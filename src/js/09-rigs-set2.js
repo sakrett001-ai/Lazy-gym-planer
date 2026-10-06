@@ -38,9 +38,10 @@ function dbpressRig(t){
  for(const [s,sign]of [['L',-1],['R',1]]){
   const kn=[sign*12,138,hip[2]+42];R['kn'+s]=kn;R['an'+s]=V3.add(kn,[0,1,0],42);
   R['heel'+s]=V3.add(R['an'+s],[0,0,1],-4);R['toe'+s]=V3.add(R['an'+s],[0,0,1],13);
-  const lowX=sign*30, lowY=R.sh[1]+4, topX=sign*12, topY=R.sh[1]-(FL.ua+FL.fa-3);
+  /* низ: гантели у ушей снаружи от плеч, предплечья вертикально; верх: над плечами */
+  const lowX=sign*40, lowY=R.sh[1]-14, topX=sign*12, topY=R.sh[1]-(FL.ua+FL.fa-3);
   const wr=[lowX+(topX-lowX)*t, lowY+(topY-lowY)*t, R.sh[2]+6-4*t];
-  arm3(R,s,wr,[sign,0.2,-.2],[0,-1,0]);
+  arm3(R,s,wr,[sign*.35,1,.35],[0,-1,0]);  /* локти вниз под гантелями и чуть вперёд — в плоскости лопатки */
   R.props.push({kind:'dumbbell',c:V3.add(R['wr'+s],[0,-3,0])});
  }
  R.props.push(...bench3(seatZ0,seatZ1,140,22), box3(-20,20,hip[1]-62,hip[1]+8,hip[2]-20,hip[2]-14));
@@ -63,18 +64,18 @@ function bbrowRig(t){
 }
 /* Жим гантелей лёжа: гантели сходятся над грудью. t=0 верх, t=1 низ. */
 function dbbenchRig(t){
- const hipY=benchTop3-10, R=body3([0,hipY,86],-90,0,12);
- const chestZ=R.sh[2]-2;
+ const hipY=benchTop3-10, R=body3([0,hipY,112],-90,0,12);
+ const chestZ=R.sh[2]+6;  /* гантели над серединой груди */
  const topY=R.sh[1]-(FL.ua+FL.fa-2), lowY=hipY-14;
  const y=topY+(lowY-topY)*t;
  for(const [s,sign]of [['L',-1],['R',1]]){
   const x=sign*(12+26*t);
-  arm3(R,s,[x,y+3,chestZ],[sign*.7,0.1,-1],[0,-1,0]);
-  leg3(R,s,[sign*16,180,40],[0,-1,0],[0,0,1]);
+  arm3(R,s,[x,y+3,chestZ],[sign*.8,.6,.4],[0,-1,0]);
+  leg3(R,s,[sign*16,180,166],[0,-1,0],[0,0,1]);
   R.props.push({kind:'dumbbell',c:[x,y,chestZ]});
  }
  R.props.push(...bench3(28,150,benchTop3,15));
- R.contacts=[{p:[0,benchTop3,R.sh[2]],label:'Лопатки на скамье'},{p:[-16,184,40],label:'Стопы на полу'}];
+ R.contacts=[{p:[0,benchTop3,R.sh[2]],label:'Лопатки на скамье'},{p:[-16,184,166],label:'Стопы на полу'}];
  return R;
 }
 spatialExercise('rdl',rdlRig,'side',['side','front'],{

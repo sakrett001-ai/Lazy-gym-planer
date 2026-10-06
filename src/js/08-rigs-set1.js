@@ -10,7 +10,7 @@ function benchRig(t){
  const topY=R.sh[1]-Math.sqrt(Math.max(0,(FL.ua+FL.fa-1)**2-(R.sh[2]-barZ)**2));
  const y=topY+(hipY-10-topY)*t;
  for(const [s,sign]of [['L',-1],['R',1]]){
-  arm3(R,s,[sign*34,y+3,barZ],[sign*.5,0.35,-1],[0,-1,0]);
+  arm3(R,s,[sign*34,y+3,barZ],[sign*.8,.6,.45],[0,-1,0]);  /* локти: наружу, вниз под скамью и к тазу (~60° к корпусу) */
   leg3(R,s,[sign*16,180,166],[0,-1,0],[0,0,1]);
  }
  const bar=[0,y,barZ];
@@ -63,7 +63,7 @@ function ohpRig(t){
  const z=chestZ-(chestZ-R.sh[2]+2)*Math.max(0,(t-.45)/.55);
  for(const [s,sign]of [['L',-1],['R',1]]){
   leg3(R,s,[sign*11,180,98],[0,0,1],[0,0,1]);
-  arm3(R,s,[sign*33,y+3,z],[sign*.7,.4,-.5],[0,-1,0]);
+  arm3(R,s,[sign*33,y+3,z],[sign*.6,.55,.45],[0,-1,0]);  /* локти под грифом и чуть впереди, не за спиной */
  }
  const bar=[0,y,z];
  R.bar=bar;R.props=[{kind:'barbell',c:bar}];
