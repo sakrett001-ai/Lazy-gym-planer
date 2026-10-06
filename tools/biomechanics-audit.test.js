@@ -14,7 +14,9 @@ test('all poses and cameras satisfy declared geometry and contact constraints', 
   const r = auditModel(model);
   assert.equal(r.stats.exercises,139);
   assert.equal(r.stats.poses,139*101);
-  assert.equal(r.stats.cameraPoses,13*2*101);
+  assert.equal(r.stats.cameraPoses,29*101);
+  assert.equal(r.stats.muscleProfiles,3);
+  assert.equal(r.stats.musclePoses,3*101);
   assert.deepEqual(r.failures,[]);
   assert(r.warnings.some(f => f.exercise === 'invrow' && f.rule.startsWith('projected-elbow')));
 });
@@ -42,4 +44,15 @@ test('nonfinite coordinates are failures', () => {
 test('invalid sampling options fail clearly', () => {
   assert.throws(() => auditModel(model,{samples:1}),/samples/);
   assert.throws(() => auditModel(model,{only:'front'}),/only/);
+});
+test('detects an out-of-range muscle curve instead of hiding it with color clamping', () => {
+  const ex=model.EX.find(e=>e.id==='squat'),p=ex.anim.muscleProfile;
+  const anim={...ex.anim,muscleProfile:{...p,muscles:{...p.muscles,quads:{...p.muscles.quads,concentric:[.34,1.5,.72]}}}};
+  const r=auditModel({...model,EX:[{...ex,anim}]});
+  assert(r.failures.some(f=>f.rule==='muscle-curve:quads'));
+});
+test('detects a missing camera rather than silently accepting the fallback projection', () => {
+  const ex=model.EX.find(e=>e.id==='bbbench');
+  const r=auditModel({...model,EX:[{...ex,anim:{...ex.anim,cameras:['missing-camera']}}]});
+  assert(r.failures.some(f=>f.rule==='camera-defined:missing-camera'));
 });

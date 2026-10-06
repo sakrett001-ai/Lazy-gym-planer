@@ -1,8 +1,9 @@
 /* ---------- Проигрыватель движений: карточки и увеличенный разбор ---------- */
 let figs = [], rafId = 0, io = null;
 const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-const motionPrefs = (() => {try {return Object.assign({speed:.5,joints:true,trace:false,vectors:true},JSON.parse(localStorage.getItem('podhod.motion.v2') || '{}'));}catch(e){return {speed:.5,joints:true,trace:false,vectors:true};}})();
+const motionPrefs = (() => {try {return Object.assign({speed:.5,joints:true,trace:false,vectors:true,muscles:true},JSON.parse(localStorage.getItem('podhod.motion.v2') || '{}'));}catch(e){return {speed:.5,joints:true,trace:false,vectors:true,muscles:true};}})();
 if (![.25,.5,1].includes(+motionPrefs.speed)) motionPrefs.speed = .5;
+if(typeof motionPrefs.muscles!=='boolean')motionPrefs.muscles=true;
 let detailMotion = null, detailReturn = null, lastMotionNow = null;
 function saveMotionPrefs() {try {localStorage.setItem('podhod.motion.v2',JSON.stringify(motionPrefs));}catch(e){}}
 function motionDurations(it) {
@@ -29,7 +30,7 @@ function motionFrame(F) {
   return {t,index,label:a.hold?'Удержание':labels[index],cue:a.hold?a.cues[0]:a.cues[(index<2)!==!!a.eccFirst?0:1],progress:((F.clock%total)+total)%total/total,total};
 }
 function paintMotion(F, detailed=false) {
-  const m = motionFrame(F); F.f.at(m.t);if(F.extra)F.extra.at(m.t);
+  const m = motionFrame(F); F.f.at(m.t,m);if(F.extra)F.extra.at(m.t,m);
   if (!detailed) {
     const cap = F.btn.closest('.motion-tile').querySelector('.motion-caption');
     if (cap && cap.textContent!==m.label) cap.textContent=m.label;
@@ -42,6 +43,34 @@ function paintMotion(F, detailed=false) {
   $('#mv-play').setAttribute('aria-label',F.paused?'Воспроизвести движение':'Приостановить движение');
   $('#mv-play').setAttribute('aria-pressed',String(!F.paused));
   $('#mv-position').textContent=`${Math.round(m.progress*100)}% повторения`;
+  paintMusclePanel('mv',F,m);
+}
+function configureMusclePanel(prefix,it){
+ const profile=it.ex.anim.muscleProfile,toggle=$('#'+prefix+'-muscle-toggle'),panel=$('#'+prefix+'-muscle-panel');
+ toggle.checked=!!profile&&!!motionPrefs.muscles;toggle.disabled=!profile;
+ $('#'+prefix+'-muscle-availability').hidden=!!profile;
+ panel.hidden=!profile||!motionPrefs.muscles;
+ if(!profile){$('#'+prefix+'-muscle-list').replaceChildren();return;}
+ $('#'+prefix+'-muscle-list').innerHTML=Object.entries(profile.muscles).map(([id,m])=>`<li data-muscle-row="${id}"><span class="muscle-swatch" aria-hidden="true"></span><span class="muscle-row-copy"><strong>${esc(MUSCLE_NAMES[id])}</strong><span>${MUSCLE_ROLES[m.role]}</span></span><span class="muscle-level"></span></li>`).join('');
+}
+function paintMusclePanel(prefix,F,m){
+ const panel=$('#'+prefix+'-muscle-panel');if(panel.hidden)return;
+ const state=muscleFrame(F.it.ex.anim,m.t,m.index);if(!state)return;
+ const note=$('#'+prefix+'-muscle-note');if(note.textContent!==state.note)note.textContent=state.note;
+ for(const row of panel.querySelectorAll('[data-muscle-row]')){
+  const v=state.values[row.dataset.muscleRow],level=row.querySelector('.muscle-level'),text=MUSCLE_BANDS[muscleBand(v)];
+  row.querySelector('.muscle-swatch').style.backgroundColor=muscleColor(v);
+  if(level.textContent!==text)level.textContent=text;
+ }
+}
+function changeMusclePreference(show){
+ motionPrefs.muscles=!!show;saveMotionPrefs();
+ for(const F of [...figs,detailMotion,workout?.motion].filter(Boolean)){
+  for(const f of [F.f,F.extra].filter(Boolean))f.setMuscles?.(motionPrefs.muscles);
+  const note=F.btn?.closest('.motion-tile').querySelector('.muscle-tile-note');if(note)note.hidden=!motionPrefs.muscles;
+ }
+ if(detailMotion){configureMusclePanel('mv',detailMotion.it);paintMotion(detailMotion,true);}
+ if(workout?.motion){configureMusclePanel('wv',workout.motion.it);paintWorkoutMotion();}
 }
 function scheduleMotionLoop() {
   cancelAnimationFrame(rafId); lastMotionNow=null;
@@ -62,10 +91,11 @@ function mountFigures() {
   document.querySelectorAll('[data-fig]').forEach(btn=>{
     const it=flat[+btn.dataset.fig];
     try {
-      const f=buildFigure(it.ex.anim,{primary:it.ex.pri,has:it.has,ratio:1,t:0,label:it.name});
+      const f=buildFigure(it.ex.anim,{primary:it.ex.pri,has:it.has,ratio:1,t:0,label:it.name,muscles:motionPrefs.muscles});
       btn.prepend(f.svg);
       const F={btn,it,f,vis:true,paused:reduceMotion,clock:0,durations:motionDurations(it)};
       figs.push(F);paintMotion(F);
+      if(it.ex.anim.muscleProfile){const note=document.createElement('p');note.className='muscle-tile-note';note.textContent='Цвет — учебная схема';note.hidden=!motionPrefs.muscles;btn.closest('.motion-tile').appendChild(note);}
       const pause=btn.closest('.motion-tile').querySelector('[data-motion-pause]');
       if(pause){pause.textContent=F.paused?'Пуск':'Пауза';pause.setAttribute('aria-pressed',String(!F.paused));pause.setAttribute('aria-label',`${F.paused?'Воспроизвести':'Приостановить'} демонстрацию: ${it.name}`);}
     } catch(e) {console.error('Демонстрация',it.ex.id,e);}
@@ -101,14 +131,18 @@ function selectMotion(it, clock=0) {
   $('#mv-errors').innerHTML=it.ex.err.map(x=>`<li>${esc(x)}</li>`).join('');
   $('#mv-breath').textContent=it.ex.breath;
   $('#mv-note').textContent=it.ex.note||'';
-  const src=(SOURCES_BY_EX[it.ex.id]||[]).map(([label,url])=>`<a href="${url}" target="_blank" rel="noopener noreferrer">${esc(label)}</a>`);
+  const links=[...(SOURCES_BY_EX[it.ex.id]||[]),...(it.ex.anim.muscleProfile?.sources||[])];
+  const src=links.filter((v,i)=>links.findIndex(x=>x[1]===v[1])===i).map(([label,url])=>`<a href="${url}" target="_blank" rel="noopener noreferrer">${esc(label)}</a>`);
   $('#mv-sources').innerHTML=src.length?`<p class="mv-muscle-label">Подробнее о технике</p>${src.join('')}`:'';
   mountDetailCameras();
 }
 function openMotion(idx) {
   const F=figs.find(f=>+f.btn.dataset.fig===Number(idx));
+  openMotionItem(F?F.it:previewItem(EX[0].id),F?F.clock:0);
+}
+function openMotionItem(it,clock=0){
   detailReturn=document.activeElement;
-  selectMotion(F?F.it:previewItem(EX[0].id),F?F.clock:0);
+  selectMotion(it,clock);
   const d=$('#motion-view');if(!d.open)d.showModal();
   document.documentElement.classList.add('motion-open');
   $('#mv-close').focus();scheduleMotionLoop();
@@ -140,6 +174,8 @@ function setupMotionViewer() {
   $('#mv-joints').addEventListener('change',e=>{motionPrefs.joints=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean))f.svg.classList.toggle('show-joints',e.target.checked);saveMotionPrefs();});
   $('#mv-vectors').addEventListener('change',e=>{motionPrefs.vectors=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean))f.setVectors(e.target.checked);saveMotionPrefs();});
   $('#mv-trace').addEventListener('change',e=>{motionPrefs.trace=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean))f.setTrace(e.target.checked);saveMotionPrefs();});
+  $('#mv-muscle-toggle').addEventListener('change',e=>changeMusclePreference(e.target.checked));
+  $('#wv-muscle-toggle').addEventListener('change',e=>changeMusclePreference(e.target.checked));
   $('#motion-view').addEventListener('cancel',e=>{e.preventDefault();closeMotion();});
   $('#motion-view').addEventListener('close',()=>{detailMotion=null;document.documentElement.classList.remove('motion-open');});
   $('#motion-view').addEventListener('keydown',e=>{if(e.code==='Space'&&!['INPUT','SELECT','BUTTON','TEXTAREA'].includes(e.target.tagName)){e.preventDefault();if(detailMotion){detailMotion.paused=!detailMotion.paused;paintMotion(detailMotion,true);}}});

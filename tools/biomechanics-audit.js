@@ -20,7 +20,7 @@ function loadModel({root = path.resolve(__dirname, '..'), fullApp = false} = {})
   const files = fs.readdirSync(dir).filter(f => /^\d.*\.js$/.test(f) && Number.parseInt(f) < (fullApp ? 99 : 11)).sort();
   for (const file of files) vm.runInContext(fs.readFileSync(path.join(dir, file), 'utf8'), context, {filename:file, timeout:10000});
   const get = expression => vm.runInContext(expression, context, {timeout:10000});
-  const api = get('({EX, FL, prepAnim, poseAt, solvePose, spatialPose, camera3})');
+  const api = get('({EX, FL, prepAnim, poseAt, solvePose, spatialPose, camera3, CAMERA3, muscleFrame, muscleSurfaces})');
   return {...api, get};
 }
 
@@ -51,9 +51,9 @@ const CONTACT_RULES = {
 function auditModel(model, {samples = 101, only = 'all'} = {}) {
   if (!Number.isInteger(samples) || samples < 9 || samples > 2001) throw new Error('samples must be an integer from 9 to 2001');
   if (!['all','side','spatial'].includes(only)) throw new Error('only must be all, side or spatial');
-  const {EX, FL, prepAnim, poseAt, solvePose, spatialPose, camera3} = model;
+  const {EX, FL, prepAnim, poseAt, solvePose, spatialPose, camera3, CAMERA3, muscleFrame, muscleSurfaces} = model;
   const failures = new Map(), warnings = new Map();
-  const stats = {exercises:0, spatialExercises:0, poses:0, cameraPoses:0, checks:0};
+  const stats = {exercises:0, spatialExercises:0, poses:0, cameraPoses:0, muscleProfiles:0, musclePoses:0, checks:0};
   function check(ok, ex, rule, t, detail, magnitude = 1) {
     stats.checks++;
     if (ok) return;
@@ -73,6 +73,16 @@ function auditModel(model, {samples = 101, only = 'all'} = {}) {
     if (only === 'spatial' && !spatial || only === 'side' && (spatial || a.view !== 'side')) continue;
     stats.exercises++;
     if (spatial) stats.spatialExercises++;
+    if (a.muscleProfile) {
+      stats.muscleProfiles++;
+      check(a.muscleProfile.curveBasis === 'illustrative',ex,'muscle-curve-basis',0,'Pilot curves must be identified as illustrative');
+      for (const [id,m] of Object.entries(a.muscleProfile.muscles)) {
+        check(['primary','support','stabilizer'].includes(m.role),ex,'muscle-role:'+id,0,'Unknown muscle role');
+        const valid = ['concentric','eccentric'].every(k=>Array.isArray(m[k])&&m[k].length===3&&m[k].every(v=>Number.isFinite(v)&&v>=0&&v<=1));
+        check(valid,ex,'muscle-curve:'+id,0,'Brightness knots must be finite values in [0,1]');
+        if(valid)check(m.concentric[0]===m.eccentric[0]&&m.concentric[2]===m.eccentric[2],ex,'muscle-turn:'+id,0,'Phase endpoints must match to avoid flashes at holds/turns');
+      }
+    }
     prepAnim(a);
     const rules = CONTACT_RULES[ex.id];
     if (spatial && !rules) warn(ex, 'contact-coverage', 0, 'Add explicit grip/support rules for this new rig');
@@ -91,6 +101,15 @@ function auditModel(model, {samples = 101, only = 'all'} = {}) {
         }
       }
       if (spatial) {
+        if (a.muscleProfile) {
+          stats.musclePoses++;
+          const before = JSON.stringify(J), zones = muscleSurfaces(J,a.muscleProfile);
+          check(JSON.stringify(J)===before,ex,'muscle-pose-integrity',t,'Muscle surfaces must not change joints or equipment');
+          for (const zone of zones) {
+            check(zone.points.every(p=>p.length===3&&p.every(Number.isFinite))&&zone.anchor.every(Number.isFinite)&&zone.normal.every(Number.isFinite),ex,'muscle-surface:'+zone.id,t,'Muscle surface coordinates must be finite');
+            check(zone.id in a.muscleProfile.muscles,ex,'muscle-profile:'+zone.id,t,'A surface must belong to the exercise profile');
+          }
+        }
         for (const side of ['L','R']) {
           for (const [x,y,length] of [['sh'+side,'el'+side,FL.ua],['el'+side,'wr'+side,FL.fa],['hip'+side,'kn'+side,FL.th],['kn'+side,'an'+side,FL.sh]]) {
             const error = Math.abs(distance(J[x],J[y])-length);
@@ -141,6 +160,7 @@ function auditModel(model, {samples = 101, only = 'all'} = {}) {
         const savedCamera = a.camera;
         try {
           for (const camera of a.cameras || [savedCamera || 'side']) {
+            check(Object.prototype.hasOwnProperty.call(CAMERA3,camera),ex,'camera-defined:'+camera,t,'Declared camera must have its own projection');
             a.camera = camera;
             const projected = spatialPose(a,t), project = camera3(camera);
             stats.cameraPoses++;
@@ -169,7 +189,7 @@ function auditModel(model, {samples = 101, only = 'all'} = {}) {
     }
   }
   return {stats, failures:[...failures.values()], warnings:[...warnings.values()],
-    limitations:['This audits schematic geometry and declared contacts; it does not validate medical safety, individual mobility, muscle force or unmodeled collisions.', 'Front-view 2D poses have no anatomical depth; projected limb lengths and bend signs are not used as 3D evidence.']};
+    limitations:['This audits schematic geometry and declared contacts; it does not validate medical safety, individual mobility, muscle force or unmodeled collisions.', 'Front-view 2D poses have no anatomical depth; projected limb lengths and bend signs are not used as 3D evidence.', 'Muscle checks validate illustrative brightness curves and finite attached surfaces, not physiological activation or force.']};
 }
 
 function elbowProfile(model) {
@@ -201,7 +221,7 @@ function main(args) {
   const report = auditModel(model,opts);
   if (json) console.log(JSON.stringify(report,null,2));
   else {
-    console.log(`Biomechanics: ${report.stats.exercises} exercises, ${report.stats.poses} poses, ${report.stats.cameraPoses} camera poses; ${report.failures.length} errors, ${report.warnings.length} review flags.`);
+    console.log(`Biomechanics: ${report.stats.exercises} exercises, ${report.stats.poses} poses, ${report.stats.cameraPoses} camera poses, ${report.stats.muscleProfiles} muscle profiles; ${report.failures.length} errors, ${report.warnings.length} review flags.`);
     for (const f of report.failures) console.log(`ERROR ${f.exercise} / ${f.rule} @ ${f.t.toFixed(3)}: ${f.detail}`);
     for (const f of report.warnings) console.log(`REVIEW ${f.exercise} / ${f.rule} @ ${f.t.toFixed(3)}: ${f.detail}`);
   }

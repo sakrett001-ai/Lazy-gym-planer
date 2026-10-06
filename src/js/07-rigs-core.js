@@ -94,7 +94,8 @@ function thrustRig(t){
  R.props=[...bench3(18,80,138,40),{kind:'barbell',c:bar}];
  R.contacts=[{p:contact,label:'Опора спиной'},{p:[-13,184,thrustFootZ3+5],label:'Стопы'}];return R;
 }
-const CAMERA3={front:{label:'Спереди',yaw:0,elevation:0},side:{label:'Сбоку',yaw:90,elevation:0},angle:{label:'Под углом',yaw:55,elevation:8}};
+const CAMERA3={front:{label:'Спереди',yaw:0,elevation:0},side:{label:'Сбоку',yaw:90,elevation:0},angle:{label:'Под углом',yaw:55,elevation:8},
+ back:{label:'Сзади',yaw:180,elevation:0},above:{label:'Сверху под углом',yaw:35,elevation:-55}};
 function camera3(key){
  const C=CAMERA3[key]||CAMERA3.side,sy=Math.sin(C.yaw*D2R),cy=Math.cos(C.yaw*D2R),se=Math.sin(C.elevation*D2R),ce=Math.cos(C.elevation*D2R);
  return p=>{const depth=-p[0]*sy+p[2]*cy;return [p[0]*cy+p[2]*sy,p[1]*ce-depth*se,depth*ce+p[1]*se];};
@@ -172,9 +173,21 @@ function buildSpatialFigure(anim,opts={}){
   const nose=[V3.add(V3.add(R.head,R.headN,8),R.headU,2),V3.add(R.head,R.headN,11),V3.add(V3.add(R.head,R.headN,8),R.headU,-3)];
   face(nose,'#a3b3cb');
  }
- function compile(t){records=[];const R=anim.rig3d(t);body(R);R.props.forEach(prop);return{R,records:records.sort((a,b)=>a.depth-b.depth)};}
+ function compile(t,index=0,withMuscles=true){
+  records=[];const R=anim.rig3d(t);body(R);
+  const muscles=muscleFrame(anim,t,index);
+  if(muscles&&withMuscles)for(const zone of muscleContours(visibleMuscleSurfaces(R,anim.muscleProfile,camera))){
+   const value=muscles.values[zone.id],fill=muscleColor(value);
+   queue('path',{d:closedSpline(zone.points.map(p=>project(p).slice(0,2))),fill,class:'muscle-zone','data-muscle':zone.id,'data-side':zone.side,
+    'data-role':anim.muscleProfile.muscles[zone.id].role,'data-band':muscleBand(value),
+    stroke:fill,'stroke-width':.25,'stroke-linejoin':'round','aria-hidden':'true'},zone.points);
+   /* Слой связан с глубиной своего сегмента: не проступает сквозь ближнюю руку/реквизит. */
+   records[records.length-1].depth=project(zone.anchor)[2]+.15;
+  }
+  R.props.forEach(prop);return{R,muscles,records:records.sort((a,b)=>a.depth-b.depth)};
+ }
  // Bounds include equipment, every sampled pose, and the floor; camera stays still.
- for(let i=0;i<=40;i++){compile(i/40);tracePts.push(project(anim.rig3d(i/40).gripL));}
+ for(let i=0;i<=40;i++){compile(i/40,0,false);tracePts.push(project(anim.rig3d(i/40).gripL));}
  const floorCorners=[[-76,187,0],[76,187,0],[76,187,195],[-76,187,195]];
  if(!anim.noGround)allBounds.push(...floorCorners.map(project));
  let minX=Math.min(...allBounds.map(p=>p[0]))-13,maxX=Math.max(...allBounds.map(p=>p[0]))+13,minY=Math.min(...allBounds.map(p=>p[1]))-16,maxY=Math.max(...allBounds.map(p=>p[1]))+10;
@@ -187,24 +200,26 @@ function buildSpatialFigure(anim,opts={}){
  }
  trace.setAttribute('d',tracePts.map((p,i)=>`${i?'L':'M'}${f1(p[0])},${f1(p[1])}`).join(' '));
  let nodes=[],jointNodes=[];
- function at(t){
-  const {R,records}=compile(t);
+ function at(t,frame){
+  const {R,muscles,records}=compile(t,frame?.index||0);
   records.forEach((s,i)=>{let node=nodes[i];if(!node||node.tagName!==s.tag){const replacement=el(s.tag,{});if(node)node.replaceWith(replacement);else scene.appendChild(replacement);node=nodes[i]=replacement;}for(const attr of [...node.attributes])if(!(attr.name in s.attrs))node.removeAttribute(attr.name);for(const[k,v]of Object.entries(s.attrs))node.setAttribute(k,v);});
   for(let i=records.length;i<nodes.length;i++)nodes[i].remove();nodes.length=records.length;
   const names=['shL','elL','wrL','hipL','knL','anL','shR','elR','wrR','hipR','knR','anR'];
   names.forEach((name,i)=>{const p=project(R[name]),node=jointNodes[i]||(jointNodes[i]=el('circle',{r:2.1,class:'joint-dot'},dots));node.setAttribute('cx',f1(p[0]));node.setAttribute('cy',f1(p[1]));});
-  svg.dataset.pose=String(t);allBounds.length=0;
+  svg.dataset.pose=String(t);if(muscles)svg.dataset.musclePhase=muscles.phase;allBounds.length=0;
  }
  const setTrace=show=>trace.setAttribute('display',show?'inline':'none');
- at(opts.t||0);const setVectors=vectorGroup(svg,anim,camera);return{svg,at,setTrace,setVectors,camera};
+ const setMuscles=show=>svg.classList.toggle('show-muscles',!!show&&!!anim.muscleProfile);
+ setMuscles(opts.muscles);at(opts.t||0);const setVectors=vectorGroup(svg,anim,camera);return{svg,at,setTrace,setVectors,setMuscles,camera};
 }
 
 function spatialExercise(id,rig,camera,cameras,hints){
  const a=DEMO[id].anim;a.rig3d=rig;a.camera=camera;a.view=camera;a.cameras=cameras;a.cameraHints=hints;
  a.sample=t=>({spatialT:t});delete a._C;delete a._normalized;
 }
-spatialExercise('latpull',pulldownRig,'front',['front','side'],{
+spatialExercise('latpull',pulldownRig,'front',['front','back','side'],{
  front:'Следите за симметрией: локти опускаются по сторонам корпуса, хват не меняется.',
+ back:'Видны широчайшие и середина спины. Локти опускаются симметрично, корпус не раскачивается.',
  side:'Рукоять проходит перед лицом к верхней части груди. Наклон корпуса остаётся небольшим.'
 });
 spatialExercise('bulgarian',bulgarianRig,'side',['side','angle'],{
