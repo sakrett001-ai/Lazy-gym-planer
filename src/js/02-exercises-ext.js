@@ -152,8 +152,10 @@ EX.push(
    'Задержитесь, сведя лопатки, и медленно вернитесь.'],
  err:['Локти ниже кистей', 'Отклонение корпуса назад', 'Подъём плеч'],
  breath:'Выдох при тяге, вдох при возврате.',
- anim:{view:'side', A:stand({arm:{ik:[146, 54], b:'back'}}), B:stand({arm:{ik:[103, 34], b:'back'}}),
-  props:[{k:'rect', x:178, y:38, w:6, h:14}, {k:'band', from:[180, 46], at:'gripN', layer:'front'}]}},
+ anim:{view:'front', viewNote:'вид спереди, лента закреплена перед атлетом',
+  A:frontStand({arm:{p:[[14, 10], [18, 4]]}}),
+  B:frontStand({arm:{p:[[32, -2], [24, -20]]}}),
+  props:[{k:'rect', x:96, y:28, w:8, h:12, rx:2}, {k:'band', from:[100, 34], at:'gripL', layer:'front'}, {k:'band', from:[100, 34], at:'gripR', layer:'front'}]}},
 
 /* ===== БИЦЕПС ===== */
 {id:'preacher', name:'Сгибание рук на скамье Скотта', eq:[['preacher'], ['bb', 'db']], g:'biceps', pri:['biceps'], sec:['forearms'], type:'i', lvl:1,
