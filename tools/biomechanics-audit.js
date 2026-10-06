@@ -20,7 +20,7 @@ function loadModel({root = path.resolve(__dirname, '..'), fullApp = false} = {})
   const files = fs.readdirSync(dir).filter(f => /^\d.*\.js$/.test(f) && Number.parseInt(f) < (fullApp ? 99 : 11)).sort();
   for (const file of files) vm.runInContext(fs.readFileSync(path.join(dir, file), 'utf8'), context, {filename:file, timeout:10000});
   const get = expression => vm.runInContext(expression, context, {timeout:10000});
-  const api = get('({EX, FL, prepAnim, poseAt, solvePose, spatialPose, camera3, CAMERA3, muscleFrame, muscleSurfaces})');
+  const api = get('({EX, FL, SIDE_CHEST, torsoPoint, PROPS, prepAnim, poseAt, solvePose, spatialPose, camera3, CAMERA3, muscleFrame, muscleSurfaces})');
   return {...api, get};
 }
 
@@ -45,13 +45,14 @@ const CONTACT_RULES = {
   bulgarian:{anchors:['anL','anR'], ground:['anL'], dumbbells:true},
   rdl:{bar:true, anchors:['anL','anR'], ground:['anL','anR'], straightArms:true, dumbbells:true},
   squat:{bar:true, anchors:['anL','anR'], ground:['anL','anR']},
-  lunge:{anchors:['toeL','toeR'], ground:['toeL','toeR'], dumbbells:true}
+  lunge:{anchors:['toeL','toeR'], ground:['toeL','toeR'], dumbbells:true},
+  chestrowdb:{anchors:['hip','anN','anF'], chestPad:true}
 };
 
 function auditModel(model, {samples = 101, only = 'all'} = {}) {
   if (!Number.isInteger(samples) || samples < 9 || samples > 2001) throw new Error('samples must be an integer from 9 to 2001');
   if (!['all','side','spatial'].includes(only)) throw new Error('only must be all, side or spatial');
-  const {EX, FL, prepAnim, poseAt, solvePose, spatialPose, camera3, CAMERA3, muscleFrame, muscleSurfaces} = model;
+  const {EX, FL, SIDE_CHEST, torsoPoint, PROPS, prepAnim, poseAt, solvePose, spatialPose, camera3, CAMERA3, muscleFrame, muscleSurfaces} = model;
   const failures = new Map(), warnings = new Map();
   const stats = {exercises:0, spatialExercises:0, poses:0, cameraPoses:0, muscleProfiles:0, musclePoses:0, checks:0};
   function check(ok, ex, rule, t, detail, magnitude = 1) {
@@ -86,7 +87,7 @@ function auditModel(model, {samples = 101, only = 'all'} = {}) {
     prepAnim(a);
     const rules = CONTACT_RULES[ex.id];
     if (spatial && !rules) warn(ex, 'contact-coverage', 0, 'Add explicit grip/support rules for this new rig');
-    const first = spatial ? a.rig3d(0) : null;
+    const first = spatial ? a.rig3d(0) : solvePose(a,poseAt(a,0),a._C);
     let previous;
     for (let i=0; i<samples; i++) {
       const t = i/(samples-1), P = poseAt(a,t), J = spatial ? a.rig3d(t) : solvePose(a,P,a._C);
@@ -99,6 +100,10 @@ function auditModel(model, {samples = 101, only = 'all'} = {}) {
           /* Scale threshold to sampling density; a hard discontinuity remains detectable. */
           check(step <= 12 * 100/(samples-1), ex, 'continuity:'+key, t, `Jump ${step.toFixed(4)} model units`, step);
         }
+      }
+      for (const key of rules?.anchors || []) {
+        const error = distance(J[key],first[key]);
+        check(error < 1e-4, ex, 'anchor:'+key, t, `Support drift ${error.toFixed(4)} model units`, error);
       }
       if (spatial) {
         if (a.muscleProfile) {
@@ -132,10 +137,6 @@ function auditModel(model, {samples = 101, only = 'all'} = {}) {
             const forward = dot(sub(J['el'+side],J['sh'+side]),J.n);
             check(forward >= -2, ex, 'press-elbow:'+side, t, 'Elbow is behind the shoulder plane', -forward);
           }
-        }
-        for (const key of rules?.anchors || []) {
-          const error = distance(J[key],first[key]);
-          check(error < 1e-4, ex, 'anchor:'+key, t, `Support drift ${error.toFixed(4)} model units`, error);
         }
         /* World-space support centers lie at Y=180; the foot surface/marker is drawn lower. */
         for (const key of rules?.ground || []) {
@@ -172,6 +173,32 @@ function auditModel(model, {samples = 101, only = 'all'} = {}) {
           }
         } finally { a.camera = savedCamera; }
       } else if (a.view === 'side') {
+        if (rules?.chestPad) {
+          const pads = (a.props || []).filter(p => p.support === 'chest');
+          check(pads.length === 1, ex, 'chest-pad-present', t, 'Exactly one chest-support pad is required');
+          if (pads.length === 1) {
+            const pad = pads[0], pts = pad.k === 'line' ? PROPS.line.bounds(pad) : null;
+            const width = pad.w || 4;
+            const valid = pts?.length === 2 && pts.every(p => p?.length === 2 && p.every(Number.isFinite)) && Number.isFinite(width) && width > 0 && distance(pts[0],pts[1]) > 0;
+            check(valid, ex, 'chest-pad-geometry', t, 'Chest support must be a finite, fixed padded segment');
+            if (valid) {
+              // Use the actual prop endpoints/stroke width and the same chest point as the SVG contour.
+              const chest = torsoPoint(J,...SIDE_CHEST), d = sub(pts[1],pts[0]), length = distance(pts[0],pts[1]);
+              const axis = d.map(v => v/length), center = pts[0].map((v,k) => (v+pts[1][k])/2);
+              const forward = dot(sub(center,chest),J.chestN);
+              check(forward > 0, ex, 'chest-pad-side', t, 'Pad must be in front of the chest, not behind the back', -forward);
+              const along = dot(sub(chest,pts[0]),axis);
+              check(along >= 0 && along <= length, ex, 'chest-pad-coverage', t, 'Chest contact falls outside the pad length');
+              const nearest = pts[0].map((v,k) => v+axis[k]*Math.max(0,Math.min(length,along)));
+              const gap = Math.abs(distance(chest,nearest)-width/2);
+              check(gap <= .75, ex, 'chest-pad-contact', t, `Chest/pad surface mismatch ${gap.toFixed(4)} model units`, gap);
+              const tilt = Math.acos(Math.min(1,Math.abs(dot(axis,J.chestU))))*180/Math.PI;
+              check(tilt <= 5, ex, 'chest-pad-angle', t, `Pad/torso angle mismatch ${tilt.toFixed(3)} degrees`, tilt);
+              const incline = Math.atan2(Math.abs(d[1]),Math.abs(d[0]))*180/Math.PI;
+              check(incline >= 30 && incline <= 45, ex, 'chest-pad-incline', t, `Bench incline ${incline.toFixed(3)} degrees does not match the exercise description`);
+            }
+          }
+        }
         for (const side of ['N','F']) {
           for (const [x,y,length] of [['sh','el'+side,FL.ua],['el'+side,'wr'+side,FL.fa],['hip','kn'+side,FL.th],['kn'+side,'an'+side,FL.sh]]) {
             const error = Math.abs(distance(J[x],J[y])-length);

@@ -1,6 +1,7 @@
 /* ===================== ДВИЖОК ФИГУРЫ ===================== */
 const FL = {torso:52, neck:15, headR:10, ua:30, fa:27, hand:7, th:43, sh:42, heel:4, toe:13};
 const GROUND = 186;
+const SIDE_CHEST = [36, 12.5]; // Anterior chest point on the rendered side-view contour.
 const D2R = Math.PI / 180;
 const dir = a => [Math.sin(a * D2R), -Math.cos(a * D2R)];
 const angOf = v => Math.atan2(v[0], -v[1]) / D2R;
@@ -345,7 +346,7 @@ const MUSCLE_SEG = {chest:'torso', abs:'torso', obliques:'torso', lats:'torso', 
 
 function torsoPathSide(J) {
   const p = (a, b) => torsoPoint(J,a,b);
-  const pts = [p(-3, 10), p(18, 9), p(36, 12.5), p(50, 10.5), p(57, 3), p(55, -8), p(38, -10), p(16, -9), p(-4, -11), p(-11, -1)];
+  const pts = [p(-3, 10), p(18, 9), p(...SIDE_CHEST), p(50, 10.5), p(57, 3), p(55, -8), p(38, -10), p(16, -9), p(-4, -11), p(-11, -1)];
   return closedSpline(pts);
 }
 function torsoPathFront(J) {
