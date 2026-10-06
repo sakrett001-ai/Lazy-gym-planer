@@ -5,6 +5,7 @@
   "description": "Подход — планировщик тренировок",
   "scripts": {
     "build": "node build.js",
-    "serve": "node build.js && npx --yes serve dist -l 8080"
+    "serve": "node build.js && npx --yes serve dist -l 8080",
+    "deploy": "sh deploy.sh"
   }
 }
