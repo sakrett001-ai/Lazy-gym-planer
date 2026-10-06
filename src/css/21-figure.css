@@ -1,0 +1,57 @@
+/* ПОДХОД 3.0 — фигура и режим тренировки */
+.fig .bone,.fig .torso{stroke:#263f6b;stroke-width:.45;stroke-opacity:.3}
+.fig .far .bone{stroke:#5f718a;stroke-width:.4}
+.fig .athlete-shorts{stroke:#233b60;stroke-width:.4;stroke-linejoin:round}
+.fig .athlete-seam{fill:none;stroke:#c1d5f4;stroke-width:1;stroke-linecap:round;opacity:.55}
+.fig .athlete-face{fill:none;stroke:#667b96;stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round}
+.fig .athlete-ear{fill:#b2bfd1;stroke:#657b98;stroke-width:.55}
+.fig .joint-dot{fill:#f2f8ff;stroke:#3b6bcb;opacity:.88}
+.p-btns #start-workout{background:var(--accent);color:var(--accent-ink);padding:12px 16px}
+.c-act [data-workout]{color:var(--accent);font-weight:600}
+html.workout-open{overflow:hidden}
+.workout-view{width:min(1080px,calc(100vw - 24px));max-width:none;max-height:calc(100dvh - 24px);padding:0;border:1px solid var(--line);border-radius:22px;background:var(--surface);color:var(--ink);overflow:auto;box-shadow:0 30px 100px #0005}
+.workout-view::backdrop{background:#08121be6}
+.wv-shell{padding:24px 28px;max-width:1060px;margin:auto}
+.wv-head{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.wv-eyebrow{font:600 11px/1.3 var(--f-body);letter-spacing:.08em;color:var(--accent);margin:0 0 5px}
+#wv-context{font-size:13px;color:var(--muted);margin:0}
+.wv-head button,.wv-select>button,.wv-figure-tools button,.wv-rest-adjust button{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;min-height:44px;padding:8px 14px;font-size:13px;color:var(--ink)}
+.wv-progress-line{display:flex;justify-content:space-between;margin-top:20px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+#wv-progress{display:block;width:100%;height:6px;margin-top:8px;accent-color:var(--accent);border:0;border-radius:8px;overflow:hidden;background:var(--line)}
+#wv-progress::-webkit-progress-bar{background:var(--line)}#wv-progress::-webkit-progress-value{background:var(--accent);border-radius:8px}#wv-progress::-moz-progress-bar{background:var(--accent)}
+.wv-select{display:flex;gap:8px;align-items:end;margin:20px 0}
+.wv-select label{display:grid;gap:4px;flex:1;min-width:0;font-size:12px;color:var(--muted)}
+.wv-select select{min-width:0;max-width:100%;width:100%;height:44px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink);font:500 14px var(--f-body);padding:0 10px}
+.wv-select button:disabled{opacity:.35;cursor:default}
+.wv-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:28px;align-items:start}
+.wv-stage-wrap{position:relative;border:1px solid var(--line);border-radius:18px;background:radial-gradient(ellipse at 45% 38%,var(--surface),var(--illus));overflow:hidden}
+#wv-stage{height:338px;padding:34px 12px 45px;display:grid;place-items:center}#wv-stage svg{width:100%;height:100%}
+#wv-angle{position:absolute;top:13px;left:15px;font-size:12px;color:var(--muted)}
+.wv-figure-tools{position:absolute;bottom:8px;left:8px;right:8px;display:flex;justify-content:space-between;gap:6px}.wv-figure-tools button{background:var(--surface);min-height:36px;font-size:12px;padding:6px 10px}
+.wv-cue{background:var(--accent-soft);border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.5;min-height:66px;margin:12px 0}
+.wv-guide{font-size:13px;line-height:1.5;color:var(--muted);margin-top:12px}.wv-guide summary{cursor:pointer;min-height:36px;color:var(--ink);padding:6px 0}.wv-guide p{margin:8px 0}
+#wv-title{font:400 clamp(23px,2.4vw,30px)/1.18 var(--f-display);margin:5px 0 9px}
+.wv-muted{font-size:12px;line-height:1.5;color:var(--muted);margin:7px 0}
+.wv-set-chips{display:flex;flex-wrap:wrap;gap:6px;margin:16px 0}
+.wv-set-chips button{min-width:40px;min-height:38px;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:9px;font:600 13px var(--f-mono)}
+.wv-set-chips .is-done{color:var(--good);background:var(--good-soft);border-color:transparent}.wv-set-chips .is-current{border:2px solid var(--accent);color:var(--ink);background:var(--accent-soft)}
+.wv-target{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+.wv-target div{display:grid;gap:4px;align-content:start;min-width:0}.wv-target span,.wv-target small{font-size:11px;color:var(--muted)}.wv-target strong{font-size:16px;line-height:1.35;font-weight:600}
+.wv-note{font-size:12px;line-height:1.45;color:var(--muted);padding-left:10px;border-left:2px solid var(--accent)}
+.wv-fields{display:flex;gap:12px;margin-top:20px}.wv-fields label{display:grid;gap:7px;flex:1;min-width:0;color:var(--muted);font-size:12px}.wv-fields label[hidden]{display:none}
+.wv-fields input{width:100%;height:66px;min-width:0;border:1.5px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);padding:8px 12px;font:600 26px var(--f-mono);text-align:center;font-variant-numeric:tabular-nums}
+.wv-fields input::placeholder{color:var(--faint);font-size:22px;font-weight:400}.wv-fields input:focus{outline:2px solid var(--accent);outline-offset:1px}.wv-fields input[aria-invalid="true"]{border-color:var(--hot)}
+#wv-error{color:var(--hot);font-size:13px;line-height:1.4;min-height:0;margin:5px 0}#wv-error:empty{display:none}
+.wv-primary{width:100%;min-height:54px;border:0;border-radius:12px;background:var(--accent);color:var(--accent-ink);padding:14px 20px;font:600 16px var(--f-body);cursor:pointer;margin-top:12px}
+.wv-primary:active{transform:translateY(1px)}.wv-link{border:0;background:none;padding:12px;min-height:44px;color:var(--muted);font-size:13px;cursor:pointer}
+.wv-rest,.wv-finish{text-align:center;max-width:540px;margin:36px auto 12px;padding:8px 0}
+.wv-rest[hidden],.wv-finish[hidden],#wv-active[hidden]{display:none}
+.wv-rest h2,.wv-finish h2{font:400 clamp(25px,4vw,34px)/1.2 var(--f-display);margin:12px 0}
+#wv-rest-time{font:600 clamp(64px,13vw,92px)/1.15 var(--f-mono);letter-spacing:-.06em;font-variant-numeric:tabular-nums;margin:22px 0;color:var(--ink)}
+#wv-rest-note{color:var(--muted);font-size:14px}.wv-rest-adjust{display:flex;justify-content:center;gap:10px;margin:18px 0 26px}
+.wv-next-card{text-align:left;padding:20px;border:1px solid var(--line);border-radius:14px;background:var(--surface-2)}.wv-next-card span{font-size:11px;color:var(--muted)}.wv-next-card h3{font-size:18px;margin:5px 0 7px}.wv-next-card p{font-size:13px;margin:0;color:var(--muted)}
+.wv-finish-mark{display:grid;place-items:center;width:62px;height:62px;border-radius:50%;background:var(--good-soft);color:var(--good);font-size:29px;margin:0 auto 22px}
+#wv-summary{text-align:left;border-block:1px solid var(--line);padding:10px 0;margin:24px 0}#wv-summary p{display:flex;justify-content:space-between;gap:15px;font-size:13px;margin:12px 0}#wv-summary strong{white-space:nowrap;color:var(--good)}
+@media(max-width:700px){.workout-view{width:100vw;height:100dvh;max-height:100dvh;margin:0;border-radius:0;border:0}.wv-shell{padding:16px 16px max(20px,env(safe-area-inset-bottom))}.wv-grid{grid-template-columns:1fr;gap:16px}.wv-head button{padding:8px 10px}.wv-select{margin:14px 0}.wv-progress-line{margin-top:15px}#wv-stage{height:246px;padding-top:28px}.wv-cue{min-height:0;font-size:13px}.wv-visual .wv-guide{margin-top:0}#wv-title{font-size:23px}.wv-set-chips{margin:12px 0}.wv-fields{margin-top:15px}.wv-fields input{height:60px;font-size:25px}.wv-rest{margin-top:32px}.wv-record{padding-bottom:8px}.wv-primary{min-height:56px}.wv-target strong{font-size:15px}}
+@media(max-width:380px){.wv-shell{padding:12px}.wv-figure-tools button{font-size:11px}.wv-select select{font-size:13px}#wv-stage{height:225px}.wv-target{padding:11px}.wv-target strong{font-size:14px}}
+@media print{#start-workout,[data-workout],.workout-view,.motion-view{display:none!important}}

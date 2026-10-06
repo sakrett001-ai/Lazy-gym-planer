@@ -1,0 +1,74 @@
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="logo">ПОД<span>Х</span>ОД</div>
+    <div class="tag">планировщик тренировок под ваш зал и цель</div>
+    <button type="button" id="motion-atlas" class="atlas-button" aria-haspopup="dialog" aria-controls="motion-view">Атлас движений ↗</button>
+    <nav class="views" id="views" role="tablist" aria-label="Раздел"></nav>
+  </header>
+  <main class="layout">
+    <aside class="setup" aria-label="Параметры тренировки">
+      <section class="field"><h2 class="lbl">Что собрать</h2><div class="seg seg-2" id="f-mode" role="group" aria-label="Что собрать"></div></section>
+      <section class="field" id="f-prog"><h2 class="lbl">Тренировок в неделю</h2><div class="seg seg-4" id="f-days" role="group" aria-label="Тренировок в неделю"></div>
+        <h2 class="lbl lbl-sub">Сплит</h2><div class="seg" id="f-split" role="group" aria-label="Сплит"></div><p class="f-note" id="split-note"></p></section>
+      <section class="field"><h2 class="lbl">Цель</h2><div class="seg" id="f-goal" role="group" aria-label="Цель"></div></section>
+      <section class="field"><h2 class="lbl">Формат</h2><div class="seg" id="f-format" role="group" aria-label="Формат"></div></section>
+      <section class="field"><h2 class="lbl">Уровень</h2><div class="seg" id="f-level" role="group" aria-label="Уровень"></div></section>
+      <section class="field"><h2 class="lbl" id="count-l">Упражнений</h2>
+        <div class="stepper"><button type="button" id="count-minus" aria-label="Меньше упражнений">−</button><output id="count-v" aria-live="polite">6</output><button type="button" id="count-plus" aria-label="Больше упражнений">+</button><p>от 3 до 10 в одной тренировке</p></div>
+      </section>
+      <section class="field" id="f-muscles"><h2 class="lbl">Мышцы</h2><div class="pres" id="g-presets"></div><div class="chips" id="g-chips"></div></section>
+      <section class="field"><h2 class="lbl">Оборудование <em id="e-count"></em></h2><div class="pres" id="e-presets"></div><p class="e-sum" id="e-sum"></p><div class="e-cats" id="e-chips"></div><button type="button" class="e-toggle" id="e-toggle"></button>
+        <p class="f-note">Упражнения с весом тела доступны всегда.</p></section>
+    </aside>
+    <section class="plan" id="plan" aria-live="polite"></section>
+  </main>
+</div>
+<div class="timer" id="timer" hidden>
+  <div class="t-track"><div id="t-bar"></div></div>
+  <div class="t-in">
+    <div class="t-txt"><span id="t-label">Отдых</span><span id="t-time">0:00</span></div>
+    <div class="t-btns"><button type="button" id="t-minus" aria-label="Минус 15 секунд">−15</button><button type="button" id="t-plus" aria-label="Плюс 15 секунд">+15</button><button type="button" id="t-skip">Готово</button></div>
+  </div>
+</div>
+<dialog id="workout-view" class="workout-view" aria-labelledby="wv-title">
+ <div class="wv-shell">
+  <header class="wv-head"><div><p class="wv-eyebrow">ПОДХОД · ТРЕНИРОВКА</p><p id="wv-context"></p></div><button type="button" id="wv-close">К плану ×</button></header>
+  <div class="wv-progress-line"><span id="wv-progress-label"></span><span id="wv-elapsed"></span></div><progress id="wv-progress" max="1" value="0" aria-label="Выполненные подходы"></progress>
+  <div id="wv-active">
+   <div class="wv-select"><button type="button" id="wv-prev" aria-label="Предыдущий подход">←</button><label for="wv-exercise">Упражнение<select id="wv-exercise"></select></label><button type="button" id="wv-next" aria-label="Следующий подход">→</button></div>
+   <div class="wv-grid">
+    <section class="wv-visual" aria-label="Техника упражнения"><div id="wv-cameras" class="motion-cameras" role="group" aria-label="Ракурс движения" hidden></div><div class="wv-stage-wrap"><span id="wv-angle"></span><div id="wv-stage"></div><div class="wv-figure-tools"><button type="button" id="wv-motion" aria-pressed="true">Пауза</button><button type="button" id="wv-technique">Разобрать технику ↗</button></div></div><p id="wv-cue" class="wv-cue"></p><details class="wv-guide"><summary>Как начать и что контролировать</summary><p id="wv-setup"></p><p id="wv-control"></p><p id="wv-breath"></p></details></section>
+    <section class="wv-record" aria-label="Текущий подход"><p id="wv-set-label" class="wv-eyebrow"></p><h2 id="wv-title"></h2><p id="wv-equipment" class="wv-muted"></p><div id="wv-set-chips" class="wv-set-chips" aria-label="Подходы упражнения"></div>
+     <div class="wv-target"><div><span>Задание</span><strong id="wv-target"></strong></div><div><span>Прошлый раз</span><strong id="wv-previous"></strong><small id="wv-previous-date"></small></div></div>
+     <p id="wv-unilateral" class="wv-note" hidden></p>
+     <form id="wv-form" novalidate><div class="wv-fields"><label id="wv-weight-label" for="wv-kg"><span id="wv-weight-caption">Вес, кг</span><input id="wv-kg" type="text" inputmode="decimal" autocomplete="off" aria-describedby="wv-input-hint"></label><label for="wv-reps"><span id="wv-rep-caption">Повторы</span><input id="wv-reps" type="text" inputmode="numeric" autocomplete="off" required aria-describedby="wv-input-hint wv-error"></label></div><p id="wv-input-hint" class="wv-muted">Укажите фактический результат подхода.</p><p id="wv-error" role="alert"></p><button id="wv-done" class="wv-primary" type="submit">Подход выполнен</button></form>
+     <p id="wv-save-status" class="wv-muted" role="status"></p><details class="wv-guide"><summary>Подсказка по нагрузке</summary><p id="wv-suggestion"></p></details>
+    </section>
+   </div>
+  </div>
+  <section id="wv-rest" class="wv-rest" hidden aria-labelledby="wv-rest-heading"><p class="wv-eyebrow">ПОДХОД ЗАПИСАН</p><h2 id="wv-rest-heading">Отдых</h2><p id="wv-rest-time" role="timer">0:00</p><p id="wv-rest-note"></p><div class="wv-rest-adjust"><button type="button" data-wv-rest="-15">−15 сек.</button><button type="button" data-wv-rest="15">+15 сек.</button></div><div class="wv-next-card"><span>Далее</span><h3 id="wv-next-name"></h3><p id="wv-next-detail"></p></div><button type="button" id="wv-continue" class="wv-primary">Перейти к подходу</button><button type="button" id="wv-undo" class="wv-link">Исправить последнюю запись</button></section>
+  <section id="wv-finish" class="wv-finish" hidden aria-labelledby="wv-finish-heading"><div class="wv-finish-mark" aria-hidden="true">✓</div><p class="wv-eyebrow">ГОТОВО НА СЕГОДНЯ</p><h2 id="wv-finish-heading">Тренировка завершена</h2><p id="wv-finish-text"></p><p class="wv-muted">Результаты уже в журнале.</p><div id="wv-summary"></div><button type="button" id="wv-finish-close" class="wv-primary">Вернуться к плану</button><button type="button" id="wv-review" class="wv-link">Посмотреть и исправить записи</button></section>
+ </div>
+</dialog>
+
+<dialog id="motion-view" class="motion-view" aria-labelledby="mv-title">
+ <div class="mv-shell">
+  <header class="mv-head"><div><p class="mv-eyebrow">ПОДХОД · АТЛАС ДВИЖЕНИЙ · 3.7</p><h2 id="mv-title">Разбор упражнения</h2></div><button type="button" id="mv-close" aria-label="Закрыть разбор">Закрыть ×</button></header>
+  <div class="mv-select"><button type="button" data-mv-nav="-1" aria-label="Предыдущее упражнение">←</button><label for="mv-exercise">Упражнение<select id="mv-exercise"></select></label><button type="button" data-mv-nav="1" aria-label="Следующее упражнение">→</button></div>
+  <div class="mv-grid">
+   <section class="mv-demo" aria-label="Демонстрация движения">
+    <div id="mv-camera-controls" class="motion-camera-controls" hidden><div id="mv-cameras" class="motion-cameras" role="group" aria-label="Ракурс движения"></div><label><input id="mv-dual" type="checkbox"> Два ракурса</label></div>
+    <div id="mv-projections"><div class="mv-projection"><div class="mv-canvas"><span id="mv-view" class="mv-view-label"></span><div id="mv-stage"></div><div class="mv-phase-line"><span id="mv-phase"></span><span id="mv-position"></span></div></div><p id="mv-camera-hint" class="mv-camera-hint" hidden></p></div><div id="mv-second" class="mv-projection" hidden><div class="mv-canvas"><span id="mv-second-label" class="mv-view-label"></span><div id="mv-second-stage"></div></div><p id="mv-second-hint" class="mv-camera-hint"></p></div></div>
+    <p id="mv-cue" class="mv-cue"></p>
+    <label class="mv-range-label" for="mv-progress">Положение в повторении<input id="mv-progress" type="range" min="0" max="1000" step="1" value="0"></label>
+    <div class="mv-controls"><button type="button" data-mv-step="-.05" aria-label="Назад на пять процентов повторения">−5%</button><button type="button" id="mv-play" class="mv-primary" aria-pressed="false">Воспроизвести</button><button type="button" data-mv-step=".05" aria-label="Вперёд на пять процентов повторения">+5%</button><label for="mv-speed">Скорость<select id="mv-speed"><option value="0.25">¼×</option><option value="0.5">½×</option><option value="1">1×</option></select></label></div>
+    <div class="mv-poses" aria-label="Положения движения"><button type="button" data-mv-pose="start">Старт</button><button type="button" data-mv-pose="middle">Середина</button><button type="button" data-mv-pose="end">Конечная точка</button><button type="button" data-mv-pose="return">Возврат</button></div>
+    <div class="mv-toggles"><label><input type="checkbox" id="mv-joints" checked> Суставы</label><label><input type="checkbox" id="mv-trace"> Траектория кисти</label></div>
+    <p id="mv-tempo" class="mv-small"></p>
+   </section>
+   <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Работающие мышцы</h3><p class="mv-muscle-label">Основные</p><p id="mv-primary"></p><p class="mv-muscle-label">Вспомогательные</p><p id="mv-secondary"></p></div></div><p class="mv-small">Расположение мышц показано на отдельной карте. На движущейся фигуре отмечены суставы.</p><h3>Как выполнять</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Ошибки и дыхание</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>О демонстрациях</summary><p>Схемы помогают разобрать последовательность движения. Амплитуда зависит от упражнения и особенностей человека; схематичный силуэт не задаёт обязательные углы суставов.</p><div id="mv-sources"></div><p class="mv-small">Версия демонстраций 3.7</p></details></aside>
+  </div>
+ </div>
+</dialog>

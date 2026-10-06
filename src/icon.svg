@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#2347C8"/>
+  <!-- гриф с дисками -->
+  <rect x="96" y="246" width="320" height="20" rx="10" fill="#FFFFFF"/>
+  <rect x="118" y="196" width="40" height="120" rx="12" fill="#FFFFFF"/>
+  <rect x="354" y="196" width="40" height="120" rx="12" fill="#FFFFFF"/>
+  <rect x="78" y="216" width="26" height="80" rx="10" fill="#DC3B37"/>
+  <rect x="408" y="216" width="26" height="80" rx="10" fill="#DC3B37"/>
+</svg>
