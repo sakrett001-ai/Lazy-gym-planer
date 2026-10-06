@@ -127,6 +127,10 @@ const CUES_ALL = {
 for (const ex of EX) {
   const c = CUES_ALL[ex.id];
   if (c) ex.anim.cues = c.length === 1 ? [c[0], c[0]] : c;
+  else if (!ex.anim.cues) ex.anim.cues = [ex.tech[1] || ex.tech[0], ex.tech[ex.tech.length - 1]];
+  /* упражнения из модулей, подключённых после 03-motion-demo */
+  if (ex.anim.eccFirst == null) ex.anim.eccFirst = eccFirst.has(ex.id);
+  if (ex.anim.hold == null) ex.anim.hold = isometric.has(ex.id);
 }
 
 DEMO.rdl.tech[2] = 'Опускайте снаряд только пока сохраняются контроль спины и натяжение задней поверхности бедра. Глубина индивидуальна.';

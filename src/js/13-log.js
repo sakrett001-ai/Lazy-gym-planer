@@ -3,9 +3,9 @@
    в офлайн-файле — браузер. Формат: LOG.data[exId] = [{d:'2026-10-05', wk?:1, s:[[кг|null, повторы] | null, …]}, …] */
 const LOG_KEY = 'podhod.log.v1';
 const LOG = {mode:'connecting', data:{}, col:null, pending:{}, writing:{}, again:{}, timers:{}, err:'', dl:null, canExport:false};
-const WEIGHTED = new Set(['db', 'bb', 'kb', 'cable', 'smith', 'legpress', 'legext', 'legcurl', 'pecdeck']);
+const WEIGHTED = new Set(['db', 'bb', 'kb', 'cable', 'smith', 'legpress', 'legext', 'legcurl', 'pecdeck', 'hack', 'chestpress', 'shoulderpress', 'leverrow', 'tbar', 'abductor', 'calfseat', 'calfstand']);
 const LOWER_G = new Set(['quads', 'hams', 'glutes', 'calves']);
-const MACHINE = new Set(['cable', 'smith', 'legext', 'legcurl', 'pecdeck']);
+const MACHINE = new Set(['cable', 'smith', 'legext', 'legcurl', 'pecdeck', 'chestpress', 'shoulderpress', 'leverrow', 'abductor', 'calfseat', 'calfstand', 'gravitron', 'hack', 'tbar']);
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
 function dayKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
@@ -136,6 +136,7 @@ function cleanToday(id) {
 
 /* ---------- что записываем ---------- */
 function loadType(ex) {
+  if (ex.assist) return 'assist'; /* гравитрон: записываем противовес, меньше — тяжелее */
   if (ex.eq.some(g => g.every(id => WEIGHTED.has(id)))) return 'kg';
   if (ex.g === 'cardio' || ex.eq.some(g => g.includes('band') || g.includes('abwheel'))) return 'none';
   return 'extra';
@@ -143,7 +144,7 @@ function loadType(ex) {
 function repLabel(ex) { return ex.kind === 'time' ? 'Секунды' : ex.kind === 'dist' ? 'Метры' : 'Повторы'; }
 function stepFor(it) {
   const ids = it.eqIds || [], lower = LOWER_G.has(it.ex.g);
-  if (ids.includes('legpress')) return 10;
+  if (ids.includes('legpress') || ids.includes('hack')) return 10;
   if (ids.includes('bb') || ids.includes('smith')) return lower ? 5 : 2.5;
   if (ids.some(i => MACHINE.has(i))) return lower ? 5 : 2.5;
   if (ids.includes('db')) return 2;
@@ -163,7 +164,7 @@ function suggest(it) {
   const step = stepFor(it);
   const res = {tone:'new', kg:null, reps:[], text:'', prev:null};
   if (!past.length) {
-    res.text = lt === 'kg'
+    res.text = lt === 'assist' ? `Первая запись. Подберите противовес, с которым ${lo === hi ? lo : lo + '–' + hi} повторов даются с запасом в 2.` : lt === 'kg'
       ? (ex.kind === 'dist' ? 'Первая запись. Возьмите тяжёлые снаряды, с которыми проходите дистанцию без остановок.' : `Первая запись. Подберите вес, с которым ${lo === hi ? lo : lo + '–' + hi}${unit} даются с запасом в 2 повтора.`)
       : `Первая запись. Отметьте, сколько ${ex.kind === 'time' ? 'секунд' : ex.kind === 'dist' ? 'метров' : 'повторов'} получилось в каждом подходе.`;
     return res;
@@ -195,6 +196,9 @@ function suggest(it) {
     if (lt === 'kg' && work) {
       res.tone = 'up'; res.kg = work + step; res.reps = sets.map(() => lo);
       res.text = `Прибавьте до ${fmtKg(res.kg)} кг (+${fmtKg(step)}). В прошлый раз все подходы на верхней границе: ${prevList}.`;
+    } else if (lt === 'assist' && work) {
+      res.tone = 'up'; res.kg = Math.max(0, work - step); res.reps = sets.map(() => lo);
+      res.text = `Уменьшите противовес до ${fmtKg(res.kg)} кг (−${fmtKg(step)}). В прошлый раз все подходы на верхней границе: ${prevList}.`;
     } else if (ex.kind === 'time') {
       res.tone = 'up'; res.kg = work; res.reps = sets.map(() => hi + 10);
       res.text = `Все подходы на верхней границе. Держите на 10 с дольше${lt === 'extra' ? ' или добавьте отягощение' : ''}.`;
@@ -211,6 +215,9 @@ function suggest(it) {
     if (lt === 'kg' && work && lowAgain) {
       res.tone = 'down'; res.kg = roundTo(work * 0.9, step); res.reps = sets.map(() => lo);
       res.text = `Две тренировки подряд меньше ${lo}${unit} — снизьте до ${fmtKg(res.kg)} кг и наберите повторы.`;
+    } else if (lt === 'assist' && work != null && lowAgain) {
+      res.tone = 'down'; res.kg = work + step; res.reps = sets.map(() => lo);
+      res.text = `Две тренировки подряд меньше ${lo} — увеличьте противовес до ${fmtKg(res.kg)} кг и наберите повторы.`;
     } else {
       res.tone = 'same'; res.kg = work; res.reps = sets.map(x => Math.max(lo, x[1]));
       res.text = `${work ? `Оставьте ${fmtKg(work)} кг` : 'Тот же вариант'} и доберите до ${lo}${unit} в каждом подходе. В прошлый раз: ${prevList}.`;
@@ -218,7 +225,7 @@ function suggest(it) {
     return res;
   }
   res.tone = 'same'; res.kg = work; res.reps = sets.map(x => Math.min(hi, x[1] + 1));
-  res.text = `${work ? `Тот же вес — ${fmtKg(work)} кг` : 'Тот же вариант'}, цель — на 1${unit || ' повтор'} больше: в прошлый раз ${prevList}.`;
+  res.text = `${work ? `${lt === 'assist' ? 'Тот же противовес' : 'Тот же вес'} — ${fmtKg(work)} кг` : 'Тот же вариант'}, цель — на 1${unit || ' повтор'} больше: в прошлый раз ${prevList}.`;
   return res;
 }
 
@@ -248,7 +255,7 @@ function logRows(it) {
   }
   return {sg, html:`<p class="sug sug-${sg.tone}"><b aria-hidden="true">${SUG_ICON[sg.tone]}</b><span>${esc(sg.text)}</span></p>
     <div class="lt${lt === 'none' ? ' lt-nokg' : ''}" role="group" aria-label="Запись подходов">
-      <div class="lt-h"><span>№</span><span>Прошлый раз</span>${lt === 'none' ? '' : `<span>${lt === 'kg' ? 'Вес, кг' : 'Доп. кг'}</span>`}<span>${repLabel(ex)}</span><span></span></div>
+      <div class="lt-h"><span>№</span><span>Прошлый раз</span>${lt === 'none' ? '' : `<span>${lt === 'kg' ? 'Вес, кг' : lt === 'assist' ? 'Противовес' : 'Доп. кг'}</span>`}<span>${repLabel(ex)}</span><span></span></div>
       ${rows}
     </div>
     <div class="lt-foot"><button type="button" class="lt-add" data-addset="${ex.id}">+ подход</button>${ex.uni ? '<span>повторы — на каждую сторону</span>' : ''}${it.rx.circ ? '<span>строка — один круг</span>' : ''}</div>`};

@@ -24,7 +24,11 @@ const PATTERN = {};
  ['curl', 'bbcurl dbcurl hammer cablecurl bandcurl preacher inclinecurl concentration towelcurl'], ['ext', 'skull pushdown bandpushdown ohext benchdip kickback chairdip'],
  ['lunge', 'lunge bulgarian stepup revlunge sidelunge pistolbox'], ['bridge', 'hipthrust bridge glutekick glutebridge1'], ['flex', 'crunch cablecrunch lyinglegraise legraise declinecrunch captainraise hangknee bicycle'],
  ['hold', 'plank sideplank rollout hollow plankup deadbug birddog wallsit'], ['side', 'sidebend'], ['calf', 'calfraise lpcalf calf1'], ['grip', 'farmer hang wristcurl'],
- ['jump', 'jumpingjack jumpsquat'], ['burpee', 'burpee thruster'], ['climb', 'mountain']].forEach(([p, ids]) => ids.split(' ').forEach(id => PATTERN[id] = p));
+ ['jump', 'jumpingjack jumpsquat'], ['burpee', 'burpee thruster'], ['climb', 'mountain'],
+ /* тренажёры и кардио (04b) */
+ ['squat', 'hacksquat'], ['hpush', 'chestpressm smithbench assistdip'], ['fly', 'cablelowfly'], ['hrow', 'leverrowm tbarrow chestrowdb'], ['vpull', 'assistpull'], ['vpush', 'shoulderpressm smithohp'],
+ ['ext', 'cableohext'], ['side', 'cablewood'], ['hinge', 'pullthrough'], ['bridge', 'cablekickback abduction'], ['adduct', 'adduction'], ['calf', 'seatedcalf standcalf'],
+ ['run', 'treadmill stairs'], ['ride', 'bike elliptical'], ['row', 'rower']].forEach(([p, ids]) => ids.split(' ').forEach(id => PATTERN[id] = p));
 /* желательность упражнения при равных условиях: вспомогательные и упрощённые варианты ниже */
 const EX_W = {wallpush:0.5, kneepush:0.7, inclinepush:0.8, towelcurl:0.6, towelrow:0.75, tablerow:0.8, chairdip:0.75, wallsit:0.7, superman:0.8, bicycle:0.9, deadbug:0.85, birddog:0.85, sidelunge:0.85, revlunge:0.9, calf1:0.9, sidebend:0.8, concentration:0.85, kickback:0.85, declinepush:0.9, goodmorning:0.8, jumpingjack:0.9, hangknee:0.95, shrug:0.55, hyper:0.75, frontraise:0.75, wristcurl:0.6, hang:0.65, farmer:0.8, lpcalf:0.9, pikepush:0.8, benchdip:0.85, bandlatraise:0.9,
   bridge:0.85, airsquat:0.8, lyinglegraise:0.9, sideplank:0.9, stepup:0.9, smithsquat:0.85, smithincline:0.9, diamond:0.85, bandcurl:0.9, bandpushdown:0.9, bandrow:0.95};
@@ -146,7 +150,7 @@ function pickExercises(E, rand, groups, count, avoid) {
       if (ex.eq.length) sc += 0.25;
       if (S.goal === 'strength' && ex.eq.some(g => g.includes('bb'))) sc += 0.3;
       for (const m of ex.pri) if (!G.has(MUSCLE_GROUP[m])) sc -= 0.3;
-      const pat = PATTERN[ex.id];
+      const pat = PATTERN[ex.id] || 'solo:' + ex.id;
       if (usedPat[pat]) sc -= 0.7 * usedPat[pat] + (picked.some(p => PATTERN[p.id] === pat && p.g === ex.g) ? 0.4 : 0);
       if (!G.has(ex.g)) sc -= 0.6;
       if (avoid && avoid.has(ex.id)) sc -= 1.1;
@@ -155,7 +159,7 @@ function pickExercises(E, rand, groups, count, avoid) {
     });
     if (!best) break;
     picked.push(best);
-    usedPat[PATTERN[best.id]] = (usedPat[PATTERN[best.id]] || 0) + 1;
+    const bp = PATTERN[best.id] || 'solo:' + best.id; usedPat[bp] = (usedPat[bp] || 0) + 1;
     if (quota[best.g] !== undefined) quota[best.g] -= 1;
     for (const g of groupsOf(best)) if (g !== best.g && quota[g] !== undefined) quota[g] -= 0.45;
   }
