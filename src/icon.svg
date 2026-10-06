@@ -1,9 +1,50 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#2347C8"/>
-  <!-- гриф с дисками -->
-  <rect x="96" y="246" width="320" height="20" rx="10" fill="#FFFFFF"/>
-  <rect x="118" y="196" width="40" height="120" rx="12" fill="#FFFFFF"/>
-  <rect x="354" y="196" width="40" height="120" rx="12" fill="#FFFFFF"/>
-  <rect x="78" y="216" width="26" height="80" rx="10" fill="#DC3B37"/>
-  <rect x="408" y="216" width="26" height="80" rx="10" fill="#DC3B37"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2E55D9"/><stop offset="1" stop-color="#1B3AA6"/></linearGradient>
+    <linearGradient id="fur" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFB45C"/><stop offset="1" stop-color="#F08A2E"/></linearGradient>
+    <linearGradient id="kb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4A5568"/><stop offset="1" stop-color="#1F2733"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- пол -->
+  <ellipse cx="256" cy="438" rx="190" ry="18" fill="#000" opacity=".18"/>
+  <!-- хвост -->
+  <path d="M352 372c48 10 86-6 92-44 4-26-12-44-32-40" fill="none" stroke="#E07A22" stroke-width="30" stroke-linecap="round"/>
+  <path d="M352 372c48 10 86-6 92-44 4-26-12-44-32-40" fill="none" stroke="#FFB45C" stroke-width="16" stroke-linecap="round"/>
+  <!-- тело: толстый, низкий -->
+  <ellipse cx="248" cy="330" rx="150" ry="118" fill="url(#fur)"/>
+  <!-- живот -->
+  <ellipse cx="248" cy="352" rx="98" ry="76" fill="#FFE2B8"/>
+  <!-- полоски на боках -->
+  <path d="M118 290c14-8 26-6 36 4M122 330c12-10 26-8 36 2M352 282c12-8 24-6 34 4" fill="none" stroke="#E07A22" stroke-width="12" stroke-linecap="round"/>
+  <!-- лапы (ноги) -->
+  <ellipse cx="190" cy="432" rx="40" ry="20" fill="#F08A2E"/>
+  <ellipse cx="300" cy="432" rx="40" ry="20" fill="#F08A2E"/>
+  <!-- голова -->
+  <path d="M136 140 L170 60 L218 112 Z" fill="#F08A2E"/>
+  <path d="M152 136 L172 86 L202 118 Z" fill="#FFC9D1"/>
+  <path d="M326 140 L292 60 L244 112 Z" fill="#F08A2E"/>
+  <path d="M310 136 L290 86 L260 118 Z" fill="#FFC9D1"/>
+  <ellipse cx="232" cy="170" rx="112" ry="92" fill="url(#fur)"/>
+  <!-- щёки -->
+  <ellipse cx="232" cy="200" rx="68" ry="44" fill="#FFE2B8"/>
+  <!-- глаза: довольные, закрытые от натуги -->
+  <path d="M176 164c10-14 28-14 38 0M250 164c10-14 28-14 38 0" fill="none" stroke="#2B1A0E" stroke-width="10" stroke-linecap="round"/>
+  <!-- нос и рот -->
+  <path d="M222 190 L242 190 L232 202 Z" fill="#E0697A"/>
+  <path d="M232 202c-8 14-22 12-28 4M232 202c8 14 22 12 28 4" fill="none" stroke="#2B1A0E" stroke-width="6" stroke-linecap="round"/>
+  <!-- усы -->
+  <path d="M150 190h44M148 206l46-4M314 190h-44M316 206l-46-4" fill="none" stroke="#2B1A0E" stroke-width="5" stroke-linecap="round" opacity=".7"/>
+  <!-- левая передняя лапа на животе -->
+  <path d="M142 300c-12 26-10 56 4 80" fill="none" stroke="#F08A2E" stroke-width="36" stroke-linecap="round"/>
+  <ellipse cx="152" cy="388" rx="26" ry="18" fill="#FFB45C"/>
+  <!-- правая лапа поднимает гирю -->
+  <path d="M344 296c36-28 50-110 44-182" fill="none" stroke="#F08A2E" stroke-width="42" stroke-linecap="round"/>
+  <!-- гиря -->
+  <circle cx="394" cy="124" r="58" fill="url(#kb)"/>
+  <path d="M356 104c10-18 30-28 52-24" fill="none" stroke="#8E9AAE" stroke-width="8" stroke-linecap="round" opacity=".55"/>
+  <path d="M356 86c0-40 76-40 76 0" fill="none" stroke="url(#kb)" stroke-width="18" stroke-linecap="round"/>
+  <text x="394" y="140" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="42" fill="#FFB45C">16</text>
+  <!-- ладонь на ручке -->
+  <ellipse cx="394" cy="60" rx="32" ry="22" fill="#FFB45C"/>
+  <path d="M372 62c8 10 36 10 44 0" fill="none" stroke="#E07A22" stroke-width="5" stroke-linecap="round" opacity=".8"/>
 </svg>

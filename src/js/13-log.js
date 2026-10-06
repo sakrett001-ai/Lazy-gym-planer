@@ -55,8 +55,9 @@ async function logInit() {
   let first = true;
   LOG.col.onSnapshot(snap => {
     const remote = {};
-    for (const d of snap.docs) { const b = d.data(); if (b && EXI[d.id] && validSessions(b.sessions)) remote[d.id] = b.sessions; }
-    const changed = [];
+    let bodyDoc = null;
+    for (const d of snap.docs) { const b = d.data(); if (d.id === '_body') bodyDoc = b; else if (b && EXI[d.id] && validSessions(b.sessions)) remote[d.id] = b.sessions; }
+    const changed = [], wasFirst = first;
     if (first) {
       first = false;
       /* записи, сделанные в этом браузере до подключения, переносим в аккаунт */
@@ -76,6 +77,7 @@ async function logInit() {
       }
     }
     logSaveLocal();
+    bodyRemote(bodyDoc, wasFirst);
     logRefresh(changed);
   }, err => {
     if (err && err.code === 'unavailable') return;
@@ -260,7 +262,7 @@ function metricOf(ex) {
   if (ex.kind === 'dist') return {name:'Лучшая дистанция', unit:'м', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
   return {name:'Лучший подход', unit:'повт.', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
 }
-function sparkSvg(pts, unit) {
+function sparkSvg(pts, unit, step = 0.5) {
   if (!pts.length) return '';
   const W = 300, H = 74, L = 6, R = 40, T = 12, B = 14;
   const vs = pts.map(p => p.v);
@@ -272,7 +274,7 @@ function sparkSvg(pts, unit) {
   const line = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join('');
   const area = pts.length > 1 ? `${line}L${x(pts.length - 1).toFixed(1)},${H - B}L${x(0).toFixed(1)},${H - B}Z` : '';
   const last = pts[pts.length - 1], first = pts[0];
-  const fv = v => fmtKg(Math.round(v * 2) / 2);
+  const fv = v => fmtKg(Math.round(v / step) * step);
   const data = esc(JSON.stringify(pts.map((p, i) => [x(i), y(p.v), `${fmtDay(p.d, true)} · ${fv(p.v)} ${unit}`])));
   return `<svg class="spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="Динамика: от ${fv(first.v)} до ${fv(last.v)} ${unit}" data-pts="${data}">
     <line class="sp-base" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/>
@@ -362,9 +364,10 @@ function renderJournal() {
   const last = entries.reduce((m, [, ss]) => ss[ss.length - 1].d > m ? ss[ss.length - 1].d : m, '');
   entries.sort((a, b) => a[1][a[1].length - 1].d < b[1][b[1].length - 1].d ? 1 : -1);
   const tools = `<div class="j-tools">
-      ${LOG.canExport ? `<button type="button" class="btn btn-2" id="exp-csv">Таблица для Excel</button><button type="button" class="btn btn-2" id="exp-json">Резервная копия</button>` : ''}
+      ${LOG.canExport ? `<button type="button" class="btn btn-2" id="exp-json">Полная копия (JSON)</button><button type="button" class="btn btn-2" id="exp-csv">Журнал для Excel</button><button type="button" class="btn btn-2" id="exp-body">Замеры для Excel</button>` : ''}
       <label class="btn btn-2" for="imp-file">Восстановить из копии</label><input type="file" id="imp-file" accept=".json,application/json" hidden>
-    </div><p class="p-hint" id="j-msg" role="status"></p>`;
+    </div><p class="p-hint" id="j-msg" role="status"></p>
+    <p class="p-hint">Полная копия — настройки, инвентарь, журнал и замеры одним файлом: перенесёт всё на другой телефон или вернёт после очистки браузера.</p>`;
   let html = `<header class="p-head j-head">
     <div class="p-sum">
       <p class="eyebrow">Журнал</p>
@@ -378,7 +381,7 @@ function renderJournal() {
       ${tools}
     </div>
     <figure class="j-heat"><figcaption class="lb-h">Активность за 12 недель${last ? ` · последняя тренировка ${fmtDay(last, true)}` : ''}</figcaption>${heatmap()}</figure>
-  </header>`;
+  </header>${bodyHtml()}`;
   if (!entries.length) {
     html += `<div class="empty"><h2>Записей пока нет</h2><p>Откройте план и отмечайте подходы в карточках упражнений: вес и повторы сохранятся здесь, а планировщик начнёт подсказывать, когда прибавлять вес.</p><button type="button" class="btn" data-view="plan">Перейти к плану</button></div>`;
   } else {
@@ -433,8 +436,8 @@ function csvText() {
 async function exportLog(kind) {
   const msg = $('#j-msg'), d = todayKey();
   const r = kind === 'csv' ? await saveFile(`lazy-gym-log-${d}.csv`, csvText(), 'text/csv')
-    : await saveFile(`lazy-gym-kopiya-${d}.json`, JSON.stringify({app:'podhod', v:1, exported:new Date().toISOString(), log:LOG.data}), 'application/json');
-  if (msg) msg.textContent = r === 'ok' ? (kind === 'csv' ? 'Таблица сохранена. Откройте её в Excel: столбцы разделены точкой с запятой.' : 'Копия сохранена. Восстановить журнал из неё можно здесь же, на любом устройстве.')
+    : await saveFile(`lazy-gym-kopiya-${d}.json`, JSON.stringify(backupObject()), 'application/json');
+  if (msg) msg.textContent = r === 'ok' ? (kind === 'csv' ? 'Таблица сохранена. Откройте её в Excel: столбцы разделены точкой с запятой.' : 'Полная копия сохранена. Восстановить из неё всё можно здесь же, на любом устройстве.')
     : r === 'declined' ? 'Сохранение отменено.' : 'Сохранить файл не удалось.';
 }
 function importLog(file) {
@@ -442,19 +445,15 @@ function importLog(file) {
   const rd = new FileReader();
   rd.onload = () => {
     let obj; try { obj = JSON.parse(rd.result); } catch (e) { obj = null; }
-    const log = obj && obj.app === 'podhod' && obj.log && typeof obj.log === 'object' ? obj.log : null;
-    if (!log) { if (msg) msg.textContent = 'Это не резервная копия Lazy Gym Planner. Выберите файл lazy-gym-kopiya-….json.'; return; }
-    let nEx = 0, nS = 0;
-    for (const [id, ss] of Object.entries(log)) {
-      if (!EXI[id] || !validSessions(ss)) continue;
-      const clean = ss.map(x => ({d:x.d, ...(x.wk ? {wk:+x.wk} : {}), s:x.s.map(v => Array.isArray(v) && isFinite(+v[1]) ? [v[0] == null || v[0] === '' ? null : +v[0], +v[1]] : null)}));
-      const merged = mergeSessions(LOG.data[id], clean);
-      if (JSON.stringify(merged) !== JSON.stringify(LOG.data[id] || [])) { LOG.data[id] = merged; logTouch(id, true); nEx++; nS += clean.length; }
-    }
-    logSaveLocal();
+    if (!obj || obj.app !== 'podhod' || (!obj.log && !obj.body && !obj.settings)) { if (msg) msg.textContent = 'Это не резервная копия Lazy Gym Planner. Выберите файл lazy-gym-kopiya-….json.'; return; }
+    const r = restoreBackup(obj);
     renderJournal();
     const m2 = $('#j-msg');
-    if (m2) m2.textContent = nEx ? `Восстановлено записей: ${nS}, упражнений: ${nEx}. Совпадающие даты объединены.` : 'Новых записей в копии нет — журнал уже содержит всё из неё.';
+    const parts = [];
+    if (r.exercises) parts.push(`записей журнала: ${r.sessions} (упражнений: ${r.exercises})`);
+    if (r.body > 0) parts.push(`замеров: ${r.body}`);
+    if (r.settings) parts.push('настройки');
+    if (m2) m2.textContent = parts.length ? `Восстановлено: ${parts.join(', ')}. Совпадающие даты объединены.` : 'Нового в копии нет — всё из неё уже есть.';
   };
   rd.readAsText(file);
 }
