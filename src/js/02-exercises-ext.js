@@ -236,8 +236,8 @@ EX.push(
  err:['Раскачка маятником', 'Бросок ног вниз', 'Подъём коленей без подкрутки таза'],
  breath:'Выдох при подъёме, вдох при опускании.',
  anim:{view:'side', noGround:true,
-  A:{hip:hipFromSh([100, 83], 0), torso:0, arm:{ik:[100, 27], b:'back'}, leg:{a:[180, 182], fr:-40}},
-  B:{hip:hipFromSh([100, 83], -10), torso:-10, arm:{ik:[100, 27], b:'back'}, leg:{a:[82, 176], fr:-40}},
+  A:{hip:hipFromSh([100, 83], 0), torso:0, arm:{ik:[100, 26], b:'fwd'}, leg:{a:[180, 182], fr:-40}},
+  B:{hip:hipFromSh([100, 83], -10), torso:-10, arm:{ik:[100, 26], b:'fwd'}, leg:{a:[82, 176], fr:-40}},
   props:[{k:'circle', c:[100, 24], r:4.5}, {k:'line', pts:[[70, 24], [130, 24]], w:2, cls:'eq-rail'}]}},
 {id:'rollout', name:'Выкатывание ролика с колен', eq:[['abwheel']], g:'abs', pri:['abs'], sec:['obliques', 'lats', 'delt_f'], type:'c', lvl:2,
  tech:['Встаньте на колени, ролик под плечами на прямых руках. Напрягите пресс и ягодицы, поясница слегка округлена.',
@@ -270,7 +270,7 @@ EX.push(
  breath:'Выдох при отведении, вдох при возврате.',
  anim:{view:'side',
   A:{hip:[90, 97], torso:20, arm:{ik:[140, 72], b:'down'}, legF:{ik:[96, 180], b:'fwd', f:90}, legN:{a:[182, 182], f:90}},
-  B:{hip:[90, 97], torso:20, arm:{ik:[140, 72], b:'down'}, legF:{ik:[96, 180], b:'fwd', f:90}, legN:{a:[214, 202], f:110}},
+  B:{hip:[90, 97], torso:20, arm:{ik:[140, 72], b:'down'}, legF:{ik:[96, 180], b:'fwd', f:90}, legN:{a:[214, 222], f:112}},
   props:[{k:'line', pts:[[150, 40], [150, GROUND]], w:5}, {k:'cable', from:[146, 180], at:'anN', handle:true, layer:'front'}]}},
 
 /* ===== КАРДИО ===== */

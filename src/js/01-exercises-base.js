@@ -473,8 +473,8 @@ const EX = [
  err:['Пассивный провал в плечах с болью', 'Раскачка'],
  breath:'Спокойное ровное дыхание.',
  anim:{view:'side', noGround:true,
-  A:{hip:hipFromSh([100, 83], -3), torso:-3, arm:{ik:[100, 27], b:'back'}, leg:{a:[183, 186], fr:-30}},
-  B:{hip:hipFromSh([100, 80], 3), torso:3, shrug:0, arm:{ik:[100, 27], b:'back'}, leg:{a:[178, 184], fr:-30}},
+  A:{hip:hipFromSh([100, 83], -3), torso:-3, arm:{ik:[100, 26], b:'fwd'}, leg:{a:[183, 186], fr:-30}},
+  B:{hip:hipFromSh([100, 80], 3), torso:3, shrug:0, arm:{ik:[100, 26], b:'fwd'}, leg:{a:[178, 184], fr:-30}},
   props:[{k:'circle', c:[100, 24], r:4.5}, {k:'line', pts:[[70, 24], [130, 24]], w:2, cls:'eq-rail'}]}},
 
 /* ===== ПРЕСС ===== */
@@ -512,8 +512,8 @@ const EX = [
  err:['Раскачка маятником', 'Подъём только за счёт сгибателей бедра без подкрутки таза'],
  breath:'Выдох при подъёме ног, вдох при опускании.',
  anim:{view:'side', noGround:true,
-  A:{hip:hipFromSh([100, 83], 0), torso:0, arm:{ik:[100, 27], b:'back'}, leg:{a:[180, 180], fr:-40}},
-  B:{hip:hipFromSh([100, 83], -12), torso:-12, arm:{ik:[100, 27], b:'back'}, leg:{a:[82, 82], fr:-40}},
+  A:{hip:hipFromSh([100, 83], 0), torso:0, arm:{ik:[100, 26], b:'fwd'}, leg:{a:[180, 180], fr:-40}},
+  B:{hip:hipFromSh([100, 83], -12), torso:-12, arm:{ik:[100, 26], b:'fwd'}, leg:{a:[82, 82], fr:-40}},
   props:[{k:'circle', c:[100, 24], r:4.5}, {k:'line', pts:[[70, 24], [130, 24]], w:2, cls:'eq-rail'}]}},
 {id:'lyinglegraise', name:'Подъём ног лёжа', eq:[], g:'abs', pri:['abs'], sec:['obliques'], type:'i', lvl:1,
  tech:['Лёжа на спине, руки вдоль тела, поясница прижата к полу.',
@@ -683,8 +683,8 @@ const EX = [
  err:['Подъём таза', 'Рывки', 'Неполное разгибание внизу'],
  breath:'Выдох при сгибании, вдох при разгибании.',
  anim:{view:'side',
-  A:{hip:[88, 124], torso:84, head:-10, arm:{a:[150, 172]}, leg:{a:[270, 268], fr:-90}},
-  B:{hip:[88, 124], torso:84, head:-10, arm:{a:[150, 172]}, leg:{a:[270, 378], fr:-90}},
+  A:{hip:[88, 124], torso:84, head:-10, arm:{a:[172, 150]}, leg:{a:[270, 268], fr:-90}},
+  B:{hip:[88, 124], torso:84, head:-10, arm:{a:[172, 150]}, leg:{a:[270, 378], fr:-90}},
   props:[{k:'rect', x:48, y:133, w:116, h:8}, {k:'line', pts:[[66, 141], [66, GROUND]], w:4}, {k:'line', pts:[[150, 141], [150, GROUND]], w:4},
    {k:'roller', leg:'N', side:90, out:8, pivot:[47, 128], layer:'front'}]}},
 
