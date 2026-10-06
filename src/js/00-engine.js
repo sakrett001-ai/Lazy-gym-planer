@@ -433,6 +433,58 @@ function makeBodyDetail(parent,view,palette) {
   };
 }
 
+/* ---------- Векторы движения: куда смещаются суставы за рабочую (концентрическую) фазу ----------
+   Считаются из самих поз, поэтому показывают не только кисти: в тяге к животу видно отклонение плеч,
+   в приседе — ход таза. Для eccFirst-упражнений рабочая фаза идёт от нижней точки к верхней. */
+const VEC_JOINTS = {
+  side:['sh', 'hip', 'elN', 'gripN', 'knN', 'anN'],
+  front:['shL', 'shR', 'elL', 'elR', 'gripL', 'gripR', 'hipL', 'hipR', 'knL', 'knR', 'anL', 'anR'],
+  spatial:['sh', 'hip', 'elL', 'elR', 'gripL', 'gripR', 'knL', 'knR', 'anL', 'anR']
+};
+let vecSerial = 0;
+function poseFor(anim, t, camera) {
+  if (anim.rig3d) { const saved = anim.camera; if (camera) anim.camera = camera; const J = spatialPose(anim, t); anim.camera = saved; return J; }
+  return solvePose(anim, poseAt(anim, t), anim._C);
+}
+function vectorPairs(anim, camera) {
+  /* циклические многокадровые движения (бёрпи, прыжки) стрелками не описываются, кроме явно разрешённых */
+  if (anim.hold || (anim.keys && anim.keys.length > 2 && !anim.vectors)) return [];
+  const t0 = anim.eccFirst ? 1 : 0, t1 = anim.eccFirst ? 0 : 1;
+  const J0 = poseFor(anim, t0, camera), Jm = poseFor(anim, 0.5, camera), J1 = poseFor(anim, t1, camera);
+  let names = anim.vecJoints || VEC_JOINTS[J0.view] || [];
+  /* дальняя конечность — только если она движется иначе, чем ближняя (выпады, попеременная работа) */
+  if (J0.view === 'side') for (const [n, f] of [['elF', 'elN'], ['gripF', 'gripN'], ['knF', 'knN'], ['anF', 'anN']]) {
+    if (J0[n] && J0[f] && (Math.hypot(J0[n][0] - J0[f][0], J0[n][1] - J0[f][1]) > 8 || Math.hypot(J1[n][0] - J1[f][0], J1[n][1] - J1[f][1]) > 8)) names = names.concat(n);
+  }
+  const out = [];
+  for (const n of names) {
+    const a = J0[n], m = Jm[n], b = J1[n]; if (!a || !b) continue;
+    if (Math.hypot(b[0] - a[0], b[1] - a[1]) < (/^(el|kn)/.test(n) ? 11 : 7)) continue;
+    /* не рисуем стрелку, если точка просто повторяет соседний сустав (кисть при прямой руке и т. п.) */
+    if (out.some(o => Math.hypot(o.a[0] - a[0], o.a[1] - a[1]) < 5 && Math.hypot(o.b[0] - b[0], o.b[1] - b[1]) < 5)) continue;
+    out.push({name:n, a, m:m || mid(a, b), b});
+  }
+  return out;
+}
+function vectorGroup(svg, anim, camera) {
+  const g = el('g', {class:'motion-vec', 'aria-hidden':'true', display:'none'}, svg);
+  const id = 'vec-arrow-' + (++vecSerial), defs = el('defs', {}, g);
+  for (const kind of ['limb', 'core']) {
+    const mk = el('marker', {id:id + '-' + kind, viewBox:'0 0 10 10', refX:'7', refY:'5', markerWidth:'5', markerHeight:'5', orient:'auto-start-reverse'}, defs);
+    el('path', {d:'M0,0 L10,5 L0,10 Z', class:'vec-head vec-' + kind}, mk);
+  }
+  for (const v of vectorPairs(anim, camera)) {
+    const dx = v.b[0] - v.a[0], dy = v.b[1] - v.a[1], L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
+    const a = [v.a[0] + ux * 2.5, v.a[1] + uy * 2.5], b = [v.b[0] - ux * 2.5, v.b[1] - uy * 2.5];
+    /* дуга через середину фазы: сгибания и махи идут по окружности, а не по прямой */
+    const c = [2 * v.m[0] - (a[0] + b[0]) / 2, 2 * v.m[1] - (a[1] + b[1]) / 2];
+    const kind = /^(head|sh|hip)/.test(v.name) ? 'vec-core' : 'vec-limb';
+    el('path', {d:`M${f1(a[0])},${f1(a[1])} Q${f1(c[0])},${f1(c[1])} ${f1(b[0])},${f1(b[1])}`, class:'vec-line ' + kind, 'marker-end':`url(#${id}-${kind.slice(4)})`}, g);
+    el('circle', {cx:f1(v.a[0]), cy:f1(v.a[1]), r:1.7, class:'vec-dot ' + kind}, g);
+  }
+  return show => g.setAttribute('display', show ? 'inline' : 'none');
+}
+
 function buildFigure(anim, opts = {}) {
   if(anim.rig3d)return buildSpatialFigure(anim,opts);
   const ratio = opts.ratio || 1;
@@ -540,7 +592,8 @@ function buildFigure(anim, opts = {}) {
   }
   function at(t) { draw(solvePose(anim, poseAt(anim, t), anim._C)); }
   at(opts.t ?? 0);
-  return {svg, at, setTrace};
+  const setVectors = vectorGroup(svg, anim);
+  return {svg, at, setTrace, setVectors};
 }
 
 /* Плавный цикл: подъём — пауза — возврат — пауза */

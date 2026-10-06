@@ -188,7 +188,7 @@ function buildSpatialFigure(anim,opts={}){
   svg.dataset.pose=String(t);allBounds.length=0;
  }
  const setTrace=show=>trace.setAttribute('display',show?'inline':'none');
- at(opts.t||0);return{svg,at,setTrace,camera};
+ at(opts.t||0);const setVectors=vectorGroup(svg,anim,camera);return{svg,at,setTrace,setVectors,camera};
 }
 
 function spatialExercise(id,rig,camera,cameras,hints){

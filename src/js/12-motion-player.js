@@ -1,7 +1,7 @@
 /* ---------- Проигрыватель движений: карточки и увеличенный разбор ---------- */
 let figs = [], rafId = 0, io = null;
 const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-const motionPrefs = (() => {try {return Object.assign({speed:.5,joints:true,trace:false},JSON.parse(localStorage.getItem('podhod.motion.v2') || '{}'));}catch(e){return {speed:.5,joints:true,trace:false};}})();
+const motionPrefs = (() => {try {return Object.assign({speed:.5,joints:true,trace:false,vectors:true},JSON.parse(localStorage.getItem('podhod.motion.v2') || '{}'));}catch(e){return {speed:.5,joints:true,trace:false,vectors:true};}})();
 if (![.25,.5,1].includes(+motionPrefs.speed)) motionPrefs.speed = .5;
 let detailMotion = null, detailReturn = null, lastMotionNow = null;
 function saveMotionPrefs() {try {localStorage.setItem('podhod.motion.v2',JSON.stringify(motionPrefs));}catch(e){}}
@@ -91,7 +91,7 @@ function selectMotion(it, clock=0) {
   $('#mv-title').textContent=it.name;
   $('#mv-exercise').value=it.ex.id;
   $('#mv-view').textContent=it.ex.viewNote||(it.ex.anim.view==='front'?'Вид спереди':'Вид сбоку');
-  $('#mv-speed').value=String(motionPrefs.speed);$('#mv-joints').checked=!!motionPrefs.joints;$('#mv-trace').checked=!!motionPrefs.trace;
+  $('#mv-speed').value=String(motionPrefs.speed);$('#mv-joints').checked=!!motionPrefs.joints;$('#mv-trace').checked=!!motionPrefs.trace;$('#mv-vectors').checked=!!motionPrefs.vectors;
   $('#mv-tempo').textContent=it.ex.anim.hold?'Удерживайте положение и дышите ровно.':it.ex.anim.timing||it.ex.g==='cardio'||it.ex.kind?'Ритм показан схематично. Замедление помогает разобрать движение.':`Темп задания: ${it.rx.tempo}. Скорость просмотра не меняет задание.`;
   const level={};it.ex.pri.forEach(m=>level[m]=1);it.ex.sec.forEach(m=>{if(!level[m])level[m]=.38;});
   $('#mv-muscles').innerHTML=muscleMapSvg(level,{labels:true,aria:'Основные и вспомогательные мышцы'});
@@ -138,6 +138,7 @@ function setupMotionViewer() {
   $('#mv-speed').addEventListener('change',e=>{motionPrefs.speed=Number(e.target.value);saveMotionPrefs();});
   $('#mv-exercise').addEventListener('change',e=>selectMotion(previewItem(e.target.value)));
   $('#mv-joints').addEventListener('change',e=>{motionPrefs.joints=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean))f.svg.classList.toggle('show-joints',e.target.checked);saveMotionPrefs();});
+  $('#mv-vectors').addEventListener('change',e=>{motionPrefs.vectors=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean))f.setVectors(e.target.checked);saveMotionPrefs();});
   $('#mv-trace').addEventListener('change',e=>{motionPrefs.trace=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean))f.setTrace(e.target.checked);saveMotionPrefs();});
   $('#motion-view').addEventListener('cancel',e=>{e.preventDefault();closeMotion();});
   $('#motion-view').addEventListener('close',()=>{detailMotion=null;document.documentElement.classList.remove('motion-open');});

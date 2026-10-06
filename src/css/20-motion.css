@@ -74,3 +74,9 @@ html.motion-open{overflow:hidden}
 @media(max-width:700px){.mv-grid{grid-template-columns:1fr;gap:18px}.mv-shell{padding:16px}.motion-view{width:100vw;max-height:100dvh;height:100dvh;border-radius:0;border:0;margin:0}.mv-head h2{font-size:23px}.mv-head button{font-size:12px;padding:7px 9px}#mv-stage{height:320px}.mv-select{margin:16px 0}.mv-cue{min-height:0}.mv-muscle-box{grid-template-columns:120px 1fr}}
 @media(max-width:420px){.top .atlas-button{font-size:12px;padding:8px 9px}.mv-controls{gap:5px;grid-template-columns:43px minmax(0,1fr) 43px 58px}.mv-controls button{font-size:12px;padding:8px 4px}.mv-cue{font-size:14px}}
 @media(prefers-reduced-motion:reduce){.motion-view::backdrop{backdrop-filter:none}}
+
+/* векторы движения: красные — конечности, тёмные — корпус (голова, плечи, таз) */
+.fig .motion-vec .vec-line{fill:none;stroke-width:1.5;stroke-linecap:round;opacity:.92}
+.fig .motion-vec .vec-limb{stroke:var(--hot)} .fig .motion-vec .vec-core{stroke:var(--accent)}
+.fig .motion-vec path.vec-head.vec-limb{fill:var(--hot);stroke:none} .fig .motion-vec path.vec-head.vec-core{fill:var(--accent);stroke:none}
+.fig .motion-vec circle.vec-limb{fill:var(--hot)} .fig .motion-vec circle.vec-core{fill:var(--accent)}

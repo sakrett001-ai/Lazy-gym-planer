@@ -1981,5 +1981,13 @@
  "Тот же противовес": "Same counterweight",
  "Тот же вес": "Same weight",
  "Противовес": "Counterweight",
- "Противовес, кг": "Counterweight, kg"
+ "Противовес, кг": "Counterweight, kg",
+ "<label><input type=\"checkbox\" id=\"mv-trace\"> Траектория кисти</label><label><input type=\"checkbox\" id=\"mv-vectors\" checked> Векторы движения</label>": "<label><input type=\"checkbox\" id=\"mv-trace\"> Hand path</label><label><input type=\"checkbox\" id=\"mv-vectors\" checked> Motion vectors</label>",
+ "Отводите таз назад, колени мягкие, канат уходит между ног.": "Push your hips back, knees soft; the rope travels back between your legs.",
+ "Векторы движения": "Motion vectors",
+ "Возьмите рукоять, вытяните руки и подайте лопатки вперёд — корпус чуть наклонён вперёд.": "Take the handle, extend your arms and let your shoulder blades reach forward — torso leans slightly forward.",
+ "Тяните рукоять к животу, сводя лопатки; корпус отклоняется назад вместе с тягой, но не больше чем на 10–15°.": "Pull the handle to your stomach, squeezing your shoulder blades; the torso leans back with the pull, but no more than 10–15°.",
+ "Сильное раскачивание корпусом — тянет поясница, а не спина": "Heavy torso rocking — the lower back pulls instead of the upper back",
+ "Тяните рукоять к животу, сводите лопатки; корпус отклоняется назад на 10–15°.": "Pull the handle to your stomach, squeeze your shoulder blades; the torso leans back 10–15°.",
+ "Разгибайте руки с контролем, корпус возвращается в небольшой наклон вперёд.": "Extend your arms with control; the torso returns to a slight forward lean."
 }

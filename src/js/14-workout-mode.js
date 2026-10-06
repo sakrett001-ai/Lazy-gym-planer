@@ -157,7 +157,7 @@ function mountDetailCameras(){
  const F=detailMotion,ex=F.it.ex,a=ex.anim,key=motionCamera(ex),cameras=a.cameras||[];
  const m=motionFrame(F),make=camera=>{
   const f=buildFigure(a,{primary:ex.pri,has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera});
-  f.svg.classList.toggle('show-joints',!!motionPrefs.joints);f.setTrace(!!motionPrefs.trace);return f;
+  f.svg.classList.toggle('show-joints',!!motionPrefs.joints);f.setTrace(!!motionPrefs.trace);f.setVectors(!!motionPrefs.vectors);return f;
  };
  F.f=make(key);$('#mv-stage').replaceChildren(F.f.svg);
  $('#mv-camera-controls').hidden=cameras.length<2;
@@ -177,7 +177,7 @@ function mountDetailCameras(){
 function mountWorkoutCameras(){
  if(!workout?.motion)return;
  const F=workout.motion,ex=F.it.ex,key=motionCamera(ex),m=motionFrame(F);
- F.f=buildFigure(ex.anim,{has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera:key});
+ F.f=buildFigure(ex.anim,{has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera:key});F.f.setVectors(!!motionPrefs.vectors);
  $('#wv-stage').replaceChildren(F.f.svg);$('#wv-cameras').innerHTML=cameraButtons(ex,key);$('#wv-cameras').hidden=!ex.anim.cameras;
  $('#wv-angle').textContent=CAMERA3[key]?.label||(ex.anim.view==='front'?'Вид спереди':'Вид сбоку');paintWorkoutMotion();
 }
