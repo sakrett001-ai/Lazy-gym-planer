@@ -131,7 +131,8 @@ function buildSpatialFigure(anim,opts={}){
  }
  function disc(c,r,outline=false){
   const p=Array.from({length:48},(_,i)=>V3.add(c,[0,Math.cos(i*Math.PI/24),Math.sin(i*Math.PI/24)],r));
-  face(p,outline?'none':'#36465e',{stroke:outline?'#7f90ad':'#25344a','stroke-width':outline?1.5:1,'stroke-opacity':outline?.85:1});
+  /* сбоку блин — полупрозрачный диск: не закрывает атлета и не читается как кольцо вокруг головы */
+  face(p,outline?'#36465e':'#36465e',{stroke:outline?'#7f90ad':'#25344a','stroke-width':outline?1.2:1,'stroke-opacity':outline?.7:1,'fill-opacity':outline?.38:1});
   const q=project(c);queue('circle',{cx:f1(q[0]),cy:f1(q[1]),r:2.5,fill:'#a6b5ca'},[c],1);
  }
  function prop(s){

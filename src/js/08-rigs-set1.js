@@ -3,21 +3,22 @@
 const benchTop3=136;
 function benchRig(t){
  const angle=-90,hipY=benchTop3-10;
- const R=body3([0,hipY,86],angle,0,12);
- /* корпус лежит на скамье: плечи выше по Z на длину корпуса */
- const barZ=R.sh[2]-4, barY=hipY-7-62+56*t;  /* верх: руки почти прямые над грудью; низ: гриф у груди */
+ const R=body3([0,hipY,112],angle,0,12);
+ /* корпус лежит вдоль скамьи (−Z к голове): таз в середине, голова на скамье, не за краем */
+ /* гриф: вверху над плечами, внизу на нижней части груди — на 16 ближе к тазу (+Z); локти уходят вниз-к тазу */
+ const barZ=R.sh[2]+4+16*t;
  const topY=R.sh[1]-Math.sqrt(Math.max(0,(FL.ua+FL.fa-1)**2-(R.sh[2]-barZ)**2));
- const y=topY+(hipY-13-topY)*t;
+ const y=topY+(hipY-10-topY)*t;
  for(const [s,sign]of [['L',-1],['R',1]]){
-  arm3(R,s,[sign*34,y+3,barZ],[sign*.6,0.1,-1],[0,-1,0]);
-  leg3(R,s,[sign*16,180,40],[0,-1,0],[0,0,1]);
+  arm3(R,s,[sign*34,y+3,barZ],[sign*.5,0.35,-1],[0,-1,0]);
+  leg3(R,s,[sign*16,180,166],[0,-1,0],[0,0,1]);
  }
  const bar=[0,y,barZ];
  R.bar=bar;
  R.props=[...bench3(28,150,benchTop3,15),{kind:'barbell',c:bar},
-  {kind:'line',a:[-40,topY-6,barZ+10],b:[-40,benchTop3+7,barZ+10],width:4,tone:'steel'},{kind:'line',a:[40,topY-6,barZ+10],b:[40,benchTop3+7,barZ+10],width:4,tone:'steel'},
-  {kind:'line',a:[-40,topY+6,barZ+10],b:[-40,topY+6,barZ+3],width:3,tone:'steel'},{kind:'line',a:[40,topY+6,barZ+10],b:[40,topY+6,barZ+3],width:3,tone:'steel'}];
- R.contacts=[{p:[0,benchTop3,R.sh[2]],label:'Лопатки на скамье'},{p:[-16,184,36],label:'Стопы на полу'}];
+  {kind:'line',a:[-40,topY-6,R.sh[2]-8],b:[-40,benchTop3+7,R.sh[2]-8],width:4,tone:'steel'},{kind:'line',a:[40,topY-6,R.sh[2]-8],b:[40,benchTop3+7,R.sh[2]-8],width:4,tone:'steel'},
+  {kind:'line',a:[-40,topY+6,R.sh[2]-8],b:[-40,topY+6,R.sh[2]+2],width:3,tone:'steel'},{kind:'line',a:[40,topY+6,R.sh[2]-8],b:[40,topY+6,R.sh[2]+2],width:3,tone:'steel'}];
+ R.contacts=[{p:[0,benchTop3,R.sh[2]],label:'Лопатки на скамье'},{p:[-16,184,166],label:'Стопы на полу'}];
  return R;
 }
 /* Присед со штангой на спине, стопы чуть шире плеч, носки развёрнуты. */
