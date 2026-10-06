@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ECEFF3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1116" media="(prefers-color-scheme: dark)">
+<meta name="description" content="Lazy Gym Planner — workout planner: picks exercises for your muscles and equipment, shows technique, logs your weights.">
+<title>Lazy Gym Planner</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Lazy Gym">
+<link rel="alternate" hreflang="ru" href="../">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<link rel="stylesheet" href="app.css?v=4.1.4">
+</head>
+<body>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="logo">Lazy<span>Gym</span>Planner</div>
+    <div class="tag">workout planner for your gym and goal</div>
+    <a class="lang" href="../" title="Русская версия">RU</a>
+    <button type="button" id="motion-atlas" class="atlas-button" aria-haspopup="dialog" aria-controls="motion-view">Motion atlas ↗</button>
+    <nav class="views" id="views" role="tablist" aria-label="Section"></nav>
+  </header>
+  <main class="layout">
+    <aside class="setup" aria-label="Workout settings">
+      <section class="field"><h2 class="lbl">What to build</h2><div class="seg seg-2" id="f-mode" role="group" aria-label="What to build"></div></section>
+      <section class="field" id="f-prog"><h2 class="lbl">Workouts per week</h2><div class="seg seg-4" id="f-days" role="group" aria-label="Workouts per week"></div>
+        <h2 class="lbl lbl-sub">Split</h2><div class="seg" id="f-split" role="group" aria-label="Split"></div><p class="f-note" id="split-note"></p></section>
+      <section class="field"><h2 class="lbl">Goal</h2><div class="seg" id="f-goal" role="group" aria-label="Goal"></div></section>
+      <section class="field"><h2 class="lbl">Format</h2><div class="seg" id="f-format" role="group" aria-label="Format"></div></section>
+      <section class="field"><h2 class="lbl">Level</h2><div class="seg" id="f-level" role="group" aria-label="Level"></div></section>
+      <section class="field"><h2 class="lbl" id="count-l">Exercises</h2>
+        <div class="stepper"><button type="button" id="count-minus" aria-label="Fewer exercises">−</button><output id="count-v" aria-live="polite">6</output><button type="button" id="count-plus" aria-label="More exercises">+</button><p>3 to 10 per workout</p></div>
+      </section>
+      <section class="field" id="f-muscles"><h2 class="lbl">Muscles</h2><div class="pres" id="g-presets"></div><div class="chips" id="g-chips"></div></section>
+      <section class="field"><h2 class="lbl">Equipment <em id="e-count"></em></h2><div class="pres" id="e-presets"></div><p class="e-sum" id="e-sum"></p><div class="e-cats" id="e-chips"></div><button type="button" class="e-toggle" id="e-toggle"></button>
+        <p class="f-note">Bodyweight exercises are always available.</p></section>
+    </aside>
+    <section class="plan" id="plan" aria-live="polite"></section>
+  </main>
+</div>
+<div class="timer" id="timer" hidden>
+  <div class="t-track"><div id="t-bar"></div></div>
+  <div class="t-in">
+    <div class="t-txt"><span id="t-label">Rest</span><span id="t-time">0:00</span></div>
+    <div class="t-btns"><button type="button" id="t-minus" aria-label="Minus 15 seconds">−15</button><button type="button" id="t-plus" aria-label="Plus 15 seconds">+15</button><button type="button" id="t-skip">Done</button></div>
+  </div>
+</div>
+<dialog id="workout-view" class="workout-view" aria-labelledby="wv-title">
+ <div class="wv-shell">
+  <header class="wv-head"><div><p class="wv-eyebrow">LAZY GYM PLANNER · WORKOUT</p><p id="wv-context"></p></div><button type="button" id="wv-close">Back to plan ×</button></header>
+  <div class="wv-progress-line"><span id="wv-progress-label"></span><span id="wv-elapsed"></span></div><progress id="wv-progress" max="1" value="0" aria-label="Completed sets"></progress>
+  <div id="wv-active">
+   <div class="wv-select"><button type="button" id="wv-prev" aria-label="Previous set">←</button><label for="wv-exercise">Exercise<select id="wv-exercise"></select></label><button type="button" id="wv-next" aria-label="Next set">→</button></div>
+   <div class="wv-grid">
+    <section class="wv-visual" aria-label="Exercise technique"><div id="wv-cameras" class="motion-cameras" role="group" aria-label="View angle" hidden></div><div class="wv-stage-wrap"><span id="wv-angle"></span><div id="wv-stage"></div><div class="wv-figure-tools"><button type="button" id="wv-motion" aria-pressed="true">Pause</button><button type="button" id="wv-technique">Technique breakdown ↗</button></div></div><p id="wv-cue" class="wv-cue"></p><details class="wv-guide"><summary>How to start and what to watch</summary><p id="wv-setup"></p><p id="wv-control"></p><p id="wv-breath"></p></details></section>
+    <section class="wv-record" aria-label="Current set"><p id="wv-set-label" class="wv-eyebrow"></p><h2 id="wv-title"></h2><p id="wv-equipment" class="wv-muted"></p><div id="wv-set-chips" class="wv-set-chips" aria-label="Exercise sets"></div>
+     <div class="wv-target"><div><span>Task</span><strong id="wv-target"></strong></div><div><span>Last time</span><strong id="wv-previous"></strong><small id="wv-previous-date"></small></div></div>
+     <p id="wv-unilateral" class="wv-note" hidden></p>
+     <form id="wv-form" novalidate><div class="wv-fields"><label id="wv-weight-label" for="wv-kg"><span id="wv-weight-caption">Weight, kg</span><input id="wv-kg" type="text" inputmode="decimal" autocomplete="off" aria-describedby="wv-input-hint"></label><label for="wv-reps"><span id="wv-rep-caption">Reps</span><input id="wv-reps" type="text" inputmode="numeric" autocomplete="off" required aria-describedby="wv-input-hint wv-error"></label></div><p id="wv-input-hint" class="wv-muted">Enter the actual result of the set.</p><p id="wv-error" role="alert"></p><button id="wv-done" class="wv-primary" type="submit">Set done</button></form>
+     <p id="wv-save-status" class="wv-muted" role="status"></p><details class="wv-guide"><summary>Load cue</summary><p id="wv-suggestion"></p></details>
+    </section>
+   </div>
+  </div>
+  <section id="wv-rest" class="wv-rest" hidden aria-labelledby="wv-rest-heading"><p class="wv-eyebrow">SET LOGGED</p><h2 id="wv-rest-heading">Rest</h2><p id="wv-rest-time" role="timer">0:00</p><p id="wv-rest-note"></p><div class="wv-rest-adjust"><button type="button" data-wv-rest="-15">−15 s</button><button type="button" data-wv-rest="15">+15 s</button></div><div class="wv-next-card"><span>Next</span><h3 id="wv-next-name"></h3><p id="wv-next-detail"></p></div><button type="button" id="wv-continue" class="wv-primary">Go to set</button><button type="button" id="wv-undo" class="wv-link">Edit last entry</button></section>
+  <section id="wv-finish" class="wv-finish" hidden aria-labelledby="wv-finish-heading"><div class="wv-finish-mark" aria-hidden="true">✓</div><p class="wv-eyebrow">DONE FOR TODAY</p><h2 id="wv-finish-heading">Workout complete</h2><p id="wv-finish-text"></p><p class="wv-muted">Results are already in the log.</p><div id="wv-summary"></div><button type="button" id="wv-finish-close" class="wv-primary">Back to plan</button><button type="button" id="wv-review" class="wv-link">View and edit entries</button></section>
+ </div>
+</dialog>
+
+<dialog id="motion-view" class="motion-view" aria-labelledby="mv-title">
+ <div class="mv-shell">
+  <header class="mv-head"><div><p class="mv-eyebrow">LAZY GYM PLANNER · MOTION ATLAS · 4.1.4</p><h2 id="mv-title">Exercise breakdown</h2></div><button type="button" id="mv-close" aria-label="Close breakdown">Close ×</button></header>
+  <div class="mv-select"><button type="button" data-mv-nav="-1" aria-label="Previous exercise">←</button><label for="mv-exercise">Exercise<select id="mv-exercise"></select></label><button type="button" data-mv-nav="1" aria-label="Next exercise">→</button></div>
+  <div class="mv-grid">
+   <section class="mv-demo" aria-label="Movement demo">
+    <div id="mv-camera-controls" class="motion-camera-controls" hidden><div id="mv-cameras" class="motion-cameras" role="group" aria-label="View angle"></div><label><input id="mv-dual" type="checkbox"> Two views</label></div>
+    <div id="mv-projections"><div class="mv-projection"><div class="mv-canvas"><span id="mv-view" class="mv-view-label"></span><div id="mv-stage"></div><div class="mv-phase-line"><span id="mv-phase"></span><span id="mv-position"></span></div></div><p id="mv-camera-hint" class="mv-camera-hint" hidden></p></div><div id="mv-second" class="mv-projection" hidden><div class="mv-canvas"><span id="mv-second-label" class="mv-view-label"></span><div id="mv-second-stage"></div></div><p id="mv-second-hint" class="mv-camera-hint"></p></div></div>
+    <p id="mv-cue" class="mv-cue"></p>
+    <label class="mv-range-label" for="mv-progress">Position in the rep<input id="mv-progress" type="range" min="0" max="1000" step="1" value="0"></label>
+    <div class="mv-controls"><button type="button" data-mv-step="-.05" aria-label="Back five percent of the rep">−5%</button><button type="button" id="mv-play" class="mv-primary" aria-pressed="false">Play</button><button type="button" data-mv-step=".05" aria-label="Forward five percent of the rep">+5%</button><label for="mv-speed">Speed<select id="mv-speed"><option value="0.25">¼×</option><option value="0.5">½×</option><option value="1">1×</option></select></label></div>
+    <div class="mv-poses" aria-label="Movement positions"><button type="button" data-mv-pose="start">Start</button><button type="button" data-mv-pose="middle">Middle</button><button type="button" data-mv-pose="end">End position</button><button type="button" data-mv-pose="return">Return</button></div>
+    <div class="mv-toggles"><label><input type="checkbox" id="mv-joints" checked> Joints</label><label><input type="checkbox" id="mv-trace"> Hand path</label><label><input type="checkbox" id="mv-vectors" checked> Motion vectors</label></div>
+    <p id="mv-tempo" class="mv-small"></p>
+   </section>
+   <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Working muscles</h3><p class="mv-muscle-label">Primary</p><p id="mv-primary"></p><p class="mv-muscle-label">Secondary</p><p id="mv-secondary"></p></div></div><p class="mv-small">Muscle locations are shown on a separate map. Joints are marked on the moving figure.</p><h3>How to perform</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Common mistakes and breathing</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>About the demos</summary><p>The diagrams help break down the sequence of the movement. Range of motion depends on the exercise and the individual; the schematic silhouette does not prescribe required joint angles.</p><div id="mv-sources"></div><p class="mv-small">Demo version 3.7</p></details></aside>
+  </div>
+ </div>
+</dialog>
+
+<script src="app.js?v=4.1.4"></script>
+<script src="pwa.js?v=4.1.4"></script>
+</body>
+</html>
