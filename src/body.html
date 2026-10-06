@@ -2,8 +2,9 @@
 <body>
 <div class="wrap">
   <header class="top">
-    <div class="logo">ПОД<span>Х</span>ОД</div>
+    <div class="logo">Lazy<span>Gym</span>Planner</div>
     <div class="tag">планировщик тренировок под ваш зал и цель</div>
+    <a class="lang" href="__LANG_HREF__" title="__LANG_TITLE__">__LANG_LABEL__</a>
     <button type="button" id="motion-atlas" class="atlas-button" aria-haspopup="dialog" aria-controls="motion-view">Атлас движений ↗</button>
     <nav class="views" id="views" role="tablist" aria-label="Раздел"></nav>
   </header>
@@ -34,7 +35,7 @@
 </div>
 <dialog id="workout-view" class="workout-view" aria-labelledby="wv-title">
  <div class="wv-shell">
-  <header class="wv-head"><div><p class="wv-eyebrow">ПОДХОД · ТРЕНИРОВКА</p><p id="wv-context"></p></div><button type="button" id="wv-close">К плану ×</button></header>
+  <header class="wv-head"><div><p class="wv-eyebrow">LAZY GYM PLANNER · ТРЕНИРОВКА</p><p id="wv-context"></p></div><button type="button" id="wv-close">К плану ×</button></header>
   <div class="wv-progress-line"><span id="wv-progress-label"></span><span id="wv-elapsed"></span></div><progress id="wv-progress" max="1" value="0" aria-label="Выполненные подходы"></progress>
   <div id="wv-active">
    <div class="wv-select"><button type="button" id="wv-prev" aria-label="Предыдущий подход">←</button><label for="wv-exercise">Упражнение<select id="wv-exercise"></select></label><button type="button" id="wv-next" aria-label="Следующий подход">→</button></div>
@@ -55,7 +56,7 @@
 
 <dialog id="motion-view" class="motion-view" aria-labelledby="mv-title">
  <div class="mv-shell">
-  <header class="mv-head"><div><p class="mv-eyebrow">ПОДХОД · АТЛАС ДВИЖЕНИЙ · 3.7</p><h2 id="mv-title">Разбор упражнения</h2></div><button type="button" id="mv-close" aria-label="Закрыть разбор">Закрыть ×</button></header>
+  <header class="mv-head"><div><p class="mv-eyebrow">LAZY GYM PLANNER · АТЛАС ДВИЖЕНИЙ · __VERSION__</p><h2 id="mv-title">Разбор упражнения</h2></div><button type="button" id="mv-close" aria-label="Закрыть разбор">Закрыть ×</button></header>
   <div class="mv-select"><button type="button" data-mv-nav="-1" aria-label="Предыдущее упражнение">←</button><label for="mv-exercise">Упражнение<select id="mv-exercise"></select></label><button type="button" data-mv-nav="1" aria-label="Следующее упражнение">→</button></div>
   <div class="mv-grid">
    <section class="mv-demo" aria-label="Демонстрация движения">

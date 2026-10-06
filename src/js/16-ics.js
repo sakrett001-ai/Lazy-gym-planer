@@ -10,7 +10,7 @@ function icsFold(line) { const out = []; let b = ''; for (const ch of line) { co
 function icsText(start, time, weeksN) {
   const [hh, mm] = time.split(':').map(Number);
   const saved = {week:S.week, day:S.day};
-  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Podhod//Workout planner//RU', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:Подход — тренировки'];
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//LazyGymPlanner//Workout planner//RU', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:Lazy Gym Planner — тренировки'];
   const stamp = icsDate(new Date()).replace(/T.*/, 'T000000Z');
   for (let w = 0; w < weeksN; w++) {
     S.week = (w % 4) + 1;
@@ -59,7 +59,7 @@ async function saveIcs() {
   ICS.time = $('#ics-time').value || '19:00'; ICS.weeks = +$('#ics-weeks').value || 4; ICS.alarm = +$('#ics-alarm').value || 0;
   try { localStorage.setItem(ICS_KEY, JSON.stringify(ICS)); } catch (e) {}
   const txt = icsText(start, ICS.time, ICS.weeks);
-  const r = await saveFile(`podhod-trenirovki-${dayKey(start)}.ics`, txt, 'text/calendar');
+  const r = await saveFile(`lazy-gym-workouts-${dayKey(start)}.ics`, txt, 'text/calendar');
   $('#ics-msg').textContent = r === 'ok' ? 'Файл сохранён. Откройте его — календарь предложит добавить события.' : r === 'declined' ? 'Сохранение отменено.' : 'Сохранить файл не удалось.';
 }
 document.addEventListener('click', e => {

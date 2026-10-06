@@ -15,7 +15,8 @@ function fmtDay(k, withYear) {
   const [y, m, d] = k.split('-').map(Number);
   return `${d} ${MONTHS[m - 1]}${withYear && y !== new Date().getFullYear() ? ' ' + y : ''}`;
 }
-const fmtKg = v => (Math.round(v * 100) / 100).toString().replace('.', ',');
+let DEC = ','; /* десятичный разделитель; в английской сборке заменяется на точку */
+const fmtKg = v => (Math.round(v * 100) / 100).toString().replace('.', DEC);
 const parseNum = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
 
 function validSessions(ss) {
@@ -431,8 +432,8 @@ function csvText() {
 }
 async function exportLog(kind) {
   const msg = $('#j-msg'), d = todayKey();
-  const r = kind === 'csv' ? await saveFile(`podhod-zhurnal-${d}.csv`, csvText(), 'text/csv')
-    : await saveFile(`podhod-kopiya-${d}.json`, JSON.stringify({app:'podhod', v:1, exported:new Date().toISOString(), log:LOG.data}), 'application/json');
+  const r = kind === 'csv' ? await saveFile(`lazy-gym-log-${d}.csv`, csvText(), 'text/csv')
+    : await saveFile(`lazy-gym-kopiya-${d}.json`, JSON.stringify({app:'podhod', v:1, exported:new Date().toISOString(), log:LOG.data}), 'application/json');
   if (msg) msg.textContent = r === 'ok' ? (kind === 'csv' ? 'Таблица сохранена. Откройте её в Excel: столбцы разделены точкой с запятой.' : 'Копия сохранена. Восстановить журнал из неё можно здесь же, на любом устройстве.')
     : r === 'declined' ? 'Сохранение отменено.' : 'Сохранить файл не удалось.';
 }
@@ -442,7 +443,7 @@ function importLog(file) {
   rd.onload = () => {
     let obj; try { obj = JSON.parse(rd.result); } catch (e) { obj = null; }
     const log = obj && obj.app === 'podhod' && obj.log && typeof obj.log === 'object' ? obj.log : null;
-    if (!log) { if (msg) msg.textContent = 'Это не резервная копия «Подхода». Выберите файл podhod-kopiya-….json.'; return; }
+    if (!log) { if (msg) msg.textContent = 'Это не резервная копия Lazy Gym Planner. Выберите файл lazy-gym-kopiya-….json.'; return; }
     let nEx = 0, nS = 0;
     for (const [id, ss] of Object.entries(log)) {
       if (!EXI[id] || !validSessions(ss)) continue;

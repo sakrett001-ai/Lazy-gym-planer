@@ -65,6 +65,8 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .logo { font:400 26px/1 var(--f-display); letter-spacing:.02em; color:var(--ink); }
 .logo span { color:var(--hot); }
 .tag { color:var(--muted); font-size:14px; }
+.lang { font:500 12px/1 var(--f-mono); letter-spacing:.08em; color:var(--muted); text-decoration:none; border:1px solid var(--line); border-radius:999px; padding:6px 10px; }
+.lang:hover { color:var(--ink); border-color:var(--ink); }
 
 .layout { display:grid; gap:16px; align-items:start; }
 @media (min-width:960px) { .layout:not(.solo) { grid-template-columns:330px minmax(0, 1fr); gap:24px; } .setup { position:sticky; top:calc(env(safe-area-inset-top, 0px) + 12px); max-height:calc(100vh - 24px); overflow:auto; } }
