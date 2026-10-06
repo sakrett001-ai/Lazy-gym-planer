@@ -25,13 +25,13 @@ function benchRig(t){
 function squatRig(t){
  const angle=2+42*t, hipY=97+49*t, hipZ=98-28*t;
  const R=body3([0,hipY,hipZ],angle,-8*t,12);
+ const bar=V3.add(V3.add(R.sh,R.u,1),R.n,-8);
  for(const [s,sign]of [['L',-1],['R',1]]){
   leg3(R,s,[sign*18,180,98],[sign*.35,0,1],[sign*.3,0,1]);
   /* хват за гриф на трапециях */
-  const grip=V3.add(V3.add(R.sh,R.u,-2),[sign,0,0],33);
-  arm3(R,s,V3.add(grip,R.n,-6),[sign*.3,1,-.6],V3.unit(V3.add(R.n,[0,0,0])));
+  const grip=V3.add(bar,[sign,0,0],33);
+  arm3(R,s,V3.add(grip,R.n,-3.5),[sign*.3,1,-.6],R.n);
  }
- const bar=V3.add(V3.add(R.sh,R.u,1),R.n,-8);
  R.bar=bar;R.props=[{kind:'barbell',c:bar}];
  R.contacts=[{p:[-18,184,98],label:'Вся стопа на полу'}];
  return R;
@@ -42,12 +42,11 @@ function deadliftRig(t){
  /* опорные стопы неподвижны; таз идёт вверх и вперёд */
  const hip=[0,116-19*t,78+20*t];
  const R=body3(hip,angle,8-8*t,12);
- const barY=160-60*t;  /* низ: гриф на уровне середины голени; верх: у бёдер */
+ const bar=hangingBar3(R,25,103);  /* кисти остаются на грифе, руки выпрямлены */
  for(const [s,sign]of [['L',-1],['R',1]]){
   leg3(R,s,[sign*13,180,100],[0,0,1],[0,0,1]);
-  arm3(R,s,[sign*25,barY,103],[0,0,-1],[0,1,0]);
+  arm3(R,s,[sign*25,bar[1]-3.5,bar[2]],[0,0,-1],[0,1,0]);
  }
- const bar=[0,barY,103];
  R.bar=bar;R.props=[{kind:'barbell',c:bar}];
  R.contacts=[{p:[-13,184,100],label:'Середина стопы под грифом'}];
  return R;

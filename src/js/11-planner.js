@@ -278,6 +278,7 @@ function buildPlan(ctx = {}) {
     if (week && week.deload) rounds -= 1;
     else if (week && week.add) rounds += 0;
     rounds = Math.max(2, rounds);
+    if (AR.light && S.mode !== 'program') rounds = Math.max(1, Math.round(rounds * .6));
     ord.forEach((it, i) => {
       it.label = String(i + 1);
       it.rounds = rounds;

@@ -134,7 +134,9 @@ function restoreBackup(obj) {
   if (obj.log && typeof obj.log === 'object') {
     for (const [id, ss] of Object.entries(obj.log)) {
       if (!EXI[id] || !validSessions(ss)) continue;
-      const clean = ss.map(x => ({d:x.d, ...(x.wk ? {wk:+x.wk} : {}), s:x.s.map(v => Array.isArray(v) && isFinite(+v[1]) ? [v[0] == null || v[0] === '' ? null : +v[0], +v[1]] : null)}));
+      const clean = ss.map(x => ({d:x.d, ...(x.wk ? {wk:+x.wk} : {}),
+        ...(Number.isSafeInteger(+x.target) && +x.target > 0 ? {target:+x.target} : {}),
+        s:x.s.map(v => Array.isArray(v) && isFinite(+v[1]) ? [v[0] == null || v[0] === '' ? null : +v[0], +v[1]] : null)}));
       const merged = mergeSessions(LOG.data[id], clean);
       if (JSON.stringify(merged) !== JSON.stringify(LOG.data[id] || [])) { LOG.data[id] = merged; logTouch(id, true); out.exercises++; out.sessions += clean.length; }
     }

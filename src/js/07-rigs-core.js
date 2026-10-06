@@ -26,6 +26,13 @@ function arm3(R,s,wr,hint,handDir){
  const d=handDir||V3.unit(V3.sub(R['wr'+s],R['el'+s]));
  R['grip'+s]=V3.add(R['wr'+s],d,3.5);R['hand'+s]=V3.add(R['wr'+s],d,7);
 }
+/* Высота висящего грифа следует из положения плеч и длины рук.
+   Независимая анимация грифа могла задавать кистям недостижимую точку. */
+function hangingBar3(R,halfGrip,z){
+ const reach=FL.ua+FL.fa-.01,dx=halfGrip-19,dz=z-R.sh[2];
+ const drop=Math.sqrt(Math.max(0,reach*reach-dx*dx-dz*dz));
+ return [0,R.sh[1]+drop+3.5,z];
+}
 function leg3(R,s,ankle,hint,footDir=[0,0,1]){
  [R['kn'+s],R['an'+s]]=joint3(R['hip'+s],ankle,FL.th,FL.sh,hint);
  R['heel'+s]=V3.add(R['an'+s],footDir,-4);R['toe'+s]=V3.add(R['an'+s],footDir,13);
