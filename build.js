@@ -25,12 +25,15 @@ const LANGS = {
 
 fs.rmSync(DIST, {recursive:true, force:true});
 fs.mkdirSync(path.join(DIST, 'fonts'), {recursive:true});
+require('node:child_process').execFileSync(process.execPath,[path.join(__dirname,'tools/build-volume.mjs')],{stdio:'inherit'});
+const volumeSrc=read(path.join(DIST,'volume.js'));
 
 const cssSrc = list(path.join(SRC, 'css'), '.css').map(read).join('\n');
 const jsSrc = list(path.join(SRC, 'js'), '.js').map(read).join('\n');
 const bodySrc = read(path.join(SRC, 'body.html'));
 const pwaSrc = read(path.join(SRC, 'pwa.js')).replace(/__VERSION__/g, VERSION);
 const manifestSrc = JSON.parse(read(path.join(SRC, 'manifest.webmanifest')));
+const ASSET_VERSION = VERSION + '-' + require('node:crypto').createHash('sha256').update([volumeSrc,cssSrc,jsSrc,bodySrc,pwaSrc,JSON.stringify(manifestSrc),read(path.join(SRC,'sw.js')),read(path.join(__dirname,'i18n/en.json'))].join('\n')).digest('hex').slice(0,12);
 const reset = `:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}`;
 const headMeta = L => `<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -44,7 +47,7 @@ const fontsDir = path.join(SRC, 'fonts');
 const inlineFonts = c => c.replace(/url\(\.\.\/fonts\/([\w.-]+)\)/g, (m, f) => `url(data:font/woff2;base64,${fs.readFileSync(path.join(fontsDir, f)).toString('base64')})`);
 for (const f of fs.readdirSync(fontsDir)) fs.copyFileSync(path.join(fontsDir, f), path.join(DIST, 'fonts', f));
 for (const f of ['icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'favicon-32.png']) { const p = path.join(SRC, f); if (fs.existsSync(p)) fs.copyFileSync(p, path.join(DIST, f)); }
-fs.writeFileSync(path.join(DIST, 'sw.js'), read(path.join(SRC, 'sw.js')).replace(/__VERSION__/g, VERSION));
+fs.writeFileSync(path.join(DIST, 'sw.js'), read(path.join(SRC, 'sw.js')).replace(/__VERSION__/g, ASSET_VERSION));
 fs.writeFileSync(path.join(DIST, '.nojekyll'), '');
 
 const report = [];
@@ -61,7 +64,7 @@ for (const [lang, L] of Object.entries(LANGS)) {
   }
   js += L.patch + `\nwindow.PODHOD_VERSION='${VERSION}';window.PODHOD_LANG='${lang}';\n`;
   body = body.replace(/__VERSION__/g, VERSION).replace(/__LANG_HREF__/g, L.other.href).replace(/__LANG_LABEL__/g, L.other.label).replace(/__LANG_TITLE__/g, L.other.title);
-  const manifest = {...manifestSrc, name:L.manifestName, description:L.manifestDesc, lang, scope:up || './', icons:manifestSrc.icons.map(i => ({...i, src:up + i.src + '?v=' + VERSION}))};
+  const manifest = {...manifestSrc, name:L.manifestName, description:L.manifestDesc, lang, scope:up || './', icons:manifestSrc.icons.map(i => ({...i, src:up + i.src + '?v=' + ASSET_VERSION}))};
 
   /* 1. PWA */
   fs.writeFileSync(path.join(out, 'app.css'), css.replace(/\.\.\/fonts\//g, up + 'fonts/'));
@@ -73,26 +76,27 @@ for (const [lang, L] of Object.entries(LANGS)) {
 <head>
 ${headMeta(L)}
 <title>${L.title}</title>
-<link rel="manifest" href="manifest.webmanifest?v=${VERSION}">
-<link rel="icon" href="${up}favicon-32.png?v=${VERSION}" type="image/png" sizes="32x32">
-<link rel="apple-touch-icon" href="${up}apple-touch-icon.png?v=${VERSION}" sizes="180x180">
+<link rel="manifest" href="manifest.webmanifest?v=${ASSET_VERSION}">
+<link rel="icon" href="${up}favicon-32.png?v=${ASSET_VERSION}" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="${up}apple-touch-icon.png?v=${ASSET_VERSION}" sizes="180x180">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Lazy Gym">
 <link rel="alternate" hreflang="${lang === 'ru' ? 'en' : 'ru'}" href="${L.other.href}">
 <style>${reset}</style>
-<link rel="stylesheet" href="app.css?v=${VERSION}">
+<link rel="stylesheet" href="app.css?v=${ASSET_VERSION}">
 </head>
 <body>
 ${body}
-<script src="app.js?v=${VERSION}"></script>
-<script src="pwa.js?v=${VERSION}"></script>
+<script src="${up}volume.js?v=${ASSET_VERSION}"></script>
+<script src="app.js?v=${ASSET_VERSION}"></script>
+<script src="pwa.js?v=${ASSET_VERSION}"></script>
 </body>
 </html>
 `);
 
   /* 2. офлайн-файл: ссылка на другой язык ведёт на соседний офлайн-файл */
-  const single = `<title>${L.title}</title>\n<style>\n${inlineFonts(css)}\n</style>\n${body.replace(`href="${L.other.href}"`, `href="${L.other.offline}"`)}\n<script>\n${js}\n</script>\n`;
+  const single = `<title>${L.title}</title>\n<style>\n${inlineFonts(css)}\n</style>\n${body.replace(`href="${L.other.href}"`, `href="${L.other.offline}"`)}\n<script>\n${volumeSrc}\n</script>\n<script>\n${js}\n</script>\n`;
   fs.writeFileSync(path.join(DIST, `lazy-gym-planner-offline-${lang}.html`), `<!doctype html>
 <html lang="${L.html}">
 <head>

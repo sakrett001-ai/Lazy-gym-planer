@@ -1,0 +1,14 @@
+{
+  "name": "lazy-gym-bench-lab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "audit": "node tools/audit.mjs",
+    "test": "node --test tools/*.test.mjs",
+    "check": "npm test && npm run audit && npm run build && node tools/check-bundle.mjs"
+  },
+  "dependencies": { "three": "0.180.0" },
+  "devDependencies": { "esbuild": "0.25.9", "jsdom": "26.1.0" }
+}

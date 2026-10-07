@@ -1,5 +1,6 @@
 dist/
 node_modules/
+qa/
 .DS_Store
 i18n/strings.json
 i18n/missing.*.json

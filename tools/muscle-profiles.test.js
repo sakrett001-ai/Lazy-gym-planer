@@ -4,7 +4,7 @@ const {loadModel}=require('./biomechanics-audit');
 const model=loadModel({fullApp:true});
 const {muscleFrame,muscleSurfaces,visibleMuscleSurfaces,motionFrame,muscleColor}=model.get('({muscleFrame,muscleSurfaces,visibleMuscleSurfaces,motionFrame,muscleColor})');
 const pilot=model.EX.filter(ex=>ex.anim.muscleProfile);
-test('only three explicit educational profiles are enabled',()=>{
+test('three original hand-authored profiles remain intact alongside the catalog',()=>{
  assert.deepEqual(Array.from(pilot,ex=>ex.id).sort(),['bbbench','latpull','squat']);
  for(const ex of pilot){
   const p=ex.anim.muscleProfile;
@@ -13,7 +13,9 @@ test('only three explicit educational profiles are enabled',()=>{
   for(const id of ex.pri)assert.equal(p.muscles[id].role,'primary');
  }
  const unsupported=model.EX.find(ex=>ex.id==='deadlift');
- assert.equal(muscleFrame(unsupported.anim,.5,0),null);
+ assert.equal(unsupported.anim.muscleProfile,undefined);
+ assert.equal(unsupported.anim.catalogProfile.muscles.lowback.role,'primary');
+ assert(muscleFrame(unsupported.anim,.5,0).values.lowback>0);
 });
 test('lowering remains active and differs from lifting at the same pose',()=>{
  for(const ex of pilot){

@@ -46,7 +46,7 @@ const MUSCLE_PROFILES={
 for(const[id,profile]of Object.entries(MUSCLE_PROFILES))DEMO[id].anim.muscleProfile=profile;
 
 function muscleFrame(anim,t,index=0){
- const profile=anim.muscleProfile;
+ const profile=motionProfile(anim);
  if(!profile)return null;
  t=Math.max(0,Math.min(1,Number.isFinite(t)?t:0));
  const phase=index===1?'end':index===3?'start':((index===0)!==!!anim.eccFirst?'concentric':'eccentric');
@@ -55,6 +55,7 @@ function muscleFrame(anim,t,index=0){
   const knots=m[curve],i=t<.5?0:1,q=(t-i*.5)*2,e=q*q*(3-2*q);
   values[id]=knots[i]+(knots[i+1]-knots[i])*e;
  }
+ for(const[id,r]of Object.entries(profile.regions||{}))values[id]=values[r.parent]*r.factor;
  return{phase,values,note:profile.notes[phase]};
 }
 function muscleBand(v){return v<.12?0:v<.45?1:v<.72?2:3;}
