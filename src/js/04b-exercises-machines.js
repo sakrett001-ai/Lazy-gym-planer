@@ -105,8 +105,11 @@ EX.push(
  anim:{view:'side',
   A:{hip:[70, 132], torso:52, head:-8, arm:{a:[178, 180]}, leg:{ik:[56, 182], b:'fwd', f:100}},
   B:{hip:[70, 132], torso:52, head:-8, arm:{a:[238, 196]}, leg:{ik:[56, 182], b:'fwd', f:100}},
-  props:[{k:'line', pts:[add(add([70, 132], dir(52), -4), [-10, -4]), add(add([70, 132], dir(52), 64), [-10, -4])], w:8, cls:'eq-pad-s'},
-   {k:'rect', x:48, y:140, w:44, h:7}, {k:'line', pts:[[72, 147], [72, GROUND]], w:4}, {k:'line', pts:[[112, 96], [128, GROUND]], w:3},
+  // Fixed bench on the anterior side: its inner surface touches the chest contour.
+  // dir(142) is the forward normal to the 52-degree torso; the incline is 38 degrees.
+  props:[{k:'line', support:'chest', pts:[-4, 50].map(h => add(add([70, 132], dir(52), h), dir(142), SIDE_CHEST[1] + 4)), w:8, cls:'eq-pad-s'},
+   {k:'rect', x:48, y:140, w:29, h:7}, {k:'line', pts:[[66, 147], [66, GROUND]], w:4},
+   {k:'line', pts:[add(add([70, 132], dir(52), 50), dir(142), SIDE_CHEST[1] + 8), [132, GROUND]], w:3},
    ...DB_SIDES('perp')]}},
 
 /* ===== ПЛЕЧИ ===== */

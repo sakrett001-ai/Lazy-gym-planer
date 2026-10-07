@@ -3,12 +3,11 @@
 function rdlRig(t){
  const angle=-2+70*t, hip=[0,97+7*t,98-20*t];
  const R=body3(hip,angle,8*t,12);
- const barY=100+40*t, barZ=104-5*t;
+ const bar=hangingBar3(R,22,104-5*t);
  for(const [s,sign]of [['L',-1],['R',1]]){
   leg3(R,s,[sign*12,180,98],[0,0,1],[0,0,1]);
-  arm3(R,s,[sign*22,barY,barZ],[0,0,-1],[0,1,0]);
+  arm3(R,s,[sign*22,bar[1]-3.5,bar[2]],[0,0,-1],[0,1,0]);
  }
- const bar=[0,barY,barZ];
  R.bar=bar;R.props=[{kind:'barbell',c:bar,optional:'bb'},{kind:'dumbbell',c:V3.add(bar,[1,0,0],-22),optional:'db'},{kind:'dumbbell',c:V3.add(bar,[1,0,0],22),optional:'db'}];
  R.contacts=[{p:[-12,184,98],label:'Вес на пятках и середине стопы'}];
  return R;
@@ -17,18 +16,16 @@ function rdlRig(t){
 function lungeRig(t){
  const R=body3([0,104+30*t,108],0+3*t,0,12);
  leg3(R,'L',[-12,180,122],[0,0,1],[0,0,1]);          /* передняя: голень почти вертикальна */
- /* задняя: колено идёт вниз к полу, голень ложится назад, стопа на носке */
- const knR=[12,R.hipR[1]+FL.th*(0.95-0.2*t),R.hipR[2]-FL.th*(0.3+0.1*t)];
- const d=V3.unit(V3.sub(knR,R.hipR));R.knR=V3.add(R.hipR,d,FL.th);
- const anR=[12,Math.min(176,R.knR[1]+FL.sh*(0.42+0.02*t)),R.knR[2]-FL.sh*(0.9-0.05*t)];
- R.anR=V3.add(R.knR,V3.unit(V3.sub(anR,R.knR)),FL.sh);
- R.heelR=V3.add(R.anR,[0,-6,-5]);R.toeR=V3.add(R.anR,[0,4,8]);
+ /* Задний носок — неподвижная опора; пятка может поворачиваться вокруг него.
+    Колено и голеностоп решаются одной цепью, без ручного смещения стопы. */
+ const footAngle=.9+.1*t,footDir=[0,Math.sin(footAngle),Math.cos(footAngle)],toe=[12,180,68];
+ leg3(R,'R',V3.add(toe,footDir,-13),[0,1,0],footDir);
  for(const [s,sign]of [['L',-1],['R',1]]){
   const d=V3.unit([sign*.08,1,0]);R['el'+s]=V3.add(R['sh'+s],d,30);R['wr'+s]=V3.add(R['el'+s],d,27);
   R['grip'+s]=V3.add(R['wr'+s],d,3.5);R['hand'+s]=V3.add(R['wr'+s],d,7);
   R.props.push({kind:'dumbbell',c:R['grip'+s],optional:'db'});
  }
- R.contacts=[{p:[-12,184,127],label:'Передняя стопа целиком'},{p:[12,182,68],label:'Задняя стопа на носке'}];
+ R.contacts=[{p:[-12,184,127],label:'Передняя стопа целиком'},{p:[12,184,68],label:'Задняя стопа на носке'}];
  return R;
 }
 /* Жим гантелей сидя: спинка вертикальна. t=0 низ (гантели у плеч), t=1 верх. */
@@ -36,7 +33,7 @@ function dbpressRig(t){
  const hip=[0,128,90], R=body3(hip,-6,0,12);
  const seatZ0=hip[2]-14, seatZ1=hip[2]+22;
  for(const [s,sign]of [['L',-1],['R',1]]){
-  const kn=[sign*12,138,hip[2]+42];R['kn'+s]=kn;R['an'+s]=V3.add(kn,[0,1,0],42);
+  const kn=[sign*12,138,hip[2]+Math.sqrt(FL.th**2-10**2)];R['kn'+s]=kn;R['an'+s]=V3.add(kn,[0,1,0],FL.sh);
   R['heel'+s]=V3.add(R['an'+s],[0,0,1],-4);R['toe'+s]=V3.add(R['an'+s],[0,0,1],13);
   /* низ: гантели у ушей снаружи от плеч, предплечья вертикально; верх: над плечами */
   const lowX=sign*40, lowY=R.sh[1]-14, topX=sign*12, topY=R.sh[1]-(FL.ua+FL.fa-3);
@@ -52,11 +49,11 @@ function dbpressRig(t){
 function bbrowRig(t){
  const angle=52, hip=[0,104,84];
  const R=body3(hip,angle,-10,12);
- const low=[0,150,118], high=V3.add(V3.add(hip,R.u,20),R.n,15);
+ const low=hangingBar3(R,26,118), high=V3.add(V3.add(hip,R.u,20),R.n,15);
  const bar=[0,low[1]+(high[1]-low[1])*t,low[2]+(high[2]-low[2])*t];
  for(const [s,sign]of [['L',-1],['R',1]]){
   leg3(R,s,[sign*13,180,100],[0,0,1],[0,0,1]);
-  arm3(R,s,[sign*26,bar[1],bar[2]],[sign*.4,-1,-.3],[0,1,0]);
+  arm3(R,s,[sign*26,bar[1]-3.5,bar[2]],[sign*.4,-1,-.3],[0,1,0]);
  }
  R.bar=bar;R.props=[{kind:'barbell',c:bar}];
  R.contacts=[{p:[-13,184,100],label:'Стопы на ширине таза'}];
