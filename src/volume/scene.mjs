@@ -28,6 +28,35 @@ function placeBeam(o,a,b,width){
  o.position.fromArray(world(add(a,b).map(v=>v/2)));o.scale.set(width/200,l/100,width/200);
  o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),vec(direction(unit(d))));
 }
+// Closed fingers must follow the handle's axis, rather than the world's X axis.
+// A neutral-grip dumbbell and a dip rail have different axes from a barbell.
+function gripAxis(R,side,props){
+ const grip=R['grip'+side],candidates=[];
+ for(const p of props){
+  let center,axis,half,priority=0;
+  if(['dumbbell','barbell'].includes(p.kind)){center=p.c;axis=p.axis||[1,0,0];half=p.kind==='dumbbell'?6:40;priority=1;}
+  else if(p.kind==='kettlebell'&&p.grip){center=p.grip;axis=p.axis||[1,0,0];half=8;priority=1;}
+  else if(p.kind==='line'&&p.equipmentRole==='grip'&&(!p.side||p.side===side)){
+   center=add(p.a,p.b).map(v=>v/2);axis=sub(p.b,p.a);half=len(axis)/2;priority=2;
+  }else continue;
+  if(len(axis)<1e-8)continue;axis=unit(axis);const delta=sub(grip,center),along=dot(delta,axis),distance=len(sub(delta,axis.map(v=>v*along)));
+  if(Math.abs(along)<=half+2&&distance<5)candidates.push({axis,distance,priority});
+ }
+ candidates.sort((a,b)=>b.priority-a.priority||a.distance-b.distance);
+ const d=unit(sub(grip,R['wr'+side]));
+ if(candidates.length)return candidates[0].axis;
+ // For an empty hand, preserve the wrist direction and the body's lateral frame.
+ let x=sub(R.x,d.map(v=>v*dot(R.x,d)));
+ if(len(x)<1e-5)x=cross(d,Math.abs(d[0])<.8?[1,0,0]:[0,0,1]);
+ return unit(x);
+}
+function placeHand(hand,R,side,props){
+ const grip=R['grip'+side],axis=gripAxis(R,side,props),d=unit(sub(grip,R['wr'+side]));
+ let y=sub(d,axis.map(v=>v*dot(d,axis)));
+ if(len(y)<1e-5)y=cross(axis,Math.abs(axis[1])<.8?[0,1,0]:[0,0,1]);
+ y=unit(y);const z=unit(cross(axis,y));
+ hand.position.fromArray(world(grip));hand.quaternion.copy(quaternion(direction(axis),direction(y),direction(z).map(v=>-v)));
+}
 export function createCatalogScene(first,{coarse=false}={}){
  const limbRows=coarse?5:10,limbCols=coarse?8:16,torsoCols=coarse?12:24;
  const scene=new THREE.Scene();scene.background=new THREE.Color('#101722');
@@ -41,7 +70,7 @@ export function createCatalogScene(first,{coarse=false}={}){
  const parts={},dots=new THREE.Group();dots.name='joint-dots';scene.add(dots);const dotMat=new THREE.MeshBasicMaterial({color:'#e2f1ff',depthTest:false});
  for(const side of ['L','R']){
   for(const[kind,a,b]of [['ua','sh','el'],['fa','el','wr'],['th','hip','kn'],['sh','kn','an']])parts[kind+side]={a:a+side,b:b+side,mesh:mesh(scene,grid(limbRows,limbCols),skin,kind+side)};
-  for(const[name,r]of [['sh',6.4],['el',4.3],['kn',5.2]])parts[name+'-joint'+side]={r,mesh:mesh(scene,new THREE.SphereGeometry(1,14,10),joint,name+'-joint'+side)};
+  for(const[name,r]of [['sh',6.4],['el',4.3],['wr',2.7],['kn',5.2]])parts[name+'-joint'+side]={r,mesh:mesh(scene,new THREE.SphereGeometry(1,14,10),joint,name+'-joint'+side)};
   const hand=new THREE.Group();hand.name='hand'+side;scene.add(hand);
   const palm=mesh(hand,new THREE.SphereGeometry(1,14,10),skin,'palm'+side);palm.scale.set(.039,.034,.026);
   for(let f=0;f<4;f++){
@@ -105,8 +134,8 @@ export function createCatalogScene(first,{coarse=false}={}){
     const p=parts[kind+side],a=R[p.a],b=R[p.b],f=frame(a,b,kind==='th'||kind==='sh'?cross(R.x,sub(b,a)):R.n),prof=data.limbProfiles[kind];
     updateGrid(p.mesh.geometry,limbRows,limbCols,(t,q)=>{const[r1,r2]=radius(prof,t),theta=q*Math.PI*2;return add(add(add(a,sub(b,a),t),f.x,r1*Math.cos(theta)),f.y,r2*Math.sin(theta));});
    }
-   for(const name of ['sh','el','kn']){const p=parts[name+'-joint'+side];placeSphere(p.mesh,R[name+side],[p.r,p.r,p.r]);}
-   const hand=parts['hand'+side].mesh;hand.position.fromArray(world(R['grip'+side]));const d=unit(sub(R['grip'+side],R['wr'+side])),axis=[1,0,0];let z=cross(axis,d);if(len(z)<.01)z=cross(axis,[0,1,0]);z=unit(z);hand.quaternion.copy(quaternion(direction(axis),direction(unit(cross(z,axis))),direction(z).map(v=>-v)));
+   for(const name of ['sh','el','wr','kn']){const p=parts[name+'-joint'+side];placeSphere(p.mesh,R[name+side],[p.r,p.r,p.r]);}
+   placeHand(parts['hand'+side].mesh,R,side,data.props);
    const a=R['heel'+side],b=R['toe'+side],shoe=parts['shoe'+side].mesh;placeBeam(shoe,a,b,8);shoe.scale.x=.095;shoe.scale.z=.055;
    const ta=R['hip'+side],tb=R['kn'+side],f=frame(ta,tb,cross(R.x,sub(tb,ta)));updateGrid(parts['shorts'+side].mesh.geometry,2,16,(t,q)=>{const u=t*.145,[r1,r2]=radius(data.limbProfiles.th,u),angle=q*Math.PI*2;return add(add(add(ta,sub(tb,ta),u),f.x,(r1+.2)*Math.cos(angle)),f.y,(r2+.2)*Math.sin(angle));});
    for(const name of ['sh','el','wr','hip','kn','an'])parts['dot'+name+side].mesh.position.fromArray(world(R[name+side]));

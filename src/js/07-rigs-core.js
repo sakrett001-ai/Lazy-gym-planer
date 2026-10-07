@@ -125,7 +125,7 @@ function buildSpatialFigure(anim,opts={}){
   const a=half(p),b=half([...p].reverse());a.pop();b.pop();
   queue('path',{d:closedSpline(a.concat(b).map(v=>v.slice(0,2))),fill,...attrs},points);
  }
- function line3(a,b,width,fill,offset=0){const p=project(a),q=project(b);queue('line',{x1:f1(p[0]),y1:f1(p[1]),x2:f1(q[0]),y2:f1(q[1]),stroke:fill,'stroke-width':width,'stroke-linecap':'round'},[a,b],offset);}
+ function line3(a,b,width,fill,offset=0,attrs={}){const p=project(a),q=project(b);queue('line',{x1:f1(p[0]),y1:f1(p[1]),x2:f1(q[0]),y2:f1(q[1]),stroke:fill,'stroke-width':width,'stroke-linecap':'round',...attrs},[a,b],offset);}
  function limb(a,b,width,kind,fill){
   const p=project(a),q=project(b);
   if(Math.hypot(q[0]-p[0],q[1]-p[1])<1.5){
@@ -137,10 +137,14 @@ function buildSpatialFigure(anim,opts={}){
   const faces=[[p(0,0,0),p(1,0,0),p(1,0,1),p(0,0,1)],[p(0,0,0),p(0,0,1),p(0,1,1),p(0,1,0)], [p(1,0,0),p(1,1,0),p(1,1,1),p(1,0,1)],[p(0,0,1),p(1,0,1),p(1,1,1),p(0,1,1)],[p(0,0,0),p(0,1,0),p(1,1,0),p(1,0,0)]];
   faces.forEach((v,i)=>face(v,['#8192a8','#56677d','#65758a','#708097','#617186'][i]));
  }
- function disc(c,r,outline=false){
-  const p=Array.from({length:48},(_,i)=>V3.add(c,[0,Math.cos(i*Math.PI/24),Math.sin(i*Math.PI/24)],r));
+ function circle3(c,r,axis,count=48){
+  axis=V3.unit(axis);const a=V3.unit(V3.cross(axis,Math.abs(axis[1])<.8?[0,1,0]:[0,0,1])),b=V3.cross(axis,a);
+  return Array.from({length:count},(_,i)=>V3.add(V3.add(c,a,r*Math.cos(i*Math.PI*2/count)),b,r*Math.sin(i*Math.PI*2/count)));
+ }
+ function disc(c,r,outline=false,axis=[1,0,0],attrs={}){
+  const p=circle3(c,r,axis);
   /* сбоку блин — полупрозрачный диск: не закрывает атлета и не читается как кольцо вокруг головы */
-  face(p,outline?'#36465e':'#36465e',{stroke:outline?'#7f90ad':'#25344a','stroke-width':outline?1.2:1,'stroke-opacity':outline?.7:1,'fill-opacity':outline?.38:1});
+  face(p,outline?'#36465e':'#36465e',{stroke:outline?'#7f90ad':'#25344a','stroke-width':outline?1.2:1,'stroke-opacity':outline?.7:1,'fill-opacity':outline?.38:1,...attrs});
   const q=project(c);queue('circle',{cx:f1(q[0]),cy:f1(q[1]),r:2.5,fill:'#a6b5ca'},[c],1);
  }
  function prop(s){
@@ -148,18 +152,24 @@ function buildSpatialFigure(anim,opts={}){
   if(s.kind==='box')box(s);
   else if(s.kind==='line')line3(s.a,s.b,s.width,tones[s.tone]||tones.steel);
   else if(s.kind==='dumbbell'){
-   line3(V3.add(s.c,[1,0,0],-9),V3.add(s.c,[1,0,0],9),3,tones.bar);
-   for(const sign of [-1,1])disc(V3.add(s.c,[1,0,0],sign*8),6);
+   const axis=V3.unit(s.axis||[1,0,0]);
+   line3(V3.add(s.c,axis,-12),V3.add(s.c,axis,12),3,tones.bar,0,{'data-prop':'dumbbell','data-part':'shaft'});
+   for(const sign of [-1,1])disc(V3.add(s.c,axis,sign*9),6,false,axis,{'data-prop':'dumbbell','data-part':'plate'});
   }else if(s.kind==='barbell'){
-   line3(V3.add(s.c,[1,0,0],-61),V3.add(s.c,[1,0,0],61),3.4,tones.bar);
-   line3(V3.add(s.c,[1,0,0],-19),V3.add(s.c,[1,0,0],19),8,'#ac8a61',1);
-   for(const sign of [-1,1])disc(V3.add(s.c,[1,0,0],sign*48),17,camera==='side');
+   const axis=V3.unit(s.axis||[1,0,0]);
+   line3(V3.add(s.c,axis,-61),V3.add(s.c,axis,61),3.4,tones.bar,0,{'data-prop':'barbell','data-part':'shaft'});
+   line3(V3.add(s.c,axis,-19),V3.add(s.c,axis,19),8,'#ac8a61',1);
+   for(const sign of [-1,1])disc(V3.add(s.c,axis,sign*48),s.radius||17,camera==='side',axis,{'data-prop':'barbell','data-part':'plate'});
   }else if(s.kind==='panel'){
    const axis=[1,0,0],normal=V3.unit(V3.cross(axis,V3.sub(s.b,s.a))),corners=[V3.add(s.a,axis,-s.width/2),V3.add(s.a,axis,s.width/2),V3.add(s.b,axis,s.width/2),V3.add(s.b,axis,-s.width/2)];
    const lower=corners.map(p=>V3.add(p,normal,s.thickness/2));face(corners,'#53677f');for(let i=0;i<4;i++)face([corners[i],corners[(i+1)%4],lower[(i+1)%4],lower[i]],'#35475f');
   }else if(['wheel','roller','weight'].includes(s.kind)){
-   const axis=s.axis||[1,0,0],a=V3.unit(V3.cross(axis,Math.abs(axis[1])<.8?[0,1,0]:[0,0,1])),b=V3.cross(axis,a),r=s.radius||6;
-   const points=Array.from({length:24},(_,i)=>V3.add(V3.add(s.c,a,r*Math.cos(i*Math.PI/12)),b,r*Math.sin(i*Math.PI/12)));face(points,s.kind==='roller'?'#35475f':'#45607f');
+   const axis=V3.unit(s.axis||[1,0,0]),r=s.radius||6;
+   if(s.kind==='roller'){
+    const ends=[-18,18].map(offset=>circle3(V3.add(s.c,axis,offset),r,axis,24));
+    for(const points of ends)face(points,'#35475f',{'data-prop':'roller','data-part':'end'});
+    for(let i=0;i<24;i++)face([ends[0][i],ends[0][(i+1)%24],ends[1][(i+1)%24],ends[1][i]],'#435570',{'data-prop':'roller','data-part':'wall'});
+   }else face(circle3(s.c,r,axis,24),'#45607f');
   }else if(s.kind==='kettlebell'){
    const c=project(s.c);queue('circle',{cx:c[0],cy:c[1],r:s.radius||8.5,fill:'#304a6a',stroke:'#607691','stroke-width':1},[s.c]);
    const d=V3.unit(V3.sub(s.c,s.grip)),points=[V3.add(V3.add(s.grip,[1,0,0],-5.5),d,3),s.grip,V3.add(V3.add(s.grip,[1,0,0],5.5),d,3)],p=points.map(project);
@@ -220,6 +230,8 @@ function buildSpatialFigure(anim,opts={}){
  }
  // Bounds include equipment, every sampled pose, and the floor; camera stays still.
  for(let i=0;i<=40;i++){compile(i/40,0,false);tracePts.push(project(anim.rig3d(i/40).gripL));}
+ const setVectors=anim.catalogId?catalogVectorGroup(svg,anim,camera):vectorGroup(svg,anim,camera);
+ if(setVectors.bounds)allBounds.push(...setVectors.bounds);
  const floorCorners=[[-76,187,0],[76,187,0],[76,187,195],[-76,187,195]];
  if(!anim.noGround)allBounds.push(...floorCorners.map(project));
  let minX=Math.min(...allBounds.map(p=>p[0]))-13,maxX=Math.max(...allBounds.map(p=>p[0]))+13,minY=Math.min(...allBounds.map(p=>p[1]))-16,maxY=Math.max(...allBounds.map(p=>p[1]))+10;
@@ -239,11 +251,12 @@ function buildSpatialFigure(anim,opts={}){
   const names=['shL','elL','wrL','hipL','knL','anL','shR','elR','wrR','hipR','knR','anR'];
   names.forEach((name,i)=>{const p=project(R[name]),node=jointNodes[i]||(jointNodes[i]=el('circle',{r:2.1,class:'joint-dot'},dots));node.setAttribute('cx',f1(p[0]));node.setAttribute('cy',f1(p[1]));});
   svg.dataset.pose=String(t);if(muscles)svg.dataset.musclePhase=muscles.phase;allBounds.length=0;setRegion(selectedRegion);
+  setVectors?.at?.(t,frame,R);
  }
  const setTrace=show=>trace.setAttribute('display',show?'inline':'none');
  const setMuscles=show=>svg.classList.toggle('show-muscles',!!show&&!!anim.muscleProfile);
  const setRegion=id=>{selectedRegion=id;for(const node of svg.querySelectorAll('[data-muscle]'))node.style.opacity=id==='all'||node.dataset.muscle===id?'1':'.12';};
- setMuscles(opts.muscles);at(opts.t||0);const setVectors=vectorGroup(svg,anim,camera);return{svg,at,setTrace,setVectors,setMuscles,setRegion,camera};
+ setMuscles(opts.muscles);at(opts.t||0);return{svg,at,setTrace,setVectors,setMuscles,setRegion,camera};
 }
 
 function spatialExercise(id,rig,camera,cameras,hints){

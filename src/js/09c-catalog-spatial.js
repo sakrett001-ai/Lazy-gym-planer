@@ -74,7 +74,7 @@ function catalogProps(source,J,R){
    for(let i=1;i<s.pts.length;i++){
     const a=map(s.pts[i-1]),b=map(s.pts[i]),pad=/pad/.test(s.cls||'');
     if(pad)out.push({kind:'panel',a,b,width:front?8:30,thickness:s.w||8,tone:'pad',support:s.support});
-    else if(!front&&Math.abs(a[1]-b[1])>25){
+    else if(!front&&Math.max(...s.pts.map(p=>p[1]))-Math.min(...s.pts.map(p=>p[1]))>25){
      const half=/rail/.test(s.cls||'')?56:13;
      for(const sign of [-1,1])out.push({kind:'line',a:V3.add(a,[1,0,0],sign*half),b:V3.add(b,[1,0,0],sign*half),width:s.w||4,tone:tone(s)});
     }else out.push({kind:'line',a,b,width:s.w||4,tone:tone(s)});
@@ -141,7 +141,7 @@ function catalogFlyRig(t){
  const R=body3([0,126,112],-90),angle=(-8+88*t)*D2R;
  for(const[s,sign]of [['L',-1],['R',1]]){
   const wr=V3.add(R['sh'+s],[sign*Math.sin(angle),-Math.cos(angle),0],54);
-  arm3(R,s,wr,[sign,0,.2],[0,-1,0]);leg3(R,s,[sign*16,180,166],[0,-1,0]);R.props.push({kind:'dumbbell',c:R['grip'+s]});
+  arm3(R,s,wr,[sign,0,.2],[0,-1,0]);leg3(R,s,[sign*16,180,166],[0,-1,0]);R.props.push({kind:'dumbbell',c:R['grip'+s],axis:[0,0,1]});
  }
  R.props.push(...bench3(28,150,136,15));R.basis='authored';return R;
 }
@@ -166,6 +166,115 @@ function catalogBenchRig(t){
  for(const[s,sign]of [['L',-1],['R',1]])arm3(R,s,[sign*34,bar[1]+3.5,bar[2]],[sign*.8,.6,.45],[0,-1,0]);
  R.bar=bar;R.props=R.props.slice(0,5).concat({kind:'barbell',c:bar});return R;
 }
+// Side-view silhouettes do not encode the width or assembly of apparatus.
+// These families have explicit members and contact surfaces in world space.
+function catalogBeam(a,b,width=4,tone='steel',extra={}){return{kind:'line',a:[...a],b:[...b],width,tone,...extra};}
+function catalogMachineLink(pivot,target,side){
+ // Two rigid arms articulate at a hinge; neither beam stretches with the hands.
+ const [hinge,end]=joint3(pivot,target,55,55,[side==='L'?-1:1,0,0]);
+ return[catalogBeam(pivot,hinge,3.5,'steel',{equipmentRole:'linkage',side,link:0}),catalogBeam(hinge,end,3.5,'steel',{equipmentRole:'linkage',side,link:1})];
+}
+function catalogEquipment(R,id,source){
+ const p=R.props;
+ if(['hang','hangknee','legraise'].includes(id)){
+  for(const[s,sign]of [['L',-1],['R',1]])arm3(R,s,[sign*19,27.5,100],[0,0,1],[0,-1,0]);
+  R.props=[catalogBeam([-42,24,100],[42,24,100],3.6,'bar',{equipmentRole:'grip',sourceIndex:1}),
+   catalogBeam([-42,24,100],[-42,14,100],4,'steel',{sourceIndex:0}),catalogBeam([42,24,100],[42,14,100],4)];
+ }
+ if(['dip','assistdip'].includes(id)){
+  for(const s of ['L','R']){R['grip'+s]=V3.add(R['wr'+s],[0,1,0],3.5);R['hand'+s]=V3.add(R['wr'+s],[0,1,0],7);}
+  const y=R.gripL[1],z0=id==='dip'?62:64,z1=id==='dip'?168:158;
+  R.props=[];
+  for(const[s,sign]of [['L',-1],['R',1]]){
+   const x=R['grip'+s][0];
+   R.props.push(catalogBeam([x,y,z0],[x,y,z1],4.5,'bar',{equipmentRole:'grip',side:s,sourceIndex:0}));
+   for(const[z,idx]of [[z0,1],[z1,id==='dip'?2:1]])R.props.push(catalogBeam([x,y,z],[x,186,z],4,'steel',{sourceIndex:idx}),catalogBeam([x-7,186,z],[x+7,186,z],4));
+  }
+  if(id==='assistdip'){
+   const y=R.knL[1]+5.2,z=(R.knL[2]+R.knR[2])/2,pad=box3(-17,17,y,y+7,z-12,z+12,'pad');pad.sourceIndex=2;pad.equipmentRole='knee-support';
+   R.props.push(pad,catalogBeam([0,y+7,z],[0,y+7,z1],4,'steel',{sourceIndex:3}),catalogBeam([0,y+7,z1],[0,186,z1],4));
+   R.props.push(catalogBeam([-19,186,z1],[19,186,z1],4));
+  }
+ }
+ if(id.startsWith('smith')){
+  const bar=p.find(q=>q.kind==='barbell'),railIndices=new Set((source.props||[]).flatMap((q,i)=>/rail/.test(q.cls||'')?[i]:[]));
+  if(bar&&railIndices.size){
+   const z=id==='smithincline'?86:id==='smithbench'?70:92,top=6;
+   bar.c[2]=z;bar.axis=[1,0,0];bar.equipmentRole='grip';
+   for(const[s,sign]of [['L',-1],['R',1]])arm3(R,s,[sign*(id==='smithsquat'?30:id==='smithohp'?32:19),bar.c[1]+3.5,z],[sign*.4,1,-.3],[0,-1,0]);
+   R.props=p.filter(q=>!railIndices.has(q.sourceIndex)&&!(id==='smithincline'&&q.sourceIndex===1));
+   for(const sign of [-1,1])R.props.push(catalogBeam([sign*56,top,z],[sign*56,186,z],4,'steel',{sourceIndex:[...railIndices][sign>0&&railIndices.size>1?1:0],equipmentRole:'guide'}),catalogBeam([sign*56,186,z-20],[sign*56,186,z+20],5));
+   R.props.push(catalogBeam([-56,top,z],[56,top,z],5,'steel',{equipmentRole:'crossmember',...(id==='smithincline'?{sourceIndex:1}:{})}));
+   if(id==='smithohp')for(const q of R.props){
+    if(q.kind==='box'){q.tone='pad';if(q.sourceIndex===1){q.lo[1]+=10;q.hi[1]+=10;q.equipmentRole='seat';}}
+    if(q.sourceIndex===2&&q.kind==='line')q.a[1]+=10;
+   }
+   if(id==='smithohp')R.props.push(catalogBeam([0,130,64],[0,146,86],4,'steel',{equipmentRole:'backrest-bracket'}));
+  }
+ }
+ if(['pecdeck','reversefly'].includes(id)){
+  // Seat supports the underside of the pelvis; rear uprights hold the pivots.
+  const reverse=id==='reversefly',frameZ=reverse?156:45,seat=box3(-24,24,140,147,65,108,'pad'),back=box3(-20,20,65,130,reverse?93:59,reverse?100:70,'pad');
+  seat.sourceIndex=reverse?2:1;seat.equipmentRole='seat';back.sourceIndex=reverse?0:0;back.equipmentRole=reverse?'chest-support':'back-support';
+  R.props=[seat,back,catalogBeam([0,147,86],[0,186,86],5,'steel',{sourceIndex:reverse?2:2}),catalogBeam([0,186,86],[0,186,frameZ],5)];
+  for(const sign of [-1,1])R.props.push(catalogBeam([sign*60,28,frameZ],[sign*60,186,frameZ],5),catalogBeam([sign*60,186,frameZ],[0,186,frameZ],5));
+  R.props.push(catalogBeam([-60,28,frameZ],[60,28,frameZ],5,'steel',{sourceIndex:reverse?1:3,equipmentRole:'crossmember'}));
+  // Backrest and seat are tied into the frame, with articulated arms to pads.
+  const backZ=reverse?100:59;
+  R.props.push(catalogBeam([0,100,backZ],[0,100,frameZ],4),catalogBeam([0,100,frameZ],[0,186,frameZ],4));
+  for(const[s,sign,idx]of [['L',-1,reverse?4:5],['R',1,reverse?3:4]]){
+   const grip=R['grip'+s],el=R['el'+s],wr=R['wr'+s],pivot=[sign*60,28,frameZ];
+   if(reverse){
+    const a=V3.add(grip,[0,1,0],-7),b=V3.add(grip,[0,1,0],7);
+    R.props.push(catalogBeam(a,b,2.8,'bar',{sourceIndex:idx,equipmentRole:'grip',side:s}),...catalogMachineLink(pivot,a,s));
+   }else{
+    const offset=[sign*7,0,0],a=V3.add(el,offset),b=V3.add(wr,offset),handleEnd=V3.add(grip,[sign,0,0],7);
+    R.props.push(catalogBeam(a,b,9,'pad',{sourceIndex:idx,equipmentRole:'forearm-support',side:s}),...catalogMachineLink(pivot,b,s),catalogBeam(b,handleEnd,3.5),catalogBeam(grip,handleEnd,2.8,'bar',{equipmentRole:'grip',side:s}));
+   }
+  }
+ }
+ if(id==='declinebb'){
+  for(const q of p)if(q.kind==='wheel'&&q.tone==='pad'){q.kind='roller';q.equipmentRole='leg-restraint';}
+  const rollers=p.filter(q=>q.kind==='roller'),pad=p.find(q=>q.kind==='panel'&&q.tone==='pad');
+  // The original side-view circles occupied the knee/calf and instep volumes.
+  // One roller restrains above the knees; the second supports under the feet.
+  rollers[0].c=[0,R.knL[1]-10.7,R.knL[2]];
+  const footDir=V3.unit(V3.sub(R.toeL,R.heelL)),under=V3.unit(V3.cross(footDir,[1,0,0]));
+  rollers[1].c=V3.add(V3.add([0,R.anL[1],R.anL[2]],footDir,6.2),under,8.5);
+  // Legs meet the underside of the actual tilted pad, not its old 2D outline.
+  R.props=p.filter(q=>![0,1,3].includes(q.sourceIndex));
+  for(const[end,idx]of [[pad.a,0],[pad.b,1]])for(const sign of [-1,1]){
+   const top=V3.add(end,[1,0,0],sign*12);R.props.push(catalogBeam(top,[top[0],186,top[2]],4,'steel',{sourceIndex:idx}));
+  }
+  for(const sign of [-1,1]){
+   const root=V3.add(pad.a,[1,0,0],sign*15);let previous=root;
+   for(const roller of rollers){const end=V3.add(roller.c,[1,0,0],sign*18);R.props.push(catalogBeam(previous,end,3.5,'steel',{sourceIndex:3}));previous=end;}
+  }
+ }
+ return R;
+}
+function catalogEquipmentRig(rig,id,source){
+ const make=t=>catalogEquipment(rig(t),id,source);
+ // A single placement for the entire clip, rather than a floor that follows feet.
+ let lift=0;
+ if(source.noGround)for(let i=0;i<=40;i++){
+  const R=make(i/40);for(const s of ['L','R'])for(const key of ['an','heel','toe'])lift=Math.max(lift,R[key+s][1]+6-186);
+ }
+ return t=>{
+  const R=make(t);
+  if(lift>0){
+   const shift=p=>[p[0],p[1]-lift,p[2]],vectors=new Set(['u','n','x','headU','headN','chestU','chestN']);
+   for(const[key,p]of Object.entries(R))if(!vectors.has(key)&&Array.isArray(p)&&p.length===3&&p.every(Number.isFinite))R[key]=shift(p);
+   for(const p of R.props)for(const key of ['a','b','c','lo','hi','grip'])if(p[key])p[key]=shift(p[key]);
+   for(const c of R.contacts||[])if(c.p)c.p=shift(c.p);
+  }
+  if(['hang','hangknee','legraise'].includes(id)){
+   const y=24-lift;
+   for(const sign of [-1,1])R.props.push(catalogBeam([sign*42,y-10,100],[sign*42,186,100],4),catalogBeam([sign*42,186,75],[sign*42,186,125],5));
+  }
+  return R;
+ };
+}
 const CATALOG_SOURCES=new Map();
 for(const ex of EX){
  const source=catalogSource(ex);CATALOG_SOURCES.set(ex.id,source);
@@ -175,6 +284,7 @@ for(const ex of EX){
  if(ex.id==='dbfly')rig=catalogFlyRig;
  if(ex.id==='bbbench')rig=catalogBenchRig;
  if(['kbswing','goblet'].includes(ex.id))rig=catalogSharedGripRig(rig,ex.id);
+ rig=catalogEquipmentRig(rig,ex.id,source);
  ex.anim.catalogRig=t=>{
   if(!Number.isFinite(t)||t<0||t>1)throw Error('Pose must be in [0,1]');
   const R=rig(t);R.x??=V3.unit(V3.cross(R.n,R.u));R.basis??=source.rig3d?'authored':'reconstructed';
