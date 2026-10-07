@@ -1,0 +1,23 @@
+{
+  "version": "4.2.0",
+  "asset_tag": "4.2.0-7a76747f4ea8",
+  "tested_source_commit": "1dc7d9a05430ded342a86018c85fef97cd99317a",
+  "preview_url": "https://sakrett001-ai.github.io/Lazy-gym-planer/atlas-preview/?v=4.2.0-7a76747f4ea8",
+  "screenshot": "catalog-browser-1791376600041.jpg",
+  "browser_checks": {
+    "exercise_options": 139,
+    "camera_buttons": 5,
+    "repetition_pose_before_camera": 0.5,
+    "repetition_pose_after_camera": 0.5,
+    "simultaneous_views": 2,
+    "region_selection": "pec_clavicular",
+    "selected_region_opacity": 1,
+    "other_region_opacity": 0.12,
+    "viewport_width": 390,
+    "document_scroll_width": 390,
+    "mobile_stage_width": 341,
+    "update_button_loaded_current_asset_tag": true
+  },
+  "rendering": "WebGL is disabled in the test browser; SVG projection fallback was verified. Three.js geometry is covered by the separate rendered audit.",
+  "physical_android_verified": false
+}
