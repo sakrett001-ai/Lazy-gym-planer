@@ -1,0 +1,32 @@
+{
+  "name": "Lazy Gym Planner — workout planner",
+  "short_name": "Lazy Gym",
+  "description": "Workouts built around your muscles and equipment, technique, weight log.",
+  "lang": "en",
+  "start_url": "./",
+  "scope": "../",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ECEFF3",
+  "theme_color": "#2347C8",
+  "icons": [
+    {
+      "src": "../icon-192.png?v=4.2.0",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "../icon-512.png?v=4.2.0",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "../icon-maskable-512.png?v=4.2.0",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
