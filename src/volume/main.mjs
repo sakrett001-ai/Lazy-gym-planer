@@ -14,10 +14,12 @@ export function createVolumeFigure(options){
  const data=(t,index)=>options.data(t,index,false),initial=data(0,0);
  const scene=createCatalogScene(initial),cameras=scene.cameras;root.append(renderer.domElement);let disposed=false,lastT=options.t||0,lastIndex=0,camera=options.camera||'above',selected='all',muscles=options.muscles!==false,joints=!!options.joints;
  if(!cameras[camera])throw Error('Unknown volume camera '+camera);
- const apply=(t,index)=>scene.apply(data(t,index),{color:options.color,selected,muscles,joints});
+ let updateVectors=()=>{};
+ const apply=(t,index)=>{const d=data(t,index);scene.apply(d,{color:options.color,selected,muscles,joints});updateVectors(t,index,d.pose);};
  const trace=new THREE.Line(new THREE.BufferGeometry().setFromPoints(options.trace.map(p=>new THREE.Vector3(...world(p)))),new THREE.LineBasicMaterial({color:'#b4c3d9',transparent:true,opacity:.7}));trace.visible=false;scene.scene.add(trace);
  const vectors=new THREE.Group();vectors.name='movement-vectors';vectors.visible=false;scene.scene.add(vectors);
  for(const v of options.vectors){const a=new THREE.Vector3(...world(v.a)),b=new THREE.Vector3(...world(v.b)),d=b.clone().sub(a);vectors.add(new THREE.ArrowHelper(d.clone().normalize(),a,d.length(),/^(sh|hip)$/.test(v.key)?0x77a9d3:0xe97155,.075,.035));}
+ updateVectors=(t,index,pose)=>{options.vectors.forEach((v,i)=>{const q=options.vectorFrame?options.vectorFrame(v,t,index,pose):v,arrow=vectors.children[i];arrow.visible=!!q;if(!q)return;const a=new THREE.Vector3(...world(q.a)),b=new THREE.Vector3(...world(q.b)),d=b.sub(a);arrow.position.copy(a);arrow.setDirection(d.clone().normalize());arrow.setLength(d.length(),.06,.03);});vectors.updateMatrixWorld(true);};
  // Camera changes reuse the full-motion fit for this exercise/equipment combination.
  const fitKey=JSON.stringify([initial.exerciseId,initial.props,options.vectors]),savedBounds=fittedBounds.get(fitKey);
  if(savedBounds)for(const key of Object.keys(scene.bounds))Object.assign(scene.bounds[key],savedBounds[key]);

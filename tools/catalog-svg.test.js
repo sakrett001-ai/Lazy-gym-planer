@@ -25,6 +25,17 @@ test('SVG fallback preserves the working and supporting sides through both phase
   }
  }finally{dom.window.close();}
 });
+test('SVG arrows are attached to current joints and follow the displayed phase',()=>{
+ const dom=svgModel();
+ try{
+  const {EX,buildFigure}=dom.window.api,anim=EX.find(e=>e.id==='dbincline').anim,figure=buildFigure(anim,{camera:'side',t:.2});figure.setVectors(true);
+  const arrow=figure.svg.querySelector('[data-vector="gripL"]'),coords=()=>arrow.getAttribute('d').match(/-?\d*\.?\d+/g).map(Number);
+  figure.at(.2,{index:0});const first=coords();assert(first[3]>first[1],'downward arrow during lowering');
+  figure.at(.7,{index:0});const next=coords();assert(Math.abs(next[1]-first[1])>3,'arrow moves with the hand');
+  figure.at(.7,{index:2});const reverse=coords();assert(reverse[3]<reverse[1],'upward arrow during lifting');assert.equal(reverse[0],next[0]);assert.equal(reverse[1],next[1]);
+  figure.at(1,{index:1});assert.equal(arrow.getAttribute('display'),'none');
+ }finally{dom.window.close();}
+});
 
 test('SVG limb skin encloses its highlighted regions; a narrowed rendered limb fails',()=>{
  const dom=svgModel();

@@ -1,6 +1,7 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const{JSDOM,VirtualConsole}=require('jsdom');
 const root=path.resolve(__dirname,'..');
+const expectedVersion=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8')).version;
 const sw=fs.readFileSync(path.join(root,'dist/sw.js'),'utf8'),shell=require('node:vm').runInNewContext(sw+'\nSHELL;',{self:{registration:{scope:'https://test.invalid/'},addEventListener(){}}}),cached=new Set(shell.map(p=>new URL(p,'https://test.invalid/').href));
 for(const lang of ['ru','en']){
  console.log(`Checking packaged ${lang}…`);
@@ -31,5 +32,5 @@ for(const lang of ['ru','en']){
  w.requestAnimationFrame=()=>0;w.cancelAnimationFrame=()=>{};w.HTMLElement.prototype.scrollIntoView=function(){};w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};
  assert.equal(d.querySelectorAll('script[src],link[rel=stylesheet]').length,0);
  w.eval([...d.querySelectorAll('script')].map(s=>s.textContent).join('\n')+'\nwindow.qaCatalog={EX,openMotionItem,previewItem,closeMotion};');
- assert.equal(w.PODHOD_VERSION,'4.2.0');w.qaCatalog.openMotionItem(w.qaCatalog.previewItem('bbbench'));assert(d.querySelector('#mv-stage svg path'));assert.equal(d.querySelectorAll('#mv-cameras button').length,5);w.qaCatalog.closeMotion();dom.window.close();console.log(`Standalone ${lang}: embedded renderer and atlas verified without network resources.`);
+ assert.equal(w.PODHOD_VERSION,expectedVersion);w.qaCatalog.openMotionItem(w.qaCatalog.previewItem('bbbench'));assert(d.querySelector('#mv-stage svg path'));assert.equal(d.querySelectorAll('#mv-cameras button').length,5);w.qaCatalog.closeMotion();dom.window.close();console.log(`Standalone ${lang}: embedded renderer and atlas verified without network resources.`);
 }
