@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101722">
+  <title>Жим · новая демонстрация — Lazy Gym Planner</title>
+  <meta name="description" content="Отдельный прототип жима: объёмный манекен, скамья и штанга, ракурсы и подсветка областей мышц по фазам.">
+  <link rel="icon" href="./favicon-32.png" type="image/png">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main>
+    <header class="masthead">
+      <a class="brand" href="../"><img src="./icon-192.png" width="40" height="40" alt=""><span>LAZY GYM PLANNER<span class="brand-caption">Атлас движений</span></span></a>
+      <span class="prototype">Новая демонстрация</span>
+    </header>
+    <div class="title-row"><h1>Жим штанги</h1><p>Рассмотрите движение, опоры и работу мышц.</p></div>
+    <div class="workspace">
+      <section class="motion" aria-label="Демонстрация жима">
+        <div class="toolbar">
+          <fieldset class="segmented" aria-label="Вариант жима"><legend class="sr-only">Наклон скамьи</legend>
+            <button type="button" data-variant="flat" aria-pressed="true">Горизонтальная</button><button type="button" data-variant="incline" aria-pressed="false">Наклон 30°</button>
+          </fieldset>
+          <label class="view-select"><span class="sr-only">Ракурс</span><select id="camera"><option value="iso">Сверху под углом</option><option value="oblique">Под углом</option><option value="side">Сбоку</option><option value="top">Сверху</option></select></label>
+        </div>
+        <div class="stage" id="stage" role="img" aria-label="Манекен выполняет жим штанги на скамье">
+          <div class="stage-meta"><span id="view-label">Сверху под углом</span><span class="angle-label" id="angle-label">0°</span></div>
+          <div class="loading" id="loading">Загружаем демонстрацию…</div>
+          <div class="stage-footer"><span id="phase">Опускание</span><span id="progress-label">0% повторения</span></div>
+        </div>
+        <p class="cue" id="cue">Опускайте гриф к нижней части груди. Сохраняйте опору стоп и таза.</p>
+        <div class="playback">
+          <label class="scrub-label" for="progress">Положение в повторении</label>
+          <input id="progress" type="range" min="0" max="1000" value="0" aria-valuetext="Верхняя точка">
+          <div class="play-row"><button id="play" type="button" class="primary" aria-pressed="false">Воспроизвести</button><label class="speed">Скорость<select id="speed"><option value="0.5">½×</option><option value="1" selected>1×</option><option value="1.5">1½×</option></select></label></div>
+          <div class="phase-buttons" aria-label="Перейти к фазе"><button type="button" data-progress="0">Старт</button><button type="button" data-progress="0.23">Опускание</button><button type="button" data-progress="0.47">У груди</button><button type="button" data-progress="0.69">Жим</button><button type="button" data-progress="0.94">Верхняя точка</button></div>
+        </div>
+      </section>
+      <aside class="muscles" aria-label="Области мышц">
+        <div class="panel-title"><h2>Работа мышц</h2><label class="toggle"><input id="muscles" type="checkbox" checked><span>Подсветка</span></label></div>
+        <p class="legend"><span class="legend-gradient" aria-hidden="true"></span><span>Ниже</span><span>Выше</span></p>
+        <p class="legend-note">Учебная вовлечённость. Цвет не показывает силу или процент ЭМГ.</p>
+        <div id="region-list" class="region-list"></div>
+        <button type="button" id="all-regions" class="all-regions" aria-pressed="true">Показать все области</button>
+        <div class="region-detail" id="region-detail">Грудные разделены на верхнюю, среднюю и нижнюю области. Нажмите на область, чтобы выделить её.</div>
+        <p class="phase-note" id="phase-note">При опускании мышцы продолжают контролировать движение.</p>
+        <details class="evidence"><summary>Как читать подсветку</summary><p>Области мышцы работают совместно. Наклон скамьи смещает акцент между ними. Границы на манекене условные.</p><p>Различия между вариантами опираются на исследования региональной ЭМГ. Кривые яркости внутри повторения заданы для объяснения движения и не воспроизводят измерения конкретного человека.</p><p>Для трицепса показан общий профиль. Независимые кривые его головок ещё не заданы.</p><p><a href="https://pubmed.ncbi.nlm.nih.gov/33049982/" target="_blank" rel="noopener noreferrer">Наклон и области грудных · 2020</a><br><a href="https://pubmed.ncbi.nlm.nih.gov/25799093/" target="_blank" rel="noopener noreferrer">Области мышц и участки повторения · 2016</a></p></details>
+      </aside>
+    </div>
+    <footer class="page-footer">Отдельный прототип · горизонтальный жим и наклон 30°<a href="./audit-report.json">Отчёт проверок</a></footer>
+    <noscript>Для интерактивной демонстрации включите JavaScript. <a href="./preview.png">Открыть изображение прототипа</a>.</noscript>
+  </main>
+  <script src="./app.js" defer></script>
+</body>
+</html>

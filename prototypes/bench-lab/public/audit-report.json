@@ -1,0 +1,20 @@
+{
+  "prototype": "bench-lab",
+  "version": "0.1.0",
+  "stats": {
+    "variants": 2,
+    "poses": 202,
+    "phaseFrames": 802,
+    "scenePoses": 84,
+    "cameraPoses": 336,
+    "checks": 3241732
+  },
+  "errors": [],
+  "limitations": [
+    "Educational geometry and declared contacts, not an individual medical/biomechanical clearance.",
+    "Colour curves are illustrative. Sources support qualitative regional differences, not these numerical knots or muscle force.",
+    "Three pectoral surface regions. Triceps uses a shared group profile; deep medial head is not drawn.",
+    "Rendered contact/cropping checks sample meshes. They are not a general collision solver for every pair of objects.",
+    "SVG fallback is checked; actual Android WebGL speed and appearance require review on the phone."
+  ]
+}
