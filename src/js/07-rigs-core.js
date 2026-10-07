@@ -119,11 +119,11 @@ function buildSpatialFigure(anim,opts={}){
  }
  const path2=p=>'M'+p.map(q=>`${f1(q[0])},${f1(q[1])}`).join('L')+'Z';
  function face(points,fill,extra={}){queue('path',{d:path2(points.map(project)),fill,...extra},points);}
- function silhouette(points,fill){
+ function silhouette(points,fill,attrs={}){
   const p=points.map(project).sort((a,b)=>a[0]-b[0]||a[1]-b[1]),cross=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
   const half=ps=>{const h=[];for(const q of ps){while(h.length>1&&cross(h[h.length-2],h[h.length-1],q)<=0)h.pop();h.push(q);}return h;};
   const a=half(p),b=half([...p].reverse());a.pop();b.pop();
-  queue('path',{d:closedSpline(a.concat(b).map(v=>v.slice(0,2))),fill},points);
+  queue('path',{d:closedSpline(a.concat(b).map(v=>v.slice(0,2))),fill,...attrs},points);
  }
  function line3(a,b,width,fill,offset=0){const p=project(a),q=project(b);queue('line',{x1:f1(p[0]),y1:f1(p[1]),x2:f1(q[0]),y2:f1(q[1]),stroke:fill,'stroke-width':width,'stroke-linecap':'round'},[a,b],offset);}
  function limb(a,b,width,kind,fill){
@@ -166,13 +166,33 @@ function buildSpatialFigure(anim,opts={}){
    queue('path',{d:`M${p[0][0]},${p[0][1]} Q${p[1][0]},${p[1][1]} ${p[2][0]},${p[2][1]}`,fill:'none',stroke:'#b4c6dc','stroke-width':2.4},points);
   }else throw Error('Unknown spatial equipment kind: '+s.kind);
  }
- function body(R){
+ function body(R,boundsOnly=false){
+  const surfaceLimb=(a,b,kind,fill,key,shorts=false)=>{
+   if(boundsOnly){
+    if(shorts)return;
+    const r=Math.max(...CATALOG_LIMB_PROFILES[kind].flatMap(p=>p.slice(1)));
+    for(const p of [a,b])for(const x of [-r,r])for(const y of [-r,r])for(const z of [-r,r])allBounds.push(project([p[0]+x,p[1]+y,p[2]+z]));
+    return;
+   }
+   const heights=shorts?[0,.0725,.145]:[0,.2,.4,.6,.8,1],f=catalogLimbFrame(R,a,b,catalogLimbFront(R,a,b,kind)),delta=V3.sub(b,a);
+   const points=heights.flatMap(t=>{
+    const [u,v]=catalogLimbRadius(kind,t),r1=u+(shorts?.2:0),r2=v+(shorts?.2:0),c=V3.add(a,delta,t);
+    return Array.from({length:8},(_,i)=>{const x=r1*Math.cos(i*Math.PI/4),y=r2*Math.sin(i*Math.PI/4);return c.map((n,k)=>n+f.x[k]*x+f.y[k]*y);});
+   });
+   silhouette(points,fill,{'data-limb':key});
+  };
   for(const s of ['R','L']){
    const skin=palette[s==='R'?'far':'skin'];
-   limb(R['hip'+s],R['kn'+s],13,'th',skin);limb(R['kn'+s],R['an'+s],10.5,'sh',skin);
+   if(R.basis){
+    for(const[kind,a,b]of [['th','hip','kn'],['sh','kn','an'],['ua','sh','el'],['fa','el','wr']])surfaceLimb(R[a+s],R[b+s],kind,skin,kind+s);
+    surfaceLimb(R['hip'+s],R['kn'+s],'th',palette.shorts,'shorts'+s,true);
+   }else{
+    limb(R['hip'+s],R['kn'+s],13,'th',skin);limb(R['kn'+s],R['an'+s],10.5,'sh',skin);
+    limb(R['sh'+s],R['el'+s],10,'ua',skin);limb(R['el'+s],R['wr'+s],8.5,'fa',skin);
+    limb(R['hip'+s],V3.add(R['hip'+s],V3.unit(V3.sub(R['kn'+s],R['hip'+s])),18),14,'th',palette.shorts);
+   }
    limb(R['heel'+s],R['toe'+s],6,'ft',palette.shoe);
-   limb(R['sh'+s],R['el'+s],10,'ua',skin);limb(R['el'+s],R['wr'+s],8.5,'fa',skin);limb(R['wr'+s],R['hand'+s],7,'hd',skin);
-   limb(R['hip'+s],V3.add(R['hip'+s],V3.unit(V3.sub(R['kn'+s],R['hip'+s])),18),14,'th',palette.shorts);
+   limb(R['wr'+s],R['hand'+s],7,'hd',skin);
   }
   const ring=(h,w,d)=>Array.from({length:12},(_,i)=>V3.add(V3.add(V3.add(R.hip,R.u,h),[1,0,0],w*Math.cos(i*Math.PI/6)),R.n,d*Math.sin(i*Math.PI/6)));
   const rings=R.basis?CATALOG_RINGS.map(([h])=>Array.from({length:24},(_,i)=>catalogTorsoPoint(R,h,i*Math.PI/12))):[ring(-5,12,8),ring(9,13,9),ring(23,12,8),ring(40,19,11),ring(49,19,9)];
@@ -184,11 +204,12 @@ function buildSpatialFigure(anim,opts={}){
   face(nose,'#a3b3cb');
  }
  function compile(t,index=0,withMuscles=true){
-  records=[];const R=anim.rig3d(t);body(R);
+  records=[];const R=anim.rig3d(t);body(R,!withMuscles);
   const muscles=muscleFrame(anim,t,index);
+  const sideValues=muscles&&anim.muscleProfile?.regions?catalogSideValues(anim.muscleProfile,muscles.values):null;
   const surfaces=!muscles||!withMuscles?[]:anim.muscleProfile?.regions?catalogMuscleSurfaces(R,anim.muscleProfile,{coarse:true}).filter(f=>project(f.normal)[2]>.035):visibleMuscleSurfaces(R,anim.muscleProfile,camera);
   if(muscles&&withMuscles)for(const zone of muscleContours(surfaces)){
-   const value=muscles.values[zone.id],fill=muscleColor(value);
+   const value=sideValues?.[zone.side]?.[zone.id]??muscles.values[zone.id],fill=muscleColor(value);
    queue('path',{d:closedSpline(zone.points.map(p=>project(p).slice(0,2))),fill,class:'muscle-zone','data-muscle':zone.id,'data-side':zone.side,
     'data-role':(anim.muscleProfile.regions?.[zone.id]||anim.muscleProfile.muscles[zone.id]).role,'data-band':muscleBand(value),
     stroke:fill,'stroke-width':.25,'stroke-linejoin':'round','aria-hidden':'true'},zone.points);

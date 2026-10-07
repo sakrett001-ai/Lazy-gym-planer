@@ -18,7 +18,7 @@ function catalogTorsoPoint(R,h,angle,extra=0){
  const[w,a,b]=catalogSection(h),n=R.chestN||R.n,x=R.x||V3.unit(V3.cross(R.n,R.u)),s=Math.cos(angle);
  return V3.add(V3.add(catalogCenter(R,h),x,w*Math.sin(angle)),n,(s>=0?a:b)*s+extra*s);
 }
-function catalogSource(ex){const a={...ex.anim};delete a.catalogRig;delete a.catalogProfile;prepAnim(a);return a;}
+function catalogSource(ex){const a={...ex.anim,catalogId:ex.id};delete a.catalogRig;delete a.catalogProfile;prepAnim(a);return a;}
 function catalogLegacyPose(a,t){return solvePose(a,poseAt(a,t),a._C);}
 function catalogPlanarRig(ex,source){
  return t=>{
@@ -83,7 +83,11 @@ function catalogProps(source,J,R){
   else if(s.k==='db')out.push({kind:'dumbbell',c:ref(s.at||'gripN',s.off),axis:[1,0,0],optional:s.if});
   else if(s.k==='plate'){
    const c=s.tf?V3.add(V3.add(R.hip,R.u,s.tf[0]),R.n,s.tf[1]):ref(s.at||'grips',s.off);
-   out.push({kind:/^grips$/.test(s.at||'grips')?'barbell':'weight',c,axis:[1,0,0],radius:s.r||16,optional:s.if});
+   if(source.catalogId==='rollout'){
+    const center=ref('grips'),axis=V3.unit(V3.sub(R.gripR,R.gripL));
+    out.push({kind:'wheel',c:center,axis,radius:s.r||8,tone:'plate'},
+     {kind:'line',a:V3.add(R.gripL,axis,-3),b:V3.add(R.gripR,axis,3),width:3,tone:'bar'});
+   }else out.push({kind:/^grips$/.test(s.at||'grips')?'barbell':'weight',c,axis:[1,0,0],radius:s.r||16,optional:s.if});
   }else if(s.k==='kb'){
    const grip=ref(s.at||'grips'),d=s.down?[0,1,0]:V3.unit(V3.sub(R.handL,R.wrL));
    out.push({kind:'kettlebell',c:V3.add(grip,d,s.dist||11),grip,axis:[1,0,0],radius:8.5,optional:s.if});

@@ -102,13 +102,13 @@ export function createCatalogScene(first,{coarse=false}={}){
   placeSphere(nose,add(R.head,R.headN,9.5),[1.7,2,3]);placeBeam(neck,add(R.sh,R.chestU||R.u,-2),R.head,8.5);
   for(const side of ['L','R']){
    for(const kind of ['ua','fa','th','sh']){
-    const p=parts[kind+side],a=R[p.a],b=R[p.b],f=frame(a,b,R.n),prof=data.limbProfiles[kind];
+    const p=parts[kind+side],a=R[p.a],b=R[p.b],f=frame(a,b,kind==='th'||kind==='sh'?cross(R.x,sub(b,a)):R.n),prof=data.limbProfiles[kind];
     updateGrid(p.mesh.geometry,limbRows,limbCols,(t,q)=>{const[r1,r2]=radius(prof,t),theta=q*Math.PI*2;return add(add(add(a,sub(b,a),t),f.x,r1*Math.cos(theta)),f.y,r2*Math.sin(theta));});
    }
    for(const name of ['sh','el','kn']){const p=parts[name+'-joint'+side];placeSphere(p.mesh,R[name+side],[p.r,p.r,p.r]);}
    const hand=parts['hand'+side].mesh;hand.position.fromArray(world(R['grip'+side]));const d=unit(sub(R['grip'+side],R['wr'+side])),axis=[1,0,0];let z=cross(axis,d);if(len(z)<.01)z=cross(axis,[0,1,0]);z=unit(z);hand.quaternion.copy(quaternion(direction(axis),direction(unit(cross(z,axis))),direction(z).map(v=>-v)));
    const a=R['heel'+side],b=R['toe'+side],shoe=parts['shoe'+side].mesh;placeBeam(shoe,a,b,8);shoe.scale.x=.095;shoe.scale.z=.055;
-   const ta=R['hip'+side],tb=R['kn'+side],f=frame(ta,tb,R.n);updateGrid(parts['shorts'+side].mesh.geometry,2,16,(t,q)=>{const u=t*.145,[r1,r2]=radius(data.limbProfiles.th,u),angle=q*Math.PI*2;return add(add(add(ta,sub(tb,ta),u),f.x,(r1+.2)*Math.cos(angle)),f.y,(r2+.2)*Math.sin(angle));});
+   const ta=R['hip'+side],tb=R['kn'+side],f=frame(ta,tb,cross(R.x,sub(tb,ta)));updateGrid(parts['shorts'+side].mesh.geometry,2,16,(t,q)=>{const u=t*.145,[r1,r2]=radius(data.limbProfiles.th,u),angle=q*Math.PI*2;return add(add(add(ta,sub(tb,ta),u),f.x,(r1+.2)*Math.cos(angle)),f.y,(r2+.2)*Math.sin(angle));});
    for(const name of ['sh','el','wr','hip','kn','an'])parts['dot'+name+side].mesh.position.fromArray(world(R[name+side]));
   }
   dots.visible=!!options.joints;

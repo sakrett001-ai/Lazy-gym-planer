@@ -342,4 +342,6 @@ const MACHINE_CUES = {
   elliptical:['Толкайте педали через пятку, помогая руками.', 'Не переносите вес на рукояти.'],
   stairs:['Всю стопу на ступень, толчок через пятку.', 'Касание поручней только для равновесия.']
 };
-for (const ex of EX) if (MACHINE_CUES[ex.id]) ex.anim.cues = MACHINE_CUES[ex.id];
+// The player stores every pair as [working/lifting phase, return/lowering phase].
+// MACHINE_CUES above is chronological, so eccentric-first entries need conversion.
+for (const ex of EX) if (MACHINE_CUES[ex.id]) ex.anim.cues = eccFirst.has(ex.id) ? [...MACHINE_CUES[ex.id]].reverse() : MACHINE_CUES[ex.id];
