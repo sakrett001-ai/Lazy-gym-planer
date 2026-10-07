@@ -487,6 +487,7 @@ function vectorGroup(svg, anim, camera) {
 }
 
 function buildFigure(anim, opts = {}) {
+  if(anim.catalogRig)return buildSpatialFigure(catalogFigureAnim(anim),opts);
   if(anim.rig3d)return buildSpatialFigure(anim,opts);
   const ratio = opts.ratio || 1;
   prepAnim(anim);

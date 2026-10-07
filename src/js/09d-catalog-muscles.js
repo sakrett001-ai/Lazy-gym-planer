@@ -1,0 +1,106 @@
+/* Anatomical parts and teaching regions are deliberately distinct. Deep muscles
+   have an entry but no patch painted on top of the skin. Colour curves are authored
+   illustrations; identical head profiles do not pretend to measure head-specific EMG. */
+const MUSCLE_REGIONS={
+ chest:[['pec_clavicular','Ключичная часть грудной','anatomical'],['pec_sternal','Средняя область грудной','teaching'],['pec_costal','Нижняя область грудной','teaching']],
+ triceps:[['tri_long','Длинная головка трицепса','anatomical'],['tri_lateral','Латеральная головка трицепса','anatomical'],['tri_medial','Медиальная головка трицепса · глубже','deep']],
+ biceps:[['bi_long','Длинная головка бицепса','anatomical'],['bi_short','Короткая головка бицепса','anatomical']],
+ delt_f:[['delt_f','Передняя часть дельтовидной','anatomical']],delt_s:[['delt_s','Средняя часть дельтовидной','anatomical']],delt_r:[['delt_r','Задняя часть дельтовидной','anatomical']],
+ quads:[['quad_rectus','Прямая мышца бедра','anatomical'],['quad_lateral','Латеральная широкая мышца','anatomical'],['quad_medial','Медиальная широкая мышца','anatomical'],['quad_deep','Промежуточная широкая · глубже','deep']],
+ hams:[['ham_lateral','Двуглавая мышца бедра','anatomical'],['ham_medial','Медиальная область заднего бедра','teaching']],
+ calves:[['calf_medial','Медиальная головка икроножной','anatomical'],['calf_lateral','Латеральная головка икроножной','anatomical'],['soleus','Камбаловидная · глубже','deep']],
+ glutes:[['glute_max','Большая ягодичная','anatomical'],['glute_lateral','Боковая ягодичная область','teaching']],
+ traps:[['trap_upper','Верхняя область трапециевидной','teaching'],['trap_mid','Средняя область трапециевидной','teaching']],
+ lats:[['lats','Широчайшие · общий профиль','group']],midback:[['midback','Межлопаточная область · общий профиль','group']],
+ lowback:[['lowback','Разгибатели спины · общий профиль','group']],abs:[['abs','Прямая мышца живота','anatomical']],
+ obliques:[['obliques','Косые мышцы живота · общий профиль','group']],forearms:[['forearms','Мышцы предплечья · общий профиль','group']]
+};
+const REGION_META=Object.fromEntries(Object.entries(MUSCLE_REGIONS).flatMap(([parent,rows])=>rows.map(([id,label,kind])=>[id,{id,parent,label,kind,visible:kind!=='deep'}])));
+const REGION_ANATOMY_SOURCES=[['Анатомия мышц плечевого пояса — OpenStax','https://openstax.org/books/anatomy-and-physiology-2e/pages/11-5-muscles-of-the-pectoral-girdle-and-upper-limbs'],['Анатомия мышц ног — OpenStax','https://openstax.org/books/anatomy-and-physiology-2e/pages/11-6-appendicular-muscles-of-the-pelvic-girdle-and-lower-limbs']];
+function motionProfile(anim){return anim.catalogProfile||anim.muscleProfile;}
+const INCLINE_CHEST=new Set(['dbincline','smithincline','inclinebb','declinepush','cablelowfly']);
+const LOWER_CHEST=new Set(['declinebb','dip','assistdip']);
+const CATALOG_LATERALITY={dbrow:{upper:'L'},cablelat:{upper:'R'},concentration:{upper:'L'},kickback:{upper:'L'},archer:{upper:'R'},bulgarian:{lower:'L'},stepup:{lower:'L'},lunge:{lower:'L'},revlunge:{lower:'L'},sidelunge:{lower:'R'},pistolbox:{lower:'L'},sllift:{lower:'L'},glutebridge1:{lower:'L'},glutekick:{lower:'L'},calf1:{lower:'L'}};
+function catalogSideValues(profile,values){
+ const sides={L:{...values},R:{...values}},lower=new Set(['quads','hams','calves','glutes']);
+ for(const[part,active]of Object.entries(profile.laterality||{}))for(const[id,r]of Object.entries(profile.regions)){
+  const applies=part==='lower'?lower.has(r.parent):!lower.has(r.parent)&&!['abs','obliques','lowback','traps'].includes(r.parent);
+  if(applies)sides[active==='L'?'R':'L'][id]=.28;
+ }return sides;
+}
+for(const ex of EX){
+ const base=ex.anim.muscleProfile,hold=ex.anim.hold,cyclic=ex.g==='cardio'||!!ex.kind,muscles=base?JSON.parse(JSON.stringify(base.muscles)):{};
+ for(const[id,role]of [...ex.pri.map(id=>[id,'primary']),...ex.sec.filter(id=>!ex.pri.includes(id)).map(id=>[id,'support'])])if(!muscles[id]){
+  const stabilizer=['abs','obliques','lowback','forearms'].includes(id)&&role!=='primary';
+  const start=role==='primary'?.42:.30,end=role==='primary'?.62:.44;
+  const c=hold?[.58,.58,.58]:stabilizer?[.34,.37,.34]:[start,role==='primary'?.83:.60,end];
+  muscles[id]={role:stabilizer?'stabilizer':role,concentric:c,eccentric:hold?[...c]:stabilizer?[...c]:[start,role==='primary'?.62:.46,end]};
+ }
+ const regions={};
+ for(const[parent,m]of Object.entries(muscles))for(const[id,label,kind]of MUSCLE_REGIONS[parent]){
+  let factor=1;
+  if(parent==='chest')factor=INCLINE_CHEST.has(ex.id)?{pec_clavicular:1,pec_sternal:.80,pec_costal:.68}[id]:LOWER_CHEST.has(ex.id)?{pec_clavicular:.70,pec_sternal:.90,pec_costal:1}[id]:{pec_clavicular:.80,pec_sternal:1,pec_costal:.88}[id];
+  regions[id]={parent,label,kind,role:m.role,factor,visible:kind!=='deep',profileBasis:parent==='chest'?'illustrative-regional':'shared-group'};
+ }
+ const names=ex.pri.map(id=>MUSCLE_NAMES[id]).join(', ');
+ const notes=base?base.notes:{concentric:hold?'Удержание: мышцы сохраняют положение.':cyclic?'Циклическое движение: цвет показывает учебное распределение акцентов.':names+' участвуют в рабочей фазе.',eccentric:cyclic?'Продолжение цикла: вовлечённость меняется плавно.':'Мышцы контролируют возврат.',end:'Конечная точка: сохраняйте контроль и опору.',start:'Исходное положение: подготовьтесь к следующему повторению.'};
+ ex.anim.catalogProfile={curveBasis:'illustrative',muscles,regions,notes,pair:ex.pri.some(id=>['lats','midback','lowback','glutes','hams','traps'].includes(id))?'back':'above',sources:[...(base?.sources||[]),...REGION_ANATOMY_SOURCES],cyclic,hold,laterality:CATALOG_LATERALITY[ex.id]};
+}
+const CATALOG_LIMB_PROFILES={ua:[[0,5.4,5.5],[.18,7.2,6.8],[.45,6.8,6.4],[.78,5.2,4.7],[1,4.2,4]],fa:[[0,4.4,4.4],[.22,5.7,5.2],[.45,4.9,4.7],[.76,3.5,3.3],[1,2.6,2.7]],th:[[0,9.1,9],[.25,8.8,8.2],[.6,7.1,6.5],[1,5.2,5]],sh:[[0,5,5],[.27,5.7,5.7],[.57,4.4,4],[1,2.8,3]]};
+function catalogLimbRadius(kind,t){
+ const p=CATALOG_LIMB_PROFILES[kind];for(let i=1;i<p.length;i++)if(t<=p[i][0]){const a=p[i-1],b=p[i],q=(t-a[0])/(b[0]-a[0]);return[a[1]+(b[1]-a[1])*q,a[2]+(b[2]-a[2])*q];}return p.at(-1).slice(1);
+}
+function catalogLimbFrame(R,a,b,front=R.n){
+ const z=V3.unit(V3.sub(b,a));let x=V3.sub(front,z.map(v=>v*V3.dot(front,z)));
+ if(Math.hypot(...x)<1e-5)x=V3.cross(z,Math.abs(z[0])<.8?[1,0,0]:[0,0,1]);x=V3.unit(x);return{x,y:V3.unit(V3.cross(z,x)),z};
+}
+function catalogLimbPoint(R,a,b,kind,t,angle,extra=0){
+ const f=catalogLimbFrame(R,a,b),[r1,r2]=catalogLimbRadius(kind,t),c=V3.add(a,V3.sub(b,a),t);
+ return V3.add(V3.add(c,f.x,(r1+extra)*Math.cos(angle)),f.y,(r2+extra)*Math.sin(angle));
+}
+function catalogMuscleSurfaces(R,profile,{coarse=false}={}){
+ const faces=[],limbRows=coarse?5:10,limbCols=coarse?8:16,torsoCols=coarse?12:24;
+ function clip(poly,key,bound,greater){
+  const result=[];for(let i=0;i<poly.length;i++){
+   const a=poly[i],b=poly[(i+1)%poly.length],inside=v=>greater?v[key]>=bound-1e-10:v[key]<=bound+1e-10,ia=inside(a),ib=inside(b);
+   if(ia)result.push(a);
+   if(ia!==ib){const t=(bound-a[key])/(b[key]-a[key]);result.push({h:a.h+(b.h-a.h)*t,a:a.a+(b.a-a.a)*t,p:V3.add(a.p,V3.sub(b.p,a.p),t)});}
+  }return result;
+ }
+ function patch(id,side,lo,hi,a0,a1,point){
+  if(!profile.regions[id]?.visible)return;
+  const heights=point.torso?CATALOG_RINGS.map(r=>r[0]):Array.from({length:limbRows+1},(_,i)=>i/limbRows),step=2*Math.PI/(point.torso?torsoCols:limbCols);
+  for(let r=1;r<heights.length;r++)if(heights[r]>=lo&&heights[r-1]<=hi)for(let c=Math.floor(a0/step);c<Math.ceil(a1/step);c++){
+   const corners=[[heights[r-1],c*step],[heights[r-1],(c+1)*step],[heights[r],c*step],[heights[r],(c+1)*step]].map(([h,a])=>({h,a,p:point(h,a)}));
+   for(const ix of point.angleSign<0?[[0,1,3],[0,3,2]]:[[0,1,2],[1,3,2]]){
+    let poly=ix.map(i=>corners[i]);const normal=V3.unit(V3.cross(V3.sub(poly[1].p,poly[0].p),V3.sub(poly[2].p,poly[0].p))).map(v=>v*(point.normalSign||1));
+    for(const[key,bound,greater]of [['h',lo,true],['h',hi,false],['a',a0,true],['a',a1,false]]){poly=clip(poly,key,bound,greater);if(poly.length<3)break;}
+    for(let i=1;i<poly.length-1;i++){
+     const tri=[poly[0].p,poly[i].p,poly[i+1].p];if(Math.hypot(...V3.cross(V3.sub(tri[1],tri[0]),V3.sub(tri[2],tri[0])))<1e-8)continue;
+     const points=tri.map(p=>V3.add(p,normal,.15));points.push(points[2]);faces.push({id,parent:profile.regions[id].parent,side,points,normal});
+    }
+   }
+  }
+ }
+ for(const[side,sign]of [['L',-1],['R',1]]){
+  const torso=(h,a)=>catalogTorsoPoint(R,h,sign*a);
+  torso.normalSign=-sign;torso.angleSign=sign;torso.torso=true;
+  for(const[id,lo,hi,a,b]of [['pec_clavicular',42,48,.08,1.08],['pec_sternal',33,41,.08,1.2],['pec_costal',27,32,.10,1.0],['abs',12,26,.05,.53],['obliques',10,29,.56,1.34],['lats',11,38,1.55,2.65],['midback',33,47,2.66,3.08],['lowback',11,30,2.72,3.08],['glute_max',0,9,1.64,3.04],['glute_lateral',2,10,1.13,1.63],['trap_upper',43,51,2.20,3.07],['trap_mid',38,43,2.31,2.66]])patch(id,side,lo,hi,a,b,torso);
+  const limb=(root,end,kind)=>{
+   const f=catalogLimbFrame(R,R[root+side],R[end+side]),outward=V3.dot(f.y,R.x)*sign,orientation=Math.abs(outward)>.001?Math.sign(outward):sign;
+   const point=(t,a)=>catalogLimbPoint(R,R[root+side],R[end+side],kind,t,a*orientation);point.normalSign=orientation;point.angleSign=orientation;return point;
+  };
+  for(const[id,lo,hi,a,b]of [['delt_f',.02,.30,-.70,.70],['delt_s',.02,.32,.73,1.76],['delt_r',.02,.30,1.80,2.75],['bi_long',.33,.84,.04,.80],['bi_short',.33,.84,-.80,-.04],['tri_long',.28,.86,2.46,3.91],['tri_lateral',.27,.85,1.68,2.42]])patch(id,side,lo,hi,a,b,limb('sh','el','ua'));
+  patch('forearms',side,.15,.78,-1.25,1.25,limb('el','wr','fa'));
+  for(const[id,lo,hi,a,b]of [['quad_rectus',.15,.80,-.44,.44],['quad_lateral',.12,.82,.48,1.48],['quad_medial',.44,.91,-1.38,-.48],['ham_lateral',.16,.82,1.67,2.71],['ham_medial',.18,.84,2.77,4.45]])patch(id,side,lo,hi,a,b,limb('hip','kn','th'));
+  patch('calf_lateral',side,.12,.59,2.08,3.12,limb('kn','an','sh'));patch('calf_medial',side,.12,.59,3.18,4.21,limb('kn','an','sh'));
+ }
+ return faces;
+}
+function catalogFigureAnim(anim){
+ return {...anim,rig3d:anim.catalogRig,muscleProfile:anim.catalogProfile,camera:'above',cameras:anim.catalogCameras,sample:t=>({spatialT:t}),catalogRig:null};
+}
+function catalogVolumeData(anim,t,index,has,coarse=false){
+ const R=anim.catalogRig(t),state=muscleFrame(anim,t,index),profile=motionProfile(anim);
+ return{exerciseId:anim.catalogId,pose:R,surfaces:catalogMuscleSurfaces(R,profile,{coarse}),values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>!s.optional||!has||has(s.optional)),torsoRings:CATALOG_RINGS,limbProfiles:CATALOG_LIMB_PROFILES};
+}

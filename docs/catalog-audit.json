@@ -1,0 +1,11 @@
+{
+  "stats": {
+    "exercises": 139,
+    "poses": 14039,
+    "cameraPoses": 70195,
+    "regionFrames": 56156,
+    "reconstructed": 119,
+    "authored": 20
+  },
+  "failures": []
+}

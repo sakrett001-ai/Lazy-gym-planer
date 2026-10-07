@@ -94,7 +94,7 @@ function thrustRig(t){
  R.props=[...bench3(18,80,138,40),{kind:'barbell',c:bar}];
  R.contacts=[{p:contact,label:'Опора спиной'},{p:[-13,184,thrustFootZ3+5],label:'Стопы'}];return R;
 }
-const CAMERA3={front:{label:'Спереди',yaw:0,elevation:0},side:{label:'Сбоку',yaw:90,elevation:0},angle:{label:'Под углом',yaw:55,elevation:8},
+const CAMERA3={front:{label:'Спереди',yaw:0,elevation:0},side:{label:'Сбоку',yaw:90,elevation:0},angle:{label:'Под углом',yaw:55,elevation:-15},
  back:{label:'Сзади',yaw:180,elevation:0},above:{label:'Сверху под углом',yaw:35,elevation:-55}};
 function camera3(key){
  const C=CAMERA3[key]||CAMERA3.side,sy=Math.sin(C.yaw*D2R),cy=Math.cos(C.yaw*D2R),se=Math.sin(C.elevation*D2R),ce=Math.cos(C.elevation*D2R);
@@ -154,7 +154,17 @@ function buildSpatialFigure(anim,opts={}){
    line3(V3.add(s.c,[1,0,0],-61),V3.add(s.c,[1,0,0],61),3.4,tones.bar);
    line3(V3.add(s.c,[1,0,0],-19),V3.add(s.c,[1,0,0],19),8,'#ac8a61',1);
    for(const sign of [-1,1])disc(V3.add(s.c,[1,0,0],sign*48),17,camera==='side');
-  }
+  }else if(s.kind==='panel'){
+   const axis=[1,0,0],normal=V3.unit(V3.cross(axis,V3.sub(s.b,s.a))),corners=[V3.add(s.a,axis,-s.width/2),V3.add(s.a,axis,s.width/2),V3.add(s.b,axis,s.width/2),V3.add(s.b,axis,-s.width/2)];
+   const lower=corners.map(p=>V3.add(p,normal,s.thickness/2));face(corners,'#53677f');for(let i=0;i<4;i++)face([corners[i],corners[(i+1)%4],lower[(i+1)%4],lower[i]],'#35475f');
+  }else if(['wheel','roller','weight'].includes(s.kind)){
+   const axis=s.axis||[1,0,0],a=V3.unit(V3.cross(axis,Math.abs(axis[1])<.8?[0,1,0]:[0,0,1])),b=V3.cross(axis,a),r=s.radius||6;
+   const points=Array.from({length:24},(_,i)=>V3.add(V3.add(s.c,a,r*Math.cos(i*Math.PI/12)),b,r*Math.sin(i*Math.PI/12)));face(points,s.kind==='roller'?'#35475f':'#45607f');
+  }else if(s.kind==='kettlebell'){
+   const c=project(s.c);queue('circle',{cx:c[0],cy:c[1],r:s.radius||8.5,fill:'#304a6a',stroke:'#607691','stroke-width':1},[s.c]);
+   const d=V3.unit(V3.sub(s.c,s.grip)),points=[V3.add(V3.add(s.grip,[1,0,0],-5.5),d,3),s.grip,V3.add(V3.add(s.grip,[1,0,0],5.5),d,3)],p=points.map(project);
+   queue('path',{d:`M${p[0][0]},${p[0][1]} Q${p[1][0]},${p[1][1]} ${p[2][0]},${p[2][1]}`,fill:'none',stroke:'#b4c6dc','stroke-width':2.4},points);
+  }else throw Error('Unknown spatial equipment kind: '+s.kind);
  }
  function body(R){
   for(const s of ['R','L']){
@@ -165,7 +175,7 @@ function buildSpatialFigure(anim,opts={}){
    limb(R['hip'+s],V3.add(R['hip'+s],V3.unit(V3.sub(R['kn'+s],R['hip'+s])),18),14,'th',palette.shorts);
   }
   const ring=(h,w,d)=>Array.from({length:12},(_,i)=>V3.add(V3.add(V3.add(R.hip,R.u,h),[1,0,0],w*Math.cos(i*Math.PI/6)),R.n,d*Math.sin(i*Math.PI/6)));
-  const rings=[ring(-5,12,8),ring(9,13,9),ring(23,12,8),ring(40,19,11),ring(49,19,9)];
+  const rings=R.basis?CATALOG_RINGS.map(([h])=>Array.from({length:24},(_,i)=>catalogTorsoPoint(R,h,i*Math.PI/12))):[ring(-5,12,8),ring(9,13,9),ring(23,12,8),ring(40,19,11),ring(49,19,9)];
   silhouette(rings.slice(1).flat(),palette.kit);silhouette(rings.slice(0,2).flat(),palette.shorts);
   line3(V3.add(R.sh,R.u,-2),R.head,8.5,'#95a6bd');
   const h=project(R.head),hu=project(V3.add(R.head,R.headU)),a=Math.atan2(hu[0]-h[0],-(hu[1]-h[1]))/D2R;
@@ -176,13 +186,14 @@ function buildSpatialFigure(anim,opts={}){
  function compile(t,index=0,withMuscles=true){
   records=[];const R=anim.rig3d(t);body(R);
   const muscles=muscleFrame(anim,t,index);
-  if(muscles&&withMuscles)for(const zone of muscleContours(visibleMuscleSurfaces(R,anim.muscleProfile,camera))){
+  const surfaces=!muscles||!withMuscles?[]:anim.muscleProfile?.regions?catalogMuscleSurfaces(R,anim.muscleProfile,{coarse:true}).filter(f=>project(f.normal)[2]>.035):visibleMuscleSurfaces(R,anim.muscleProfile,camera);
+  if(muscles&&withMuscles)for(const zone of muscleContours(surfaces)){
    const value=muscles.values[zone.id],fill=muscleColor(value);
    queue('path',{d:closedSpline(zone.points.map(p=>project(p).slice(0,2))),fill,class:'muscle-zone','data-muscle':zone.id,'data-side':zone.side,
-    'data-role':anim.muscleProfile.muscles[zone.id].role,'data-band':muscleBand(value),
+    'data-role':(anim.muscleProfile.regions?.[zone.id]||anim.muscleProfile.muscles[zone.id]).role,'data-band':muscleBand(value),
     stroke:fill,'stroke-width':.25,'stroke-linejoin':'round','aria-hidden':'true'},zone.points);
    /* Слой связан с глубиной своего сегмента: не проступает сквозь ближнюю руку/реквизит. */
-   records[records.length-1].depth=project(zone.anchor)[2]+.15;
+   if(zone.anchor)records[records.length-1].depth=project(zone.anchor)[2]+.15;
   }
   R.props.forEach(prop);return{R,muscles,records:records.sort((a,b)=>a.depth-b.depth)};
  }
@@ -199,18 +210,19 @@ function buildSpatialFigure(anim,opts={}){
   for(const z of [25,75,125,175]){const a=project([-70,187,z]),b=project([70,187,z]);el('line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1],class:'spatial-grid'},ground);}
  }
  trace.setAttribute('d',tracePts.map((p,i)=>`${i?'L':'M'}${f1(p[0])},${f1(p[1])}`).join(' '));
- let nodes=[],jointNodes=[];
+ let nodes=[],jointNodes=[],selectedRegion='all';
  function at(t,frame){
   const {R,muscles,records}=compile(t,frame?.index||0);
   records.forEach((s,i)=>{let node=nodes[i];if(!node||node.tagName!==s.tag){const replacement=el(s.tag,{});if(node)node.replaceWith(replacement);else scene.appendChild(replacement);node=nodes[i]=replacement;}for(const attr of [...node.attributes])if(!(attr.name in s.attrs))node.removeAttribute(attr.name);for(const[k,v]of Object.entries(s.attrs))node.setAttribute(k,v);});
   for(let i=records.length;i<nodes.length;i++)nodes[i].remove();nodes.length=records.length;
   const names=['shL','elL','wrL','hipL','knL','anL','shR','elR','wrR','hipR','knR','anR'];
   names.forEach((name,i)=>{const p=project(R[name]),node=jointNodes[i]||(jointNodes[i]=el('circle',{r:2.1,class:'joint-dot'},dots));node.setAttribute('cx',f1(p[0]));node.setAttribute('cy',f1(p[1]));});
-  svg.dataset.pose=String(t);if(muscles)svg.dataset.musclePhase=muscles.phase;allBounds.length=0;
+  svg.dataset.pose=String(t);if(muscles)svg.dataset.musclePhase=muscles.phase;allBounds.length=0;setRegion(selectedRegion);
  }
  const setTrace=show=>trace.setAttribute('display',show?'inline':'none');
  const setMuscles=show=>svg.classList.toggle('show-muscles',!!show&&!!anim.muscleProfile);
- setMuscles(opts.muscles);at(opts.t||0);const setVectors=vectorGroup(svg,anim,camera);return{svg,at,setTrace,setVectors,setMuscles,camera};
+ const setRegion=id=>{selectedRegion=id;for(const node of svg.querySelectorAll('[data-muscle]'))node.style.opacity=id==='all'||node.dataset.muscle===id?'1':'.12';};
+ setMuscles(opts.muscles);at(opts.t||0);const setVectors=vectorGroup(svg,anim,camera);return{svg,at,setTrace,setVectors,setMuscles,setRegion,camera};
 }
 
 function spatialExercise(id,rig,camera,cameras,hints){

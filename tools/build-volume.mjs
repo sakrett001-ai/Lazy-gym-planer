@@ -1,0 +1,10 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const require=createRequire(path.join(root,'package.json'));
+const {build}=require('esbuild');
+const out=path.join(root,'dist');await fs.mkdir(out,{recursive:true});
+await build({entryPoints:[path.join(root,'src/volume/main.mjs')],outfile:path.join(out,'volume.js'),bundle:true,minify:true,format:'iife',target:['es2020'],legalComments:'eof'});
+await fs.copyFile(require.resolve('three').replace(/build\/three\.cjs$/,'LICENSE'),path.join(out,'three-LICENSE.txt'));

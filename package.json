@@ -1,6 +1,6 @@
 {
   "name": "lazy-gym-planer",
-  "version": "4.1.8",
+  "version": "4.2.0",
   "private": true,
   "description": "Lazy Gym Planner — планировщик тренировок",
   "scripts": {
@@ -10,12 +10,19 @@
     "check:lab": "npm --prefix prototypes/bench-lab run check",
     "check:all": "npm run check && npm run check:lab",
     "test": "node --test tools/*.test.js",
-    "check": "npm test && npm run audit && npm run build && node --check dist/app.js && node --check dist/en/app.js",
+    "check": "npm test && npm run audit && npm run audit:catalog && npm run audit:render && npm run build && node --check dist/app.js && node --check dist/en/app.js && node tools/check-catalog-bundle.js",
     "serve": "node build.js && npx --yes serve dist -l 8080",
     "deploy": "sh deploy.sh",
-    "i18n": "node i18n/extract.js en"
+    "i18n": "node i18n/extract.js en",
+    "audit:catalog": "node tools/catalog-audit.js",
+    "audit:render": "node tools/catalog-render-audit.mjs"
   },
   "dependencies": {
-    "acorn": "^8.19.0"
+    "acorn": "^8.19.0",
+    "three": "0.180.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.9",
+    "jsdom": "26.1.0"
   }
 }

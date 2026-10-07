@@ -46,19 +46,30 @@ function paintMotion(F, detailed=false) {
   paintMusclePanel('mv',F,m);
 }
 function configureMusclePanel(prefix,it){
- const profile=it.ex.anim.muscleProfile,toggle=$('#'+prefix+'-muscle-toggle'),panel=$('#'+prefix+'-muscle-panel');
+ const profile=motionProfile(it.ex.anim),toggle=$('#'+prefix+'-muscle-toggle'),panel=$('#'+prefix+'-muscle-panel');
  toggle.checked=!!profile&&!!motionPrefs.muscles;toggle.disabled=!profile;
  $('#'+prefix+'-muscle-availability').hidden=!!profile;
  panel.hidden=!profile||!motionPrefs.muscles;
  if(!profile){$('#'+prefix+'-muscle-list').replaceChildren();return;}
- $('#'+prefix+'-muscle-list').innerHTML=Object.entries(profile.muscles).map(([id,m])=>`<li data-muscle-row="${id}"><span class="muscle-swatch" aria-hidden="true"></span><span class="muscle-row-copy"><strong>${esc(MUSCLE_NAMES[id])}</strong><span>${MUSCLE_ROLES[m.role]}</span></span><span class="muscle-level"></span></li>`).join('');
+ const rows=[];
+ for(const[id,m]of Object.entries(profile.muscles)){
+  rows.push(`<li data-muscle-row="${id}"><span class="muscle-swatch" aria-hidden="true"></span><span class="muscle-row-copy"><strong>${esc(MUSCLE_NAMES[id])}</strong><span>${MUSCLE_ROLES[m.role]}</span></span><span class="muscle-level"></span></li>`);
+  for(const[key,r]of Object.entries(profile.regions||{}).filter(([,r])=>r.parent===id&&r.id!==id)){
+   if(key===id)continue;
+   rows.push(`<li class="muscle-region-row" data-muscle-row="${key}" data-deep="${!r.visible}"><span class="muscle-swatch" aria-hidden="true"></span><span class="muscle-row-copy"><span>${esc(r.label)}</span><small>${r.profileBasis==='shared-group'?'Общий профиль группы':'Учебный региональный акцент'}</small></span><span class="muscle-level"></span></li>`);
+  }
+ }
+ $('#'+prefix+'-muscle-list').innerHTML=rows.join('');
+ const region=$('#'+prefix+'-region');region.innerHTML='<option value="all">Все области</option>'+Object.entries(profile.regions||{}).filter(([,r])=>r.visible).map(([id,r])=>`<option value="${id}">${esc(r.label)}</option>`).join('');
+ const saved=motionPrefs.regions?.[it.ex.id]||'all';region.value=profile.regions?.[saved]?.visible?saved:'all';
+ const F=prefix==='mv'?detailMotion:workout?.motion;for(const f of [F?.f,F?.extra].filter(Boolean))f.setRegion?.(region.value);
 }
 function paintMusclePanel(prefix,F,m){
  const panel=$('#'+prefix+'-muscle-panel');if(panel.hidden)return;
  const state=muscleFrame(F.it.ex.anim,m.t,m.index);if(!state)return;
  const note=$('#'+prefix+'-muscle-note');if(note.textContent!==state.note)note.textContent=state.note;
  for(const row of panel.querySelectorAll('[data-muscle-row]')){
-  const v=state.values[row.dataset.muscleRow],level=row.querySelector('.muscle-level'),text=MUSCLE_BANDS[muscleBand(v)];
+  const v=state.values[row.dataset.muscleRow],level=row.querySelector('.muscle-level'),text=row.dataset.deep==='true'?'Глубже':MUSCLE_BANDS[muscleBand(v)];
   row.querySelector('.muscle-swatch').style.backgroundColor=muscleColor(v);
   if(level.textContent!==text)level.textContent=text;
  }
@@ -95,7 +106,7 @@ function mountFigures() {
       btn.prepend(f.svg);
       const F={btn,it,f,vis:true,paused:reduceMotion,clock:0,durations:motionDurations(it)};
       figs.push(F);paintMotion(F);
-      if(it.ex.anim.muscleProfile){const note=document.createElement('p');note.className='muscle-tile-note';note.textContent='Цвет — учебная схема';note.hidden=!motionPrefs.muscles;btn.closest('.motion-tile').appendChild(note);}
+      if(motionProfile(it.ex.anim)){const note=document.createElement('p');note.className='muscle-tile-note';note.textContent='Цвет — учебная схема';note.hidden=!motionPrefs.muscles;btn.closest('.motion-tile').appendChild(note);}
       const pause=btn.closest('.motion-tile').querySelector('[data-motion-pause]');
       if(pause){pause.textContent=F.paused?'Пуск':'Пауза';pause.setAttribute('aria-pressed',String(!F.paused));pause.setAttribute('aria-label',`${F.paused?'Воспроизвести':'Приостановить'} демонстрацию: ${it.name}`);}
     } catch(e) {console.error('Демонстрация',it.ex.id,e);}
@@ -117,6 +128,7 @@ function previewItem(id) {
   return {ex,name:exName(ex,E),rx:prescribe(ex,S.mode==='program'?WEEKS[S.week-1]:null),has:propHas(ex,E),eqLine:equipLine(ex,E)};
 }
 function selectMotion(it, clock=0) {
+  disposeMotion(detailMotion);
   detailMotion={it,f:null,clock,paused:true,durations:motionDurations(it)};
   $('#mv-title').textContent=it.name;
   $('#mv-exercise').value=it.ex.id;
@@ -131,7 +143,7 @@ function selectMotion(it, clock=0) {
   $('#mv-errors').innerHTML=it.ex.err.map(x=>`<li>${esc(x)}</li>`).join('');
   $('#mv-breath').textContent=it.ex.breath;
   $('#mv-note').textContent=it.ex.note||'';
-  const links=[...(SOURCES_BY_EX[it.ex.id]||[]),...(it.ex.anim.muscleProfile?.sources||[])];
+  const links=[...(SOURCES_BY_EX[it.ex.id]||[]),...(motionProfile(it.ex.anim)?.sources||[])];
   const src=links.filter((v,i)=>links.findIndex(x=>x[1]===v[1])===i).map(([label,url])=>`<a href="${url}" target="_blank" rel="noopener noreferrer">${esc(label)}</a>`);
   $('#mv-sources').innerHTML=src.length?`<p class="mv-muscle-label">Подробнее о технике</p>${src.join('')}`:'';
   mountDetailCameras();
@@ -148,7 +160,7 @@ function openMotionItem(it,clock=0){
   $('#mv-close').focus();scheduleMotionLoop();
 }
 function closeMotion() {
-  const d=$('#motion-view');detailMotion=null;
+  const d=$('#motion-view');disposeMotion(detailMotion);detailMotion=null;
   if(d&&d.open)d.close();
   document.documentElement.classList.remove('motion-open');
   if(detailReturn&&detailReturn.isConnected)detailReturn.focus();
@@ -171,13 +183,14 @@ function setupMotionViewer() {
   $('#mv-progress').addEventListener('input',e=>{if(!detailMotion)return;const m=motionFrame(detailMotion);detailMotion.paused=true;detailMotion.clock=Number(e.target.value)/1000*(m.total-1);paintMotion(detailMotion,true);});
   $('#mv-speed').addEventListener('change',e=>{motionPrefs.speed=Number(e.target.value);saveMotionPrefs();});
   $('#mv-exercise').addEventListener('change',e=>selectMotion(previewItem(e.target.value)));
-  $('#mv-joints').addEventListener('change',e=>{motionPrefs.joints=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean))f.svg.classList.toggle('show-joints',e.target.checked);saveMotionPrefs();});
+  $('#mv-joints').addEventListener('change',e=>{motionPrefs.joints=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean)){f.svg.classList.toggle('show-joints',e.target.checked);f.setJoints?.(e.target.checked);}saveMotionPrefs();});
   $('#mv-vectors').addEventListener('change',e=>{motionPrefs.vectors=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean))f.setVectors(e.target.checked);saveMotionPrefs();});
   $('#mv-trace').addEventListener('change',e=>{motionPrefs.trace=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean))f.setTrace(e.target.checked);saveMotionPrefs();});
   $('#mv-muscle-toggle').addEventListener('change',e=>changeMusclePreference(e.target.checked));
   $('#wv-muscle-toggle').addEventListener('change',e=>changeMusclePreference(e.target.checked));
+  for(const prefix of ['mv','wv'])$('#'+prefix+'-region').addEventListener('change',e=>selectMuscleRegion(prefix,e.target.value));
   $('#motion-view').addEventListener('cancel',e=>{e.preventDefault();closeMotion();});
-  $('#motion-view').addEventListener('close',()=>{detailMotion=null;document.documentElement.classList.remove('motion-open');});
+  $('#motion-view').addEventListener('close',()=>{disposeMotion(detailMotion);detailMotion=null;document.documentElement.classList.remove('motion-open');});
   $('#motion-view').addEventListener('keydown',e=>{if(e.code==='Space'&&!['INPUT','SELECT','BUTTON','TEXTAREA'].includes(e.target.tagName)){e.preventDefault();if(detailMotion){detailMotion.paused=!detailMotion.paused;paintMotion(detailMotion,true);}}});
 }
 
