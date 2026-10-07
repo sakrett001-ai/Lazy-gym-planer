@@ -1,0 +1,64 @@
+name: Build Pages candidate
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/pages-candidate.yml'
+      - 'src/**'
+      - 'i18n/**'
+      - 'tools/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'build.js'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: source
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            source/package-lock.json
+            source/prototypes/bench-lab/package-lock.json
+      - name: Install dependencies
+        working-directory: source
+        run: |
+          npm ci
+          npm ci --prefix prototypes/bench-lab
+      - name: Check and build
+        working-directory: source
+        run: npm run check:all
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: site
+      - name: Preserve pages and create reviewed candidate
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          cp -R source/dist/. site/
+          cd site
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "Build Pages from $SOURCE_COMMIT"
+          fi
+          candidate="build/pages-$SOURCE_COMMIT"
+          git push origin "HEAD:refs/heads/$candidate"
+          {
+            echo "Candidate branch: $candidate"
+            echo "Candidate commit: $(git rev-parse HEAD)"
+            echo "Promote this candidate to gh-pages after review; its parent preserves existing previews."
+          } >> "$GITHUB_STEP_SUMMARY"
