@@ -1,8 +1,10 @@
 /* Сервис-воркер Lazy Gym Planner: кеширует оболочку приложения, работает без сети, обновляется при новой версии. */
 const VERSION = '__VERSION__';
 const CACHE = 'podhod-' + VERSION;
-const SHELL = ['./', './index.html', './app.css?v=' + VERSION, './app.js?v=' + VERSION, './pwa.js?v=' + VERSION, './manifest.webmanifest',
-  './en/', './en/index.html', './en/app.css?v=' + VERSION, './en/app.js?v=' + VERSION, './en/pwa.js?v=' + VERSION, './en/manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png',
+const SHELL = ['./', './index.html', './app.css?v=' + VERSION, './app.js?v=' + VERSION, './pwa.js?v=' + VERSION, './manifest.webmanifest', './manifest.webmanifest?v=' + VERSION,
+  './en/', './en/index.html', './en/app.css?v=' + VERSION, './en/app.js?v=' + VERSION, './en/pwa.js?v=' + VERSION, './en/manifest.webmanifest', './en/manifest.webmanifest?v=' + VERSION,
+  './icon.svg', './icon-192.png?v=' + VERSION, './icon-512.png?v=' + VERSION, './icon-maskable-512.png?v=' + VERSION,
+  './apple-touch-icon.png?v=' + VERSION, './favicon-32.png?v=' + VERSION,
   'fonts/golos-text-cyrillic-400.woff2', 'fonts/golos-text-cyrillic-500.woff2', 'fonts/golos-text-cyrillic-600.woff2',
   'fonts/golos-text-latin-400.woff2', 'fonts/golos-text-latin-500.woff2', 'fonts/golos-text-latin-600.woff2',
   'fonts/russo-one-cyrillic-400.woff2', 'fonts/russo-one-latin-400.woff2', 'fonts/jetbrains-mono-cyrillic-500.woff2', 'fonts/jetbrains-mono-latin-500.woff2'];

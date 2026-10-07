@@ -43,7 +43,7 @@ const headMeta = L => `<meta charset="utf-8">
 const fontsDir = path.join(SRC, 'fonts');
 const inlineFonts = c => c.replace(/url\(\.\.\/fonts\/([\w.-]+)\)/g, (m, f) => `url(data:font/woff2;base64,${fs.readFileSync(path.join(fontsDir, f)).toString('base64')})`);
 for (const f of fs.readdirSync(fontsDir)) fs.copyFileSync(path.join(fontsDir, f), path.join(DIST, 'fonts', f));
-for (const f of ['icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png']) { const p = path.join(SRC, f); if (fs.existsSync(p)) fs.copyFileSync(p, path.join(DIST, f)); }
+for (const f of ['icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'favicon-32.png']) { const p = path.join(SRC, f); if (fs.existsSync(p)) fs.copyFileSync(p, path.join(DIST, f)); }
 fs.writeFileSync(path.join(DIST, 'sw.js'), read(path.join(SRC, 'sw.js')).replace(/__VERSION__/g, VERSION));
 fs.writeFileSync(path.join(DIST, '.nojekyll'), '');
 
@@ -61,7 +61,7 @@ for (const [lang, L] of Object.entries(LANGS)) {
   }
   js += L.patch + `\nwindow.PODHOD_VERSION='${VERSION}';window.PODHOD_LANG='${lang}';\n`;
   body = body.replace(/__VERSION__/g, VERSION).replace(/__LANG_HREF__/g, L.other.href).replace(/__LANG_LABEL__/g, L.other.label).replace(/__LANG_TITLE__/g, L.other.title);
-  const manifest = {...manifestSrc, name:L.manifestName, description:L.manifestDesc, lang, scope:up || './', icons:manifestSrc.icons.map(i => ({...i, src:up + i.src}))};
+  const manifest = {...manifestSrc, name:L.manifestName, description:L.manifestDesc, lang, scope:up || './', icons:manifestSrc.icons.map(i => ({...i, src:up + i.src + '?v=' + VERSION}))};
 
   /* 1. PWA */
   fs.writeFileSync(path.join(out, 'app.css'), css.replace(/\.\.\/fonts\//g, up + 'fonts/'));
@@ -73,9 +73,9 @@ for (const [lang, L] of Object.entries(LANGS)) {
 <head>
 ${headMeta(L)}
 <title>${L.title}</title>
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="${up}icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="${up}icon-192.png">
+<link rel="manifest" href="manifest.webmanifest?v=${VERSION}">
+<link rel="icon" href="${up}favicon-32.png?v=${VERSION}" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="${up}apple-touch-icon.png?v=${VERSION}" sizes="180x180">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Lazy Gym">
