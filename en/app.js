@@ -487,6 +487,7 @@ function vectorGroup(svg, anim, camera) {
 }
 
 function buildFigure(anim, opts = {}) {
+  if(anim.catalogRig)return buildSpatialFigure(catalogFigureAnim(anim),opts);
   if(anim.rig3d)return buildSpatialFigure(anim,opts);
   const ratio = opts.ratio || 1;
   prepAnim(anim);
@@ -2381,7 +2382,9 @@ const MACHINE_CUES = {
   elliptical:['Push the pedals through your heels, helping with your arms.', 'Don\'t shift your weight onto the handles.'],
   stairs:['Whole foot on the step, push through your heel.', 'Touch the handrails only for balance.']
 };
-for (const ex of EX) if (MACHINE_CUES[ex.id]) ex.anim.cues = MACHINE_CUES[ex.id];
+// The player stores every pair as [working/lifting phase, return/lowering phase].
+// MACHINE_CUES above is chronological, so eccentric-first entries need conversion.
+for (const ex of EX) if (MACHINE_CUES[ex.id]) ex.anim.cues = eccFirst.has(ex.id) ? [...MACHINE_CUES[ex.id]].reverse() : MACHINE_CUES[ex.id];
 
 const CUES_ALL = {
   /* грудь */
@@ -2588,15 +2591,15 @@ const MOTION_FOCUS={
  plank:{setup:'Forearms and toes form the base.',control:'Keep your hips and rib cage in position and keep breathing.'},
  latraise:{setup:'Dumbbells at your thighs, elbows slightly bent.',control:'Arms move in an arc; torso holds position.'}
 };
-DEMO.pushup.anim.cues=['Lower your rib cage and hips together, keeping support on palms and toes.','Push the floor away, raising your body as one unit.'];
+DEMO.pushup.anim.cues=['Push the floor away, raising your body as one unit.','Lower your rib cage and hips together, keeping support on palms and toes.'];
 DEMO.pushup.tech[1]='Bend your elbows and lower your chest, keeping a stable base and torso control. Choose a range you can manage without your hips sagging.';
-DEMO.diamond.anim.cues=['Bend your elbows, keeping your hand position and body line.','Straighten your arms and raise your body without your hips sagging.'];
+DEMO.diamond.anim.cues=['Straighten your arms and raise your body without your hips sagging.','Bend your elbows, keeping your hand position and body line.'];
 DEMO.bridge.anim.cues=['Lift your hips, keeping your shoulders and feet planted.','Lower your hips smoothly to the starting position.'];
 DEMO.hipthrust.anim.cues=['Extend your hips to a line with your torso and thighs without overarching.','Lower your hips smoothly, keeping your back supported on the bench.'];
 DEMO.goblet.tech[2]='Lower to a depth where you keep a stable base and back control, then stand up.';
-DEMO.goblet.anim.cues=['Bend your knees and hips, keeping the weight close to your chest.','Stand up, keeping your feet on the floor and your torso under control.'];
+DEMO.goblet.anim.cues=['Stand up, keeping your feet on the floor and your torso under control.','Bend your knees and hips, keeping the weight close to your chest.'];
 DEMO.lunge.tech[2]='Front knee travels toward the toes. Keeping your balance, rise to the starting position.';
-DEMO.lunge.anim.cues=['Lower between your feet, keeping your balance.','Rise by driving through the front foot; then do the other side.'];
+DEMO.lunge.anim.cues=['Rise by driving through the front foot; then do the other side.','Lower between your feet, keeping your balance.'];
 MOTION_SOURCES.push(
  ['Push-ups — ACE','https://www.acefitness.org/resources/everyone/exercise-library/41/push-up/'],
  ['Squats — ACE','https://www.acefitness.org/resources/everyone/exercise-library/135/bodyweight-squat/'],
@@ -2699,7 +2702,7 @@ function thrustRig(t){
  R.props=[...bench3(18,80,138,40),{kind:'barbell',c:bar}];
  R.contacts=[{p:contact,label:'Back support'},{p:[-13,184,thrustFootZ3+5],label:'Feet'}];return R;
 }
-const CAMERA3={front:{label:'Front',yaw:0,elevation:0},side:{label:'Side',yaw:90,elevation:0},angle:{label:'Angled',yaw:55,elevation:8},
+const CAMERA3={front:{label:'Front',yaw:0,elevation:0},side:{label:'Side',yaw:90,elevation:0},angle:{label:'Angled',yaw:55,elevation:-15},
  back:{label:'Rear view',yaw:180,elevation:0},above:{label:'Angled overhead view',yaw:35,elevation:-55}};
 function camera3(key){
  const C=CAMERA3[key]||CAMERA3.side,sy=Math.sin(C.yaw*D2R),cy=Math.cos(C.yaw*D2R),se=Math.sin(C.elevation*D2R),ce=Math.cos(C.elevation*D2R);
@@ -2724,11 +2727,11 @@ function buildSpatialFigure(anim,opts={}){
  }
  const path2=p=>'M'+p.map(q=>`${f1(q[0])},${f1(q[1])}`).join('L')+'Z';
  function face(points,fill,extra={}){queue('path',{d:path2(points.map(project)),fill,...extra},points);}
- function silhouette(points,fill){
+ function silhouette(points,fill,attrs={}){
   const p=points.map(project).sort((a,b)=>a[0]-b[0]||a[1]-b[1]),cross=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
   const half=ps=>{const h=[];for(const q of ps){while(h.length>1&&cross(h[h.length-2],h[h.length-1],q)<=0)h.pop();h.push(q);}return h;};
   const a=half(p),b=half([...p].reverse());a.pop();b.pop();
-  queue('path',{d:closedSpline(a.concat(b).map(v=>v.slice(0,2))),fill},points);
+  queue('path',{d:closedSpline(a.concat(b).map(v=>v.slice(0,2))),fill,...attrs},points);
  }
  function line3(a,b,width,fill,offset=0){const p=project(a),q=project(b);queue('line',{x1:f1(p[0]),y1:f1(p[1]),x2:f1(q[0]),y2:f1(q[1]),stroke:fill,'stroke-width':width,'stroke-linecap':'round'},[a,b],offset);}
  function limb(a,b,width,kind,fill){
@@ -2759,18 +2762,48 @@ function buildSpatialFigure(anim,opts={}){
    line3(V3.add(s.c,[1,0,0],-61),V3.add(s.c,[1,0,0],61),3.4,tones.bar);
    line3(V3.add(s.c,[1,0,0],-19),V3.add(s.c,[1,0,0],19),8,'#ac8a61',1);
    for(const sign of [-1,1])disc(V3.add(s.c,[1,0,0],sign*48),17,camera==='side');
-  }
+  }else if(s.kind==='panel'){
+   const axis=[1,0,0],normal=V3.unit(V3.cross(axis,V3.sub(s.b,s.a))),corners=[V3.add(s.a,axis,-s.width/2),V3.add(s.a,axis,s.width/2),V3.add(s.b,axis,s.width/2),V3.add(s.b,axis,-s.width/2)];
+   const lower=corners.map(p=>V3.add(p,normal,s.thickness/2));face(corners,'#53677f');for(let i=0;i<4;i++)face([corners[i],corners[(i+1)%4],lower[(i+1)%4],lower[i]],'#35475f');
+  }else if(['wheel','roller','weight'].includes(s.kind)){
+   const axis=s.axis||[1,0,0],a=V3.unit(V3.cross(axis,Math.abs(axis[1])<.8?[0,1,0]:[0,0,1])),b=V3.cross(axis,a),r=s.radius||6;
+   const points=Array.from({length:24},(_,i)=>V3.add(V3.add(s.c,a,r*Math.cos(i*Math.PI/12)),b,r*Math.sin(i*Math.PI/12)));face(points,s.kind==='roller'?'#35475f':'#45607f');
+  }else if(s.kind==='kettlebell'){
+   const c=project(s.c);queue('circle',{cx:c[0],cy:c[1],r:s.radius||8.5,fill:'#304a6a',stroke:'#607691','stroke-width':1},[s.c]);
+   const d=V3.unit(V3.sub(s.c,s.grip)),points=[V3.add(V3.add(s.grip,[1,0,0],-5.5),d,3),s.grip,V3.add(V3.add(s.grip,[1,0,0],5.5),d,3)],p=points.map(project);
+   queue('path',{d:`M${p[0][0]},${p[0][1]} Q${p[1][0]},${p[1][1]} ${p[2][0]},${p[2][1]}`,fill:'none',stroke:'#b4c6dc','stroke-width':2.4},points);
+  }else throw Error('Unknown spatial equipment kind: '+s.kind);
  }
- function body(R){
+ function body(R,boundsOnly=false){
+  const surfaceLimb=(a,b,kind,fill,key,shorts=false)=>{
+   if(boundsOnly){
+    if(shorts)return;
+    const r=Math.max(...CATALOG_LIMB_PROFILES[kind].flatMap(p=>p.slice(1)));
+    for(const p of [a,b])for(const x of [-r,r])for(const y of [-r,r])for(const z of [-r,r])allBounds.push(project([p[0]+x,p[1]+y,p[2]+z]));
+    return;
+   }
+   const heights=shorts?[0,.0725,.145]:[0,.2,.4,.6,.8,1],f=catalogLimbFrame(R,a,b,catalogLimbFront(R,a,b,kind)),delta=V3.sub(b,a);
+   const points=heights.flatMap(t=>{
+    const [u,v]=catalogLimbRadius(kind,t),r1=u+(shorts?.2:0),r2=v+(shorts?.2:0),c=V3.add(a,delta,t);
+    return Array.from({length:8},(_,i)=>{const x=r1*Math.cos(i*Math.PI/4),y=r2*Math.sin(i*Math.PI/4);return c.map((n,k)=>n+f.x[k]*x+f.y[k]*y);});
+   });
+   silhouette(points,fill,{'data-limb':key});
+  };
   for(const s of ['R','L']){
    const skin=palette[s==='R'?'far':'skin'];
-   limb(R['hip'+s],R['kn'+s],13,'th',skin);limb(R['kn'+s],R['an'+s],10.5,'sh',skin);
+   if(R.basis){
+    for(const[kind,a,b]of [['th','hip','kn'],['sh','kn','an'],['ua','sh','el'],['fa','el','wr']])surfaceLimb(R[a+s],R[b+s],kind,skin,kind+s);
+    surfaceLimb(R['hip'+s],R['kn'+s],'th',palette.shorts,'shorts'+s,true);
+   }else{
+    limb(R['hip'+s],R['kn'+s],13,'th',skin);limb(R['kn'+s],R['an'+s],10.5,'sh',skin);
+    limb(R['sh'+s],R['el'+s],10,'ua',skin);limb(R['el'+s],R['wr'+s],8.5,'fa',skin);
+    limb(R['hip'+s],V3.add(R['hip'+s],V3.unit(V3.sub(R['kn'+s],R['hip'+s])),18),14,'th',palette.shorts);
+   }
    limb(R['heel'+s],R['toe'+s],6,'ft',palette.shoe);
-   limb(R['sh'+s],R['el'+s],10,'ua',skin);limb(R['el'+s],R['wr'+s],8.5,'fa',skin);limb(R['wr'+s],R['hand'+s],7,'hd',skin);
-   limb(R['hip'+s],V3.add(R['hip'+s],V3.unit(V3.sub(R['kn'+s],R['hip'+s])),18),14,'th',palette.shorts);
+   limb(R['wr'+s],R['hand'+s],7,'hd',skin);
   }
   const ring=(h,w,d)=>Array.from({length:12},(_,i)=>V3.add(V3.add(V3.add(R.hip,R.u,h),[1,0,0],w*Math.cos(i*Math.PI/6)),R.n,d*Math.sin(i*Math.PI/6)));
-  const rings=[ring(-5,12,8),ring(9,13,9),ring(23,12,8),ring(40,19,11),ring(49,19,9)];
+  const rings=R.basis?CATALOG_RINGS.map(([h])=>Array.from({length:24},(_,i)=>catalogTorsoPoint(R,h,i*Math.PI/12))):[ring(-5,12,8),ring(9,13,9),ring(23,12,8),ring(40,19,11),ring(49,19,9)];
   silhouette(rings.slice(1).flat(),palette.kit);silhouette(rings.slice(0,2).flat(),palette.shorts);
   line3(V3.add(R.sh,R.u,-2),R.head,8.5,'#95a6bd');
   const h=project(R.head),hu=project(V3.add(R.head,R.headU)),a=Math.atan2(hu[0]-h[0],-(hu[1]-h[1]))/D2R;
@@ -2779,15 +2812,17 @@ function buildSpatialFigure(anim,opts={}){
   face(nose,'#a3b3cb');
  }
  function compile(t,index=0,withMuscles=true){
-  records=[];const R=anim.rig3d(t);body(R);
+  records=[];const R=anim.rig3d(t);body(R,!withMuscles);
   const muscles=muscleFrame(anim,t,index);
-  if(muscles&&withMuscles)for(const zone of muscleContours(visibleMuscleSurfaces(R,anim.muscleProfile,camera))){
-   const value=muscles.values[zone.id],fill=muscleColor(value);
+  const sideValues=muscles&&anim.muscleProfile?.regions?catalogSideValues(anim.muscleProfile,muscles.values):null;
+  const surfaces=!muscles||!withMuscles?[]:anim.muscleProfile?.regions?catalogMuscleSurfaces(R,anim.muscleProfile,{coarse:true}).filter(f=>project(f.normal)[2]>.035):visibleMuscleSurfaces(R,anim.muscleProfile,camera);
+  if(muscles&&withMuscles)for(const zone of muscleContours(surfaces)){
+   const value=sideValues?.[zone.side]?.[zone.id]??muscles.values[zone.id],fill=muscleColor(value);
    queue('path',{d:closedSpline(zone.points.map(p=>project(p).slice(0,2))),fill,class:'muscle-zone','data-muscle':zone.id,'data-side':zone.side,
-    'data-role':anim.muscleProfile.muscles[zone.id].role,'data-band':muscleBand(value),
+    'data-role':(anim.muscleProfile.regions?.[zone.id]||anim.muscleProfile.muscles[zone.id]).role,'data-band':muscleBand(value),
     stroke:fill,'stroke-width':.25,'stroke-linejoin':'round','aria-hidden':'true'},zone.points);
    /* Слой связан с глубиной своего сегмента: не проступает сквозь ближнюю руку/реквизит. */
-   records[records.length-1].depth=project(zone.anchor)[2]+.15;
+   if(zone.anchor)records[records.length-1].depth=project(zone.anchor)[2]+.15;
   }
   R.props.forEach(prop);return{R,muscles,records:records.sort((a,b)=>a.depth-b.depth)};
  }
@@ -2804,18 +2839,19 @@ function buildSpatialFigure(anim,opts={}){
   for(const z of [25,75,125,175]){const a=project([-70,187,z]),b=project([70,187,z]);el('line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1],class:'spatial-grid'},ground);}
  }
  trace.setAttribute('d',tracePts.map((p,i)=>`${i?'L':'M'}${f1(p[0])},${f1(p[1])}`).join(' '));
- let nodes=[],jointNodes=[];
+ let nodes=[],jointNodes=[],selectedRegion='all';
  function at(t,frame){
   const {R,muscles,records}=compile(t,frame?.index||0);
   records.forEach((s,i)=>{let node=nodes[i];if(!node||node.tagName!==s.tag){const replacement=el(s.tag,{});if(node)node.replaceWith(replacement);else scene.appendChild(replacement);node=nodes[i]=replacement;}for(const attr of [...node.attributes])if(!(attr.name in s.attrs))node.removeAttribute(attr.name);for(const[k,v]of Object.entries(s.attrs))node.setAttribute(k,v);});
   for(let i=records.length;i<nodes.length;i++)nodes[i].remove();nodes.length=records.length;
   const names=['shL','elL','wrL','hipL','knL','anL','shR','elR','wrR','hipR','knR','anR'];
   names.forEach((name,i)=>{const p=project(R[name]),node=jointNodes[i]||(jointNodes[i]=el('circle',{r:2.1,class:'joint-dot'},dots));node.setAttribute('cx',f1(p[0]));node.setAttribute('cy',f1(p[1]));});
-  svg.dataset.pose=String(t);if(muscles)svg.dataset.musclePhase=muscles.phase;allBounds.length=0;
+  svg.dataset.pose=String(t);if(muscles)svg.dataset.musclePhase=muscles.phase;allBounds.length=0;setRegion(selectedRegion);
  }
  const setTrace=show=>trace.setAttribute('display',show?'inline':'none');
  const setMuscles=show=>svg.classList.toggle('show-muscles',!!show&&!!anim.muscleProfile);
- setMuscles(opts.muscles);at(opts.t||0);const setVectors=vectorGroup(svg,anim,camera);return{svg,at,setTrace,setVectors,setMuscles,camera};
+ const setRegion=id=>{selectedRegion=id;for(const node of svg.querySelectorAll('[data-muscle]'))node.style.opacity=id==='all'||node.dataset.muscle===id?'1':'.12';};
+ setMuscles(opts.muscles);at(opts.t||0);const setVectors=vectorGroup(svg,anim,camera);return{svg,at,setTrace,setVectors,setMuscles,setRegion,camera};
 }
 
 function spatialExercise(id,rig,camera,cameras,hints){
@@ -3031,7 +3067,7 @@ spatialExercise('dbbench',dbbenchRig,'front',['front','side'],{
 DEMO.latpull.tech=['Sit down, place your feet on the floor and lock your thighs under the pads. Take an overhand grip on the handle, wider than shoulders.','Lean back slightly and hold that angle; keep your head in line with your spine.','Drive your elbows down at your sides, bringing the handle past your face to the upper chest. Stop when pulling further would require moving your elbows back.','Smoothly return the handle up, straightening your arms and letting your shoulder blades move naturally.'];
 DEMO.latpull.anim.cues=['Drive your elbows down; the handle travels past your face to your chest.','Straighten your arms under control, holding your torso position.'];
 DEMO.bulgarian.tech=['Place your front foot on the floor and the top of your rear foot on a stable bench. Feet hip-width apart, not in a single line.','Bend your front leg and lower your rear knee toward the floor. Choose depth based on position control and available mobility.','Keep your whole front foot planted; front knee travels toward the toes. A slight forward lean of the torso is fine.','Rise mainly through the front leg. Repeat on the other side.'];
-DEMO.bulgarian.anim.cues=['Lower your hips and rear knee; both feet stay planted.','Rise using your front leg without pushing off the bench.'];
+DEMO.bulgarian.anim.cues=['Rise using your front leg without pushing off the bench.','Lower your hips and rear knee; both feet stay planted.'];
 DEMO.hipthrust.tech=['Rest your lower shoulder blades on a stable bench. Place the padded bar in your hip crease and hold it with your hands.','Plant your feet firmly: at the top your shins are roughly vertical, knees tracking over the toes.','Raise your hips to a shoulders–hips–knees line. Upper back stays in contact with the bench; don\'t add lower-back arch.','Lower your hips smoothly, controlling the barbell and keeping your feet planted.'];
 MOTION_FOCUS.latpull={setup:'Thighs under the pads, feet on the floor, slight lean back.',control:'Elbows down, handle past your face to your chest; no torso swinging.'};
 MOTION_FOCUS.bulgarian={setup:'Front foot on the floor, top of the rear foot on the bench.',control:'Rear knee travels toward the floor; front foot stays planted.'};
@@ -3090,7 +3126,7 @@ const MUSCLE_PROFILES={
 for(const[id,profile]of Object.entries(MUSCLE_PROFILES))DEMO[id].anim.muscleProfile=profile;
 
 function muscleFrame(anim,t,index=0){
- const profile=anim.muscleProfile;
+ const profile=motionProfile(anim);
  if(!profile)return null;
  t=Math.max(0,Math.min(1,Number.isFinite(t)?t:0));
  const phase=index===1?'end':index===3?'start':((index===0)!==!!anim.eccFirst?'concentric':'eccentric');
@@ -3099,6 +3135,7 @@ function muscleFrame(anim,t,index=0){
   const knots=m[curve],i=t<.5?0:1,q=(t-i*.5)*2,e=q*q*(3-2*q);
   values[id]=knots[i]+(knots[i+1]-knots[i])*e;
  }
+ for(const[id,r]of Object.entries(profile.regions||{}))values[id]=values[r.parent]*r.factor;
  return{phase,values,note:profile.notes[phase]};
 }
 function muscleBand(v){return v<.12?0:v<.45?1:v<.72?2:3;}
@@ -3183,6 +3220,335 @@ function muscleContours(faces){
   if(points.length>=3)contours.push({...face,points});
  }
  return contours;
+}
+
+/* Catalog coordinates: centimetres, Y down. Reconstructed depth is an educational
+   model, not measured motion capture. Original animation descriptors remain intact
+   for the independent regression audit. All cameras use the same world pose. */
+const CATALOG_CAMERAS=['above','angle','side','front','back'];
+const CATALOG_RINGS=[[0,12.5,10,10],[10,13,11.5,8],[18,13.3636363636,12.2272727273,8],[21,13.5,12.5,8],[31,16.3,12.5,9],[40,18.2,12.5,10],[47,17.8,12,10],[52,15.8,8.5,10]];
+function catalogCenter(R,h){
+ const u=R.chestU||R.u;
+ return h>18&&R.waist?V3.add(R.waist,u,h-18):V3.add(R.hip,R.u,h);
+}
+function catalogSection(h){
+ if(h<=0)return CATALOG_RINGS[0].slice(1);
+ for(let i=1;i<CATALOG_RINGS.length;i++)if(h<=CATALOG_RINGS[i][0]){
+  const a=CATALOG_RINGS[i-1],b=CATALOG_RINGS[i],q=(h-a[0])/(b[0]-a[0]);return a.slice(1).map((v,k)=>v+(b[k+1]-v)*q);
+ }
+ return CATALOG_RINGS.at(-1).slice(1);
+}
+function catalogTorsoPoint(R,h,angle,extra=0){
+ const[w,a,b]=catalogSection(h),n=R.chestN||R.n,x=R.x||V3.unit(V3.cross(R.n,R.u)),s=Math.cos(angle);
+ return V3.add(V3.add(catalogCenter(R,h),x,w*Math.sin(angle)),n,(s>=0?a:b)*s+extra*s);
+}
+function catalogSource(ex){const a={...ex.anim,catalogId:ex.id};delete a.catalogRig;delete a.catalogProfile;prepAnim(a);return a;}
+function catalogLegacyPose(a,t){return solvePose(a,poseAt(a,t),a._C);}
+function catalogPlanarRig(ex,source){
+ return t=>{
+  const P=poseAt(source,t),J=solvePose(source,P,source._C),front=source.view==='front';
+  const map=p=>front?[p[0]-100,p[1],80]:[0,p[1],p[0]],vector=p=>front?[p[0],p[1],0]:[0,p[1],p[0]];
+  const hip=map(front?J.c:J.hip),u=vector(J.u),n=front?[0,0,1]:vector(J.n),x=V3.unit(V3.cross(n,u));
+  const sh=map(front?J.neck:J.sh),R={hip,sh,u,n,x,head:map(J.head),headU:vector(dir(J.upperTa??J.ta)),headN:front?n:vector(dir((J.upperTa??J.ta)+90)),props:[],contacts:[],basis:'reconstructed'};
+  if(J.waist){R.waist=map(J.waist);R.chestU=vector(J.chestU);R.chestN=vector(J.chestN);}
+  R.headU=V3.unit(V3.sub(R.head,R.sh));R.headN=V3.unit(V3.cross(R.headU,R.x));
+  for(const[s,old,sign]of [['L',front?'L':'N',-1],['R',front?'R':'F',1]]){
+   R['sh'+s]=front?map(J['sh'+old]):V3.add(sh,x,sign*19);
+   R['hip'+s]=front?map(J['hip'+old]):V3.add(hip,x,sign*11);
+   for(const part of ['el','wr','hand','grip','kn','an','toe','heel']){
+    const p=J[part+old];if(p)R[part+s]=front?map(p):V3.add(map(p),x,sign*(/^(kn|an|toe|heel)$/.test(part)?11:19));
+   }
+   if(front){
+    for(const[part,root,mid,end,l1,l2]of [['arm','sh','el','wr',FL.ua,FL.fa],['leg','hip','kn','an',FL.th,FL.sh]]){
+     const spec=P[part+s]||P[part],v=spec?.v;
+     if(v){R[mid+s][2]=R[root+s][2]+v[0][2]*l1;R[end+s][2]=R[mid+s][2]+v[1][2]*l2;}
+    }
+    const d=V3.unit(V3.sub(R['wr'+s],R['el'+s]));
+    R['grip'+s]=V3.add(R['wr'+s],d,3.5);R['hand'+s]=V3.add(R['wr'+s],d,7);
+    R['toe'+s][2]=R['an'+s][2]+10;R['heel'+s]=V3.add(R['an'+s],[0,0,1],-4);
+   }
+  }
+  R.props=catalogProps(source,J,R);return R;
+ };
+}
+function catalogRef(source,J,R,ref,off){
+ const front=source.view==='front',map=p=>front?[p[0]-100,p[1],80]:[0,p[1],p[0]];
+ let p;
+ if(Array.isArray(ref))p=map(ref);
+ else if(ref==='grips')p=V3.add(R.gripL,R.gripR).map(v=>v/2);
+ else if(ref==='tf')p=R.hip;
+ else{
+  const key=front?ref:String(ref).replace(/N$/,'L').replace(/F$/,'R');p=R[key];
+  if(!p&&J[ref])p=map(J[ref]);
+ }
+ if(!p)throw Error('Unknown equipment attachment: '+ref);
+ if(off)p=V3.add(p,front?[off[0],off[1],0]:[0,off[1],off[0]]);
+ return [...p];
+}
+function catalogProps(source,J,R){
+ const out=[],front=source.view==='front',map=p=>front?[p[0]-100,p[1],80]:[0,p[1],p[0]],ref=(name,off)=>catalogRef(source,J,R,name,off);
+ const tone=s=>/mat/.test(s.cls||'')?'mat':/pad/.test(s.cls||'')?'pad':/band/.test(s.cls||'')?'band':/cable/.test(s.cls||'')?'cable':'steel';
+ for(const[sidx,s]of (source.props||[]).entries()){
+  const before=out.length;
+  if(s.k==='rect'){
+   if(/mat/.test(s.cls||''))out.push(box3(-75,75,186,187,-5,205,'mat'));
+   else if(front){const z=s.h>20?65:80;out.push(box3(s.x-100,s.x+s.w-100,s.y,s.y+s.h,z-(s.h>20?6:15),z+(s.h>20?5:20),tone(s)));}
+   else out.push(box3(s.h>50?-45:-16,s.h>50?45:16,s.y,s.y+s.h,s.x,s.x+s.w,tone(s)));
+  }else if(s.k==='line'){
+   for(let i=1;i<s.pts.length;i++){
+    const a=map(s.pts[i-1]),b=map(s.pts[i]),pad=/pad/.test(s.cls||'');
+    if(pad)out.push({kind:'panel',a,b,width:front?8:30,thickness:s.w||8,tone:'pad',support:s.support});
+    else if(!front&&Math.abs(a[1]-b[1])>25){
+     const half=/rail/.test(s.cls||'')?56:13;
+     for(const sign of [-1,1])out.push({kind:'line',a:V3.add(a,[1,0,0],sign*half),b:V3.add(b,[1,0,0],sign*half),width:s.w||4,tone:tone(s)});
+    }else out.push({kind:'line',a,b,width:s.w||4,tone:tone(s)});
+   }
+  }else if(s.k==='circle')out.push({kind:'wheel',c:map(s.c),radius:s.r||6,axis:front?[0,0,1]:[1,0,0],tone:tone(s)});
+  else if(s.k==='db')out.push({kind:'dumbbell',c:ref(s.at||'gripN',s.off),axis:[1,0,0],optional:s.if});
+  else if(s.k==='plate'){
+   const c=s.tf?V3.add(V3.add(R.hip,R.u,s.tf[0]),R.n,s.tf[1]):ref(s.at||'grips',s.off);
+   if(source.catalogId==='rollout'){
+    const center=ref('grips'),axis=V3.unit(V3.sub(R.gripR,R.gripL));
+    out.push({kind:'wheel',c:center,axis,radius:s.r||8,tone:'plate'},
+     {kind:'line',a:V3.add(R.gripL,axis,-3),b:V3.add(R.gripR,axis,3),width:3,tone:'bar'});
+   }else out.push({kind:/^grips$/.test(s.at||'grips')?'barbell':'weight',c,axis:[1,0,0],radius:s.r||16,optional:s.if});
+  }else if(s.k==='kb'){
+   const grip=ref(s.at||'grips'),d=s.down?[0,1,0]:V3.unit(V3.sub(R.handL,R.wrL));
+   out.push({kind:'kettlebell',c:V3.add(grip,d,s.dist||11),grip,axis:[1,0,0],radius:8.5,optional:s.if});
+  }else if(['cable','band','barcable'].includes(s.k)){
+   const a=Array.isArray(s.from)?map(s.from):ref(s.from,s.foff),b=ref(s.k==='barcable'?'grips':s.at,s.off);
+   out.push({kind:'line',a,b,width:s.k==='band'?2.2:1.4,tone:s.k==='band'&&!s.cls?'band':'cable',optional:s.if});
+   if(s.k!=='band')out.push({kind:'wheel',c:a,radius:4.5,axis:front?[0,0,1]:[1,0,0],tone:'steel'});
+   if(s.handle)out.push({kind:'line',a:V3.add(b,[1,0,0],-5),b:V3.add(b,[1,0,0],5),width:2.6,tone:'bar'});
+  }else if(s.k==='seg')out.push({kind:'line',a:ref(s.a,s.aoff),b:ref(s.b,s.boff),width:s.w||4,tone:tone(s)});
+  else if(s.k==='fbar'){
+   const c=V3.add(R.gripL,R.gripR).map(v=>v/2),axis=V3.unit(V3.sub(R.gripR,R.gripL));
+   if(s.plates)out.push({kind:'barbell',c,axis});
+   else out.push({kind:'line',a:V3.add(R.gripL,axis,-(s.ext||12)),b:V3.add(R.gripR,axis,s.ext||12),width:s.w||3.6,tone:'bar'});
+  }else if(s.k==='roller'){
+   const p=map(PROPS.roller.geom(s,J));out.push({kind:'roller',c:p,radius:s.r||6.5,axis:[1,0,0],tone:'pad'});
+   if(s.pivot)out.push({kind:'line',a:map(s.pivot),b:p,width:3.5,tone:'steel'});
+  }else if(s.k==='platform'){
+   const p=PROPS.platform.geom(s,J);out.push({kind:'panel',a:map(p[0]),b:map(p[1]),width:65,thickness:5,tone:'steel'});
+  }else throw Error('Unmapped equipment kind: '+s.k);
+  for(let i=before;i<out.length;i++){out[i].sourceIndex=sidx;if(s.if)out[i].optional=s.if;}
+ }
+ return out;
+}
+function catalogProneRig(source){
+ return t=>{
+  const J=catalogLegacyPose(source,t),R={hip:[0,172,108],sh:[0,172,56],u:[0,0,-1],n:[0,1,0],x:[1,0,0],head:[0,170,41],headU:[0,0,-1],headN:[0,1,0],props:[],contacts:[],basis:'authored'};
+  for(const[s,sign]of [['L',-1],['R',1]]){
+   R['hip'+s]=[sign*9,172,108];R['sh'+s]=[sign*19,172,59];
+   for(const[root,joint,end,l1,l2]of [['sh','el','wr',30,27],['hip','kn','an',43,42]]){
+    const jr=root==='sh'?J['sh'+s]:J['hip'+s],m=J[joint+s],e=J[end+s];
+    const d1=V3.unit([m[0]-jr[0],0,m[1]-jr[1]]),d2=V3.unit([e[0]-m[0],0,e[1]-m[1]]);
+    R[joint+s]=V3.add(R[root+s],d1,l1);R[end+s]=V3.add(R[joint+s],d2,l2);
+   }
+   const d=V3.unit(V3.sub(R['wr'+s],R['el'+s]));R['grip'+s]=V3.add(R['wr'+s],d,3.5);R['hand'+s]=V3.add(R['wr'+s],d,7);
+   R['heel'+s]=V3.add(R['an'+s],[0,0,1],-4);R['toe'+s]=V3.add(R['an'+s],[0,0,1],13);
+  }return R;
+ };
+}
+function catalogWidePushRig(source,archer=false){
+ return t=>{
+  const J=catalogLegacyPose(source,t),R=body3([archer?20*t:0,J.hip[1]+4,J.hip[0]],J.ta),xShift=R.hip[0];
+  for(const[s,old,sign]of [['L','N',-1],['R','F',1]]){
+   arm3(R,s,[sign*44,182,139],[sign*.6,0,-1],[0,0,1]);
+   const ankle=[sign*11,J['an'+old][1],J['an'+old][0]];
+   leg3(R,s,ankle,[0,1,-1]);R['heel'+s]=[sign*11,J['heel'+old][1],J['heel'+old][0]];R['toe'+s]=[sign*11,J['toe'+old][1],J['toe'+old][0]];
+  }
+  R.contacts=[{key:'wrL',kind:'support'},{key:'wrR',kind:'support'},{key:'toeL',kind:'support'},{key:'toeR',kind:'support'}];R.basis='authored';return R;
+ };
+}
+function catalogFlyRig(t){
+ const R=body3([0,126,112],-90),angle=(-8+88*t)*D2R;
+ for(const[s,sign]of [['L',-1],['R',1]]){
+  const wr=V3.add(R['sh'+s],[sign*Math.sin(angle),-Math.cos(angle),0],54);
+  arm3(R,s,wr,[sign,0,.2],[0,-1,0]);leg3(R,s,[sign*16,180,166],[0,-1,0]);R.props.push({kind:'dumbbell',c:R['grip'+s]});
+ }
+ R.props.push(...bench3(28,150,136,15));R.basis='authored';return R;
+}
+function catalogSharedGripRig(rig,id){
+ return t=>{
+  const R=rig(t),d=V3.unit(V3.sub(R.gripL,R.wrL)),center=V3.add(R.wrL,R.wrR).map(v=>v/2),root=R.sh;
+  const delta=[0,center[1]-root[1],center[2]-root[2]],reach=Math.sqrt((FL.ua+FL.fa-.02)**2-14**2),scale=Math.min(1,reach/(Math.hypot(...delta)||1));
+  center[1]=root[1]+delta[1]*scale;center[2]=root[2]+delta[2]*scale;
+  for(const[s,sign]of [['L',-1],['R',1]])arm3(R,s,[sign*5,center[1],center[2]],V3.sub(R['el'+s],R['sh'+s]),d);
+  const grip=V3.add(R.gripL,R.gripR).map(v=>v/2);
+  for(const p of R.props)if(['kettlebell','dumbbell'].includes(p.kind)){
+   if(p.kind==='kettlebell'){const direction=id==='goblet'?[0,1,0]:d;p.grip=grip;p.c=V3.add(grip,direction,id==='goblet'?9:11);}
+   else p.c=[...grip];
+  }
+  R.sharedGrip=grip;R.basis='authored';return R;
+ };
+}
+function catalogBenchRig(t){
+ const R=benchRig(t),bar=[...R.bar];
+ // The thicker torso has a 12.5 cm anterior contour; the shaft touches its surface.
+ bar[1]-=3.9*t;
+ for(const[s,sign]of [['L',-1],['R',1]])arm3(R,s,[sign*34,bar[1]+3.5,bar[2]],[sign*.8,.6,.45],[0,-1,0]);
+ R.bar=bar;R.props=R.props.slice(0,5).concat({kind:'barbell',c:bar});return R;
+}
+const CATALOG_SOURCES=new Map();
+for(const ex of EX){
+ const source=catalogSource(ex);CATALOG_SOURCES.set(ex.id,source);
+ let rig=source.rig3d||catalogPlanarRig(ex,source);
+ if(['ytw','reversesnow'].includes(ex.id))rig=catalogProneRig(source);
+ if(['widepush','archer'].includes(ex.id))rig=catalogWidePushRig(CATALOG_SOURCES.get('pushup'),ex.id==='archer');
+ if(ex.id==='dbfly')rig=catalogFlyRig;
+ if(ex.id==='bbbench')rig=catalogBenchRig;
+ if(['kbswing','goblet'].includes(ex.id))rig=catalogSharedGripRig(rig,ex.id);
+ ex.anim.catalogRig=t=>{
+  if(!Number.isFinite(t)||t<0||t>1)throw Error('Pose must be in [0,1]');
+  const R=rig(t);R.x??=V3.unit(V3.cross(R.n,R.u));R.basis??=source.rig3d?'authored':'reconstructed';
+  if(ex.id==='bbbench'){
+   const z=R.sh[2]-16,y=R.sh[1]-58;
+   for(const sign of [-1,1])R.props.push({kind:'line',a:[sign*56,186,z],b:[sign*56,y-10,z],width:5,tone:'steel'},box3(sign*56-5,sign*56+5,180,186,z-18,z+18,'steel'),{kind:'line',a:[sign*56,y,z],b:[sign*56,y,z+12],width:4,tone:'bar'});
+  }
+  if(ex.id==='inclinebb')for(const pad of R.props.filter(p=>p.kind==='panel'&&p.tone==='pad')){
+   pad.a=V3.add(pad.a,R.n,-1.5);pad.b=V3.add(V3.add(pad.b,R.n,-1.5),R.u,15);
+  }
+  return R;
+ };
+ ex.anim.catalogCameras=[...CATALOG_CAMERAS];
+ ex.anim.catalogId=ex.id;
+}
+
+/* Anatomical parts and teaching regions are deliberately distinct. Deep muscles
+   have an entry but no patch painted on top of the skin. Colour curves are authored
+   illustrations; identical head profiles do not pretend to measure head-specific EMG. */
+const MUSCLE_REGIONS={
+ chest:[['pec_clavicular','Clavicular portion of pectoralis major','anatomical'],['pec_sternal','Middle chest region','teaching'],['pec_costal','Lower chest region','teaching']],
+ triceps:[['tri_long','Long head of triceps','anatomical'],['tri_lateral','Lateral head of triceps','anatomical'],['tri_medial','Medial head of triceps · deeper','deep']],
+ biceps:[['bi_long','Long head of biceps','anatomical'],['bi_short','Short head of biceps','anatomical']],
+ delt_f:[['delt_f','Anterior deltoid','anatomical']],delt_s:[['delt_s','Middle deltoid','anatomical']],delt_r:[['delt_r','Posterior deltoid','anatomical']],
+ quads:[['quad_rectus','Rectus femoris','anatomical'],['quad_lateral','Vastus lateralis','anatomical'],['quad_medial','Vastus medialis','anatomical'],['quad_deep','Vastus intermedius · deeper','deep']],
+ hams:[['ham_lateral','Biceps femoris','anatomical'],['ham_medial','Medial hamstring region','teaching']],
+ calves:[['calf_medial','Medial head of gastrocnemius','anatomical'],['calf_lateral','Lateral head of gastrocnemius','anatomical'],['soleus','Soleus · deeper','deep']],
+ glutes:[['glute_max','Gluteus maximus','anatomical'],['glute_lateral','Lateral gluteal region','teaching']],
+ traps:[['trap_upper','Upper trapezius region','teaching'],['trap_mid','Middle trapezius region','teaching']],
+ lats:[['lats','Latissimus dorsi · shared profile','group']],midback:[['midback','Interscapular region · shared profile','group']],
+ lowback:[['lowback','Spinal extensors · shared profile','group']],abs:[['abs','Abs (rectus abdominis)','anatomical']],
+ obliques:[['obliques','Oblique abdominal muscles · shared profile','group']],forearms:[['forearms','Forearm muscles · shared profile','group']]
+};
+const REGION_META=Object.fromEntries(Object.entries(MUSCLE_REGIONS).flatMap(([parent,rows])=>rows.map(([id,label,kind])=>[id,{id,parent,label,kind,visible:kind!=='deep'}])));
+const REGION_ANATOMY_SOURCES=[['Shoulder girdle anatomy — OpenStax','https://openstax.org/books/anatomy-and-physiology-2e/pages/11-5-muscles-of-the-pectoral-girdle-and-upper-limbs'],['Leg muscle anatomy — OpenStax','https://openstax.org/books/anatomy-and-physiology-2e/pages/11-6-appendicular-muscles-of-the-pelvic-girdle-and-lower-limbs']];
+function motionProfile(anim){return anim.catalogProfile||anim.muscleProfile;}
+const INCLINE_CHEST=new Set(['dbincline','smithincline','inclinebb','declinepush','cablelowfly']);
+const LOWER_CHEST=new Set(['declinebb','dip','assistdip']);
+const CATALOG_LATERALITY={dbrow:{upper:'L'},cablelat:{upper:'R'},concentration:{upper:'L'},kickback:{upper:'L'},archer:{upper:'R'},bulgarian:{lower:'L'},stepup:{lower:'L'},lunge:{lower:'L'},revlunge:{lower:'L'},sidelunge:{lower:'R'},pistolbox:{lower:'L'},sllift:{lower:'L'},glutebridge1:{lower:'L'},glutekick:{lower:'L'},calf1:{lower:'L'}};
+function catalogSideValues(profile,values){
+ const sides={L:{...values},R:{...values}},lower=new Set(['quads','hams','calves','glutes']);
+ for(const[part,active]of Object.entries(profile.laterality||{}))for(const[id,r]of Object.entries(profile.regions)){
+  const applies=part==='lower'?lower.has(r.parent):!lower.has(r.parent)&&!['abs','obliques','lowback','traps'].includes(r.parent);
+  if(applies)sides[active==='L'?'R':'L'][id]=.28;
+ }return sides;
+}
+for(const ex of EX){
+ const base=ex.anim.muscleProfile,hold=ex.anim.hold,cyclic=ex.g==='cardio'||!!ex.kind,muscles=base?JSON.parse(JSON.stringify(base.muscles)):{};
+ for(const[id,role]of [...ex.pri.map(id=>[id,'primary']),...ex.sec.filter(id=>!ex.pri.includes(id)).map(id=>[id,'support'])])if(!muscles[id]){
+  const stabilizer=['abs','obliques','lowback','forearms'].includes(id)&&role!=='primary';
+  const start=role==='primary'?.42:.30,end=role==='primary'?.62:.44;
+  const c=hold?[.58,.58,.58]:stabilizer?[.34,.37,.34]:[start,role==='primary'?.83:.60,end];
+  muscles[id]={role:stabilizer?'stabilizer':role,concentric:c,eccentric:hold?[...c]:stabilizer?[...c]:[start,role==='primary'?.62:.46,end]};
+ }
+ const regions={};
+ for(const[parent,m]of Object.entries(muscles))for(const[id,label,kind]of MUSCLE_REGIONS[parent]){
+  let factor=1;
+  if(parent==='chest')factor=INCLINE_CHEST.has(ex.id)?{pec_clavicular:1,pec_sternal:.80,pec_costal:.68}[id]:LOWER_CHEST.has(ex.id)?{pec_clavicular:.70,pec_sternal:.90,pec_costal:1}[id]:{pec_clavicular:.80,pec_sternal:1,pec_costal:.88}[id];
+  regions[id]={parent,label,kind,role:m.role,factor,visible:kind!=='deep',profileBasis:parent==='chest'?'illustrative-regional':'shared-group'};
+ }
+ const names=ex.pri.map(id=>MUSCLE_NAMES[id]).join(', ');
+ const notes=base?base.notes:{concentric:hold?'Hold: the muscles maintain the position.':cyclic?'Cyclic motion: colour illustrates how emphasis changes.':names+' participate in the working phase.',eccentric:cyclic?'Continuation of the cycle: involvement changes smoothly.':'The muscles control the return.',end:'End position: maintain control and support.',start:'Starting position: prepare for the next repetition.'};
+ ex.anim.catalogProfile={curveBasis:'illustrative',muscles,regions,notes,pair:ex.pri.some(id=>['lats','midback','lowback','glutes','hams','traps'].includes(id))?'back':'above',sources:[...(base?.sources||[]),...REGION_ANATOMY_SOURCES],cyclic,hold,laterality:CATALOG_LATERALITY[ex.id]};
+}
+const CATALOG_LIMB_PROFILES={ua:[[0,5.4,5.5],[.18,7.2,6.8],[.45,6.8,6.4],[.78,5.2,4.7],[1,4.2,4]],fa:[[0,4.4,4.4],[.22,5.7,5.2],[.45,4.9,4.7],[.76,3.5,3.3],[1,2.6,2.7]],th:[[0,9.1,9],[.25,8.8,8.2],[.6,7.1,6.5],[1,5.2,5]],sh:[[0,5,5],[.27,5.7,5.7],[.57,4.4,4],[1,2.8,3]]};
+function catalogLimbRadius(kind,t){
+ const p=CATALOG_LIMB_PROFILES[kind];for(let i=1;i<p.length;i++)if(t<=p[i][0]){const a=p[i-1],b=p[i],q=(t-a[0])/(b[0]-a[0]);return[a[1]+(b[1]-a[1])*q,a[2]+(b[2]-a[2])*q];}return p.at(-1).slice(1);
+}
+function catalogLimbFrame(R,a,b,front=R.n){
+ const z=V3.unit(V3.sub(b,a));let x=V3.sub(front,z.map(v=>v*V3.dot(front,z)));
+ if(Math.hypot(...x)<1e-5)x=V3.cross(z,Math.abs(z[0])<.8?[1,0,0]:[0,0,1]);x=V3.unit(x);return{x,y:V3.unit(V3.cross(z,x)),z};
+}
+// Leg fronts follow the sagittal limb plane, even when a bent thigh passes the
+// torso's forward normal. Projecting R.n alone would flip front/back at that point.
+function catalogLimbFront(R,a,b,kind){return kind==='th'||kind==='sh'?V3.cross(R.x,V3.sub(b,a)):R.n;}
+function catalogLimbPoint(R,a,b,kind,t,angle,extra=0){
+ const f=catalogLimbFrame(R,a,b,catalogLimbFront(R,a,b,kind)),[r1,r2]=catalogLimbRadius(kind,t),c=V3.add(a,V3.sub(b,a),t);
+ return V3.add(V3.add(c,f.x,(r1+extra)*Math.cos(angle)),f.y,(r2+extra)*Math.sin(angle));
+}
+function catalogMuscleSurfaces(R,profile,{coarse=false}={}){
+ const faces=[],limbRows=coarse?5:10,limbCols=coarse?8:16,torsoCols=coarse?12:24;
+ function clip(poly,key,bound,greater){
+  const result=[];for(let i=0;i<poly.length;i++){
+   const a=poly[i],b=poly[(i+1)%poly.length],inside=v=>greater?v[key]>=bound-1e-10:v[key]<=bound+1e-10,ia=inside(a),ib=inside(b);
+   if(ia)result.push(a);
+   if(ia!==ib){const t=(bound-a[key])/(b[key]-a[key]);result.push({h:a.h+(b.h-a.h)*t,a:a.a+(b.a-a.a)*t,p:V3.add(a.p,V3.sub(b.p,a.p),t)});}
+  }return result;
+ }
+ function patch(id,side,lo,hi,a0,a1,point){
+  if(!profile.regions[id]?.visible)return;
+  const heights=point.torso?CATALOG_RINGS.map(r=>r[0]):Array.from({length:limbRows+1},(_,i)=>i/limbRows),step=2*Math.PI/(point.torso?torsoCols:limbCols);
+  for(let r=1;r<heights.length;r++)if(heights[r]>=lo&&heights[r-1]<=hi)for(let c=Math.floor(a0/step);c<Math.ceil(a1/step);c++){
+   const corners=[[heights[r-1],c*step],[heights[r-1],(c+1)*step],[heights[r],c*step],[heights[r],(c+1)*step]].map(([h,a])=>({h,a,p:point(h,a)}));
+   for(const ix of point.angleSign<0?[[0,1,3],[0,3,2]]:[[0,1,2],[1,3,2]]){
+    let poly=ix.map(i=>corners[i]);const normal=V3.unit(V3.cross(V3.sub(poly[1].p,poly[0].p),V3.sub(poly[2].p,poly[0].p))).map(v=>v*(point.normalSign||1));
+    for(const[key,bound,greater]of [['h',lo,true],['h',hi,false],['a',a0,true],['a',a1,false]]){poly=clip(poly,key,bound,greater);if(poly.length<3)break;}
+    for(let i=1;i<poly.length-1;i++){
+     const tri=[poly[0].p,poly[i].p,poly[i+1].p];if(Math.hypot(...V3.cross(V3.sub(tri[1],tri[0]),V3.sub(tri[2],tri[0])))<1e-8)continue;
+     const points=tri.map(p=>V3.add(p,normal,.15));points.push(points[2]);faces.push({id,parent:profile.regions[id].parent,side,points,normal});
+    }
+   }
+  }
+ }
+ for(const[side,sign]of [['L',-1],['R',1]]){
+  const torso=(h,a)=>catalogTorsoPoint(R,h,sign*a);
+  torso.normalSign=-sign;torso.angleSign=sign;torso.torso=true;
+  for(const[id,lo,hi,a,b]of [['pec_clavicular',42,48,.08,1.08],['pec_sternal',33,41,.08,1.2],['pec_costal',27,32,.10,1.0],['abs',12,26,.05,.53],['obliques',10,29,.56,1.34],['lats',11,38,1.55,2.65],['midback',33,47,2.66,3.08],['lowback',11,30,2.72,3.08],['glute_max',0,9,1.64,3.04],['glute_lateral',2,10,1.13,1.63],['trap_upper',43,51,2.20,3.07],['trap_mid',38,43,2.31,2.66]])patch(id,side,lo,hi,a,b,torso);
+  const limb=(root,end,kind)=>{
+   const a=R[root+side],b=R[end+side],f=catalogLimbFrame(R,a,b,catalogLimbFront(R,a,b,kind)),outward=V3.dot(f.y,R.x)*sign,orientation=Math.abs(outward)>.001?Math.sign(outward):sign;
+   const point=(t,a)=>catalogLimbPoint(R,R[root+side],R[end+side],kind,t,a*orientation);point.normalSign=orientation;point.angleSign=orientation;return point;
+  };
+  for(const[id,lo,hi,a,b]of [['delt_f',.02,.30,-.70,.70],['delt_s',.02,.32,.73,1.76],['delt_r',.02,.30,1.80,2.75],['bi_long',.33,.84,.04,.80],['bi_short',.33,.84,-.80,-.04],['tri_long',.28,.86,2.46,3.91],['tri_lateral',.27,.85,1.68,2.42]])patch(id,side,lo,hi,a,b,limb('sh','el','ua'));
+  patch('forearms',side,.15,.78,-1.25,1.25,limb('el','wr','fa'));
+  for(const[id,lo,hi,a,b]of [['quad_rectus',.15,.80,-.44,.44],['quad_lateral',.12,.82,.48,1.48],['quad_medial',.44,.91,-1.38,-.48],['ham_lateral',.16,.82,1.67,2.71],['ham_medial',.18,.84,2.77,4.45]])patch(id,side,lo,hi,a,b,limb('hip','kn','th'));
+  patch('calf_lateral',side,.12,.59,2.08,3.12,limb('kn','an','sh'));patch('calf_medial',side,.12,.59,3.18,4.21,limb('kn','an','sh'));
+ }
+ return faces;
+}
+function catalogFigureAnim(anim){
+ return {...anim,rig3d:anim.catalogRig,muscleProfile:anim.catalogProfile,camera:'above',cameras:anim.catalogCameras,sample:t=>({spatialT:t}),catalogRig:null};
+}
+function catalogVolumeData(anim,t,index,has,coarse=false){
+ const R=anim.catalogRig(t),state=muscleFrame(anim,t,index),profile=motionProfile(anim);
+ return{exerciseId:anim.catalogId,pose:R,surfaces:catalogMuscleSurfaces(R,profile,{coarse}),values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>!s.optional||!has||has(s.optional)),torsoRings:CATALOG_RINGS,limbProfiles:CATALOG_LIMB_PROFILES};
+}
+
+function catalogVectors(anim){
+ if(anim.hold||(anim.keys?.length>2&&!anim.vectors))return[];
+ const a=anim.catalogRig(anim.eccFirst?1:0),b=anim.catalogRig(anim.eccFirst?0:1),out=[];
+ for(const key of ['sh','hip','elL','elR','gripL','gripR','knL','knR','anL','anR']){
+  const delta=V3.sub(b[key],a[key]);if(Math.hypot(...delta)>10)out.push({a:a[key],b:b[key],key});
+ }return out;
+}
+function createMotionFigure(anim,opts){
+ if(!window.GymVolume||!anim.catalogRig)return buildFigure(anim,opts);
+ let f=window.GymVolume.create({...opts,data:(t,index,coarse)=>catalogVolumeData(anim,t,index,opts.has,coarse),color:muscleColor,joints:motionPrefs.joints,
+  trace:Array.from({length:41},(_,i)=>anim.catalogRig(i/40).gripL),vectors:catalogVectors(anim)});
+ if(!f){
+  f=buildFigure(anim,opts);const svg=f.svg,root=document.createElement('div');root.className='volume-figure';root.setAttribute('role','img');root.setAttribute('aria-label',opts.label);root.dataset.renderer='svg';root.dataset.camera=opts.camera||'above';root.append(svg);f.svg=root;
+  const at=f.at;f.at=(t,frame)=>{at(t,frame);root.dataset.pose=String(t);root.dataset.phase=String(frame?.index||0);};
+  const setJoints=show=>svg.classList.toggle('show-joints',!!show);f.setJoints=setJoints;setJoints(motionPrefs.joints);f.at(opts.t||0);
+ }
+ f.setTrace(motionPrefs.trace);f.setVectors(motionPrefs.vectors);return f;
+}
+function disposeMotion(F){F?.f?.dispose?.();F?.extra?.dispose?.();}
+function selectMuscleRegion(prefix,id){
+ const F=prefix==='mv'?detailMotion:workout?.motion;if(!F)return;
+ const p=motionProfile(F.it.ex.anim);if(id!=='all'&&!p.regions[id]?.visible)return;
+ motionPrefs.regions={...motionPrefs.regions,[F.it.ex.id]:id};saveMotionPrefs();
+ for(const f of [F.f,F.extra].filter(Boolean))f.setRegion?.(id);
 }
 
 /* ---------- прогрессии: от лёгкого к тяжёлому ---------- */
@@ -3675,7 +4041,7 @@ function cardHtml(it, idx) {
   const meta = [];
   if (r.tempo) meta.push(`<span title="lowering – pause – lifting – pause, seconds; X — explosive">tempo <b>${r.tempo}</b></span>`);
   if (r.load) meta.push(`<span>${r.load}</span>`);
-  const view = (ex.viewNote || (ex.anim.view === 'front' ? 'front view' : 'side view'))+(ex.anim.cameras?' · 2 views':'');
+  const view = ex.anim.catalogRig?'Isometric view · 5 angles':(ex.viewNote || (ex.anim.view === 'front' ? 'front view' : 'side view'));
   return `<li class="card" data-ex="${ex.id}" data-slot="${it.slot}">
   <div class="c-top">
     <div class="motion-tile"><button type="button" class="illus" data-fig="${idx}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Break down the movement: ${esc(it.name)}"><span class="illus-v">${view}</span><span class="illus-zoom" aria-hidden="true">Zoom ↗</span></button><div class="motion-bar"><span class="motion-caption">Starting position</span><button type="button" data-motion-pause="${idx}" aria-label="Pause demo: ${esc(it.name)}" aria-pressed="false">Pause</button></div></div>
@@ -3887,19 +4253,30 @@ function paintMotion(F, detailed=false) {
   paintMusclePanel('mv',F,m);
 }
 function configureMusclePanel(prefix,it){
- const profile=it.ex.anim.muscleProfile,toggle=$('#'+prefix+'-muscle-toggle'),panel=$('#'+prefix+'-muscle-panel');
+ const profile=motionProfile(it.ex.anim),toggle=$('#'+prefix+'-muscle-toggle'),panel=$('#'+prefix+'-muscle-panel');
  toggle.checked=!!profile&&!!motionPrefs.muscles;toggle.disabled=!profile;
  $('#'+prefix+'-muscle-availability').hidden=!!profile;
  panel.hidden=!profile||!motionPrefs.muscles;
  if(!profile){$('#'+prefix+'-muscle-list').replaceChildren();return;}
- $('#'+prefix+'-muscle-list').innerHTML=Object.entries(profile.muscles).map(([id,m])=>`<li data-muscle-row="${id}"><span class="muscle-swatch" aria-hidden="true"></span><span class="muscle-row-copy"><strong>${esc(MUSCLE_NAMES[id])}</strong><span>${MUSCLE_ROLES[m.role]}</span></span><span class="muscle-level"></span></li>`).join('');
+ const rows=[];
+ for(const[id,m]of Object.entries(profile.muscles)){
+  rows.push(`<li data-muscle-row="${id}"><span class="muscle-swatch" aria-hidden="true"></span><span class="muscle-row-copy"><strong>${esc(MUSCLE_NAMES[id])}</strong><span>${MUSCLE_ROLES[m.role]}</span></span><span class="muscle-level"></span></li>`);
+  for(const[key,r]of Object.entries(profile.regions||{}).filter(([,r])=>r.parent===id&&r.id!==id)){
+   if(key===id)continue;
+   rows.push(`<li class="muscle-region-row" data-muscle-row="${key}" data-deep="${!r.visible}"><span class="muscle-swatch" aria-hidden="true"></span><span class="muscle-row-copy"><span>${esc(r.label)}</span><small>${r.profileBasis==='shared-group'?'Shared group profile':'Illustrative regional emphasis'}</small></span><span class="muscle-level"></span></li>`);
+  }
+ }
+ $('#'+prefix+'-muscle-list').innerHTML=rows.join('');
+ const region=$('#'+prefix+'-region');region.innerHTML='<option value="all">All regions</option>'+Object.entries(profile.regions||{}).filter(([,r])=>r.visible).map(([id,r])=>`<option value="${id}">${esc(r.label)}</option>`).join('');
+ const saved=motionPrefs.regions?.[it.ex.id]||'all';region.value=profile.regions?.[saved]?.visible?saved:'all';
+ const F=prefix==='mv'?detailMotion:workout?.motion;for(const f of [F?.f,F?.extra].filter(Boolean))f.setRegion?.(region.value);
 }
 function paintMusclePanel(prefix,F,m){
  const panel=$('#'+prefix+'-muscle-panel');if(panel.hidden)return;
  const state=muscleFrame(F.it.ex.anim,m.t,m.index);if(!state)return;
  const note=$('#'+prefix+'-muscle-note');if(note.textContent!==state.note)note.textContent=state.note;
  for(const row of panel.querySelectorAll('[data-muscle-row]')){
-  const v=state.values[row.dataset.muscleRow],level=row.querySelector('.muscle-level'),text=MUSCLE_BANDS[muscleBand(v)];
+  const v=state.values[row.dataset.muscleRow],level=row.querySelector('.muscle-level'),text=row.dataset.deep==='true'?'Deeper':MUSCLE_BANDS[muscleBand(v)];
   row.querySelector('.muscle-swatch').style.backgroundColor=muscleColor(v);
   if(level.textContent!==text)level.textContent=text;
  }
@@ -3936,7 +4313,7 @@ function mountFigures() {
       btn.prepend(f.svg);
       const F={btn,it,f,vis:true,paused:reduceMotion,clock:0,durations:motionDurations(it)};
       figs.push(F);paintMotion(F);
-      if(it.ex.anim.muscleProfile){const note=document.createElement('p');note.className='muscle-tile-note';note.textContent='Color is an educational illustration';note.hidden=!motionPrefs.muscles;btn.closest('.motion-tile').appendChild(note);}
+      if(motionProfile(it.ex.anim)){const note=document.createElement('p');note.className='muscle-tile-note';note.textContent='Color is an educational illustration';note.hidden=!motionPrefs.muscles;btn.closest('.motion-tile').appendChild(note);}
       const pause=btn.closest('.motion-tile').querySelector('[data-motion-pause]');
       if(pause){pause.textContent=F.paused?'Start':'Pause';pause.setAttribute('aria-pressed',String(!F.paused));pause.setAttribute('aria-label',`${F.paused?'Play':'Pause'} demo: ${it.name}`);}
     } catch(e) {console.error('Demo',it.ex.id,e);}
@@ -3958,6 +4335,7 @@ function previewItem(id) {
   return {ex,name:exName(ex,E),rx:prescribe(ex,S.mode==='program'?WEEKS[S.week-1]:null),has:propHas(ex,E),eqLine:equipLine(ex,E)};
 }
 function selectMotion(it, clock=0) {
+  disposeMotion(detailMotion);
   detailMotion={it,f:null,clock,paused:true,durations:motionDurations(it)};
   $('#mv-title').textContent=it.name;
   $('#mv-exercise').value=it.ex.id;
@@ -3972,7 +4350,7 @@ function selectMotion(it, clock=0) {
   $('#mv-errors').innerHTML=it.ex.err.map(x=>`<li>${esc(x)}</li>`).join('');
   $('#mv-breath').textContent=it.ex.breath;
   $('#mv-note').textContent=it.ex.note||'';
-  const links=[...(SOURCES_BY_EX[it.ex.id]||[]),...(it.ex.anim.muscleProfile?.sources||[])];
+  const links=[...(SOURCES_BY_EX[it.ex.id]||[]),...(motionProfile(it.ex.anim)?.sources||[])];
   const src=links.filter((v,i)=>links.findIndex(x=>x[1]===v[1])===i).map(([label,url])=>`<a href="${url}" target="_blank" rel="noopener noreferrer">${esc(label)}</a>`);
   $('#mv-sources').innerHTML=src.length?`<p class="mv-muscle-label">More on technique</p>${src.join('')}`:'';
   mountDetailCameras();
@@ -3989,7 +4367,7 @@ function openMotionItem(it,clock=0){
   $('#mv-close').focus();scheduleMotionLoop();
 }
 function closeMotion() {
-  const d=$('#motion-view');detailMotion=null;
+  const d=$('#motion-view');disposeMotion(detailMotion);detailMotion=null;
   if(d&&d.open)d.close();
   document.documentElement.classList.remove('motion-open');
   if(detailReturn&&detailReturn.isConnected)detailReturn.focus();
@@ -4012,13 +4390,14 @@ function setupMotionViewer() {
   $('#mv-progress').addEventListener('input',e=>{if(!detailMotion)return;const m=motionFrame(detailMotion);detailMotion.paused=true;detailMotion.clock=Number(e.target.value)/1000*(m.total-1);paintMotion(detailMotion,true);});
   $('#mv-speed').addEventListener('change',e=>{motionPrefs.speed=Number(e.target.value);saveMotionPrefs();});
   $('#mv-exercise').addEventListener('change',e=>selectMotion(previewItem(e.target.value)));
-  $('#mv-joints').addEventListener('change',e=>{motionPrefs.joints=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean))f.svg.classList.toggle('show-joints',e.target.checked);saveMotionPrefs();});
+  $('#mv-joints').addEventListener('change',e=>{motionPrefs.joints=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean)){f.svg.classList.toggle('show-joints',e.target.checked);f.setJoints?.(e.target.checked);}saveMotionPrefs();});
   $('#mv-vectors').addEventListener('change',e=>{motionPrefs.vectors=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean))f.setVectors(e.target.checked);saveMotionPrefs();});
   $('#mv-trace').addEventListener('change',e=>{motionPrefs.trace=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean))f.setTrace(e.target.checked);saveMotionPrefs();});
   $('#mv-muscle-toggle').addEventListener('change',e=>changeMusclePreference(e.target.checked));
   $('#wv-muscle-toggle').addEventListener('change',e=>changeMusclePreference(e.target.checked));
+  for(const prefix of ['mv','wv'])$('#'+prefix+'-region').addEventListener('change',e=>selectMuscleRegion(prefix,e.target.value));
   $('#motion-view').addEventListener('cancel',e=>{e.preventDefault();closeMotion();});
-  $('#motion-view').addEventListener('close',()=>{detailMotion=null;document.documentElement.classList.remove('motion-open');});
+  $('#motion-view').addEventListener('close',()=>{disposeMotion(detailMotion);detailMotion=null;document.documentElement.classList.remove('motion-open');});
   $('#motion-view').addEventListener('keydown',e=>{if(e.code==='Space'&&!['INPUT','SELECT','BUTTON','TEXTAREA'].includes(e.target.tagName)){e.preventDefault();if(detailMotion){detailMotion.paused=!detailMotion.paused;paintMotion(detailMotion,true);}}});
 }
 
@@ -4796,7 +5175,7 @@ function startWorkout(id){
   clearInterval(workoutTimer);workoutTimer=setInterval(workoutTick,250);workoutTick();saveWorkout();$('#wv-close').focus();scheduleMotionLoop();
 }
 function closeWorkout(){
-  if(!workout)return;workoutCapture();saveWorkout();clearInterval(workoutTimer);workoutTimer=0;
+  if(!workout)return;workoutCapture();saveWorkout();disposeMotion(workout.motion);clearInterval(workoutTimer);workoutTimer=0;
   const d=$('#workout-view');if(d.open)d.close();document.documentElement.classList.remove('workout-open');
   logRefresh(null);if(workoutReturn?.isConnected)workoutReturn.focus();workoutReturn=null;
 }
@@ -4823,7 +5202,7 @@ function workoutShow(index){
   $('#wv-done').textContent=stored?'Save changes':'Set done';$('#wv-save-status').textContent=stored?'This set is already logged.':'The entry will appear in the main log.';
   $('#wv-suggestion').textContent=sg.text;
   const cue=MOTION_FOCUS[ex.id];$('#wv-setup').textContent=cue?.setup||ex.tech[0];$('#wv-control').textContent=cue?.control||ex.tech[1];$('#wv-breath').textContent=ex.breath;
-  workout.motion={it,f:null,clock:0,paused:reduceMotion,durations:motionDurations(it)};$('#wv-angle').textContent=ex.viewNote||(ex.anim.view==='front'?'Front view':'Side view');
+  disposeMotion(workout.motion);workout.motion={it,f:null,clock:0,paused:reduceMotion,durations:motionDurations(it)};$('#wv-angle').textContent=ex.viewNote||(ex.anim.view==='front'?'Front view':'Side view');
   $('#wv-motion').textContent=reduceMotion?'Play':'Pause';$('#wv-motion').setAttribute('aria-pressed',String(!reduceMotion));mountWorkoutCameras();
   $('#wv-prev').disabled=workout.index===0;$('#wv-next').disabled=workout.index===workout.queue.length-1;
   saveWorkout();workoutTick();
@@ -4889,21 +5268,22 @@ function setupWorkout(){
 }
 
 function motionCamera(ex){
- const cameras=ex.anim.cameras||[],saved=motionPrefs.views?.[ex.id];
- return cameras.includes(saved)?saved:ex.anim.camera||ex.anim.view;
+ const cameras=ex.anim.catalogCameras||ex.anim.cameras||[],saved=motionPrefs.views?.[ex.id];
+ return cameras.includes(saved)?saved:ex.anim.catalogRig?'above':ex.anim.camera||ex.anim.view;
 }
 function cameraButtons(ex,current){
- return (ex.anim.cameras||[]).map(key=>`<button type="button" data-motion-camera="${key}" aria-pressed="${current===key}">${CAMERA3[key].label}</button>`).join('');
+ return (ex.anim.catalogCameras||ex.anim.cameras||[]).map(key=>`<button type="button" data-motion-camera="${key}" aria-pressed="${current===key}">${CAMERA3[key].label}</button>`).join('');
 }
 function rememberCamera(ex,key){
- if(!ex.anim.cameras?.includes(key))return false;
+ if(!(ex.anim.catalogCameras||ex.anim.cameras)?.includes(key))return false;
  motionPrefs.views=Object.assign({},motionPrefs.views,{[ex.id]:key});saveMotionPrefs();return true;
 }
 function mountDetailCameras(){
  if(!detailMotion)return;
- const F=detailMotion,ex=F.it.ex,a=ex.anim,key=motionCamera(ex),cameras=a.cameras||[];
+ const F=detailMotion,ex=F.it.ex,a=ex.anim,key=motionCamera(ex),cameras=a.catalogCameras||a.cameras||[];
+ disposeMotion(F);
  const m=motionFrame(F),make=camera=>{
-  const f=buildFigure(a,{primary:ex.pri,has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera,muscles:motionPrefs.muscles});
+  const f=createMotionFigure(a,{primary:ex.pri,has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera,muscles:motionPrefs.muscles});
   f.svg.classList.toggle('show-joints',!!motionPrefs.joints);f.setTrace(!!motionPrefs.trace);f.setVectors(!!motionPrefs.vectors);return f;
  };
  F.f=make(key);$('#mv-stage').replaceChildren(F.f.svg);
@@ -4916,7 +5296,7 @@ function mountDetailCameras(){
  $('#mv-dual').checked=!!motionPrefs.dual;$('#mv-second').hidden=!pair;$('#mv-projections').classList.toggle('is-dual',pair);
  F.extra=null;
  if(pair){
-  const preferred=a.muscleProfile?.pair,other=preferred!==key&&cameras.includes(preferred)?preferred:cameras.find(c=>c!==key);F.extra=make(other);$('#mv-second-stage').replaceChildren(F.extra.svg);
+  const preferred=motionProfile(a)?.pair,other=preferred!==key&&cameras.includes(preferred)?preferred:cameras.find(c=>c!==key);F.extra=make(other);$('#mv-second-stage').replaceChildren(F.extra.svg);
   $('#mv-second-label').textContent=CAMERA3[other].label;$('#mv-second-hint').textContent=a.cameraHints?.[other]||'';
  }else $('#mv-second-stage').replaceChildren();
  configureMusclePanel('mv',F.it);paintMotion(F,true);
@@ -4924,8 +5304,8 @@ function mountDetailCameras(){
 function mountWorkoutCameras(){
  if(!workout?.motion)return;
  const F=workout.motion,ex=F.it.ex,key=motionCamera(ex),m=motionFrame(F);
- F.f=buildFigure(ex.anim,{has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera:key,muscles:motionPrefs.muscles});F.f.setVectors(!!motionPrefs.vectors);
- $('#wv-stage').replaceChildren(F.f.svg);$('#wv-cameras').innerHTML=cameraButtons(ex,key);$('#wv-cameras').hidden=!ex.anim.cameras;
+ disposeMotion(F);F.f=createMotionFigure(ex.anim,{has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera:key,muscles:motionPrefs.muscles});F.f.setVectors(!!motionPrefs.vectors);
+ $('#wv-stage').replaceChildren(F.f.svg);$('#wv-cameras').innerHTML=cameraButtons(ex,key);$('#wv-cameras').hidden=!(ex.anim.catalogCameras||ex.anim.cameras);
  $('#wv-angle').textContent=CAMERA3[key]?.label||(ex.anim.view==='front'?'Front view':'Side view');configureMusclePanel('wv',F.it);paintWorkoutMotion();
 }
 function setupMotionCameras(){
@@ -5395,4 +5775,4 @@ logInit();
 plural = (n, a, b, c) => n === 1 ? a : c;
 DEC = '.';
 
-window.PODHOD_VERSION='4.1.8';window.PODHOD_LANG='en';
+window.PODHOD_VERSION='4.2.0';window.PODHOD_LANG='en';
