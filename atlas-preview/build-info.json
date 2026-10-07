@@ -1,0 +1,35 @@
+{
+  "version": "4.2.0",
+  "source_commit": "1dc7d9a05430ded342a86018c85fef97cd99317a",
+  "source_tree": "38c5ecf8078ac03ef530adf9f9df5d47baa8366f",
+  "asset_tag": "4.2.0-7a76747f4ea8",
+  "tests": {
+    "application": 50,
+    "bench_prototype": 23
+  },
+  "catalog": {
+    "exercises": 139,
+    "poses": 14039,
+    "projections": 70195,
+    "authored": 20,
+    "reconstructed": 119
+  },
+  "rendered": {
+    "poses": 3058,
+    "camera_views": 15290
+  },
+  "failures": 0,
+  "legacy_review_exercises": [
+    "invrow",
+    "tablerow",
+    "goodmorning",
+    "burpee",
+    "plankup",
+    "cableohext"
+  ],
+  "limitations": [
+    "Illustrative muscle curves, not measured force or EMG.",
+    "Reconstructed depth requires manual technique review.",
+    "Real Android WebGL appearance and performance are not yet measured."
+  ]
+}

@@ -3203,7 +3203,7 @@ function muscleContours(faces){
    model, not measured motion capture. Original animation descriptors remain intact
    for the independent regression audit. All cameras use the same world pose. */
 const CATALOG_CAMERAS=['above','angle','side','front','back'];
-const CATALOG_RINGS=[[0,12.5,10,10],[10,13,11.5,8],[21,13.5,12.5,8],[31,16.3,12.5,9],[40,18.2,12.5,10],[47,17.8,12,10],[52,15.8,8.5,10]];
+const CATALOG_RINGS=[[0,12.5,10,10],[10,13,11.5,8],[18,13.3636363636,12.2272727273,8],[21,13.5,12.5,8],[31,16.3,12.5,9],[40,18.2,12.5,10],[47,17.8,12,10],[52,15.8,8.5,10]];
 function catalogCenter(R,h){
  const u=R.chestU||R.u;
  return h>18&&R.waist?V3.add(R.waist,u,h-18):V3.add(R.hip,R.u,h);
@@ -3356,6 +3356,13 @@ function catalogSharedGripRig(rig,id){
   R.sharedGrip=grip;R.basis='authored';return R;
  };
 }
+function catalogBenchRig(t){
+ const R=benchRig(t),bar=[...R.bar];
+ // The thicker torso has a 12.5 cm anterior contour; the shaft touches its surface.
+ bar[1]-=3.9*t;
+ for(const[s,sign]of [['L',-1],['R',1]])arm3(R,s,[sign*34,bar[1]+3.5,bar[2]],[sign*.8,.6,.45],[0,-1,0]);
+ R.bar=bar;R.props=R.props.slice(0,5).concat({kind:'barbell',c:bar});return R;
+}
 const CATALOG_SOURCES=new Map();
 for(const ex of EX){
  const source=catalogSource(ex);CATALOG_SOURCES.set(ex.id,source);
@@ -3363,6 +3370,7 @@ for(const ex of EX){
  if(['ytw','reversesnow'].includes(ex.id))rig=catalogProneRig(source);
  if(['widepush','archer'].includes(ex.id))rig=catalogWidePushRig(CATALOG_SOURCES.get('pushup'),ex.id==='archer');
  if(ex.id==='dbfly')rig=catalogFlyRig;
+ if(ex.id==='bbbench')rig=catalogBenchRig;
  if(['kbswing','goblet'].includes(ex.id))rig=catalogSharedGripRig(rig,ex.id);
  ex.anim.catalogRig=t=>{
   if(!Number.isFinite(t)||t<0||t>1)throw Error('Pose must be in [0,1]');
@@ -3371,9 +3379,13 @@ for(const ex of EX){
    const z=R.sh[2]-16,y=R.sh[1]-58;
    for(const sign of [-1,1])R.props.push({kind:'line',a:[sign*56,186,z],b:[sign*56,y-10,z],width:5,tone:'steel'},box3(sign*56-5,sign*56+5,180,186,z-18,z+18,'steel'),{kind:'line',a:[sign*56,y,z],b:[sign*56,y,z+12],width:4,tone:'bar'});
   }
+  if(ex.id==='inclinebb')for(const pad of R.props.filter(p=>p.kind==='panel'&&p.tone==='pad')){
+   pad.a=V3.add(pad.a,R.n,-1.5);pad.b=V3.add(V3.add(pad.b,R.n,-1.5),R.u,15);
+  }
   return R;
  };
  ex.anim.catalogCameras=[...CATALOG_CAMERAS];
+ ex.anim.catalogId=ex.id;
 }
 
 /* Anatomical parts and teaching regions are deliberately distinct. Deep muscles
@@ -3437,25 +3449,41 @@ function catalogLimbPoint(R,a,b,kind,t,angle,extra=0){
  return V3.add(V3.add(c,f.x,(r1+extra)*Math.cos(angle)),f.y,(r2+extra)*Math.sin(angle));
 }
 function catalogMuscleSurfaces(R,profile,{coarse=false}={}){
- const faces=[],rows=coarse?2:4,cols=coarse?3:8;
+ const faces=[],limbRows=coarse?5:10,limbCols=coarse?8:16,torsoCols=coarse?12:24;
+ function clip(poly,key,bound,greater){
+  const result=[];for(let i=0;i<poly.length;i++){
+   const a=poly[i],b=poly[(i+1)%poly.length],inside=v=>greater?v[key]>=bound-1e-10:v[key]<=bound+1e-10,ia=inside(a),ib=inside(b);
+   if(ia)result.push(a);
+   if(ia!==ib){const t=(bound-a[key])/(b[key]-a[key]);result.push({h:a.h+(b.h-a.h)*t,a:a.a+(b.a-a.a)*t,p:V3.add(a.p,V3.sub(b.p,a.p),t)});}
+  }return result;
+ }
  function patch(id,side,lo,hi,a0,a1,point){
   if(!profile.regions[id]?.visible)return;
-  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
-   const h0=lo+(hi-lo)*r/rows,h1=lo+(hi-lo)*(r+1)/rows,b0=a0+(a1-a0)*c/cols,b1=a0+(a1-a0)*(c+1)/cols;
-   const points=[point(h0,b0),point(h0,b1),point(h1,b1),point(h1,b0)];
-   const normal=V3.unit(V3.cross(V3.sub(points[1],points[0]),V3.sub(points[3],points[0]))).map(v=>v*(point.normalSign||1));
-   faces.push({id,parent:profile.regions[id].parent,side,points,normal});
+  const heights=point.torso?CATALOG_RINGS.map(r=>r[0]):Array.from({length:limbRows+1},(_,i)=>i/limbRows),step=2*Math.PI/(point.torso?torsoCols:limbCols);
+  for(let r=1;r<heights.length;r++)if(heights[r]>=lo&&heights[r-1]<=hi)for(let c=Math.floor(a0/step);c<Math.ceil(a1/step);c++){
+   const corners=[[heights[r-1],c*step],[heights[r-1],(c+1)*step],[heights[r],c*step],[heights[r],(c+1)*step]].map(([h,a])=>({h,a,p:point(h,a)}));
+   for(const ix of point.angleSign<0?[[0,1,3],[0,3,2]]:[[0,1,2],[1,3,2]]){
+    let poly=ix.map(i=>corners[i]);const normal=V3.unit(V3.cross(V3.sub(poly[1].p,poly[0].p),V3.sub(poly[2].p,poly[0].p))).map(v=>v*(point.normalSign||1));
+    for(const[key,bound,greater]of [['h',lo,true],['h',hi,false],['a',a0,true],['a',a1,false]]){poly=clip(poly,key,bound,greater);if(poly.length<3)break;}
+    for(let i=1;i<poly.length-1;i++){
+     const tri=[poly[0].p,poly[i].p,poly[i+1].p];if(Math.hypot(...V3.cross(V3.sub(tri[1],tri[0]),V3.sub(tri[2],tri[0])))<1e-8)continue;
+     const points=tri.map(p=>V3.add(p,normal,.15));points.push(points[2]);faces.push({id,parent:profile.regions[id].parent,side,points,normal});
+    }
+   }
   }
  }
  for(const[side,sign]of [['L',-1],['R',1]]){
-  const torso=(h,a)=>catalogTorsoPoint(R,h,sign*a,.25);
-  torso.normalSign=-sign;
+  const torso=(h,a)=>catalogTorsoPoint(R,h,sign*a);
+  torso.normalSign=-sign;torso.angleSign=sign;torso.torso=true;
   for(const[id,lo,hi,a,b]of [['pec_clavicular',42,48,.08,1.08],['pec_sternal',33,41,.08,1.2],['pec_costal',27,32,.10,1.0],['abs',12,26,.05,.53],['obliques',10,29,.56,1.34],['lats',11,38,1.55,2.65],['midback',33,47,2.66,3.08],['lowback',11,30,2.72,3.08],['glute_max',0,9,1.64,3.04],['glute_lateral',2,10,1.13,1.63],['trap_upper',43,51,2.20,3.07],['trap_mid',38,43,2.31,2.66]])patch(id,side,lo,hi,a,b,torso);
-  const limb=(root,end,kind)=>(t,a)=>catalogLimbPoint(R,R[root+side],R[end+side],kind,t,a,.30);
-  for(const[id,lo,hi,a,b]of [['delt_f',.02,.30,-.70,.70],['delt_s',.02,.32,.73,1.76],['delt_r',.02,.30,1.80,2.75],['bi_long',.33,.84,-.80,-.04],['bi_short',.33,.84,.04,.80],['tri_long',.28,.86,2.46,3.91],['tri_lateral',.27,.85,1.68,2.42]])patch(id,side,lo,hi,a,b,limb('sh','el','ua'));
+  const limb=(root,end,kind)=>{
+   const f=catalogLimbFrame(R,R[root+side],R[end+side]),outward=V3.dot(f.y,R.x)*sign,orientation=Math.abs(outward)>.001?Math.sign(outward):sign;
+   const point=(t,a)=>catalogLimbPoint(R,R[root+side],R[end+side],kind,t,a*orientation);point.normalSign=orientation;point.angleSign=orientation;return point;
+  };
+  for(const[id,lo,hi,a,b]of [['delt_f',.02,.30,-.70,.70],['delt_s',.02,.32,.73,1.76],['delt_r',.02,.30,1.80,2.75],['bi_long',.33,.84,.04,.80],['bi_short',.33,.84,-.80,-.04],['tri_long',.28,.86,2.46,3.91],['tri_lateral',.27,.85,1.68,2.42]])patch(id,side,lo,hi,a,b,limb('sh','el','ua'));
   patch('forearms',side,.15,.78,-1.25,1.25,limb('el','wr','fa'));
-  for(const[id,lo,hi,a,b]of [['quad_rectus',.15,.80,-.44,.44],['quad_lateral',.12,.82,-1.48,-.48],['quad_medial',.44,.91,.48,1.38],['ham_lateral',.16,.82,1.67,2.71],['ham_medial',.18,.84,2.77,4.45]])patch(id,side,lo,hi,a,b,limb('hip','kn','th'));
-  patch('calf_medial',side,.12,.59,2.08,3.12,limb('kn','an','sh'));patch('calf_lateral',side,.12,.59,3.18,4.21,limb('kn','an','sh'));
+  for(const[id,lo,hi,a,b]of [['quad_rectus',.15,.80,-.44,.44],['quad_lateral',.12,.82,.48,1.48],['quad_medial',.44,.91,-1.38,-.48],['ham_lateral',.16,.82,1.67,2.71],['ham_medial',.18,.84,2.77,4.45]])patch(id,side,lo,hi,a,b,limb('hip','kn','th'));
+  patch('calf_lateral',side,.12,.59,2.08,3.12,limb('kn','an','sh'));patch('calf_medial',side,.12,.59,3.18,4.21,limb('kn','an','sh'));
  }
  return faces;
 }
@@ -3464,7 +3492,7 @@ function catalogFigureAnim(anim){
 }
 function catalogVolumeData(anim,t,index,has,coarse=false){
  const R=anim.catalogRig(t),state=muscleFrame(anim,t,index),profile=motionProfile(anim);
- return{pose:R,surfaces:catalogMuscleSurfaces(R,profile,{coarse}),values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>!s.optional||!has||has(s.optional)),torsoRings:CATALOG_RINGS,limbProfiles:CATALOG_LIMB_PROFILES};
+ return{exerciseId:anim.catalogId,pose:R,surfaces:catalogMuscleSurfaces(R,profile,{coarse}),values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>!s.optional||!has||has(s.optional)),torsoRings:CATALOG_RINGS,limbProfiles:CATALOG_LIMB_PROFILES};
 }
 
 function catalogVectors(anim){
@@ -3476,8 +3504,13 @@ function catalogVectors(anim){
 }
 function createMotionFigure(anim,opts){
  if(!window.GymVolume||!anim.catalogRig)return buildFigure(anim,opts);
- const f=window.GymVolume.create({...opts,data:(t,index,coarse)=>catalogVolumeData(anim,t,index,opts.has,coarse),color:muscleColor,joints:motionPrefs.joints,
+ let f=window.GymVolume.create({...opts,data:(t,index,coarse)=>catalogVolumeData(anim,t,index,opts.has,coarse),color:muscleColor,joints:motionPrefs.joints,
   trace:Array.from({length:41},(_,i)=>anim.catalogRig(i/40).gripL),vectors:catalogVectors(anim)});
+ if(!f){
+  f=buildFigure(anim,opts);const svg=f.svg,root=document.createElement('div');root.className='volume-figure';root.setAttribute('role','img');root.setAttribute('aria-label',opts.label);root.dataset.renderer='svg';root.dataset.camera=opts.camera||'above';root.append(svg);f.svg=root;
+  const at=f.at;f.at=(t,frame)=>{at(t,frame);root.dataset.pose=String(t);root.dataset.phase=String(frame?.index||0);};
+  const setJoints=show=>svg.classList.toggle('show-joints',!!show);f.setJoints=setJoints;setJoints(motionPrefs.joints);f.at(opts.t||0);
+ }
  f.setTrace(motionPrefs.trace);f.setVectors(motionPrefs.vectors);return f;
 }
 function disposeMotion(F){F?.f?.dispose?.();F?.extra?.dispose?.();}
