@@ -1,0 +1,4926 @@
+{
+ "summary": {
+  "exercises": 139,
+  "withErrors": 86,
+  "warningsOnly": 40,
+  "clean": 13,
+  "errorsByRule": {
+   "penetration": 50,
+   "floating": 45,
+   "self-collision": 8,
+   "rom": 11,
+   "cable-through-body": 6,
+   "floor": 4,
+   "jump": 1
+  }
+ },
+ "report": [
+  {
+   "id": "pushup",
+   "name": "Отжимания от пола",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.95,
+     "frames": 20
+    }
+   ]
+  },
+  {
+   "id": "diamond",
+   "name": "Отжимания узким хватом",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.925,
+     "frames": 26
+    }
+   ]
+  },
+  {
+   "id": "dip",
+   "name": "Отжимания на брусьях",
+   "eq": [
+    "dipbars"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ line#0(grip)",
+     "depth": 2.3,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.3,
+     "frames": 20
+    },
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ line#5(grip)",
+     "depth": 2.3,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.3,
+     "frames": 20
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.1,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "faL ⟂ line#0(grip)",
+     "depth": 5.1,
+     "unit": "см",
+     "severity": "error",
+     "t": 1,
+     "frames": 6
+    },
+    {
+     "rule": "penetration",
+     "detail": "faR ⟂ line#5(grip)",
+     "depth": 5.1,
+     "unit": "см",
+     "severity": "error",
+     "t": 1,
+     "frames": 6
+    }
+   ]
+  },
+  {
+   "id": "bbbench",
+   "name": "Жим штанги лёжа",
+   "eq": [
+    "bb",
+    "bench"
+   ],
+   "basis": "authored",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#0",
+     "depth": 6.2,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "dbbench",
+   "name": "Жим гантелей лёжа",
+   "eq": [
+    "db",
+    "bench"
+   ],
+   "basis": "authored",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#2",
+     "depth": 6.2,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "dbincline",
+   "name": "Жим гантелей на наклонной скамье",
+   "eq": [
+    "db",
+    "incline"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#1",
+     "depth": 3.7,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 1,
+     "frames": 5
+    }
+   ]
+  },
+  {
+   "id": "smithincline",
+   "name": "Жим в машине Смита на наклонной скамье",
+   "eq": [
+    "smith",
+    "incline"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#1",
+     "depth": 3.7,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "dbfly",
+   "name": "Разводка гантелей лёжа",
+   "eq": [
+    "db",
+    "bench"
+   ],
+   "basis": "authored",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#2",
+     "depth": 6.3,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "cablefly",
+   "name": "Сведение рук в кроссовере",
+   "eq": [
+    "cable"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "floor",
+     "detail": "footL ниже пола",
+     "depth": 1.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "wheel#3 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "self-collision",
+     "detail": "handL ⟂ handR",
+     "depth": 5.4,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.975,
+     "frames": 2
+    }
+   ]
+  },
+  {
+   "id": "pecdeck",
+   "name": "Сведение рук в тренажёре «бабочка»",
+   "eq": [
+    "pecdeck"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#0(seat)",
+     "depth": 4.1,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "faL ⟂ line#11(forearm-support)",
+     "depth": 2.3,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "faR ⟂ line#16(forearm-support)",
+     "depth": 2.3,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "pullup",
+   "name": "Подтягивания",
+   "eq": [
+    "pullup"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "rom",
+     "detail": "колено L гнётся в невозможную сторону: 172° > 50°",
+     "depth": 122,
+     "unit": "°",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "rom",
+     "detail": "колено R гнётся в невозможную сторону: 172° > 50°",
+     "depth": 122,
+     "unit": "°",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "line#1 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "penetration",
+     "detail": "headC ⟂ line#0",
+     "depth": 14.4,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.875,
+     "frames": 18
+    }
+   ]
+  },
+  {
+   "id": "bbrow",
+   "name": "Тяга штанги в наклоне",
+   "eq": [
+    "bb"
+   ],
+   "basis": "authored",
+   "issues": []
+  },
+  {
+   "id": "dbrow",
+   "name": "Тяга гантели одной рукой",
+   "eq": [
+    "db",
+    "bench"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "shL ⟂ box#0",
+     "depth": 7.4,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.675,
+     "frames": 27
+    }
+   ]
+  },
+  {
+   "id": "latpull",
+   "name": "Тяга верхнего блока",
+   "eq": [
+    "cable"
+   ],
+   "basis": "authored",
+   "issues": [
+    {
+     "rule": "floating",
+     "detail": "box#5 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "cablerow",
+   "name": "Тяга горизонтального блока",
+   "eq": [
+    "cable"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "floating",
+     "detail": "box#5 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "line#8 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "wheel#10 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.625,
+     "frames": 21
+    }
+   ]
+  },
+  {
+   "id": "deadlift",
+   "name": "Становая тяга",
+   "eq": [
+    "bb"
+   ],
+   "basis": "authored",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ barbell#0",
+     "depth": 6.9,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.325,
+     "frames": 35
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 4.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.85,
+     "frames": 10
+    }
+   ]
+  },
+  {
+   "id": "hyper",
+   "name": "Гиперэкстензия",
+   "eq": [
+    "hyper"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "shL ⟂ line#0",
+     "depth": 5.1,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "penetration",
+     "detail": "shR ⟂ line#1",
+     "depth": 5.1,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 4.9,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "wheel#2 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "penetration",
+     "detail": "torsoC ⟂ wheel#2",
+     "depth": 11.9,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.95,
+     "frames": 15
+    }
+   ]
+  },
+  {
+   "id": "shrug",
+   "name": "Шраги с гантелями",
+   "eq": [
+    "db"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ dumbbell#0",
+     "depth": 8.8,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.45,
+     "frames": 82
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ dumbbell#1",
+     "depth": 8.8,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.45,
+     "frames": 82
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "bandrow",
+   "name": "Тяга эспандера к поясу сидя",
+   "eq": [
+    "band"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.625,
+     "frames": 21
+    }
+   ]
+  },
+  {
+   "id": "dbpress",
+   "name": "Жим гантелей сидя",
+   "eq": [
+    "db",
+    "incline",
+    "bench"
+   ],
+   "basis": "authored",
+   "issues": [
+    {
+     "rule": "floating",
+     "detail": "box#7 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "ohp",
+   "name": "Жим штанги стоя",
+   "eq": [
+    "bb"
+   ],
+   "basis": "authored",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 4.9,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 1
+    },
+    {
+     "rule": "penetration",
+     "detail": "headC ⟂ barbell#0",
+     "depth": 1.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.3,
+     "frames": 6
+    }
+   ]
+  },
+  {
+   "id": "latraise",
+   "name": "Махи гантелями в стороны",
+   "eq": [
+    "db"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ dumbbell#0",
+     "depth": 4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 3
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ dumbbell#1",
+     "depth": 4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 3
+    },
+    {
+     "rule": "floor",
+     "detail": "footL ниже пола",
+     "depth": 1.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "faR ⟂ dumbbell#0",
+     "depth": 4.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.8,
+     "frames": 26
+    },
+    {
+     "rule": "penetration",
+     "detail": "faL ⟂ dumbbell#1",
+     "depth": 4.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.8,
+     "frames": 26
+    }
+   ]
+  },
+  {
+   "id": "bandlatraise",
+   "name": "Махи с эспандером в стороны",
+   "eq": [
+    "band"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "floor",
+     "detail": "footL ниже пола",
+     "depth": 1.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "frontraise",
+   "name": "Подъём гантелей перед собой",
+   "eq": [
+    "db"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ dumbbell#0",
+     "depth": 8.6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 8
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ dumbbell#1",
+     "depth": 8.6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 8
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 11
+    }
+   ]
+  },
+  {
+   "id": "facepull",
+   "name": "Тяга каната к лицу",
+   "eq": [
+    "cable"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "floor",
+     "detail": "footL ниже пола",
+     "depth": 1.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "wheel#0 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 123
+    }
+   ]
+  },
+  {
+   "id": "pikepush",
+   "name": "Отжимания в упоре углом",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "rom",
+     "detail": "бедро L сгибание: 157° > 130°",
+     "depth": 27.2,
+     "unit": "°",
+     "severity": "error",
+     "t": 1,
+     "frames": 21
+    },
+    {
+     "rule": "rom",
+     "detail": "бедро R сгибание: 157° > 130°",
+     "depth": 27.2,
+     "unit": "°",
+     "severity": "error",
+     "t": 1,
+     "frames": 21
+    },
+    {
+     "rule": "self-collision",
+     "detail": "thL ⟂ torsoC",
+     "depth": 5.8,
+     "unit": "см",
+     "severity": "error",
+     "t": 1,
+     "frames": 11
+    }
+   ]
+  },
+  {
+   "id": "bbcurl",
+   "name": "Подъём штанги на бицепс",
+   "eq": [
+    "bb"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ barbell#0",
+     "depth": 7.1,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 4
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "dbcurl",
+   "name": "Подъём гантелей на бицепс",
+   "eq": [
+    "db"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ dumbbell#0",
+     "depth": 8.6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 10
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ dumbbell#1",
+     "depth": 8.6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 10
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "hammer",
+   "name": "Молотковые сгибания",
+   "eq": [
+    "db"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ dumbbell#0",
+     "depth": 8.6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 10
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ dumbbell#1",
+     "depth": 8.6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 10
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "cablecurl",
+   "name": "Сгибание рук на нижнем блоке",
+   "eq": [
+    "cable"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ line#4",
+     "depth": 2.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 2
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "wheel#3 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "line#4 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "bandcurl",
+   "name": "Сгибание рук с эспандером",
+   "eq": [
+    "band"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "cable-through-body",
+     "detail": "трос/лента #0 проходит сквозь shL",
+     "depth": 2.5,
+     "unit": "см",
+     "severity": "error",
+     "t": 1,
+     "frames": 6
+    }
+   ]
+  },
+  {
+   "id": "chinup",
+   "name": "Подтягивания обратным хватом",
+   "eq": [
+    "pullup"
+   ],
+   "basis": "authored",
+   "issues": [
+    {
+     "rule": "floating",
+     "detail": "line#1 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 4.8,
+     "unit": "см",
+     "severity": "warn",
+     "t": 1,
+     "frames": 2
+    }
+   ]
+  },
+  {
+   "id": "skull",
+   "name": "Французский жим лёжа",
+   "eq": [
+    "bb",
+    "bench"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#0",
+     "depth": 4.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "pushdown",
+   "name": "Разгибание рук на верхнем блоке",
+   "eq": [
+    "cable"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "wheel#3 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "line#4 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ line#4",
+     "depth": 1.4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 1,
+     "frames": 1
+    }
+   ]
+  },
+  {
+   "id": "bandpushdown",
+   "name": "Разгибание рук с эспандером",
+   "eq": [
+    "band"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "box#0 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "трос/лента #1 без крепления на конце",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "benchdip",
+   "name": "Обратные отжимания от скамьи",
+   "eq": [
+    "bench"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "rom",
+     "detail": "плечо L разгибание: 71° > 60°",
+     "depth": 10.6,
+     "unit": "°",
+     "severity": "warn",
+     "t": 1,
+     "frames": 1
+    },
+    {
+     "rule": "rom",
+     "detail": "плечо R разгибание: 71° > 60°",
+     "depth": 10.6,
+     "unit": "°",
+     "severity": "warn",
+     "t": 1,
+     "frames": 1
+    }
+   ]
+  },
+  {
+   "id": "ohext",
+   "name": "Разгибание гантели из-за головы",
+   "eq": [
+    "db"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "floating",
+     "detail": "снаряд #0 висит без хвата и опоры",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "wristcurl",
+   "name": "Сгибание запястий со штангой",
+   "eq": [
+    "bb",
+    "bench"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.2,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "farmer",
+   "name": "Прогулка фермера",
+   "eq": [
+    "db",
+    "kb"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ dumbbell#0",
+     "depth": 8.6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ dumbbell#1",
+     "depth": 8.6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "penetration",
+     "detail": "handL ⟂ kettlebell#2",
+     "depth": 3.9,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 14
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ kettlebell#2",
+     "depth": 6.9,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.95,
+     "frames": 27
+    }
+   ]
+  },
+  {
+   "id": "hang",
+   "name": "Вис на турнике",
+   "eq": [
+    "pullup"
+   ],
+   "basis": "reconstructed",
+   "issues": []
+  },
+  {
+   "id": "crunch",
+   "name": "Скручивания",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 4.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "plank",
+   "name": "Планка на предплечьях",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": []
+  },
+  {
+   "id": "sideplank",
+   "name": "Боковая планка",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "floor",
+     "detail": "footR ниже пола",
+     "depth": 5.7,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "legraise",
+   "name": "Подъём ног в висе",
+   "eq": [
+    "pullup"
+   ],
+   "basis": "reconstructed",
+   "issues": []
+  },
+  {
+   "id": "lyinglegraise",
+   "name": "Подъём ног лёжа",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "cablecrunch",
+   "name": "Скручивания на блоке стоя на коленях",
+   "eq": [
+    "cable"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "rom",
+     "detail": "локоть L сгибание: 158° > 150°",
+     "depth": 8,
+     "unit": "°",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть R сгибание: 158° > 150°",
+     "depth": 8,
+     "unit": "°",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "wheel#3 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "line#4 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "cable-through-body",
+     "detail": "трос/лента #2 проходит сквозь neckC",
+     "depth": 4.1,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.6,
+     "frames": 13
+    }
+   ]
+  },
+  {
+   "id": "hipthrust",
+   "name": "Ягодичный мост со штангой",
+   "eq": [
+    "bb",
+    "bench"
+   ],
+   "basis": "authored",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ barbell#5",
+     "depth": 4.2,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 10
+    }
+   ]
+  },
+  {
+   "id": "bridge",
+   "name": "Ягодичный мостик",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 25
+    }
+   ]
+  },
+  {
+   "id": "kbswing",
+   "name": "Махи гирей",
+   "eq": [
+    "kb"
+   ],
+   "basis": "authored",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "handL ⟂ kettlebell#0",
+     "depth": 2.4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 9
+    },
+    {
+     "rule": "self-collision",
+     "detail": "uaL ⟂ torsoC",
+     "depth": 5.4,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.225,
+     "frames": 11
+    }
+   ]
+  },
+  {
+   "id": "bulgarian",
+   "name": "Болгарские выпады",
+   "eq": [
+    "bench"
+   ],
+   "basis": "authored",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ dumbbell#0",
+     "depth": 6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.025,
+     "frames": 71
+    },
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ dumbbell#1",
+     "depth": 1.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 3
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 4.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 9
+    },
+    {
+     "rule": "penetration",
+     "detail": "shR ⟂ box#2",
+     "depth": 6.8,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.75,
+     "frames": 36
+    }
+   ]
+  },
+  {
+   "id": "stepup",
+   "name": "Зашагивания на скамью",
+   "eq": [
+    "bench"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ dumbbell#1",
+     "depth": 8.6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.225,
+     "frames": 82
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ dumbbell#2",
+     "depth": 8.6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.75,
+     "frames": 69
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.65,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ box#0",
+     "depth": 4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.1,
+     "frames": 4
+    },
+    {
+     "rule": "penetration",
+     "detail": "shR ⟂ box#0",
+     "depth": 4.7,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.25,
+     "frames": 11
+    },
+    {
+     "rule": "penetration",
+     "detail": "footR ⟂ box#0",
+     "depth": 7.8,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.55,
+     "frames": 19
+    }
+   ]
+  },
+  {
+   "id": "rdl",
+   "name": "Румынская тяга",
+   "eq": [
+    "bb",
+    "db"
+   ],
+   "basis": "authored",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ barbell#0",
+     "depth": 6.2,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.85,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ dumbbell#1",
+     "depth": 8.4,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ dumbbell#2",
+     "depth": 8.4,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 24
+    }
+   ]
+  },
+  {
+   "id": "squat",
+   "name": "Приседания со штангой",
+   "eq": [
+    "bb"
+   ],
+   "basis": "authored",
+   "issues": [
+    {
+     "rule": "rom",
+     "detail": "локоть L гнётся в невозможную сторону: 134° > 90°",
+     "depth": 43.6,
+     "unit": "°",
+     "severity": "warn",
+     "t": 1,
+     "frames": 41
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть R гнётся в невозможную сторону: 134° > 90°",
+     "depth": 43.6,
+     "unit": "°",
+     "severity": "warn",
+     "t": 1,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "goblet",
+   "name": "Гоблет-приседания",
+   "eq": [
+    "db",
+    "kb"
+   ],
+   "basis": "authored",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "faL ⟂ dumbbell#0",
+     "depth": 1.7,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "faR ⟂ dumbbell#0",
+     "depth": 1.7,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "handL ⟂ kettlebell#1",
+     "depth": 2.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 38
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 6.2,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "airsquat",
+   "name": "Приседания с собственным весом",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 9
+    }
+   ]
+  },
+  {
+   "id": "lunge",
+   "name": "Сплит-приседания",
+   "eq": [],
+   "basis": "authored",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ dumbbell#0",
+     "depth": 6.8,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ dumbbell#1",
+     "depth": 6.8,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 4.8,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "legpress",
+   "name": "Жим ногами",
+   "eq": [
+    "legpress"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ panel#0",
+     "depth": 6.1,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "panel#5 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "self-collision",
+     "detail": "handL ⟂ thL",
+     "depth": 2.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.825,
+     "frames": 16
+    }
+   ]
+  },
+  {
+   "id": "legext",
+   "name": "Разгибание ног в тренажёре",
+   "eq": [
+    "legext"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "shL ⟂ box#0",
+     "depth": 6.6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 18
+    },
+    {
+     "rule": "penetration",
+     "detail": "footL ⟂ roller#5",
+     "depth": 2.2,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "panel#1 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "roller#5 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0.1,
+     "frames": 37
+    },
+    {
+     "rule": "floating",
+     "detail": "line#6 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0.1,
+     "frames": 37
+    }
+   ]
+  },
+  {
+   "id": "smithsquat",
+   "name": "Приседания в машине Смита",
+   "eq": [
+    "smith"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 4.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 1
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть L гнётся в невозможную сторону: 129° > 90°",
+     "depth": 38.7,
+     "unit": "°",
+     "severity": "warn",
+     "t": 0.8,
+     "frames": 41
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть R гнётся в невозможную сторону: 129° > 90°",
+     "depth": 38.7,
+     "unit": "°",
+     "severity": "warn",
+     "t": 0.8,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "legcurl",
+   "name": "Сгибание ног лёжа в тренажёре",
+   "eq": [
+    "legcurl"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "uaL ⟂ box#0",
+     "depth": 2.7,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "roller#5 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "line#6 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "calfraise",
+   "name": "Подъём на носки стоя",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ dumbbell#0",
+     "depth": 8.6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ dumbbell#1",
+     "depth": 8.6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "lpcalf",
+   "name": "Подъём на носки в тренажёре для жима ногами",
+   "eq": [
+    "legpress"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ panel#0",
+     "depth": 6.1,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "footL ⟂ panel#5",
+     "depth": 2.2,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "panel#5 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "inclinebb",
+   "name": "Жим штанги на наклонной скамье",
+   "eq": [
+    "bb",
+    "incline"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#1",
+     "depth": 3.7,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.3,
+     "unit": "см",
+     "severity": "warn",
+     "t": 1,
+     "frames": 5
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть L сгибание: 155° > 150°",
+     "depth": 5.2,
+     "unit": "°",
+     "severity": "warn",
+     "t": 1,
+     "frames": 1
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть R сгибание: 155° > 150°",
+     "depth": 5.2,
+     "unit": "°",
+     "severity": "warn",
+     "t": 1,
+     "frames": 1
+    }
+   ]
+  },
+  {
+   "id": "declinebb",
+   "name": "Жим штанги на скамье с обратным наклоном",
+   "eq": [
+    "bb",
+    "decline"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.6,
+     "frames": 26
+    }
+   ]
+  },
+  {
+   "id": "closegrip",
+   "name": "Жим лёжа узким хватом",
+   "eq": [
+    "bb",
+    "bench"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#0",
+     "depth": 4.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.825,
+     "frames": 21
+    }
+   ]
+  },
+  {
+   "id": "pullover",
+   "name": "Пуловер с гантелью",
+   "eq": [
+    "db",
+    "bench"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#0",
+     "depth": 4.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "снаряд #5 висит без хвата и опоры",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "declinepush",
+   "name": "Отжимания с ногами на скамье",
+   "eq": [
+    "bench"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "footL ⟂ box#0",
+     "depth": 2.7,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "invrow",
+   "name": "Австралийские подтягивания",
+   "eq": [
+    "smith",
+    "pullup"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "rom",
+     "detail": "локоть L гнётся в невозможную сторону: 180° > 90°",
+     "depth": 90,
+     "unit": "°",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть R гнётся в невозможную сторону: 180° > 90°",
+     "depth": 90,
+     "unit": "°",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "wheel#2 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "headC ⟂ wheel#2",
+     "depth": 2.7,
+     "unit": "см",
+     "severity": "warn",
+     "t": 1,
+     "frames": 2
+    },
+    {
+     "rule": "rom",
+     "detail": "плечо L поднято и заведено назад: 48° > 30°",
+     "depth": 18.1,
+     "unit": "°",
+     "severity": "warn",
+     "t": 1,
+     "frames": 1
+    },
+    {
+     "rule": "rom",
+     "detail": "плечо R поднято и заведено назад: 48° > 30°",
+     "depth": 18.1,
+     "unit": "°",
+     "severity": "warn",
+     "t": 1,
+     "frames": 1
+    }
+   ]
+  },
+  {
+   "id": "straightpull",
+   "name": "Пуловер на блоке прямыми руками",
+   "eq": [
+    "cable"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "floating",
+     "detail": "wheel#3 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "line#4 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 4.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 1,
+     "frames": 1
+    }
+   ]
+  },
+  {
+   "id": "goodmorning",
+   "name": "Наклоны со штангой на плечах",
+   "eq": [
+    "bb"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "self-collision",
+     "detail": "uaL ⟂ handL",
+     "depth": 3.8,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть L сгибание: 169° > 150°",
+     "depth": 19.3,
+     "unit": "°",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть L гнётся в невозможную сторону: 180° > 90°",
+     "depth": 90,
+     "unit": "°",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть R сгибание: 169° > 150°",
+     "depth": 19.3,
+     "unit": "°",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть R гнётся в невозможную сторону: 180° > 90°",
+     "depth": 90,
+     "unit": "°",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "arnold",
+   "name": "Жим Арнольда",
+   "eq": [
+    "db",
+    "incline",
+    "bench"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#1",
+     "depth": 11.2,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "cablelat",
+   "name": "Отведение руки на нижнем блоке",
+   "eq": [
+    "cable"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ line#3",
+     "depth": 8.9,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.025,
+     "frames": 6
+    },
+    {
+     "rule": "floor",
+     "detail": "footL ниже пола",
+     "depth": 1.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "self-collision",
+     "detail": "handR ⟂ thR",
+     "depth": 9.7,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 3
+    },
+    {
+     "rule": "floating",
+     "detail": "wheel#2 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "cable-through-body",
+     "detail": "трос/лента #1 проходит сквозь thL",
+     "depth": 4.7,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.025,
+     "frames": 5
+    },
+    {
+     "rule": "cable-through-body",
+     "detail": "трос/лента #1 проходит сквозь thR",
+     "depth": 6.1,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.075,
+     "frames": 36
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaR ⟂ torsoC (рука вдоль тела)",
+     "depth": 4.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.075,
+     "frames": 1
+    }
+   ]
+  },
+  {
+   "id": "reversefly",
+   "name": "Обратные разведения в «бабочке»",
+   "eq": [
+    "pecdeck"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#0(seat)",
+     "depth": 4.1,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "uaL ⟂ box#1(chest-support)",
+     "depth": 7.6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.125,
+     "frames": 14
+    },
+    {
+     "rule": "self-collision",
+     "detail": "handL ⟂ handR",
+     "depth": 3.9,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 1
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#1(chest-support)",
+     "depth": 3.3,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.35,
+     "frames": 27
+    }
+   ]
+  },
+  {
+   "id": "bandfacepull",
+   "name": "Тяга эспандера к лицу",
+   "eq": [
+    "band"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "neckC ⟂ box#0",
+     "depth": 8.2,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floor",
+     "detail": "footL ниже пола",
+     "depth": 1.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "box#0 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "preacher",
+   "name": "Сгибание рук на скамье Скотта",
+   "eq": [
+    "preacher",
+    "bb",
+    "db"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ line#0",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ line#1",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "torsoC ⟂ panel#5",
+     "depth": 5.4,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ barbell#6",
+     "depth": 4.9,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.025,
+     "frames": 4
+    },
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ dumbbell#7",
+     "depth": 5.8,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 11
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ dumbbell#8",
+     "depth": 5.8,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 11
+    }
+   ]
+  },
+  {
+   "id": "inclinecurl",
+   "name": "Сгибание рук на наклонной скамье",
+   "eq": [
+    "db",
+    "incline"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#1",
+     "depth": 3.4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ dumbbell#8",
+     "depth": 8.8,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.375,
+     "frames": 20
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ dumbbell#9",
+     "depth": 8.8,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.375,
+     "frames": 20
+    },
+    {
+     "rule": "self-collision",
+     "detail": "handL ⟂ thL",
+     "depth": 2.9,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.4,
+     "frames": 2
+    },
+    {
+     "rule": "self-collision",
+     "detail": "faL ⟂ torsoC",
+     "depth": 2.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 1,
+     "frames": 1
+    }
+   ]
+  },
+  {
+   "id": "concentration",
+   "name": "Концентрированный подъём на бицепс",
+   "eq": [
+    "db",
+    "bench"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "shL ⟂ dumbbell#5",
+     "depth": 4.8,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 12
+    }
+   ]
+  },
+  {
+   "id": "kickback",
+   "name": "Разгибание руки с гантелью в наклоне",
+   "eq": [
+    "db",
+    "bench"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "shR ⟂ box#0",
+     "depth": 8.1,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ dumbbell#5",
+     "depth": 7.9,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.425,
+     "frames": 64
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "declinecrunch",
+   "name": "Скручивания на скамье для пресса",
+   "eq": [
+    "abbench",
+    "decline"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 4.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "line#4 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "wheel#5 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    }
+   ]
+  },
+  {
+   "id": "captainraise",
+   "name": "Подъём коленей в упоре на локтях",
+   "eq": [
+    "captain"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "torsoC ⟂ line#5",
+     "depth": 7.7,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.975,
+     "frames": 41
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.025,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "wheel#6 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "hangknee",
+   "name": "Подъём коленей в висе",
+   "eq": [
+    "pullup"
+   ],
+   "basis": "reconstructed",
+   "issues": []
+  },
+  {
+   "id": "rollout",
+   "name": "Выкатывание ролика с колен",
+   "eq": [
+    "abwheel"
+   ],
+   "basis": "authored",
+   "issues": [
+    {
+     "rule": "floating",
+     "detail": "wheel#0 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "sidebend",
+   "name": "Наклоны в сторону с гантелью",
+   "eq": [
+    "db"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ dumbbell#0",
+     "depth": 6.2,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.125,
+     "frames": 61
+    },
+    {
+     "rule": "floor",
+     "detail": "footR ниже пола",
+     "depth": 4.2,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.975,
+     "frames": 40
+    }
+   ]
+  },
+  {
+   "id": "glutekick",
+   "name": "Отведение ноги назад на нижнем блоке",
+   "eq": [
+    "cable"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "shL ⟂ line#4",
+     "depth": 3.9,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "wheel#3 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "line#4 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "jumpingjack",
+   "name": "Прыжки «ноги врозь»",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "floor",
+     "detail": "footL ниже пола",
+     "depth": 1.7,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 3
+    }
+   ]
+  },
+  {
+   "id": "burpee",
+   "name": "Бёрпи",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.35,
+     "frames": 9
+    },
+    {
+     "rule": "rom",
+     "detail": "бедро L сгибание: 152° > 130°",
+     "depth": 21.6,
+     "unit": "°",
+     "severity": "warn",
+     "t": 0.675,
+     "frames": 3
+    },
+    {
+     "rule": "rom",
+     "detail": "бедро R сгибание: 152° > 130°",
+     "depth": 21.6,
+     "unit": "°",
+     "severity": "warn",
+     "t": 0.675,
+     "frames": 3
+    },
+    {
+     "rule": "self-collision",
+     "detail": "thL ⟂ torsoC",
+     "depth": 4.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.675,
+     "frames": 1
+    },
+    {
+     "rule": "floor",
+     "detail": "thL ниже пола",
+     "depth": 5.3,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.85,
+     "frames": 4
+    },
+    {
+     "rule": "jump",
+     "severity": "error",
+     "detail": "knL скачок 17 см между кадрами",
+     "t": 1,
+     "frames": 1
+    },
+    {
+     "rule": "jump",
+     "severity": "error",
+     "detail": "knR скачок 17 см между кадрами",
+     "t": 1,
+     "frames": 1
+    }
+   ]
+  },
+  {
+   "id": "mountain",
+   "name": "Скалолаз",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "rom",
+     "detail": "бедро L сгибание: 147° > 130°",
+     "depth": 16.6,
+     "unit": "°",
+     "severity": "warn",
+     "t": 0,
+     "frames": 1
+    },
+    {
+     "rule": "floor",
+     "detail": "thR ниже пола",
+     "depth": 4.1,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.525,
+     "frames": 7
+    },
+    {
+     "rule": "floor",
+     "detail": "thL ниже пола",
+     "depth": 4.1,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.475,
+     "frames": 8
+    },
+    {
+     "rule": "rom",
+     "detail": "бедро R сгибание: 147° > 130°",
+     "depth": 16.6,
+     "unit": "°",
+     "severity": "warn",
+     "t": 1,
+     "frames": 1
+    }
+   ]
+  },
+  {
+   "id": "jumpsquat",
+   "name": "Приседания с выпрыгиванием",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 4
+    }
+   ]
+  },
+  {
+   "id": "thruster",
+   "name": "Трастеры с гантелями",
+   "eq": [
+    "db"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "headC ⟂ dumbbell#0",
+     "depth": 2.8,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.125,
+     "frames": 24
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть L сгибание: 162° > 150°",
+     "depth": 11.8,
+     "unit": "°",
+     "severity": "warn",
+     "t": 0,
+     "frames": 6
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть R сгибание: 162° > 150°",
+     "depth": 11.8,
+     "unit": "°",
+     "severity": "warn",
+     "t": 0,
+     "frames": 6
+    }
+   ]
+  },
+  {
+   "id": "wallpush",
+   "name": "Отжимания от стены",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": []
+  },
+  {
+   "id": "inclinepush",
+   "name": "Отжимания с рук на возвышении",
+   "eq": [
+    "bench"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.6,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "kneepush",
+   "name": "Отжимания с колен",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "floor",
+     "detail": "footL ниже пола",
+     "depth": 1.4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.275,
+     "frames": 35
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.2,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.95,
+     "frames": 16
+    }
+   ]
+  },
+  {
+   "id": "widepush",
+   "name": "Отжимания широким хватом",
+   "eq": [],
+   "basis": "authored",
+   "issues": []
+  },
+  {
+   "id": "archer",
+   "name": "Отжимания «лучник»",
+   "eq": [],
+   "basis": "authored",
+   "issues": []
+  },
+  {
+   "id": "declinepike",
+   "name": "Отжимания в упоре углом с ногами на возвышении",
+   "eq": [
+    "bench"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "footL ⟂ box#0",
+     "depth": 6.7,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.425,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "footL ⟂ line#3",
+     "depth": 1.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.9,
+     "frames": 12
+    },
+    {
+     "rule": "penetration",
+     "detail": "footR ⟂ line#4",
+     "depth": 1.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.9,
+     "frames": 12
+    }
+   ]
+  },
+  {
+   "id": "superman",
+   "name": "Лодочка",
+   "eq": [],
+   "basis": "authored",
+   "issues": []
+  },
+  {
+   "id": "ytw",
+   "name": "Разведения лёжа «Y-T-W»",
+   "eq": [],
+   "basis": "authored",
+   "issues": []
+  },
+  {
+   "id": "towelrow",
+   "name": "Тяга полотенца у двери",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "floating",
+     "detail": "wheel#2 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.575,
+     "frames": 35
+    }
+   ]
+  },
+  {
+   "id": "tablerow",
+   "name": "Тяга под столом",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ line#3",
+     "depth": 7.1,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.9,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ line#4",
+     "depth": 7.1,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.9,
+     "frames": 41
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть L гнётся в невозможную сторону: 180° > 90°",
+     "depth": 90,
+     "unit": "°",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть R гнётся в невозможную сторону: 180° > 90°",
+     "depth": 90,
+     "unit": "°",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "rom",
+     "detail": "плечо L поднято и заведено назад: 74° > 30°",
+     "depth": 44,
+     "unit": "°",
+     "severity": "error",
+     "t": 0.9,
+     "frames": 6
+    },
+    {
+     "rule": "rom",
+     "detail": "плечо R поднято и заведено назад: 74° > 30°",
+     "depth": 44,
+     "unit": "°",
+     "severity": "error",
+     "t": 0.9,
+     "frames": 6
+    },
+    {
+     "rule": "penetration",
+     "detail": "neckC ⟂ box#0",
+     "depth": 7.2,
+     "unit": "см",
+     "severity": "error",
+     "t": 1,
+     "frames": 6
+    },
+    {
+     "rule": "rom",
+     "detail": "плечо L разгибание: 87° > 60°",
+     "depth": 26.6,
+     "unit": "°",
+     "severity": "error",
+     "t": 1,
+     "frames": 1
+    },
+    {
+     "rule": "rom",
+     "detail": "плечо R разгибание: 87° > 60°",
+     "depth": 26.6,
+     "unit": "°",
+     "severity": "error",
+     "t": 1,
+     "frames": 1
+    }
+   ]
+  },
+  {
+   "id": "reversesnow",
+   "name": "Обратные «снежные ангелы»",
+   "eq": [],
+   "basis": "authored",
+   "issues": [
+    {
+     "rule": "self-collision",
+     "detail": "handR ⟂ torsoC",
+     "depth": 3.8,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.45,
+     "frames": 1
+    },
+    {
+     "rule": "self-collision",
+     "detail": "handL ⟂ torsoC",
+     "depth": 5.4,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.5,
+     "frames": 3
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть L сгибание: 176° > 150°",
+     "depth": 26.5,
+     "unit": "°",
+     "severity": "error",
+     "t": 0.55,
+     "frames": 6
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть R сгибание: 176° > 150°",
+     "depth": 26.5,
+     "unit": "°",
+     "severity": "error",
+     "t": 0.55,
+     "frames": 6
+    },
+    {
+     "rule": "self-collision",
+     "detail": "uaL ⟂ handL",
+     "depth": 7,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.55,
+     "frames": 3
+    }
+   ]
+  },
+  {
+   "id": "wallsit",
+   "name": "Стульчик у стены",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "revlunge",
+   "name": "Обратные выпады",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ dumbbell#0",
+     "depth": 8.6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ dumbbell#1",
+     "depth": 8.6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floor",
+     "detail": "footR ниже пола",
+     "depth": 6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.5,
+     "frames": 30
+    },
+    {
+     "rule": "floor",
+     "detail": "thR ниже пола",
+     "depth": 2.1,
+     "unit": "см",
+     "severity": "warn",
+     "t": 1,
+     "frames": 1
+    }
+   ]
+  },
+  {
+   "id": "sidelunge",
+   "name": "Боковые выпады",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "rom",
+     "detail": "колено L гнётся в невозможную сторону: 148° > 50°",
+     "depth": 98.3,
+     "unit": "°",
+     "severity": "error",
+     "t": 1,
+     "frames": 40
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.3,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.8,
+     "frames": 28
+    },
+    {
+     "rule": "floor",
+     "detail": "footR ниже пола",
+     "depth": 4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.5,
+     "frames": 25
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaR ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.975,
+     "frames": 7
+    },
+    {
+     "rule": "rom",
+     "detail": "бедро L отведение: 65° > 45°",
+     "depth": 20.2,
+     "unit": "°",
+     "severity": "warn",
+     "t": 1,
+     "frames": 12
+    },
+    {
+     "rule": "self-collision",
+     "detail": "handL ⟂ handR",
+     "depth": 5.7,
+     "unit": "см",
+     "severity": "error",
+     "t": 1,
+     "frames": 3
+    }
+   ]
+  },
+  {
+   "id": "pistolbox",
+   "name": "Приседания на одной ноге на скамью",
+   "eq": [
+    "bench"
+   ],
+   "basis": "reconstructed",
+   "issues": []
+  },
+  {
+   "id": "sllift",
+   "name": "Румынская тяга на одной ноге",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ dumbbell#0",
+     "depth": 8.6,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 19
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 14
+    }
+   ]
+  },
+  {
+   "id": "glutebridge1",
+   "name": "Ягодичный мостик на одной ноге",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.025,
+     "frames": 32
+    }
+   ]
+  },
+  {
+   "id": "nordic",
+   "name": "Скандинавские сгибания",
+   "eq": [],
+   "basis": "authored",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 19
+    }
+   ]
+  },
+  {
+   "id": "calf1",
+   "name": "Подъём на носок на одной ноге",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "footL ⟂ box#0",
+     "depth": 7.8,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 4.9,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 12
+    }
+   ]
+  },
+  {
+   "id": "deadbug",
+   "name": "«Мёртвый жук»",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "floor",
+     "detail": "handL ниже пола",
+     "depth": 55.7,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "birddog",
+   "name": "«Птица-собака»",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": []
+  },
+  {
+   "id": "hollow",
+   "name": "Удержание «лодочки» на спине",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": []
+  },
+  {
+   "id": "bicycle",
+   "name": "«Велосипед»",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 4.9,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть L сгибание: 170° > 150°",
+     "depth": 20,
+     "unit": "°",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть R сгибание: 170° > 150°",
+     "depth": 20,
+     "unit": "°",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "plankup",
+   "name": "Планка с подъёмом на руки",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "rom",
+     "detail": "локоть L гнётся в невозможную сторону: 180° > 90°",
+     "depth": 90,
+     "unit": "°",
+     "severity": "error",
+     "t": 0,
+     "frames": 40
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть R гнётся в невозможную сторону: 180° > 90°",
+     "depth": 90,
+     "unit": "°",
+     "severity": "error",
+     "t": 0,
+     "frames": 40
+    }
+   ]
+  },
+  {
+   "id": "chairdip",
+   "name": "Отжимания от стула",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "rom",
+     "detail": "плечо L разгибание: 71° > 60°",
+     "depth": 10.6,
+     "unit": "°",
+     "severity": "warn",
+     "t": 1,
+     "frames": 1
+    },
+    {
+     "rule": "rom",
+     "detail": "плечо R разгибание: 71° > 60°",
+     "depth": 10.6,
+     "unit": "°",
+     "severity": "warn",
+     "t": 1,
+     "frames": 1
+    }
+   ]
+  },
+  {
+   "id": "towelcurl",
+   "name": "Сгибание рук с полотенцем",
+   "eq": [],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "cable-through-body",
+     "detail": "трос/лента #0 проходит сквозь shL",
+     "depth": 2.5,
+     "unit": "см",
+     "severity": "error",
+     "t": 1,
+     "frames": 6
+    }
+   ]
+  },
+  {
+   "id": "chestpressm",
+   "name": "Жим от груди в тренажёре",
+   "eq": [
+    "chestpress"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#1",
+     "depth": 6.7,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "panel#0 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "wheel#9 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "smithbench",
+   "name": "Жим лёжа в машине Смита",
+   "eq": [
+    "smith",
+    "bench"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#0",
+     "depth": 4.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "faL ⟂ barbell#5(grip)",
+     "depth": 4.4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 1,
+     "frames": 14
+    },
+    {
+     "rule": "penetration",
+     "detail": "faR ⟂ barbell#5(grip)",
+     "depth": 4.4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 1,
+     "frames": 12
+    }
+   ]
+  },
+  {
+   "id": "cablelowfly",
+   "name": "Сведение рук в кроссовере снизу",
+   "eq": [
+    "cable"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "handL ⟂ line#0",
+     "depth": 2.9,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 2
+    },
+    {
+     "rule": "penetration",
+     "detail": "handR ⟂ line#1",
+     "depth": 2.9,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 2
+    },
+    {
+     "rule": "floor",
+     "detail": "footL ниже пола",
+     "depth": 1.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "wheel#3 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    }
+   ]
+  },
+  {
+   "id": "leverrowm",
+   "name": "Рычажная тяга к поясу",
+   "eq": [
+    "leverrow"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#0",
+     "depth": 4.1,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ line#5",
+     "depth": 4.9,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ line#6",
+     "depth": 4.9,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.95,
+     "frames": 17
+    }
+   ]
+  },
+  {
+   "id": "tbarrow",
+   "name": "Тяга Т-грифа в наклоне",
+   "eq": [
+    "tbar"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "handL ⟂ weight#2",
+     "depth": 5.5,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "wheel#0 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.95,
+     "frames": 15
+    }
+   ]
+  },
+  {
+   "id": "assistpull",
+   "name": "Подтягивания в гравитроне",
+   "eq": [
+    "gravitron"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "faL ⟂ line#0",
+     "depth": 1.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 1
+    },
+    {
+     "rule": "rom",
+     "detail": "колено L гнётся в невозможную сторону: 178° > 50°",
+     "depth": 128.2,
+     "unit": "°",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "rom",
+     "detail": "колено R гнётся в невозможную сторону: 178° > 50°",
+     "depth": 128.2,
+     "unit": "°",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "line#5 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "headC ⟂ line#0",
+     "depth": 14.4,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.7,
+     "frames": 21
+    },
+    {
+     "rule": "penetration",
+     "detail": "neckC ⟂ line#0",
+     "depth": 6.7,
+     "unit": "см",
+     "severity": "error",
+     "t": 1,
+     "frames": 5
+    }
+   ]
+  },
+  {
+   "id": "chestrowdb",
+   "name": "Тяга гантелей лёжа на наклонной скамье",
+   "eq": [
+    "db",
+    "incline"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ panel#0",
+     "depth": 10.5,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#1",
+     "depth": 8.4,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "shL ⟂ line#2",
+     "depth": 3.3,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "shR ⟂ line#3",
+     "depth": 3.3,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ dumbbell#6",
+     "depth": 8.4,
+     "unit": "см",
+     "severity": "error",
+     "t": 1,
+     "frames": 52
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ dumbbell#7",
+     "depth": 8.4,
+     "unit": "см",
+     "severity": "error",
+     "t": 1,
+     "frames": 52
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.925,
+     "frames": 22
+    }
+   ]
+  },
+  {
+   "id": "shoulderpressm",
+   "name": "Жим сидя в тренажёре",
+   "eq": [
+    "shoulderpress"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#1",
+     "depth": 11.2,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "smithohp",
+   "name": "Жим сидя в машине Смита",
+   "eq": [
+    "smith",
+    "incline"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#1(seat)",
+     "depth": 3,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "faL ⟂ barbell#3(grip)",
+     "depth": 1.7,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 6
+    },
+    {
+     "rule": "penetration",
+     "detail": "faR ⟂ barbell#3(grip)",
+     "depth": 1.7,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 6
+    }
+   ]
+  },
+  {
+   "id": "assistdip",
+   "name": "Отжимания на брусьях в гравитроне",
+   "eq": [
+    "gravitron"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ line#0(grip)",
+     "depth": 2.3,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.125,
+     "frames": 14
+    },
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ line#5(grip)",
+     "depth": 2.3,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.125,
+     "frames": 14
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "faL ⟂ line#0(grip)",
+     "depth": 3,
+     "unit": "см",
+     "severity": "warn",
+     "t": 1,
+     "frames": 4
+    },
+    {
+     "rule": "penetration",
+     "detail": "faR ⟂ line#5(grip)",
+     "depth": 3,
+     "unit": "см",
+     "severity": "warn",
+     "t": 1,
+     "frames": 4
+    }
+   ]
+  },
+  {
+   "id": "cableohext",
+   "name": "Разгибание рук с канатом над головой",
+   "eq": [
+    "cable"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "floating",
+     "detail": "wheel#3 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть L сгибание: 179° > 150°",
+     "depth": 28.5,
+     "unit": "°",
+     "severity": "error",
+     "t": 0.25,
+     "frames": 8
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть R сгибание: 179° > 150°",
+     "depth": 28.5,
+     "unit": "°",
+     "severity": "error",
+     "t": 0.25,
+     "frames": 8
+    },
+    {
+     "rule": "penetration",
+     "detail": "uaL ⟂ line#4",
+     "depth": 5.2,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.25,
+     "frames": 3
+    },
+    {
+     "rule": "self-collision",
+     "detail": "uaL ⟂ handL",
+     "depth": 7.7,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.25,
+     "frames": 4
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть L гнётся в невозможную сторону: 180° > 90°",
+     "depth": 90,
+     "unit": "°",
+     "severity": "error",
+     "t": 0.275,
+     "frames": 25
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть R гнётся в невозможную сторону: 180° > 90°",
+     "depth": 90,
+     "unit": "°",
+     "severity": "error",
+     "t": 0.275,
+     "frames": 25
+    },
+    {
+     "rule": "cable-through-body",
+     "detail": "трос/лента #2 проходит сквозь torso",
+     "depth": 3,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.775,
+     "frames": 9
+    },
+    {
+     "rule": "cable-through-body",
+     "detail": "трос/лента #2 проходит сквозь uaL",
+     "depth": 1.7,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.875,
+     "frames": 1
+    },
+    {
+     "rule": "cable-through-body",
+     "detail": "трос/лента #2 проходит сквозь faL",
+     "depth": 2.5,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.925,
+     "frames": 3
+    }
+   ]
+  },
+  {
+   "id": "cablewood",
+   "name": "«Дровосек» на блоке",
+   "eq": [
+    "cable"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "floating",
+     "detail": "wheel#2 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "self-collision",
+     "detail": "handL ⟂ handR",
+     "depth": 5.2,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.45,
+     "frames": 3
+    },
+    {
+     "rule": "self-collision",
+     "detail": "faL ⟂ handR",
+     "depth": 4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.5,
+     "frames": 1
+    },
+    {
+     "rule": "self-collision",
+     "detail": "faL ⟂ faR",
+     "depth": 8.9,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.825,
+     "frames": 15
+    },
+    {
+     "rule": "penetration",
+     "detail": "faL ⟂ line#3",
+     "depth": 5.5,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.65,
+     "frames": 5
+    },
+    {
+     "rule": "cable-through-body",
+     "detail": "трос/лента #1 проходит сквозь faL",
+     "depth": 1.8,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.7,
+     "frames": 1
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть L гнётся в невозможную сторону: 178° > 90°",
+     "depth": 88.1,
+     "unit": "°",
+     "severity": "error",
+     "t": 0.95,
+     "frames": 8
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть R гнётся в невозможную сторону: 178° > 90°",
+     "depth": 88.1,
+     "unit": "°",
+     "severity": "error",
+     "t": 0.95,
+     "frames": 8
+    },
+    {
+     "rule": "cable-through-body",
+     "detail": "трос/лента #1 проходит сквозь uaR",
+     "depth": 3.5,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.85,
+     "frames": 5
+    },
+    {
+     "rule": "self-collision",
+     "detail": "uaL ⟂ torsoC",
+     "depth": 10.2,
+     "unit": "см",
+     "severity": "error",
+     "t": 1,
+     "frames": 5
+    },
+    {
+     "rule": "cable-through-body",
+     "detail": "трос/лента #1 проходит сквозь torso",
+     "depth": 4.3,
+     "unit": "см",
+     "severity": "error",
+     "t": 1,
+     "frames": 4
+    }
+   ]
+  },
+  {
+   "id": "pullthrough",
+   "name": "Протяжка на блоке между ног",
+   "eq": [
+    "cable"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ line#4",
+     "depth": 2.5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.3,
+     "frames": 22
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "wheel#3 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "line#4 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "cablekickback",
+   "name": "Отведение ноги назад на блоке",
+   "eq": [
+    "cable"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "shL ⟂ line#4",
+     "depth": 3.9,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "wheel#3 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "line#4 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    }
+   ]
+  },
+  {
+   "id": "abduction",
+   "name": "Разведение ног в тренажёре",
+   "eq": [
+    "abductor"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#1",
+     "depth": 12.1,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.425,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "panel#3 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "floor",
+     "detail": "footL ниже пола",
+     "depth": 3.8,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.85,
+     "frames": 33
+    },
+    {
+     "rule": "rom",
+     "detail": "колено L гнётся в невозможную сторону: 90° > 50°",
+     "depth": 39.7,
+     "unit": "°",
+     "severity": "warn",
+     "t": 1,
+     "frames": 8
+    },
+    {
+     "rule": "rom",
+     "detail": "колено R гнётся в невозможную сторону: 90° > 50°",
+     "depth": 39.7,
+     "unit": "°",
+     "severity": "warn",
+     "t": 1,
+     "frames": 8
+    }
+   ]
+  },
+  {
+   "id": "adduction",
+   "name": "Сведение ног в тренажёре",
+   "eq": [
+    "abductor"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#1",
+     "depth": 12.1,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.45,
+     "frames": 41
+    },
+    {
+     "rule": "floor",
+     "detail": "footL ниже пола",
+     "depth": 3.8,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 33
+    },
+    {
+     "rule": "rom",
+     "detail": "колено L гнётся в невозможную сторону: 90° > 50°",
+     "depth": 39.7,
+     "unit": "°",
+     "severity": "warn",
+     "t": 0,
+     "frames": 9
+    },
+    {
+     "rule": "rom",
+     "detail": "колено R гнётся в невозможную сторону: 90° > 50°",
+     "depth": 39.7,
+     "unit": "°",
+     "severity": "warn",
+     "t": 0,
+     "frames": 9
+    },
+    {
+     "rule": "floating",
+     "detail": "panel#3 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    }
+   ]
+  },
+  {
+   "id": "hacksquat",
+   "name": "Приседания в гакк-машине",
+   "eq": [
+    "hack"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "footL ⟂ line#4",
+     "depth": 3.2,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "footR ⟂ line#5",
+     "depth": 3.2,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "line#0 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 164
+    }
+   ]
+  },
+  {
+   "id": "seatedcalf",
+   "name": "Подъём на носки сидя",
+   "eq": [
+    "calfseat"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#0",
+     "depth": 1.3,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 1
+    },
+    {
+     "rule": "penetration",
+     "detail": "footL ⟂ box#3",
+     "depth": 4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 8
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ roller#5",
+     "depth": 3.3,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "roller#5 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.95,
+     "frames": 20
+    }
+   ]
+  },
+  {
+   "id": "standcalf",
+   "name": "Подъём на носки стоя в тренажёре",
+   "eq": [
+    "calfstand"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "headC ⟂ line#2",
+     "depth": 7.2,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 10
+    },
+    {
+     "rule": "penetration",
+     "detail": "neckC ⟂ wheel#3",
+     "depth": 7,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 29
+    },
+    {
+     "rule": "penetration",
+     "detail": "footL ⟂ box#4",
+     "depth": 2.1,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 3
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть L сгибание: 164° > 150°",
+     "depth": 14,
+     "unit": "°",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "rom",
+     "detail": "локоть R сгибание: 164° > 150°",
+     "depth": 14,
+     "unit": "°",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "line#2 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "wheel#3 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "neckC ⟂ line#2",
+     "depth": 4.7,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.475,
+     "frames": 17
+    },
+    {
+     "rule": "penetration",
+     "detail": "torsoC ⟂ line#2",
+     "depth": 11.8,
+     "unit": "см",
+     "severity": "error",
+     "t": 1,
+     "frames": 14
+    },
+    {
+     "rule": "penetration",
+     "detail": "torsoC ⟂ wheel#3",
+     "depth": 9.3,
+     "unit": "см",
+     "severity": "error",
+     "t": 1,
+     "frames": 12
+    }
+   ]
+  },
+  {
+   "id": "treadmill",
+   "name": "Беговая дорожка",
+   "eq": [
+    "treadmill"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.3,
+     "frames": 21
+    },
+    {
+     "rule": "floating",
+     "detail": "box#3 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "line#4 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaR ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.65,
+     "frames": 20
+    }
+   ]
+  },
+  {
+   "id": "bike",
+   "name": "Велотренажёр",
+   "eq": [
+    "bike"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "thR ⟂ box#0",
+     "depth": 9.5,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 17
+    },
+    {
+     "rule": "penetration",
+     "detail": "footR ⟂ line#4",
+     "depth": 3.2,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.075,
+     "frames": 53
+    },
+    {
+     "rule": "penetration",
+     "detail": "footL ⟂ line#3",
+     "depth": 3.2,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "line#5 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "floating",
+     "detail": "wheel#7 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "penetration",
+     "detail": "shL ⟂ line#3",
+     "depth": 4.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.325,
+     "frames": 24
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ box#0",
+     "depth": 9.5,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.675,
+     "frames": 24
+    },
+    {
+     "rule": "penetration",
+     "detail": "shR ⟂ line#4",
+     "depth": 4.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 1,
+     "frames": 12
+    }
+   ]
+  },
+  {
+   "id": "rower",
+   "name": "Гребной тренажёр",
+   "eq": [
+    "rower"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "floating",
+     "detail": "line#0 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "floating",
+     "detail": "wheel#6 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "penetration",
+     "detail": "footL ⟂ box#5",
+     "depth": 7.6,
+     "unit": "см",
+     "severity": "error",
+     "t": 1,
+     "frames": 26
+    },
+    {
+     "rule": "penetration",
+     "detail": "thL ⟂ line#9",
+     "depth": 1.4,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.5,
+     "frames": 1
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.675,
+     "frames": 18
+    },
+    {
+     "rule": "penetration",
+     "detail": "footL ⟂ line#3",
+     "depth": 2.7,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.9,
+     "frames": 17
+    },
+    {
+     "rule": "penetration",
+     "detail": "footR ⟂ line#4",
+     "depth": 2.7,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.9,
+     "frames": 17
+    }
+   ]
+  },
+  {
+   "id": "elliptical",
+   "name": "Эллиптический тренажёр",
+   "eq": [
+    "elliptical"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "shL ⟂ line#4",
+     "depth": 5.1,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "penetration",
+     "detail": "shR ⟂ line#5",
+     "depth": 5.1,
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 41
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaL ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.15,
+     "frames": 21
+    },
+    {
+     "rule": "floating",
+     "detail": "line#3 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 119
+    },
+    {
+     "rule": "proportions",
+     "detail": "uaR ⟂ torsoC (рука вдоль тела)",
+     "depth": 5.6,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0.775,
+     "frames": 20
+    }
+   ]
+  },
+  {
+   "id": "stairs",
+   "name": "Степпер / лестница",
+   "eq": [
+    "stairs"
+   ],
+   "basis": "reconstructed",
+   "issues": [
+    {
+     "rule": "penetration",
+     "detail": "footR ⟂ box#1",
+     "depth": 5.8,
+     "unit": "см",
+     "severity": "error",
+     "t": 0.475,
+     "frames": 7
+    },
+    {
+     "rule": "penetration",
+     "detail": "footL ⟂ box#1",
+     "depth": 2.8,
+     "unit": "см",
+     "severity": "warn",
+     "t": 0,
+     "frames": 36
+    },
+    {
+     "rule": "floating",
+     "detail": "box#1 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 82
+    },
+    {
+     "rule": "floating",
+     "detail": "line#3 не соединена с рамой и полом",
+     "unit": "см",
+     "severity": "error",
+     "t": 0,
+     "frames": 123
+    }
+   ]
+  }
+ ]
+}
