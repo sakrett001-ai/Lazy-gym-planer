@@ -147,9 +147,37 @@ function buildSpatialFigure(anim,opts={}){
   face(p,outline?'#36465e':'#36465e',{stroke:outline?'#7f90ad':'#25344a','stroke-width':outline?1.2:1,'stroke-opacity':outline?.7:1,'fill-opacity':outline?.38:1,...attrs});
   const q=project(c);queue('circle',{cx:f1(q[0]),cy:f1(q[1]),r:2.5,fill:'#a6b5ca'},[c],1);
  }
+ const TONE3={frame:'#5f708a',pad:'#46566e',chrome:'#b7c4d6',plate:'#3b4c66',rubber:'#2f3a4b',cable:'#8a9ab0',band:'#6d9dc6',mat:'#2f3d52',wood:'#8a755e',wall:'#4a586c',stack:'#56667e'};
+ const shade=(hex,k)=>{const n=parseInt(hex.slice(1),16),c=[n>>16,n>>8&255,n&255].map(v=>Math.max(0,Math.min(255,Math.round(v*k))));return'#'+c.map(v=>v.toString(16).padStart(2,'0')).join('');};
+ const facing=d=>{const a=project([0,0,0]),b=project(d);return b[2]-a[2];};
+ function obox(c,ax,size,tone,attrs={}){
+  const h=size.map(v=>v/2),P=(i,j,k)=>V3.add(V3.add(V3.add(c,ax[0],i*h[0]),ax[1],j*h[1]),ax[2],k*h[2]),base=TONE3[tone]||TONE3.frame;
+  for(let a=0;a<3;a++)for(const sg of [-1,1]){
+   const n=ax[a].map(v=>v*sg);if(facing(n)<=1e-6)continue;
+   const b=(a+1)%3,cc=(a+2)%3,q=(u,v)=>{const idx=[0,0,0];idx[a]=sg;idx[b]=u;idx[cc]=v;return P(...idx);};
+   face([q(-1,-1),q(1,-1),q(1,1),q(-1,1)],shade(base,.78+.32*Math.abs(project(n)[1]-project([0,0,0])[1]<0?.9:.55)),attrs);
+  }
+ }
+ function cylinder(c,axis,r,len,tone,attrs={}){
+  axis=V3.unit(axis);const a=V3.add(c,axis,-len/2),b=V3.add(c,axis,len/2),ca=circle3(a,r,axis,20),cb=circle3(b,r,axis,20),base=TONE3[tone]||TONE3.frame;
+  silhouette(ca.concat(cb),shade(base,.85),attrs);const end=facing(axis)>0?cb:ca;face(end,shade(base,1.08),attrs);
+ }
  function prop(s){
   if(s.optional&&opts.has&&!opts.has(s.optional))return;
-  if(s.kind==='box')box(s);
+  if(s.kind==='beam')line3(s.a,s.b,s.r?2*s.r:Math.max(s.w,s.h),TONE3[s.tone]||TONE3.frame,0,{'data-prop':s.id||'beam'});
+  else if(s.kind==='obox')obox(s.c,[s.x,s.y,s.z].map(V3.unit),s.size,s.tone,{'data-prop':s.id||'box'});
+  else if(s.kind==='cyl')cylinder(s.c,s.axis,s.r,s.len,s.tone,{'data-prop':s.id||'cyl'});
+  else if(s.kind==='sphere'){const q=project(s.c);queue('circle',{cx:f1(q[0]),cy:f1(q[1]),r:f1(s.r),fill:TONE3[s.tone]||TONE3.frame},[s.c]);}
+  else if(s.kind==='cable')for(let i=1;i<s.pts.length;i++)line3(s.pts[i-1],s.pts[i],Math.max(1,2*s.r),TONE3[s.tone]||TONE3.cable,0,{'data-prop':s.id||'cable'});
+  else if(s.kind==='barbell'&&s.len){
+   const ax=V3.unit(s.axis);line3(V3.add(s.c,ax,-s.inner),V3.add(s.c,ax,s.inner),2*s.shaftR,TONE3.chrome,0,{'data-prop':'barbell','data-part':'shaft'});
+   for(const sg of [-1,1]){line3(V3.add(s.c,ax,sg*(s.inner+2)),V3.add(s.c,ax,sg*s.len/2),2*s.sleeveR,TONE3.chrome,0,{'data-prop':'barbell','data-part':'sleeve'});
+    let at=s.inner+2.4;for(const[r,th]of s.plates){cylinder(V3.add(s.c,ax,sg*(at+th/2)),ax,r,th,'plate',{'data-prop':'barbell','data-part':'plate'});at+=th+.3;}}
+  }else if(s.kind==='dumbbell'&&s.handle){
+   const ax=V3.unit(s.axis);line3(V3.add(s.c,ax,-s.handle/2-1),V3.add(s.c,ax,s.handle/2+1),3.2,TONE3.chrome,0,{'data-prop':'dumbbell','data-part':'shaft'});
+   for(const sg of [-1,1])cylinder(V3.add(s.c,ax,sg*(s.handle/2+1.2+s.headLen/2)),ax,s.headR,s.headLen,'plate',{'data-prop':'dumbbell','data-part':'plate'});
+  }
+  else if(s.kind==='box')box(s);
   else if(s.kind==='line')line3(s.a,s.b,s.width,tones[s.tone]||tones.steel);
   else if(s.kind==='dumbbell'){
    const axis=V3.unit(s.axis||[1,0,0]);
@@ -176,7 +204,31 @@ function buildSpatialFigure(anim,opts={}){
    queue('path',{d:`M${p[0][0]},${p[0][1]} Q${p[1][0]},${p[1][1]} ${p[2][0]},${p[2][1]}`,fill:'none',stroke:'#b4c6dc','stroke-width':2.4},points);
   }else throw Error('Unknown spatial equipment kind: '+s.kind);
  }
+ /* Манекен: силуэты сегментов строятся из той же поверхности, что и объёмная сцена */
+ function mannequinBody(R,boundsOnly){
+  const B=Mannequin.bodyData(R),H=B.torsoHeights,every=(rows,k)=>rows.filter((_,i)=>i%k===0||i===rows.length-1);
+  const L=(f,p)=>[f.o[0]+f.x[0]*p[0]+f.y[0]*p[1]+f.z[0]*p[2],f.o[1]+f.x[1]*p[0]+f.y[1]*p[1]+f.z[1]*p[2],f.o[2]+f.x[2]*p[0]+f.y[2]*p[1]+f.z[2]*p[2]];
+  if(boundsOnly){for(const row of B.torso)allBounds.push(...row.map(project));for(const rows of Object.values(B.limbs))for(const row of every(rows,3))allBounds.push(...row.map(project));allBounds.push(project(V3.add(R.head,R.headU,12)));return;}
+  const part=(lo,hi)=>B.torso.filter((_,i)=>H[i]>=lo&&H[i]<=hi).flat();
+  silhouette(part(-9,10),palette.shorts,{'data-part':'pelvis'});silhouette(part(8,26),palette.kit,{'data-part':'waist'});silhouette(part(23,56),palette.kit,{'data-part':'chest'});
+  silhouette(B.neck.flat(),palette.skin,{'data-part':'neck'});
+  for(const s of ['R','L']){
+   const skin=palette[s==='R'?'far':'skin'];
+   for(const k of ['th','sk','ua','fa'])silhouette(every(B.limbs[k+s],2).flatMap(r=>r.filter((_,j)=>j%2===0)),skin,{'data-limb':k+s});
+   silhouette(B.limbs['th'+s].slice(0,3).flat(),palette.shorts,{'data-limb':'shorts'+s});
+   for(const c of B.caps.filter(c=>c.key.endsWith(s))){const q=project(c.c);queue('circle',{cx:f1(q[0]),cy:f1(q[1]),r:f1(c.r),fill:skin},[c.c]);}
+   const h=B.hands[s],hand=[...h.shape.fingers.flatMap(f=>f.pts),...h.shape.thumb.pts];
+   for(const dx of [-.5,.5])for(const dy of [-.5,.5])for(const dz of [-.5,.5])hand.push([h.shape.palm.c[0]+dx*h.shape.palm.size[0],h.shape.palm.c[1]+dy*h.shape.palm.size[1],h.shape.palm.c[2]+dz*h.shape.palm.size[2]]);
+   silhouette(hand.map(p=>L(h.frame,p)),skin,{'data-limb':'hand'+s});
+   for(const k of ['rear','toes']){const f=B.feet[s][k],sp=B.shoe[k],pts=[];for(const dx of [-.5,.5])for(const dy of [-.5,.5])for(const dz of [-.5,.5])pts.push(L(f,[sp.c[0]+dx*sp.size[0],sp.c[1]+dy*sp.size[1],sp.c[2]+dz*sp.size[2]]));silhouette(pts,palette.shoe,{'data-limb':'shoe'+s});}
+  }
+  const hf=R.frames.head,head=[];
+  for(let i=0;i<16;i++)for(let j=1;j<8;j++){const th=i/16*2*Math.PI,ph=j/8*Math.PI,d=[Math.sin(ph)*Math.cos(th)*B.head.radii[0],Math.cos(ph)*B.head.radii[1],Math.sin(ph)*Math.sin(th)*B.head.radii[2]];head.push(L({o:R.head,x:hf.x,y:hf.y,z:hf.z},d));}
+  silhouette(head,palette.skin,{'data-part':'head'});
+  face([L({o:R.head,x:hf.x,y:hf.y,z:hf.z},[-1.2,0,9.4]),L({o:R.head,x:hf.x,y:hf.y,z:hf.z},[0,-2.6,10.6]),L({o:R.head,x:hf.x,y:hf.y,z:hf.z},[1.2,0,9.4])],'#a3b3cb');
+ }
  function body(R,boundsOnly=false){
+  if(R.frames)return mannequinBody(R,boundsOnly);
   const surfaceLimb=(a,b,kind,fill,key,shorts=false)=>{
    if(boundsOnly){
     if(shorts)return;
@@ -217,7 +269,8 @@ function buildSpatialFigure(anim,opts={}){
   records=[];const R=anim.rig3d(t);body(R,!withMuscles);
   const muscles=muscleFrame(anim,t,index);
   const sideValues=muscles&&anim.muscleProfile?.regions?catalogSideValues(anim.muscleProfile,muscles.values):null;
-  const surfaces=!muscles||!withMuscles?[]:anim.muscleProfile?.regions?catalogMuscleSurfaces(R,anim.muscleProfile,{coarse:true}).filter(f=>project(f.normal)[2]>.035):visibleMuscleSurfaces(R,anim.muscleProfile,camera);
+  const facingCam=f=>{const a=project([0,0,0]),b=project(f.normal);return b[2]-a[2]>.035;};
+  const surfaces=!muscles||!withMuscles?[]:anim.muscleProfile?.regions?(R.frames?mannequinMuscleSurfaces(R,anim.muscleProfile,{coarse:true}).filter(facingCam):catalogMuscleSurfaces(R,anim.muscleProfile,{coarse:true}).filter(f=>project(f.normal)[2]>.035)):visibleMuscleSurfaces(R,anim.muscleProfile,camera);
   if(muscles&&withMuscles)for(const zone of muscleContours(surfaces)){
    const value=sideValues?.[zone.side]?.[zone.id]??muscles.values[zone.id],fill=muscleColor(value);
    queue('path',{d:closedSpline(zone.points.map(p=>project(p).slice(0,2))),fill,class:'muscle-zone','data-muscle':zone.id,'data-side':zone.side,
@@ -232,7 +285,15 @@ function buildSpatialFigure(anim,opts={}){
  for(let i=0;i<=40;i++){compile(i/40,0,false);tracePts.push(project(anim.rig3d(i/40).gripL));}
  const setVectors=anim.catalogId?catalogVectorGroup(svg,anim,camera):vectorGroup(svg,anim,camera);
  if(setVectors.bounds)allBounds.push(...setVectors.bounds);
- const floorCorners=[[-76,187,0],[76,187,0],[76,187,195],[-76,187,195]];
+ let floorCorners=[[-76,187,0],[76,187,0],[76,187,195],[-76,187,195]];
+ if(anim.rig3d(0).frames){
+  /* пол под всей сценой манекена: суставы по фазам и детали инвентаря */
+  const xs=[],zs=[],add=p=>{if(p&&p.length===3){xs.push(p[0]);zs.push(p[2]);}};
+  for(let i=0;i<=4;i++){const R=anim.rig3d(i/4);for(const k of ['hip','head','anL','anR','toeL','toeR','heelL','heelR','gripL','gripR','knL','knR'])add(R[k]);
+   for(const q of R.props){if(q.optional&&opts.has&&!opts.has(q.optional))continue;for(const k of ['a','b','c'])add(q[k]);if(q.pts)q.pts.forEach(add);if(q.size&&q.c){const r=Math.max(...q.size)/2;add(V3.add(q.c,[r,0,r]));add(V3.add(q.c,[-r,0,-r]));}}}
+  const x0=Math.min(...xs)-18,x1=Math.max(...xs)+18,z0=Math.min(...zs)-18,z1=Math.max(...zs)+18;
+  floorCorners=[[x0,186.5,z0],[x1,186.5,z0],[x1,186.5,z1],[x0,186.5,z1]];
+ }
  if(!anim.noGround)allBounds.push(...floorCorners.map(project));
  let minX=Math.min(...allBounds.map(p=>p[0]))-13,maxX=Math.max(...allBounds.map(p=>p[0]))+13,minY=Math.min(...allBounds.map(p=>p[1]))-16,maxY=Math.max(...allBounds.map(p=>p[1]))+10;
  const ratio=opts.ratio||1.15,cx=(minX+maxX)/2,cy=(minY+maxY)/2;let w=maxX-minX,h=maxY-minY;
@@ -240,7 +301,8 @@ function buildSpatialFigure(anim,opts={}){
  svg.setAttribute('viewBox',`${f1(cx-w/2)} ${f1(cy-h/2)} ${f1(w)} ${f1(h)}`);
  if(!anim.noGround){
   el('path',{d:path2(floorCorners.map(project)),class:'spatial-floor'},ground);
-  for(const z of [25,75,125,175]){const a=project([-70,187,z]),b=project([70,187,z]);el('line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1],class:'spatial-grid'},ground);}
+  const fx0=floorCorners[0][0]+6,fx1=floorCorners[1][0]-6,fz0=floorCorners[0][2],fz1=floorCorners[2][2];
+  for(let z=Math.ceil(fz0/50)*50;z<fz1;z+=50){const a=project([fx0,187,z]),b=project([fx1,187,z]);el('line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1],class:'spatial-grid'},ground);}
  }
  trace.setAttribute('d',tracePts.map((p,i)=>`${i?'L':'M'}${f1(p[0])},${f1(p[1])}`).join(' '));
  let nodes=[],jointNodes=[],selectedRegion='all';

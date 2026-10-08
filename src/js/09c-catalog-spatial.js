@@ -278,6 +278,12 @@ function catalogEquipmentRig(rig,id,source){
 const CATALOG_SOURCES=new Map();
 for(const ex of EX){
  const source=catalogSource(ex);CATALOG_SOURCES.set(ex.id,source);
+ /* Упражнения на манекене: запечённые ключи поз (tools/mannequin) и параметрический инвентарь */
+ if(typeof CATALOG_POSES!=='undefined'&&CATALOG_POSES[ex.id]){
+  const rig=GymEquipment.rig(CATALOG_POSES[ex.id]);
+  ex.anim.catalogRig=rig;ex.anim.catalogCameras=[...CATALOG_CAMERAS];ex.anim.catalogId=ex.id;ex.anim.catalogBasis='mannequin';
+  continue;
+ }
  let rig=source.rig3d||catalogPlanarRig(ex,source);
  if(['ytw','reversesnow'].includes(ex.id))rig=catalogProneRig(source);
  if(['widepush','archer'].includes(ex.id))rig=catalogWidePushRig(CATALOG_SOURCES.get('pushup'),ex.id==='archer');

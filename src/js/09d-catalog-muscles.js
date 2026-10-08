@@ -100,10 +100,47 @@ function catalogMuscleSurfaces(R,profile,{coarse=false}={}){
  }
  return faces;
 }
+/* Мышечные зоны на манекене: те же учебные области, но на поверхности нового тела.
+   Корпус: h — высота вдоль оси корпуса от середины тазобедренных суставов, угол от передней линии к боку и спине.
+   Конечности: t — доля сегмента, угол от передней поверхности к латеральной. Дельты лежат на «шапке» плеча. */
+const MANNEQUIN_TORSO_PATCHES=[['pec_clavicular',41,48,.06,1.12],['pec_sternal',34,41,.06,1.22],['pec_costal',29,34,.08,1.02],['abs',3,29,.04,.5],['obliques',3,28,.56,1.36],
+ ['lats',13,39,1.52,2.62],['midback',33,48,2.62,3.1],['lowback',3,24,2.7,3.1],['glute_max',-9,4,1.72,3.1],['glute_lateral',-6,7,1.16,1.7],['trap_upper',47,56,2.05,3.1],['trap_mid',39,47,2.3,2.68]];
+const MANNEQUIN_LIMB_PATCHES={
+ ua:[['bi_long',.33,.84,.05,.8],['bi_short',.33,.84,-.8,-.05],['tri_long',.3,.86,2.5,3.9],['tri_lateral',.3,.85,1.7,2.45]],
+ fa:[['forearms',.12,.76,-1.25,1.25]],
+ th:[['quad_rectus',.15,.8,-.44,.44],['quad_lateral',.12,.82,.48,1.48],['quad_medial',.44,.91,-1.38,-.48],['ham_lateral',.16,.82,1.67,2.71],['ham_medial',.18,.84,2.77,4.45]],
+ sk:[['calf_lateral',.1,.56,2.05,3.12],['calf_medial',.1,.56,3.16,4.22]]
+};
+const MANNEQUIN_DELTS=[['delt_f',-.75,.75],['delt_s',.8,1.75],['delt_r',1.8,2.75]];
+function mannequinMuscleSurfaces(R,profile,{coarse=false}={}){
+ const faces=[],V=Mannequin.V,lift=.25;
+ const grid=(id,side,rows,cols,point)=>{
+  if(!profile.regions[id]?.visible)return;
+  const P=[];for(let r=0;r<=rows;r++){P.push([]);for(let c=0;c<=cols;c++)P[r].push(point(r/rows,c/cols,lift));}
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+   const pts=[P[r][c],P[r][c+1],P[r+1][c+1],P[r+1][c]],mid=point((r+.5)/rows,(c+.5)/cols,0),out=point((r+.5)/rows,(c+.5)/cols,1);
+   faces.push({id,parent:profile.regions[id].parent,side,points:pts,normal:V.unit(V.sub(out,mid)),anchor:mid});
+  }
+ };
+ const step=coarse?2:1;
+ for(const side of ['L','R']){
+  for(const[id,h0,h1,a0,a1]of MANNEQUIN_TORSO_PATCHES)grid(id,side,Math.max(1,Math.round((h1-h0)/(2.5*step))),Math.max(2,Math.round((a1-a0)/(.13*step))),(u,v,e)=>Mannequin.torsoPoint(R,h0+(h1-h0)*u,side,a0+(a1-a0)*v,e));
+  for(const[kind,list]of Object.entries(MANNEQUIN_LIMB_PATCHES))for(const[id,t0,t1,a0,a1]of list)
+   grid(id,side,Math.max(1,Math.round((t1-t0)/(.06*step))),Math.max(2,Math.round((a1-a0)/(.2*step))),(u,v,e)=>Mannequin.limbPoint(R,kind,side,t0+(t1-t0)*u,a0+(a1-a0)*v,e));
+  /* дельтовидная: сектор «шапки» плечевого сустава, от верха вниз на ~95° */
+  const ua=R.frames['ua'+side],g=side==='L'?1:-1,cap=V.add(V.add(R['sh'+side],ua.y,-1.4),ua.x,g*.7),lat=V.scale(ua.x,g),r=Mannequin.CAPS.sh;
+  for(const[id,a0,a1]of MANNEQUIN_DELTS)grid(id,side,coarse?3:5,coarse?3:6,(u,v,e)=>{
+   const polar=(.18+.85*u)*Math.PI/2*1.05,az=a0+(a1-a0)*v,dir=V.add(V.add(V.scale(ua.y,Math.cos(polar)),ua.z,Math.sin(polar)*Math.cos(az)),lat,Math.sin(polar)*Math.sin(az));
+   return V.add(cap,dir,r+e);
+  });
+ }
+ return faces;
+}
 function catalogFigureAnim(anim){
- return {...anim,rig3d:anim.catalogRig,muscleProfile:anim.catalogProfile,camera:'above',cameras:anim.catalogCameras,sample:t=>({spatialT:t}),catalogRig:null};
+ return {...anim,noGround:anim.catalogBasis==='mannequin'?false:anim.noGround,rig3d:anim.catalogRig,muscleProfile:anim.catalogProfile,camera:'above',cameras:anim.catalogCameras,sample:t=>({spatialT:t}),catalogRig:null};
 }
 function catalogVolumeData(anim,t,index,has,coarse=false){
  const R=anim.catalogRig(t),state=muscleFrame(anim,t,index),profile=motionProfile(anim);
+ if(R.frames)return{exerciseId:anim.catalogId,pose:R,body:Mannequin.bodyData(R),surfaces:mannequinMuscleSurfaces(R,profile,{coarse}),values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>!s.optional||!has||has(s.optional)),torsoRings:[],limbProfiles:{}};
  return{exerciseId:anim.catalogId,pose:R,surfaces:catalogMuscleSurfaces(R,profile,{coarse}),values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>!s.optional||!has||has(s.optional)),torsoRings:CATALOG_RINGS,limbProfiles:CATALOG_LIMB_PROFILES};
 }
