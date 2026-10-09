@@ -70,3 +70,24 @@ test('3D joint-stress marks appear at the loaded joints, show through the body, 
   figure.setStress(false);assert.equal(visible().length,0,'switched off');
  }finally{figure?.dispose();r.dom.window.close();}
 });
+test('studio light: semantic colours bypass tone mapping, the body casts but never receives shadows',async()=>{
+ const THREE=await import('three'),{createCatalogScene,STUDIO}=await import('../src/volume/scene.mjs');
+ const m=loadModel(),{catalogVolumeData,muscleColor}=m.get('({catalogVolumeData,muscleColor})'),anim=m.EX.find(e=>e.id==='bbbench').anim;
+ const view=createCatalogScene(catalogVolumeData(anim,.5,0));
+ try{
+  view.apply(catalogVolumeData(anim,.5,0),{color:muscleColor,muscles:true,stress:true,joints:true});
+  assert.equal(view.studio({}),false,'without a real WebGL renderer the scene stays plain');
+  const renderer={isWebGLRenderer:true,shadowMap:{}};assert.equal(view.studio(renderer),true);
+  assert.equal(renderer.toneMapping,THREE.NeutralToneMapping);assert.equal(renderer.shadowMap.enabled,!!STUDIO.shadow);
+  assert(STUDIO.exposure<1,'muted a little so lit muscles keep their colour');
+  const s=view.scene,dots=s.getObjectByName('joint-dots'),stress=s.getObjectByName('joint-stress');
+  dots.traverse(o=>{if(o.isMesh){assert.equal(o.material.toneMapped,false,'joint dots keep their exact colour');assert.equal(o.castShadow,false,'markers cast no shadow');}});
+  view.apply(catalogVolumeData(m.EX.find(e=>e.id==='squat').anim,1,1),{color:muscleColor,muscles:true,stress:true});
+  stress.traverse(o=>{if(o.isMesh)assert.equal(o.material.toneMapped,false,'red joint marks are not tone-mapped');});
+  const body=s.getObjectByName('mannequin'),regions=s.getObjectByName('regions');
+  for(const g of [body,regions])g.traverse(o=>{if(o.isMesh)assert.equal(o.receiveShadow,false,'no shadow falls on the body or muscle colour: '+o.name);});
+  assert.equal(s.getObjectByName('floor').receiveShadow,true,'the floor shows contact shadows');
+  assert(body.getObjectByName('torso').castShadow,'the body casts a shadow');
+  view.setShadows(false);assert.equal(renderer.shadowMap.enabled,false,'slow graphics: shadows switch off');
+ }finally{view.dispose();}
+});

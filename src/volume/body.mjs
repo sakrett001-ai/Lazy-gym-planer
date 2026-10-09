@@ -32,7 +32,9 @@ function handGeometry(shape){
  }
  return geos;
 }
-export function createMannequinBody(root,first,{skin,joint,sole,mesh}){
+export function createMannequinBody(root,first,{skin,joint,sole,mesh:sceneMesh}){
+ /* тело тень отбрасывает, но не принимает: тень не ложится на цвет мышц (и на кисти, пересобираемые по хвату) */
+ const mesh=(...a)=>{const o=sceneMesh(...a);o.receiveShadow=false;return o;};
  const B=first.body,parts={},group=new THREE.Group();group.name='mannequin';root.add(group);
  const torsoRows=B.torso.length+1;
  parts.torso={mesh:mesh(group,ringGrid(torsoRows,B.torso[0].length),skin,'torso')};

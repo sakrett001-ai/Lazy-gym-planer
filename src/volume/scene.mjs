@@ -31,7 +31,8 @@ export const STUDIO={
  environment:0,                              /* отражения студии на металле (PMREM). Выключены: на программном GL кадр в 10–20 раз дороже,
                                                 на телефонах не измерено; металл держится на бликах трёх источников */
  shadow:'pcf',                               /* 'soft' | 'pcf' | false */
- exposure:1
+ exposure:.93,                               /* на 7 % тише: сверху освещённые мышцы не выцветают */
+ muscleGlow:.28                              /* собственное свечение мышц: держит цвет в тени, не пересвечивает на свету */
 };
 /* радиальная растяжка пола без DOM: светлое пятно под сценой, к краям — в цвет фона */
 function radialTexture(inner,outer,size=128){
@@ -207,12 +208,12 @@ export function createCatalogScene(first,{coarse=false}={}){
   }
   const groups=new Map();for(const f of data.surfaces){const key=f.id+':'+f.side;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(f);}
   for(const[key,faces]of groups){
-   let o=regionMeshes.get(key);if(!o){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(faces.length*6*3),3));const m=material('#a7b3c6',{roughness:.55});m.polygonOffset=true;m.polygonOffsetFactor=-1;m.polygonOffsetUnits=-1;o=mesh(regionsGroup,g,m,key);o.userData={region:faces[0].id,side:faces[0].side};regionMeshes.set(key,o);}
+   let o=regionMeshes.get(key);if(!o){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(faces.length*6*3),3));const m=material('#a7b3c6',{roughness:.82});m.polygonOffset=true;m.polygonOffsetFactor=-1;m.polygonOffsetUnits=-1;o=mesh(regionsGroup,g,m,key);o.receiveShadow=false;o.userData={region:faces[0].id,side:faces[0].side};regionMeshes.set(key,o);}
    if(o.geometry.attributes.position.count!==faces.length*6){o.geometry.dispose();o.geometry=new THREE.BufferGeometry();o.geometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array(faces.length*6*3),3));}
    let i=0;const p=o.geometry.attributes.position;for(const f of faces)for(const j of [0,1,2,0,2,3])p.setXYZ(i++,...world(f.points[j]));p.needsUpdate=true;o.geometry.computeVertexNormals();o.geometry.computeBoundingSphere();o.geometry.computeBoundingBox();
    const id=faces[0].id,side=faces[0].side,active=options.muscles!==false&&(!options.selected||options.selected==='all'||options.selected===id||options.selected===faces[0].parent);o.visible=options.muscles!==false;o.material.color.set(active?options.color(data.sideValues?.[side]?.[id]??data.values[id]??.28):'#a0adc0');
    /* собственное свечение участка: жёлтый и оранжевый в тени не уходят в коричневый */
-   if(active)o.material.emissive.copy(o.material.color).multiplyScalar(.34);else o.material.emissive.setRGB(0,0,0);
+   if(active)o.material.emissive.copy(o.material.color).multiplyScalar(STUDIO.muscleGlow);else o.material.emissive.setRGB(0,0,0);
   }
   if(propNodes.length!==data.props.length||propNodes.some((n,i)=>n.key!==(isNewProp(data.props[i])?propKey(data.props[i]):data.props[i].kind))){
    equipment.traverse(o=>o.geometry?.dispose());equipment.clear();propNodes=data.props.map(propNode);
@@ -254,9 +255,8 @@ export function createCatalogScene(first,{coarse=false}={}){
     const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;scene.background=t;studioTextures.push(t);}
   }
   key.castShadow=!!STUDIO.shadow;key.shadow.mapSize.set(1024,1024);key.shadow.bias=-.0004;key.shadow.normalBias=.02;key.shadow.radius=4;
-  /* тело тень отбрасывает, но не принимает */
-  const bodyParts=new Set();for(const p of Object.values(parts))p?.mesh?.traverse?.(o=>bodyParts.add(o));regionsGroup.traverse(o=>bodyParts.add(o));
-  scene.traverse(o=>{if(o.isMesh&&bodyParts.has(o))o.receiveShadow=false;});
+  /* тело тень отбрасывает, но не принимает (манекен и мышцы — при создании, здесь — запасная фигура без манекена) */
+  if(!mannequin)for(const p of Object.values(parts))p?.mesh?.traverse?.(o=>{if(o.isMesh)o.receiveShadow=false;});
   /* точки суставов — разметка, а не предметы: тени не отбрасывают */
   scene.getObjectByName('joint-dots')?.traverse(o=>{o.castShadow=false;o.receiveShadow=false;});
   fitShadow();return true;
