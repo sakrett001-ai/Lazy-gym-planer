@@ -26,6 +26,7 @@ function bakeOne(id, spec) {
   const out = { keys, equipment: spec.equipment || [], contacts: spec.contacts || [] };
   if (spec.gripRadius) out.gripRadius = spec.gripRadius;
   if (spec.dynamic) out.dynamic = spec.dynamic;
+  if (spec.loop) out.loop = true;
   if (spec.laterality) out.laterality = spec.laterality;
   return out;
 }

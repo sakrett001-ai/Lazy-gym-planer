@@ -341,7 +341,7 @@ function build(list,R){
 function anchors(list){return staticParts(list).anchors;}
 /* ---------- Риг упражнения: ключи позы → поза каталога + инвентарь ---------- */
 function rig(entry){
- const track=M.makeTrack(entry.keys);
+ const track=M.makeTrack(entry.keys,{loop:!!entry.loop});
  return t=>{
   if(!Number.isFinite(t)||t<0||t>1)throw Error('Pose must be in [0,1]');
   const k=track(t),q=M.unpack(k.v,k.hands);if(entry.gripRadius)q.gripRadius=entry.gripRadius;

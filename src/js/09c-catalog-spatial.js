@@ -282,6 +282,7 @@ for(const ex of EX){
  if(typeof CATALOG_POSES!=='undefined'&&CATALOG_POSES[ex.id]){
   const rig=GymEquipment.rig(CATALOG_POSES[ex.id]);
   ex.anim.catalogRig=rig;ex.anim.catalogCameras=[...CATALOG_CAMERAS];ex.anim.catalogId=ex.id;ex.anim.catalogBasis='mannequin';
+  if(CATALOG_POSES[ex.id].loop)ex.anim.loop=true;
   continue;
  }
  let rig=source.rig3d||catalogPlanarRig(ex,source);

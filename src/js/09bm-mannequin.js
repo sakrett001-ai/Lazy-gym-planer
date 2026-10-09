@@ -277,11 +277,13 @@ function monotone(ts,ys){
  for(let i=0;i<n-1;i++){if(Math.abs(d[i])<1e-12){m[i]=m[i+1]=0;continue;}const a=m[i]/d[i],b=m[i+1]/d[i],h=a*a+b*b;if(h>9){const k=3/Math.sqrt(h);m[i]=k*a*d[i];m[i+1]=k*b*d[i];}}
  return m;
 }
-function makeTrack(keys){
- /* keys: [{t, v:[...pack], hands:{L,R}}], v упакованы; кватернион корня приведён к одной полусфере */
+function makeTrack(keys,{loop=false}={}){
+ /* keys: [{t, v:[...pack], hands:{L,R}}], v упакованы; кватернион корня приведён к одной полусфере.
+    loop — замкнутый цикл (ключ t=1 совпадает с t=0): касательные на концах берутся через стык, без остановки. */
  const ts=keys.map(k=>k.t),n=keys[0].v.length,vals=keys.map(k=>k.v.slice());
  for(let i=1;i<vals.length;i++){const a=vals[i-1],b=vals[i];if(a[3]*b[3]+a[4]*b[4]+a[5]*b[5]+a[6]*b[6]<0)for(let j=3;j<7;j++)b[j]=-b[j];}
  const slopes=[];for(let j=0;j<n;j++)slopes.push(keys.length>1?monotone(ts,vals.map(v=>v[j])):[0]);
+ if(loop&&keys.length>2){const m=keys.length-1;for(let j=0;j<n;j++){const d0=(vals[1][j]-vals[0][j])/(ts[1]-ts[0]),d1=(vals[m][j]-vals[m-1][j])/(ts[m]-ts[m-1]),s=d0*d1<=0?0:(d0+d1)/2;slopes[j][0]=slopes[j][m]=s;}}
  return t=>{
   if(keys.length===1)return{v:vals[0].slice(),hands:keys[0].hands};
   t=clamp(t,ts[0],ts.at(-1));let i=0;while(i<ts.length-2&&t>ts[i+1])i++;
