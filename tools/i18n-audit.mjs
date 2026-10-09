@@ -72,6 +72,20 @@ await scan('place delete armed, equipment open');
 await run(`(()=>{placeDel=false;S.place='gym';S.adapt=null;ensurePlaces(S);setFocus('biceps');regen();})()`);
 await scan('focus chip');
 await run(`(()=>{setFocus(null);regen();})()`);
+/* свой план: пустой, с правкой подходов, список «по мышцам» целиком, все форматы, место без инвентаря */
+step('2b. свой план');
+await run(`(()=>{Object.assign(S,{view:'plan',mode:'custom',format:'classic',goal:'mass',level:'mid',groups:['chest','back','shoulders']});S.fav=['bbbench','latpull','squat'];S.customs=[];S.custom=null;ensureCustoms(S);cpTab=null;regen();})()`);
+await scan('custom empty');
+await run(`(()=>{S.customs[0].items=[{id:'bbbench',sets:5,reps:'5',rest:180},{id:'dbfly'},{id:'ohp'},{id:'latpull'}];cpOpen=new Set([0,1]);regen();})()`);
+await scan('custom plan', await run('planText()'));
+await run(`(()=>{cpTab='groups';renderPlan();document.querySelectorAll('[data-cp-more]').forEach(b=>b.click());})()`);
+await scan('custom add by muscles');
+for (const format of ['superset', 'circuit', 'static']) { await run(`(()=>{S.format='${format}';cpOpen=new Set([0]);regen();})()`); await scan('custom ' + format, await run('planText()')); }
+await run(`(()=>{S.format='classic';S.place='street';ensurePlaces(S);regen();})()`);
+await scan('custom on the street');
+await run(`(()=>{S.customs.push({id:'c2',name:'Legs',items:[]});S.custom='c2';cpDel=true;renderSetup();})()`);
+await scan('custom second plan, delete armed');
+await run(`(()=>{cpDel=false;S.customs=S.customs.slice(0,1);S.custom=S.customs[0].id;S.place='gym';ensurePlaces(S);S.mode='single';cpTab=null;regen();})()`);
 /* замены в карточке до исчерпания */
 for (let i = 0; i < 6; i++) { const b = await page.$('[data-swap]'); if (!b) break; await b.click(); await page.waitForTimeout(80); }
 await scan('swaps');
@@ -79,7 +93,7 @@ await scan('swaps');
 step('3. атлас');
 await run(`(()=>{S.view='atlas';renderSetup();renderPlan();})()`);
 for (const place of ['gym', 'home', 'street']) for (const m of await run('ATLAS_ORDER')) {
-  await run(`(()=>{S.place='${place}';ensurePlaces(S);S.atlasM='${m}';atlasEx=null;renderAtlas();document.querySelectorAll('.at-more').forEach(n=>n.hidden=false);document.querySelectorAll('.at-other').forEach(d=>d.open=true);})()`);
+  await run(`(()=>{S.place='${place}';ensurePlaces(S);S.atlasM='${m}';atlasEx=null;renderAtlas();document.querySelectorAll('.at-more').forEach(n=>n.hidden=false);document.querySelectorAll('.at-other').forEach(d=>d.open=true);const a=document.querySelector('#at-keep [data-cp-add]');if(a)a.click();})()`);
   await scan(`atlas ${place}/${m}`);
 }
 await run(`(()=>{S.place='gym';ensurePlaces(S);})()`);
