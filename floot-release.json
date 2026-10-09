@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "repository": "sakrett001-ai/Lazy-gym-planer",
+  "sourceBranch": "main",
+  "sourceCommit": "efd87ce4ed776f1409f9f47f3dd66755ec8ca7a1",
+  "version": "4.7.0",
+  "checks": "passed",
+  "builtAt": "2026-10-09T20:11:09.464Z",
+  "documents": {
+    "ru": {
+      "path": "floot/releases/efd87ce4ed776f1409f9f47f3dd66755ec8ca7a1/planner-ru.html",
+      "sha256": "3064a2d94733c0138c8d1f1ee2aceddb7cebedb089c0a493648a4d4be5034c9b",
+      "bytes": 1854889
+    },
+    "en": {
+      "path": "floot/releases/efd87ce4ed776f1409f9f47f3dd66755ec8ca7a1/planner-en.html",
+      "sha256": "e6e40db81fe6c60a0b66f101427d204df4bcc645198503e6a26752b0419c5411",
+      "bytes": 1781154
+    }
+  }
+}
