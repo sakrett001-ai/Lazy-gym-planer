@@ -62,7 +62,7 @@ for (const [lang, L] of Object.entries(LANGS)) {
     css = translateCss(css, dict, missing); js = translateJs(js, dict, missing); body = translateHtml(body, dict, missing); pwa = translateJs(pwa, dict, missing);
     if (missing.size) report.push(`${lang}: не переведено ${missing.size} строк (node i18n/extract.js ${lang})`);
   }
-  js += L.patch + `\nwindow.PODHOD_VERSION='${VERSION}';window.PODHOD_LANG='${lang}';\n`;
+  js += L.patch + `\nwindow.PODHOD_VERSION='${VERSION}';window.PODHOD_BUILD='${ASSET_VERSION}';window.PODHOD_LANG='${lang}';\n`;
   body = body.replace(/__VERSION__/g, VERSION).replace(/__LANG_HREF__/g, L.other.href).replace(/__LANG_LABEL__/g, L.other.label).replace(/__LANG_TITLE__/g, L.other.title);
   const manifest = {...manifestSrc, name:L.manifestName, description:L.manifestDesc, lang, scope:up || './', icons:manifestSrc.icons.map(i => ({...i, src:up + i.src + '?v=' + ASSET_VERSION}))};
 

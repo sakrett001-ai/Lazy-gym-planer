@@ -106,6 +106,30 @@ function spatialPose(anim,t){
  for(const[k,v]of Object.entries(R))if(Array.isArray(v)&&v.length===3&&v.every(Number.isFinite))J[k]=project(v).slice(0,2);
  J.sh=project(R.sh).slice(0,2);J.hip=project(R.hip).slice(0,2);return J;
 }
+/* Рамки кадров SVG-фигур: «упражнение|ракурс|пропорция|пол|видимый инвентарь» → {viewBox, floor, trace}.
+   Хранятся и между запусками (localStorage), пока не сменится сборка: хэш сборки — PODHOD_BUILD. */
+const SPATIAL_FRAMES=new Map(),SPATIAL_FRAMES_KEY='podhod.frames.v1';
+let spatialFramesLoaded=false,spatialFramesSave=0;
+function spatialFramesBuild(){return typeof window!=='undefined'&&window.PODHOD_BUILD||null;}
+function spatialFrameGet(key){
+ if(!spatialFramesLoaded){
+  spatialFramesLoaded=true;
+  try{const saved=JSON.parse(localStorage.getItem(SPATIAL_FRAMES_KEY)||'null');if(saved&&saved.build&&saved.build===spatialFramesBuild())for(const[k,v]of Object.entries(saved.frames||{}))if(!SPATIAL_FRAMES.has(k)&&v&&typeof v.viewBox==='string'&&typeof v.trace==='string'&&Array.isArray(v.floor)&&v.floor.length===4)SPATIAL_FRAMES.set(k,v);}catch(e){}
+ }
+ return SPATIAL_FRAMES.get(key)||null;
+}
+/* запись пачкой через полторы секунды или при уходе со страницы; запись другой сборки заменяется целиком, объём ограничен */
+function spatialFramesFlush(){
+ clearTimeout(spatialFramesSave);spatialFramesSave=0;
+ const build=spatialFramesBuild();if(!build)return;
+ try{localStorage.setItem(SPATIAL_FRAMES_KEY,JSON.stringify({build,frames:Object.fromEntries([...SPATIAL_FRAMES].slice(-240))}));}catch(e){}
+}
+function spatialFrameSet(key,frame){
+ SPATIAL_FRAMES.set(key,frame);
+ if(!spatialFramesBuild()||spatialFramesSave)return;
+ if(!spatialFramesSave&&typeof addEventListener==='function'&&!spatialFrameSet.hooked){spatialFrameSet.hooked=true;addEventListener('pagehide',()=>{if(spatialFramesSave)spatialFramesFlush();});}
+ spatialFramesSave=setTimeout(spatialFramesFlush,1500);
+}
 function buildSpatialFigure(anim,opts={}){
  const camera=opts.camera||anim.camera||'side',project=camera3(camera),paletteRoot=el('svg',{}),palette=athletePalette(paletteRoot);
  const svg=el('svg',{class:'fig spatial-figure',role:'img','aria-label':`${opts.label||''} — ${CAMERA3[camera].label}`});
@@ -213,9 +237,10 @@ function buildSpatialFigure(anim,opts={}){
  }
  /* Манекен: силуэты сегментов строятся из той же поверхности, что и объёмная сцена */
  function mannequinBody(R,boundsOnly){
+  /* для рамки — только нужные точки поверхности (все ряды туловища, каждый третий ряд конечностей) */
+  if(boundsOnly){const B=Mannequin.boundsSurface(R);for(const row of B.torso)allBounds.push(...row.map(project));for(const rows of Object.values(B.limbs))for(const row of rows)allBounds.push(...row.map(project));allBounds.push(project(V3.add(R.head,R.headU,12)));return;}
   const B=Mannequin.bodyData(R),H=B.torsoHeights,every=(rows,k)=>rows.filter((_,i)=>i%k===0||i===rows.length-1);
   const L=(f,p)=>[f.o[0]+f.x[0]*p[0]+f.y[0]*p[1]+f.z[0]*p[2],f.o[1]+f.x[1]*p[0]+f.y[1]*p[1]+f.z[1]*p[2],f.o[2]+f.x[2]*p[0]+f.y[2]*p[1]+f.z[2]*p[2]];
-  if(boundsOnly){for(const row of B.torso)allBounds.push(...row.map(project));for(const rows of Object.values(B.limbs))for(const row of every(rows,3))allBounds.push(...row.map(project));allBounds.push(project(V3.add(R.head,R.headU,12)));return;}
   const part=(lo,hi)=>B.torso.filter((_,i)=>H[i]>=lo&&H[i]<=hi).flat();
   silhouette(part(-9,10),palette.shorts,{'data-part':'pelvis'});silhouette(part(8,26),palette.kit,{'data-part':'waist'});silhouette(part(23,56),palette.kit,{'data-part':'chest'});
   silhouette(B.neck.flat(),palette.skin,{'data-part':'neck'});
@@ -289,30 +314,45 @@ function buildSpatialFigure(anim,opts={}){
   R.props.forEach(prop);return{R,muscles,records:records.sort((a,b)=>a.depth-b.depth)};
  }
  // Bounds include equipment, every sampled pose, and the floor; camera stays still.
- for(let i=0;i<=40;i++){compile(i/40,0,false);tracePts.push(project(anim.rig3d(i/40).gripL));}
+ /* Рамка кадра (viewBox, пол, след хвата) по 41 положению. Считается один раз на упражнение, ракурс, пропорцию
+    и набор видимого инвентаря и запоминается (SPATIAL_FRAMES, между запусками — в localStorage по хэшу сборки).
+    opts.frameOnly: только рамка, по частям — figureFrameJob() досчитывает её в простое, пока карточка не на экране. */
+ const frameKey=anim.catalogId?[anim.catalogId,camera,opts.ratio||1.15,anim.noGround?1:0,anim.rig3d(0).props.map(q=>GymEquipment.visible(q,opts.has)?1:0).join('')].join('|'):null;
+ let framed=frameKey?spatialFrameGet(frameKey):null,frameNext=0;
  const setVectors=anim.catalogId?catalogVectorGroup(svg,anim,camera):vectorGroup(svg,anim,camera);
- if(setVectors.bounds)allBounds.push(...setVectors.bounds);
- let floorCorners=[[-76,187,0],[76,187,0],[76,187,195],[-76,187,195]];
- if(anim.rig3d(0).frames){
-  /* пол под всей сценой манекена: суставы по фазам и детали инвентаря */
-  const xs=[],zs=[],add=p=>{if(p&&p.length===3){xs.push(p[0]);zs.push(p[2]);}};
-  for(let i=0;i<=4;i++){const R=anim.rig3d(i/4);for(const k of ['hip','head','anL','anR','toeL','toeR','heelL','heelR','gripL','gripR','knL','knR'])add(R[k]);
-   for(const q of R.props){if(!GymEquipment.visible(q,opts.has))continue;for(const k of ['a','b','c'])add(q[k]);if(q.pts)q.pts.forEach(add);if(q.size&&q.c){const r=Math.max(...q.size)/2;add(V3.add(q.c,[r,0,r]));add(V3.add(q.c,[-r,0,-r]));}}}
-  const x0=Math.min(...xs)-18,x1=Math.max(...xs)+18,z0=Math.min(...zs)-18,z1=Math.max(...zs)+18;
-  floorCorners=[[x0,186.5,z0],[x1,186.5,z0],[x1,186.5,z1],[x0,186.5,z1]];
+ function frameSample(){const{R}=compile(frameNext/40,0,false);tracePts.push(project(R.gripL));frameNext++;}
+ function frameFinish(){
+  if(setVectors.bounds)allBounds.push(...setVectors.bounds);
+  let floor=[[-76,187,0],[76,187,0],[76,187,195],[-76,187,195]];
+  if(anim.rig3d(0).frames){
+   /* пол под всей сценой манекена: суставы по фазам и детали инвентаря */
+   const xs=[],zs=[],add=p=>{if(p&&p.length===3){xs.push(p[0]);zs.push(p[2]);}};
+   for(let i=0;i<=4;i++){const R=anim.rig3d(i/4);for(const k of ['hip','head','anL','anR','toeL','toeR','heelL','heelR','gripL','gripR','knL','knR'])add(R[k]);
+    for(const q of R.props){if(!GymEquipment.visible(q,opts.has))continue;for(const k of ['a','b','c'])add(q[k]);if(q.pts)q.pts.forEach(add);if(q.size&&q.c){const r=Math.max(...q.size)/2;add(V3.add(q.c,[r,0,r]));add(V3.add(q.c,[-r,0,-r]));}}}
+   const x0=Math.min(...xs)-18,x1=Math.max(...xs)+18,z0=Math.min(...zs)-18,z1=Math.max(...zs)+18;
+   floor=[[x0,186.5,z0],[x1,186.5,z0],[x1,186.5,z1],[x0,186.5,z1]];
+  }
+  if(!anim.noGround)allBounds.push(...floor.map(project));
+  let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+  for(const p of allBounds){if(p[0]<x0)x0=p[0];if(p[0]>x1)x1=p[0];if(p[1]<y0)y0=p[1];if(p[1]>y1)y1=p[1];}
+  const minX=x0-13,maxX=x1+13,minY=y0-16,maxY=y1+10;
+  const ratio=opts.ratio||1.15,cx=(minX+maxX)/2,cy=(minY+maxY)/2;let w=maxX-minX,h=maxY-minY;
+  if(w/h<ratio)w=h*ratio;else h=w/ratio;
+  framed={viewBox:`${f1(cx-w/2)} ${f1(cy-h/2)} ${f1(w)} ${f1(h)}`,floor,trace:tracePts.map((p,i)=>`${i?'L':'M'}${f1(p[0])},${f1(p[1])}`).join(' ')};
+  allBounds.length=0;if(frameKey)spatialFrameSet(frameKey,framed);
+  return framed;
  }
- if(!anim.noGround)allBounds.push(...floorCorners.map(project));
- let minX=Math.min(...allBounds.map(p=>p[0]))-13,maxX=Math.max(...allBounds.map(p=>p[0]))+13,minY=Math.min(...allBounds.map(p=>p[1]))-16,maxY=Math.max(...allBounds.map(p=>p[1]))+10;
- const ratio=opts.ratio||1.15,cx=(minX+maxX)/2,cy=(minY+maxY)/2;let w=maxX-minX,h=maxY-minY;
- if(w/h<ratio)w=h*ratio;else h=w/ratio;
- svg.setAttribute('viewBox',`${f1(cx-w/2)} ${f1(cy-h/2)} ${f1(w)} ${f1(h)}`);
+ if(opts.frameOnly)return{key:frameKey,done:!!framed,step(n=1){if(this.done)return true;for(let k=0;k<n&&frameNext<=40;k++)frameSample();if(frameNext>40){frameFinish();this.done=true;}return this.done;}};
+ if(!framed){while(frameNext<=40)frameSample();frameFinish();}
+ svg.setAttribute('viewBox',framed.viewBox);
  if(!anim.noGround){
+  const floorCorners=framed.floor;
   el('path',{d:path2(floorCorners.map(project)),class:'spatial-floor'},ground);
   const fx0=floorCorners[0][0]+6,fx1=floorCorners[1][0]-6,fz0=floorCorners[0][2],fz1=floorCorners[2][2];
   for(let z=Math.ceil(fz0/50)*50;z<fz1;z+=50){const a=project([fx0,187,z]),b=project([fx1,187,z]);el('line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1],class:'spatial-grid'},ground);}
  }
- trace.setAttribute('d',tracePts.map((p,i)=>`${i?'L':'M'}${f1(p[0])},${f1(p[1])}`).join(' '));
- let nodes=[],jointNodes=[],selectedRegion='all';
+ trace.setAttribute('d',framed.trace);
+ let nodes=[],nodeAttrs=[],jointNodes=[],selectedRegion='all';
  /* метки нагрузки на суставы — поверх всего рисунка */
  const stressLayer=el('g',{class:'stress-marks','aria-hidden':'true'},svg),stressNodes=[];
  let stressOn=(opts.stress??(typeof motionPrefs!=='undefined'?motionPrefs.stress:true))!==false,lastT=opts.t||0,lastFrame=null;
@@ -324,8 +364,9 @@ function buildSpatialFigure(anim,opts={}){
  function at(t,frame){
   lastT=t;lastFrame=frame||null;
   const {R,muscles,records}=compile(t,frame?.index||0);
-  records.forEach((s,i)=>{let node=nodes[i];if(!node||node.tagName!==s.tag){const replacement=el(s.tag,{});if(node)node.replaceWith(replacement);else scene.appendChild(replacement);node=nodes[i]=replacement;}for(const attr of [...node.attributes])if(!(attr.name in s.attrs))node.removeAttribute(attr.name);for(const[k,v]of Object.entries(s.attrs))node.setAttribute(k,v);});
-  for(let i=records.length;i<nodes.length;i++)nodes[i].remove();nodes.length=records.length;
+  /* атрибут пишется, только если он изменился с прошлого кадра: у неподвижного инвентаря и цветов — почти никогда */
+  records.forEach((s,i)=>{let node=nodes[i];if(!node||node.tagName!==s.tag){const replacement=el(s.tag,{});if(node)node.replaceWith(replacement);else scene.appendChild(replacement);node=nodes[i]=replacement;nodeAttrs[i]=null;}const old=nodeAttrs[i];for(const attr of [...node.attributes])if(!(attr.name in s.attrs))node.removeAttribute(attr.name);for(const k in s.attrs){const v=s.attrs[k];if(!old||old[k]!==v||!node.hasAttribute(k))node.setAttribute(k,v);}nodeAttrs[i]=s.attrs;});
+  for(let i=records.length;i<nodes.length;i++)nodes[i].remove();nodes.length=nodeAttrs.length=records.length;
   const names=['shL','elL','wrL','hipL','knL','anL','shR','elR','wrR','hipR','knR','anR'];
   names.forEach((name,i)=>{const p=project(R[name]),node=jointNodes[i]||(jointNodes[i]=el('circle',{r:2.1,class:'joint-dot'},dots));node.setAttribute('cx',f1(p[0]));node.setAttribute('cy',f1(p[1]));});
   svg.dataset.pose=String(t);if(muscles)svg.dataset.musclePhase=muscles.phase;allBounds.length=0;setRegion(selectedRegion);

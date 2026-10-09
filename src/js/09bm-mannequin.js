@@ -341,8 +341,10 @@ function spineFrame(R,h){
  const ax=axesOf(seg);return{c:pointOn(seg,h),...ax};
 }
 /* Точка поверхности корпуса: side — 'L'/'R', ang ∈ [0, π] от передней линии через бок к спине */
-function torsoPoint(R,h,side,ang,extra=0){
- const f=spineFrame(R,h),[w,a,b]=sectionAt(h),c=Math.cos(ang),s=Math.sin(ang),lat=V.scale(f.x,SIGN[side]); /* f.x — левая сторона тела */
+function torsoPoint(R,h,side,ang,extra=0){return torsoPointIn(R,h,side,ang,extra,spineFrame(R,h),sectionAt(h));}
+/* то же по готовой рамке сечения: сетка тела считает рамку и профиль один раз на ряд, а не на каждую точку */
+function torsoPointIn(R,h,side,ang,extra,f,[w,a,b]){
+ const c=Math.cos(ang),s=Math.sin(ang),lat=V.scale(f.x,SIGN[side]); /* f.x — левая сторона тела */
  let p=V.add(V.add(f.c,f.z,((c>=0?a:b)+extra)*c),lat,(w+extra)*s);
  /* надплечья следуют за поднятием и протракцией плечевого пояса */
  if(h>38&&R.girdle&&R.frames.thorax){
@@ -364,30 +366,55 @@ function limbAxes(R,kind,side,t){
  const f=fr[kind+side];return{front:f.z,lat:V.scale(f.x,g),axis:V.scale(f.y,-1)};
 }
 function limbPoint(R,kind,side,t,ang,extra=0){
- const[,a,b]=LIMB_DEF[kind],A=R[a+side],Bp=R[b+side],ax=limbAxes(R,kind,side,t),[rf,rb,rl,rm]=profileAt(LIMBS[kind],t),c=Math.cos(ang),s=Math.sin(ang);
- return V.add(V.add(V.mix(A,Bp,t),ax.front,((c>=0?rf:rb)+extra)*c),ax.lat,((s>=0?rl:rm)+extra)*s);
+ const[,a,b]=LIMB_DEF[kind];return limbPointIn(V.mix(R[a+side],R[b+side],t),limbAxes(R,kind,side,t),profileAt(LIMBS[kind],t),ang,extra);
+}
+/* ряд точек на одном сечении: рамка, оси и профиль считаются один раз (сетки тела и мышечных зон) */
+function torsoRow(R,h,side){const f=spineFrame(R,h),sec=sectionAt(h);return(ang,extra=0)=>torsoPointIn(R,h,side,ang,extra,f,sec);}
+function limbRow(R,kind,side,t){const[,a,b]=LIMB_DEF[kind],center=V.mix(R[a+side],R[b+side],t),ax=limbAxes(R,kind,side,t),prof=profileAt(LIMBS[kind],t);return(ang,extra=0)=>limbPointIn(center,ax,prof,ang,extra);}
+/* то же по готовому сечению (центр, оси, профиль) — для сетки, где сечение общее для ряда точек */
+function limbPointIn(center,ax,[rf,rb,rl,rm],ang,extra=0){
+ const c=Math.cos(ang),s=Math.sin(ang);
+ return V.add(V.add(center,ax.front,((c>=0?rf:rb)+extra)*c),ax.lat,((s>=0?rl:rm)+extra)*s);
 }
 /* Шея: ось — от основания (на уровне верхнего сечения корпуса, впереди остистых отростков) к точке внутри черепа.
    Нижние 40 % плавно переходят из верхнего сечения корпуса (надплечья с поднятием плечевого пояса) в круглую шею:
    поверхность непрерывна, без уступа и открытого края сзади. ang: 0 — спереди, π/2 — левая сторона, π — сзади. */
-function neckPoint(R,t,ang){
+function neckPoint(R,t,ang,top){
  const n=R.frames.neck,h=R.frames.head,lo=V.add(V.add(n.o,n.y,-1),n.z,2.5),hi=V.add(h.o,h.y,1.5),c=V.mix(lo,hi,t);
  const z=V.unit(V.mix(n.z,h.z,t)),x=V.unit(V.mix(n.x,h.x,t)),[rf,rb,rl]=profileAt(NECK,t),cs=Math.cos(ang),sn=Math.sin(ang);
  const p=V.add(V.add(c,z,(cs>=0?rf:rb)*cs),x,rl*sn),w=smooth(t/NECK_BLEND);
  if(w>=1)return p;
  /* основание — продолжение поверхности корпуса по её же касательной: стык корпуса и шеи без излома */
  const a=((ang%(2*Math.PI))+2*Math.PI)%(2*Math.PI),side=a<=Math.PI?'L':'R',an=a<=Math.PI?a:2*Math.PI-a,hTop=TORSO.at(-1)[0];
- const A=torsoPoint(R,hTop,side,an),A0=torsoPoint(R,hTop-2,side,an),base=V.add(A,V.unit(V.sub(A,A0)),t*V.dist(lo,hi));
+ const A=top?torsoPointIn(R,hTop,side,an,0,top.f,top.sec):torsoPoint(R,hTop,side,an),A0=top?torsoPointIn(R,hTop-2,side,an,0,top.f0,top.sec0):torsoPoint(R,hTop-2,side,an),base=V.add(A,V.unit(V.sub(A,A0)),t*V.dist(lo,hi));
  return V.mix(base,p,w);
 }
 const TORSO_H=[];for(let h=TORSO[0][0];h<=TORSO.at(-1)[0]+1e-9;h+=2.5)TORSO_H.push(+h.toFixed(2));if(TORSO_H.at(-1)<TORSO.at(-1)[0])TORSO_H.push(TORSO.at(-1)[0]);
 /* Полная сетка тела для сцены: точки в координатах каталога */
 function surface(R,{cols=24,limbRows=10,limbCols=16}={}){
- const torso=TORSO_H.map(h=>Array.from({length:cols},(_,c)=>{const a=c/cols*2*Math.PI,side=a<=Math.PI?'L':'R',ang=a<=Math.PI?a:2*Math.PI-a;return torsoPoint(R,h,side,ang);}));
+ /* рамка и профиль сечения считаются один раз на ряд — точки те же, что у torsoPoint/limbPoint/neckPoint */
+ const torso=TORSO_H.map(h=>{const f=spineFrame(R,h),sec=sectionAt(h);return Array.from({length:cols},(_,c)=>{const a=c/cols*2*Math.PI,side=a<=Math.PI?'L':'R',ang=a<=Math.PI?a:2*Math.PI-a;return torsoPointIn(R,h,side,ang,0,f,sec);});});
  const limbs={};
- for(const s of SIDES)for(const k of Object.keys(LIMB_DEF))limbs[k+s]=Array.from({length:limbRows+1},(_,r)=>Array.from({length:limbCols},(_,c)=>{const a=c/limbCols*2*Math.PI;return limbPoint(R,k,s,r/limbRows,a);}));
- const neck=Array.from({length:9},(_,r)=>Array.from({length:20},(_,c)=>neckPoint(R,r/8,c/20*2*Math.PI)));
+ for(const s of SIDES)for(const k of Object.keys(LIMB_DEF)){
+  const[,a,b]=LIMB_DEF[k],A=R[a+s],Bp=R[b+s];
+  limbs[k+s]=Array.from({length:limbRows+1},(_,r)=>{const t=r/limbRows,center=V.mix(A,Bp,t),ax=limbAxes(R,k,s,t),prof=profileAt(LIMBS[k],t);return Array.from({length:limbCols},(_,c)=>limbPointIn(center,ax,prof,c/limbCols*2*Math.PI));});
+ }
+ const hTop=TORSO.at(-1)[0],top={f:spineFrame(R,hTop),sec:sectionAt(hTop),f0:spineFrame(R,hTop-2),sec0:sectionAt(hTop-2)};
+ const neck=Array.from({length:9},(_,r)=>Array.from({length:20},(_,c)=>neckPoint(R,r/8,c/20*2*Math.PI,top)));
  return{torso,limbs,neck,torsoHeights:TORSO_H};
+}
+
+/* Точки для рамки кадра SVG-фигуры: все ряды туловища и каждый третий ряд конечностей (с последним) — ровно те точки
+   surface(), по которым считается рамка, без шеи, кистей и стоп; совпадают с surface() до бита. */
+function boundsSurface(R,{cols=24,limbRows=10,limbCols=16,limbStep=3}={}){
+ const torso=TORSO_H.map(h=>{const f=spineFrame(R,h),sec=sectionAt(h);return Array.from({length:cols},(_,c)=>{const a=c/cols*2*Math.PI,side=a<=Math.PI?'L':'R',ang=a<=Math.PI?a:2*Math.PI-a;return torsoPointIn(R,h,side,ang,0,f,sec);});});
+ const rows=[];for(let r=0;r<=limbRows;r++)if(r%limbStep===0||r===limbRows)rows.push(r);
+ const limbs={};
+ for(const s of SIDES)for(const k of Object.keys(LIMB_DEF)){
+  const[,a,b]=LIMB_DEF[k],A=R[a+s],Bp=R[b+s];
+  limbs[k+s]=rows.map(r=>{const t=r/limbRows,center=V.mix(A,Bp,t),ax=limbAxes(R,k,s,t),prof=profileAt(LIMBS[k],t);return Array.from({length:limbCols},(_,c)=>limbPointIn(center,ax,prof,c/limbCols*2*Math.PI));});
+ }
+ return{torso,limbs};
 }
 
 /* ---------- Знаковые расстояния тела (каталог) ---------- */
@@ -506,7 +533,7 @@ function centerOfMass(R,extra=[]){
 return{V,M3,Q,B,TORSO,TORSO_H,TORSO_JOINTS,LIMBS,NECK,CAPS,MASS,LIMITS,SIDES,SIGN,FLOOR,D2R,R2D,clamp,
  neutral,clone,pack,unpack,PACK,PACK_SIZE,fk,solePoints,twoBone,solveArm,solveArmWrist,setArmFromPoints,footFrame,heelFrame,solveLeg,rootRot,rootFromAxes,
  swing,swingTwist,eulerXZY,eulerYZX,spineRot,makeTrack,monotone,toCat,dirCat,catalogPose,
- profileAt,sectionAt,spineFrame,torsoPoint,limbAxes,limbPoint,neckPoint,surface,limbSDF,torsoSDF,torsoCache,headSDF,ellipseRadius,centerOfMass,LIMB_DEF,
+ profileAt,sectionAt,spineFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,ellipseRadius,centerOfMass,LIMB_DEF,
  handShape,SHOE,bodyData,jointAngles};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=Mannequin;
