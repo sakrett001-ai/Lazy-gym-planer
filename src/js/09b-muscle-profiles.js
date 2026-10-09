@@ -2,7 +2,7 @@
    Источники описывают технику/состав мышц; кривые — явно условная иллюстрация.
    Узлы кривых: t=0, .5, 1. Общие края исключают скачки в паузах и на развороте. */
 const MUSCLE_ROLES={primary:'Основная',support:'Вспомогательная',stabilizer:'Стабилизатор'};
-const MUSCLE_BANDS=['Нейтрально','Низкая яркость','Средняя яркость','Высокая яркость'];
+const MUSCLE_BANDS=['Нейтрально','Слабое участие','Заметное участие','Сильное участие'];
 const MUSCLE_PROFILES={
  bbbench:{pair:'above',curveBasis:'illustrative',
   sources:[['Мышцы в жиме лёжа — исследование','https://pubmed.ncbi.nlm.nih.gov/25799093/']],
@@ -59,9 +59,12 @@ function muscleFrame(anim,t,index=0){
  return{phase,values,note:profile.notes[phase]};
 }
 function muscleBand(v){return v<.12?0:v<.45?1:v<.72?2:3;}
+/* Шкала участия: цвет тела → жёлтый → янтарный → оранжевый. Красный оставлен для отметок нагрузки на суставы. */
+const MUSCLE_STOPS=[[0,[174,184,200]],[.15,[233,210,106]],[.45,[245,184,46]],[.75,[242,138,31]],[1,[234,106,14]]];
 function muscleColor(v){
- const stops=[[174,184,200],[237,172,99],[237,107,82]],x=Math.max(0,Math.min(1,v))*2,i=Math.min(1,Math.floor(x)),q=x-i;
- return '#'+stops[i].map((c,k)=>Math.round(c+(stops[i+1][k]-c)*q).toString(16).padStart(2,'0')).join('');
+ const x=Math.max(0,Math.min(1,Number.isFinite(v)?v:0));let i=0;while(i<MUSCLE_STOPS.length-2&&x>MUSCLE_STOPS[i+1][0])i++;
+ const[a,ca]=MUSCLE_STOPS[i],[b,cb]=MUSCLE_STOPS[i+1],q=(x-a)/(b-a);
+ return '#'+ca.map((c,k)=>Math.round(c+(cb[k]-c)*q).toString(16).padStart(2,'0')).join('');
 }
 
 /* Поверхности в координатах скелета: передняя/задняя сторона, не пятна на экране.
