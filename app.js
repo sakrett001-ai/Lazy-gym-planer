@@ -6613,7 +6613,8 @@ const GOALS = {
     load:{c:'≈ 55–65% от 1ПМ, почти до отказа', i:'до выраженного жжения'}, rep:3, time:'45–60 с', dist:'40 м',
     circ:{rounds:4, reps:'15–20', work:40, rest:15, roundRest:90}, ss:{rest:60}}
 };
-const FORMATS = {classic:{name:'Классика', hint:'по подходам'}, superset:{name:'Суперсеты', hint:'пары без отдыха'}, circuit:{name:'Круговая', hint:'круги подряд'}};
+const FORMATS = {classic:{name:'Классика', hint:'по подходам'}, superset:{name:'Суперсеты', hint:'пары без отдыха'}, circuit:{name:'Круговая', hint:'круги подряд'},
+  static:{name:'Статодинамика', hint:'без расслабления'}};
 const LEVELS = {beg:{name:'Новичок'}, mid:{name:'Средний'}, adv:{name:'Опытный'}};
 const GROUP_W = {chest:1.3, back:1.5, shoulders:1, biceps:0.8, triceps:0.8, forearms:0.5, abs:0.8, glutes:1, quads:1.3, hams:1, calves:0.6, cardio:0.9};
 const GROUP_ORDER = {quads:0, glutes:0, hams:1, back:2, chest:3, shoulders:4, triceps:5, biceps:5, forearms:6, calves:7, cardio:7.5, abs:8};
@@ -6740,7 +6741,7 @@ function splitFor(days) { return SPLITS[S.split] && SPLITS[S.split].days[days] ?
 function pickExercises(E, rand, groups, count, avoid) {
   const G = new Set(groups);
   const lvlMax = S.level === 'beg' ? 2 : 3;
-  const pool = EX.filter(ex => available(ex, E) && ex.lvl <= lvlMax && (ex.g !== 'cardio' || G.has('cardio')));
+  const pool = EX.filter(ex => available(ex, E) && ex.lvl <= lvlMax && (ex.g !== 'cardio' || G.has('cardio')) && (S.format !== 'static' || staticOk(ex)));
   const totalW = groups.reduce((a, g) => a + GROUP_W[g], 0) || 1;
   const quota = {};
   for (const g of groups) quota[g] = count * GROUP_W[g] / totalW;
@@ -6859,7 +6860,8 @@ function prescribe(ex, week, E) {
   if (!week && S.level === 'beg') load = load.replace('1–2 повтора', '2–3 повтора');
   const rest = G.rest[t];
   const work = ex.kind === 'time' ? midOf(G.time) : ex.kind === 'dist' ? 30 : midOf(reps) * G.rep * (ex.uni ? 2 : 1);
-  return {sets, reps, unit, rest, load, tempo:ex.kind ? null : G.tempo, notes, work, uni:!!ex.uni};
+  const rx = {sets, reps, unit, rest, load, tempo:ex.kind ? null : G.tempo, notes, work, uni:!!ex.uni};
+  return S.format === 'static' && staticOk(ex) ? staticRx(rx, ex, week, E) : rx;
 }
 
 /* ---------- сборка одной тренировки ---------- */
@@ -6878,7 +6880,7 @@ function buildPlan(ctx = {}) {
     const lvlMax = S.level === 'beg' ? 2 : 3, used = new Set(picked.filter(ex => available(ex, E)).map(ex => ex.id));
     picked = picked.map(ex => {
       if (available(ex, E)) return ex;
-      const alt = analogsFor(ex, E, {exclude:used, lvlMax, limit:1})[0];
+      const alt = analogsFor(ex, E, {exclude:used, lvlMax, limit:1, ok:S.format === 'static' ? staticOk : null})[0];
       if (!alt) { lost.push(ex); return null; }
       used.add(alt.ex.id); subs.set(alt.ex, {from:ex, note:alt.note}); return alt.ex;
     }).filter(Boolean);
@@ -6892,11 +6894,11 @@ function buildPlan(ctx = {}) {
   const items = picked.map((ex, i) => ({ex, slot:i, rx:applyLight(prescribe(ex, week, E), ex), name:exName(ex, E), eqLine:equipLine(ex, E), eqIds:chosenEquip(ex, E), has:propHas(ex, E), sub:subs.get(ex) || null}));
   const bySlot = new Map(items.map(it => [it.ex, it]));
   let blocks = [], minutes = 0, totalSets = 0;
-  if (S.format === 'classic') {
+  if (S.format === 'classic' || S.format === 'static') {
     const ord = orderClassic(picked).map(ex => bySlot.get(ex));
     ord.forEach((it, i) => { it.label = String(i + 1); });
     blocks = [{kind:'list', items:ord}];
-    for (const it of ord) { minutes += it.rx.sets * (it.rx.work + it.rx.rest) + 60; totalSets += it.rx.sets; }
+    for (const it of ord) { minutes += it.rx.static ? staticSeconds(it.rx) : it.rx.sets * (it.rx.work + it.rx.rest) + 60; totalSets += it.rx.sets; }
   } else if (S.format === 'superset') {
     const pairs = pairSupersets(picked);
     pairs.forEach((pr, pi) => {
@@ -7078,6 +7080,7 @@ function rxHtml(it) {
   const r = it.rx;
   const unit = r.unit ? ` <small>${r.unit}</small>` : '';
   const side = r.uni ? '<small> на сторону</small>' : '';
+  if (r.static) return `<div class="rx"><span class="rx-big">${r.series} × 3 × ${r.reps}${unit}${side}</span><span class="rx-rest">${r.series} ${plural(r.series, 'серия', 'серии', 'серий')} по 3 подхода · отдых ${fmtRest(r.rest)}${r.series > 1 ? `, между сериями ${fmtRest(r.seriesRest)}` : ''}</span>${r.light ? '<span class="rx-light">облегчено</span>' : ''}</div>`;
   if (r.circ) return `<div class="rx"><span class="rx-big">${r.reps}${unit}${side}</span></div>`;
   const rest = r.restShown !== undefined ? (r.restShown ? `отдых ${fmtRest(r.restShown)}` : 'сразу к следующему') : `отдых ${fmtRest(r.rest)}`;
   return `<div class="rx"><span class="rx-big">${r.sets} × ${r.reps}${unit}${side}</span><span class="rx-rest">${rest}</span>${r.light ? '<span class="rx-light">облегчено</span>' : ''}</div>`;
@@ -7139,6 +7142,7 @@ function cardHtml(it, idx) {
 
 function blocksHtml(p) {
   let html = `<p class="phase"><b>Разминка, 8–10 мин.</b> Лёгкое кардио до тёплого пота, суставная гимнастика, затем 1–2 разминочных подхода с лёгким весом в первом упражнении.</p>`;
+  if (S.format === 'static') html += `<p class="phase phase-static"><b>Статодинамика.</b> Вес — около половины от 1ПМ. Медленно: 3 с вниз и 3 с вверх, без пауз; не выпрямляйтесь до конца и не расслабляйтесь внизу — мышца всё время напряжена. К концу подхода (30–40 с) — сильное жжение, но не отказ. Три подхода с отдыхом 30 с — одна серия.</p>`;
   let idx = 0;
   for (const b of p.blocks) {
     if (b.kind === 'list') {
@@ -7333,9 +7337,9 @@ function analogNote(a, b, E) {
   return out.slice(0, 3).join('; ');
 }
 /* лучшие замены упражнения ex среди доступных при оборудовании E */
-function analogsFor(ex, E, {exclude = new Set(), lvlMax = 3, limit = 5, min = .45} = {}) {
+function analogsFor(ex, E, {exclude = new Set(), lvlMax = 3, limit = 5, min = .45, ok = null} = {}) {
   const cardio = ex.g === 'cardio';
-  return EX.filter(b => b !== ex && !exclude.has(b.id) && available(b, E) && b.lvl <= lvlMax && (b.g === 'cardio') === cardio)
+  return EX.filter(b => b !== ex && !exclude.has(b.id) && available(b, E) && b.lvl <= lvlMax && (b.g === 'cardio') === cardio && (!ok || ok(b)))
     .map(b => ({ex:b, score:analogScore(ex, b)}))
     .filter(r => r.score >= min)
     .sort((x, y) => y.score - x.score)
@@ -7370,6 +7374,50 @@ function setPlaceEquip(list) { S.equip = list.slice(); placeOf().equip = list.sl
 function programEquip() { return S.adapt && S.adapt !== S.place ? placeOf(S, S.adapt).equip : null; }
 ensurePlaces(S);
 
+/* ===================== СТАТОДИНАМИКА =====================
+   Медленно, без пауз и без расслабления, в неполной амплитуде: мышца всё время напряжена, кровоток в ней пережат,
+   к концу подхода — сильное жжение, но не отказ. Три подхода с короткой паузой — одна серия.
+   Основания: В. Н. Селуянов — статодинамический режим (30–70% от максимума, подход 30–60 с, отдых 20–60 с,
+   не меньше трёх подходов, без полного расслабления); Tanimoto, Ishii 2006, J Appl Physiol 100(4):1150–1157 —
+   около 50% 1ПМ, 3 с опускание и 3 с подъём без расслабления, 3 подхода: прирост массы и силы как при 80% 1ПМ. */
+const STATIC = {
+  tempo:'3-0-3-0', reps:'5–7', work:36, rest:30, perSeries:3, nextExercise:120,
+  series:{beg:1, mid:2, adv:3}, seriesRest:{beg:180, mid:180, adv:240},
+  /* показ на манекене: рабочая часть амплитуды без выпрямления вверху и без провала внизу */
+  partial:[.12, .88]
+};
+/* где медленная неполная амплитуда не имеет смысла или опасна при утомлении:
+   кардио, удержания, прыжки, махи гирей, тяги с пола и наклоны со штангой (поясница), подтягивания на весе тела
+   (30–40 с без расслабления почти никому не по силам), уступающие сгибания, ролик, пистолет */
+const STATIC_SKIP = new Set(['kbswing', 'deadlift', 'goodmorning', 'pullup', 'chinup', 'nordic', 'rollout', 'pistolbox']);
+function staticOk(ex) {
+  if (ex.g === 'cardio' || ex.kind || ex.anim.hold || ex.anim.loop || STATIC_SKIP.has(ex.id)) return false;
+  return !['jump', 'burpee', 'climb'].includes(PATTERN[ex.id]);
+}
+/* назначение в статодинамике поверх обычного: серии по три подхода, медленный темп, нагрузка по жжению */
+function staticRx(rx, ex, week, E) {
+  let series = STATIC.series[S.level] || 2;
+  if (week && week.deload) series = Math.max(1, series - 1);
+  const band = ex.eq.length && ex.eq.every(g => g.every(id => id === 'band')), assisted = ex.eq.some(g => g.includes('gravitron'));
+  const load = weighable(ex, E) ? '≈ 40–60% от 1ПМ: к концу подхода сильное жжение, но не отказ'
+    : band ? 'натяжение ленты: к концу подхода сильное жжение, но не отказ'
+    : assisted ? 'противовес: к концу подхода сильное жжение, но не отказ'
+    : 'вес тела: если жжения нет — медленнее и без отдыха в крайних точках';
+  return {...rx, sets:series * STATIC.perSeries, series, reps:STATIC.reps, unit:'повт.', rest:STATIC.rest, seriesRest:STATIC.seriesRest[S.level] || 180,
+    tempo:STATIC.tempo, load, work:STATIC.work * (ex.uni ? 2 : 1), static:true, partial:STATIC.partial,
+    notes:[...rx.notes, 'Подход ≈ 30–40 с: 3 с вниз и 3 с вверх без пауз, не выпрямляйтесь до конца и не расслабляйтесь внизу.']};
+}
+/* отдых после подхода k (с нуля): внутри серии коротко, между сериями долго, после последнего — переход к следующему */
+function restAfter(rx, k) {
+  if (!rx.static) return rx.restShown !== undefined ? rx.restShown : rx.rest;
+  if (k + 1 >= rx.sets) return STATIC.nextExercise;
+  return (k + 1) % STATIC.perSeries === 0 ? rx.seriesRest : rx.rest;
+}
+/* время упражнения в статодинамике, секунды */
+function staticSeconds(rx) {
+  return rx.series * (STATIC.perSeries * rx.work + (STATIC.perSeries - 1) * rx.rest) + (rx.series - 1) * rx.seriesRest + STATIC.nextExercise;
+}
+
 /* ---------- Проигрыватель движений: карточки и увеличенный разбор ---------- */
 let figs = [], rafId = 0, io = null;
 const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -7398,6 +7446,8 @@ function motionFrame(F) {
   if (F.it.ex.anim.hold) t=0;
   /* замкнутый цикл (педали, бег, «велосипед»): фаза идёт по кругу без возврата назад */
   if (F.it.ex.anim.loop) {const p=((F.clock%total)+total)%total/total;t=p;index=p<.5?0:2;}
+  /* статодинамика: только рабочая часть амплитуды, без выпрямления и без провала */
+  const part=F.it.rx&&F.it.rx.partial;if(part&&!F.it.ex.anim.loop&&!F.it.ex.anim.hold)t=part[0]+(part[1]-part[0])*t;
   const a = F.it.ex.anim;
   let labels = a.eccFirst ? ['Опускание','Нижняя точка','Подъём','Верхняя точка'] : ['Рабочая фаза','Конечная точка','Возврат','Исходное положение'];
   if (F.it.ex.id === 'kbswing') labels=['Мах вперёд','Верхняя точка','Замах назад','Исходное положение'];
@@ -7539,7 +7589,7 @@ function selectMotion(it, clock=0) {
   $('#mv-exercise').value=it.ex.id;
   $('#mv-view').textContent=it.ex.viewNote||(it.ex.anim.view==='front'?'Вид спереди':'Вид сбоку');
   $('#mv-speed').value=String(motionPrefs.speed);$('#mv-joints').checked=!!motionPrefs.joints;$('#mv-trace').checked=!!motionPrefs.trace;$('#mv-vectors').checked=!!motionPrefs.vectors;
-  $('#mv-tempo').textContent=it.ex.anim.hold?'Удерживайте положение и дышите ровно.':it.ex.anim.timing||it.ex.g==='cardio'||it.ex.kind?'Ритм показан схематично. Замедление помогает разобрать движение.':`Темп задания: ${it.rx.tempo}. Скорость просмотра не меняет задание.`;
+  $('#mv-tempo').textContent=it.ex.anim.hold?'Удерживайте положение и дышите ровно.':it.ex.anim.timing||it.ex.g==='cardio'||it.ex.kind?'Ритм показан схематично. Замедление помогает разобрать движение.':it.rx.static?`Статодинамика: темп ${it.rx.tempo} без пауз, показана рабочая часть амплитуды — без выпрямления до конца и без расслабления внизу.`:`Темп задания: ${it.rx.tempo}. Скорость просмотра не меняет задание.`;
   const level={};it.ex.pri.forEach(m=>level[m]=1);it.ex.sec.forEach(m=>{if(!level[m])level[m]=.38;});
   $('#mv-muscles').innerHTML=muscleMapSvg(level,{labels:true,aria:'Основные и вспомогательные мышцы'});
   $('#mv-primary').textContent=it.ex.pri.map(m=>MUSCLE_NAMES[m]).join(', ');
@@ -7633,6 +7683,7 @@ function blocksText(p) {
     for (const it of b.items) {
       const r = it.rx;
       const side = r.uni ? ' на сторону' : '';
+      if (r.static) { lines.push(`${it.label}. ${it.name} — ${r.series} × 3 × ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}, темп ${r.tempo} без расслабления, отдых ${fmtRest(r.rest)}${r.series > 1 ? `, между сериями ${fmtRest(r.seriesRest)}` : ''}`); continue; }
       lines.push(r.circ ? `${it.label}. ${it.name} — ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}` : `${it.label}. ${it.name} — ${r.sets} × ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}${b.kind === 'list' ? `, отдых ${fmtRest(r.rest)}` : ''}`);
     }
   }
@@ -7704,7 +7755,7 @@ document.addEventListener('click', e => {
     const lvlMax = S.level === 'beg' ? 2 : 3;
     const tried = new Set((swaps.__tried && swaps.__tried[swapKey() + ':' + slot]) || []);
     /* ближайшие по смыслу: то же движение и те же мышцы — первыми */
-    let alts = EX.filter(ex => !inPlan.has(ex.id) && available(ex, plan.E) && ex.lvl <= lvlMax && (ex.g === cur.g || PATTERN[ex.id] === PATTERN[cur.id]))
+    let alts = EX.filter(ex => !inPlan.has(ex.id) && available(ex, plan.E) && ex.lvl <= lvlMax && (ex.g === cur.g || PATTERN[ex.id] === PATTERN[cur.id]) && (S.format !== 'static' || staticOk(ex)))
       .sort((a, b) => analogScore(cur, b) - analogScore(cur, a));
     const msgEl = t.querySelector('span');
     if (!alts.length) { msgEl.textContent = 'Замены нет'; setTimeout(() => { msgEl.textContent = 'Заменить'; }, 1800); return; }
@@ -7896,12 +7947,23 @@ const e1rm = (kg, reps) => kg * (1 + Math.min(reps, 12) / 30);
 
 /* ---------- подсказка по двойной прогрессии ---------- */
 function suggest(it) {
-  const ex = it.ex, lt = loadType(ex), past = pastSessions(ex.id);
+  /* статодинамика и обычные подходы ведутся раздельно: вес в них отличается примерно вдвое */
+  const ex = it.ex, lt = loadType(ex), all = pastSessions(ex.id), past = all.filter(s => (s.fmt === 'static') === !!it.rx.static);
   const [lo, hi] = parseRange(it.rx.reps);
   const unit = ex.kind === 'time' ? ' с' : ex.kind === 'dist' ? ' м' : '';
   const week = S.mode === 'program' ? WEEKS[S.week - 1] : null;
   const step = stepFor(it);
   const res = {tone:'new', kg:null, reps:[], text:'', prev:null};
+  if (it.rx.static && !past.length) {
+    const last = all[all.length - 1], kgs = last ? last.s.filter(Boolean).map(x => x[0]).filter(v => v > 0) : [];
+    if (lt === 'kg' && kgs.length) {
+      const w = Math.max(...kgs); res.kg = roundTo(w * .6, step);
+      res.text = `Статодинамика: около ${fmtKg(res.kg)} кг — примерно 60% от прошлого рабочего веса (${fmtKg(w)} кг). К концу подхода — сильное жжение, но не отказ.`;
+    } else res.text = lt === 'kg' ? 'Первая запись в статодинамике. Возьмите около половины обычного рабочего веса: к концу подхода — сильное жжение, но не отказ.'
+      : lt === 'assist' ? 'Первая запись в статодинамике. Подберите противовес, при котором к концу подхода сильное жжение, но не отказ.'
+      : 'Первая запись в статодинамике. Отметьте, сколько медленных повторов получилось в каждом подходе.';
+    return res;
+  }
   if (!past.length) {
     res.text = lt === 'assist' ? `Первая запись. Подберите противовес, с которым ${lo === hi ? lo : lo + '–' + hi} повторов даются с запасом в 2.` : lt === 'kg'
       ? (ex.kind === 'dist' ? 'Первая запись. Возьмите тяжёлые снаряды, с которыми проходите дистанцию без остановок.' : `Первая запись. Подберите вес, с которым ${lo === hi ? lo : lo + '–' + hi}${unit} даются с запасом в 2 повтора.`)
@@ -7985,7 +8047,7 @@ function logRows(it) {
     const phKg = sg.kg != null ? fmtKg(sg.kg) : (lt === 'kg' ? '' : '—');
     const phR = sg.reps[k] ?? sg.reps[sg.reps.length - 1] ?? (lo === hi ? String(lo) : `${lo}–${hi}`);
     const done = !!v;
-    rows += `<div class="lt-r${done ? ' done' : ''}" data-k="${k}">
+    rows += `<div class="lt-r${done ? ' done' : ''}${it.rx.static && k > 0 && k % 3 === 0 ? ' lt-series' : ''}" data-k="${k}">
       <span class="lt-n">${k + 1}</span><span class="lt-p">${pTxt}</span>
       ${lt === 'none' ? '' : `<input class="lt-in" id="kg-${ex.id}-${k}" data-f="kg" type="text" inputmode="decimal" autocomplete="off" aria-label="Вес, подход ${k + 1}" placeholder="${phKg}" value="${done && v[0] != null ? fmtKg(v[0]) : ''}">`}
       <input class="lt-in" id="rp-${ex.id}-${k}" data-f="reps" type="text" inputmode="numeric" autocomplete="off" aria-label="${repLabel(ex)}, подход ${k + 1}" placeholder="${phR}" value="${done ? v[1] : ''}">
@@ -8003,7 +8065,8 @@ function logBlock(it) { return `<div class="c-log" data-log="${it.ex.id}">${logR
 
 /* ---------- история упражнения ---------- */
 function metricOf(ex) {
-  if (loadType(ex) === 'kg' && ex.kind !== 'dist') return {name:'Расчётный максимум', unit:'кг', f:s => { const v = s.s.filter(x => x && x[0] > 0).map(x => e1rm(x[0], x[1])); return v.length ? Math.max(...v) : null; }};
+  /* расчётный максимум по медленным подходам без расслабления занижен — статодинамика в него не входит */
+  if (loadType(ex) === 'kg' && ex.kind !== 'dist') return {name:'Расчётный максимум', unit:'кг', f:s => { if (s.fmt === 'static') return null; const v = s.s.filter(x => x && x[0] > 0).map(x => e1rm(x[0], x[1])); return v.length ? Math.max(...v) : null; }};
   if (ex.kind === 'time') return {name:'Лучший подход', unit:'с', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
   if (ex.kind === 'dist') return {name:'Лучшая дистанция', unit:'м', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
   return {name:'Лучший подход', unit:'повт.', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
@@ -8038,7 +8101,7 @@ function histHtml(ex) {
   const m = metricOf(ex);
   const pts = ss.map(s => ({d:s.d, v:m.f(s)})).filter(p => p.v != null).slice(-24);
   const best = pts.length ? Math.max(...pts.map(p => p.v)) : null;
-  const rows = ss.slice(-6).reverse().map(s => `<li><span class="h-d">${fmtDay(s.d, true)}${s.wk ? `<small>нед. ${s.wk}</small>` : ''}</span>
+  const rows = ss.slice(-6).reverse().map(s => `<li><span class="h-d">${fmtDay(s.d, true)}${s.wk ? `<small>нед. ${s.wk}</small>` : ''}${s.fmt === 'static' ? '<small>статодинамика</small>' : ''}</span>
     <span class="h-s">${s.s.filter(Boolean).map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(' · ')}</span>
     <button type="button" class="h-del" data-del="${ex.id}" data-d="${s.d}" aria-label="Удалить запись за ${fmtDay(s.d, true)}">Удалить</button></li>`).join('');
   return `<div class="h-chart"><p class="h-cap">${m.name}, ${m.unit}${best != null ? ` · лучший ${fmtKg(Math.round(best * 2) / 2)}` : ''}</p>${sparkSvg(pts, m.unit)}</div>
@@ -8257,6 +8320,7 @@ function tickSet(btn) {
   while (s.s.length < k) s.s.push(null);
   s.s[k] = [kg, Math.round(reps * 10) / 10];
   s.target=Math.max(s.target||0,it.rx.circ?(it.rounds||it.rx.sets):it.rx.sets);
+  if (it.rx.static) s.fmt = 'static';
   if (kgIn) kgIn.value = kg != null ? fmtKg(kg) : '';
   rIn.value = s.s[k][1];
   row.classList.add('done'); btn.setAttribute('aria-pressed', 'true');
@@ -8264,8 +8328,8 @@ function tickSet(btn) {
   const total = it.rx.circ ? 0 : it.rx.sets;
   const doneN = s.s.filter(Boolean).length;
   if (!it.rx.circ) {
-    const r = it.rx.restShown !== undefined ? it.rx.restShown : it.rx.rest;
-    if (r) startRest(r, doneN >= total ? 'Отдых перед следующим упражнением' : `Отдых после подхода ${doneN}`);
+    const r = restAfter(it.rx, doneN - 1);
+    if (r) startRest(r, doneN >= total ? 'Отдых перед следующим упражнением' : it.rx.static && doneN % 3 === 0 ? `Отдых после серии ${doneN / 3}` : `Отдых после подхода ${doneN}`);
   }
 }
 function editSet(inp) {
@@ -8574,7 +8638,7 @@ const WORKOUT_STORE='podhod.workout.v3';
 function workoutQueue(p){
   const q=[];
   for(const b of p.blocks){
-    if(b.kind==='list')for(const it of b.items)for(let k=0;k<it.rx.sets;k++)q.push({it,k,n:it.rx.sets,rest:it.rx.rest,phase:'Классика'});
+    if(b.kind==='list')for(const it of b.items)for(let k=0;k<it.rx.sets;k++)q.push({it,k,n:it.rx.sets,rest:restAfter(it.rx,k),phase:it.rx.static?`Статодинамика · серия ${Math.floor(k/3)+1} из ${it.rx.series}`:'Классика'});
     if(b.kind==='pair')for(let k=0;k<Math.max(b.sets,...b.items.map(it=>it.rx.sets));k++){
       const active=b.items.filter(it=>k<it.rx.sets);active.forEach((it,j)=>q.push({it,k,n:it.rx.sets,rest:j===active.length-1?b.rest:0,phase:`Суперсет ${b.letter} · круг ${k+1}`}));
     }
@@ -8663,7 +8727,7 @@ function commitWorkout(e){
   if(bad){$('#wv-error').textContent=msg;bad.setAttribute('aria-invalid','true');bad.focus();return;}
   const already=!!workoutValue(step),session=todaySession(ex.id,true);
   while(session.s.length<step.k)session.s.push(null);
-  session.s[step.k]=[kg,Math.round(reps*10)/10];session.target=Math.max(session.target||0,step.n);delete workout.drafts[workoutDraftKey(step)];
+  session.s[step.k]=[kg,Math.round(reps*10)/10];session.target=Math.max(session.target||0,step.n);if(step.it.rx.static)session.fmt='static';delete workout.drafts[workoutDraftKey(step)];
   logTouch(ex.id);logRefresh([ex.id]);workout.last=workout.index;
   if(already){workoutShow(workout.index);$('#wv-save-status').textContent='Изменения сохранены.';return;}
   const next=workoutFirstOpen(workout.queue,workout.index);
@@ -8830,7 +8894,8 @@ function autoregHtml() {
 /* облегчённый режим влияет на дозировку в одиночном режиме */
 function applyLight(rx, ex) {
   if (!AR.light || S.mode === 'program') return rx;
-  if (!rx.circ) rx.sets = Math.max(2, Math.ceil(rx.sets * 0.6));
+  if (rx.static) { rx.series = Math.max(1, rx.series - 1); rx.sets = rx.series * 3; }
+  else if (!rx.circ) rx.sets = Math.max(2, Math.ceil(rx.sets * 0.6));
   rx.light = true;
   return rx;
 }
@@ -9176,7 +9241,7 @@ function restoreBackup(obj) {
   if (obj.log && typeof obj.log === 'object') {
     for (const [id, ss] of Object.entries(obj.log)) {
       if (!EXI[id] || !validSessions(ss)) continue;
-      const clean = ss.map(x => ({d:x.d, ...(x.wk ? {wk:+x.wk} : {}),
+      const clean = ss.map(x => ({d:x.d, ...(x.wk ? {wk:+x.wk} : {}), ...(x.fmt === 'static' ? {fmt:'static'} : {}),
         ...(Number.isSafeInteger(+x.target) && +x.target > 0 ? {target:+x.target} : {}),
         s:x.s.map(v => Array.isArray(v) && isFinite(+v[1]) ? [v[0] == null || v[0] === '' ? null : +v[0], +v[1]] : null)}));
       const merged = mergeSessions(LOG.data[id], clean);
@@ -9216,4 +9281,4 @@ renderSetup();
 renderPlan();
 logInit();
 
-window.PODHOD_VERSION='4.6.0';window.PODHOD_LANG='ru';
+window.PODHOD_VERSION='4.7.0';window.PODHOD_LANG='ru';

@@ -6252,7 +6252,7 @@ for(const ex of EX){
   regions[id]={parent,label,kind,role:m.role,factor,visible:kind!=='deep',profileBasis:parent==='chest'?'illustrative-regional':'shared-group'};
  }
  const names=ex.pri.map(id=>MUSCLE_NAMES[id]).join(', ');
- const notes=base?base.notes:{concentric:hold?'Hold: the muscles maintain the position.':cyclic?'Cyclic motion: colour illustrates how emphasis changes.':names+' participate in the working phase.',eccentric:cyclic?'Continuation of the cycle: involvement changes smoothly.':'The muscles control the return.',end:'End position: maintain control and support.',start:'Starting position: prepare for the next repetition.'};
+ const notes=base?base.notes:{concentric:hold?'Hold: the muscles maintain the position.':cyclic?'Cyclic motion: color illustrates how emphasis changes.':names+' participate in the working phase.',eccentric:cyclic?'Continuation of the cycle: involvement changes smoothly.':'The muscles control the return.',end:'End position: maintain control and support.',start:'Starting position: prepare for the next repetition.'};
  ex.anim.catalogProfile={curveBasis:'illustrative',muscles,regions,notes,pair:ex.pri.some(id=>['lats','midback','lowback','glutes','hams','traps'].includes(id))?'back':'above',sources:[...(base?.sources||[]),...REGION_ANATOMY_SOURCES],cyclic,hold,laterality:CATALOG_LATERALITY[ex.id]};
 }
 const CATALOG_LIMB_PROFILES={ua:[[0,5.4,5.5],[.18,7.2,6.8],[.45,6.8,6.4],[.78,5.2,4.7],[1,4.2,4]],fa:[[0,4.4,4.4],[.22,5.7,5.2],[.45,4.9,4.7],[.76,3.5,3.3],[1,2.6,2.7]],th:[[0,9.1,9],[.25,8.8,8.2],[.6,7.1,6.5],[1,5.2,5]],sh:[[0,5,5],[.27,5.7,5.7],[.57,4.4,4],[1,2.8,3]]};
@@ -6613,7 +6613,8 @@ const GOALS = {
     load:{c:'≈ 55–65% of 1RM, close to failure', i:'until a strong burn'}, rep:3, time:'45–60 s', dist:'40 m',
     circ:{rounds:4, reps:'15–20', work:40, rest:15, roundRest:90}, ss:{rest:60}}
 };
-const FORMATS = {classic:{name:'Straight sets', hint:'set by set'}, superset:{name:'Supersets', hint:'pairs without rest'}, circuit:{name:'Circuit', hint:'rounds back to back'}};
+const FORMATS = {classic:{name:'Straight sets', hint:'set by set'}, superset:{name:'Supersets', hint:'pairs without rest'}, circuit:{name:'Circuit', hint:'rounds back to back'},
+  static:{name:'Static-dynamic', hint:'constant tension'}};
 const LEVELS = {beg:{name:'Beginner'}, mid:{name:'Intermediate'}, adv:{name:'Advanced'}};
 const GROUP_W = {chest:1.3, back:1.5, shoulders:1, biceps:0.8, triceps:0.8, forearms:0.5, abs:0.8, glutes:1, quads:1.3, hams:1, calves:0.6, cardio:0.9};
 const GROUP_ORDER = {quads:0, glutes:0, hams:1, back:2, chest:3, shoulders:4, triceps:5, biceps:5, forearms:6, calves:7, cardio:7.5, abs:8};
@@ -6740,7 +6741,7 @@ function splitFor(days) { return SPLITS[S.split] && SPLITS[S.split].days[days] ?
 function pickExercises(E, rand, groups, count, avoid) {
   const G = new Set(groups);
   const lvlMax = S.level === 'beg' ? 2 : 3;
-  const pool = EX.filter(ex => available(ex, E) && ex.lvl <= lvlMax && (ex.g !== 'cardio' || G.has('cardio')));
+  const pool = EX.filter(ex => available(ex, E) && ex.lvl <= lvlMax && (ex.g !== 'cardio' || G.has('cardio')) && (S.format !== 'static' || staticOk(ex)));
   const totalW = groups.reduce((a, g) => a + GROUP_W[g], 0) || 1;
   const quota = {};
   for (const g of groups) quota[g] = count * GROUP_W[g] / totalW;
@@ -6859,7 +6860,8 @@ function prescribe(ex, week, E) {
   if (!week && S.level === 'beg') load = load.replace('1–2 reps', '2–3 reps');
   const rest = G.rest[t];
   const work = ex.kind === 'time' ? midOf(G.time) : ex.kind === 'dist' ? 30 : midOf(reps) * G.rep * (ex.uni ? 2 : 1);
-  return {sets, reps, unit, rest, load, tempo:ex.kind ? null : G.tempo, notes, work, uni:!!ex.uni};
+  const rx = {sets, reps, unit, rest, load, tempo:ex.kind ? null : G.tempo, notes, work, uni:!!ex.uni};
+  return S.format === 'static' && staticOk(ex) ? staticRx(rx, ex, week, E) : rx;
 }
 
 /* ---------- сборка одной тренировки ---------- */
@@ -6878,7 +6880,7 @@ function buildPlan(ctx = {}) {
     const lvlMax = S.level === 'beg' ? 2 : 3, used = new Set(picked.filter(ex => available(ex, E)).map(ex => ex.id));
     picked = picked.map(ex => {
       if (available(ex, E)) return ex;
-      const alt = analogsFor(ex, E, {exclude:used, lvlMax, limit:1})[0];
+      const alt = analogsFor(ex, E, {exclude:used, lvlMax, limit:1, ok:S.format === 'static' ? staticOk : null})[0];
       if (!alt) { lost.push(ex); return null; }
       used.add(alt.ex.id); subs.set(alt.ex, {from:ex, note:alt.note}); return alt.ex;
     }).filter(Boolean);
@@ -6892,11 +6894,11 @@ function buildPlan(ctx = {}) {
   const items = picked.map((ex, i) => ({ex, slot:i, rx:applyLight(prescribe(ex, week, E), ex), name:exName(ex, E), eqLine:equipLine(ex, E), eqIds:chosenEquip(ex, E), has:propHas(ex, E), sub:subs.get(ex) || null}));
   const bySlot = new Map(items.map(it => [it.ex, it]));
   let blocks = [], minutes = 0, totalSets = 0;
-  if (S.format === 'classic') {
+  if (S.format === 'classic' || S.format === 'static') {
     const ord = orderClassic(picked).map(ex => bySlot.get(ex));
     ord.forEach((it, i) => { it.label = String(i + 1); });
     blocks = [{kind:'list', items:ord}];
-    for (const it of ord) { minutes += it.rx.sets * (it.rx.work + it.rx.rest) + 60; totalSets += it.rx.sets; }
+    for (const it of ord) { minutes += it.rx.static ? staticSeconds(it.rx) : it.rx.sets * (it.rx.work + it.rx.rest) + 60; totalSets += it.rx.sets; }
   } else if (S.format === 'superset') {
     const pairs = pairSupersets(picked);
     pairs.forEach((pr, pi) => {
@@ -7027,8 +7029,8 @@ function renderSetup() {
   const others = S.places.filter(p => p.id !== S.place);
   $('#e-place-tools').innerHTML = `<label class="place-name">Name<input id="place-name" type="text" maxlength="24" value="${esc(cur.name)}" autocomplete="off"></label>`
     + (S.places.length > 1 ? `<button type="button" class="place-del${placeDel ? ' armed' : ''}" data-place-del="1">${placeDel ? 'Are you sure?' : 'Delete place'}</button>` : '')
-    + (others.length ? `<label class="place-adapt">Programme<select id="place-adapt"><option value="">Built for this place</option>${others.map(p => `<option value="${p.id}"${S.adapt === p.id ? ' selected' : ''}>As in “${esc(p.name)}”, with substitutes</option>`).join('')}</select></label>
-      <p class="f-note">${S.adapt ? `Exercises are chosen for “${esc(placeOf(S, S.adapt).name)}”; anything missing here is replaced with the closest alternative — same movement, same muscles.` : 'The programme is built from what this place has.'}</p>` : '');
+    + (others.length ? `<label class="place-adapt">Program<select id="place-adapt"><option value="">Built for this place</option>${others.map(p => `<option value="${p.id}"${S.adapt === p.id ? ' selected' : ''}>As in “${esc(p.name)}”, with substitutes</option>`).join('')}</select></label>
+      <p class="f-note">${S.adapt ? `Exercises are chosen for “${esc(placeOf(S, S.adapt).name)}”; anything missing here is replaced with the closest alternative — same movement, same muscles.` : 'The program is built from what this place has.'}</p>` : '');
   const es = new Set(S.equip);
   $('#e-presets').innerHTML = '<span class="pres-l">Fill in:</span>' + EQUIP_PRESETS.map(p => {
     const on = p.eq.length === es.size && p.eq.every(e => es.has(e));
@@ -7078,6 +7080,7 @@ function rxHtml(it) {
   const r = it.rx;
   const unit = r.unit ? ` <small>${r.unit}</small>` : '';
   const side = r.uni ? '<small> per side</small>' : '';
+  if (r.static) return `<div class="rx"><span class="rx-big">${r.series} × 3 × ${r.reps}${unit}${side}</span><span class="rx-rest">${r.series} ${plural(r.series, 'series', 'series', 'series')} of 3 sets · rest ${fmtRest(r.rest)}${r.series > 1 ? `, between series ${fmtRest(r.seriesRest)}` : ''}</span>${r.light ? '<span class="rx-light">scaled down</span>' : ''}</div>`;
   if (r.circ) return `<div class="rx"><span class="rx-big">${r.reps}${unit}${side}</span></div>`;
   const rest = r.restShown !== undefined ? (r.restShown ? `rest ${fmtRest(r.restShown)}` : 'straight to the next one') : `rest ${fmtRest(r.rest)}`;
   return `<div class="rx"><span class="rx-big">${r.sets} × ${r.reps}${unit}${side}</span><span class="rx-rest">${rest}</span>${r.light ? '<span class="rx-light">scaled down</span>' : ''}</div>`;
@@ -7099,7 +7102,7 @@ function cardHtml(it, idx) {
   const meta = [];
   if (r.tempo) meta.push(`<span title="lowering – pause – lifting – pause, seconds; X — explosive">tempo <b>${r.tempo}</b></span>`);
   if (r.load) meta.push(`<span>${r.load}</span>`);
-  const view = ex.anim.catalogRig?'Isometric view · 5 angles':(ex.viewNote || (ex.anim.view === 'front' ? 'front view' : 'side view'));
+  const view = ex.anim.catalogRig?'3D view · 5 angles':(ex.viewNote || (ex.anim.view === 'front' ? 'front view' : 'side view'));
   return `<li class="card" data-ex="${ex.id}" data-slot="${it.slot}">
   <div class="c-top">
     <div class="motion-tile"><button type="button" class="illus" data-fig="${idx}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Break down the movement: ${esc(it.name)}"><span class="illus-v">${view}</span><span class="illus-zoom" aria-hidden="true">Zoom ↗</span></button><div class="motion-bar"><span class="motion-caption">Starting position</span><button type="button" data-motion-pause="${idx}" aria-label="Pause demo: ${esc(it.name)}" aria-pressed="false">Pause</button></div></div>
@@ -7139,6 +7142,7 @@ function cardHtml(it, idx) {
 
 function blocksHtml(p) {
   let html = `<p class="phase"><b>Warm-up, 8–10 min.</b> Easy cardio until you break a light sweat, joint mobility, then 1–2 warm-up sets with a light weight in the first exercise.</p>`;
+  if (S.format === 'static') html += `<p class="phase phase-static"><b>Static-dynamic.</b> Weight — about half of your 1RM. Slowly: 3 s down and 3 s up, no pauses; don’t lock out at the top and don’t relax at the bottom — the muscle stays tense the whole time. By the end of a set (30–40 s) — a strong burn, but not failure. Three sets with 30 s rest make one series.</p>`;
   let idx = 0;
   for (const b of p.blocks) {
     if (b.kind === 'list') {
@@ -7281,7 +7285,7 @@ const PATTERN_NAMES = {squat:'squat', hinge:'hip hinge', hpush:'horizontal press
   fly:'fly', pullover:'pullover', vpull:'vertical pull', hrow:'horizontal row', vpush:'overhead press', raise:'arm raise',
   rear:'rear delts and shoulder blades', curl:'arm curl', ext:'arm extension', lunge:'lunge', bridge:'glute bridge', flex:'crunch',
   hold:'core hold', side:'side bend', calf:'calf raise', grip:'grip', jump:'jumps', burpee:'burpee', climb:'mountain climber',
-  adduct:'hip adduction', run:'running', ride:'pedalling', row:'rowing', kneeext:'knee extension', kneeflex:'knee flexion', shrug:'shrugs'};
+  adduct:'hip adduction', run:'running', ride:'pedaling', row:'rowing', kneeext:'knee extension', kneeflex:'knee flexion', shrug:'shrugs'};
 /* движения, которым не нашлось места в общей таблице */
 [['kneeext', 'legext'], ['kneeflex', 'legcurl nordic'], ['shrug', 'shrug'], ['raise', 'frontraise']].forEach(([p, ids]) => ids.split(' ').forEach(id => PATTERN[id] = p));
 
@@ -7289,8 +7293,8 @@ const PATTERN_NAMES = {squat:'squat', hinge:'hip hinge', hpush:'horizontal press
 const LOAD_KIND_NOTE = {
   band:'band: resistance rises towards the end of the range',
   body:'bodyweight: progress with tempo and range',
-  free:'free weight: more work for stabilisers',
-  machine:'machine guides the path: less stabilisation',
+  free:'free weight: more work for stabilizers',
+  machine:'machine guides the path: less stabilization',
   cable:'cable: more even load through the range'
 };
 function loadKind(ex, E) {
@@ -7333,9 +7337,9 @@ function analogNote(a, b, E) {
   return out.slice(0, 3).join('; ');
 }
 /* лучшие замены упражнения ex среди доступных при оборудовании E */
-function analogsFor(ex, E, {exclude = new Set(), lvlMax = 3, limit = 5, min = .45} = {}) {
+function analogsFor(ex, E, {exclude = new Set(), lvlMax = 3, limit = 5, min = .45, ok = null} = {}) {
   const cardio = ex.g === 'cardio';
-  return EX.filter(b => b !== ex && !exclude.has(b.id) && available(b, E) && b.lvl <= lvlMax && (b.g === 'cardio') === cardio)
+  return EX.filter(b => b !== ex && !exclude.has(b.id) && available(b, E) && b.lvl <= lvlMax && (b.g === 'cardio') === cardio && (!ok || ok(b)))
     .map(b => ({ex:b, score:analogScore(ex, b)}))
     .filter(r => r.score >= min)
     .sort((x, y) => y.score - x.score)
@@ -7370,6 +7374,50 @@ function setPlaceEquip(list) { S.equip = list.slice(); placeOf().equip = list.sl
 function programEquip() { return S.adapt && S.adapt !== S.place ? placeOf(S, S.adapt).equip : null; }
 ensurePlaces(S);
 
+/* ===================== СТАТОДИНАМИКА =====================
+   Медленно, без пауз и без расслабления, в неполной амплитуде: мышца всё время напряжена, кровоток в ней пережат,
+   к концу подхода — сильное жжение, но не отказ. Три подхода с короткой паузой — одна серия.
+   Основания: В. Н. Селуянов — статодинамический режим (30–70% от максимума, подход 30–60 с, отдых 20–60 с,
+   не меньше трёх подходов, без полного расслабления); Tanimoto, Ishii 2006, J Appl Physiol 100(4):1150–1157 —
+   около 50% 1ПМ, 3 с опускание и 3 с подъём без расслабления, 3 подхода: прирост массы и силы как при 80% 1ПМ. */
+const STATIC = {
+  tempo:'3-0-3-0', reps:'5–7', work:36, rest:30, perSeries:3, nextExercise:120,
+  series:{beg:1, mid:2, adv:3}, seriesRest:{beg:180, mid:180, adv:240},
+  /* показ на манекене: рабочая часть амплитуды без выпрямления вверху и без провала внизу */
+  partial:[.12, .88]
+};
+/* где медленная неполная амплитуда не имеет смысла или опасна при утомлении:
+   кардио, удержания, прыжки, махи гирей, тяги с пола и наклоны со штангой (поясница), подтягивания на весе тела
+   (30–40 с без расслабления почти никому не по силам), уступающие сгибания, ролик, пистолет */
+const STATIC_SKIP = new Set(['kbswing', 'deadlift', 'goodmorning', 'pullup', 'chinup', 'nordic', 'rollout', 'pistolbox']);
+function staticOk(ex) {
+  if (ex.g === 'cardio' || ex.kind || ex.anim.hold || ex.anim.loop || STATIC_SKIP.has(ex.id)) return false;
+  return !['jump', 'burpee', 'climb'].includes(PATTERN[ex.id]);
+}
+/* назначение в статодинамике поверх обычного: серии по три подхода, медленный темп, нагрузка по жжению */
+function staticRx(rx, ex, week, E) {
+  let series = STATIC.series[S.level] || 2;
+  if (week && week.deload) series = Math.max(1, series - 1);
+  const band = ex.eq.length && ex.eq.every(g => g.every(id => id === 'band')), assisted = ex.eq.some(g => g.includes('gravitron'));
+  const load = weighable(ex, E) ? '≈ 40–60% of 1RM: a strong burn by the end of the set, but not failure'
+    : band ? 'band tension: a strong burn by the end of the set, but not failure'
+    : assisted ? 'counterweight: a strong burn by the end of the set, but not failure'
+    : 'body weight: if there is no burn, go slower and don’t rest at the end points';
+  return {...rx, sets:series * STATIC.perSeries, series, reps:STATIC.reps, unit:'reps', rest:STATIC.rest, seriesRest:STATIC.seriesRest[S.level] || 180,
+    tempo:STATIC.tempo, load, work:STATIC.work * (ex.uni ? 2 : 1), static:true, partial:STATIC.partial,
+    notes:[...rx.notes, 'A set lasts ≈ 30–40 s: 3 s down and 3 s up with no pauses; don’t lock out and don’t relax at the bottom.']};
+}
+/* отдых после подхода k (с нуля): внутри серии коротко, между сериями долго, после последнего — переход к следующему */
+function restAfter(rx, k) {
+  if (!rx.static) return rx.restShown !== undefined ? rx.restShown : rx.rest;
+  if (k + 1 >= rx.sets) return STATIC.nextExercise;
+  return (k + 1) % STATIC.perSeries === 0 ? rx.seriesRest : rx.rest;
+}
+/* время упражнения в статодинамике, секунды */
+function staticSeconds(rx) {
+  return rx.series * (STATIC.perSeries * rx.work + (STATIC.perSeries - 1) * rx.rest) + (rx.series - 1) * rx.seriesRest + STATIC.nextExercise;
+}
+
 /* ---------- Проигрыватель движений: карточки и увеличенный разбор ---------- */
 let figs = [], rafId = 0, io = null;
 const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -7398,6 +7446,8 @@ function motionFrame(F) {
   if (F.it.ex.anim.hold) t=0;
   /* замкнутый цикл (педали, бег, «велосипед»): фаза идёт по кругу без возврата назад */
   if (F.it.ex.anim.loop) {const p=((F.clock%total)+total)%total/total;t=p;index=p<.5?0:2;}
+  /* статодинамика: только рабочая часть амплитуды, без выпрямления и без провала */
+  const part=F.it.rx&&F.it.rx.partial;if(part&&!F.it.ex.anim.loop&&!F.it.ex.anim.hold)t=part[0]+(part[1]-part[0])*t;
   const a = F.it.ex.anim;
   let labels = a.eccFirst ? ['Lowering','Bottom position','Lifting','Top position'] : ['Working phase','End position','Return','Starting position'];
   if (F.it.ex.id === 'kbswing') labels=['Forward swing','Top position','Backswing','Starting position'];
@@ -7539,7 +7589,7 @@ function selectMotion(it, clock=0) {
   $('#mv-exercise').value=it.ex.id;
   $('#mv-view').textContent=it.ex.viewNote||(it.ex.anim.view==='front'?'Front view':'Side view');
   $('#mv-speed').value=String(motionPrefs.speed);$('#mv-joints').checked=!!motionPrefs.joints;$('#mv-trace').checked=!!motionPrefs.trace;$('#mv-vectors').checked=!!motionPrefs.vectors;
-  $('#mv-tempo').textContent=it.ex.anim.hold?'Hold the position and breathe steadily.':it.ex.anim.timing||it.ex.g==='cardio'||it.ex.kind?'The rhythm is shown schematically. Slowing it down helps you study the movement.':`Prescribed tempo: ${it.rx.tempo}. Playback speed doesn't change the prescription.`;
+  $('#mv-tempo').textContent=it.ex.anim.hold?'Hold the position and breathe steadily.':it.ex.anim.timing||it.ex.g==='cardio'||it.ex.kind?'The rhythm is shown schematically. Slowing it down helps you study the movement.':it.rx.static?`Static-dynamic: tempo ${it.rx.tempo} with no pauses; the working part of the range is shown — no lockout at the top and no relaxing at the bottom.`:`Prescribed tempo: ${it.rx.tempo}. Playback speed doesn't change the prescription.`;
   const level={};it.ex.pri.forEach(m=>level[m]=1);it.ex.sec.forEach(m=>{if(!level[m])level[m]=.38;});
   $('#mv-muscles').innerHTML=muscleMapSvg(level,{labels:true,aria:'Primary and secondary muscles'});
   $('#mv-primary').textContent=it.ex.pri.map(m=>MUSCLE_NAMES[m]).join(', ');
@@ -7633,6 +7683,7 @@ function blocksText(p) {
     for (const it of b.items) {
       const r = it.rx;
       const side = r.uni ? ' per side' : '';
+      if (r.static) { lines.push(`${it.label}. ${it.name} — ${r.series} × 3 × ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}, tempo ${r.tempo} without relaxing, rest ${fmtRest(r.rest)}${r.series > 1 ? `, between series ${fmtRest(r.seriesRest)}` : ''}`); continue; }
       lines.push(r.circ ? `${it.label}. ${it.name} — ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}` : `${it.label}. ${it.name} — ${r.sets} × ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}${b.kind === 'list' ? `, rest ${fmtRest(r.rest)}` : ''}`);
     }
   }
@@ -7704,7 +7755,7 @@ document.addEventListener('click', e => {
     const lvlMax = S.level === 'beg' ? 2 : 3;
     const tried = new Set((swaps.__tried && swaps.__tried[swapKey() + ':' + slot]) || []);
     /* ближайшие по смыслу: то же движение и те же мышцы — первыми */
-    let alts = EX.filter(ex => !inPlan.has(ex.id) && available(ex, plan.E) && ex.lvl <= lvlMax && (ex.g === cur.g || PATTERN[ex.id] === PATTERN[cur.id]))
+    let alts = EX.filter(ex => !inPlan.has(ex.id) && available(ex, plan.E) && ex.lvl <= lvlMax && (ex.g === cur.g || PATTERN[ex.id] === PATTERN[cur.id]) && (S.format !== 'static' || staticOk(ex)))
       .sort((a, b) => analogScore(cur, b) - analogScore(cur, a));
     const msgEl = t.querySelector('span');
     if (!alts.length) { msgEl.textContent = 'No substitute'; setTimeout(() => { msgEl.textContent = 'Swap'; }, 1800); return; }
@@ -7896,12 +7947,23 @@ const e1rm = (kg, reps) => kg * (1 + Math.min(reps, 12) / 30);
 
 /* ---------- подсказка по двойной прогрессии ---------- */
 function suggest(it) {
-  const ex = it.ex, lt = loadType(ex), past = pastSessions(ex.id);
+  /* статодинамика и обычные подходы ведутся раздельно: вес в них отличается примерно вдвое */
+  const ex = it.ex, lt = loadType(ex), all = pastSessions(ex.id), past = all.filter(s => (s.fmt === 'static') === !!it.rx.static);
   const [lo, hi] = parseRange(it.rx.reps);
   const unit = ex.kind === 'time' ? ' s' : ex.kind === 'dist' ? ' m' : '';
   const week = S.mode === 'program' ? WEEKS[S.week - 1] : null;
   const step = stepFor(it);
   const res = {tone:'new', kg:null, reps:[], text:'', prev:null};
+  if (it.rx.static && !past.length) {
+    const last = all[all.length - 1], kgs = last ? last.s.filter(Boolean).map(x => x[0]).filter(v => v > 0) : [];
+    if (lt === 'kg' && kgs.length) {
+      const w = Math.max(...kgs); res.kg = roundTo(w * .6, step);
+      res.text = `Static-dynamic: about ${fmtKg(res.kg)} kg — roughly 60% of your last working weight (${fmtKg(w)} kg). A strong burn by the end of the set, but not failure.`;
+    } else res.text = lt === 'kg' ? 'First static-dynamic entry. Take about half of your usual working weight: a strong burn by the end of the set, but not failure.'
+      : lt === 'assist' ? 'First static-dynamic entry. Choose a counterweight that gives a strong burn by the end of the set, but not failure.'
+      : 'First static-dynamic entry. Note how many slow reps you managed in each set.';
+    return res;
+  }
   if (!past.length) {
     res.text = lt === 'assist' ? `First entry. Choose a counterweight that lets you do ${lo === hi ? lo : lo + '–' + hi} reps with 2 in reserve.` : lt === 'kg'
       ? (ex.kind === 'dist' ? 'First entry. Take heavy implements you can carry the full distance without stopping.' : `First entry. Pick a weight that lets you do ${lo === hi ? lo : lo + '–' + hi}${unit} with 2 reps in reserve.`)
@@ -7985,7 +8047,7 @@ function logRows(it) {
     const phKg = sg.kg != null ? fmtKg(sg.kg) : (lt === 'kg' ? '' : '—');
     const phR = sg.reps[k] ?? sg.reps[sg.reps.length - 1] ?? (lo === hi ? String(lo) : `${lo}–${hi}`);
     const done = !!v;
-    rows += `<div class="lt-r${done ? ' done' : ''}" data-k="${k}">
+    rows += `<div class="lt-r${done ? ' done' : ''}${it.rx.static && k > 0 && k % 3 === 0 ? ' lt-series' : ''}" data-k="${k}">
       <span class="lt-n">${k + 1}</span><span class="lt-p">${pTxt}</span>
       ${lt === 'none' ? '' : `<input class="lt-in" id="kg-${ex.id}-${k}" data-f="kg" type="text" inputmode="decimal" autocomplete="off" aria-label="Weight, set ${k + 1}" placeholder="${phKg}" value="${done && v[0] != null ? fmtKg(v[0]) : ''}">`}
       <input class="lt-in" id="rp-${ex.id}-${k}" data-f="reps" type="text" inputmode="numeric" autocomplete="off" aria-label="${repLabel(ex)}, set ${k + 1}" placeholder="${phR}" value="${done ? v[1] : ''}">
@@ -8003,7 +8065,8 @@ function logBlock(it) { return `<div class="c-log" data-log="${it.ex.id}">${logR
 
 /* ---------- история упражнения ---------- */
 function metricOf(ex) {
-  if (loadType(ex) === 'kg' && ex.kind !== 'dist') return {name:'Estimated 1RM', unit:'kg', f:s => { const v = s.s.filter(x => x && x[0] > 0).map(x => e1rm(x[0], x[1])); return v.length ? Math.max(...v) : null; }};
+  /* расчётный максимум по медленным подходам без расслабления занижен — статодинамика в него не входит */
+  if (loadType(ex) === 'kg' && ex.kind !== 'dist') return {name:'Estimated 1RM', unit:'kg', f:s => { if (s.fmt === 'static') return null; const v = s.s.filter(x => x && x[0] > 0).map(x => e1rm(x[0], x[1])); return v.length ? Math.max(...v) : null; }};
   if (ex.kind === 'time') return {name:'Best set', unit:'s', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
   if (ex.kind === 'dist') return {name:'Best distance', unit:'m', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
   return {name:'Best set', unit:'reps', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
@@ -8038,7 +8101,7 @@ function histHtml(ex) {
   const m = metricOf(ex);
   const pts = ss.map(s => ({d:s.d, v:m.f(s)})).filter(p => p.v != null).slice(-24);
   const best = pts.length ? Math.max(...pts.map(p => p.v)) : null;
-  const rows = ss.slice(-6).reverse().map(s => `<li><span class="h-d">${fmtDay(s.d, true)}${s.wk ? `<small>wk ${s.wk}</small>` : ''}</span>
+  const rows = ss.slice(-6).reverse().map(s => `<li><span class="h-d">${fmtDay(s.d, true)}${s.wk ? `<small>wk ${s.wk}</small>` : ''}${s.fmt === 'static' ? '<small>static-dynamic</small>' : ''}</span>
     <span class="h-s">${s.s.filter(Boolean).map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(' · ')}</span>
     <button type="button" class="h-del" data-del="${ex.id}" data-d="${s.d}" aria-label="Delete entry for ${fmtDay(s.d, true)}">Delete</button></li>`).join('');
   return `<div class="h-chart"><p class="h-cap">${m.name}, ${m.unit}${best != null ? ` · best ${fmtKg(Math.round(best * 2) / 2)}` : ''}</p>${sparkSvg(pts, m.unit)}</div>
@@ -8257,6 +8320,7 @@ function tickSet(btn) {
   while (s.s.length < k) s.s.push(null);
   s.s[k] = [kg, Math.round(reps * 10) / 10];
   s.target=Math.max(s.target||0,it.rx.circ?(it.rounds||it.rx.sets):it.rx.sets);
+  if (it.rx.static) s.fmt = 'static';
   if (kgIn) kgIn.value = kg != null ? fmtKg(kg) : '';
   rIn.value = s.s[k][1];
   row.classList.add('done'); btn.setAttribute('aria-pressed', 'true');
@@ -8264,8 +8328,8 @@ function tickSet(btn) {
   const total = it.rx.circ ? 0 : it.rx.sets;
   const doneN = s.s.filter(Boolean).length;
   if (!it.rx.circ) {
-    const r = it.rx.restShown !== undefined ? it.rx.restShown : it.rx.rest;
-    if (r) startRest(r, doneN >= total ? 'Rest before the next exercise' : `Rest after set ${doneN}`);
+    const r = restAfter(it.rx, doneN - 1);
+    if (r) startRest(r, doneN >= total ? 'Rest before the next exercise' : it.rx.static && doneN % 3 === 0 ? `Rest after series ${doneN / 3}` : `Rest after set ${doneN}`);
   }
 }
 function editSet(inp) {
@@ -8504,7 +8568,7 @@ function renderAtlas() {
         <div class="motion-bar"><span class="motion-caption">Start position</span><button type="button" data-motion-pause="0" aria-pressed="true">Pause</button></div>
       </div>
       <div class="at-under"><p class="at-pv"><b id="at-pv-name">${esc(it.name)}</b></p><div class="at-cams" role="group" aria-label="View">${Object.entries(ATLAS_CAMS).map(([c, label]) => `<button type="button" data-atlas-cam="${c}" aria-pressed="false">${label}</button>`).join('')}</div></div>
-      <p class="at-hint">The chosen muscle is shown in orange: the brighter the colour, the harder it works at that moment of the rep.</p>`;
+      <p class="at-hint">The chosen muscle is shown in orange: the brighter the color, the harder it works at that moment of the rep.</p>`;
     if (A.pri.length) html += `<h3 class="at-h">Main mover <small>${A.pri.length}</small></h3>${atlasList(A.pri, m, atlasEx, 8)}`;
     else html += `<p class="warn-inline">No exercise here has ${esc(lower)} as its main target. Below are exercises where it assists, and what the others need.</p>`;
     if (A.sec.length) html += `<h3 class="at-h">Assists <small>${A.sec.length}</small></h3>${atlasList(A.sec, m, atlasEx, 5)}`;
@@ -8514,7 +8578,7 @@ function renderAtlas() {
   if (A.other.length) {
     html += `<details class="at-other"><summary>Needs other equipment <small>${A.other.length}</small></summary><ul class="at-olist">${A.other.map(r => `<li><button type="button" class="at-open at-orow" data-atlas-open="${r.ex.id}" aria-haspopup="dialog" aria-controls="motion-view"><b>${esc(r.ex.name)}</b><small>${r.role === 'pri' ? 'main mover' : 'assists'} · needs: ${esc(r.need.join('; '))}${r.places.length ? ` · available at: ${esc(r.places.join(', '))}` : ''}</small></button></li>`).join('')}</ul></details>`;
   }
-  html += `<p class="legend">The map and colours illustrate muscle involvement for teaching; they are not measured muscle activity.</p></section></div>`;
+  html += `<p class="legend">The map and colors illustrate muscle involvement for teaching; they are not measured muscle activity.</p></section></div>`;
   $('#plan').innerHTML = html;
   mountAtlasPreview(m);
 }
@@ -8574,7 +8638,7 @@ const WORKOUT_STORE='podhod.workout.v3';
 function workoutQueue(p){
   const q=[];
   for(const b of p.blocks){
-    if(b.kind==='list')for(const it of b.items)for(let k=0;k<it.rx.sets;k++)q.push({it,k,n:it.rx.sets,rest:it.rx.rest,phase:'Straight sets'});
+    if(b.kind==='list')for(const it of b.items)for(let k=0;k<it.rx.sets;k++)q.push({it,k,n:it.rx.sets,rest:restAfter(it.rx,k),phase:it.rx.static?`Static-dynamic · series ${Math.floor(k/3)+1} of ${it.rx.series}`:'Straight sets'});
     if(b.kind==='pair')for(let k=0;k<Math.max(b.sets,...b.items.map(it=>it.rx.sets));k++){
       const active=b.items.filter(it=>k<it.rx.sets);active.forEach((it,j)=>q.push({it,k,n:it.rx.sets,rest:j===active.length-1?b.rest:0,phase:`Superset ${b.letter} · round ${k+1}`}));
     }
@@ -8663,7 +8727,7 @@ function commitWorkout(e){
   if(bad){$('#wv-error').textContent=msg;bad.setAttribute('aria-invalid','true');bad.focus();return;}
   const already=!!workoutValue(step),session=todaySession(ex.id,true);
   while(session.s.length<step.k)session.s.push(null);
-  session.s[step.k]=[kg,Math.round(reps*10)/10];session.target=Math.max(session.target||0,step.n);delete workout.drafts[workoutDraftKey(step)];
+  session.s[step.k]=[kg,Math.round(reps*10)/10];session.target=Math.max(session.target||0,step.n);if(step.it.rx.static)session.fmt='static';delete workout.drafts[workoutDraftKey(step)];
   logTouch(ex.id);logRefresh([ex.id]);workout.last=workout.index;
   if(already){workoutShow(workout.index);$('#wv-save-status').textContent='Changes saved.';return;}
   const next=workoutFirstOpen(workout.queue,workout.index);
@@ -8830,7 +8894,8 @@ function autoregHtml() {
 /* облегчённый режим влияет на дозировку в одиночном режиме */
 function applyLight(rx, ex) {
   if (!AR.light || S.mode === 'program') return rx;
-  if (!rx.circ) rx.sets = Math.max(2, Math.ceil(rx.sets * 0.6));
+  if (rx.static) { rx.series = Math.max(1, rx.series - 1); rx.sets = rx.series * 3; }
+  else if (!rx.circ) rx.sets = Math.max(2, Math.ceil(rx.sets * 0.6));
   rx.light = true;
   return rx;
 }
@@ -9176,7 +9241,7 @@ function restoreBackup(obj) {
   if (obj.log && typeof obj.log === 'object') {
     for (const [id, ss] of Object.entries(obj.log)) {
       if (!EXI[id] || !validSessions(ss)) continue;
-      const clean = ss.map(x => ({d:x.d, ...(x.wk ? {wk:+x.wk} : {}),
+      const clean = ss.map(x => ({d:x.d, ...(x.wk ? {wk:+x.wk} : {}), ...(x.fmt === 'static' ? {fmt:'static'} : {}),
         ...(Number.isSafeInteger(+x.target) && +x.target > 0 ? {target:+x.target} : {}),
         s:x.s.map(v => Array.isArray(v) && isFinite(+v[1]) ? [v[0] == null || v[0] === '' ? null : +v[0], +v[1]] : null)}));
       const merged = mergeSessions(LOG.data[id], clean);
@@ -9219,4 +9284,4 @@ logInit();
 plural = (n, a, b, c) => n === 1 ? a : c;
 DEC = '.';
 
-window.PODHOD_VERSION='4.6.0';window.PODHOD_LANG='en';
+window.PODHOD_VERSION='4.7.0';window.PODHOD_LANG='en';
