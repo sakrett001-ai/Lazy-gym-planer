@@ -125,37 +125,92 @@ function scheduleMotionLoop() {
     if (!document.hidden) {
       if (detailMotion) {if (!detailMotion.paused) {detailMotion.clock+=dt*Number(motionPrefs.speed);paintMotion(detailMotion,true);}}
       else if(workout && $('#workout-view').open){const F=workout.motion;if(F && !F.paused && !$('#wv-active').hidden){F.clock+=dt;paintWorkoutMotion();}}
-      else for (const F of figs) if (F.vis && !F.paused) {F.clock+=dt;paintMotion(F);}
+      else for (const F of figs) if (F.f && F.vis && !F.paused && F.active!==false) {
+        /* карточки и атлас — 30 кадров в секунду: часы идут каждый кадр, рисунок — через кадр */
+        F.clock+=dt;F.since=(F.since||0)+dt;
+        if(F.since>=CARD_FRAME_MS){F.since=0;paintMotion(F);}
+      }
     }
     rafId=requestAnimationFrame(loop);
   };
   rafId=requestAnimationFrame(loop);
 }
+/* Карточки плана. Рисунок строится, когда карточка подходит к экрану; двигаются только те, на которые смотрят:
+   на телефоне — одна (самая видимая или та, где только что нажали «Пуск»), на широком экране — две,
+   и ещё та, что под мышью или в фокусе. Остальные стоят в текущей фазе; пауза пользователя не трогается. */
+const CARD_FRAME_MS=30, CARD_NEAR='400px 0px';
+let ioSeen=null;
+function activeCardCount(){return window.innerWidth>=900?2:1;}
+function pickActiveCards(){
+  const cards=figs.filter(F=>F.card&&F.f);
+  const mid=window.innerHeight/2,dist=F=>{const r=F.btn.getBoundingClientRect();return Math.abs(r.top+r.height/2-mid);};
+  /* порядок: под мышью или в фокусе, потом последняя нажатая «Пуск» (пока видна хотя бы наполовину),
+     потом самая видимая и ближе к середине экрана */
+  const pick=F=>F.seen>=.4?F.pick||0:0;
+  const order=cards.filter(F=>!F.paused&&(F.seen>0||F.hover)).sort((a,b)=>(b.hover|0)-(a.hover|0)||pick(b)-pick(a)||Math.round(b.seen*5)-Math.round(a.seen*5)||dist(a)-dist(b));
+  const on=new Set(order.slice(0,activeCardCount()+(order[0]?.hover?1:0)));
+  let k=0;for(const F of figs)if(F.card){const was=F.active;F.active=on.has(F);if(F.active&&!was)F.since=CARD_FRAME_MS/2*(k++%2);}
+}
+function buildCardFigure(F){
+  if(F.f||F.failed)return;
+  try {
+    /* начатую заранее рамку досчитать, а не начинать заново */
+    if(F.job){F.job.step(41);F.job=null;}
+    F.f=buildFigure(F.it.ex.anim,{primary:F.it.ex.pri,has:F.it.has,ratio:1,t:0,label:F.it.name,muscles:motionPrefs.muscles});
+    F.btn.prepend(F.f.svg);paintMotion(F);
+  } catch(e) {F.failed=true;console.error('Демонстрация',F.it.ex.id,e);}
+}
+/* Рамки ещё не построенных карточек досчитываются заранее, по два положения за раз: в простое, а если простоя
+   нет (идёт анимация на слабом телефоне) — не реже чем раз в четверть секунды. Тогда при прокрутке карточка
+   строится сразу, без долгой паузы. */
+let framePrefetchGen=0;
+function prefetchCardFrames(){
+  const gen=++framePrefetchGen,queue=figs.filter(F=>F.card);let F=null;
+  const idle=window.requestIdleCallback?cb=>requestIdleCallback(cb,{timeout:200}):cb=>setTimeout(()=>{const end=performance.now()+8;cb({timeRemaining:()=>Math.max(0,end-performance.now())});},40);
+  const work=deadline=>{
+    if(gen!==framePrefetchGen)return;
+    do {
+      if(!F||!F.job){
+        F=queue.shift();if(!F)return;
+        if(F.f||F.failed){F=null;continue;}
+        try{F.job=figureFrameJob(F.it.ex.anim,{has:F.it.has,ratio:1});}catch(e){F.job=null;}
+        if(!F.job||F.job.done){F.job=null;continue;}
+      }
+      /* без простоя (сработал таймаут) — кусок побольше: шесть положений ≈ 3 мс на компьютере */
+      if(F.job.step(deadline.didTimeout?6:2))F.job=null;
+    } while(deadline.timeRemaining()>3);
+    idle(work);
+  };
+  idle(work);
+}
 function mountFigures() {
   figs=[];
   const flat=plan.blocks.flatMap(b=>b.items);
   document.querySelectorAll('[data-fig]').forEach(btn=>{
-    const it=flat[+btn.dataset.fig];
-    try {
-      const f=buildFigure(it.ex.anim,{primary:it.ex.pri,has:it.has,ratio:1,t:0,label:it.name,muscles:motionPrefs.muscles});
-      btn.prepend(f.svg);
-      const F={btn,it,f,vis:true,paused:reduceMotion,clock:0,durations:motionDurations(it)};
-      figs.push(F);paintMotion(F);
-      if(motionProfile(it.ex.anim)){const note=document.createElement('p');note.className='muscle-tile-note';note.textContent='Цвет — учебная схема';note.hidden=!motionPrefs.muscles;btn.closest('.motion-tile').appendChild(note);}
-      const pause=btn.closest('.motion-tile').querySelector('[data-motion-pause]');
-      if(pause){pause.textContent=F.paused?'Пуск':'Пауза';pause.setAttribute('aria-pressed',String(!F.paused));pause.setAttribute('aria-label',`${F.paused?'Воспроизвести':'Приостановить'} демонстрацию: ${it.name}`);}
-    } catch(e) {console.error('Демонстрация',it.ex.id,e);}
+    const it=flat[+btn.dataset.fig];if(!it)return;
+    const F={btn,it,f:null,card:true,vis:false,seen:0,active:false,paused:reduceMotion,clock:0,durations:motionDurations(it)};
+    figs.push(F);
+    const tile=btn.closest('.motion-tile');
+    if(motionProfile(it.ex.anim)){const note=document.createElement('p');note.className='muscle-tile-note';note.textContent='Цвет — учебная схема';note.hidden=!motionPrefs.muscles;tile.appendChild(note);}
+    const pause=tile.querySelector('[data-motion-pause]');
+    if(pause){pause.textContent=F.paused?'Пуск':'Пауза';pause.setAttribute('aria-pressed',String(!F.paused));pause.setAttribute('aria-label',`${F.paused?'Воспроизвести':'Приостановить'} демонстрацию: ${it.name}`);}
+    const hover=on=>e=>{if(e.pointerType&&e.pointerType!=='mouse')return;F.hover=on;pickActiveCards();};
+    tile.addEventListener('pointerenter',hover(true));tile.addEventListener('pointerleave',hover(false));
+    btn.addEventListener('focus',()=>{F.hover=true;pickActiveCards();});btn.addEventListener('blur',()=>{F.hover=false;pickActiveCards();});
   });
   if ('IntersectionObserver' in window) {
-    io=new IntersectionObserver(es=>{for(const e of es){const F=figs.find(x=>x.btn===e.target);if(F)F.vis=e.isIntersecting;}},{rootMargin:'80px'});
-    figs.forEach(F=>io.observe(F.btn));
-  }
+    const byBtn=new Map(figs.map(F=>[F.btn,F]));
+    io=new IntersectionObserver(es=>{for(const e of es){const F=byBtn.get(e.target);if(!F)continue;F.vis=e.isIntersecting;if(F.vis)buildCardFigure(F);}pickActiveCards();},{rootMargin:CARD_NEAR});
+    ioSeen=new IntersectionObserver(es=>{for(const e of es){const F=byBtn.get(e.target);if(F)F.seen=e.isIntersecting?e.intersectionRatio:0;}pickActiveCards();},{threshold:[0,.2,.4,.6,.8,1]});
+    for(const F of figs){io.observe(F.btn);ioSeen.observe(F.btn);}
+    prefetchCardFrames();
+  } else for(const F of figs){F.vis=true;F.active=true;buildCardFigure(F);}
   scheduleMotionLoop();
 }
 function stopFigures() {
   if(workout && $('#workout-view').open)closeWorkout();
   if(detailMotion) closeMotion();
-  cancelAnimationFrame(rafId);if(io)io.disconnect();io=null;for(const F of figs)disposeMotion(F);figs=[];
+  cancelAnimationFrame(rafId);framePrefetchGen++;if(io)io.disconnect();if(ioSeen)ioSeen.disconnect();io=ioSeen=null;for(const F of figs)disposeMotion(F);figs=[];
 }
 function previewItem(id) {
   const ex=EXI[id];let E=effEquip(S.equip);
@@ -202,11 +257,12 @@ function closeMotion() {
   detailReturn=null;
 }
 function setupMotionViewer() {
+  window.addEventListener('resize',()=>pickActiveCards(),{passive:true});
   $('#mv-exercise').innerHTML=GROUPS.map(g=>`<optgroup label="${esc(g.name)}">${EX.filter(ex=>ex.g===g.id).map(ex=>`<option value="${ex.id}">${esc(ex.name)}</option>`).join('')}</optgroup>`).join('');
 
   document.addEventListener('click',e=>{
     const t=e.target.closest('button');if(!t)return;
-    if(t.dataset.motionPause!==undefined){const F=figs.find(f=>+f.btn.dataset.fig===+t.dataset.motionPause);if(F){F.paused=!F.paused;t.textContent=F.paused?'Пуск':'Пауза';t.setAttribute('aria-pressed',String(!F.paused));t.setAttribute('aria-label',`${F.paused?'Воспроизвести':'Приостановить'} демонстрацию: ${F.it.name}`);}return;}
+    if(t.dataset.motionPause!==undefined){const F=figs.find(f=>+f.btn.dataset.fig===+t.dataset.motionPause);if(F){F.paused=!F.paused;if(F.card){F.pick=performance.now();pickActiveCards();}t.textContent=F.paused?'Пуск':'Пауза';t.setAttribute('aria-pressed',String(!F.paused));t.setAttribute('aria-label',`${F.paused?'Воспроизвести':'Приостановить'} демонстрацию: ${F.it.name}`);}return;}
     if(t.id==='motion-atlas'){openMotion(figs[0]?figs[0].btn.dataset.fig:-1);return;}
     if(t.id==='mv-close'){closeMotion();return;}
     if(!detailMotion)return;

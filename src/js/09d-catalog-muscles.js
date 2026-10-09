@@ -114,22 +114,23 @@ const MANNEQUIN_LIMB_PATCHES={
 const MANNEQUIN_DELTS=[['delt_f',-.75,.75],['delt_s',.8,1.75],['delt_r',1.8,2.75]];
 function mannequinMuscleSurfaces(R,profile,{coarse=false}={}){
  const faces=[],V=Mannequin.V,lift=.25;
- const grid=(id,side,rows,cols,point)=>{
+ /* row(u) возвращает точку ряда (v, e): сечение ряда считается один раз — и для вершин, и для центров граней */
+ const grid=(id,side,rows,cols,row)=>{
   if(!profile.regions[id]?.visible)return;
-  const P=[];for(let r=0;r<=rows;r++){P.push([]);for(let c=0;c<=cols;c++)P[r].push(point(r/rows,c/cols,lift));}
-  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
-   const pts=[P[r][c],P[r][c+1],P[r+1][c+1],P[r+1][c]],mid=point((r+.5)/rows,(c+.5)/cols,0),out=point((r+.5)/rows,(c+.5)/cols,1);
+  const P=[];for(let r=0;r<=rows;r++){const at=row(r/rows);P.push([]);for(let c=0;c<=cols;c++)P[r].push(at(c/cols,lift));}
+  for(let r=0;r<rows;r++){const at=row((r+.5)/rows);for(let c=0;c<cols;c++){
+   const pts=[P[r][c],P[r][c+1],P[r+1][c+1],P[r+1][c]],mid=at((c+.5)/cols,0),out=at((c+.5)/cols,1);
    faces.push({id,parent:profile.regions[id].parent,side,points:pts,normal:V.unit(V.sub(out,mid)),anchor:mid});
-  }
+  }}
  };
  const step=coarse?2:1;
  for(const side of ['L','R']){
-  for(const[id,h0,h1,a0,a1]of MANNEQUIN_TORSO_PATCHES)grid(id,side,Math.max(1,Math.round((h1-h0)/(2.5*step))),Math.max(2,Math.round((a1-a0)/(.13*step))),(u,v,e)=>Mannequin.torsoPoint(R,h0+(h1-h0)*u,side,a0+(a1-a0)*v,e));
+  for(const[id,h0,h1,a0,a1]of MANNEQUIN_TORSO_PATCHES)grid(id,side,Math.max(1,Math.round((h1-h0)/(2.5*step))),Math.max(2,Math.round((a1-a0)/(.13*step))),u=>{const at=Mannequin.torsoRow(R,h0+(h1-h0)*u,side);return(v,e)=>at(a0+(a1-a0)*v,e);});
   for(const[kind,list]of Object.entries(MANNEQUIN_LIMB_PATCHES))for(const[id,t0,t1,a0,a1]of list)
-   grid(id,side,Math.max(1,Math.round((t1-t0)/(.06*step))),Math.max(2,Math.round((a1-a0)/(.2*step))),(u,v,e)=>Mannequin.limbPoint(R,kind,side,t0+(t1-t0)*u,a0+(a1-a0)*v,e));
+   grid(id,side,Math.max(1,Math.round((t1-t0)/(.06*step))),Math.max(2,Math.round((a1-a0)/(.2*step))),u=>{const at=Mannequin.limbRow(R,kind,side,t0+(t1-t0)*u);return(v,e)=>at(a0+(a1-a0)*v,e);});
   /* дельтовидная: сектор «шапки» плечевого сустава, от верха вниз на ~95° */
   const ua=R.frames['ua'+side],g=side==='L'?1:-1,cap=V.add(V.add(R['sh'+side],ua.y,-1.4),ua.x,g*.7),lat=V.scale(ua.x,g),r=Mannequin.CAPS.sh;
-  for(const[id,a0,a1]of MANNEQUIN_DELTS)grid(id,side,coarse?3:5,coarse?3:6,(u,v,e)=>{
+  for(const[id,a0,a1]of MANNEQUIN_DELTS)grid(id,side,coarse?3:5,coarse?3:6,u=>(v,e)=>{
    const polar=(.18+.85*u)*Math.PI/2*1.05,az=a0+(a1-a0)*v,dir=V.add(V.add(V.scale(ua.y,Math.cos(polar)),ua.z,Math.sin(polar)*Math.cos(az)),lat,Math.sin(polar)*Math.sin(az));
    return V.add(cap,dir,r+e);
   });
