@@ -274,6 +274,8 @@ function checkFrame(R, entry = {}) {
   }
   /* 5. Заявленные контакты */
   for (const k of contacts) {
+    /* контакт может действовать только в части цикла: when [t0, t1] (прыжки, шаги) */
+    if (k.when && entry.t != null && (entry.t < k.when[0] - 1e-6 || entry.t > k.when[1] + 1e-6)) continue;
     if (k.prop !== 'floor' && !cols.some(c => c.id === k.prop || c.id.startsWith(k.prop + ':'))) { if (k.optional) continue; }
     const region = /^grip(L|R)$/.test(k.body) ? null : regionPoints(k.body, pts, R);
     if (/^grip(L|R)$/.test(k.body)) {
@@ -355,7 +357,8 @@ function checkFrame(R, entry = {}) {
     if (worst > 1.0) push('cable', worst > 3 ? 'error' : 'warn', `${c.id} проходит сквозь ${where}`, worst);
   }
   /* 8. Равновесие: только если тело опирается лишь на пол */
-  if (!entry.dynamic && contacts.length && contacts.every(k => k.prop === 'floor')) {
+  const active = contacts.filter(k => !(k.when && entry.t != null && (entry.t < k.when[0] || entry.t > k.when[1])));
+  if (!entry.dynamic && active.length && active.every(k => k.prop === 'floor')) {
     const extra = []; for (const c of cols.filter(c => c.free && c.part !== 'plate')) { }
     const freeMass = (entry.loads || []).map(l => [l.at === 'grips' ? V.mix(R.gripL, R.gripR, .5) : R[l.at], l.kg]);
     const com = M.centerOfMass(R, freeMass).c;
@@ -388,7 +391,7 @@ function checkClip(frameAt, entry = {}, { samples = 41 } = {}) {
   const issues = new Map(); let prev = null;
   const keys = ['shL', 'shR', 'elL', 'elR', 'wrL', 'wrR', 'hipL', 'hipR', 'knL', 'knR', 'anL', 'anR', 'head'];
   for (let i = 0; i < samples; i++) {
-    const t = i / (samples - 1), R = frameAt(t), { issues: list } = checkFrame(R, entry);
+    const t = i / (samples - 1), R = frameAt(t), { issues: list } = checkFrame(R, { ...entry, t });
     for (const f of list) {
       const key = f.rule + '|' + f.detail.replace(/-?[\d.]+(°| см)/g, '').replace(/\d+/g, '#');
       const old = issues.get(key);
@@ -398,6 +401,8 @@ function checkClip(frameAt, entry = {}, { samples = 41 } = {}) {
     if (prev) for (const k of keys) { const d = V.dist(R[k], prev[k]); if (d > 14) issues.set('jump|' + k, { rule: 'jump', severity: 'error', detail: `${k} скачок ${d.toFixed(0)} см между кадрами`, t: +t.toFixed(3), frames: 1 }); }
     prev = R;
   }
+  /* замкнутый цикл: конец совпадает с началом */
+  if (entry.loop) { const a = frameAt(0), b = frameAt(1); for (const k of keys) { const d = V.dist(a[k], b[k]); if (d > 1) { issues.set('loop|' + k, { rule: 'loop', severity: 'error', detail: `цикл не замкнут: ${k} в конце на ${d.toFixed(1)} см от начала`, t: 1, frames: 1 }); break; } } }
   return [...issues.values()];
 }
 module.exports = { checkFrame, checkClip, angles, romChecks, bodyPoints, collider, LIM };

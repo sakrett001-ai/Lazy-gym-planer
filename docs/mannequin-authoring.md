@@ -77,6 +77,10 @@
 | `C.solve1D(f, lo, hi)` | подбор одного параметра (например, наклона тела, чтобы грудь коснулась грифа) |
 | `C.point(eqId, name)`, `C.frame(eqId, name)` | опорные точки и рамки инвентаря (`anchor`/`frameAnchor` в типе) |
 
+Контакт можно ограничить частью цикла: `{ body: 'soleL', prop: 'floor', when: [0, .4] }` — например,
+стопа на полу только в опорной фазе шага или до прыжка. Для бросков и прыжков ставьте `dynamic: true`
+(равновесие не проверяется).
+
 Области тела для `restOn` и контактов: `back`, `upperBack`, `chest`, `belly`, `front`, `buttocks`,
 `thighsBack`, `headBack`, `headAll`, `uaL/R`, `faL/R`, `thL/R`, `skL/R`, `kneeL/R`, `shinL/R`.
 Для контактов дополнительно: `soleL/R` (подошва), `footL/R` (вся обувь), `palmL/R`, `gripL/R`.
