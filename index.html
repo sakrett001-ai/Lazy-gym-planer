@@ -8,15 +8,15 @@
 <meta name="theme-color" content="#0E1116" media="(prefers-color-scheme: dark)">
 <meta name="description" content="Lazy Gym Planner — планировщик тренировок: подбор под мышцы и оборудование, техника, журнал весов.">
 <title>Lazy Gym Planner</title>
-<link rel="manifest" href="manifest.webmanifest?v=4.5.0-da2752bed033">
-<link rel="icon" href="favicon-32.png?v=4.5.0-da2752bed033" type="image/png" sizes="32x32">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=4.5.0-da2752bed033" sizes="180x180">
+<link rel="manifest" href="manifest.webmanifest?v=4.6.0-b52f549a0e7d">
+<link rel="icon" href="favicon-32.png?v=4.6.0-b52f549a0e7d" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=4.6.0-b52f549a0e7d" sizes="180x180">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Lazy Gym">
 <link rel="alternate" hreflang="en" href="en/">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
-<link rel="stylesheet" href="app.css?v=4.5.0-da2752bed033">
+<link rel="stylesheet" href="app.css?v=4.6.0-b52f549a0e7d">
 </head>
 <body>
 </head>
@@ -61,7 +61,8 @@
   <div id="wv-active">
    <div class="wv-select"><button type="button" id="wv-prev" aria-label="Предыдущий подход">←</button><label for="wv-exercise">Упражнение<select id="wv-exercise"></select></label><button type="button" id="wv-next" aria-label="Следующий подход">→</button></div>
    <div class="wv-grid">
-    <section class="wv-visual" aria-label="Техника упражнения"><div id="wv-cameras" class="motion-cameras" role="group" aria-label="Ракурс движения" hidden></div><div class="wv-stage-wrap"><span id="wv-angle"></span><div id="wv-stage"></div><div class="wv-figure-tools"><button type="button" id="wv-motion" aria-pressed="true">Пауза</button><button type="button" id="wv-technique">Разобрать технику ↗</button></div></div><div class="muscle-tools"><label><input type="checkbox" id="wv-muscle-toggle" aria-describedby="wv-muscle-availability"> Мышцы по фазам</label></div><p id="wv-muscle-availability" class="muscle-availability" hidden>Мышечный профиль для этого упражнения пока отсутствует.</p><p id="wv-cue" class="wv-cue"></p>
+    <section class="wv-visual" aria-label="Техника упражнения"><div id="wv-cameras" class="motion-cameras" role="group" aria-label="Ракурс движения" hidden></div><div class="wv-stage-wrap"><span id="wv-angle"></span><div id="wv-stage"></div><div class="wv-figure-tools"><button type="button" id="wv-motion" aria-pressed="true">Пауза</button><button type="button" id="wv-technique">Разобрать технику ↗</button></div></div><div class="muscle-tools"><label><input type="checkbox" id="wv-muscle-toggle" aria-describedby="wv-muscle-availability"> Мышцы по фазам</label><label><input type="checkbox" id="wv-stress-toggle" checked> Нагрузка на суставы</label></div><p id="wv-muscle-availability" class="muscle-availability" hidden>Мышечный профиль для этого упражнения пока отсутствует.</p><p id="wv-cue" class="wv-cue"></p>
+     <section id="wv-stress-panel" class="stress-panel" aria-label="Нагрузка на суставы" hidden><h3>Нагрузка на суставы</h3><p class="stress-explanation">Красная метка на манекене — момент пиковой нагрузки на сустав, связки или сухожилие. Это напоминание держать технику, а не запрет.</p><ul id="wv-stress-list" class="stress-list"></ul></section>
      <section id="wv-muscle-panel" class="muscle-panel" aria-label="Участие мышц по фазам" hidden><h3>Мышцы по фазам</h3><div class="muscle-scale" aria-hidden="true"><span>Нейтрально</span><span class="muscle-scale-gradient"></span><span>Сильнее</span></div><p class="muscle-explanation">Учебная схема: цвет показывает примерное участие мышцы, а не измеренную силу или ЭМГ. Кривые условные. Части мышцы работают совместно; для большинства частей используется общий профиль группы.</p><label class="muscle-region-select">Выделить область<select id="wv-region" aria-label="Выделить мышечную область"><option value="all">Все области</option></select></label><p id="wv-muscle-note" class="muscle-phase-note"></p><ul id="wv-muscle-list" class="muscle-list"></ul><p class="muscle-explanation">Скрытые поверхности видны в другом ракурсе.</p></section>
      <details class="wv-guide"><summary>Как начать и что контролировать</summary><p id="wv-setup"></p><p id="wv-control"></p><p id="wv-breath"></p></details></section>
     <section class="wv-record" aria-label="Текущий подход"><p id="wv-set-label" class="wv-eyebrow"></p><h2 id="wv-title"></h2><p id="wv-equipment" class="wv-muted"></p><div id="wv-set-chips" class="wv-set-chips" aria-label="Подходы упражнения"></div>
@@ -79,28 +80,29 @@
 
 <dialog id="motion-view" class="motion-view" aria-labelledby="mv-title">
  <div class="mv-shell">
-  <header class="mv-head"><div><p class="mv-eyebrow">LAZY GYM PLANNER · АТЛАС ДВИЖЕНИЙ · 4.5.0</p><h2 id="mv-title">Разбор упражнения</h2></div><button type="button" id="mv-close" aria-label="Закрыть разбор">Закрыть ×</button></header>
+  <header class="mv-head"><div><p class="mv-eyebrow">LAZY GYM PLANNER · АТЛАС ДВИЖЕНИЙ · 4.6.0</p><h2 id="mv-title">Разбор упражнения</h2></div><button type="button" id="mv-close" aria-label="Закрыть разбор">Закрыть ×</button></header>
   <div class="mv-select"><button type="button" data-mv-nav="-1" aria-label="Предыдущее упражнение">←</button><label for="mv-exercise">Упражнение<select id="mv-exercise"></select></label><button type="button" data-mv-nav="1" aria-label="Следующее упражнение">→</button></div>
   <div class="mv-grid">
    <section class="mv-demo" aria-label="Демонстрация движения">
     <div id="mv-camera-controls" class="motion-camera-controls" hidden><div id="mv-cameras" class="motion-cameras" role="group" aria-label="Ракурс движения"></div><label><input id="mv-dual" type="checkbox"> Два ракурса</label></div>
     <div id="mv-projections"><div class="mv-projection"><div class="mv-canvas"><span id="mv-view" class="mv-view-label"></span><div id="mv-stage"></div><div class="mv-phase-line"><span id="mv-phase"></span><span id="mv-position"></span></div></div><p id="mv-camera-hint" class="mv-camera-hint" hidden></p></div><div id="mv-second" class="mv-projection" hidden><div class="mv-canvas"><span id="mv-second-label" class="mv-view-label"></span><div id="mv-second-stage"></div></div><p id="mv-second-hint" class="mv-camera-hint"></p></div></div>
     <p id="mv-cue" class="mv-cue"></p>
-    <label class="mv-range-label" for="mv-progress">Положение в повторении<input id="mv-progress" type="range" min="0" max="1000" step="1" value="0"></label>
+    <label class="mv-range-label" for="mv-progress">Положение в повторении<input id="mv-progress" type="range" min="0" max="1000" step="1" value="0"><span id="mv-stress-track" class="stress-track" title="Красным — моменты пиковой нагрузки на суставы" hidden></span></label>
     <div class="mv-controls"><button type="button" data-mv-step="-.05" aria-label="Назад на пять процентов повторения">−5%</button><button type="button" id="mv-play" class="mv-primary" aria-pressed="false">Воспроизвести</button><button type="button" data-mv-step=".05" aria-label="Вперёд на пять процентов повторения">+5%</button><label for="mv-speed">Скорость<select id="mv-speed"><option value="0.25">¼×</option><option value="0.5">½×</option><option value="1">1×</option></select></label></div>
     <div class="mv-poses" aria-label="Положения движения"><button type="button" data-mv-pose="start">Старт</button><button type="button" data-mv-pose="middle">Середина</button><button type="button" data-mv-pose="end">Конечная точка</button><button type="button" data-mv-pose="return">Возврат</button></div>
-    <div class="mv-toggles"><label><input type="checkbox" id="mv-joints" checked> Суставы</label><label><input type="checkbox" id="mv-trace"> Траектория кисти</label><label><input type="checkbox" id="mv-vectors" checked> Векторы движения</label><label><input type="checkbox" id="mv-muscle-toggle" aria-describedby="mv-muscle-availability"> Мышцы по фазам</label></div>
+    <div class="mv-toggles"><label><input type="checkbox" id="mv-joints" checked> Суставы</label><label><input type="checkbox" id="mv-trace"> Траектория кисти</label><label><input type="checkbox" id="mv-vectors" checked> Векторы движения</label><label><input type="checkbox" id="mv-muscle-toggle" aria-describedby="mv-muscle-availability"> Мышцы по фазам</label><label><input type="checkbox" id="mv-stress-toggle" checked> Нагрузка на суставы</label></div>
+    <section id="mv-stress-panel" class="stress-panel" aria-label="Нагрузка на суставы" hidden><h3>Нагрузка на суставы</h3><p class="stress-explanation">Красная метка на манекене — момент пиковой нагрузки на сустав, связки или сухожилие. Это напоминание держать технику, а не запрет.</p><ul id="mv-stress-list" class="stress-list"></ul></section>
     <p id="mv-muscle-availability" class="muscle-availability" hidden>Мышечный профиль для этого упражнения пока отсутствует.</p>
     <section id="mv-muscle-panel" class="muscle-panel" aria-label="Участие мышц по фазам" hidden><h3>Мышцы по фазам</h3><div class="muscle-scale" aria-hidden="true"><span>Нейтрально</span><span class="muscle-scale-gradient"></span><span>Сильнее</span></div><p class="muscle-explanation">Учебная схема: цвет показывает примерное участие мышцы, а не измеренную силу или ЭМГ. Кривые условные. Части мышцы работают совместно; для большинства частей используется общий профиль группы.</p><label class="muscle-region-select">Выделить область<select id="mv-region" aria-label="Выделить мышечную область"><option value="all">Все области</option></select></label><p id="mv-muscle-note" class="muscle-phase-note"></p><ul id="mv-muscle-list" class="muscle-list"></ul><p class="muscle-explanation">Скрытые поверхности видны в другом ракурсе.</p></section>
     <p id="mv-tempo" class="mv-small"></p>
    </section>
-   <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Работающие мышцы</h3><p class="mv-muscle-label">Основные</p><p id="mv-primary"></p><p class="mv-muscle-label">Вспомогательные</p><p id="mv-secondary"></p></div></div><p class="mv-small">На объёмном манекене можно выделить мышечную область и сменить ракурс. Глубокие части перечислены в пояснениях.</p><h3>Как выполнять</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Ошибки и дыхание</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>О демонстрациях</summary><p>Схемы помогают разобрать последовательность движения. Амплитуда зависит от упражнения и особенностей человека; схематичный силуэт не задаёт обязательные углы суставов.</p><div id="mv-sources"></div><p class="mv-small">Версия демонстраций 4.5.0</p></details></aside>
+   <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Работающие мышцы</h3><p class="mv-muscle-label">Основные</p><p id="mv-primary"></p><p class="mv-muscle-label">Вспомогательные</p><p id="mv-secondary"></p></div></div><p class="mv-small">На объёмном манекене можно выделить мышечную область и сменить ракурс. Глубокие части перечислены в пояснениях.</p><h3>Как выполнять</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Ошибки и дыхание</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>О демонстрациях</summary><p>Схемы помогают разобрать последовательность движения. Амплитуда зависит от упражнения и особенностей человека; схематичный силуэт не задаёт обязательные углы суставов.</p><div id="mv-sources"></div><p class="mv-small">Версия демонстраций 4.6.0</p></details></aside>
   </div>
  </div>
 </dialog>
 
-<script src="volume.js?v=4.5.0-da2752bed033"></script>
-<script src="app.js?v=4.5.0-da2752bed033"></script>
-<script src="pwa.js?v=4.5.0-da2752bed033"></script>
+<script src="volume.js?v=4.6.0-b52f549a0e7d"></script>
+<script src="app.js?v=4.6.0-b52f549a0e7d"></script>
+<script src="pwa.js?v=4.6.0-b52f549a0e7d"></script>
 </body>
 </html>

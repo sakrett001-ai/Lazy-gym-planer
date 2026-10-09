@@ -2921,19 +2921,29 @@ function buildSpatialFigure(anim,opts={}){
  }
  trace.setAttribute('d',tracePts.map((p,i)=>`${i?'L':'M'}${f1(p[0])},${f1(p[1])}`).join(' '));
  let nodes=[],jointNodes=[],selectedRegion='all';
+ /* метки нагрузки на суставы — поверх всего рисунка */
+ const stressLayer=el('g',{class:'stress-marks','aria-hidden':'true'},svg),stressNodes=[];
+ let stressOn=(opts.stress??(typeof motionPrefs!=='undefined'?motionPrefs.stress:true))!==false,lastT=opts.t||0,lastFrame=null;
+ function paintStress(R,t,frame){
+  const marks=stressOn&&anim.catalogId&&R.frames&&typeof jointStressPoints==='function'?jointStressPoints(anim,R,t,frame?.index||0):[];
+  marks.forEach((m,i)=>{const p=project(m.p);let n=stressNodes[i];if(!n){n=stressNodes[i]=el('g',{class:'stress-mark'},stressLayer);el('circle',{r:9,class:'stress-halo'},n);el('circle',{r:3.4,class:'stress-core'},n);}n.setAttribute('transform',`translate(${f1(p[0])},${f1(p[1])})`);n.dataset.joint=m.key;n.removeAttribute('display');});
+  for(let i=marks.length;i<stressNodes.length;i++)stressNodes[i].setAttribute('display','none');
+ }
  function at(t,frame){
+  lastT=t;lastFrame=frame||null;
   const {R,muscles,records}=compile(t,frame?.index||0);
   records.forEach((s,i)=>{let node=nodes[i];if(!node||node.tagName!==s.tag){const replacement=el(s.tag,{});if(node)node.replaceWith(replacement);else scene.appendChild(replacement);node=nodes[i]=replacement;}for(const attr of [...node.attributes])if(!(attr.name in s.attrs))node.removeAttribute(attr.name);for(const[k,v]of Object.entries(s.attrs))node.setAttribute(k,v);});
   for(let i=records.length;i<nodes.length;i++)nodes[i].remove();nodes.length=records.length;
   const names=['shL','elL','wrL','hipL','knL','anL','shR','elR','wrR','hipR','knR','anR'];
   names.forEach((name,i)=>{const p=project(R[name]),node=jointNodes[i]||(jointNodes[i]=el('circle',{r:2.1,class:'joint-dot'},dots));node.setAttribute('cx',f1(p[0]));node.setAttribute('cy',f1(p[1]));});
   svg.dataset.pose=String(t);if(muscles)svg.dataset.musclePhase=muscles.phase;allBounds.length=0;setRegion(selectedRegion);
-  setVectors?.at?.(t,frame,R);
+  setVectors?.at?.(t,frame,R);paintStress(R,t,frame);
  }
+ const setStress=show=>{stressOn=!!show;at(lastT,lastFrame);};
  const setTrace=show=>trace.setAttribute('display',show?'inline':'none');
  const setMuscles=show=>svg.classList.toggle('show-muscles',!!show&&!!anim.muscleProfile);
  const setRegion=id=>{selectedRegion=id;for(const node of svg.querySelectorAll('[data-muscle]'))node.style.opacity=id==='all'||node.dataset.muscle===id?'1':'.12';};
- setMuscles(opts.muscles);at(opts.t||0);return{svg,at,setTrace,setVectors,setMuscles,setRegion,camera};
+ setMuscles(opts.muscles);at(opts.t||0);return{svg,at,setTrace,setVectors,setMuscles,setRegion,setStress,camera};
 }
 
 function spatialExercise(id,rig,camera,cameras,hints){
@@ -3762,6 +3772,42 @@ function bodyData(R){
  return{...S,head:{c:R.head,axes:[fr.head.x,fr.head.y,fr.head.z],radii:B.head},caps,hands,feet,shoe:SHOE};
 }
 
+/* ---------- Углы суставов по рамкам сегментов ----------
+   Общие для валидатора (tools/biomech/validator2.js) и меток нагрузки на суставы в приложении. */
+const jaInt = f => M3.cols([f.x[0], -f.x[1], f.x[2]], [f.y[0], -f.y[1], f.y[2]], [f.z[0], -f.z[1], f.z[2]]); /* каталог → внутренняя правая тройка */
+const jaRel = (a, b) => M3.mul(M3.T(jaInt(a)), jaInt(b));
+function jointAngles(R) {
+  const F = R.frames, out = {};
+  out.lumbar = eulerXZY(jaRel(F.pelvis, F.lumbar));
+  out.thoracic = eulerXZY(jaRel(F.lumbar, F.thorax));
+  out.neck = eulerXZY(jaRel(F.thorax, F.head));
+  for (const s of SIDES) {
+    const g = SIGN[s], A = {};
+    /* плечо относительно грудной клетки */
+    const ua = jaRel(F.thorax, F['ua' + s]), st = swingTwist(ua), hum = M3.v(ua, [0, -1, 0]);
+    A.elevation = V.angle(hum, [0, -1, 0]);
+    A.flexion = Math.atan2(hum[2], -hum[1]) * R2D;         /* вперёд + */
+    A.abduction = Math.atan2(g * hum[0], Math.hypot(hum[1], hum[2])) * R2D; /* наружу + */
+    A.posterior = -hum[2];                                     /* >0 — плечо позади фронтальной плоскости */
+    A.up = hum[1]; A.lat = g * hum[0];
+    A.twist = g * st.twist;
+    const fa = jaRel(F['ua' + s], F['fa' + s]); A.elbow = -Math.atan2(fa[7], fa[4]) * R2D;
+    const pr = jaRel(F['fa' + s], F['fd' + s]); A.pron = -g * Math.atan2(pr[2], pr[0]) * R2D;
+    /* запястье: направление кисти в рамке дистального предплечья — устойчиво и при разгибании ~90° */
+    const wr = jaRel(F['fd' + s], F['hand' + s]), d = [-wr[1], -wr[4], -wr[7]];
+    A.wristFlex = Math.atan2(-g * d[0], -d[1]) * R2D; A.wristDev = Math.asin(clamp(d[2], -1, 1)) * R2D;
+    { const ex = M3.mul(M3.rz(-g * A.wristFlex), M3.rx(-A.wristDev)), zE = M3.col(ex, 2), zH = M3.col(wr, 2), ax = V.unit(d);
+      const a1 = V.unit(V.perp(zE, ax)), a2 = V.unit(V.perp(zH, ax)); A.wristTwist = Math.atan2(V.dot(V.cross(a1, a2), ax), V.dot(a1, a2)) * R2D; }
+    const th = jaRel(F.pelvis, F['th' + s]), fem = M3.v(th, [0, -1, 0]), ht = swingTwist(th);
+    A.hipFlex = Math.atan2(fem[2], -fem[1]) * R2D; A.hipAbd = Math.atan2(g * fem[0], Math.hypot(fem[1], fem[2])) * R2D; A.hipRot = g * ht.twist;
+    const kn = jaRel(F['th' + s], F['sk' + s]); A.knee = Math.atan2(kn[7], kn[4]) * R2D;
+    const an = eulerXZY(jaRel(F['sk' + s], F['foot' + s])); A.dorsi = -an[0]; A.inversion = -g * an[1]; A.ankleTwist = an[2];
+    const mt = eulerXZY(jaRel(F['foot' + s], F['toes' + s])); A.mtp = -mt[0];
+    out[s] = A;
+  }
+  return out;
+}
+
 /* ---------- Масса ---------- */
 function centerOfMass(R,extra=[]){
  const m=B.mass,parts=[];
@@ -3780,7 +3826,7 @@ return{V,M3,Q,B,TORSO,TORSO_H,TORSO_JOINTS,LIMBS,NECK,CAPS,MASS,LIMITS,SIDES,SIG
  neutral,clone,pack,unpack,PACK,PACK_SIZE,fk,solePoints,twoBone,solveArm,solveArmWrist,setArmFromPoints,footFrame,heelFrame,solveLeg,rootRot,rootFromAxes,
  swing,swingTwist,eulerXZY,eulerYZX,spineRot,makeTrack,monotone,toCat,dirCat,catalogPose,
  profileAt,sectionAt,spineFrame,torsoPoint,limbAxes,limbPoint,neckPoint,surface,limbSDF,torsoSDF,torsoCache,headSDF,ellipseRadius,centerOfMass,LIMB_DEF,
- handShape,SHOE,bodyData};
+ handShape,SHOE,bodyData,jointAngles};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=Mannequin;
 
@@ -6304,7 +6350,7 @@ function catalogFigureAnim(anim){
 }
 function catalogVolumeData(anim,t,index,has,coarse=false){
  const R=anim.catalogRig(t),state=muscleFrame(anim,t,index),profile=motionProfile(anim);
- if(R.frames)return{exerciseId:anim.catalogId,pose:R,body:Mannequin.bodyData(R),surfaces:mannequinMuscleSurfaces(R,profile,{coarse}),values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>GymEquipment.visible(s,has)),torsoRings:[],limbProfiles:{}};
+ if(R.frames)return{exerciseId:anim.catalogId,pose:R,body:Mannequin.bodyData(R),stress:jointStressPoints(anim,R,t,index),surfaces:mannequinMuscleSurfaces(R,profile,{coarse}),values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>GymEquipment.visible(s,has)),torsoRings:[],limbProfiles:{}};
  return{exerciseId:anim.catalogId,pose:R,surfaces:catalogMuscleSurfaces(R,profile,{coarse}),values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>!s.optional||!has||has(s.optional)),torsoRings:CATALOG_RINGS,limbProfiles:CATALOG_LIMB_PROFILES};
 }
 
@@ -6334,7 +6380,7 @@ function catalogVectorGroup(svg,anim,camera){
 }
 function createMotionFigure(anim,opts){
  if(!window.GymVolume||!anim.catalogRig)return buildFigure(anim,opts);
- let f=window.GymVolume.create({...opts,data:(t,index,coarse)=>catalogVolumeData(anim,t,index,opts.has,coarse),color:muscleColor,joints:motionPrefs.joints,
+ let f=window.GymVolume.create({...opts,data:(t,index,coarse)=>catalogVolumeData(anim,t,index,opts.has,coarse),color:muscleColor,joints:motionPrefs.joints,stress:opts.stress??motionPrefs.stress,
   trace:Array.from({length:41},(_,i)=>anim.catalogRig(i/40).gripL),vectors:catalogVectors(anim),vectorFrame:catalogVectorFrame});
  if(!f){
   f=buildFigure(anim,opts);const svg=f.svg,root=document.createElement('div');root.className='volume-figure';root.setAttribute('role','img');root.setAttribute('aria-label',opts.label);root.dataset.renderer='svg';root.dataset.camera=opts.camera||'above';root.append(svg);f.svg=root;
@@ -6349,6 +6395,166 @@ function selectMuscleRegion(prefix,id){
  const p=motionProfile(F.it.ex.anim);if(id!=='all'&&!p.regions[id]?.visible)return;
  motionPrefs.regions={...motionPrefs.regions,[F.it.ex.id]:id};saveMotionPrefs();
  for(const f of [F.f,F.extra].filter(Boolean))f.setRegion?.(id);
+}
+
+/* ===================== НАГРУЗКА НА СУСТАВЫ =====================
+   Красная метка — момент пиковой нагрузки на сустав, связки или сухожилие в повторении. Это напоминание держать
+   технику, а не «опасное упражнение». Условия проверяются по углам суставов манекена (Mannequin.jointAngles —
+   тот же расчёт, что у валидатора) и по опорам упражнения (контакты спецификации), на 41 кадре повторения.
+   Пороги и основания:
+   колени      — сгибание ≥85° (на одной ноге ≥80°) под весом: Escamilla 2001, MSSE 33(1):127–141;
+   колено      — разгибание в открытой цепи ближе 30° к прямой ноге: Escamilla et al. 1998, MSSE 30(4):556–569;
+   поясница    — наклон корпуса ≥40° без опоры с весом: McGill 1997, J Biomech 30(5):465–475;
+   плечи       — плечо за линией корпуса ≥20° в жимах и брусьях, длинный рычаг в разведениях:
+                 Fees et al. 1998, AJSM 26(5):732–742; брусья — McKenzie et al. 2022, IJERPH 19(21):14390;
+   локти       — сгибание ≥100° с весом над головой в изолирующих упражнениях на трицепс (практическое правило);
+   запястья    — разгибание кисти ≥60° под весом тела: J Wrist Surg 2017, 6(4):276–279;
+   ахилл       — тыльное сгибание ≥15° с весом в подъёмах на носки: Weinert-Aplin et al. 2015, JSSM 14:459–465;
+   приземление — кадры после полётной фазы, пока таз опускается;
+   бёдра сзади — колено ≤40° при сгибании бедра ≥70° с весом; скандинавские сгибания — наклон ≥40°:
+                 Opar et al. 2012, Sports Med 42(3):209–226;
+   вис, верх подтягивания, шея — по просьбе владельца: здесь чаще всего травмируют плечи и шейный отдел. */
+const STRESS_RULES = [
+  {id:'knee', parts:['knees'], zone:'Knees', what:'Deep bend under load — peak load on the kneecap and knee ligaments.', tip:'Keep knees in line with your feet; don’t drop or relax at the bottom.'},
+  {id:'kneeOpen', parts:['knees'], zone:'Knees', what:'The last 30° before a straight leg put the most tension on the ACL.', tip:'Extend without jerking or slamming at the end.'},
+  {id:'lumbar', parts:['lower back'], zone:'Lower back', what:'Leaning forward with a load and no support — peak load on the lower back.', tip:'Keep a neutral back, hinge at the hips, keep the weight close to your legs.'},
+  {id:'shPress', parts:['shoulders'], zone:'Shoulders', what:'The upper arm goes behind the torso under load — stress on the front of the shoulder joint.', tip:'Lower only to a comfortable depth, shoulder blades squeezed and set.'},
+  {id:'shLever', parts:['shoulders'], zone:'Shoulders', what:'Long lever: the weight is far from the shoulder.', tip:'Keep elbows slightly bent, don’t sink at the bottom.'},
+  {id:'hang', parts:['shoulders'], zone:'Shoulders', what:'Hanging: body weight stretches the shoulder joint.', tip:'Active hang: shoulders away from your ears, no dropping into the bottom.'},
+  {id:'pullTop', parts:['shoulders'], zone:'Shoulders', what:'Top of the pull-up: shoulders roll forward and up to the ears.', tip:'Chest to the bar, shoulder blades down and back, no jerking.'},
+  {id:'neck', parts:['neck'], zone:'Neck', what:'When strength runs out, people reach for the bar with their neck — this overloads the cervical spine.', tip:'Keep your chin neutral and eyes forward: better to fall short than to reach with your neck.'},
+  {id:'elbow', parts:['elbows'], zone:'Elbows', what:'Deep elbow bend with the weight overhead — stress on the olecranon and triceps tendon.', tip:'Lower slowly, keep your elbows in.'},
+  {id:'wrist', parts:['wrists'], zone:'Wrists', what:'The wrist is bent back under body weight.', tip:'Spread the load over the whole palm; if it hurts, use push-up handles.'},
+  {id:'achilles', parts:['Achilles tendons'], zone:'Achilles tendons', what:'Heel below the step under load — peak tension on the tendon.', tip:'Lower smoothly, no bouncing.'},
+  {id:'landing', parts:['knees', 'Achilles tendons'], zone:'Knees and Achilles tendons', what:'Landing — an impact several times your body weight.', tip:'Land softly on the balls of your feet, knees in line with your feet.'},
+  {id:'hams', parts:['hamstrings'], zone:'Hamstrings', what:'The hamstrings are stretched under load.', tip:'Lower until you feel the stretch, no jerking out of the bottom.'}
+];
+const STRESS_RULE = Object.fromEntries(STRESS_RULES.map(r => [r.id, r]));
+const STRESS_FRAMES = 40;
+const STRESS_CACHE = new Map();
+/* наклоны от таза, если таблица движений планировщика ещё не загружена (проверка рисунков без приложения) */
+const STRESS_HINGE = new Set(['deadlift', 'rdl', 'sllift', 'goodmorning', 'kbswing', 'hyper', 'pullthrough']);
+
+/* что держит и на что опирается тело — по контактам спецификации */
+function stressContacts(ex) {
+  const C = (typeof CATALOG_POSES !== 'undefined' && CATALOG_POSES[ex.id]?.contacts || []).map(c => c.body + '>' + c.prop);
+  const has = re => C.some(c => re.test(c));
+  const legs = ['quads', 'glutes', 'hams', 'calves', 'cardio'].includes(ex.g);
+  /* свободный вес: гриф, гантель, гиря; ладони на диске гантели (пуловер, разгибание из-за головы) */
+  const free = has(/^grip[LR]?>(bar|db[LR]?|kb[LR]?|tbar|\w+:horn[LR])$/) || has(/^(hand|palm[LR]?)>\w+:top$/);
+  const machine = !legs && has(/^grip[LR]?>(cab[LR]?|pec[LR]|\w+:(handle[LR]?|grab[LR]|pull[LR]|pec[LR]))$/);
+  return {
+    loaded: free || machine,
+    backBar: has(/^back>bar$/),
+    sole: s => has(new RegExp(s ? '^sole(' + s + ')?>' : '^sole[LR]?>')),
+    /* стоит на полу или коврике и ничем больше не опирается — только у таких упражнений бывает приземление */
+    floorOnly: C.some(c => /^sole[LR]?>(floor|mat)$/.test(c)) && !C.some(c => /^sole[LR]?>(?!(floor|mat)$)|^(buttocks|back|upperBack|chest|knee[LR]?|th[LR]?)>|^grip[LR]?>\w+:(pullBar|pull[LR]|bar[LR]|dip[LR]|rail[LR])$/.test(c)),
+    seated: has(/^(back|chest|belly|buttocks|upperBack|front|headBack|th[LR]?|thighsBack|knee[LR]?|fa[LR]?|palm[LR]?)>(?!bar$)/),
+    upright: !has(/^(buttocks|back|chest|th[LR]?|upperBack|knee[LR]?)>(?!bar$)(?!\w+:sh[LR]$)/),
+    /* на одной ноге: касание ящика ягодицами в нижней точке пистолета не делает упражнение сидячим */
+    uprightUni: !has(/^(back|chest|th[LR]?|upperBack|knee[LR]?)>(?!bar$)/),
+    legPress: has(/^sole[LR]?>\w+:plate/) || has(/^upperBack>\w+:sh[LR]$/),
+    shin: has(/^shin[LR]?>\w+:roller/),
+    palmBear: s => has(new RegExp('^palm(' + s + ')?>(?!\\w+:(panel|top)$)')),
+    palmTop: has(/^palm[LR]?>\w+:top$/),
+    handsBear: has(/^(palm[LR]?|fa[LR]?)>|^grip[LR]?>\w+:(bar[LR]|dip[LR]|seat|pad|top)$/),
+    bar: has(/^grip[LR]?>\w+:(pullBar|pull[LR])$/),
+    kneelAnchored: has(/^knee[LR]?>pad$/) && has(/^foot[LR]?>\w+:base$/)
+  };
+}
+/* углы и вспомогательные величины кадра */
+function stressFrame(R) {
+  const A = Mannequin.jointAngles(R), V = Mannequin.V;
+  const up = V.unit(V.sub(R.sh, R.hip)), trunk = Math.acos(Math.max(-1, Math.min(1, -up[1]))) * 180 / Math.PI;
+  const side = s => { const a = A[s], h = R['grip' + s] && R['sh' + s] ? Math.hypot(R['grip' + s][0] - R['sh' + s][0], R['grip' + s][2] - R['sh' + s][2]) : 0;
+    return {...a, behind:a.posterior > 0 ? Math.asin(Math.min(1, a.posterior)) * 180 / Math.PI : 0, beta:Math.abs(Math.atan2(a.lat, -a.up) * 180 / Math.PI), reach:h}; };
+  return {A, trunk, L:side('L'), R:side('R')};
+}
+/* правила кадра: возвращают ключи меток (суставы со стороной или центральные точки) */
+function stressRulesAt(ex, k, f) {
+  const out = {}, add = (id, keys) => { if (keys.length) out[id] = keys; }, both = (fn, key) => ['L', 'R'].filter(fn).map(s => key + s);
+  /* в наклоне от таза (становая, румынская) колени согнуты, но пик нагрузки — на поясницу и заднюю поверхность бедра */
+  const hinge = typeof PATTERN !== 'undefined' ? PATTERN[ex.id] === 'hinge' : STRESS_HINGE.has(ex.id), legsG = ['quads', 'glutes', 'hams'].includes(ex.g);
+  if (!ex.pri.includes('calves') && !hinge) {
+    const loaded = k.legPress || (k.upright && (k.loaded || k.backBar)) || (legsG && ex.uni && k.uprightUni);
+    if (loaded) add('knee', both(s => k.sole(s) && f[s].knee >= (ex.uni ? 80 : 85), 'kn'));
+  }
+  if (k.shin) add('kneeOpen', both(s => f[s].knee <= 30, 'kn'));
+  if (k.sole('') && !k.seated && (k.loaded || k.backBar) && f.trunk >= 40) add('lumbar', ['lumbar']);
+  const push = ['chest', 'triceps', 'shoulders'].includes(ex.g);
+  if (push && (k.loaded || k.handsBear)) add('shPress', both(s => f[s].behind >= 20, 'sh'));
+  if (ex.g === 'chest' && k.loaded) add('shLever', both(s => (f[s].elbow <= 35 && f[s].reach >= 45 && f[s].beta >= 60 && f[s].beta <= 120 && f.trunk > 60) || (f[s].elevation >= 130 && f[s].reach >= 35), 'sh'));
+  if (k.bar) {
+    add('hang', both(s => f[s].elevation >= 140, 'sh'));
+    const top = both(s => f[s].elbow >= 100, 'sh');
+    add('pullTop', top);
+    if (top.length) add('neck', ['neck']);
+  }
+  if (ex.pri[0] === 'triceps' && ex.type !== 'c' && k.loaded) add('elbow', both(s => f[s].elbow >= 100 && f[s].elevation >= 80, 'el'));
+  if (!k.kneelAnchored) add('wrist', both(s => ((k.palmBear(s) && f.trunk >= 45) || k.palmTop) && f[s].wristFlex <= -60, 'wr'));
+  if (ex.pri[0] === 'calves' && ex.type !== 'c' && ex.g !== 'cardio') add('achilles', both(s => f[s].dorsi >= 15, 'an'));
+  if (k.sole('') && !k.seated && (k.loaded || k.backBar)) add('hams', both(s => f[s].knee <= 40 && f[s].hipFlex >= 70, 'th'));
+  if (k.kneelAnchored && f.trunk >= 40) add('hams', ['thL', 'thR']);
+  return out;
+}
+/* метки по кадрам: f — повторение вперёд (t 0→1), b — возврат (t 1→0); различаются только приземлением */
+function jointStress(ex) {
+  if (STRESS_CACHE.has(ex.id)) return STRESS_CACHE.get(ex.id);
+  let result = {rules:[]};
+  const rig = ex.anim.catalogRig;
+  if (rig && typeof CATALOG_POSES !== 'undefined' && CATALOG_POSES[ex.id]) {
+    const k = stressContacts(ex), frames = [], clear = [], hip = [];
+    for (let i = 0; i <= STRESS_FRAMES; i++) {
+      const R = rig(i / STRESS_FRAMES);
+      if (!R.frames) { frames.length = 0; break; }
+      frames.push(stressRulesAt(ex, k, stressFrame(R)));
+      clear.push(Math.max(R.heelL[1], R.toeL[1], R.heelR[1], R.toeR[1])); hip.push(R.hip[1]);
+    }
+    if (frames.length) {
+      const ground = Math.max(...clear), gap = clear.map(y => ground - y);
+      const landing = order => { const hit = new Array(frames.length).fill(false); let since = Infinity;
+        for (let n = 1; n < order.length; n++) { const i = order[n], prev = order[n - 1];
+          since = gap[prev] >= 5 ? 0 : since + 1;
+          if (gap[i] < 3 && since < 5 && hip[i] > hip[prev]) hit[i] = true; }
+        return hit; };
+      const idx = frames.map((_, i) => i), none = idx.map(() => false);
+      const fw = k.floorOnly ? landing(idx) : none, bw = !k.floorOnly ? none : ex.anim.loop ? fw : landing(idx.slice().reverse());
+      const ids = new Set(frames.flatMap(f => Object.keys(f)));
+      if (fw.some(Boolean) || bw.some(Boolean)) ids.add('landing');
+      const keysOf = (id, i, dir) => id === 'landing' ? ((dir === 'b' ? bw : fw)[i] ? ['knL', 'knR', 'anL', 'anR'] : []) : frames[i][id] || [];
+      result = {rules:STRESS_RULES.filter(r => ids.has(r.id)).map(r => ({...r, f:frames.map((_, i) => keysOf(r.id, i, 'f')), b:frames.map((_, i) => keysOf(r.id, i, 'b'))}))};
+    }
+  }
+  STRESS_CACHE.set(ex.id, result);
+  return result;
+}
+function stressExercise(anim) { return anim.catalogId ? (typeof EXI !== 'undefined' ? EXI[anim.catalogId] : EX.find(e => e.id === anim.catalogId)) : null; }
+/* активные правила в положении t; index 2 и 3 — обратный ход (кроме замкнутых циклов) */
+function jointStressAt(ex, t, index = 0) {
+  const S = jointStress(ex), i = Math.max(0, Math.min(STRESS_FRAMES, Math.round(t * STRESS_FRAMES))), dir = index >= 2 && !ex.anim.loop ? 'b' : 'f';
+  return S.rules.map(r => ({rule:r, keys:r[dir][i]})).filter(x => x.keys.length);
+}
+/* точка метки на манекене */
+function stressPoint(R, key) {
+  const V = Mannequin.V, s = key.slice(-1);
+  if (key === 'lumbar') return R.waist || V.mix(R.hip, R.sh, .3);
+  if (key === 'neck') return V.mix(R.neckBase || R.sh, R.head, .35);
+  if (key.startsWith('th')) return V.mix(R['hip' + s], R['kn' + s], .45);
+  if (key.startsWith('an')) return V.mix(R['an' + s], R['heel' + s], .5);
+  return R[key];
+}
+function jointStressPoints(anim, R, t, index) {
+  const ex = stressExercise(anim);
+  if (!ex || !R.frames) return [];
+  const out = [];
+  for (const {rule, keys} of jointStressAt(ex, t, index)) for (const key of keys) if (!out.some(m => m.key === key)) out.push({key, rule:rule.id, p:stressPoint(R, key)});
+  return out;
+}
+/* коротко для карточки: какие суставы под пиковой нагрузкой */
+function stressZones(ex) {
+  const zones = [];
+  for (const r of jointStress(ex).rules) for (const name of r.parts) if (!zones.includes(name)) zones.push(name);
+  return zones;
 }
 
 /* ---------- прогрессии: от лёгкого к тяжёлому ---------- */
@@ -6877,6 +7083,13 @@ function rxHtml(it) {
   return `<div class="rx"><span class="rx-big">${r.sets} × ${r.reps}${unit}${side}</span><span class="rx-rest">${rest}</span>${r.light ? '<span class="rx-light">scaled down</span>' : ''}</div>`;
 }
 
+/* суставы под пиковой нагрузкой — короткая строка в карточке; подробности в разборе движения */
+function jointsLine(ex) {
+  const zones = typeof stressZones === 'function' ? stressZones(ex) : [];
+  if (!zones.length) return '';
+  const on = typeof motionPrefs === 'undefined' || motionPrefs.stress !== false;
+  return `<p class="c-joints"${on ? '' : ' hidden'} title="Red marks in the movement breakdown show when the load peaks"><span class="stress-dot" aria-hidden="true"></span>Peak load: ${esc(zones.join(', '))}</p>`;
+}
 function cardHtml(it, idx) {
   const ex = it.ex, r = it.rx;
   const lvl = {};
@@ -6903,6 +7116,7 @@ function cardHtml(it, idx) {
     <div class="c-map">${muscleMapSvg(lvl, {aria:'Working muscles: ' + ex.pri.map(m => MUSCLE_NAMES[m]).join(', ')})}</div>
     <ul class="mus">${mus}</ul>
   </div>
+  ${jointsLine(ex)}
   ${logBlock(it)}
   <div class="c-warm">${warmupHtml(it, workWeightOf(it, null))}</div>
   <div class="c-prog">${progressionHint(it)}</div>
@@ -7162,6 +7376,7 @@ const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced
 const motionPrefs = (() => {try {return Object.assign({speed:.5,joints:true,trace:false,vectors:true,muscles:true},JSON.parse(localStorage.getItem('podhod.motion.v2') || '{}'));}catch(e){return {speed:.5,joints:true,trace:false,vectors:true,muscles:true};}})();
 if (![.25,.5,1].includes(+motionPrefs.speed)) motionPrefs.speed = .5;
 if(typeof motionPrefs.muscles!=='boolean')motionPrefs.muscles=true;
+if(typeof motionPrefs.stress!=='boolean')motionPrefs.stress=true;
 let detailMotion = null, detailReturn = null, lastMotionNow = null;
 function saveMotionPrefs() {try {localStorage.setItem('podhod.motion.v2',JSON.stringify(motionPrefs));}catch(e){}}
 function motionDurations(it) {
@@ -7203,7 +7418,7 @@ function paintMotion(F, detailed=false) {
   $('#mv-play').setAttribute('aria-label',F.paused?'Play movement':'Pause movement');
   $('#mv-play').setAttribute('aria-pressed',String(!F.paused));
   $('#mv-position').textContent=`${Math.round(m.progress*100)}% of rep`;
-  paintMusclePanel('mv',F,m);
+  paintMusclePanel('mv',F,m);paintStressPanel('mv',F,m);
 }
 function configureMusclePanel(prefix,it){
  const profile=motionProfile(it.ex.anim),toggle=$('#'+prefix+'-muscle-toggle'),panel=$('#'+prefix+'-muscle-panel');
@@ -7233,6 +7448,36 @@ function paintMusclePanel(prefix,F,m){
   row.querySelector('.muscle-swatch').style.backgroundColor=muscleColor(v);
   if(level.textContent!==text)level.textContent=text;
  }
+}
+/* ---------- нагрузка на суставы: панель с подсказками и красные отрезки шкалы повторения ---------- */
+function stressTrack(F){
+ const ex=F.it.ex;if(!jointStress(ex).rules.length)return '';
+ const N=160,total=F.durations.reduce((a,b)=>a+b,0)||4000,on=[];
+ for(let i=0;i<=N;i++){const m=motionFrame({...F,clock:i/N*total*.9999});on.push(jointStressAt(ex,m.t,m.index).length>0);}
+ if(!on.some(Boolean))return '';
+ const stops=[],pct=i=>(i/N*100).toFixed(2)+'%';let start=0;
+ for(let i=1;i<=N+1;i++)if(i>N||on[i]!==on[start]){stops.push(`${on[start]?'var(--hot)':'var(--line)'} ${pct(start)} ${pct(Math.min(i,N))}`);start=i;}
+ return `linear-gradient(90deg,${stops.join(',')})`;
+}
+function configureStressPanel(prefix,F){
+ const panel=$('#'+prefix+'-stress-panel');if(!panel||!F)return;
+ const rules=jointStress(F.it.ex).rules,toggle=$('#'+prefix+'-stress-toggle'),track=$('#'+prefix+'-stress-track');
+ if(toggle){toggle.checked=!!motionPrefs.stress;toggle.disabled=!rules.length;}
+ panel.hidden=!rules.length||!motionPrefs.stress;
+ $('#'+prefix+'-stress-list').innerHTML=rules.map(r=>`<li data-stress-row="${r.id}"><span class="stress-dot" aria-hidden="true"></span><span><b>${esc(r.zone)}.</b> ${esc(r.what)} <em>${esc(r.tip)}</em></span></li>`).join('');
+ if(track){const g=motionPrefs.stress?stressTrack(F):'';track.hidden=!g;track.style.background=g;}
+}
+function paintStressPanel(prefix,F,m){
+ const panel=$('#'+prefix+'-stress-panel');if(!panel||panel.hidden)return;
+ const now=new Set(jointStressAt(F.it.ex,m.t,m.index).map(x=>x.rule.id));
+ for(const row of panel.querySelectorAll('[data-stress-row]'))row.classList.toggle('on',now.has(row.dataset.stressRow));
+}
+function changeStressPreference(show){
+ motionPrefs.stress=!!show;saveMotionPrefs();
+ for(const F of [...figs,detailMotion,workout?.motion].filter(Boolean))for(const f of [F.f,F.extra].filter(Boolean))f.setStress?.(motionPrefs.stress);
+ for(const line of document.querySelectorAll('.c-joints'))line.hidden=!motionPrefs.stress;
+ if(detailMotion){configureStressPanel('mv',detailMotion);paintMotion(detailMotion,true);}
+ if(workout?.motion){configureStressPanel('wv',workout.motion);paintWorkoutMotion();}
 }
 function changeMusclePreference(show){
  motionPrefs.muscles=!!show;saveMotionPrefs();
@@ -7348,6 +7593,7 @@ function setupMotionViewer() {
   $('#mv-trace').addEventListener('change',e=>{motionPrefs.trace=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean))f.setTrace(e.target.checked);saveMotionPrefs();});
   $('#mv-muscle-toggle').addEventListener('change',e=>changeMusclePreference(e.target.checked));
   $('#wv-muscle-toggle').addEventListener('change',e=>changeMusclePreference(e.target.checked));
+  for(const prefix of ['mv','wv'])$('#'+prefix+'-stress-toggle').addEventListener('change',e=>changeStressPreference(e.target.checked));
   for(const prefix of ['mv','wv'])$('#'+prefix+'-region').addEventListener('change',e=>selectMuscleRegion(prefix,e.target.value));
   $('#motion-view').addEventListener('cancel',e=>{e.preventDefault();closeMotion();});
   $('#motion-view').addEventListener('close',()=>{disposeMotion(detailMotion);detailMotion=null;document.documentElement.classList.remove('motion-open');});
@@ -8405,7 +8651,7 @@ function workoutShow(index){
   $('#wv-prev').disabled=workout.index===0;$('#wv-next').disabled=workout.index===workout.queue.length-1;
   saveWorkout();workoutTick();
 }
-function paintWorkoutMotion(){if(!workout?.motion)return;const F=workout.motion,m=motionFrame(F);F.f.at(m.t,m);if($('#wv-cue').textContent!==m.cue)$('#wv-cue').textContent=m.cue;paintMusclePanel('wv',F,m);}
+function paintWorkoutMotion(){if(!workout?.motion)return;const F=workout.motion,m=motionFrame(F);F.f.at(m.t,m);if($('#wv-cue').textContent!==m.cue)$('#wv-cue').textContent=m.cue;paintMusclePanel('wv',F,m);paintStressPanel('wv',F,m);}
 function strictWorkoutNumber(value){const s=String(value).trim().replace(',','.');return /^\d+(\.\d+)?$/.test(s)?Number(s):null;}
 function commitWorkout(e){
   if(e)e.preventDefault();if(!workout||$('#wv-active').hidden)return;
@@ -8497,14 +8743,14 @@ function mountDetailCameras(){
   const preferred=motionProfile(a)?.pair,other=preferred!==key&&cameras.includes(preferred)?preferred:cameras.find(c=>c!==key);F.extra=make(other);$('#mv-second-stage').replaceChildren(F.extra.svg);
   $('#mv-second-label').textContent=CAMERA3[other].label;$('#mv-second-hint').textContent=a.cameraHints?.[other]||'';
  }else $('#mv-second-stage').replaceChildren();
- configureMusclePanel('mv',F.it);paintMotion(F,true);
+ configureMusclePanel('mv',F.it);configureStressPanel('mv',F);paintMotion(F,true);
 }
 function mountWorkoutCameras(){
  if(!workout?.motion)return;
  const F=workout.motion,ex=F.it.ex,key=motionCamera(ex),m=motionFrame(F);
  disposeMotion(F);F.f=createMotionFigure(ex.anim,{has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera:key,muscles:motionPrefs.muscles});F.f.setVectors(!!motionPrefs.vectors);
  $('#wv-stage').replaceChildren(F.f.svg);$('#wv-cameras').innerHTML=cameraButtons(ex,key);$('#wv-cameras').hidden=!(ex.anim.catalogCameras||ex.anim.cameras);
- $('#wv-angle').textContent=CAMERA3[key]?.label||(ex.anim.view==='front'?'Front view':'Side view');configureMusclePanel('wv',F.it);paintWorkoutMotion();
+ $('#wv-angle').textContent=CAMERA3[key]?.label||(ex.anim.view==='front'?'Front view':'Side view');configureMusclePanel('wv',F.it);configureStressPanel('wv',F);paintWorkoutMotion();
 }
 function setupMotionCameras(){
  $('#mv-cameras').addEventListener('click',e=>{const b=e.target.closest('[data-motion-camera]');if(b&&detailMotion&&rememberCamera(detailMotion.it.ex,b.dataset.motionCamera))mountDetailCameras();});
@@ -8973,4 +9219,4 @@ logInit();
 plural = (n, a, b, c) => n === 1 ? a : c;
 DEC = '.';
 
-window.PODHOD_VERSION='4.5.0';window.PODHOD_LANG='en';
+window.PODHOD_VERSION='4.6.0';window.PODHOD_LANG='en';
