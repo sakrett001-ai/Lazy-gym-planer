@@ -64,7 +64,7 @@ export function createCatalogScene(first,{coarse=false}={}){
  const scene=new THREE.Scene();scene.background=new THREE.Color('#101722');
  const skin=material('#9aaac1'),joint=material('#8c9fb9'),shorts=material('#43526d',12),sole=material('#283549',12);
  const mats={steel:material('#425570',62),bar:material('#bbc9db',105),pad:material('#3a4b66',14),plate:material('#263e5c',44),cable:material('#74859b'),band:material('#709ec4'),mat:material('#1a293b',5),
-  frame:material('#566d8e',58),chrome:material('#c4d0de',110),rubber:material('#222c3a',8),wood:material('#6d5c4a',12),wall:material('#253142',4),stack:material('#475a76',40)};
+  frame:material('#566d8e',58),chrome:material('#c4d0de',110),rubber:material('#222c3a',8),wood:material('#6d5c4a',12),wall:material('#253142',4),stack:material('#475a76',40),rope:material('#b8a07a',10),towel:material('#c9cfd8',6)};
  scene.add(new THREE.AmbientLight(0xd9e7ff,.60));const light=new THREE.DirectionalLight(0xf6f3ea,.70);light.position.set(-2,5,3);scene.add(light);const rim=new THREE.DirectionalLight(0xa9c4ff,.25);rim.position.set(3,2,-4);scene.add(rim);
  const floor=mesh(scene,new THREE.PlaneGeometry(12,12),material('#0d1622',5),'floor');floor.rotation.x=-Math.PI/2;floor.position.y=-.014;floor.castShadow=false;
  const floorGrid=new THREE.GridHelper(5,20,0x2b3a50,0x2b3a50);floorGrid.position.set(0,-.01,1);floorGrid.material.transparent=true;floorGrid.material.opacity=.40;scene.add(floorGrid);

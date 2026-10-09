@@ -6,7 +6,7 @@ const world=p=>[p[0]/100,(186-p[1])/100,p[2]/100],direction=p=>[p[0],-p[1],p[2]]
 const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],add=(a,b,k=1)=>[a[0]+b[0]*k,a[1]+b[1]*k,a[2]+b[2]*k],len=a=>Math.hypot(...a),unit=a=>{const l=len(a)||1;return a.map(v=>v/l);};
 const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 export const NEW_KINDS=new Set(['beam','obox','cyl','sphere','cable']);
-export const isNewProp=s=>NEW_KINDS.has(s.kind)||(s.kind==='barbell'&&s.len)||(s.kind==='dumbbell'&&s.handle);
+export const isNewProp=s=>NEW_KINDS.has(s.kind)||(s.kind==='barbell'&&s.len)||(s.kind==='dumbbell'&&s.handle)||(s.kind==='kettlebell'&&s.handleAxis);
 export function propKey(s){return s.kind+(s.kind==='barbell'?JSON.stringify(s.plates||[]):'')+(s.kind==='cable'?':'+s.pts.length:'')+(s.kind==='beam'?(s.r?':r':':w'):'')+(s.kind==='cyl'?':'+(s.sides||24):'');}
 function basisQ(x,y,z){const X=unit(direction(x)),Y=unit(direction(y)),Z=cross(X,Y);return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(vec(X),vec(Y),vec(Z)));}
 const UP=new THREE.Vector3(0,1,0);
@@ -25,6 +25,12 @@ export function createPropNode(parent,s,mats,mesh){
    mesh(g,new THREE.CylinderGeometry(1,1,1,18),mats.chrome,'collar').userData.sign=sign;
    (s.plates||[]).forEach((p,i)=>{const o=mesh(g,new THREE.CylinderGeometry(1,1,1,32),mats.plate,'plate');o.userData={sign,i};});
   }
+ }else if(s.kind==='kettlebell'){
+  /* шар Ø21, плоское дно, П-образная рукоять: локальные оси — x вдоль рукояти, y вверх к рукояти */
+  const ball=mesh(g,new THREE.SphereGeometry(1,24,16),mats.plate,'bell');ball.scale.set(1,.94,1);
+  const pts=[[-7.2,6.5],[-9.2,11],[-8.4,14.6],[-5,15.6],[5,15.6],[8.4,14.6],[9.2,11],[7.2,6.5]].map(([x,y])=>new THREE.Vector3(x/10.5,y/10.5,0));
+  mesh(g,new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),40,.16,10,false),mats.plate,'handle');
+  const base=mesh(g,new THREE.CylinderGeometry(.62,.62,.06,24),mats.plate,'base');base.position.set(0,-.92,0);
  }else if(s.kind==='dumbbell'){
   mesh(g,new THREE.CylinderGeometry(1,1,1,14),mats.chrome,'handle');
   for(const sign of [-1,1]){mesh(g,new THREE.CylinderGeometry(1,1,1,6),mats.plate,'head').userData.sign=sign;mesh(g,new THREE.CylinderGeometry(1,1,1,14),mats.chrome,'inner').userData.sign=sign;}
@@ -51,6 +57,9 @@ export function updatePropNode(node,s){
    else if(o.name==='sleeve'){const a=s.inner+2,b=s.len/2;o.position.fromArray(world(add(c,ax,sign*(a+b)/2)));o.scale.set(s.sleeveR/100,(b-a)/100,s.sleeveR/100);}
    else if(o.name==='plate'){let at=s.inner+2.4;for(let i=0;i<o.userData.i;i++)at+=s.plates[i][1]+.3;const[r,th]=s.plates[o.userData.i];o.position.fromArray(world(add(c,ax,sign*(at+th/2))));o.scale.set(r/100,th/100,r/100);}
   }
+ }else if(s.kind==='kettlebell'){
+  const up=unit(sub(s.grip,s.c)),x=unit(s.handleAxis),z=cross(x,up);
+  g.position.fromArray(world(s.c));g.quaternion.copy(basisQ(x,up,z));g.scale.setScalar(s.radius/100);
  }else if(s.kind==='dumbbell'){
   const ax=unit(s.axis),c=s.c,q=new THREE.Quaternion().setFromUnitVectors(UP,vec(unit(direction(ax))));
   for(const o of ch){

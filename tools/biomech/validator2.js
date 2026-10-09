@@ -115,6 +115,11 @@ function collider(s) {
   else if (s.kind === 'sphere') { c.sdf = p => V.dist(p, s.c) - s.r; c.pts = [s.c]; c.r = s.r; }
   else if (s.kind === 'cable') { c.cable = true; c.pts = s.pts; c.r = s.r; c.ptR = s.r; c.sdf = p => Math.min(...s.pts.slice(1).map((b, i) => sdCapsule(p, s.pts[i], b, s.r))); }
   else if (s.kind === 'barbell' || s.kind === 'dumbbell') return compound(s, c);
+  else if (s.kind === 'kettlebell' && s.handleAxis) {
+    const ax = V.unit(s.handleAxis), up = V.unit(V.sub(s.grip, s.c)), k = s.radius / 10.5, a = V.add(V.add(s.c, ax, -5 * k), up, 15.6 * k), b = V.add(V.add(s.c, ax, 5 * k), up, 15.6 * k);
+    return [{ ...c, free: true, part: 'bell', r: s.radius, sdf: p => V.dist(p, s.c) - s.radius * .97, pts: cylPoints(s.c, up, s.radius * .9, s.radius * .5).concat([V.add(s.c, up, -s.radius)]) },
+      { ...c, free: true, part: 'handle', grip: true, r: 1.7, ptR: 1.7, axis: [a, b], sdf: p => sdCapsule(p, a, b, 1.7), pts: linspace(a, b, 2) }];
+  }
   else { c.unknown = true; c.sdf = () => Infinity; c.pts = []; }
   return [c];
 }
@@ -195,7 +200,8 @@ function regionPoints(name, pts, R) {
 /* ---------- кадр ---------- */
 function checkFrame(R, entry = {}) {
   const issues = [], push = (rule, severity, detail, depth, unit = 'см') => issues.push({ rule, severity, detail, depth: depth == null ? undefined : +(+depth).toFixed(1), unit });
-  const props = R.props || [], cols = props.flatMap(collider), byId = new Map(); for (const c of cols) { if (!byId.has(c.id)) byId.set(c.id, []); byId.get(c.id).push(c); }
+  const EQV = require('../../src/js/09bn-equipment.js').visible;
+  const props = (R.props || []).filter(p => EQV(p, entry.has || (() => true))), cols = props.flatMap(collider), byId = new Map(); for (const c of cols) { if (!byId.has(c.id)) byId.set(c.id, []); byId.get(c.id).push(c); }
   const pts = bodyPoints(R), cache = M.torsoCache(R);
   const contacts = entry.contacts || R.contacts || [];
   const gripProps = new Set(contacts.filter(c => /^grip/.test(c.body)).map(c => c.prop));
@@ -268,6 +274,7 @@ function checkFrame(R, entry = {}) {
   }
   /* 5. Заявленные контакты */
   for (const k of contacts) {
+    if (k.prop !== 'floor' && !cols.some(c => c.id === k.prop || c.id.startsWith(k.prop + ':'))) { if (k.optional) continue; }
     const region = /^grip(L|R)$/.test(k.body) ? null : regionPoints(k.body, pts, R);
     if (/^grip(L|R)$/.test(k.body)) {
       const s = k.body.slice(4), g = R['grip' + s], cand = cols.filter(c => c.id === k.prop || c.id.startsWith(k.prop + ':'));

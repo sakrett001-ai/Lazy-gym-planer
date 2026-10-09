@@ -151,6 +151,35 @@ function ctx(equipment) {
     solve1D(f, lo, hi, it = 40) { let a = lo, b = hi, fa = f(a); for (let i = 0; i < it; i++) { const m = (a + b) / 2, fm = f(m); if (fa * fm <= 0) b = m; else { a = m; fa = fm; } } return (a + b) / 2; },
     /* точка передней поверхности корпуса по средней линии на высоте h */
     chestPoint(q, h, ang = 0) { const R = M.catalogPose(q); return fromCat(M.torsoPoint(R, h, 'L', ang)); },
+    /* Свободная рука: запястье в точку, кисть продолжает предплечье (pron — пронация, wrist — [сгиб., откл.]) */
+    armTo(q, s, wrist, pole, opts = {}) {
+      const r = M.solveArmWrist(q, s, wrist, pole, null);
+      if (opts.pron != null) q[s].pron = opts.pron; if (opts.wrist) q[s].wrist = [...opts.wrist];
+      q.hands = { ...(q.hands || {}), [s]: opts.mode || q.hands?.[s] || 'relaxed' };
+      if (r.reachError > .05 && !opts.allowShort) throw Error(`Рука ${s} не дотягивается: ${r.reachError.toFixed(1)} см`);
+      return r;
+    },
+    /* Свободная нога: голеностоп в точку, стопа под углом dorsi к голени (отрицательный — носок вытянут) */
+    legTo(q, s, ankle, pole, opts = {}) {
+      const f = M.fk(q), hip = f.P['hip' + s], tb = M.twoBone(hip, ankle, M.B.th, M.B.sk, pole);
+      const a = V.unit(V.sub(tb.mid, hip)), sd = V.unit(V.sub(tb.end, tb.mid)), pp = V.perp(a, sd);
+      const skz = V.len(pp) > .02 ? V.unit(pp) : V.unit(V.perp(pole, sd));
+      const footR = M3.mul(M3.frameYZ(V.scale(sd, -1), skz), M3.rx(-(opts.dorsi ?? 0)));
+      const r = M.solveLeg(q, s, { o: tb.end, R: footR }, pole);
+      if (tb.reachError > .05 && !opts.allowShort) throw Error(`Нога ${s} не дотягивается: ${tb.reachError.toFixed(1)} см`);
+      return r;
+    },
+    /* Общий центр масс тела и снарядов (loads: [[точка внутр., кг]]) во внутренних координатах */
+    com(q, loads = []) {
+      const R = M.catalogPose(q), toC = p => [p[0], M.FLOOR - p[1], p[2]];
+      return fromCat(M.centerOfMass(R, loads.map(([p, kg]) => [toC(p), kg])).c);
+    },
+    /* Сдвинуть таз по горизонтали так, чтобы центр масс встал над точкой target (x, z).
+       resolve(q) заново ставит стопы и кисти после каждого сдвига; loads(q) → [[точка, кг]] — снаряд в руках. */
+    balanceOver(q, target, { loads = () => [], resolve = () => {}, iter = 6 } = {}) {
+      for (let i = 0; i < iter; i++) { resolve(q); const c = C.com(q, loads(q)); const d = [target[0] - c[0], 0, target[2] - c[2]]; if (Math.hypot(d[0], d[2]) < .2) break; q.root.p = V.add(q.root.p, d); }
+      resolve(q); return q;
+    },
     point: (eqId, name) => { const a = A[eqId]?.[name]; if (!a) throw Error(`Нет опорной точки ${eqId}.${name}`); return a.o ? a.o : a; },
     frame: (eqId, name) => A[eqId][name]
   };

@@ -10,9 +10,9 @@ const ids=arg('--ids','').split(',').filter(Boolean),ts=arg('--t','0,0.5,1').spl
 const {bakeAll}=require('./tools/mannequin/author.js'.replace('./',root+'/'));
 const entries=bakeAll({only:ids.length?ids:null});
 const list=ids.length?ids:Object.keys(entries);
-const lab=path.join(root,'tools/mannequin/.lab');await fs.mkdir(lab,{recursive:true});
+const lab=path.join(root,'tools/mannequin/.lab',String(process.pid));await fs.mkdir(lab,{recursive:true});
 await build({entryPoints:[path.join(root,'tools/mannequin/lab/entry.mjs')],outfile:path.join(lab,'lab.js'),bundle:true,format:'iife',target:['es2020'],logLevel:'error'});
-await fs.writeFile(path.join(lab,'index.html'),`<!doctype html><meta charset="utf-8"><body style="margin:0;background:#000"><script src="${root}/src/js/09bm-mannequin.js"></script><script src="${root}/src/js/09bn-equipment.js"></script><script src="lab.js"></script>`);
+await fs.writeFile(path.join(lab,'index.html'),`<!doctype html><meta charset="utf-8"><body style="margin:0;background:#000"><script src="${root}/src/js/09bm-mannequin.js"></script><script src="${root}/src/js/09bn-equipment.js"></script>${(await fs.readdir(path.join(root,'src/js'))).filter(f=>/^09bo.*\.js$/.test(f)).sort().map(f=>`<script src="${root}/src/js/${f}"></script>`).join('')}<script src="lab.js"></script>`);
 const browser=await chromium.launch({args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
 await page.goto('file://'+path.join(lab,'index.html'));
@@ -20,4 +20,4 @@ const specs=[];for(const id of list)for(const t of ts)for(const cam of cams)spec
 const url=await page.evaluate(([specs,entries,o])=>Lab.sheet(specs,entries,o),[specs,entries,{w,h,cols,title:arg('--title','')}]);
 await fs.mkdir(path.dirname(path.resolve(root,out)),{recursive:true});
 await fs.writeFile(path.resolve(root,out),Buffer.from(url.split(',')[1],'base64'));
-if(errors.length)console.log('Ошибки страницы:',errors.slice(0,5));console.log(out);await browser.close();
+if(errors.length)console.log('Ошибки страницы:',errors.slice(0,5));console.log(out);await browser.close();await fs.rm(lab,{recursive:true,force:true});

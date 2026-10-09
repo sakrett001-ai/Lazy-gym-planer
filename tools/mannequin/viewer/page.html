@@ -1,0 +1,151 @@
+<title>Манекен атласа — ревью</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Unbounded:wght@500;700&display=swap">
+<style>
+/* Раскладка: слева список упражнений, в центре сцена с фазой, справа — проверки и углы; на телефоне всё в одну колонку */
+:root{
+ --bg:#eef1f5;--panel:#ffffff;--ink:#18212e;--muted:#5a6676;--line:#d6dde6;--accent:#c96a22;--stage:#e3e8ee;--floor:#c8d0da;--grid:#aab4c0;
+ --ok:#2f8a57;--warn:#b7791f;--bad:#c2413b;--chip:#f2f4f7;
+ --display:'Unbounded','Golos Text',system-ui,sans-serif;--body:'Golos Text',system-ui,-apple-system,'Segoe UI',sans-serif;--mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e131a;--panel:#151c26;--ink:#e5ecf5;--muted:#93a0b2;--line:#253041;--accent:#ef9450;--stage:#101722;--floor:#0d1622;--grid:#2b3a50;--ok:#4cc07f;--warn:#e0a640;--bad:#ec6b63;--chip:#1c2532;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e131a;--panel:#151c26;--ink:#e5ecf5;--muted:#93a0b2;--line:#253041;--accent:#ef9450;--stage:#101722;--floor:#0d1622;--grid:#2b3a50;--ok:#4cc07f;--warn:#e0a640;--bad:#ec6b63;--chip:#1c2532;color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--body);padding-inline:16px;padding-block:14px 28px}
+.wrap{max-width:1320px;margin:0 auto;display:grid;gap:14px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px}
+h1{font:600 clamp(19px,2.6vw,26px)/1.15 var(--display);letter-spacing:.01em;margin:0;text-wrap:balance}
+.lede{color:var(--muted);margin:0;max-width:70ch}
+.grid{display:grid;grid-template-columns:250px minmax(0,1fr) 320px;gap:14px;align-items:start}
+@media (max-width:1100px){.grid{grid-template-columns:minmax(0,1fr) 300px}.list{grid-column:1/-1}}
+@media (max-width:720px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;min-width:0}
+.list{display:flex;flex-direction:column;gap:6px}
+@media (max-width:1100px){.list{flex-direction:row;overflow-x:auto;padding-bottom:6px}.list button{flex:0 0 210px}}
+.list button{all:unset;cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:8px 10px;border-radius:8px;border:1px solid transparent}
+.list button:hover{background:var(--chip)}
+.list button[aria-pressed="true"]{border-color:var(--accent);background:var(--chip)}
+.list button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.list .nm{font-weight:500;line-height:1.25}
+.list .id{grid-column:1;font:12px var(--mono);color:var(--muted)}
+.pill{font:500 11px/1 var(--mono);padding:4px 7px;border-radius:99px;white-space:nowrap;align-self:start;letter-spacing:.02em}
+.pill.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}
+.pill.warn{color:var(--warn);background:color-mix(in srgb,var(--warn) 16%,transparent)}
+.pill.bad{color:var(--bad);background:color-mix(in srgb,var(--bad) 15%,transparent)}
+.stagebox{display:grid;gap:10px;min-width:0}
+.stage{position:relative;aspect-ratio:4/3;max-width:100%;border-radius:10px;overflow:hidden;background:var(--stage);border:1px solid var(--line);touch-action:none}
+.stage canvas{width:100%;height:100%;display:block}
+.cams{position:absolute;left:8px;top:8px;display:flex;flex-wrap:wrap;gap:4px}
+.cams button,.ctl button{font:500 12px var(--body);color:var(--ink);background:color-mix(in srgb,var(--panel) 88%,transparent);border:1px solid var(--line);border-radius:6px;padding:5px 8px;cursor:pointer}
+.cams button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+.hint{position:absolute;right:10px;bottom:8px;font:12px var(--body);color:var(--muted)}
+@media (max-width:720px){.hint{display:none}.stage{aspect-ratio:1/1}}
+.ctl{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.ctl input[type=range]{flex:1 1 220px;accent-color:var(--accent)}
+.ctl label{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
+.tval{font:500 13px var(--mono);min-width:5.5ch;font-variant-numeric:tabular-nums}
+.phase{font-size:13px;color:var(--muted);margin:0}
+h2{font:600 13px var(--body);text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:0 0 8px}
+.side{display:grid;gap:14px}
+.issues{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.issues li{display:grid;grid-template-columns:auto 1fr;gap:8px;font-size:13px;line-height:1.35}
+.empty{font-size:13px;color:var(--ok);margin:0}
+table{border-collapse:collapse;width:100%;font-size:13px}
+td,th{padding:3px 0;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+th{font-weight:500;color:var(--muted);text-align:left}
+td{font-family:var(--mono)}
+td.lim{color:var(--muted);font-size:11px}
+td.over{color:var(--bad)}
+.before{font-size:13px;color:var(--muted);margin:0}
+.before b{color:var(--bad);font-weight:600}
+details summary{cursor:pointer;font-size:13px;color:var(--muted)}
+details ul{margin:6px 0 0;padding-left:18px;font-size:12px;color:var(--muted)}
+.foot{font-size:13px;color:var(--muted);margin:0;max-width:85ch}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style>
+<div class="wrap">
+ <header>
+  <h1>Манекен атласа</h1>
+  <p class="lede">Пилот: упражнения с ваших скриншотов на новом манекене и реальных тренажёрах. Крутите сцену пальцем или мышью, двигайте фазу, смотрите проверки.</p>
+ </header>
+ <div class="grid">
+  <nav class="panel list" id="list" aria-label="Упражнения"></nav>
+  <section class="stagebox">
+   <div class="stage" id="stage">
+    <canvas id="cv" aria-label="Трёхмерная сцена упражнения"></canvas>
+    <div class="cams" id="cams"></div>
+    <div class="hint">Перетаскивание — поворот, щипок или колесо — масштаб</div>
+   </div>
+   <div class="ctl">
+    <button id="play" type="button" aria-pressed="true">Пауза</button>
+    <input id="phase" type="range" min="0" max="1000" value="0" aria-label="Фаза движения">
+    <span class="tval" id="tval">t=0.00</span>
+    <label><input id="joints" type="checkbox"> центры суставов</label>
+   </div>
+   <p class="phase" id="phaseText"></p>
+  </section>
+  <aside class="side">
+   <div class="panel"><h2>Проверка позы</h2><div id="issues"></div></div>
+   <div class="panel"><h2>Углы в кадре</h2><table id="angles"></table></div>
+   <div class="panel"><h2>Было в 4.2.1</h2><div id="before"></div></div>
+  </aside>
+ </div>
+ <p class="foot">Проверка идёт по 41 кадру каждого повторения: пределы суставов (CDC, AAOS), тело внутри тренажёра, пол, самопересечения, контакт стоп и кистей с опорой, крепления деталей, тросы, равновесие. Предупреждение — заметно при внимательном взгляде, ошибка — видно сразу. Если что-то выглядит неестественно, напишите упражнение и момент (t на шкале).</p>
+</div>
+<script>/*@SCRIPTS@*/</script>
+<script>/*@DATA@*/</script>
+<script>/*@BUNDLE@*/</script>
+<script>
+(()=>{
+const X=MannequinViewer,T=X.THREE,$=id=>document.getElementById(id),css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const canvas=$('cv'),renderer=new T.WebGLRenderer({canvas,antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+const camera=new T.PerspectiveCamera(30,4/3,.05,60),controls=new X.OrbitControls(camera,canvas);controls.enableDamping=true;controls.dampingFactor=.12;
+let view=null,rig=null,cur=null,t=0,clock=0,playing=!matchMedia('(prefers-reduced-motion: reduce)').matches,joints=false,camKey='angle',center=new T.Vector3(),radius=2;
+const CAMS=[['angle','Под углом',40,-22],['side','Сбоку',90,0],['front','Спереди',0,0],['back','Сзади',180,0],['above','Сверху',35,-55]];
+const sevPill=r=>{const e=r.issues.filter(i=>i.severity==='error').length,w=r.issues.length-e;return e?`<span class="pill bad">${e} ошиб.</span>`:w?`<span class="pill warn">${w} предупр.</span>`:'<span class="pill ok">чисто</span>';};
+$('list').innerHTML=REVIEW.map(r=>`<button type="button" data-id="${r.id}" aria-pressed="false"><span class="nm">${r.name}</span>${sevPill(r)}<span class="id">${r.id}</span></button>`).join('');
+$('cams').innerHTML=CAMS.map(([k,l])=>`<button type="button" data-cam="${k}" aria-pressed="${k==='angle'}">${l}</button>`).join('');
+const dataFor=t=>{const R=rig(t);return{exerciseId:cur.id,pose:R,body:Mannequin.bodyData(R),surfaces:[],values:{},regions:{},props:R.props,torsoRings:[],limbProfiles:{}};};
+function theme(){if(!view)return;view.scene.background=new T.Color(css('--stage'));view.scene.traverse(o=>{if(o.name==='floor')o.material.color.set(css('--floor'));if(o.isGridHelper)o.material.color.set(css('--grid'));});}
+function setCam(k){camKey=k;const c=CAMS.find(c=>c[0]===k),y=c[2]*Math.PI/180,e=c[3]*Math.PI/180,d=radius*3.0;
+ camera.position.set(center.x-Math.sin(y)*Math.cos(e)*d,center.y-Math.sin(e)*d,center.z+Math.cos(y)*Math.cos(e)*d);controls.target.copy(center);controls.update();
+ for(const b of $('cams').children)b.setAttribute('aria-pressed',String(b.dataset.cam===k));}
+function select(id){
+ if(view)view.dispose();cur=REVIEW.find(r=>r.id===id);rig=GymEquipment.rig(CATALOG_POSES[id]);view=X.createCatalogScene(dataFor(0));theme();
+ const box=new T.Box3();for(let i=0;i<=8;i++){view.apply(dataFor(i/8),{muscles:false,joints,color:()=>'#a7b3c6'});view.scene.traverse(o=>{if(o.isMesh&&o.visible&&o.name!=='floor'&&o.parent?.name!=='joint-dots')box.expandByObject(o);});}
+ box.getCenter(center);radius=box.getSize(new T.Vector3()).length()/2;setCam(camKey);
+ for(const b of $('list').children)b.setAttribute('aria-pressed',String(b.dataset.id===id));
+ $('issues').innerHTML=cur.issues.length?`<ul class="issues">${cur.issues.map(i=>`<li><span class="pill ${i.severity==='error'?'bad':'warn'}">${i.severity==='error'?'ошибка':'предупр.'}</span><span>${i.detail}${i.depth!=null?` · ${i.depth} ${i.unit||'см'}`:''} · t=${i.t}</span></li>`).join('')}</ul>`:'<p class="empty">Нарушений нет ни в одном из 41 кадра.</p>';
+ const pl=(n,a,b,c)=>{const m=n%10,h=n%100;return m===1&&h!==11?a:m>=2&&m<=4&&(h<12||h>14)?b:c;};const b=cur.before;$('before').innerHTML=`<p class="before">${b.errors.length?`<b>${b.errors.length}</b> ${pl(b.errors.length,'грубая ошибка','грубые ошибки','грубых ошибок')}`:'Грубых ошибок не было'}${b.warns?`, ${b.warns} ${pl(b.warns,'предупреждение','предупреждения','предупреждений')}`:''}.</p>`+(b.errors.length?`<details><summary>Что было не так</summary><ul>${b.errors.map(e=>`<li>${e}</li>`).join('')}</ul></details>`:'');
+ const [c0,c1]=cur.cues||[];$('phaseText').textContent=cur.eccFirst?`t=0 — исходное положение, t=1 — нижняя точка. ${c1||''}`:`t=0 — исходное положение, t=1 — конечная точка. ${c0||''}`;
+ try{localStorage.setItem('mv.ex',id);}catch(e){}
+}
+const ROWS=[['Колено',A=>A.knee,[0,145]],['Бедро (сгиб.)',A=>A.hipFlex,[-20,125]],['Бедро (отвед.)',A=>A.hipAbd,[-25,45]],['Голеностоп',A=>A.dorsi,[-50,20]],['Локоть',A=>A.elbow,[0,150]],['Плечо (подъём)',A=>A.elevation,[0,180]],['Предплечье (прон.)',A=>A.pron,[-90,85]],['Запястье',A=>A.wristFlex,[-75,80]]];
+let lastAngles=0;
+function drawAngles(R){
+ const a=X.angles(R),cell=(v,[lo,hi])=>`<td class="${v<lo-.5||v>hi+.5?'over':''}">${v.toFixed(0)}°</td>`;
+ $('angles').innerHTML='<tr><th></th><th style="text-align:right">Л</th><th style="text-align:right">П</th><th style="text-align:right">норма</th></tr>'+ROWS.map(([n,f,l])=>`<tr><th>${n}</th>${cell(f(a.L),l)}${cell(f(a.R),l)}<td class="lim">${l[0]}…${l[1]}</td></tr>`).join('')
+  +`<tr><th>Поясница</th><td colspan="2">${a.lumbar[0].toFixed(0)}°</td><td class="lim">−25…50</td></tr><tr><th>Шея</th><td colspan="2">${a.neck[0].toFixed(0)}°</td><td class="lim">−60…50</td></tr>`;
+}
+function resize(){const r=$('stage').getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();}
+new ResizeObserver(resize).observe($('stage'));
+let prev=performance.now();
+function frame(now){
+ const dt=Math.min(.1,(now-prev)/1000);prev=now;
+ if(playing&&!cur.hold){clock=(clock+dt/4)%1;const q=clock<.5?clock*2:2-clock*2;t=.5-.5*Math.cos(Math.PI*q);$('phase').value=String(Math.round(t*1000));}
+ $('tval').textContent='t='+t.toFixed(2);
+ const d=dataFor(t);view.apply(d,{muscles:false,joints,color:()=>'#a7b3c6'});controls.update();renderer.render(view.scene,camera);
+ if(now-lastAngles>150){drawAngles(d.pose);lastAngles=now;}
+ requestAnimationFrame(frame);
+}
+$('list').addEventListener('click',e=>{const b=e.target.closest('button[data-id]');if(b)select(b.dataset.id);});
+$('cams').addEventListener('click',e=>{const b=e.target.closest('button[data-cam]');if(b)setCam(b.dataset.cam);});
+$('play').addEventListener('click',()=>{playing=!playing;$('play').textContent=playing?'Пауза':'Пуск';$('play').setAttribute('aria-pressed',String(playing));});
+$('phase').addEventListener('input',e=>{playing=false;$('play').textContent='Пуск';$('play').setAttribute('aria-pressed','false');t=+e.target.value/1000;clock=t/2;});
+$('joints').addEventListener('change',e=>{joints=e.target.checked;});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',theme);new MutationObserver(theme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+let first=REVIEW[0].id;try{const s=localStorage.getItem('mv.ex');if(s&&CATALOG_POSES[s])first=s;}catch(e){}
+$('play').textContent=playing?'Пауза':'Пуск';
+resize();select(first);requestAnimationFrame(frame);
+})();
+</script>

@@ -10,7 +10,10 @@ function run({ only, samples = 41, entries } = {}) {
   const report = [];
   for (const [id, e] of Object.entries(entries)) {
     if (only && !only.includes(id)) continue;
-    const t0 = Date.now(), issues = checkClip(EQ.rig(e), e, { samples });
+    const t0 = Date.now(), rig = EQ.rig(e), issues = checkClip(rig, e, { samples });
+    /* вариант без необязательного инвентаря (например, гантели вместо гири) */
+    const optional = (e.equipment || []).some(q => q.optional || q.optionalNot);
+    if (optional) for (const i of checkClip(rig, { ...e, has: () => false, contacts: (e.contacts || []).map(c => ({ ...c, optional: true })) }, { samples: Math.ceil(samples / 2) })) if (!issues.some(j => j.rule === i.rule && j.detail === i.detail)) issues.push({ ...i, detail: i.detail + ' [без доп. инвентаря]' });
     report.push({ id, issues, ms: Date.now() - t0 });
   }
   return report;

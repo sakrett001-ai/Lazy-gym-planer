@@ -147,7 +147,7 @@ function buildSpatialFigure(anim,opts={}){
   face(p,outline?'#36465e':'#36465e',{stroke:outline?'#7f90ad':'#25344a','stroke-width':outline?1.2:1,'stroke-opacity':outline?.7:1,'fill-opacity':outline?.38:1,...attrs});
   const q=project(c);queue('circle',{cx:f1(q[0]),cy:f1(q[1]),r:2.5,fill:'#a6b5ca'},[c],1);
  }
- const TONE3={frame:'#5f708a',pad:'#46566e',chrome:'#b7c4d6',plate:'#3b4c66',rubber:'#2f3a4b',cable:'#8a9ab0',band:'#6d9dc6',mat:'#2f3d52',wood:'#8a755e',wall:'#4a586c',stack:'#56667e'};
+ const TONE3={frame:'#5f708a',pad:'#46566e',chrome:'#b7c4d6',plate:'#3b4c66',rubber:'#2f3a4b',cable:'#8a9ab0',band:'#6d9dc6',mat:'#2f3d52',wood:'#8a755e',wall:'#4a586c',stack:'#56667e',rope:'#b8a07a',towel:'#c9cfd8'};
  const shade=(hex,k)=>{const n=parseInt(hex.slice(1),16),c=[n>>16,n>>8&255,n&255].map(v=>Math.max(0,Math.min(255,Math.round(v*k))));return'#'+c.map(v=>v.toString(16).padStart(2,'0')).join('');};
  const facing=d=>{const a=project([0,0,0]),b=project(d);return b[2]-a[2];};
  function obox(c,ax,size,tone,attrs={}){
@@ -164,6 +164,7 @@ function buildSpatialFigure(anim,opts={}){
  }
  function prop(s){
   if(s.optional&&opts.has&&!opts.has(s.optional))return;
+  if(s.optionalNot&&(!opts.has||opts.has(s.optionalNot)))return;
   if(s.kind==='beam')line3(s.a,s.b,s.r?2*s.r:Math.max(s.w,s.h),TONE3[s.tone]||TONE3.frame,0,{'data-prop':s.id||'beam'});
   else if(s.kind==='obox')obox(s.c,[s.x,s.y,s.z].map(V3.unit),s.size,s.tone,{'data-prop':s.id||'box'});
   else if(s.kind==='cyl')cylinder(s.c,s.axis,s.r,s.len,s.tone,{'data-prop':s.id||'cyl'});
@@ -176,6 +177,12 @@ function buildSpatialFigure(anim,opts={}){
   }else if(s.kind==='dumbbell'&&s.handle){
    const ax=V3.unit(s.axis);line3(V3.add(s.c,ax,-s.handle/2-1),V3.add(s.c,ax,s.handle/2+1),3.2,TONE3.chrome,0,{'data-prop':'dumbbell','data-part':'shaft'});
    for(const sg of [-1,1])cylinder(V3.add(s.c,ax,sg*(s.handle/2+1.2+s.headLen/2)),ax,s.headR,s.headLen,'plate',{'data-prop':'dumbbell','data-part':'plate'});
+  }
+  else if(s.kind==='kettlebell'&&s.handleAxis){
+   const q=project(s.c);queue('circle',{cx:f1(q[0]),cy:f1(q[1]),r:f1(s.radius),fill:TONE3.plate,'data-prop':'kettlebell'},[s.c]);
+   const up=V3.unit(V3.sub(s.grip,s.c)),ax=V3.unit(s.handleAxis),P=(x,y)=>V3.add(V3.add(s.c,ax,x*s.radius/10.5),up,y*s.radius/10.5);
+   const pts=[P(-7.2,6.5),P(-9,12),P(-5,15.6),P(5,15.6),P(9,12),P(7.2,6.5)].map(project);
+   queue('path',{d:'M'+pts.map(p=>f1(p[0])+','+f1(p[1])).join('L'),fill:'none',stroke:TONE3.plate,'stroke-width':3.2,'stroke-linejoin':'round','data-prop':'kettlebell'},[s.grip],.5);
   }
   else if(s.kind==='box')box(s);
   else if(s.kind==='line')line3(s.a,s.b,s.width,tones[s.tone]||tones.steel);
@@ -290,7 +297,7 @@ function buildSpatialFigure(anim,opts={}){
   /* пол под всей сценой манекена: суставы по фазам и детали инвентаря */
   const xs=[],zs=[],add=p=>{if(p&&p.length===3){xs.push(p[0]);zs.push(p[2]);}};
   for(let i=0;i<=4;i++){const R=anim.rig3d(i/4);for(const k of ['hip','head','anL','anR','toeL','toeR','heelL','heelR','gripL','gripR','knL','knR'])add(R[k]);
-   for(const q of R.props){if(q.optional&&opts.has&&!opts.has(q.optional))continue;for(const k of ['a','b','c'])add(q[k]);if(q.pts)q.pts.forEach(add);if(q.size&&q.c){const r=Math.max(...q.size)/2;add(V3.add(q.c,[r,0,r]));add(V3.add(q.c,[-r,0,-r]));}}}
+   for(const q of R.props){if(!GymEquipment.visible(q,opts.has))continue;for(const k of ['a','b','c'])add(q[k]);if(q.pts)q.pts.forEach(add);if(q.size&&q.c){const r=Math.max(...q.size)/2;add(V3.add(q.c,[r,0,r]));add(V3.add(q.c,[-r,0,-r]));}}}
   const x0=Math.min(...xs)-18,x1=Math.max(...xs)+18,z0=Math.min(...zs)-18,z1=Math.max(...zs)+18;
   floorCorners=[[x0,186.5,z0],[x1,186.5,z0],[x1,186.5,z1],[x0,186.5,z1]];
  }

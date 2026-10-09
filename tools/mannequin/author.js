@@ -8,7 +8,8 @@ const DIR = path.join(__dirname, 'exercises');
 function loadSpecs() {
   const all = {};
   for (const f of fs.readdirSync(DIR).filter(f => f.endsWith('.js')).sort()) {
-    const mod = require(path.join(DIR, f));
+    let mod;
+    try { mod = require(path.join(DIR, f)); } catch (e) { console.error('Спецификации ' + f + ' не загрузились: ' + e.message); continue; }
     for (const [id, spec] of Object.entries(mod)) { if (all[id]) throw Error('Повтор упражнения ' + id + ' в ' + f); all[id] = { ...spec, file: f }; }
   }
   return all;
