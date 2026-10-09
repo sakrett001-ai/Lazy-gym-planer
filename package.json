@@ -5,6 +5,7 @@
   "description": "Lazy Gym Planner — планировщик тренировок",
   "scripts": {
     "build": "node build.js",
+    "build:floot": "node tools/build-floot-release.mjs",
     "audit": "node tools/biomechanics-audit.js",
     "audit:lab": "npm --prefix prototypes/bench-lab run audit",
     "check:lab": "npm --prefix prototypes/bench-lab run check",
@@ -28,6 +29,7 @@
   },
   "devDependencies": {
     "esbuild": "0.25.9",
-    "jsdom": "26.1.0"
+    "jsdom": "26.1.0",
+    "playwright": "1.62.1"
   }
 }
