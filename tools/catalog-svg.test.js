@@ -44,7 +44,7 @@ test('SVG limb skin encloses its highlighted regions; a narrowed rendered limb f
   const bounds=node=>{const nums=node.getAttribute('d').match(/-?\d*\.?\d+/g).map(Number),x=nums.filter((_,i)=>i%2===0);return[Math.min(...x),Math.max(...x)];};
   const check=()=>{
    for(const side of ['L','R']){
-    for(const kind of ['ua','fa','th','sh'])assert(figure.svg.querySelector(`[data-limb="${kind+side}"]`),'each catalog limb uses the shared surface profile');
+    for(const kind of ['ua','fa','th','sk'])assert(figure.svg.querySelector(`[data-limb="${kind+side}"]`),'each catalog limb uses the shared surface profile');
     const [lo,hi]=bounds(figure.svg.querySelector(`[data-limb="th${side}"]`));
     const zones=[...figure.svg.querySelectorAll(`[data-side="${side}"][data-muscle^="quad_"]`)];assert(zones.length);
     for(const node of zones){const [a,b]=bounds(node);assert(a>=lo-.3&&b<=hi+.3,'muscle contour must remain inside the thigh skin');}

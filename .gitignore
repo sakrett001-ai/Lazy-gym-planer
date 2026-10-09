@@ -5,3 +5,4 @@ qa/
 i18n/strings.json
 i18n/missing.*.json
 i18n/parts/
+tools/mannequin/.lab/

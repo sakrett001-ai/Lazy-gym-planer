@@ -49,6 +49,8 @@ function catalogSupermanGroundRig(t){
 }
 const CATALOG_GROUND_RIGS={rollout:catalogRolloutGroundRig,nordic:catalogNordicGroundRig,superman:catalogSupermanGroundRig};
 for(const ex of EX){
+ /* упражнения на манекене уже стоят на своих опорах (tools/mannequin) — старые плоские риги их не подменяют */
+ if(ex.anim.catalogBasis==='mannequin')continue;
  const rig=CATALOG_GROUND_RIGS[ex.id];
  if(rig)ex.anim.catalogRig=t=>{
   if(!Number.isFinite(t)||t<0||t>1)throw Error('Pose must be in [0,1]');

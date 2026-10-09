@@ -36,6 +36,8 @@ function fixture(t) {
   write(source, 'dist/index.html', 'new production');
   write(source, 'dist/sw.js', 'new service worker');
   write(source, 'dist/volume.js', 'new volume engine');
+  /* заглушка проверки манекена: настоящая проверка — tools/mannequin/check.js */
+  write(source, 'tools/mannequin/check.js', 'process.exitCode = process.env.DEPLOY_TEST_MANNEQUIN_FAIL ? 1 : 0;\n');
   return {root, remote, source, seed};
 }
 const deploy = (source, env=process.env) => spawnSync('sh', ['deploy.sh', '--no-build'], {cwd:source, encoding:'utf8', env});
@@ -75,4 +77,13 @@ test('a concurrent publication rejects deployment instead of overwriting the new
   assert.equal(git(remote, 'rev-parse', 'gh-pages'), concurrent);
   assert.equal(git(remote, 'show', 'gh-pages:concurrent.html'), 'another publication');
   assert.equal(git(remote, 'show', 'gh-pages:index.html'), 'old production');
+});
+
+test('deployment refuses to publish when the mannequin check reports errors', t => {
+  const {remote, source} = fixture(t);
+  const before = git(remote, 'rev-parse', 'gh-pages');
+  const result = deploy(source, {...process.env, DEPLOY_TEST_MANNEQUIN_FAIL:'1'});
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Проверка манекена не пройдена/);
+  assert.equal(git(remote, 'rev-parse', 'gh-pages'), before);
 });

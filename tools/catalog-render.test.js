@@ -4,12 +4,12 @@ const model=loadModel(),api=model.get('({catalogVolumeData,muscleColor})');
 test('negative: a rendered wrist or palm offset is detected with unchanged skeleton data',async()=>{
  const{createCatalogScene}=await import('../src/volume/scene.mjs'),{checkDrawnScene}=await import('./catalog-render-audit.mjs');
  const ex=model.EX.find(e=>e.id==='kbswing'),d=api.catalogVolumeData(ex.anim,.5,0),v=createCatalogScene(d);
- try{assert.deepEqual(checkDrawnScene(v,d,{cameras:false}),[]);v.parts.handL.mesh.getObjectByName('palmL').position.y+=.10;v.scene.updateMatrixWorld(true);assert(checkDrawnScene(v,d,{cameras:false}).includes('drawn-palm:L'));}finally{v.dispose();}
+ try{assert.deepEqual(checkDrawnScene(v,d,{cameras:false}),[]);v.parts.handL.mesh.position.y+=.10;v.scene.updateMatrixWorld(true);const r=checkDrawnScene(v,d,{cameras:false});assert(r.includes('drawn-palm:L'));assert(r.includes('drawn-grip:L'));}finally{v.dispose();}
 });
 test('negative: changed rendered limb geometry and moved equipment fail independently',async()=>{
  const{createCatalogScene}=await import('../src/volume/scene.mjs'),{checkDrawnScene}=await import('./catalog-render-audit.mjs');
  const ex=model.EX.find(e=>e.id==='bbbench'),d=api.catalogVolumeData(ex.anim,.5,0),v=createCatalogScene(d);
- try{const a=v.parts.uaL.mesh.geometry.attributes.position;for(let i=170;i<186;i++)a.setX(i,a.getX(i)+.1);v.propNodes()[0].group.children[0].position.y+=.1;v.scene.updateMatrixWorld(true);const r=checkDrawnScene(v,d,{cameras:false});assert(r.some(r=>r.startsWith('drawn-bone:uaL')));assert(r.some(r=>r.startsWith('drawn-prop:0')));}finally{v.dispose();}
+ try{const a=v.parts.uaL.mesh.geometry.attributes.position,cols=d.body.limbs.uaL[0].length,last=d.body.limbs.uaL.length-1;for(let i=last*(cols+1);i<last*(cols+1)+cols;i++)a.setX(i,a.getX(i)+.1);v.propNodes()[0].group.children[0].position.y+=.1;v.scene.updateMatrixWorld(true);const r=checkDrawnScene(v,d,{cameras:false});assert(r.some(r=>r.startsWith('drawn-bone:uaL')));assert(r.some(r=>r.startsWith('drawn-prop:0')));}finally{v.dispose();}
 });
 test('negative: a camera cropping actual geometry fails the same envelope audit',async()=>{
  const{createCatalogScene}=await import('../src/volume/scene.mjs'),{checkDrawnScene}=await import('./catalog-render-audit.mjs');

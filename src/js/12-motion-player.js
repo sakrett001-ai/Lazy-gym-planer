@@ -23,6 +23,8 @@ function motionFrame(F) {
   const eased = .5-.5*Math.cos(Math.PI*q);
   let t = index===0 ? eased : index===1 ? 1 : index===2 ? 1-eased : 0;
   if (F.it.ex.anim.hold) t=0;
+  /* замкнутый цикл (педали, бег, «велосипед»): фаза идёт по кругу без возврата назад */
+  if (F.it.ex.anim.loop) {const p=((F.clock%total)+total)%total/total;t=p;index=p<.5?0:2;}
   const a = F.it.ex.anim;
   let labels = a.eccFirst ? ['Опускание','Нижняя точка','Подъём','Верхняя точка'] : ['Рабочая фаза','Конечная точка','Возврат','Исходное положение'];
   if (F.it.ex.id === 'kbswing') labels=['Мах вперёд','Верхняя точка','Замах назад','Исходное положение'];
