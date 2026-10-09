@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import {createCatalogScene,world} from './scene.mjs';
 
 let rendererUnavailable=false;
+/* Слабая графика: если кадры анимации идут реже ~20 в секунду, тени выключаются — до конца сеанса и для следующих фигур. */
+let lowPower=false;
+const PACE_SAMPLES=40,PACE_LIMIT=48;
 const fittedBounds=new Map();
 export function createVolumeFigure(options){
  if(rendererUnavailable)return null;
@@ -28,10 +31,17 @@ export function createVolumeFigure(options){
   fittedBounds.set(fitKey,Object.fromEntries(Object.entries(scene.bounds).map(([key,value])=>[key,{...value}])));
   if(fittedBounds.size>256)fittedBounds.delete(fittedBounds.keys().next().value);
  }
- apply(lastT,0);
+ apply(lastT,0);scene.studio?.(renderer);if(lowPower)scene.setShadows?.(false);
+ const pace=[];let lastAt=0;
+ function watchPace(){
+  const now=typeof performance!=='undefined'?performance.now():Date.now(),dt=now-lastAt;lastAt=now;if(lowPower||!(dt>0&&dt<200))return;
+  pace.push(dt);if(pace.length<PACE_SAMPLES)return;
+  const median=pace.sort((a,b)=>a-b)[pace.length>>1];pace.length=0;
+  if(median>PACE_LIMIT){lowPower=true;scene.setShadows?.(false);root.dataset.quality='low';}
+ }
  function draw(){if(disposed)return;renderer.render(scene.scene,cameras[camera]);}
  function resize(){if(disposed)return;const rect=root.getBoundingClientRect(),w=Math.max(1,Math.min(1100,rect.width||620)),h=Math.max(1,Math.round(rect.height||w/(options.ratio||1.15)));renderer.setSize(w,h);scene.resize(w,h);draw();}
- function at(t,frame){if(disposed)return;lastT=t;lastIndex=frame?.index||0;apply(t,lastIndex);root.dataset.pose=String(t);root.dataset.phase=String(lastIndex);draw();}
+ function at(t,frame){if(disposed)return;lastT=t;lastIndex=frame?.index||0;apply(t,lastIndex);root.dataset.pose=String(t);root.dataset.phase=String(lastIndex);draw();watchPace();}
  // Three restores its GPU resources first; paused views also need a fresh frame.
  const restore=()=>{if(!disposed){apply(lastT,lastIndex);resize();}};
  canvas.addEventListener('webglcontextrestored',restore);

@@ -49,8 +49,12 @@ export function createMannequinBody(root,first,{skin,joint,sole,mesh}){
   const hand=new THREE.Group();hand.name='hand'+s;group.add(hand);parts['hand'+s]={mesh:hand,key:null};
   for(const k of ['rear','toes']){const shoe=mesh(group,new RoundedBoxGeometry(1,1,1,3,k==='rear'?.22:.3),sole,'shoe-'+k+s);parts['shoe-'+k+s]={mesh:shoe};}
  }
- const dots=new THREE.Group();dots.name='joint-dots';root.add(dots);const dotMat=new THREE.MeshBasicMaterial({color:'#e2f1ff',depthTest:false});
- for(const s of ['L','R'])for(const key of ['sh','el','wr','hip','kn','an'])parts['dot'+key+s]={mesh:mesh(dots,new THREE.SphereGeometry(.021,8,6),dotMat,key+s)};
+ const dots=new THREE.Group();dots.name='joint-dots';root.add(dots);const dotMat=new THREE.MeshBasicMaterial({color:'#e2f1ff',depthTest:false,toneMapped:false});
+ /* тёмная обводка: светлая точка сустава видна и на светлом теле, и на тёмном фоне */
+ const ringMat=new THREE.MeshBasicMaterial({color:'#0e1520',depthTest:false,toneMapped:false}),dotGeo=new THREE.SphereGeometry(.021,10,8),ringGeo=new THREE.SphereGeometry(.031,10,8);
+ for(const s of ['L','R'])for(const key of ['sh','el','wr','hip','kn','an']){
+  const d=mesh(dots,dotGeo,dotMat,key+s),ring=new THREE.Mesh(ringGeo,ringMat);ring.name='dot-ring';ring.renderOrder=10;d.renderOrder=11;d.castShadow=d.receiveShadow=false;d.add(ring);parts['dot'+key+s]={mesh:d};
+ }
  function setHand(s,h){
   const node=parts['hand'+s];
   if(node.key!==h.key){

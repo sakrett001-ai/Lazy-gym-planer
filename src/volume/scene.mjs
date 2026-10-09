@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {createMannequinBody} from './body.mjs';
 import {isNewProp,propKey,createPropNode,updatePropNode} from './props.mjs';
 
@@ -14,8 +15,41 @@ function frame(a,b,reference){
  if(len(x)<1e-5)x=cross(z,Math.abs(z[0])<.8?[1,0,0]:[0,0,1]);x=unit(x);return{x,y:unit(cross(z,x)),z};
 }
 function quaternion(x,y,z){return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(vec(x),vec(y),vec(z)));}
-function material(color,shine=24){return new THREE.MeshPhongMaterial({color,shininess:shine,specular:0x3d4553,side:THREE.DoubleSide});}
+/* Студийный свет и материалы. Материалы физические (roughness/metalness): матовый манекен, порошковая краска рамы,
+   хром грифа, резина блинов, винил подушек. Свет — три источника и небо: ключевой тёплый сверху-слева с мягкой тенью,
+   холодный заполняющий, контровой сзади, отделяющий силуэт от фона. Тон — Khronos PBR Neutral: цвета мышц не уплывают;
+   у него глубокий «носок» в тенях, поэтому тёмные материалы заданы светлее, чем выглядят в кадре. */
+function material(color,{roughness=.6,metalness=0}={}){return new THREE.MeshStandardMaterial({color,roughness,metalness,side:THREE.DoubleSide});}
 function mesh(parent,g,m,name){const o=new THREE.Mesh(g,m);o.name=name;o.castShadow=true;o.receiveShadow=true;parent.add(o);return o;}
+export const STUDIO={
+ background:['#1b2636','#0b1119'],           /* фон: центр и края виньетки */
+ floor:['#44536b','#111925'],                /* пол: световое пятно под сценой и края */
+ hemi:[0xe4ecf7,0x3a4252,2.1],              /* небо, земля, сила */
+ key:[0xfff1e0,1.9,[-2.2,5.2,3.2]],          /* ключевой: цвет, сила, направление (откуда светит) */
+ fill:[0xbcd2ff,.9,[3.4,1.6,2.4]],
+ rim:[0xd8e6ff,1.5,[1.2,3.2,-4.6]],
+ environment:0,                              /* отражения студии на металле (PMREM). Выключены: на программном GL кадр в 10–20 раз дороже,
+                                                на телефонах не измерено; металл держится на бликах трёх источников */
+ shadow:'pcf',                               /* 'soft' | 'pcf' | false */
+ exposure:1
+};
+/* радиальная растяжка пола без DOM: светлое пятно под сценой, к краям — в цвет фона */
+function radialTexture(inner,outer,size=128){
+ const a=new THREE.Color(inner),b=new THREE.Color(outer),data=new Uint8Array(size*size*4),c=new THREE.Color();
+ for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+  const r=Math.min(1,Math.hypot(x/(size-1)-.5,y/(size-1)-.5)*2),k=r*r*(3-2*r);c.copy(a).lerp(b,k);
+  const i=(y*size+x)*4;data[i]=Math.round(c.r*255);data[i+1]=Math.round(c.g*255);data[i+2]=Math.round(c.b*255);data[i+3]=255;
+ }
+ const t=new THREE.DataTexture(data,size,size);t.colorSpace=THREE.SRGBColorSpace;t.magFilter=THREE.LinearFilter;t.minFilter=THREE.LinearFilter;t.needsUpdate=true;return t;
+}
+/* сетка пола гаснет к краям, а не обрывается */
+function fadingGrid(size,divisions,color,center){
+ const pts=[],cols=[],h=size/2,step=size/divisions,c=new THREE.Color(color),fade=(x,z)=>Math.max(0,1-Math.hypot(x,z)/h)**1.6;
+ for(let i=0;i<=divisions;i++){const v=-h+i*step;for(let j=0;j<divisions;j++){const u0=-h+j*step,u1=u0+step;
+  pts.push(v,0,u0,v,0,u1,u0,0,v,u1,0,v);for(const[x,z]of [[v,u0],[v,u1],[u0,v],[u1,v]])cols.push(c.r,c.g,c.b,fade(x,z));}}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));g.setAttribute('color',new THREE.Float32BufferAttribute(cols,4));
+ const lines=new THREE.LineSegments(g,new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.55,depthWrite:false}));lines.name='floor-grid';lines.position.set(...center);return lines;
+}
 function grid(rows,cols){
  const g=new THREE.BufferGeometry(),indices=[];g.setAttribute('position',new THREE.BufferAttribute(new Float32Array((rows+1)*(cols+1)*3),3));
  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const a=r*(cols+1)+c,b=a+1,d=a+cols+1;indices.push(a,d,b,b,d,d+1);}
@@ -61,19 +95,25 @@ function placeHand(hand,R,side,props){
 }
 export function createCatalogScene(first,{coarse=false}={}){
  const limbRows=coarse?5:10,limbCols=coarse?8:16,torsoCols=coarse?12:24;
- const scene=new THREE.Scene();scene.background=new THREE.Color('#101722');
- const skin=material('#9aaac1'),joint=material('#8c9fb9'),shorts=material('#43526d',12),sole=material('#283549',12);
- const mats={steel:material('#425570',62),bar:material('#bbc9db',105),pad:material('#3a4b66',14),plate:material('#263e5c',44),cable:material('#74859b'),band:material('#709ec4'),mat:material('#1a293b',5),
-  frame:material('#566d8e',58),chrome:material('#c4d0de',110),rubber:material('#222c3a',8),wood:material('#6d5c4a',12),wall:material('#253142',4),stack:material('#475a76',40),rope:material('#b8a07a',10),towel:material('#c9cfd8',6)};
- scene.add(new THREE.AmbientLight(0xd9e7ff,.60));const light=new THREE.DirectionalLight(0xf6f3ea,.70);light.position.set(-2,5,3);scene.add(light);const rim=new THREE.DirectionalLight(0xa9c4ff,.25);rim.position.set(3,2,-4);scene.add(rim);
- const floor=mesh(scene,new THREE.PlaneGeometry(12,12),material('#0d1622',5),'floor');floor.rotation.x=-Math.PI/2;floor.position.y=-.014;floor.castShadow=false;
- const floorGrid=new THREE.GridHelper(5,20,0x2b3a50,0x2b3a50);floorGrid.position.set(0,-.01,1);floorGrid.material.transparent=true;floorGrid.material.opacity=.40;scene.add(floorGrid);
+ const scene=new THREE.Scene();scene.background=new THREE.Color(STUDIO.background[1]);
+ /* манекен — матовый «скульптурный» пластик: светлее прежнего, чтобы жёлто-оранжевые мышцы и тени читались */
+ const skin=material('#a0adc0',{roughness:.62}),joint=material('#96a4b8',{roughness:.6}),shorts=material('#46546d',{roughness:.86}),sole=material('#323c4c',{roughness:.78});
+ const mats={steel:material('#6a7fa2',{roughness:.42,metalness:.25}),bar:material('#d3dbe6',{roughness:.26,metalness:.5}),pad:material('#3c4a62',{roughness:.66}),plate:material('#3d506b',{roughness:.5,metalness:.15}),
+  cable:material('#8494aa',{roughness:.35,metalness:.4}),band:material('#6f9fc7',{roughness:.7}),mat:material('#2a3a52',{roughness:.95}),
+  frame:material('#7186a7',{roughness:.45,metalness:.25}),chrome:material('#dde4ee',{roughness:.24,metalness:.5}),rubber:material('#2b3341',{roughness:.95}),wood:material('#7a6450',{roughness:.78}),
+  wall:material('#2a3546',{roughness:.92}),stack:material('#53668a',{roughness:.4,metalness:.3}),rope:material('#b8a07a',{roughness:.92}),towel:material('#c9cfd8',{roughness:1})};
+ const hemi=new THREE.HemisphereLight(STUDIO.hemi[0],STUDIO.hemi[1],STUDIO.hemi[2]);scene.add(hemi);
+ const light=(color,power,dir)=>{const l=new THREE.DirectionalLight(color,power);l.position.set(...dir);scene.add(l);scene.add(l.target);return l;};
+ const key=light(...STUDIO.key),fill=light(...STUDIO.fill),rim=light(...STUDIO.rim);key.name='key-light';fill.name='fill-light';rim.name='rim-light';
+ const floorTexture=radialTexture(...STUDIO.floor);
+ const floor=mesh(scene,new THREE.PlaneGeometry(12,12),new THREE.MeshStandardMaterial({map:floorTexture,roughness:.94,metalness:0}),'floor');floor.rotation.x=-Math.PI/2;floor.position.y=-.014;floor.castShadow=false;floor.position.z=.6;
+ const floorGrid=fadingGrid(5,20,0x485b76,[0,-.01,1]);scene.add(floorGrid);
  const mannequin=first.body?createMannequinBody(scene,first,{skin,joint,sole,mesh}):null;
  const parts=mannequin?mannequin.parts:{};let body=mannequin?mannequin.parts.torso.mesh:null,head=mannequin?mannequin.parts.head.mesh:null,nose,neck,dots;
  if(!mannequin){
  body=mesh(scene,grid(first.torsoRings.length-1,torsoCols),skin,'torso');
  head=mesh(scene,new THREE.SphereGeometry(1,18,12),skin,'head');nose=mesh(scene,new THREE.SphereGeometry(1,10,8),joint,'nose');neck=mesh(scene,new THREE.CylinderGeometry(1,1,1,12),skin,'neck');
- dots=new THREE.Group();dots.name='joint-dots';scene.add(dots);const dotMat=new THREE.MeshBasicMaterial({color:'#e2f1ff',depthTest:false});
+ dots=new THREE.Group();dots.name='joint-dots';scene.add(dots);const dotMat=new THREE.MeshBasicMaterial({color:'#e2f1ff',depthTest:false,toneMapped:false});
  for(const side of ['L','R']){
   for(const[kind,a,b]of [['ua','sh','el'],['fa','el','wr'],['th','hip','kn'],['sh','kn','an']])parts[kind+side]={a:a+side,b:b+side,mesh:mesh(scene,grid(limbRows,limbCols),skin,kind+side)};
   for(const[name,r]of [['sh',6.4],['el',4.3],['wr',2.7],['kn',5.2]])parts[name+'-joint'+side]={r,mesh:mesh(scene,new THREE.SphereGeometry(1,14,10),joint,name+'-joint'+side)};
@@ -94,7 +134,7 @@ export function createCatalogScene(first,{coarse=false}={}){
  const equipment=new THREE.Group();equipment.name='equipment';scene.add(equipment);let propNodes=[],lastData,options={};
  /* метки нагрузки на суставы: красный ореол с ядром, видны сквозь тело и снаряд */
  const stressGroup=new THREE.Group();stressGroup.name='joint-stress';scene.add(stressGroup);
- const stressGeo=new THREE.SphereGeometry(1,18,12),stressHalo=new THREE.MeshBasicMaterial({color:'#ff3b30',transparent:true,opacity:.36,depthTest:false,depthWrite:false}),stressCore=new THREE.MeshBasicMaterial({color:'#ff453a',depthTest:false,depthWrite:false});
+ const stressGeo=new THREE.SphereGeometry(1,18,12),stressHalo=new THREE.MeshBasicMaterial({color:'#ff3b30',transparent:true,opacity:.36,depthTest:false,depthWrite:false,toneMapped:false}),stressCore=new THREE.MeshBasicMaterial({color:'#ff453a',depthTest:false,depthWrite:false,toneMapped:false});
  const stressMarks=[],calm=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
  function stressMark(i){
   while(stressMarks.length<=i){const g=new THREE.Group();g.name='stress-mark';const halo=new THREE.Mesh(stressGeo,stressHalo),core=new THREE.Mesh(stressGeo,stressCore);halo.renderOrder=20;core.renderOrder=21;core.scale.setScalar(.03);g.add(halo,core);stressGroup.add(g);stressMarks.push(g);}
@@ -167,10 +207,10 @@ export function createCatalogScene(first,{coarse=false}={}){
   }
   const groups=new Map();for(const f of data.surfaces){const key=f.id+':'+f.side;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(f);}
   for(const[key,faces]of groups){
-   let o=regionMeshes.get(key);if(!o){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(faces.length*6*3),3));const m=material('#a7b3c6');m.polygonOffset=true;m.polygonOffsetFactor=-1;m.polygonOffsetUnits=-1;o=mesh(regionsGroup,g,m,key);o.userData={region:faces[0].id,side:faces[0].side};regionMeshes.set(key,o);}
+   let o=regionMeshes.get(key);if(!o){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(faces.length*6*3),3));const m=material('#a7b3c6',{roughness:.55});m.polygonOffset=true;m.polygonOffsetFactor=-1;m.polygonOffsetUnits=-1;o=mesh(regionsGroup,g,m,key);o.userData={region:faces[0].id,side:faces[0].side};regionMeshes.set(key,o);}
    if(o.geometry.attributes.position.count!==faces.length*6){o.geometry.dispose();o.geometry=new THREE.BufferGeometry();o.geometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array(faces.length*6*3),3));}
    let i=0;const p=o.geometry.attributes.position;for(const f of faces)for(const j of [0,1,2,0,2,3])p.setXYZ(i++,...world(f.points[j]));p.needsUpdate=true;o.geometry.computeVertexNormals();o.geometry.computeBoundingSphere();o.geometry.computeBoundingBox();
-   const id=faces[0].id,side=faces[0].side,active=options.muscles!==false&&(!options.selected||options.selected==='all'||options.selected===id||options.selected===faces[0].parent);o.visible=options.muscles!==false;o.material.color.set(active?options.color(data.sideValues?.[side]?.[id]??data.values[id]??.28):'#9aaac1');
+   const id=faces[0].id,side=faces[0].side,active=options.muscles!==false&&(!options.selected||options.selected==='all'||options.selected===id||options.selected===faces[0].parent);o.visible=options.muscles!==false;o.material.color.set(active?options.color(data.sideValues?.[side]?.[id]??data.values[id]??.28):'#a0adc0');
    /* собственное свечение участка: жёлтый и оранжевый в тени не уходят в коричневый */
    if(active)o.material.emissive.copy(o.material.color).multiplyScalar(.34);else o.material.emissive.setRGB(0,0,0);
   }
@@ -185,7 +225,7 @@ export function createCatalogScene(first,{coarse=false}={}){
  }));
  const bounds=Object.fromEntries(Object.keys(cameras).map(id=>[id,{minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity}]));
  function includeBounds(){
-  scene.traverse(o=>{if(!o.isMesh||!o.visible||o===floor||o.parent===dots||o.parent?.name==='joint-dots'||o.parent?.parent===stressGroup)return;if(!o.geometry.boundingBox)o.geometry.computeBoundingBox();const b=o.geometry.boundingBox;
+  scene.traverse(o=>{if(!o.isMesh||!o.visible||o===floor||o.name==='dot-ring'||o.parent===dots||o.parent?.name==='joint-dots'||o.parent?.parent===stressGroup)return;if(!o.geometry.boundingBox)o.geometry.computeBoundingBox();const b=o.geometry.boundingBox;
    for(const x of [b.min.x,b.max.x])for(const y of [b.min.y,b.max.y])for(const z of [b.min.z,b.max.z]){
     const p=vec([x,y,z]).applyMatrix4(o.matrixWorld);for(const[id,c]of Object.entries(cameras)){const q=p.clone().applyMatrix4(c.matrixWorldInverse),e=bounds[id];e.minX=Math.min(e.minX,q.x);e.maxX=Math.max(e.maxX,q.x);e.minY=Math.min(e.minY,q.y);e.maxY=Math.max(e.maxY,q.y);}
    }
@@ -197,7 +237,45 @@ export function createCatalogScene(first,{coarse=false}={}){
    const ratio=width/height;if(w/h<ratio)w=h*ratio;else h=w/ratio;c.left=cx-w/2;c.right=cx+w/2;c.top=cy+h/2;c.bottom=cy-h/2;c.updateProjectionMatrix();
   }
  }
+ /* Студия для настоящего рендерера: тон, мягкие тени, отражения, фон. Без WebGL (тесты, аудит) сцена остаётся той же,
+    только без этих эффектов. Тень отбрасывают все; принимают пол и инвентарь — на теле тень не перекрывает цвет мышц. */
+ let studioTextures=[],metalEnv=null;
+ function studio(renderer){
+  if(!renderer?.isWebGLRenderer)return false;studioRenderer=renderer;
+  renderer.toneMapping=THREE.NeutralToneMapping;renderer.toneMappingExposure=STUDIO.exposure;renderer.outputColorSpace=THREE.SRGBColorSpace;
+  renderer.shadowMap.enabled=!!STUDIO.shadow;renderer.shadowMap.type=STUDIO.shadow==='soft'?THREE.PCFSoftShadowMap:THREE.PCFShadowMap;
+  if(STUDIO.environment)try{
+   const pmrem=new THREE.PMREMGenerator(renderer),env=new RoomEnvironment(),rt=pmrem.fromScene(env,.04);studioTextures.push(rt);env.dispose?.();pmrem.dispose();
+   metalEnv=rt.texture;for(const m of Object.values(mats))if(m.metalness>=.3){m.envMap=metalEnv;m.envMapIntensity=STUDIO.environment;m.needsUpdate=true;}
+  }catch(e){metalEnv=null;}
+  if(typeof document!=='undefined'){
+   const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d');
+   if(g){const grad=g.createRadialGradient(128,112,10,128,128,190);grad.addColorStop(0,STUDIO.background[0]);grad.addColorStop(1,STUDIO.background[1]);g.fillStyle=grad;g.fillRect(0,0,256,256);
+    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;scene.background=t;studioTextures.push(t);}
+  }
+  key.castShadow=!!STUDIO.shadow;key.shadow.mapSize.set(1024,1024);key.shadow.bias=-.0004;key.shadow.normalBias=.02;key.shadow.radius=4;
+  /* тело тень отбрасывает, но не принимает */
+  const bodyParts=new Set();for(const p of Object.values(parts))p?.mesh?.traverse?.(o=>bodyParts.add(o));regionsGroup.traverse(o=>bodyParts.add(o));
+  scene.traverse(o=>{if(o.isMesh&&bodyParts.has(o))o.receiveShadow=false;});
+  /* точки суставов — разметка, а не предметы: тени не отбрасывают */
+  scene.getObjectByName('joint-dots')?.traverse(o=>{o.castShadow=false;o.receiveShadow=false;});
+  fitShadow();return true;
+ }
+ /* тени можно выключить на ходу (слабая графика): материалы пересобираются без теневого кода */
+ let studioRenderer=null;
+ function setShadows(on){
+  if(!studioRenderer)return;on=!!on&&!!STUDIO.shadow;if(studioRenderer.shadowMap.enabled===on)return;
+  studioRenderer.shadowMap.enabled=on;key.castShadow=on;scene.traverse(o=>{if(o.material)for(const m of [].concat(o.material))m.needsUpdate=true;});
+ }
+ /* теневая камера ключевого света охватывает всю сцену со всеми фазами (по рамке камер) с запасом */
+ function fitShadow(){
+  const box=new THREE.Box3();scene.traverse(o=>{if(!o.isMesh||!o.visible||o===floor||o.name==='dot-ring'||o.parent===dots||o.parent?.name==='joint-dots'||o.parent?.parent===stressGroup)return;box.expandByObject(o);});
+  if(box.isEmpty())box.set(new THREE.Vector3(-1,0,-1),new THREE.Vector3(1,2,2));
+  box.expandByScalar(.7);const center=box.getCenter(new THREE.Vector3()),r=box.getSize(new THREE.Vector3()).length()/2;
+  for(const l of [key,fill,rim]){l.target.position.copy(center);l.position.copy(center).add(l.userData.dir||(l.userData.dir=l.position.clone().normalize().multiplyScalar(8)));l.target.updateMatrixWorld();}
+  const cam=key.shadow.camera;cam.left=-r;cam.right=r;cam.top=r;cam.bottom=-r;cam.near=.1;cam.far=8+r*2;cam.updateProjectionMatrix();key.shadow.needsUpdate=true;
+ }
  apply(first,{color:()=> '#a7b3c6'});
- return{scene,cameras,apply,includeBounds,resize,bounds,regionMeshes,parts,body,head,mannequin,propNodes:()=>propNodes,
-  dispose(){const materials=new Set();scene.traverse(o=>{o.geometry?.dispose();if(o.material)for(const m of [].concat(o.material))materials.add(m);});for(const m of materials)m.dispose();}};
+ return{scene,cameras,apply,includeBounds,resize,bounds,regionMeshes,parts,body,head,mannequin,propNodes:()=>propNodes,studio,fitShadow,setShadows,
+  dispose(){const materials=new Set();scene.traverse(o=>{o.geometry?.dispose();if(o.material)for(const m of [].concat(o.material)){materials.add(m);m.map?.dispose();}});for(const m of materials)m.dispose();for(const t of studioTextures)t.dispose();studioTextures=[];}};
 }
