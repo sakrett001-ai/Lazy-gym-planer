@@ -453,6 +453,42 @@ function bodyData(R){
  return{...S,head:{c:R.head,axes:[fr.head.x,fr.head.y,fr.head.z],radii:B.head},caps,hands,feet,shoe:SHOE};
 }
 
+/* ---------- Углы суставов по рамкам сегментов ----------
+   Общие для валидатора (tools/biomech/validator2.js) и меток нагрузки на суставы в приложении. */
+const jaInt = f => M3.cols([f.x[0], -f.x[1], f.x[2]], [f.y[0], -f.y[1], f.y[2]], [f.z[0], -f.z[1], f.z[2]]); /* каталог → внутренняя правая тройка */
+const jaRel = (a, b) => M3.mul(M3.T(jaInt(a)), jaInt(b));
+function jointAngles(R) {
+  const F = R.frames, out = {};
+  out.lumbar = eulerXZY(jaRel(F.pelvis, F.lumbar));
+  out.thoracic = eulerXZY(jaRel(F.lumbar, F.thorax));
+  out.neck = eulerXZY(jaRel(F.thorax, F.head));
+  for (const s of SIDES) {
+    const g = SIGN[s], A = {};
+    /* плечо относительно грудной клетки */
+    const ua = jaRel(F.thorax, F['ua' + s]), st = swingTwist(ua), hum = M3.v(ua, [0, -1, 0]);
+    A.elevation = V.angle(hum, [0, -1, 0]);
+    A.flexion = Math.atan2(hum[2], -hum[1]) * R2D;         /* вперёд + */
+    A.abduction = Math.atan2(g * hum[0], Math.hypot(hum[1], hum[2])) * R2D; /* наружу + */
+    A.posterior = -hum[2];                                     /* >0 — плечо позади фронтальной плоскости */
+    A.up = hum[1]; A.lat = g * hum[0];
+    A.twist = g * st.twist;
+    const fa = jaRel(F['ua' + s], F['fa' + s]); A.elbow = -Math.atan2(fa[7], fa[4]) * R2D;
+    const pr = jaRel(F['fa' + s], F['fd' + s]); A.pron = -g * Math.atan2(pr[2], pr[0]) * R2D;
+    /* запястье: направление кисти в рамке дистального предплечья — устойчиво и при разгибании ~90° */
+    const wr = jaRel(F['fd' + s], F['hand' + s]), d = [-wr[1], -wr[4], -wr[7]];
+    A.wristFlex = Math.atan2(-g * d[0], -d[1]) * R2D; A.wristDev = Math.asin(clamp(d[2], -1, 1)) * R2D;
+    { const ex = M3.mul(M3.rz(-g * A.wristFlex), M3.rx(-A.wristDev)), zE = M3.col(ex, 2), zH = M3.col(wr, 2), ax = V.unit(d);
+      const a1 = V.unit(V.perp(zE, ax)), a2 = V.unit(V.perp(zH, ax)); A.wristTwist = Math.atan2(V.dot(V.cross(a1, a2), ax), V.dot(a1, a2)) * R2D; }
+    const th = jaRel(F.pelvis, F['th' + s]), fem = M3.v(th, [0, -1, 0]), ht = swingTwist(th);
+    A.hipFlex = Math.atan2(fem[2], -fem[1]) * R2D; A.hipAbd = Math.atan2(g * fem[0], Math.hypot(fem[1], fem[2])) * R2D; A.hipRot = g * ht.twist;
+    const kn = jaRel(F['th' + s], F['sk' + s]); A.knee = Math.atan2(kn[7], kn[4]) * R2D;
+    const an = eulerXZY(jaRel(F['sk' + s], F['foot' + s])); A.dorsi = -an[0]; A.inversion = -g * an[1]; A.ankleTwist = an[2];
+    const mt = eulerXZY(jaRel(F['foot' + s], F['toes' + s])); A.mtp = -mt[0];
+    out[s] = A;
+  }
+  return out;
+}
+
 /* ---------- Масса ---------- */
 function centerOfMass(R,extra=[]){
  const m=B.mass,parts=[];
@@ -471,6 +507,6 @@ return{V,M3,Q,B,TORSO,TORSO_H,TORSO_JOINTS,LIMBS,NECK,CAPS,MASS,LIMITS,SIDES,SIG
  neutral,clone,pack,unpack,PACK,PACK_SIZE,fk,solePoints,twoBone,solveArm,solveArmWrist,setArmFromPoints,footFrame,heelFrame,solveLeg,rootRot,rootFromAxes,
  swing,swingTwist,eulerXZY,eulerYZX,spineRot,makeTrack,monotone,toCat,dirCat,catalogPose,
  profileAt,sectionAt,spineFrame,torsoPoint,limbAxes,limbPoint,neckPoint,surface,limbSDF,torsoSDF,torsoCache,headSDF,ellipseRadius,centerOfMass,LIMB_DEF,
- handShape,SHOE,bodyData};
+ handShape,SHOE,bodyData,jointAngles};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=Mannequin;

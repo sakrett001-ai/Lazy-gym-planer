@@ -92,6 +92,19 @@ export function createCatalogScene(first,{coarse=false}={}){
  }
  const regionMeshes=new Map(),regionsGroup=new THREE.Group();regionsGroup.name='regions';scene.add(regionsGroup);
  const equipment=new THREE.Group();equipment.name='equipment';scene.add(equipment);let propNodes=[],lastData,options={};
+ /* метки нагрузки на суставы: красный ореол с ядром, видны сквозь тело и снаряд */
+ const stressGroup=new THREE.Group();stressGroup.name='joint-stress';scene.add(stressGroup);
+ const stressGeo=new THREE.SphereGeometry(1,18,12),stressHalo=new THREE.MeshBasicMaterial({color:'#ff3b30',transparent:true,opacity:.36,depthTest:false,depthWrite:false}),stressCore=new THREE.MeshBasicMaterial({color:'#ff453a',depthTest:false,depthWrite:false});
+ const stressMarks=[],calm=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+ function stressMark(i){
+  while(stressMarks.length<=i){const g=new THREE.Group();g.name='stress-mark';const halo=new THREE.Mesh(stressGeo,stressHalo),core=new THREE.Mesh(stressGeo,stressCore);halo.renderOrder=20;core.renderOrder=21;core.scale.setScalar(.03);g.add(halo,core);stressGroup.add(g);stressMarks.push(g);}
+  return stressMarks[i];
+ }
+ function applyStress(marks){
+  const pulse=calm?1:1+.18*Math.sin((typeof performance!=='undefined'?performance.now():0)/170);
+  marks.forEach((m,i)=>{const g=stressMark(i);g.visible=true;g.position.fromArray(world(m.p));g.children[0].scale.setScalar(.078*pulse);});
+  for(let i=marks.length;i<stressMarks.length;i++)stressMarks[i].visible=false;
+ }
  function propNode(s,i){
   if(isNewProp(s))return createPropNode(equipment,s,mats,mesh);
   const g=new THREE.Group();g.name='prop-'+i+'-'+s.kind;equipment.add(g);const m=mats[s.tone]||mats.steel;
@@ -164,7 +177,7 @@ export function createCatalogScene(first,{coarse=false}={}){
   if(propNodes.length!==data.props.length||propNodes.some((n,i)=>n.key!==(isNewProp(data.props[i])?propKey(data.props[i]):data.props[i].kind))){
    equipment.traverse(o=>o.geometry?.dispose());equipment.clear();propNodes=data.props.map(propNode);
   }
-  data.props.forEach((s,i)=>updateProp(propNodes[i],s));scene.updateMatrixWorld(true);
+  data.props.forEach((s,i)=>updateProp(propNodes[i],s));applyStress(options.stress?data.stress||[]:[]);scene.updateMatrixWorld(true);
  }
  const cameras=Object.fromEntries(Object.entries(CAMERA_SETTINGS).map(([id,[yaw,elev]])=>{
   const y=yaw*Math.PI/180,e=elev*Math.PI/180,eye=[-Math.sin(y)*Math.cos(e),-Math.sin(e),Math.cos(y)*Math.cos(e)];
@@ -172,7 +185,7 @@ export function createCatalogScene(first,{coarse=false}={}){
  }));
  const bounds=Object.fromEntries(Object.keys(cameras).map(id=>[id,{minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity}]));
  function includeBounds(){
-  scene.traverse(o=>{if(!o.isMesh||!o.visible||o===floor||o.parent===dots||o.parent?.name==='joint-dots')return;if(!o.geometry.boundingBox)o.geometry.computeBoundingBox();const b=o.geometry.boundingBox;
+  scene.traverse(o=>{if(!o.isMesh||!o.visible||o===floor||o.parent===dots||o.parent?.name==='joint-dots'||o.parent?.parent===stressGroup)return;if(!o.geometry.boundingBox)o.geometry.computeBoundingBox();const b=o.geometry.boundingBox;
    for(const x of [b.min.x,b.max.x])for(const y of [b.min.y,b.max.y])for(const z of [b.min.z,b.max.z]){
     const p=vec([x,y,z]).applyMatrix4(o.matrixWorld);for(const[id,c]of Object.entries(cameras)){const q=p.clone().applyMatrix4(c.matrixWorldInverse),e=bounds[id];e.minX=Math.min(e.minX,q.x);e.maxX=Math.max(e.maxX,q.x);e.minY=Math.min(e.minY,q.y);e.maxY=Math.max(e.maxY,q.y);}
    }

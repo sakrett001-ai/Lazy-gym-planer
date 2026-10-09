@@ -4,6 +4,7 @@ const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced
 const motionPrefs = (() => {try {return Object.assign({speed:.5,joints:true,trace:false,vectors:true,muscles:true},JSON.parse(localStorage.getItem('podhod.motion.v2') || '{}'));}catch(e){return {speed:.5,joints:true,trace:false,vectors:true,muscles:true};}})();
 if (![.25,.5,1].includes(+motionPrefs.speed)) motionPrefs.speed = .5;
 if(typeof motionPrefs.muscles!=='boolean')motionPrefs.muscles=true;
+if(typeof motionPrefs.stress!=='boolean')motionPrefs.stress=true;
 let detailMotion = null, detailReturn = null, lastMotionNow = null;
 function saveMotionPrefs() {try {localStorage.setItem('podhod.motion.v2',JSON.stringify(motionPrefs));}catch(e){}}
 function motionDurations(it) {
@@ -45,7 +46,7 @@ function paintMotion(F, detailed=false) {
   $('#mv-play').setAttribute('aria-label',F.paused?'Воспроизвести движение':'Приостановить движение');
   $('#mv-play').setAttribute('aria-pressed',String(!F.paused));
   $('#mv-position').textContent=`${Math.round(m.progress*100)}% повторения`;
-  paintMusclePanel('mv',F,m);
+  paintMusclePanel('mv',F,m);paintStressPanel('mv',F,m);
 }
 function configureMusclePanel(prefix,it){
  const profile=motionProfile(it.ex.anim),toggle=$('#'+prefix+'-muscle-toggle'),panel=$('#'+prefix+'-muscle-panel');
@@ -75,6 +76,36 @@ function paintMusclePanel(prefix,F,m){
   row.querySelector('.muscle-swatch').style.backgroundColor=muscleColor(v);
   if(level.textContent!==text)level.textContent=text;
  }
+}
+/* ---------- нагрузка на суставы: панель с подсказками и красные отрезки шкалы повторения ---------- */
+function stressTrack(F){
+ const ex=F.it.ex;if(!jointStress(ex).rules.length)return '';
+ const N=160,total=F.durations.reduce((a,b)=>a+b,0)||4000,on=[];
+ for(let i=0;i<=N;i++){const m=motionFrame({...F,clock:i/N*total*.9999});on.push(jointStressAt(ex,m.t,m.index).length>0);}
+ if(!on.some(Boolean))return '';
+ const stops=[],pct=i=>(i/N*100).toFixed(2)+'%';let start=0;
+ for(let i=1;i<=N+1;i++)if(i>N||on[i]!==on[start]){stops.push(`${on[start]?'var(--hot)':'var(--line)'} ${pct(start)} ${pct(Math.min(i,N))}`);start=i;}
+ return `linear-gradient(90deg,${stops.join(',')})`;
+}
+function configureStressPanel(prefix,F){
+ const panel=$('#'+prefix+'-stress-panel');if(!panel||!F)return;
+ const rules=jointStress(F.it.ex).rules,toggle=$('#'+prefix+'-stress-toggle'),track=$('#'+prefix+'-stress-track');
+ if(toggle){toggle.checked=!!motionPrefs.stress;toggle.disabled=!rules.length;}
+ panel.hidden=!rules.length||!motionPrefs.stress;
+ $('#'+prefix+'-stress-list').innerHTML=rules.map(r=>`<li data-stress-row="${r.id}"><span class="stress-dot" aria-hidden="true"></span><span><b>${esc(r.zone)}.</b> ${esc(r.what)} <em>${esc(r.tip)}</em></span></li>`).join('');
+ if(track){const g=motionPrefs.stress?stressTrack(F):'';track.hidden=!g;track.style.background=g;}
+}
+function paintStressPanel(prefix,F,m){
+ const panel=$('#'+prefix+'-stress-panel');if(!panel||panel.hidden)return;
+ const now=new Set(jointStressAt(F.it.ex,m.t,m.index).map(x=>x.rule.id));
+ for(const row of panel.querySelectorAll('[data-stress-row]'))row.classList.toggle('on',now.has(row.dataset.stressRow));
+}
+function changeStressPreference(show){
+ motionPrefs.stress=!!show;saveMotionPrefs();
+ for(const F of [...figs,detailMotion,workout?.motion].filter(Boolean))for(const f of [F.f,F.extra].filter(Boolean))f.setStress?.(motionPrefs.stress);
+ for(const line of document.querySelectorAll('.c-joints'))line.hidden=!motionPrefs.stress;
+ if(detailMotion){configureStressPanel('mv',detailMotion);paintMotion(detailMotion,true);}
+ if(workout?.motion){configureStressPanel('wv',workout.motion);paintWorkoutMotion();}
 }
 function changeMusclePreference(show){
  motionPrefs.muscles=!!show;saveMotionPrefs();
@@ -190,6 +221,7 @@ function setupMotionViewer() {
   $('#mv-trace').addEventListener('change',e=>{motionPrefs.trace=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean))f.setTrace(e.target.checked);saveMotionPrefs();});
   $('#mv-muscle-toggle').addEventListener('change',e=>changeMusclePreference(e.target.checked));
   $('#wv-muscle-toggle').addEventListener('change',e=>changeMusclePreference(e.target.checked));
+  for(const prefix of ['mv','wv'])$('#'+prefix+'-stress-toggle').addEventListener('change',e=>changeStressPreference(e.target.checked));
   for(const prefix of ['mv','wv'])$('#'+prefix+'-region').addEventListener('change',e=>selectMuscleRegion(prefix,e.target.value));
   $('#motion-view').addEventListener('cancel',e=>{e.preventDefault();closeMotion();});
   $('#motion-view').addEventListener('close',()=>{disposeMotion(detailMotion);detailMotion=null;document.documentElement.classList.remove('motion-open');});

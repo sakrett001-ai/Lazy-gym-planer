@@ -1,0 +1,25 @@
+/* Нагрузка на суставы: красные метки на манекене (SVG), отрезки на шкале повторения, панель подсказок, строка в карточке.
+   Красный в приложении занят только суставами и ошибками; мышцы — жёлто-оранжевые. */
+.stress-marks .stress-halo { fill:var(--hot); fill-opacity:.32; }
+.stress-marks .stress-core { fill:var(--hot); }
+@media (prefers-reduced-motion:no-preference) {
+  .stress-marks .stress-halo { animation:stress-pulse 1.1s ease-in-out infinite; transform-box:fill-box; transform-origin:center; }
+}
+@keyframes stress-pulse { 0%, 100% { transform:scale(1); fill-opacity:.32; } 50% { transform:scale(1.28); fill-opacity:.16; } }
+
+.stress-track { display:block; height:5px; border-radius:3px; margin:3px 8px 0; }
+
+.stress-panel { border:1px solid color-mix(in srgb, var(--hot) 35%, var(--line)); background:var(--hot-soft); border-radius:12px; padding:10px 12px; display:grid; gap:6px; }
+.stress-panel h3 { margin:0; font:600 11.5px/1.2 var(--f-body); letter-spacing:.08em; text-transform:uppercase; color:color-mix(in srgb, var(--hot) 82%, var(--ink)); }
+.stress-explanation { margin:0; font-size:12.5px; color:var(--muted); }
+.stress-list { list-style:none; margin:0; padding:0; display:grid; gap:7px; }
+.stress-list li { display:grid; grid-template-columns:auto minmax(0, 1fr); gap:8px; align-items:start; font-size:13.5px; line-height:1.38; color:var(--muted); }
+.stress-list li b { color:var(--ink); }
+.stress-list li em { font-style:normal; }
+.stress-list li.on { color:var(--ink); }
+.stress-list li .stress-dot { opacity:.45; }
+.stress-list li.on .stress-dot { opacity:1; box-shadow:0 0 0 4px color-mix(in srgb, var(--hot) 28%, transparent); }
+.stress-dot { display:inline-block; flex:none; width:10px; height:10px; margin-top:5px; border-radius:50%; background:var(--hot); }
+
+.c-joints { margin:0; padding:0 2px; display:flex; align-items:center; gap:7px; font-size:13px; font-weight:600; color:color-mix(in srgb, var(--hot) 82%, var(--ink)); }
+.c-joints .stress-dot { margin-top:0; }
