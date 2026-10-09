@@ -25,6 +25,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+      pages: write
     steps:
       - uses: actions/checkout@v6
         with:
@@ -82,3 +83,12 @@ jobs:
             echo "Release commit: $(git rev-parse HEAD)"
             echo "GitHub Pages and Floot now use this checked release."
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Request GitHub Pages build after the token-authenticated push
+        if: github.event_name != 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.request('POST /repos/{owner}/{repo}/pages/builds', {
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
