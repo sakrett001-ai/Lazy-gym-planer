@@ -122,7 +122,7 @@ function mountFigures() {
 function stopFigures() {
   if(workout && $('#workout-view').open)closeWorkout();
   if(detailMotion) closeMotion();
-  cancelAnimationFrame(rafId);if(io)io.disconnect();io=null;figs=[];
+  cancelAnimationFrame(rafId);if(io)io.disconnect();io=null;for(const F of figs)disposeMotion(F);figs=[];
 }
 function previewItem(id) {
   const ex=EXI[id];let E=effEquip(S.equip);

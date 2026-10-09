@@ -80,7 +80,7 @@ const WEEKS = [
 ];
 
 const DEFAULTS = {goal:'mass', format:'classic', level:'mid', count:6, groups:['chest', 'back', 'shoulders'], equip:EQUIP.map(e => e.id), seed:7,
-  mode:'single', days:3, split:'full', week:1, day:0, view:'plan'};
+  mode:'single', days:3, split:'full', week:1, day:0, view:'plan', atlasM:'chest', focus:null};
 const STORE = 'podhod.settings.v1';
 function loadSettings() {
   try { const s = JSON.parse(localStorage.getItem(STORE) || 'null'); if (s && s.groups && s.equip) return Object.assign({}, DEFAULTS, s); } catch (e) {}
@@ -144,9 +144,15 @@ function pickExercises(E, rand, groups, count, avoid) {
   const picked = [];
   const usedPat = {};
   const compBonus = {strength:0.7, mass:0.35, cut:0.05}[S.goal];
+  /* акцент из атласа: если группа мышцы есть в этой тренировке, треть упражнений нагружают её как основную
+     (в недельной программе — одно на каждые 5 упражнений дня, объём набирается за неделю);
+     сверх этого — небольшой плюс, а где мышца помогает — ещё меньший */
+  const focus = S.focus && MUSCLE_NAMES[S.focus] ? S.focus : null;
+  const focusNeed = focus && G.has(MUSCLE_GROUP[focus]) ? (S.mode === 'program' ? Math.max(1, Math.round(count / 5)) : Math.ceil(count / 3)) : 0;
   const jitter = pool.map(() => rand());
   while (picked.length < count) {
     let best = null, bestScore = -1e9;
+    const focusShort = !!focus && picked.filter(p => p.pri.includes(focus)).length < focusNeed;
     pool.forEach((ex, i) => {
       if (picked.includes(ex)) return;
       const gs = groupsOf(ex);
@@ -162,6 +168,7 @@ function pickExercises(E, rand, groups, count, avoid) {
       if (usedPat[pat]) sc -= 0.7 * usedPat[pat] + (picked.some(p => PATTERN[p.id] === pat && p.g === ex.g) ? 0.4 : 0);
       if (!G.has(ex.g)) sc -= 0.6;
       if (avoid && avoid.has(ex.id)) sc -= 1.1;
+      if (focus) sc += ex.pri.includes(focus) ? (focusShort ? 3 : 0.6) + (ex.pri[0] === focus ? 0.3 : 0) : ex.sec.includes(focus) ? 0.35 : 0;
       if (typeof PROG_CHAIN !== 'undefined' && PROG_CHAIN[ex.id] !== undefined && picked.some(p => PROG_CHAIN[p.id] === PROG_CHAIN[ex.id])) sc -= 1.5;
       if (sc > bestScore) { bestScore = sc; best = ex; }
     });
@@ -343,7 +350,9 @@ function buildProgram() {
   const seen = {};
   const out = tmpl.map((tid, i) => {
     seen[tid] = (seen[tid] || 0) + 1;
-    const p = buildPlan({groups:DAY_T[tid].g, count:S.count, seed:S.seed * 131 + i * 977 + 13, avoid:new Set(avoid), week, swaps:swaps['d' + i] || {}});
+    /* день «всё тело» включает мышцу акцента, даже если по шаблону её группы в этот день нет */
+    const fg = S.focus && MUSCLE_GROUP[S.focus], g = DAY_T[tid].name === 'Всё тело' && fg && !DAY_T[tid].g.includes(fg) ? DAY_T[tid].g.concat(fg) : DAY_T[tid].g;
+    const p = buildPlan({groups:g, count:S.count, seed:S.seed * 131 + i * 977 + 13, avoid:new Set(avoid), week, swaps:swaps['d' + i] || {}});
     if (p.items) p.items.forEach(it => avoid.add(it.ex.id));
     return {tid, i, wd:SCHEDULE[days][i], plan:p};
   });
@@ -384,7 +393,7 @@ function renderSetup() {
     `<button type="button" class="seg-b${k === cur ? ' on' : ''}" data-set="${name}" data-v="${k}" aria-pressed="${k === cur}"><b>${v.name}</b>${v.hint ? `<small>${v.hint}</small>` : ''}</button>`).join('');
   const prog = S.mode === 'program';
   $('#views').innerHTML = viewTabs();
-  const jv = S.view === 'journal';
+  const jv = S.view === 'journal' || S.view === 'atlas';
   $('.setup').hidden = jv; $('.layout').classList.toggle('solo', jv);
   $('#f-mode').innerHTML = seg('mode', MODES, S.mode);
   $('#f-prog').hidden = !prog;
@@ -558,11 +567,17 @@ function headButtons(copyLabel) {
       </div>
       <p class="p-hint" id="copy-msg" role="status"></p>`;
 }
+/* акцент, выбранный в атласе мышц */
+function focusHtml() {
+  if (!S.focus || !MUSCLE_NAMES[S.focus]) return '';
+  return `<p class="focus-chip"><span>Акцент: <b>${esc(MUSCLE_NAMES[S.focus])}</b></span><button type="button" data-focus-clear="1">Убрать акцент</button></p>`;
+}
 function norm(load) { const mx = Math.max(1, ...Object.values(load)); const o = {}; for (const [m, v] of Object.entries(load)) o[m] = v / mx; return o; }
 
 function renderPlan() {
   stopFigures();
   if (S.view === 'journal') { prog = null; plan = null; return renderJournal(); }
+  if (S.view === 'atlas') { prog = null; plan = null; return renderAtlas(); }
   if (S.mode === 'program') return renderProgram();
   prog = null;
   plan = buildPlan({swaps:swaps.s || {}});
@@ -581,6 +596,7 @@ function renderPlan() {
     <div class="p-sum">
       <p class="eyebrow">${G.name} · ${FORMATS[S.format].name} · ${LEVELS[S.level].name.toLowerCase()}</p>
       <h1 class="p-title">${esc(titleFor())}</h1>
+      ${focusHtml()}
       <dl class="stats">
         <div><dt>время</dt><dd>≈${plan.minutes}<small>мин</small></dd></div>
         <div><dt>${setsWord}</dt><dd>${plan.totalSets}</dd></div>
@@ -614,6 +630,7 @@ function renderProgram() {
     <div class="p-sum">
       <p class="eyebrow">${G.name} · ${FORMATS[S.format].name} · ${LEVELS[S.level].name.toLowerCase()}</p>
       <h1 class="p-title">${esc(sp.name)}, ${S.days} ${plural(S.days, 'тренировка', 'тренировки', 'тренировок')} в неделю</h1>
+      ${focusHtml()}
       <dl class="stats">
         <div><dt>в неделю</dt><dd>≈${prog.minutes}<small>мин</small></dd></div>
         <div><dt>${plural(prog.sets, 'подход', 'подхода', 'подходов')} в неделю</dt><dd>${prog.sets}</dd></div>
@@ -638,7 +655,7 @@ function renderProgram() {
   </section>
   <nav class="days" role="tablist" aria-label="Дни недели">${prog.days.map((d, i) => `<button type="button" role="tab" class="${i === S.day ? 'on' : ''}" data-day="${i}" aria-selected="${i === S.day}"><b>${WD[d.wd]}</b><span>${esc(d.name)}</span><small>${d.plan.items ? `≈${d.plan.minutes} мин` : 'нет упражнений'}</small></button>`).join('')}</nav>
   <div class="day-head"><h2>${WD_FULL[day.wd]} — ${esc(day.name)}</h2>
-    <p>${DAY_T[day.tid].g.map(g => GN[g].toLowerCase()).join(', ')}${plan.items ? ` · ≈${plan.minutes} мин · ${plan.totalSets} ${plural(plan.totalSets, 'подход', 'подхода', 'подходов')}` : ''}</p></div>`;
+    <p>${(plan.groups || DAY_T[day.tid].g).map(g => GN[g].toLowerCase()).join(', ')}${plan.items ? ` · ≈${plan.minutes} мин · ${plan.totalSets} ${plural(plan.totalSets, 'подход', 'подхода', 'подходов')}` : ''}</p></div>`;
   if (!plan.items) html += `<div class="empty"><h2>Для этого дня нет упражнений</h2><p>С выбранным оборудованием нечем нагрузить эти мышцы. Добавьте оборудование или выберите другой сплит.</p></div>`;
   else html += autoregHtml() + warnHtml(plan) + blocksHtml(plan);
   html += LEGEND;

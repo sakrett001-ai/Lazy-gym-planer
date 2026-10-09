@@ -413,9 +413,9 @@ function renderJournal() {
   $('#plan').innerHTML = html;
 }
 function viewTabs() {
-  const n = journalDays();
-  return `<button type="button" role="tab" data-view="plan" aria-selected="${S.view !== 'journal'}" class="${S.view !== 'journal' ? 'on' : ''}">План</button>
-    <button type="button" role="tab" data-view="journal" aria-selected="${S.view === 'journal'}" class="${S.view === 'journal' ? 'on' : ''}">Журнал <small>${n || ''}</small></button>`;
+  const n = journalDays(), v = ['atlas', 'journal'].includes(S.view) ? S.view : 'plan';
+  const tab = (id, label, extra = '') => `<button type="button" role="tab" data-view="${id}" aria-selected="${v === id}" class="${v === id ? 'on' : ''}">${label}${extra}</button>`;
+  return tab('plan', 'План') + tab('atlas', 'Мышцы') + tab('journal', 'Журнал', ` <small>${n || ''}</small>`);
 }
 
 /* ---------- экспорт и восстановление ---------- */
