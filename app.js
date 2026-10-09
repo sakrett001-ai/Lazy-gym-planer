@@ -3164,7 +3164,7 @@ MOTION_SOURCES.push(['Подтягивания обратным хватом —
    Источники описывают технику/состав мышц; кривые — явно условная иллюстрация.
    Узлы кривых: t=0, .5, 1. Общие края исключают скачки в паузах и на развороте. */
 const MUSCLE_ROLES={primary:'Основная',support:'Вспомогательная',stabilizer:'Стабилизатор'};
-const MUSCLE_BANDS=['Нейтрально','Низкая яркость','Средняя яркость','Высокая яркость'];
+const MUSCLE_BANDS=['Нейтрально','Слабое участие','Заметное участие','Сильное участие'];
 const MUSCLE_PROFILES={
  bbbench:{pair:'above',curveBasis:'illustrative',
   sources:[['Мышцы в жиме лёжа — исследование','https://pubmed.ncbi.nlm.nih.gov/25799093/']],
@@ -3221,9 +3221,12 @@ function muscleFrame(anim,t,index=0){
  return{phase,values,note:profile.notes[phase]};
 }
 function muscleBand(v){return v<.12?0:v<.45?1:v<.72?2:3;}
+/* Шкала участия: цвет тела → жёлтый → янтарный → оранжевый. Красный оставлен для отметок нагрузки на суставы. */
+const MUSCLE_STOPS=[[0,[174,184,200]],[.15,[233,210,106]],[.45,[245,184,46]],[.75,[242,138,31]],[1,[234,106,14]]];
 function muscleColor(v){
- const stops=[[174,184,200],[237,172,99],[237,107,82]],x=Math.max(0,Math.min(1,v))*2,i=Math.min(1,Math.floor(x)),q=x-i;
- return '#'+stops[i].map((c,k)=>Math.round(c+(stops[i+1][k]-c)*q).toString(16).padStart(2,'0')).join('');
+ const x=Math.max(0,Math.min(1,Number.isFinite(v)?v:0));let i=0;while(i<MUSCLE_STOPS.length-2&&x>MUSCLE_STOPS[i+1][0])i++;
+ const[a,ca]=MUSCLE_STOPS[i],[b,cb]=MUSCLE_STOPS[i+1],q=(x-a)/(b-a);
+ return '#'+ca.map((c,k)=>Math.round(c+(cb[k]-c)*q).toString(16).padStart(2,'0')).join('');
 }
 
 /* Поверхности в координатах скелета: передняя/задняя сторона, не пятна на экране.
@@ -6485,6 +6488,7 @@ function saveSettings() { try { localStorage.setItem(STORE, JSON.stringify(S)); 
 const S = loadSettings();
 let swaps = {};
 let eqOpen = false;
+let placeDel = false;
 let done = {};
 let plan = null, prog = null;
 
@@ -6496,6 +6500,13 @@ const midOf = r => { const m = String(r).match(/(\d+)\D+(\d+)/); if (m) return (
 function plural(n, a, b, c) { const m10 = n % 10, m100 = n % 100; if (m10 === 1 && m100 !== 11) return a; if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return b; return c; }
 const fmtNum = v => Number.isInteger(v) ? String(v) : v.toFixed(1).replace('.', ',');
 
+/* можно ли взвесить отягощение: свободные веса, тренажёры, блок, машина Смита (а не лента, турник, скамья или вес тела) */
+const WEIGHABLE = new Set(['db', 'bb', 'kb', 'cable', 'smith']);
+function weighable(ex, E) {
+  const ok = id => id !== 'gravitron' && (WEIGHABLE.has(id) || (EQUIP.find(e => e.id === id) || {}).cat === 'mach');
+  /* необязательные гантели считаются, только если они есть в этом месте */
+  return ex.eq.some(g => g.every(ok)) || (ex.opt || []).some(id => ok(id) && (!E || E.has(id)));
+}
 function available(ex, E) { return ex.eq.every(grp => grp.some(id => E.has(id))); }
 function chosenEquip(ex, E) {
   const ch = [];
@@ -6600,7 +6611,7 @@ function orderCircuit(list) {
 }
 
 /* ---------- дозировка ---------- */
-function prescribe(ex, week) {
+function prescribe(ex, week, E) {
   const G = GOALS[S.goal];
   const t = ex.type;
   let sets = G.sets[t];
@@ -6610,14 +6621,21 @@ function prescribe(ex, week) {
   if (ex.kind === 'time') { reps = G.time; unit = ''; }
   if (ex.kind === 'dist') { reps = G.dist; unit = ''; }
   const bodyweight = !ex.eq.length && !(ex.opt || []).length;
-  let load = G.load[t];
+  /* процент от 1ПМ имеет смысл только для веса, который можно взвесить: штанга, гантели, гиря, тренажёр, блок.
+     Для резины, противовеса и собственного веса — тот же запас повторов, но подбирается натяжение ленты,
+     противовес или вариант упражнения. */
+  const pct = t === 'c' && weighable(ex, E);
+  const band = ex.eq.length && ex.eq.every(g => g.every(id => id === 'band')), assisted = ex.eq.some(g => g.includes('gravitron'));
+  const how = band ? 'натяжение ленты: ' : assisted ? 'противовес: ' : 'вариант по силам: ';
+  const easy = band ? 'слабее обычного, без отказа' : assisted ? 'больше обычного, без отказа' : 'облегчённый, без отказа';
+  let load = t === 'c' && !pct ? how + {strength:'1–2 повтора в запасе', mass:'1–2 повтора в запасе', cut:'почти до отказа'}[S.goal] : G.load[t];
   if (week) {
     const rir = week.rir + (S.level === 'beg' ? 1 : 0);
     const reserve = `${rir} ${plural(rir, 'повтор', 'повтора', 'повторов')} в запасе`;
-    if (week.deload) { sets = Math.max(2, Math.round(sets * 0.6)); load = t === 'c' ? `${week.pct[S.goal]} от 1ПМ, лёгкий вес без отказа` : 'лёгкий вес, без отказа'; }
+    if (week.deload) { sets = Math.max(2, Math.round(sets * 0.6)); load = pct ? `${week.pct[S.goal]} от 1ПМ, лёгкий вес без отказа` : t === 'c' ? how + easy : 'лёгкий вес, без отказа'; }
     else {
       if (week.add && t === 'c') sets = Math.min(6, sets + week.add);
-      load = t === 'c' ? `${week.pct[S.goal]} от 1ПМ, ${reserve}` : reserve;
+      load = pct ? `${week.pct[S.goal]} от 1ПМ, ${reserve}` : t === 'c' ? how + reserve : reserve;
     }
   }
   if (ex.kind === 'time') load = ex.g === 'cardio' ? 'высокий темп без потери техники' : S.goal === 'strength' ? 'с отягощением или в усложнённом варианте' : 'ровно, без потери формы';
@@ -6638,14 +6656,27 @@ function buildPlan(ctx = {}) {
   const E = effEquip(S.equip);
   const rand = rng((ctx.seed ?? S.seed) * 9973 + count * 31 + groups.length * 7);
   if (!groups.length) return {empty:'groups'};
-  let {picked, pool} = pickExercises(E, rand, groups, count, ctx.avoid);
+  /* программа другого места: подбор под его инвентарь, затем недоступное здесь заменяется аналогами */
+  const ref = programEquip(), PE = ref ? effEquip(ref) : E;
+  let {picked} = pickExercises(PE, rand, groups, count, ctx.avoid);
+  const pool = EX.filter(ex => available(ex, E));
+  const subs = new Map(), lost = [];
+  if (ref) {
+    const lvlMax = S.level === 'beg' ? 2 : 3, used = new Set(picked.filter(ex => available(ex, E)).map(ex => ex.id));
+    picked = picked.map(ex => {
+      if (available(ex, E)) return ex;
+      const alt = analogsFor(ex, E, {exclude:used, lvlMax, limit:1})[0];
+      if (!alt) { lost.push(ex); return null; }
+      used.add(alt.ex.id); subs.set(alt.ex, {from:ex, note:alt.note}); return alt.ex;
+    }).filter(Boolean);
+  }
   for (const [i, id] of Object.entries(sw)) {
     const ex = EXI[id];
     if (picked[i] && ex && available(ex, E) && !picked.includes(ex)) picked[i] = ex;
   }
   if (!picked.length) return {empty:'none', pool, groups};
   const G = GOALS[S.goal];
-  const items = picked.map((ex, i) => ({ex, slot:i, rx:applyLight(prescribe(ex, week), ex), name:exName(ex, E), eqLine:equipLine(ex, E), eqIds:chosenEquip(ex, E), has:propHas(ex, E)}));
+  const items = picked.map((ex, i) => ({ex, slot:i, rx:applyLight(prescribe(ex, week, E), ex), name:exName(ex, E), eqLine:equipLine(ex, E), eqIds:chosenEquip(ex, E), has:propHas(ex, E), sub:subs.get(ex) || null}));
   const bySlot = new Map(items.map(it => [it.ex, it]));
   let blocks = [], minutes = 0, totalSets = 0;
   if (S.format === 'classic') {
@@ -6697,7 +6728,7 @@ function buildPlan(ctx = {}) {
     else for (const m of it.ex.pri) w[MUSCLE_GROUP[m]] = Math.max(w[MUSCLE_GROUP[m]], 0.5);
     for (const [g, x] of Object.entries(w)) gvol[g] = (gvol[g] || 0) + k * x;
   }
-  return {blocks, items, minutes:Math.round(minutes / 60), totalSets, missing, load, gvol, pool, E, groups, count};
+  return {blocks, items, minutes:Math.round(minutes / 60), totalSets, missing, load, gvol, pool, E, groups, count, lost};
 }
 
 /* ---------- сборка недели ---------- */
@@ -6775,8 +6806,16 @@ function renderSetup() {
     return `<button type="button" class="pre${on ? ' on' : ''}" data-gp="${p.id}">${p.name}</button>`;
   }).join('');
   $('#g-chips').innerHTML = GROUPS.map(g => `<button type="button" class="chip${gs.has(g.id) ? ' on' : ''}" data-g="${g.id}" aria-pressed="${gs.has(g.id)}">${ICON.check}<span>${g.name}</span></button>`).join('');
+  const cur = placeOf();
+  $('#e-places').innerHTML = S.places.map(p => `<button type="button" class="place${p.id === S.place ? ' on' : ''}" data-place="${p.id}" aria-pressed="${p.id === S.place}"><b>${esc(p.name)}</b><small>${p.equip.length ? p.equip.length + ' ' + plural(p.equip.length, 'снаряд', 'снаряда', 'снарядов') : 'без снаряжения'}</small></button>`).join('')
+    + `<button type="button" class="place place-add" data-place-add="1">+ Место</button>`;
+  const others = S.places.filter(p => p.id !== S.place);
+  $('#e-place-tools').innerHTML = `<label class="place-name">Название<input id="place-name" type="text" maxlength="24" value="${esc(cur.name)}" autocomplete="off"></label>`
+    + (S.places.length > 1 ? `<button type="button" class="place-del${placeDel ? ' armed' : ''}" data-place-del="1">${placeDel ? 'Точно удалить?' : 'Удалить место'}</button>` : '')
+    + (others.length ? `<label class="place-adapt">Программа<select id="place-adapt"><option value="">Своя для этого места</option>${others.map(p => `<option value="${p.id}"${S.adapt === p.id ? ' selected' : ''}>Как в «${esc(p.name)}», с заменами</option>`).join('')}</select></label>
+      <p class="f-note">${S.adapt ? `Упражнения подобраны под «${esc(placeOf(S, S.adapt).name)}»; то, чего здесь нет, заменено ближайшим аналогом — по тому же движению и тем же мышцам.` : 'Программа собирается из того, что есть в этом месте.'}</p>` : '');
   const es = new Set(S.equip);
-  $('#e-presets').innerHTML = EQUIP_PRESETS.map(p => {
+  $('#e-presets').innerHTML = '<span class="pres-l">Заполнить:</span>' + EQUIP_PRESETS.map(p => {
     const on = p.eq.length === es.size && p.eq.every(e => es.has(e));
     return `<button type="button" class="pre${on ? ' on' : ''}" data-ep="${p.id}">${p.name}</button>`;
   }).join('');
@@ -6846,6 +6885,7 @@ function cardHtml(it, idx) {
       <div class="c-head"><span class="c-idx">${it.label}</span><span class="c-type">${ex.type === 'c' ? 'базовое' : 'изолирующее'}</span></div>
       <h3 class="c-name">${esc(it.name)}</h3>
       <p class="c-eq">${esc(it.eqLine)}</p>
+      ${it.sub ? `<p class="c-sub"><b>Вместо: ${esc(exName(it.sub.from, effEquip(programEquip() || S.equip)))}</b>${it.sub.note ? ` · ${esc(it.sub.note)}` : ''}</p>` : ''}
       ${rxHtml(it)}
       ${meta.length ? `<p class="c-meta">${meta.join('<i>·</i>')}</p>` : ''}
     </div>
@@ -6902,6 +6942,7 @@ const LEGEND = `<p class="legend">1ПМ — вес, который вы може
 function warnHtml(p) {
   const warn = [];
   if (p.items.length < p.count) warn.push(`Подобрано ${p.items.length} ${plural(p.items.length, 'упражнение', 'упражнения', 'упражнений')} из ${p.count}: других вариантов для этих мышц и оборудования нет.`);
+  if (p.lost && p.lost.length) warn.push(`Здесь нечем заменить: ${p.lost.map(ex => ex.name).join(', ')}. ${p.lost.length > 1 ? 'Их' : 'Его'} можно сделать здесь: ${placeOf(S, S.adapt).name}.`);
   if (p.missing.length) warn.push(`Без упражнений осталось: ${p.missing.map(g => GN[g].toLowerCase()).join(', ')}. Для них нужно другое оборудование.`);
   return warn.length ? `<div class="warn">${warn.map(w => `<p>${esc(w)}</p>`).join('')}</div>` : '';
 }
@@ -7001,6 +7042,102 @@ function renderProgram() {
   $('#plan').innerHTML = html;
   if (plan.items) mountFigures();
 }
+
+/* ===================== АНАЛОГИ УПРАЖНЕНИЙ =====================
+   Замена по смыслу, а не по названию: то же движение (PATTERN), те же работающие мышцы, близкий уровень.
+   Каждая замена объясняет, что меняется: другой снаряд, другая мышца в акценте, работа по одной стороне. */
+const PATTERN_NAMES = {squat:'присед', hinge:'наклон от таза', hpush:'горизонтальный жим', ipush:'жим под углом вверх', dpush:'жим под углом вниз',
+  fly:'сведение рук', pullover:'пуловер', vpull:'вертикальная тяга', hrow:'горизонтальная тяга', vpush:'жим вверх', raise:'подъём рук',
+  rear:'задняя дельта и лопатки', curl:'сгибание рук', ext:'разгибание рук', lunge:'выпад', bridge:'ягодичный мост', flex:'скручивание',
+  hold:'удержание корпуса', side:'боковой наклон', calf:'подъём на носки', grip:'хват', jump:'прыжки', burpee:'бёрпи', climb:'скалолаз',
+  adduct:'сведение ног', run:'бег', ride:'вращение педалей', row:'гребля', kneeext:'разгибание колена', kneeflex:'сгибание колена', shrug:'шраги'};
+/* движения, которым не нашлось места в общей таблице */
+[['kneeext', 'legext'], ['kneeflex', 'legcurl nordic'], ['shrug', 'shrug'], ['raise', 'frontraise']].forEach(([p, ids]) => ids.split(' ').forEach(id => PATTERN[id] = p));
+
+/* вид сопротивления: от него зависит, как ощущается замена */
+const LOAD_KIND_NOTE = {
+  band:'резина: сопротивление растёт к концу амплитуды',
+  body:'вес тела: усложняйте темпом и амплитудой',
+  free:'свободный вес: больше работы мышц-стабилизаторов',
+  machine:'тренажёр ведёт траекторию: меньше стабилизации',
+  cable:'блок: нагрузка ровнее по всей амплитуде'
+};
+function loadKind(ex, E) {
+  const ids = E ? chosenEquip(ex, E) : ex.eq.map(g => g[0]);
+  const cat = id => (EQUIP.find(e => e.id === id) || {}).cat;
+  if (ids.some(id => id === 'cable')) return 'cable';
+  if (ids.some(id => cat(id) === 'mach' || cat(id) === 'cardio')) return 'machine';
+  if (ids.some(id => id === 'band')) return 'band';
+  if (ids.some(id => ['db', 'bb', 'kb'].includes(id)) || (E && (ex.opt || []).some(id => ['db', 'kb'].includes(id) && E.has(id)))) return 'free';
+  return 'body';
+}
+function muscleVector(ex) { const v = {}; for (const m of ex.pri) v[m] = 1; for (const m of ex.sec) v[m] = Math.max(v[m] || 0, .45); return v; }
+function cosine(a, b) {
+  let d = 0, na = 0, nb = 0;
+  for (const [k, x] of Object.entries(a)) { na += x * x; if (b[k]) d += x * b[k]; }
+  for (const x of Object.values(b)) nb += x * x;
+  return na && nb ? d / Math.sqrt(na * nb) : 0;
+}
+/* близость упражнения b к a: 0…1 с небольшим запасом; движение и мышцы весят больше всего */
+function analogScore(a, b) {
+  const same = PATTERN[a.id] && PATTERN[a.id] === PATTERN[b.id];
+  let s = .55 * cosine(muscleVector(a), muscleVector(b)) + (same ? .35 : 0) + (a.g === b.g ? .1 : 0);
+  s -= .05 * Math.max(0, b.lvl - a.lvl);
+  s -= .15 * (1 - (EX_W[b.id] ?? 1));
+  if (!!a.uni !== !!b.uni) s -= .03;
+  if ((a.kind || '') !== (b.kind || '')) s -= .08;
+  return s;
+}
+/* что меняется при замене a → b: коротко, не больше трёх пунктов */
+function analogNote(a, b, E) {
+  const out = [], name = m => MUSCLE_NAMES[m].toLowerCase();
+  if (PATTERN[b.id] && PATTERN[a.id] !== PATTERN[b.id]) out.push('другое движение: ' + PATTERN_NAMES[PATTERN[b.id]]);
+  const bAll = new Set(b.pri.concat(b.sec)), aAll = new Set(a.pri.concat(a.sec));
+  const lost = a.pri.filter(m => !bAll.has(m)), gained = b.pri.filter(m => !aAll.has(m));
+  if (lost.length) out.push('меньше нагрузки: ' + lost.slice(0, 2).map(name).join(', '));
+  if (gained.length) out.push('добавляется: ' + gained.slice(0, 2).map(name).join(', '));
+  const ka = loadKind(a), kb = loadKind(b, E);
+  if (ka !== kb && LOAD_KIND_NOTE[kb]) out.push(LOAD_KIND_NOTE[kb]);
+  if (b.uni && !a.uni) out.push('по одной стороне — подход дольше');
+  return out.slice(0, 3).join('; ');
+}
+/* лучшие замены упражнения ex среди доступных при оборудовании E */
+function analogsFor(ex, E, {exclude = new Set(), lvlMax = 3, limit = 5, min = .45} = {}) {
+  const cardio = ex.g === 'cardio';
+  return EX.filter(b => b !== ex && !exclude.has(b.id) && available(b, E) && b.lvl <= lvlMax && (b.g === 'cardio') === cardio)
+    .map(b => ({ex:b, score:analogScore(ex, b)}))
+    .filter(r => r.score >= min)
+    .sort((x, y) => y.score - x.score)
+    .slice(0, limit)
+    .map(r => ({...r, note:analogNote(ex, r.ex, E)}));
+}
+
+/* ===================== МЕСТА ТРЕНИРОВОК =====================
+   У каждого места свой инвентарь: зал, дом, площадка во дворе. S.equip — инвентарь текущего места. */
+const PLACE_DEFAULTS = [
+  {id:'gym', name:'Зал', equip:EQUIP.map(e => e.id)},
+  {id:'home', name:'Дом', equip:['db', 'band', 'abwheel']},
+  {id:'street', name:'Улица', equip:['pullup', 'dipbars']}
+];
+function ensurePlaces(s) {
+  if (!Array.isArray(s.places) || !s.places.length) {
+    s.places = PLACE_DEFAULTS.map(p => ({...p, equip:p.equip.slice()}));
+    /* перенос старой настройки: инвентарь, который уже был выбран, становится инвентарём подходящего места */
+    const same = (a, b) => a.length === b.length && a.every(x => b.includes(x));
+    const match = s.places.find(p => same(p.equip, s.equip || []));
+    if (match) s.place = match.id;
+    else { s.place = 'gym'; s.places[0].equip = (s.equip || []).slice(); }
+  }
+  if (!s.places.some(p => p.id === s.place)) s.place = s.places[0].id;
+  if (s.adapt && (!s.places.some(p => p.id === s.adapt) || s.adapt === s.place)) s.adapt = null;
+  s.equip = placeOf(s).equip.slice();
+  return s;
+}
+function placeOf(s = S, id = s.place) { return s.places.find(p => p.id === id) || s.places[0]; }
+function setPlaceEquip(list) { S.equip = list.slice(); placeOf().equip = list.slice(); }
+/* инвентарь, под который собирается программа: своё место или выбранное «как в …» */
+function programEquip() { return S.adapt && S.adapt !== S.place ? placeOf(S, S.adapt).equip : null; }
+ensurePlaces(S);
 
 /* ---------- Проигрыватель движений: карточки и увеличенный разбор ---------- */
 let figs = [], rafId = 0, io = null;
@@ -7131,7 +7268,7 @@ function stopFigures() {
 function previewItem(id) {
   const ex=EXI[id];let E=effEquip(S.equip);
   if(!available(ex,E)) E=effEquip(EQUIP.map(e=>e.id));
-  return {ex,name:exName(ex,E),rx:prescribe(ex,S.mode==='program'?WEEKS[S.week-1]:null),has:propHas(ex,E),eqLine:equipLine(ex,E)};
+  return {ex,name:exName(ex,E),rx:prescribe(ex,S.mode==='program'?WEEKS[S.week-1]:null,E),has:propHas(ex,E),eqLine:equipLine(ex,E)};
 }
 function selectMotion(it, clock=0) {
   disposeMotion(detailMotion);
@@ -7253,6 +7390,11 @@ function planText() {
 }
 
 /* ---------- события ---------- */
+/* место тренировок: название и источник программы */
+document.addEventListener('change', e => {
+  if (e.target.id === 'place-name') { const v = e.target.value.trim().slice(0, 24); if (v) placeOf().name = v; saveSettings(); renderSetup(); return; }
+  if (e.target.id === 'place-adapt') { S.adapt = e.target.value || null; ensurePlaces(S); return regen(); }
+});
 const swapKey = () => S.mode === 'program' ? 'd' + S.day : 's';
 function regen(resetSwaps = true) { if (resetSwaps) swaps = {}; done = {}; saveSettings(); renderSetup(); renderPlan(); }
 document.addEventListener('click', e => {
@@ -7271,8 +7413,20 @@ document.addEventListener('click', e => {
   if (t.id === 'count-plus') { S.count = Math.min(10, S.count + 1); return regen(); }
   if (t.dataset.g) { const g = t.dataset.g; S.groups = S.groups.includes(g) ? S.groups.filter(x => x !== g) : S.groups.concat(g); S.groups.sort((a, b) => GROUPS.findIndex(x => x.id === a) - GROUPS.findIndex(x => x.id === b)); return regen(); }
   if (t.dataset.gp) { S.groups = GROUP_PRESETS.find(p => p.id === t.dataset.gp).g.slice(); return regen(); }
-  if (t.dataset.e) { eqOpen = true; const id = t.dataset.e; S.equip = S.equip.includes(id) ? S.equip.filter(x => x !== id) : S.equip.concat(id); return regen(); }
-  if (t.dataset.ep) { S.equip = EQUIP_PRESETS.find(p => p.id === t.dataset.ep).eq.slice(); return regen(); }
+  if (t.dataset.e) { eqOpen = true; const id = t.dataset.e; setPlaceEquip(S.equip.includes(id) ? S.equip.filter(x => x !== id) : S.equip.concat(id)); return regen(); }
+  if (t.dataset.ep) { setPlaceEquip(EQUIP_PRESETS.find(p => p.id === t.dataset.ep).eq); return regen(); }
+  if (t.dataset.place) { S.place = t.dataset.place; ensurePlaces(S); placeDel = false; return regen(); }
+  if (t.dataset.placeAdd !== undefined) {
+    const id = 'p' + Date.now().toString(36);
+    S.places.push({id, name:'Место ' + (S.places.length + 1), equip:[]});
+    S.place = id; ensurePlaces(S); eqOpen = true; placeDel = false; regen();
+    const inp = $('#place-name'); if (inp) { inp.focus(); inp.select(); }
+    return;
+  }
+  if (t.dataset.placeDel !== undefined) {
+    if (!placeDel) { placeDel = true; return renderSetup(); }
+    S.places = S.places.filter(p => p.id !== S.place); placeDel = false; ensurePlaces(S); return regen();
+  }
   if (t.id === 'reroll') { S.seed = (S.seed * 48271 + 11) % 2147483647; regen(); $('#plan').scrollIntoView({behavior:reduceMotion ? 'auto' : 'smooth', block:'start'}); return; }
   if (t.id === 'copy') {
     const txt = planText(), msg = $('#copy-msg');
@@ -7286,8 +7440,9 @@ document.addEventListener('click', e => {
     const inPlan = new Set(plan.items.map(it => it.ex.id));
     const lvlMax = S.level === 'beg' ? 2 : 3;
     const tried = new Set((swaps.__tried && swaps.__tried[swapKey() + ':' + slot]) || []);
+    /* ближайшие по смыслу: то же движение и те же мышцы — первыми */
     let alts = EX.filter(ex => !inPlan.has(ex.id) && available(ex, plan.E) && ex.lvl <= lvlMax && (ex.g === cur.g || PATTERN[ex.id] === PATTERN[cur.id]))
-      .sort((a, b) => (PATTERN[b.id] === PATTERN[cur.id]) - (PATTERN[a.id] === PATTERN[cur.id]));
+      .sort((a, b) => analogScore(cur, b) - analogScore(cur, a));
     const msgEl = t.querySelector('span');
     if (!alts.length) { msgEl.textContent = 'Замены нет'; setTimeout(() => { msgEl.textContent = 'Заменить'; }, 1800); return; }
     tried.add(cur.id);
@@ -8571,4 +8726,4 @@ renderSetup();
 renderPlan();
 logInit();
 
-window.PODHOD_VERSION='4.3.0';window.PODHOD_LANG='ru';
+window.PODHOD_VERSION='4.4.0';window.PODHOD_LANG='ru';
