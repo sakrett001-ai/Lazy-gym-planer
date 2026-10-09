@@ -158,6 +158,8 @@ export function createCatalogScene(first,{coarse=false}={}){
    if(o.geometry.attributes.position.count!==faces.length*6){o.geometry.dispose();o.geometry=new THREE.BufferGeometry();o.geometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array(faces.length*6*3),3));}
    let i=0;const p=o.geometry.attributes.position;for(const f of faces)for(const j of [0,1,2,0,2,3])p.setXYZ(i++,...world(f.points[j]));p.needsUpdate=true;o.geometry.computeVertexNormals();o.geometry.computeBoundingSphere();o.geometry.computeBoundingBox();
    const id=faces[0].id,side=faces[0].side,active=options.muscles!==false&&(!options.selected||options.selected==='all'||options.selected===id||options.selected===faces[0].parent);o.visible=options.muscles!==false;o.material.color.set(active?options.color(data.sideValues?.[side]?.[id]??data.values[id]??.28):'#9aaac1');
+   /* собственное свечение участка: жёлтый и оранжевый в тени не уходят в коричневый */
+   if(active)o.material.emissive.copy(o.material.color).multiplyScalar(.34);else o.material.emissive.setRGB(0,0,0);
   }
   if(propNodes.length!==data.props.length||propNodes.some((n,i)=>n.key!==(isNewProp(data.props[i])?propKey(data.props[i]):data.props[i].kind))){
    equipment.traverse(o=>o.geometry?.dispose());equipment.clear();propNodes=data.props.map(propNode);

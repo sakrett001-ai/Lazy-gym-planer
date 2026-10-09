@@ -127,7 +127,7 @@ function stopFigures() {
 function previewItem(id) {
   const ex=EXI[id];let E=effEquip(S.equip);
   if(!available(ex,E)) E=effEquip(EQUIP.map(e=>e.id));
-  return {ex,name:exName(ex,E),rx:prescribe(ex,S.mode==='program'?WEEKS[S.week-1]:null),has:propHas(ex,E),eqLine:equipLine(ex,E)};
+  return {ex,name:exName(ex,E),rx:prescribe(ex,S.mode==='program'?WEEKS[S.week-1]:null,E),has:propHas(ex,E),eqLine:equipLine(ex,E)};
 }
 function selectMotion(it, clock=0) {
   disposeMotion(detailMotion);
@@ -249,6 +249,11 @@ function planText() {
 }
 
 /* ---------- события ---------- */
+/* место тренировок: название и источник программы */
+document.addEventListener('change', e => {
+  if (e.target.id === 'place-name') { const v = e.target.value.trim().slice(0, 24); if (v) placeOf().name = v; saveSettings(); renderSetup(); return; }
+  if (e.target.id === 'place-adapt') { S.adapt = e.target.value || null; ensurePlaces(S); return regen(); }
+});
 const swapKey = () => S.mode === 'program' ? 'd' + S.day : 's';
 function regen(resetSwaps = true) { if (resetSwaps) swaps = {}; done = {}; saveSettings(); renderSetup(); renderPlan(); }
 document.addEventListener('click', e => {
@@ -267,8 +272,20 @@ document.addEventListener('click', e => {
   if (t.id === 'count-plus') { S.count = Math.min(10, S.count + 1); return regen(); }
   if (t.dataset.g) { const g = t.dataset.g; S.groups = S.groups.includes(g) ? S.groups.filter(x => x !== g) : S.groups.concat(g); S.groups.sort((a, b) => GROUPS.findIndex(x => x.id === a) - GROUPS.findIndex(x => x.id === b)); return regen(); }
   if (t.dataset.gp) { S.groups = GROUP_PRESETS.find(p => p.id === t.dataset.gp).g.slice(); return regen(); }
-  if (t.dataset.e) { eqOpen = true; const id = t.dataset.e; S.equip = S.equip.includes(id) ? S.equip.filter(x => x !== id) : S.equip.concat(id); return regen(); }
-  if (t.dataset.ep) { S.equip = EQUIP_PRESETS.find(p => p.id === t.dataset.ep).eq.slice(); return regen(); }
+  if (t.dataset.e) { eqOpen = true; const id = t.dataset.e; setPlaceEquip(S.equip.includes(id) ? S.equip.filter(x => x !== id) : S.equip.concat(id)); return regen(); }
+  if (t.dataset.ep) { setPlaceEquip(EQUIP_PRESETS.find(p => p.id === t.dataset.ep).eq); return regen(); }
+  if (t.dataset.place) { S.place = t.dataset.place; ensurePlaces(S); placeDel = false; return regen(); }
+  if (t.dataset.placeAdd !== undefined) {
+    const id = 'p' + Date.now().toString(36);
+    S.places.push({id, name:'Место ' + (S.places.length + 1), equip:[]});
+    S.place = id; ensurePlaces(S); eqOpen = true; placeDel = false; regen();
+    const inp = $('#place-name'); if (inp) { inp.focus(); inp.select(); }
+    return;
+  }
+  if (t.dataset.placeDel !== undefined) {
+    if (!placeDel) { placeDel = true; return renderSetup(); }
+    S.places = S.places.filter(p => p.id !== S.place); placeDel = false; ensurePlaces(S); return regen();
+  }
   if (t.id === 'reroll') { S.seed = (S.seed * 48271 + 11) % 2147483647; regen(); $('#plan').scrollIntoView({behavior:reduceMotion ? 'auto' : 'smooth', block:'start'}); return; }
   if (t.id === 'copy') {
     const txt = planText(), msg = $('#copy-msg');
@@ -282,8 +299,9 @@ document.addEventListener('click', e => {
     const inPlan = new Set(plan.items.map(it => it.ex.id));
     const lvlMax = S.level === 'beg' ? 2 : 3;
     const tried = new Set((swaps.__tried && swaps.__tried[swapKey() + ':' + slot]) || []);
+    /* ближайшие по смыслу: то же движение и те же мышцы — первыми */
     let alts = EX.filter(ex => !inPlan.has(ex.id) && available(ex, plan.E) && ex.lvl <= lvlMax && (ex.g === cur.g || PATTERN[ex.id] === PATTERN[cur.id]))
-      .sort((a, b) => (PATTERN[b.id] === PATTERN[cur.id]) - (PATTERN[a.id] === PATTERN[cur.id]));
+      .sort((a, b) => analogScore(cur, b) - analogScore(cur, a));
     const msgEl = t.querySelector('span');
     if (!alts.length) { msgEl.textContent = 'Замены нет'; setTimeout(() => { msgEl.textContent = 'Заменить'; }, 1800); return; }
     tried.add(cur.id);

@@ -4,7 +4,8 @@
   --ink:#141A23; --muted:#5B6574; --faint:#8993A2; --line:#DCE1E8;
   --accent:#2347C8; --accent-soft:#E4EAFB; --accent-ink:#FFFFFF;
   --hot:#DC3B37; --hot-soft:#FBE3E1;
-  --fig:#384152; --fig-far:#B2BAC5; --work:#D8443E; --work-far:#EDB1AD;
+  --mus:#E8670E; --mus-soft:#FDEBD9; /* мышцы: от жёлтого к оранжевому; красный — только ошибки и суставы */
+  --fig:#384152; --fig-far:#B2BAC5; --work:#E8670E; --work-far:#F4C9A4;
   --steel:#6F7988; --plate:#1E2532; --pad:#9AA5B3; --band:#2C8A5C;
   --mm-base:#D4DAE2; --mm-n:#E6E9EE;
   --warn-bg:#FFF4DC; --warn-ink:#8A5A00;
@@ -24,7 +25,8 @@
   --ink:#E6EAF0; --muted:#9BA5B3; --faint:#6F7988; --line:#29313C;
   --accent:#7D96FF; --accent-soft:#1F2945; --accent-ink:#0A0E18;
   --hot:#FF5D56; --hot-soft:#3D2023;
-  --fig:#C5CDD8; --fig-far:#4A5361; --work:#FF6B62; --work-far:#76403E;
+  --mus:#FF8A2A; --mus-soft:#3D2A18;
+  --fig:#C5CDD8; --fig-far:#4A5361; --work:#FF8A2A; --work-far:#7A4A26;
   --steel:#8C96A5; --plate:#4A5466; --pad:#59646F; --band:#4EC08A;
   --mm-base:#2C3440; --mm-n:#222932;
   --warn-bg:#33290F; --warn-ink:#F1D492;
@@ -41,7 +43,8 @@
   --ink:#E6EAF0; --muted:#9BA5B3; --faint:#6F7988; --line:#29313C;
   --accent:#7D96FF; --accent-soft:#1F2945; --accent-ink:#0A0E18;
   --hot:#FF5D56; --hot-soft:#3D2023;
-  --fig:#C5CDD8; --fig-far:#4A5361; --work:#FF6B62; --work-far:#76403E;
+  --mus:#FF8A2A; --mus-soft:#3D2A18;
+  --fig:#C5CDD8; --fig-far:#4A5361; --work:#FF8A2A; --work-far:#7A4A26;
   --steel:#8C96A5; --plate:#4A5466; --pad:#59646F; --band:#4EC08A;
   --mm-base:#2C3440; --mm-n:#222932;
   --warn-bg:#33290F; --warn-ink:#F1D492;
@@ -105,6 +108,25 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .e-cat h3 { font:500 12px/1.2 var(--f-body); color:var(--faint); }
 .e-toggle { justify-self:start; border:0; background:transparent; padding:2px 0; font-size:13.5px; font-weight:600; color:var(--accent); }
 .e-sum { margin:0; font-size:13px; color:var(--muted); }
+/* места тренировок */
+.places { display:flex; flex-wrap:wrap; gap:6px; }
+.place { display:grid; gap:1px; text-align:left; border:1px solid var(--line); background:var(--surface); border-radius:11px; padding:7px 12px; min-width:92px; }
+.place b { font-weight:600; font-size:14px; }
+.place small { font:500 10.5px/1.2 var(--f-mono); color:var(--muted); }
+.place.on { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+.place.on small { color:inherit; opacity:.8; }
+.place-add { border-style:dashed; color:var(--muted); align-content:center; font-size:14px; }
+.place-tools { display:flex; flex-wrap:wrap; align-items:end; gap:8px 12px; }
+.place-tools .f-note { flex-basis:100%; margin:0; }
+.place-name, .place-adapt { display:grid; gap:4px; font-size:12px; color:var(--muted); min-width:0; }
+.place-name { flex:1 1 150px; }
+.place-adapt { flex:1 1 100%; }
+.place-name input, .place-adapt select { min-height:40px; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--ink); padding:7px 10px; font:inherit; font-size:14px; min-width:0; max-width:100%; }
+.place-del { border:0; background:transparent; color:var(--muted); font-size:13px; padding:10px 2px; }
+.place-del.armed { color:var(--hot); font-weight:600; }
+.pres-l { font-size:12.5px; color:var(--faint); align-self:center; }
+.c-sub { margin:4px 0 0; font-size:12.5px; line-height:1.45; color:var(--muted); }
+.c-sub b { color:var(--ink); font-weight:600; }
 .f-note { margin:2px 0 0; font-size:12.5px; color:var(--faint); }
 
 /* ---------- шапка плана ---------- */
@@ -140,7 +162,7 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 
 .mmap .mm-b { fill:var(--mm-base); }
 .mmap .mm-n { fill:var(--mm-n); }
-.mmap .mm-h { fill:var(--hot); }
+.mmap .mm-h { fill:var(--mus); }
 .mmap .mm-l { fill:var(--faint); font:500 10px var(--f-body); text-anchor:middle; }
 
 .warn { background:var(--warn-bg); color:var(--warn-ink); border-radius:12px; padding:10px 14px; font-size:14px; }
@@ -377,10 +399,10 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .mus { list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:5px; }
 .mus li { display:inline-flex; align-items:center; gap:5px; font-size:12.5px; border-radius:999px; padding:3px 9px 3px 7px; line-height:1.25; }
 .mus li::before { content:''; width:8px; height:8px; border-radius:50%; flex:none; }
-.mus .p { background:var(--hot-soft); color:var(--ink); }
-.mus .p::before { background:var(--hot); }
+.mus .p { background:var(--mus-soft); color:var(--ink); }
+.mus .p::before { background:var(--mus); }
 .mus .s { background:var(--surface-2); color:var(--muted); }
-.mus .s::before { background:transparent; box-shadow:inset 0 0 0 1.6px var(--hot); opacity:.7; }
+.mus .s::before { background:transparent; box-shadow:inset 0 0 0 1.6px var(--mus); opacity:.7; }
 
 .c-act { display:flex; align-items:center; justify-content:flex-start; gap:8px; flex-wrap:wrap; }
 .sets { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
