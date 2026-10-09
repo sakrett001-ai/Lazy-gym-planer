@@ -91,6 +91,7 @@ function saveSettings() { try { localStorage.setItem(STORE, JSON.stringify(S)); 
 const S = loadSettings();
 let swaps = {};
 let eqOpen = false;
+let placeDel = false;
 let done = {};
 let plan = null, prog = null;
 
@@ -244,14 +245,27 @@ function buildPlan(ctx = {}) {
   const E = effEquip(S.equip);
   const rand = rng((ctx.seed ?? S.seed) * 9973 + count * 31 + groups.length * 7);
   if (!groups.length) return {empty:'groups'};
-  let {picked, pool} = pickExercises(E, rand, groups, count, ctx.avoid);
+  /* программа другого места: подбор под его инвентарь, затем недоступное здесь заменяется аналогами */
+  const ref = programEquip(), PE = ref ? effEquip(ref) : E;
+  let {picked} = pickExercises(PE, rand, groups, count, ctx.avoid);
+  const pool = EX.filter(ex => available(ex, E));
+  const subs = new Map(), lost = [];
+  if (ref) {
+    const lvlMax = S.level === 'beg' ? 2 : 3, used = new Set(picked.filter(ex => available(ex, E)).map(ex => ex.id));
+    picked = picked.map(ex => {
+      if (available(ex, E)) return ex;
+      const alt = analogsFor(ex, E, {exclude:used, lvlMax, limit:1})[0];
+      if (!alt) { lost.push(ex); return null; }
+      used.add(alt.ex.id); subs.set(alt.ex, {from:ex, note:alt.note}); return alt.ex;
+    }).filter(Boolean);
+  }
   for (const [i, id] of Object.entries(sw)) {
     const ex = EXI[id];
     if (picked[i] && ex && available(ex, E) && !picked.includes(ex)) picked[i] = ex;
   }
   if (!picked.length) return {empty:'none', pool, groups};
   const G = GOALS[S.goal];
-  const items = picked.map((ex, i) => ({ex, slot:i, rx:applyLight(prescribe(ex, week), ex), name:exName(ex, E), eqLine:equipLine(ex, E), eqIds:chosenEquip(ex, E), has:propHas(ex, E)}));
+  const items = picked.map((ex, i) => ({ex, slot:i, rx:applyLight(prescribe(ex, week), ex), name:exName(ex, E), eqLine:equipLine(ex, E), eqIds:chosenEquip(ex, E), has:propHas(ex, E), sub:subs.get(ex) || null}));
   const bySlot = new Map(items.map(it => [it.ex, it]));
   let blocks = [], minutes = 0, totalSets = 0;
   if (S.format === 'classic') {
@@ -303,7 +317,7 @@ function buildPlan(ctx = {}) {
     else for (const m of it.ex.pri) w[MUSCLE_GROUP[m]] = Math.max(w[MUSCLE_GROUP[m]], 0.5);
     for (const [g, x] of Object.entries(w)) gvol[g] = (gvol[g] || 0) + k * x;
   }
-  return {blocks, items, minutes:Math.round(minutes / 60), totalSets, missing, load, gvol, pool, E, groups, count};
+  return {blocks, items, minutes:Math.round(minutes / 60), totalSets, missing, load, gvol, pool, E, groups, count, lost};
 }
 
 /* ---------- сборка недели ---------- */
@@ -381,8 +395,16 @@ function renderSetup() {
     return `<button type="button" class="pre${on ? ' on' : ''}" data-gp="${p.id}">${p.name}</button>`;
   }).join('');
   $('#g-chips').innerHTML = GROUPS.map(g => `<button type="button" class="chip${gs.has(g.id) ? ' on' : ''}" data-g="${g.id}" aria-pressed="${gs.has(g.id)}">${ICON.check}<span>${g.name}</span></button>`).join('');
+  const cur = placeOf();
+  $('#e-places').innerHTML = S.places.map(p => `<button type="button" class="place${p.id === S.place ? ' on' : ''}" data-place="${p.id}" aria-pressed="${p.id === S.place}"><b>${esc(p.name)}</b><small>${p.equip.length ? p.equip.length + ' ' + plural(p.equip.length, 'снаряд', 'снаряда', 'снарядов') : 'без снаряжения'}</small></button>`).join('')
+    + `<button type="button" class="place place-add" data-place-add="1">+ Место</button>`;
+  const others = S.places.filter(p => p.id !== S.place);
+  $('#e-place-tools').innerHTML = `<label class="place-name">Название<input id="place-name" type="text" maxlength="24" value="${esc(cur.name)}" autocomplete="off"></label>`
+    + (S.places.length > 1 ? `<button type="button" class="place-del${placeDel ? ' armed' : ''}" data-place-del="1">${placeDel ? 'Точно удалить?' : 'Удалить место'}</button>` : '')
+    + (others.length ? `<label class="place-adapt">Программа<select id="place-adapt"><option value="">Своя для этого места</option>${others.map(p => `<option value="${p.id}"${S.adapt === p.id ? ' selected' : ''}>Как в «${esc(p.name)}», с заменами</option>`).join('')}</select></label>
+      <p class="f-note">${S.adapt ? `Упражнения подобраны под «${esc(placeOf(S, S.adapt).name)}»; то, чего здесь нет, заменено ближайшим аналогом — по тому же движению и тем же мышцам.` : 'Программа собирается из того, что есть в этом месте.'}</p>` : '');
   const es = new Set(S.equip);
-  $('#e-presets').innerHTML = EQUIP_PRESETS.map(p => {
+  $('#e-presets').innerHTML = '<span class="pres-l">Заполнить:</span>' + EQUIP_PRESETS.map(p => {
     const on = p.eq.length === es.size && p.eq.every(e => es.has(e));
     return `<button type="button" class="pre${on ? ' on' : ''}" data-ep="${p.id}">${p.name}</button>`;
   }).join('');
@@ -452,6 +474,7 @@ function cardHtml(it, idx) {
       <div class="c-head"><span class="c-idx">${it.label}</span><span class="c-type">${ex.type === 'c' ? 'базовое' : 'изолирующее'}</span></div>
       <h3 class="c-name">${esc(it.name)}</h3>
       <p class="c-eq">${esc(it.eqLine)}</p>
+      ${it.sub ? `<p class="c-sub"><b>Вместо: ${esc(exName(it.sub.from, effEquip(programEquip() || S.equip)))}</b>${it.sub.note ? ` · ${esc(it.sub.note)}` : ''}</p>` : ''}
       ${rxHtml(it)}
       ${meta.length ? `<p class="c-meta">${meta.join('<i>·</i>')}</p>` : ''}
     </div>
@@ -508,6 +531,7 @@ const LEGEND = `<p class="legend">1ПМ — вес, который вы може
 function warnHtml(p) {
   const warn = [];
   if (p.items.length < p.count) warn.push(`Подобрано ${p.items.length} ${plural(p.items.length, 'упражнение', 'упражнения', 'упражнений')} из ${p.count}: других вариантов для этих мышц и оборудования нет.`);
+  if (p.lost && p.lost.length) warn.push(`Здесь нечем заменить: ${p.lost.map(ex => ex.name).join(', ')}. ${p.lost.length > 1 ? 'Их' : 'Его'} можно сделать здесь: ${placeOf(S, S.adapt).name}.`);
   if (p.missing.length) warn.push(`Без упражнений осталось: ${p.missing.map(g => GN[g].toLowerCase()).join(', ')}. Для них нужно другое оборудование.`);
   return warn.length ? `<div class="warn">${warn.map(w => `<p>${esc(w)}</p>`).join('')}</div>` : '';
 }
