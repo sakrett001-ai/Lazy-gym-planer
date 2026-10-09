@@ -55,6 +55,13 @@ for (const mode of ['single', 'program']) for (const format of ['classic', 'supe
     await scan(`program week ${week} day ${day}`, await run('planText()'));
   }
 }
+/* свёрнутые параметры, нагрузка и карточки: строки-сводки во всех режимах */
+step('свёрнутые блоки');
+for (const mode of ['single', 'program', 'custom']) {
+  await run(`(()=>{Object.assign(S,{view:'plan',mode:'${mode}',format:'classic',goal:'mass',level:'mid',week:1,day:0});S.fold={setup:true,load:true,cards:'compact'};regen();})()`);
+  await scan('folded ' + mode);
+}
+await run(`(()=>{S.fold={setup:false,load:false,cards:'compact'};S.mode='single';regen();})()`);
 /* группы мышц и количество упражнений */
 step('группы мышц');
 for (const groups of [['quads', 'glutes', 'hams', 'calves'], ['biceps', 'triceps', 'forearms'], ['abs', 'cardio'], []]) {

@@ -272,12 +272,14 @@ function logRows(it) {
       <button type="button" class="lt-ok" data-tick="${ex.id}" data-k="${k}" aria-pressed="${done}" aria-label="Подход ${k + 1} выполнен">${ICON.check}</button>
     </div>`;
   }
+  const doneN = tset.slice(0, n).filter(Boolean).length;
   return {sg, html:`<p class="sug sug-${sg.tone}"><b aria-hidden="true">${SUG_ICON[sg.tone]}</b><span>${esc(sg.text)}</span></p>
-    <div class="lt${lt === 'none' ? ' lt-nokg' : ''}" role="group" aria-label="Запись подходов">
+    ${logFoldBar(it, n, doneN)}
+    <div class="lt-fold" id="lt-${ex.id}"><div class="lt${lt === 'none' ? ' lt-nokg' : ''}" role="group" aria-label="Запись подходов">
       <div class="lt-h"><span>№</span><span>Прошлый раз</span>${lt === 'none' ? '' : `<span>${lt === 'kg' ? 'Вес, кг' : lt === 'assist' ? 'Противовес' : 'Доп. кг'}</span>`}<span>${repLabel(ex)}</span><span></span></div>
       ${rows}
     </div>
-    <div class="lt-foot"><button type="button" class="lt-add" data-addset="${ex.id}">+ подход</button>${ex.uni ? '<span>повторы — на каждую сторону</span>' : ''}${it.rx.circ ? '<span>строка — один круг</span>' : ''}</div>`};
+    <div class="lt-foot"><button type="button" class="lt-add" data-addset="${ex.id}">+ подход</button>${ex.uni ? '<span>повторы — на каждую сторону</span>' : ''}${it.rx.circ ? '<span>строка — один круг</span>' : ''}</div></div>`};
 }
 function logBlock(it) { return `<div class="c-log" data-log="${it.ex.id}">${logRows(it).html}</div>`; }
 
@@ -335,8 +337,10 @@ function refreshCard(card) {
   const box = card.querySelector('.c-log');
   const ae = document.activeElement;
   if (box && !(box.contains(ae) && ae.tagName === 'INPUT')) {
-    const refocus = box.contains(ae) && ae.dataset.k !== undefined ? `[data-${ae.dataset.tick ? 'tick' : 'addset'}][data-k="${ae.dataset.k}"]` : null;
+    const refocus = !box.contains(ae) ? null : ae.dataset.k !== undefined ? `[data-${ae.dataset.tick ? 'tick' : 'addset'}][data-k="${ae.dataset.k}"]`
+      : ae.dataset.cfold ? '[data-cfold]' : ae.dataset.hist ? '[data-hist]' : null;
     box.innerHTML = logRows(it).html;
+    syncCardLog(card);
     if (refocus) { const n = box.querySelector(refocus); if (n) n.focus(); }
   }
   refreshWarmup(card);
@@ -563,6 +567,7 @@ function refreshHist(id) {
   const card = document.querySelector(`.card[data-ex="${id}"]`); if (!card) return;
   const h = card.querySelector('.c-hist'); if (h && !h.hidden) h.innerHTML = histHtml(EXI[id]);
   const hb = card.querySelector('[data-hist] small'); if (hb) { const n = histCount(id); hb.textContent = n || ''; }
+  logBarUpdate(card);
   const tab = document.querySelector('[data-view="journal"] small'); if (tab) tab.textContent = journalDays() || '';
 }
 const delArm = {};
@@ -593,7 +598,7 @@ document.addEventListener('click', e => {
     const n = box.querySelectorAll('.lt-r').length;
     it.rx.sets = Math.max(it.rx.sets, n + 1);
     if (it.rx.circ) it.rounds = Math.max(it.rounds || 0, n + 1);
-    box.innerHTML = logRows(it).html;
+    box.innerHTML = logRows(it).html; if (box.closest('.card')) syncCardLog(box.closest('.card'));
     const inp = box.querySelector(`.lt-r[data-k="${n}"] .lt-in`); if (inp) inp.focus();
     return;
   }
