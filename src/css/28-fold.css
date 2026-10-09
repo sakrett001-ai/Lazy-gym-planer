@@ -1,0 +1,72 @@
+/* Сворачиваемые блоки: заголовок-кнопка со сводкой и шевроном (11f-fold.js). */
+.cg-h { display:flex; align-items:center; gap:10px; width:100%; min-height:40px; border:0; background:transparent; padding:6px 4px; margin:0; text-align:left; color:var(--ink); font:inherit; cursor:pointer; border-radius:8px; }
+.cg-h:hover { background:var(--surface-2); }
+.cg-x { flex:1 1 auto; min-width:0; display:flex; flex-wrap:wrap; align-items:baseline; gap:3px 12px; }
+.cg-t { flex:0 1 auto; font:600 11.5px/1.2 var(--f-body); letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.cg-s { flex:1 1 150px; min-width:0; font-size:13.5px; line-height:1.35; color:var(--ink); }
+.cg-chev { flex:none; width:8px; height:8px; margin:0 4px 3px auto; border-right:2px solid var(--muted); border-bottom:2px solid var(--muted); transform:rotate(45deg); transition:transform .15s; }
+[aria-expanded="true"] > .cg-chev { transform:rotate(-135deg); margin-bottom:-3px; }
+@media (prefers-reduced-motion:reduce) { .cg-chev { transition:none; } }
+
+/* карточка: мышцы одной строкой — основные (заливка) и помогающие (кольцо), как в чипах */
+.c-mus > .cg-h { grid-column:1 / -1; }
+.card:not(.open-mus) .c-map, .card:not(.open-mus) .c-mus .mus { display:none; }
+.card.open-mus .cg-mus { display:none; }
+.cg-mus .cg-p::before, .cg-mus .cg-sec::before { content:''; display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; vertical-align:1px; }
+.cg-mus .cg-p::before { background:var(--mus); }
+.cg-mus .cg-sec { color:var(--muted); margin-left:12px; }
+.cg-mus .cg-sec::before { box-shadow:inset 0 0 0 1.6px var(--mus); opacity:.7; }
+.card:not(.open-mus) .c-mus { gap:0; padding-top:6px; }
+
+/* карточка: запись подходов — подсказка видна всегда, таблица по кнопке */
+.lt-bar { display:flex; align-items:center; gap:8px; }
+.lt-bar .lt-tog { flex:1 1 auto; min-width:0; }
+.lt-bar .btn-ghost { flex:none; }
+.lt-tog .cg-s { color:var(--muted); font:500 13px var(--f-mono); }
+.lt-tog .cg-done { color:var(--good); font-weight:600; }
+.card:not(.open-log) .lt-fold { display:none; }
+.lt-fold { display:grid; gap:8px; }
+
+/* вид карточек */
+.fold-bar { display:flex; align-items:center; justify-content:space-between; gap:8px 12px; flex-wrap:wrap; margin:0 0 12px; }
+.fold-bar > span { font:600 11.5px/1.2 var(--f-body); letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.fold-seg { display:flex; gap:3px; background:var(--surface-2); padding:3px; border-radius:10px; }
+.fold-seg button { border:0; background:transparent; border-radius:8px; padding:6px 12px; min-height:36px; font-size:13.5px; font-weight:600; color:var(--ink); }
+.fold-seg button.on { background:var(--accent); color:var(--accent-ink); }
+
+/* шапка плана: нагрузка по мышцам */
+.lb-h.cg-h { margin:0 0 6px; min-height:36px; padding:4px; font:inherit; letter-spacing:0; text-transform:none; color:var(--ink); }
+.p-load:not(.folded) .lb-h .cg-s { display:none; }
+.p-load.folded { grid-template-columns:minmax(0, 1fr); border-top:1px solid var(--line); padding-top:8px; }
+.p-load.folded .p-map, .p-load.folded .lbars, .p-load.folded .vbars, .p-load.folded .lb-note { display:none; }
+.p-load.folded .lb-h.cg-h { margin:0; }
+@media (min-width:700px) { .p-head.load-folded { grid-template-columns:minmax(0, 1fr); } }
+
+/* программа: правило прибавки веса по кнопке */
+details.rule summary { cursor:pointer; font-weight:600; color:var(--ink); padding:4px 0; }
+details.rule p { margin:6px 0 0; }
+
+/* параметры: на телефоне и планшете сворачиваются в строку выбранного */
+.setup-bar, .setup-fold-end { display:none; }
+@media (max-width:959px) {
+  .setup-bar { display:block; padding-top:12px; }
+  .sb-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .sb-head .lbl { margin:0; color:var(--ink); font-size:12.5px; }
+  .sb-tog, .setup-fold-end { align-items:center; justify-content:center; gap:10px; border:1px solid var(--line); background:transparent; border-radius:9px; padding:7px 12px; min-height:40px; font:inherit; font-weight:600; font-size:13.5px; color:var(--accent); }
+  .sb-tog { display:inline-flex; }
+  .sb-tog .cg-chev, .setup-fold-end .cg-chev { border-color:currentColor; }
+  .sb-chips { display:flex; flex-wrap:wrap; gap:6px; padding:10px 0 2px; }
+  .sb-chip { border:1px solid var(--line); background:var(--surface-2); border-radius:999px; padding:6px 12px; min-height:34px; font:inherit; font-size:13.5px; color:var(--ink); text-align:left; }
+  .sb-chip:hover { border-color:var(--accent); }
+  .setup-bar + .field { border-top:1px solid var(--line); margin-top:12px; }
+  .setup.folded > .field { display:none; }
+  .setup.folded { padding-bottom:12px; }
+  .setup:not(.folded) > .setup-fold-end { display:flex; width:100%; margin-top:16px; }
+  .setup-fold-end .cg-chev { transform:rotate(-135deg); margin:3px 0 0; }
+}
+.lt-tog .cg-x { flex-wrap:nowrap; align-items:center; }
+.lt-tog .cg-s { flex:0 1 auto; white-space:nowrap; }
+
+/* узкий телефон: подписи столбцов записи не наезжают друг на друга («Противовес» — самая длинная) */
+.lt-h span { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+@media (max-width:400px) { .lt-h span { letter-spacing:0; } }

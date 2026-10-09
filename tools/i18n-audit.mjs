@@ -55,6 +55,13 @@ for (const mode of ['single', 'program']) for (const format of ['classic', 'supe
     await scan(`program week ${week} day ${day}`, await run('planText()'));
   }
 }
+/* свёрнутые параметры, нагрузка и карточки: строки-сводки во всех режимах */
+step('свёрнутые блоки');
+for (const mode of ['single', 'program', 'custom']) {
+  await run(`(()=>{Object.assign(S,{view:'plan',mode:'${mode}',format:'classic',goal:'mass',level:'mid',week:1,day:0});S.fold={setup:true,load:true,cards:'compact'};regen();})()`);
+  await scan('folded ' + mode);
+}
+await run(`(()=>{S.fold={setup:false,load:false,cards:'compact'};S.mode='single';regen();})()`);
 /* группы мышц и количество упражнений */
 step('группы мышц');
 for (const groups of [['quads', 'glutes', 'hams', 'calves'], ['biceps', 'triceps', 'forearms'], ['abs', 'cardio'], []]) {
@@ -81,6 +88,35 @@ await scan('custom plan', await run('planText()'));
 await run(`(()=>{cpTab='groups';renderPlan();document.querySelectorAll('[data-cp-more]').forEach(b=>b.click());})()`);
 await scan('custom add by muscles');
 for (const format of ['superset', 'circuit', 'static']) { await run(`(()=>{S.format='${format}';cpOpen=new Set([0]);regen();})()`); await scan('custom ' + format, await run('planText()')); }
+/* вес по подходам, темп, заметки, «о плане»; подсказка «вес по плану» в журнале карточки */
+await run(`(()=>{S.format='classic';const c=S.customs[0];Object.assign(c,{group:'Block A',for:'Sam',note:'No failure'});
+  c.items[0]={id:'bbbench',sets:4,kg:[60,62.5,65],tempo:'4-1-1-0',note:'Pause'};c.items[1]={id:'dbfly',kg:[14]};
+  S.customs.push({id:'c3',name:'Lower',group:'Block A',items:[{id:'squat'}]});cpOpen=new Set([0,1]);regen();
+  document.querySelectorAll('.cp-about').forEach(d=>d.open=true);document.querySelectorAll('[data-hist]').forEach(b=>b.click());})()`);
+await scan('custom with weights, tempo and notes', await run('planText()'));
+/* окно выгрузки: все варианты, копирование */
+await page.click('#plan-export'); await page.waitForTimeout(120);
+await scan('export dialog');
+await run(`document.querySelector('#po-copy').click()`); await page.waitForTimeout(200);
+await scan('export copied');
+await run(`(()=>{document.querySelector('#po-for').value='';document.querySelector('#plan-out').close();})()`);
+await run(`(()=>{const c=S.customs.find(p=>p.id==='c3');c.items=[];S.custom='c3';regen();openPlanOut();document.querySelector('#po-save').click();})()`); await page.waitForTimeout(120);
+await scan('export of an empty plan');
+await run(`(()=>{document.querySelector('#plan-out').close();S.custom=S.customs[0].id;regen();})()`);
+/* окно загрузки: пустое, просмотр файла с предупреждениями, ошибки, добавление */
+await run(`document.querySelector('[data-cp-import]').click()`); await page.waitForTimeout(100);
+await scan('import dialog');
+const readPasted = text => page.evaluate(t => { document.querySelector('#pi-text').value = t; document.querySelector('#pi-read').click(); }, text);
+await readPasted(JSON.stringify({ format: 'lazy-gym-planner/plans', version: 9, from: 'Coach', note: 'Week 1', plans: [
+  { name: 'Upper', group: 'Block B', for: 'Sam', goal: 'strength', format: 'superset', level: 'adv', items: [{ id: 'bbbench', sets: 4, reps: '5', kg: 80 }, { id: 'teleport', name: 'Teleport' }] },
+  ...Array.from({ length: 51 }, (_, i) => ({ name: 'P' + i, items: [{ id: 'squat' }] }))] }));
+await scan('import preview with warnings');
+await run(`(()=>{document.querySelectorAll('[data-pi]').forEach(x=>x.checked=false);document.querySelector('#pi-add').click();})()`);
+await scan('import nothing picked');
+for (const bad of ['', '{"plans":[', JSON.stringify(await run('backupObject()')), '{"format":"other","plans":[]}', '{"plans":[]}', ' '.repeat(300 * 1024)]) { await readPasted(bad); await scan('import error'); }
+await readPasted(JSON.stringify({ format: 'lazy-gym-planner/plans', version: 1, plans: [{ name: 'Upper', items: [{ id: 'bbbench' }] }] }));
+await run(`document.querySelector('#pi-add').click()`); await page.waitForTimeout(100);
+await scan('imported plan opened');
 await run(`(()=>{S.format='classic';S.place='street';ensurePlaces(S);regen();})()`);
 await scan('custom on the street');
 await run(`(()=>{S.customs.push({id:'c2',name:'Legs',items:[]});S.custom='c2';cpDel=true;renderSetup();})()`);
@@ -89,6 +125,12 @@ await run(`(()=>{cpDel=false;S.customs=S.customs.slice(0,1);S.custom=S.customs[0
 /* замены в карточке до исчерпания */
 for (let i = 0; i < 6; i++) { const b = await page.$('[data-swap]'); if (!b) break; await b.click(); await page.waitForTimeout(80); }
 await scan('swaps');
+/* сохранение собранной тренировки и недели в свои планы */
+await run(`(()=>{regen();document.querySelector('#save-plan').click();})()`);
+await scan('saved a workout as a plan');
+await run(`(()=>{Object.assign(S,{mode:'program',days:3,week:2,day:0});regen();document.querySelector('#save-plan').click();})()`);
+await scan('saved a week as plans');
+await run(`(()=>{S.customs=S.customs.slice(0,1);S.custom=S.customs[0].id;S.mode='single';regen();})()`);
 /* 3. атлас мышц */
 step('3. атлас');
 await run(`(()=>{S.view='atlas';renderSetup();renderPlan();})()`);
