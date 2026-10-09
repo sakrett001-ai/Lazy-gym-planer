@@ -4,7 +4,7 @@ const fs=require('node:fs'),path=require('node:path');
 const{loadModel}=require('./biomechanics-audit');
 const distance=(a,b)=>Math.hypot(...a.map((v,i)=>v-b[i]));
 function auditCatalog(model,{samples=101}={}){
- const {EX,get}=model,{catalogVolumeData,muscleFrame,REGION_META,MUSCLE_REGIONS,CATALOG_SOURCES,camera3}=get('({catalogVolumeData,muscleFrame,REGION_META,MUSCLE_REGIONS,CATALOG_SOURCES,camera3})');
+ const {EX,get}=model,{catalogVolumeData,muscleFrame,REGION_META,MUSCLE_REGIONS,CATALOG_SOURCES,camera3,Mannequin}=get('({catalogVolumeData,muscleFrame,REGION_META,MUSCLE_REGIONS,CATALOG_SOURCES,camera3,Mannequin})'),MB=Mannequin.B;
  const failures=[],stats={exercises:EX.length,poses:0,cameraPoses:0,regionFrames:0,reconstructed:0,authored:0};
  const seen=new Set(),check=(ok,id,rule,t)=>{if(!ok&&!seen.has(id+rule)){seen.add(id+rule);failures.push({exercise:id,rule,t});}};
  for(const ex of EX){
@@ -17,8 +17,11 @@ function auditCatalog(model,{samples=101}={}){
   for(let i=0;i<samples;i++){
    const t=i/(samples-1),R=a.catalogRig(t);stats.poses++;
    for(const [key,v]of Object.entries(R))if(Array.isArray(v)&&typeof v[0]==='number')check(v.length===3&&v.every(Number.isFinite),ex.id,'finite:'+key,t);
-   for(const s of ['L','R'])for(const[x,y,l]of [['sh','el',30],['el','wr',27],['hip','kn',43],['kn','an',42]])check(Math.abs(distance(R[x+s],R[y+s])-l)<1e-4,ex.id,'bone:'+x+s+'-'+y+s,t);
-   for(const prop of R.props)for(const[k,v]of Object.entries(prop))if(Array.isArray(v))check(v.every(Number.isFinite),ex.id,'prop-finite:'+prop.kind+':'+k,t);
+   /* длины сегментов: у манекена — антропометрия de Leva (Mannequin.B), у старых плоских ригов — прежние константы */
+   const L=R.frames?MB:{ua:30,fa:27,th:43,sk:42};
+   for(const s of ['L','R'])for(const[x,y,l]of [['sh','el',L.ua],['el','wr',L.fa],['hip','kn',L.th],['kn','an',L.sk]])check(Math.abs(distance(R[x+s],R[y+s])-l)<1e-4,ex.id,'bone:'+x+s+'-'+y+s,t);
+   /* числовые поля деталей (точки, оси, ломаные тросов) конечны; списки имён (rides) не проверяются */
+   for(const prop of R.props)for(const[k,v]of Object.entries(prop))if(Array.isArray(v)&&!v.every(x=>typeof x==='string'))check(v.flat(2).every(Number.isFinite),ex.id,'prop-finite:'+prop.kind+':'+k,t);
    for(const camera of a.catalogCameras){const project=camera3(camera);for(const key of ['head','gripL','gripR','anL','anR'])check(project(R[key]).every(Number.isFinite),ex.id,'camera:'+camera,t);stats.cameraPoses++;}
    if(i%10===0||i===samples-1){
     const data=catalogVolumeData(a,t,0);for(const f of data.surfaces)check(REGION_META[f.id]?.visible&&f.points.every(p=>p.length===3&&p.every(Number.isFinite)),ex.id,'region:'+f.id,t);

@@ -21,7 +21,7 @@ const meta=ids.map(id=>{const ex=EX.find(e=>e.id===id),b=base.find(r=>r.id===id)
  return{id,name:ex.name,group:GROUPS[specs[id].file]||'Прочее',loop:!!entries[id].loop,opts,eccFirst:!!ex.anim.eccFirst,cues:ex.anim.cues,hold:!!ex.anim.hold,
   before:{errors:b.issues.filter(x=>x.severity==='error').map(x=>x.detail),warns:b.issues.filter(x=>x.severity!=='error').length},
   issues:r.issues.map(x=>({rule:x.rule,severity:x.severity,detail:x.detail,depth:x.depth,unit:x.unit,t:x.t}))};});
-const bundle=(await build({entryPoints:[path.join(root,'tools/mannequin/viewer/entry.mjs')],bundle:true,minify:true,format:'iife',target:['es2020'],write:false,logLevel:'error'})).outputFiles[0].text;
+const bundle=(await build({entryPoints:[path.join(root,'tools/mannequin/viewer/entry.mjs')],bundle:true,minify:true,format:'iife',target:['es2020'],write:false,logLevel:'error',external:['fs','path','node:fs','node:path']})).outputFiles[0].text;
 const read=f=>fs.readFile(path.join(root,f),'utf8');
 const tpl=await read('tools/mannequin/viewer/page.html');
 const poses=`const CATALOG_POSES=${JSON.stringify(entries)};`;

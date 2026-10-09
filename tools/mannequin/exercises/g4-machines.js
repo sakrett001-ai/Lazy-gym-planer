@@ -357,8 +357,9 @@ function haLever(L, s, side) {
       { name: 'hub', kind: 'cyl', c: [-3, 0, 0], axis: [1, 0, 0], r: 5, len: 7, mount: 'ha:hub' + s },
       { name: 'arm', kind: 'beam', a: [-3, 0, 0], b: [-3, rk - 2, tpost], w: 5, h: 5, up: [1, 0, 0], mount: 'hub' },
       { name: 'post', kind: 'beam', a: [ab - 6, rk - 2, tpost], b: [ak + 7, rk - 2, tpost], w: 4.5, h: 4.5, up: [0, 1, 0], mount: 'arm' },
-      { name: 'padPlate', kind: 'obox', c: [ak, rk, sd * (5.8 + 7 - .2 - 1.2)], size: [15, 18, 2], mount: 'post' },
-      { name: 'pad', kind: 'obox', c: [ak, rk, tp], size: [17, 20, 7], tone: 'pad', role: 'pad', mount: 'padPlate', round: 1.8 },
+      /* подушка у колена; нижний край выше сиденья (сиденье кончается под бедром) */
+      { name: 'padPlate', kind: 'obox', c: [ak + 1.5, rk, sd * (5.8 + 7 - .2 - 1.2)], size: [12, 18, 2], mount: 'post' },
+      { name: 'pad', kind: 'obox', c: [ak + 1.5, rk, tp], size: [14, 20, 7], tone: 'pad', role: 'pad', mount: 'padPlate', round: 1.8 },
       { name: 'pegArm', kind: 'beam', a: [ab - 5, rk - 2, tpost], b: [ab - 5, rb, 0], w: 3, h: 3, up: [1, 0, 0], mount: 'post' },
       { name: 'peg', kind: 'obox', c: [ab - 2.4, rb - 1, 0], size: [3, 16, 11], tone: 'rubber', mount: 'pegArm', round: .5 }
     ] };
@@ -435,7 +436,7 @@ const HK = once(() => {
   /* плоскость спинки и упоры: по телу в верхнем положении; направляющие — на 30 см позади оси таза */
   const q0 = body(u0), back = Math.min(...C.region(q0, 'back').map(p => V.dot(p, nb))) + 1.0, hip0 = V.add(H0, d, u0);
   const R0 = V.add(H0, nb, -30), yBack = -(back - V.dot(R0, nb));
-  const rail = { a: V.add(R0, d, -10).slice(1), b: V.add(R0, d, 175).slice(1) };
+  const rail = { a: V.add(R0, d, -26).slice(1), b: V.add(R0, d, 175).slice(1) };
   return { C, d, nb, pu, pf, H0, sup, body, u0, u1, R0, yBack, rail, machine: { type: 'hackSquat', id: 'hk', rx: 22, rail, plate: { c: V.add(sup, pf, -6).slice(1), ang: 20, w: 70, l: 46 } } };
 });
 
@@ -453,8 +454,9 @@ const HK_SLED = once(() => {
   parts.push({ name: 'plate', kind: 'obox', c: [0, yb + 8, (zs - 18 - 16) / 2], size: [26, 2, zs - 18 + 12], mount: 'frame' });
   parts.push({ name: 'frame', kind: 'beam', a: [0, yb + 10, -12], b: [0, yb + 10, zs + 10], w: 8, h: 4, up: [0, 1, 0], mount: 'strutLo' });
   for (const [k, z] of [['Lo', 0], ['Hi', 40]]) {
-    parts.push({ name: 'cross' + k, kind: 'beam', a: [-22, 4, z], b: [22, 4, z], w: 6, h: 6, mount: 'car' + k + 'L' });
-    parts.push({ name: 'strut' + k, kind: 'beam', a: [0, 4, z], b: [0, yb + 11, z], w: 6, h: 6, mount: 'cross' + k });
+    /* поперечины каретки — со стороны спинки (−y), чтобы не задевать балки направляющих за рельсами */
+    parts.push({ name: 'cross' + k, kind: 'beam', a: [-22, -4.5, z], b: [22, -4.5, z], w: 6, h: 4, mount: 'car' + k + 'L' });
+    parts.push({ name: 'strut' + k, kind: 'beam', a: [0, -4.5, z], b: [0, yb + 11, z], w: 6, h: 6, mount: 'cross' + k });
     for (const g of [1, -1]) parts.push({ name: 'car' + k + (g > 0 ? 'L' : 'R'), kind: 'obox', c: [g * 22, 0, z], size: [7, 7, 16], mount: 'hk:rail' + (g > 0 ? 'L' : 'R') });
   }
   const hl = Math.hypot(.4, .9), ha = [0, .4 / hl, .9 / hl], topZ = zs + 10;
@@ -467,11 +469,11 @@ const HK_SLED = once(() => {
     parts.push({ name: 'shArm' + k, kind: 'beam', a: [g * 26, ySh, topZ], b: [pc[0] + nn[0] * 5.2, ySh, pc[2] + nn[2] * 5.2], w: 4, h: 4, mount: 'arm' + k });
     parts.push({ name: 'hDrop' + k, kind: 'beam', a: [g * 26, hc[1] + ha[1] * 9, topZ], b: [g * 26, hc[1] + ha[1] * 9, hc[2] + ha[2] * 9], w: 3.5, h: 3.5, mount: 'arm' + k });
     parts.push({ name: 'handle' + k, kind: 'beam', a: [g * 26, hc[1] + ha[1] * 9, hc[2] + ha[2] * 9], b: [g * 26, hc[1] - ha[1] * 8, hc[2] - ha[2] * 8], r: 1.6, tone: 'rubber', role: 'grip', mount: 'hDrop' + k });
-    parts.push({ name: 'horn' + k, kind: 'cyl', c: [g * 40, 4, 40], axis: [1, 0, 0], r: 2.5, len: 24, tone: 'chrome', mount: 'hornBar' });
-    parts.push({ name: 'disc' + k, kind: 'cyl', c: [g * 37.5, 4, 40], axis: [1, 0, 0], r: 22.5, len: 5.6, tone: 'plate', mount: 'horn' + k, sides: 32 });
+    parts.push({ name: 'horn' + k, kind: 'cyl', c: [g * 40, -4.5, 40], axis: [1, 0, 0], r: 2.5, len: 24, tone: 'chrome', mount: 'hornBar' });
+    parts.push({ name: 'disc' + k, kind: 'cyl', c: [g * 37.5, -4.5, 40], axis: [1, 0, 0], r: 22.5, len: 5.6, tone: 'plate', mount: 'horn' + k, sides: 32 });
   }
   parts.push({ name: 'top', kind: 'beam', a: [-27, yb + 10, topZ], b: [27, yb + 10, topZ], w: 6, h: 6, mount: 'frame' });
-  parts.push({ name: 'hornBar', kind: 'beam', a: [-28, 4, 40], b: [28, 4, 40], w: 6, h: 6, mount: 'strutHi' });
+  parts.push({ name: 'hornBar', kind: 'beam', a: [-28, -4.5, 40], b: [28, -4.5, 40], w: 6, h: 4, mount: 'strutHi' });
   return { parts, gh };
 });
 
@@ -632,7 +634,7 @@ module.exports = {
     equipment: (() => { const L = HA(); return [L.machine, haLever(L, 'L', 'in'), haLever(L, 'R', 'in')]; })(),
     contacts: [{ body: 'buttocks', prop: 'ha:seat' }, { body: 'back', prop: 'ha:back' }, { body: 'kneeL', prop: 'haL:pad' }, { body: 'kneeR', prop: 'haR:pad' },
       { body: 'soleL', prop: 'haL:peg' }, { body: 'soleR', prop: 'haR:peg' }, { body: 'gripL', prop: 'ha:handleL' }, { body: 'gripR', prop: 'ha:handleR' }],
-    pose(t, C) { return haPose(C, C.lerp(36, 8, C.ease(t))); }
+    pose(t, C) { return haPose(C, C.lerp(36, 12, C.ease(t))); }
   },
 
   /* Рычажная тяга к поясу с упором грудью: t=0 — руки вытянуты вперёд, лопатки разведены; t=1 — кисти у пояса,

@@ -111,7 +111,7 @@ function sdCyl(p, c, axis, r, halfH) { const d = V.sub(p, c), y = V.dot(d, axis)
 const linspace = (a, b, step) => { const n = Math.max(1, Math.ceil(V.dist(a, b) / step)), out = []; for (let i = 0; i <= n; i++) out.push(V.mix(a, b, i / n)); return out; };
 function beamAxes(s) { const y = V.unit(V.sub(s.b, s.a)); let z = V.perp(s.up || [0, -1, 0], y); if (V.len(z) < 1e-6) z = V.perp([0, 0, 1], y); if (V.len(z) < 1e-6) z = V.perp([1, 0, 0], y); z = V.unit(z); return [V.unit(V.cross(y, z)), y, z]; }
 function collider(s) {
-  const c = { id: s.id, kind: s.kind, role: s.role || '', tone: s.tone || 'frame', mount: s.mount, free: !!s.free, part: s.part, dyn: !!s.dyn, group: s.group };
+  const c = { id: s.id, kind: s.kind, role: s.role || '', tone: s.tone || 'frame', mount: s.mount, free: !!s.free, part: s.part, dyn: !!s.dyn, group: s.group, rides: s.rides || [] };
   c.soft = ['pad', 'mat'].includes(c.tone);
   if (s.kind === 'beam') {
     if (s.r) { c.sdf = p => sdCapsule(p, s.a, s.b, s.r); c.pts = linspace(s.a, s.b, 2); c.r = s.r; c.ptR = s.r; c.axis = [s.a, s.b]; }
@@ -183,6 +183,21 @@ function bodyPoints(R) {
   return pts;
 }
 
+/* ---------- быстрые отсечения по габаритам ----------
+   Объём сегмента тела лежит внутри габарита его точек поверхности с запасом ~1,5 см (хорда между образующими),
+   а все проверки ниже срабатывают не дальше 2,5 см снаружи. Поэтому запас BOX_M = 4 см не меняет результат,
+   только пропускает заведомо далёкие пары. */
+const BOX_M = 4;
+function aabb(list, pad = 0) { const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]; for (const p of list) for (let i = 0; i < 3; i++) { if (p[i] < lo[i]) lo[i] = p[i]; if (p[i] > hi[i]) hi[i] = p[i]; } for (let i = 0; i < 3; i++) { lo[i] -= pad; hi[i] += pad; } return { lo, hi }; }
+const inBox = (b, p, m = 0) => !!b && p[0] >= b.lo[0] - m && p[0] <= b.hi[0] + m && p[1] >= b.lo[1] - m && p[1] <= b.hi[1] + m && p[2] >= b.lo[2] - m && p[2] <= b.hi[2] + m;
+const boxesMeet = (a, b, m = 0) => a.lo.every((v, i) => v - m <= b.hi[i]) && b.lo.every((v, i) => v - m <= a.hi[i]);
+function segBoxes(pts) {
+  const g = {}; for (const b of pts) { const k = b.seg === 'torso' || b.seg === 'head' || b.seg === 'neck' ? b.seg : b.seg + b.side; (g[k] = g[k] || []).push(b.p); }
+  const out = {}; for (const [k, l] of Object.entries(g)) out[k] = aabb(l); out.body = aabb(pts.map(b => b.p)); return out;
+}
+/* габарит детали инвентаря: точки детали плюс радиус (капсулы, сферы) и 1 см */
+function withBox(c) { c.box = aabb(c.pts, Math.max(c.r || 0, c.ptR || 0) + 1); return c; }
+
 /* ---------- контакты ---------- */
 function regionPoints(name, pts, R) {
   const m = /^(sole|grip|palm|knee|shin|hand|ua|fa|th|sk|foot)(L|R)?$/.exec(name);
@@ -209,8 +224,12 @@ function regionPoints(name, pts, R) {
 function checkFrame(R, entry = {}) {
   const issues = [], push = (rule, severity, detail, depth, unit = 'см') => issues.push({ rule, severity, detail, depth: depth == null ? undefined : +(+depth).toFixed(1), unit });
   const EQV = require('../../src/js/09bn-equipment.js').visible;
-  const props = (R.props || []).filter(p => EQV(p, entry.has || (() => true))), cols = props.flatMap(collider), byId = new Map(); for (const c of cols) { if (!byId.has(c.id)) byId.set(c.id, []); byId.get(c.id).push(c); }
-  const pts = bodyPoints(R), cache = M.torsoCache(R);
+  const props = (R.props || []).filter(p => EQV(p, entry.has || (() => true))), cols = props.flatMap(collider).map(withBox), byId = new Map(); for (const c of cols) { if (!byId.has(c.id)) byId.set(c.id, []); byId.get(c.id).push(c); }
+  const pts = bodyPoints(R), cache = M.torsoCache(R), SB = segBoxes(pts);
+  /* знаковые расстояния тела с отсечением по габаритам: далеко от сегмента — «бесконечно далеко» */
+  const torsoD = p => inBox(SB.torso, p, BOX_M) ? M.torsoSDF(R, p, cache) : Infinity;
+  const headD = p => inBox(SB.head, p, BOX_M) ? M.headSDF(R, p) : Infinity;
+  const limbD = (k, s, p) => inBox(SB[k + s], p, BOX_M) ? M.limbSDF(R, k, s, p) : Infinity;
   const contacts = entry.contacts || R.contacts || [];
   const gripProps = new Set(contacts.filter(c => /^grip/.test(c.body)).map(c => c.prop));
   const touching = new Set(contacts.map(c => c.prop));
@@ -223,8 +242,10 @@ function checkFrame(R, entry = {}) {
   /* 2. Тело в инвентаре */
   for (const c of cols) {
     if (c.unknown || c.cable) continue;
+    if (!boxesMeet(c.box, SB.body, BOX_M)) continue;
     let worst = null;
     for (const b of pts) {
+      if (!inBox(c.box, b.p)) continue;
       if (b.seg === 'hand' && isGripCol(c, b.side)) continue;
       if (b.seg === 'hand' && b.part === 'palm' && contacts.some(k => k.body === 'palm' + b.side)) continue;
       if (b.seg === 'fa' && b.t > .8 && isGripCol(c, b.side)) continue;
@@ -236,14 +257,15 @@ function checkFrame(R, entry = {}) {
     }
     /* тонкие детали: точки детали внутри тела */
     for (const p of c.pts) {
-      const dT = M.torsoSDF(R, p, cache), dH = M.headSDF(R, p), rr = c.ptR || 0;
+      if (!inBox(SB.body, p, BOX_M)) continue;
+      const dT = torsoD(p), dH = headD(p), rr = c.ptR || 0;
       const tol = declared(c) ? (c.soft ? 4 : 2) : c.soft ? 2.5 : .8;
       const nearHand = c.grip && M.SIDES.some(sd => V.dist(p, R['grip' + sd]) < 10);
       if (!nearHand && -dT + Math.min(rr, 2) > tol && (!worst || -dT + Math.min(rr, 2) - tol > worst.depth - worst.tol)) worst = { b: { seg: 'torso', side: 'C' }, depth: -dT + Math.min(rr, 2), tol };
       if (-dH + Math.min(rr, 2) > .8 && (!worst || -dH + Math.min(rr, 2) - .8 > worst.depth - worst.tol)) worst = { b: { seg: 'head', side: 'C' }, depth: -dH + Math.min(rr, 2), tol: .8 };
       for (const s of M.SIDES) for (const k of ['ua', 'fa', 'th', 'sk']) {
         if (c.grip && (k === 'fa')) continue;
-        const d = -M.limbSDF(R, k, s, p) + Math.min(rr, 2);
+        const d = -limbD(k, s, p) + Math.min(rr, 2);
         if (d > tol && (!worst || d - tol > worst.depth - worst.tol)) worst = { b: { seg: k, side: s }, depth: d, tol };
       }
     }
@@ -264,18 +286,18 @@ function checkFrame(R, entry = {}) {
     for (const b of pts) {
       /* против корпуса */
       if (!['torso', 'neck'].includes(b.seg) && !(b.seg === 'ua' && b.t < .3) && !(b.seg === 'th' && b.t < .35)) {
-        const d = -M.torsoSDF(R, b.p, cache) - (b.r || 0) * .5, tol = tolPair(b.seg, 'torso');
+        const d = -torsoD(b.p) - (b.r || 0) * .5, tol = tolPair(b.seg, 'torso');
         if (d > tol && (!worst || d - tol > worst.depth - worst.tol)) worst = { a: b.seg + b.side, b: 'torso', depth: d, tol };
       }
       /* против головы */
-      if (!['head', 'neck', 'torso'].includes(b.seg)) { const d = -M.headSDF(R, b.p), tol = 1.2; if (d > tol && (!worst || d - tol > worst.depth - worst.tol)) worst = { a: b.seg + b.side, b: 'head', depth: d, tol }; }
+      if (!['head', 'neck', 'torso'].includes(b.seg)) { const d = -headD(b.p), tol = 1.2; if (d > tol && (!worst || d - tol > worst.depth - worst.tol)) worst = { a: b.seg + b.side, b: 'head', depth: d, tol }; }
       /* против конечностей */
       if (['torso', 'neck'].includes(b.seg)) continue;
       for (const s of M.SIDES) for (const k of ['ua', 'fa', 'th', 'sk']) {
         if (s === b.side && (k === b.seg || (adj[b.seg] || []).includes(k))) continue;
         if (b.seg === 'hand' && s === b.side && k === 'fa') continue;
         if (b.seg === 'th' && k === 'th' && b.t < .3) continue;
-        const d = -M.limbSDF(R, k, s, b.p) - (b.r || 0) * .5, tol = tolPair(b.seg, k);
+        const d = -limbD(k, s, b.p) - (b.r || 0) * .5, tol = tolPair(b.seg, k);
         if (d > tol && (!worst || d - tol > worst.depth - worst.tol)) worst = { a: b.seg + b.side, b: k + s, depth: d, tol };
       }
     }
@@ -345,25 +367,33 @@ function checkFrame(R, entry = {}) {
       const held = M.SIDES.some(s => grip.some(c => c.sdf(R['grip' + s]) < 2.5));
       const supports = cols.filter(c => !c.free && !c.cable && c.id !== id);
       const resting = parts.some(c => c.pts.some(p => p[1] >= FLOOR - 1.2 || supports.some(o => o.sdf(p) < 1.2)));
-      const onBody = parts.some(c => c.pts.some(p => M.torsoSDF(R, p, cache) < 2.5));
+      const onBody = parts.some(c => c.pts.some(p => torsoD(p) < 2.5));
       if (!held && !resting && !onBody) push('free-weight', 'error', `${id} не в руке и не на опоре`);
     }
   }
   /* 6б. Снаряд против снаряда: гриф в стойку, гантель в скамью, рычаг в раму.
      Неподвижные детали сверяются один раз (на первом кадре), подвижные — в каждом. */
   {
-    const item = c => String(c.id).split(':')[0], skip = (a, b) => item(a) === item(b) || a.mount === b.id || b.mount === a.id || a.cable || b.cable || a.unknown || b.unknown;
+    const item = c => String(c.id).split(':')[0];
+    /* По устройству пересекаются: деталь узла и ось/направляющая, на которой узел сидит (каретка на штанге Смита,
+       рычаг на оси, салазки на направляющей), деталь и ось её втулки, плиты стека и их направляющие (rides). */
+    const seat = new Set(); for (const c of cols) if (c.mount && item({ id: c.mount }) !== item(c)) seat.add(item(c) + '|' + c.mount);
+    const joint = (x, y) => { const h = byId.get(x.mount)?.[0]; return seat.has(item(x) + '|' + y.id) || x.rides.includes(y.id) || (!!h && /hub|bearing|bushing/i.test(h.id) && h.mount === y.id); };
+    const skip = (a, b) => item(a) === item(b) || a.mount === b.id || b.mount === a.id || joint(a, b) || joint(b, a) || a.cable || b.cable || a.unknown || b.unknown;
     const sub = pts => pts.length <= 260 ? pts : pts.filter((_, i) => i % Math.ceil(pts.length / 260) === 0);
     let worst = null;
     for (let i = 0; i < cols.length; i++) for (let j = i + 1; j < cols.length; j++) {
       const a = cols[i], b = cols[j];
-      if (skip(a, b) || (!a.dyn && !b.dyn && entry.t != null && entry.t > 0)) continue;
+      if (skip(a, b) || (!a.dyn && !b.dyn && entry.t != null && entry.t > 0) || !boxesMeet(a.box, b.box)) continue;
       for (const [x, y] of [[a, b], [b, a]]) for (const p of sub(x.pts)) {
         const d = (x.ptR || 0) - y.sdf(p);
-        if (d > 1.5 && (!worst || d > worst.d)) worst = { d, a: x.id + (x.part ? '/' + x.part : ''), b: y.id + (y.part ? '/' + y.part : '') };
+        /* сквозное прохождение тонких деталей (стойка сквозь подушку) ограничено их толщиной — поэтому порог
+           ошибки — 4 см или 80 % полутолщины более тонкой детали */
+        const thin = Math.min(x.r || Infinity, y.r || Infinity), through = d >= Math.max(1.5, .8 * thin);
+        if (d > 1.5 && (!worst || d > worst.d)) worst = { d, through, a: x.id + (x.part ? '/' + x.part : ''), b: y.id + (y.part ? '/' + y.part : '') };
       }
     }
-    if (worst) push('equipment', worst.d > 4 ? 'error' : 'warn', `${worst.a} ⟂ ${worst.b}`, worst.d);
+    if (worst) push('equipment', worst.d > 4 || worst.through ? 'error' : 'warn', `${worst.a} ⟂ ${worst.b}`, worst.d);
   }
   /* 7. Тросы и ленты */
   for (const c of cols.filter(c => c.cable)) {
@@ -374,9 +404,10 @@ function checkFrame(R, entry = {}) {
         const p = V.mix(a, b, j / n);
         if (M.SIDES.some(s => V.dist(p, R['grip' + s]) < 9)) continue;
         if (i === 1 && j === 0) continue;
-        const dT = -M.torsoSDF(R, p, cache) + c.r; if (dT > worst) { worst = dT; where = 'torso'; }
-        const dH = -M.headSDF(R, p) + c.r; if (dH > worst) { worst = dH; where = 'head'; }
-        for (const s of M.SIDES) for (const k of ['ua', 'fa', 'th', 'sk']) { const d = -M.limbSDF(R, k, s, p) + c.r; if (d > worst) { worst = d; where = k + s; } }
+        if (!inBox(SB.body, p, BOX_M)) continue;
+        const dT = -torsoD(p) + c.r; if (dT > worst) { worst = dT; where = 'torso'; }
+        const dH = -headD(p) + c.r; if (dH > worst) { worst = dH; where = 'head'; }
+        for (const s of M.SIDES) for (const k of ['ua', 'fa', 'th', 'sk']) { const d = -limbD(k, s, p) + c.r; if (d > worst) { worst = d; where = k + s; } }
       }
     }
     if (worst > 1.0) push('cable', worst > 3 ? 'error' : 'warn', `${c.id} проходит сквозь ${where}`, worst);

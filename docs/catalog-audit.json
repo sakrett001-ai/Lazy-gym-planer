@@ -4,8 +4,8 @@
     "poses": 14039,
     "cameraPoses": 70195,
     "regionFrames": 56156,
-    "reconstructed": 116,
-    "authored": 23
+    "reconstructed": 0,
+    "authored": 139
   },
   "failures": []
 }

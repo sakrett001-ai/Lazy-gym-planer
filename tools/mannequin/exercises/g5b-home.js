@@ -143,7 +143,7 @@ const PIKED = once(() => pikeLayout(ctx([]), PKD));
 
 /* обратные отжимания: скамья поперёк (передняя грань z = 0), стул передним краем к z = 0 */
 const BDIP = { top: 44, edge: 0, gr: 2.2, hx: 21, gap: 2.5, distal: 38, feetX: 11, heelZ: 80, toe: [30, 40], flare: .25,
-  pelvis: [4, -4], lumbar: [0, 4], thoracic: [2, 12], neck: [4, 2], girdleTop: [-4, -6], girdleBot: [8, -14], reachTop: 54.6, reachBot: 41 };
+  pelvis: [4, -4], lumbar: [0, 4], thoracic: [2, 12], neck: [4, 2], girdleTop: [-4, -6], girdleBot: [8, -14], reachTop: 54.6, reachBot: 43.5 };
 const CDIP = { top: 45, edge: 0, gr: 1.5, hx: 15, gap: 2.5, distal: 38, turn: 20, feetX: 11, heelZ: 55, toe: [18, 24], flare: .2,
   pelvis: [4, -4], lumbar: [0, 4], thoracic: [2, 12], neck: [4, 2], girdleTop: [-4, -6], girdleBot: [8, -14], reachTop: 54.6, reachBot: 41 };
 const BDIP_L = once(() => dipLayout(ctx([]), BDIP)), CDIP_L = once(() => dipLayout(ctx([]), CDIP));

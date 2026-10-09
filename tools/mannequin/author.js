@@ -45,7 +45,7 @@ if (require.main === module) {
   const arg = k => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : null; };
   const only = arg('--only')?.split(',');
   const entries = bakeAll({ only });
-  if (!only) console.log('Записано:', write(entries), Object.keys(entries).length, 'упражнений');
+  if (!only) console.log('Записано:', write(entries), Object.keys(entries).filter(id => !id.startsWith('_')).length, 'упражнений');
   else console.log(JSON.stringify(Object.keys(entries)));
 }
 module.exports = { loadSpecs, bakeOne, bakeAll, write };

@@ -400,7 +400,7 @@ module.exports = {
       const f = C.fk(q), T = C.axes(q, 'thorax');
       for (const s of S) {
         const gh = f.P['gh' + s], lat = C.lat(q, s), fwd = T.z, up = T.y;
-        const d0 = V.unit(V.add(V.add(V.scale(lat, .94), fwd, .05), up, .2)), d1 = V.unit(V.add(V.add(V.scale(fwd, .9), up, -.3), lat, -.24));
+        const d0 = V.unit(V.add(V.add(V.scale(lat, .94), fwd, .05), up, .2)), d1 = V.unit(V.add(V.add(V.scale(fwd, .9), up, -.3), lat, -.19));
         const g = V.add(gh, slerpDir(V, d0, d1, e), 61.5);
         const pole = V.unit(V.mix(V.add(V.scale(fwd, -1), up, .25), V.add(V.add(lat, up, -.12), fwd, -.65), e));
         C.hold(q, s, g, pole, { pron: C.lerp(60, 25, e) });

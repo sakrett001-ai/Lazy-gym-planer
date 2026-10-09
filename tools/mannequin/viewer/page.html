@@ -131,7 +131,8 @@ $('cams').innerHTML=CAMS.map(([k,l])=>`<button type="button" data-cam="${k}" ari
 const hasFn=k=>has.has(k);
 const dataFor=t=>{const R=rig(t);return{exerciseId:cur.id,pose:R,body:Mannequin.bodyData(R),surfaces:[],values:{},regions:{},props:R.props.filter(p=>GymEquipment.visible(p,hasFn)),torsoRings:[],limbProfiles:{}};};
 function theme(){if(!view)return;view.scene.background=new T.Color(css('--stage'));view.scene.traverse(o=>{if(o.name==='floor')o.material.color.set(css('--floor'));if(o.isGridHelper)o.material.color.set(css('--grid'));});}
-function setCam(k){camKey=k;const c=CAMS.find(c=>c[0]===k),y=c[2]*Math.PI/180,e=c[3]*Math.PI/180,d=radius*3.0;
+/* дистанция — чтобы сфера, описанная вокруг сцены, целиком вошла в кадр по узкой стороне */
+function setCam(k){camKey=k;const c=CAMS.find(c=>c[0]===k),y=c[2]*Math.PI/180,e=c[3]*Math.PI/180,vf=camera.fov*Math.PI/180,hf=2*Math.atan(Math.tan(vf/2)*camera.aspect),d=radius/Math.sin(Math.min(vf,hf)/2)*1.02;
  camera.position.set(center.x-Math.sin(y)*Math.cos(e)*d,center.y-Math.sin(e)*d,center.z+Math.cos(y)*Math.cos(e)*d);controls.target.copy(center);controls.update();
  for(const b of $('cams').children)b.setAttribute('aria-pressed',String(b.dataset.cam===k));}
 function select(id,keepVars){
@@ -152,7 +153,7 @@ function drawAngles(R){
  $('angles').innerHTML='<tr><th></th><th style="text-align:right">Л</th><th style="text-align:right">П</th><th style="text-align:right">норма</th></tr>'+ROWS.map(([n,f,l])=>`<tr><th>${n}</th>${cell(f(a.L),l)}${cell(f(a.R),l)}<td class="lim">${l[0]}…${l[1]}</td></tr>`).join('')
   +`<tr><th>Поясница</th><td colspan="2">${a.lumbar[0].toFixed(0)}°</td><td class="lim">−25…50</td></tr><tr><th>Шея</th><td colspan="2">${a.neck[0].toFixed(0)}°</td><td class="lim">−60…50</td></tr>`;
 }
-function resize(){const r=$('stage').getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();}
+function resize(){const r=$('stage').getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();if(view)setCam(camKey);}
 new ResizeObserver(resize).observe($('stage'));
 let prev=performance.now();
 function frame(now){

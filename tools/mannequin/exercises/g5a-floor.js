@@ -589,14 +589,14 @@ module.exports = {
       const dip = (1 - Math.cos(4 * Math.PI * t)) / 2, lift = C.lerp(YTW.lift, YTW.low, dip) * C.D2R;
       /* форма: Y (45° от линии головы) → T (90°) в первой половине, T → W (локти согнуты) во второй */
       const ang = (t < .5 ? C.lerp(45, 90, C.ease(t / .5)) : C.lerp(90, 125, C.ease((t - .5) / .5))) * C.D2R;
-      const bend = t < .5 ? 5 : C.lerp(5, 78, C.ease((t - .5) / .5));
+      const bend = t < .5 ? 5 : C.lerp(5, 72, C.ease((t - .5) / .5));
       for (const s of S) {
         const g = C.M.SIGN[s], up = 1 - dip;
         q[s].girdle = [C.lerp(0, -4, up), C.lerp(-4, -15, up)];
         const gh = C.fk(q).P['gh' + s], ua = V.unit([g * Math.sin(ang) * Math.cos(lift), Math.sin(lift), Math.cos(ang) * Math.cos(lift)]);
         const E = V.add(gh, ua, C.M.B.ua);
         /* предплечье: от продолжения плеча поворачивается к голове (+Z) в горизонтальной плоскости на угол bend */
-        const fAng = ang - bend * C.D2R, fa = V.unit([g * Math.sin(fAng) * Math.cos(lift), Math.sin(lift) * (bend > 10 ? .5 : 1), Math.cos(fAng) * Math.cos(lift)]);
+        const fAng = ang - bend * C.D2R, fa = V.unit([g * Math.sin(fAng) * Math.cos(lift), Math.sin(lift) * (bend > 10 ? 0 : 1), Math.cos(fAng) * Math.cos(lift)]);
         const pole = bend > 10 ? V.unit(V.add(V.scale(fa, -1), ua, 1)) : [0, 1, 0];
         C.armTo(q, s, V.add(E, fa, C.M.B.fa), V.unit(V.add(pole, [0, 1, 0], bend > 10 ? 0 : 1)), { pron: 0, mode: 'fist' });
       }

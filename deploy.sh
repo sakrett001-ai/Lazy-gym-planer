@@ -3,6 +3,11 @@
 # Использование: ./deploy.sh; после проверенной сборки: ./deploy.sh --no-build
 set -e
 cd "$(dirname "$0")"
+# Атлас не публикуется, если хоть одно упражнение нарушает биомеханику или проходит сквозь инвентарь.
+if ! node tools/mannequin/check.js --quiet; then
+  echo "Проверка манекена не пройдена — публикация отменена (см. AGENTS.md)." >&2
+  exit 1
+fi
 case "${1-}" in
   '') node build.js ;;
   --no-build) ;;

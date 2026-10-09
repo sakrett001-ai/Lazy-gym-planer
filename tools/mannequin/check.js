@@ -9,7 +9,7 @@ function run({ only, samples = 41, entries } = {}) {
   entries = entries || bakeAll({ only });
   const report = [];
   for (const [id, e] of Object.entries(entries)) {
-    if (only && !only.includes(id)) continue;
+    if ((only && !only.includes(id)) || id.startsWith('_')) continue;
     const t0 = Date.now(), rig = EQ.rig(e), issues = checkClip(rig, e, { samples });
     /* вариант без необязательного инвентаря (например, гантели вместо гири) */
     const optional = (e.equipment || []).some(q => q.optional || q.optionalNot);

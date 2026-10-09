@@ -91,7 +91,7 @@ module.exports = {
       C.rootAtHip(q, 'R', [-1, 44 + 5.4 + 42.4, -24]);
       C.kneel(q, 'R', [-1, 44, -24], [0, 0, -1], [0, 1, 0], { toes: 'flat', plantar: 44 });
       let f = C.fk(q);
-      C.palm(q, 'R', [f.P.ghR[0] + 4, 44, f.P.ghR[2] + 12], [.9, 0, 1], [0, 1, 0], [-.4, 0, -1]);
+      C.palm(q, 'R', [f.P.ghR[0] + 4, 44, f.P.ghR[2] + 12], [.8, 0, 1], [0, 1, 0], [-.4, 0, -1]);
       C.foot(q, 'L', [33, 0, -22], 0, V.unit([.3, 0, 1]), { forward: V.unit([.22, 0, 1]) });
       f = C.fk(q);
       const T = C.axes(q, 'thorax'), gh = f.P.ghL;
@@ -197,10 +197,11 @@ module.exports = {
       const f = C.fk(q);
       for (const s of S) {
         const gh = f.P['gh' + s], lat = C.lat(q, s), fwd = [0, 0, 1];
-        const ang = C.lerp(66, -4, e) * C.D2R, rad = 58;
+        const ang = C.lerp(62, -4, e) * C.D2R, rad = 58;
         const dir = V.unit(V.add(V.scale(lat, Math.cos(ang)), fwd, Math.sin(ang)));
         const grip = V.add([L.gh[s][0], gh[1] - 3, L.gh[s][2]], dir, rad);
-        const tangent = V.unit(V.add(V.scale(lat, -Math.sin(ang)), fwd, Math.cos(ang)));
+        /* рукоять чуть наклонена внутренним концом вниз — запястье без локтевого отведения */
+        const tangent = V.unit(V.add(V.add(V.scale(lat, -Math.sin(ang)), fwd, Math.cos(ang)), [0, -1, 0], .22));
         const pole = V.unit(V.add(V.add([0, -.3, 0], lat, 1), [0, 0, -1], .2));
         C.grip(q, s, grip, tangent, pole);
       }
@@ -286,7 +287,7 @@ module.exports = {
       for (const s of S) {
         q[s].girdle = [C.lerp(-2, 4, e), C.lerp(12, -16, e)];
         const lat = C.lat(q, s), gh = f.P['gh' + s];
-        const g0 = V.add(V.add(gh, [0, -1, 0], 60), lat, 3), g1 = V.add(V.add(V.add(T.o, T.x, M.SIGN[s] * 26), T.y, 3), T.z, 5);
+        const g0 = V.add(V.add(gh, [0, -1, 0], 60), lat, 3), g1 = V.add(V.add(V.add(T.o, T.x, M.SIGN[s] * 28), T.y, 3), T.z, 8);
         const grip = V.add(V.mix(g0, g1, e), T.z, 5 * Math.sin(Math.PI * e));
         const pole = V.unit(V.mix(V.add([0, 0, -1], lat, .5), V.add(V.add([0, 1, 0], [0, 0, -1], .6), lat, .3), e));
         C.hold(q, s, grip, pole, { pron: C.lerp(0, -22, e) });
