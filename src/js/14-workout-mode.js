@@ -4,7 +4,7 @@ const WORKOUT_STORE='podhod.workout.v3';
 function workoutQueue(p){
   const q=[];
   for(const b of p.blocks){
-    if(b.kind==='list')for(const it of b.items)for(let k=0;k<it.rx.sets;k++)q.push({it,k,n:it.rx.sets,rest:it.rx.rest,phase:'Классика'});
+    if(b.kind==='list')for(const it of b.items)for(let k=0;k<it.rx.sets;k++)q.push({it,k,n:it.rx.sets,rest:restAfter(it.rx,k),phase:it.rx.static?`Статодинамика · серия ${Math.floor(k/3)+1} из ${it.rx.series}`:'Классика'});
     if(b.kind==='pair')for(let k=0;k<Math.max(b.sets,...b.items.map(it=>it.rx.sets));k++){
       const active=b.items.filter(it=>k<it.rx.sets);active.forEach((it,j)=>q.push({it,k,n:it.rx.sets,rest:j===active.length-1?b.rest:0,phase:`Суперсет ${b.letter} · круг ${k+1}`}));
     }
@@ -93,7 +93,7 @@ function commitWorkout(e){
   if(bad){$('#wv-error').textContent=msg;bad.setAttribute('aria-invalid','true');bad.focus();return;}
   const already=!!workoutValue(step),session=todaySession(ex.id,true);
   while(session.s.length<step.k)session.s.push(null);
-  session.s[step.k]=[kg,Math.round(reps*10)/10];session.target=Math.max(session.target||0,step.n);delete workout.drafts[workoutDraftKey(step)];
+  session.s[step.k]=[kg,Math.round(reps*10)/10];session.target=Math.max(session.target||0,step.n);if(step.it.rx.static)session.fmt='static';delete workout.drafts[workoutDraftKey(step)];
   logTouch(ex.id);logRefresh([ex.id]);workout.last=workout.index;
   if(already){workoutShow(workout.index);$('#wv-save-status').textContent='Изменения сохранены.';return;}
   const next=workoutFirstOpen(workout.queue,workout.index);

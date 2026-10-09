@@ -26,6 +26,8 @@ function motionFrame(F) {
   if (F.it.ex.anim.hold) t=0;
   /* замкнутый цикл (педали, бег, «велосипед»): фаза идёт по кругу без возврата назад */
   if (F.it.ex.anim.loop) {const p=((F.clock%total)+total)%total/total;t=p;index=p<.5?0:2;}
+  /* статодинамика: только рабочая часть амплитуды, без выпрямления и без провала */
+  const part=F.it.rx&&F.it.rx.partial;if(part&&!F.it.ex.anim.loop&&!F.it.ex.anim.hold)t=part[0]+(part[1]-part[0])*t;
   const a = F.it.ex.anim;
   let labels = a.eccFirst ? ['Опускание','Нижняя точка','Подъём','Верхняя точка'] : ['Рабочая фаза','Конечная точка','Возврат','Исходное положение'];
   if (F.it.ex.id === 'kbswing') labels=['Мах вперёд','Верхняя точка','Замах назад','Исходное положение'];
@@ -167,7 +169,7 @@ function selectMotion(it, clock=0) {
   $('#mv-exercise').value=it.ex.id;
   $('#mv-view').textContent=it.ex.viewNote||(it.ex.anim.view==='front'?'Вид спереди':'Вид сбоку');
   $('#mv-speed').value=String(motionPrefs.speed);$('#mv-joints').checked=!!motionPrefs.joints;$('#mv-trace').checked=!!motionPrefs.trace;$('#mv-vectors').checked=!!motionPrefs.vectors;
-  $('#mv-tempo').textContent=it.ex.anim.hold?'Удерживайте положение и дышите ровно.':it.ex.anim.timing||it.ex.g==='cardio'||it.ex.kind?'Ритм показан схематично. Замедление помогает разобрать движение.':`Темп задания: ${it.rx.tempo}. Скорость просмотра не меняет задание.`;
+  $('#mv-tempo').textContent=it.ex.anim.hold?'Удерживайте положение и дышите ровно.':it.ex.anim.timing||it.ex.g==='cardio'||it.ex.kind?'Ритм показан схематично. Замедление помогает разобрать движение.':it.rx.static?`Статодинамика: темп ${it.rx.tempo} без пауз, показана рабочая часть амплитуды — без выпрямления до конца и без расслабления внизу.`:`Темп задания: ${it.rx.tempo}. Скорость просмотра не меняет задание.`;
   const level={};it.ex.pri.forEach(m=>level[m]=1);it.ex.sec.forEach(m=>{if(!level[m])level[m]=.38;});
   $('#mv-muscles').innerHTML=muscleMapSvg(level,{labels:true,aria:'Основные и вспомогательные мышцы'});
   $('#mv-primary').textContent=it.ex.pri.map(m=>MUSCLE_NAMES[m]).join(', ');
@@ -261,6 +263,7 @@ function blocksText(p) {
     for (const it of b.items) {
       const r = it.rx;
       const side = r.uni ? ' на сторону' : '';
+      if (r.static) { lines.push(`${it.label}. ${it.name} — ${r.series} × 3 × ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}, темп ${r.tempo} без расслабления, отдых ${fmtRest(r.rest)}${r.series > 1 ? `, между сериями ${fmtRest(r.seriesRest)}` : ''}`); continue; }
       lines.push(r.circ ? `${it.label}. ${it.name} — ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}` : `${it.label}. ${it.name} — ${r.sets} × ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}${b.kind === 'list' ? `, отдых ${fmtRest(r.rest)}` : ''}`);
     }
   }
@@ -332,7 +335,7 @@ document.addEventListener('click', e => {
     const lvlMax = S.level === 'beg' ? 2 : 3;
     const tried = new Set((swaps.__tried && swaps.__tried[swapKey() + ':' + slot]) || []);
     /* ближайшие по смыслу: то же движение и те же мышцы — первыми */
-    let alts = EX.filter(ex => !inPlan.has(ex.id) && available(ex, plan.E) && ex.lvl <= lvlMax && (ex.g === cur.g || PATTERN[ex.id] === PATTERN[cur.id]))
+    let alts = EX.filter(ex => !inPlan.has(ex.id) && available(ex, plan.E) && ex.lvl <= lvlMax && (ex.g === cur.g || PATTERN[ex.id] === PATTERN[cur.id]) && (S.format !== 'static' || staticOk(ex)))
       .sort((a, b) => analogScore(cur, b) - analogScore(cur, a));
     const msgEl = t.querySelector('span');
     if (!alts.length) { msgEl.textContent = 'Замены нет'; setTimeout(() => { msgEl.textContent = 'Заменить'; }, 1800); return; }

@@ -57,9 +57,9 @@ function analogNote(a, b, E) {
   return out.slice(0, 3).join('; ');
 }
 /* лучшие замены упражнения ex среди доступных при оборудовании E */
-function analogsFor(ex, E, {exclude = new Set(), lvlMax = 3, limit = 5, min = .45} = {}) {
+function analogsFor(ex, E, {exclude = new Set(), lvlMax = 3, limit = 5, min = .45, ok = null} = {}) {
   const cardio = ex.g === 'cardio';
-  return EX.filter(b => b !== ex && !exclude.has(b.id) && available(b, E) && b.lvl <= lvlMax && (b.g === 'cardio') === cardio)
+  return EX.filter(b => b !== ex && !exclude.has(b.id) && available(b, E) && b.lvl <= lvlMax && (b.g === 'cardio') === cardio && (!ok || ok(b)))
     .map(b => ({ex:b, score:analogScore(ex, b)}))
     .filter(r => r.score >= min)
     .sort((x, y) => y.score - x.score)

@@ -157,12 +157,23 @@ const e1rm = (kg, reps) => kg * (1 + Math.min(reps, 12) / 30);
 
 /* ---------- подсказка по двойной прогрессии ---------- */
 function suggest(it) {
-  const ex = it.ex, lt = loadType(ex), past = pastSessions(ex.id);
+  /* статодинамика и обычные подходы ведутся раздельно: вес в них отличается примерно вдвое */
+  const ex = it.ex, lt = loadType(ex), all = pastSessions(ex.id), past = all.filter(s => (s.fmt === 'static') === !!it.rx.static);
   const [lo, hi] = parseRange(it.rx.reps);
   const unit = ex.kind === 'time' ? ' с' : ex.kind === 'dist' ? ' м' : '';
   const week = S.mode === 'program' ? WEEKS[S.week - 1] : null;
   const step = stepFor(it);
   const res = {tone:'new', kg:null, reps:[], text:'', prev:null};
+  if (it.rx.static && !past.length) {
+    const last = all[all.length - 1], kgs = last ? last.s.filter(Boolean).map(x => x[0]).filter(v => v > 0) : [];
+    if (lt === 'kg' && kgs.length) {
+      const w = Math.max(...kgs); res.kg = roundTo(w * .6, step);
+      res.text = `Статодинамика: около ${fmtKg(res.kg)} кг — примерно 60% от прошлого рабочего веса (${fmtKg(w)} кг). К концу подхода — сильное жжение, но не отказ.`;
+    } else res.text = lt === 'kg' ? 'Первая запись в статодинамике. Возьмите около половины обычного рабочего веса: к концу подхода — сильное жжение, но не отказ.'
+      : lt === 'assist' ? 'Первая запись в статодинамике. Подберите противовес, при котором к концу подхода сильное жжение, но не отказ.'
+      : 'Первая запись в статодинамике. Отметьте, сколько медленных повторов получилось в каждом подходе.';
+    return res;
+  }
   if (!past.length) {
     res.text = lt === 'assist' ? `Первая запись. Подберите противовес, с которым ${lo === hi ? lo : lo + '–' + hi} повторов даются с запасом в 2.` : lt === 'kg'
       ? (ex.kind === 'dist' ? 'Первая запись. Возьмите тяжёлые снаряды, с которыми проходите дистанцию без остановок.' : `Первая запись. Подберите вес, с которым ${lo === hi ? lo : lo + '–' + hi}${unit} даются с запасом в 2 повтора.`)
@@ -246,7 +257,7 @@ function logRows(it) {
     const phKg = sg.kg != null ? fmtKg(sg.kg) : (lt === 'kg' ? '' : '—');
     const phR = sg.reps[k] ?? sg.reps[sg.reps.length - 1] ?? (lo === hi ? String(lo) : `${lo}–${hi}`);
     const done = !!v;
-    rows += `<div class="lt-r${done ? ' done' : ''}" data-k="${k}">
+    rows += `<div class="lt-r${done ? ' done' : ''}${it.rx.static && k > 0 && k % 3 === 0 ? ' lt-series' : ''}" data-k="${k}">
       <span class="lt-n">${k + 1}</span><span class="lt-p">${pTxt}</span>
       ${lt === 'none' ? '' : `<input class="lt-in" id="kg-${ex.id}-${k}" data-f="kg" type="text" inputmode="decimal" autocomplete="off" aria-label="Вес, подход ${k + 1}" placeholder="${phKg}" value="${done && v[0] != null ? fmtKg(v[0]) : ''}">`}
       <input class="lt-in" id="rp-${ex.id}-${k}" data-f="reps" type="text" inputmode="numeric" autocomplete="off" aria-label="${repLabel(ex)}, подход ${k + 1}" placeholder="${phR}" value="${done ? v[1] : ''}">
@@ -264,7 +275,8 @@ function logBlock(it) { return `<div class="c-log" data-log="${it.ex.id}">${logR
 
 /* ---------- история упражнения ---------- */
 function metricOf(ex) {
-  if (loadType(ex) === 'kg' && ex.kind !== 'dist') return {name:'Расчётный максимум', unit:'кг', f:s => { const v = s.s.filter(x => x && x[0] > 0).map(x => e1rm(x[0], x[1])); return v.length ? Math.max(...v) : null; }};
+  /* расчётный максимум по медленным подходам без расслабления занижен — статодинамика в него не входит */
+  if (loadType(ex) === 'kg' && ex.kind !== 'dist') return {name:'Расчётный максимум', unit:'кг', f:s => { if (s.fmt === 'static') return null; const v = s.s.filter(x => x && x[0] > 0).map(x => e1rm(x[0], x[1])); return v.length ? Math.max(...v) : null; }};
   if (ex.kind === 'time') return {name:'Лучший подход', unit:'с', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
   if (ex.kind === 'dist') return {name:'Лучшая дистанция', unit:'м', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
   return {name:'Лучший подход', unit:'повт.', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
@@ -299,7 +311,7 @@ function histHtml(ex) {
   const m = metricOf(ex);
   const pts = ss.map(s => ({d:s.d, v:m.f(s)})).filter(p => p.v != null).slice(-24);
   const best = pts.length ? Math.max(...pts.map(p => p.v)) : null;
-  const rows = ss.slice(-6).reverse().map(s => `<li><span class="h-d">${fmtDay(s.d, true)}${s.wk ? `<small>нед. ${s.wk}</small>` : ''}</span>
+  const rows = ss.slice(-6).reverse().map(s => `<li><span class="h-d">${fmtDay(s.d, true)}${s.wk ? `<small>нед. ${s.wk}</small>` : ''}${s.fmt === 'static' ? '<small>статодинамика</small>' : ''}</span>
     <span class="h-s">${s.s.filter(Boolean).map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(' · ')}</span>
     <button type="button" class="h-del" data-del="${ex.id}" data-d="${s.d}" aria-label="Удалить запись за ${fmtDay(s.d, true)}">Удалить</button></li>`).join('');
   return `<div class="h-chart"><p class="h-cap">${m.name}, ${m.unit}${best != null ? ` · лучший ${fmtKg(Math.round(best * 2) / 2)}` : ''}</p>${sparkSvg(pts, m.unit)}</div>
@@ -518,6 +530,7 @@ function tickSet(btn) {
   while (s.s.length < k) s.s.push(null);
   s.s[k] = [kg, Math.round(reps * 10) / 10];
   s.target=Math.max(s.target||0,it.rx.circ?(it.rounds||it.rx.sets):it.rx.sets);
+  if (it.rx.static) s.fmt = 'static';
   if (kgIn) kgIn.value = kg != null ? fmtKg(kg) : '';
   rIn.value = s.s[k][1];
   row.classList.add('done'); btn.setAttribute('aria-pressed', 'true');
@@ -525,8 +538,8 @@ function tickSet(btn) {
   const total = it.rx.circ ? 0 : it.rx.sets;
   const doneN = s.s.filter(Boolean).length;
   if (!it.rx.circ) {
-    const r = it.rx.restShown !== undefined ? it.rx.restShown : it.rx.rest;
-    if (r) startRest(r, doneN >= total ? 'Отдых перед следующим упражнением' : `Отдых после подхода ${doneN}`);
+    const r = restAfter(it.rx, doneN - 1);
+    if (r) startRest(r, doneN >= total ? 'Отдых перед следующим упражнением' : it.rx.static && doneN % 3 === 0 ? `Отдых после серии ${doneN / 3}` : `Отдых после подхода ${doneN}`);
   }
 }
 function editSet(inp) {

@@ -70,7 +70,8 @@ function autoregHtml() {
 /* облегчённый режим влияет на дозировку в одиночном режиме */
 function applyLight(rx, ex) {
   if (!AR.light || S.mode === 'program') return rx;
-  if (!rx.circ) rx.sets = Math.max(2, Math.ceil(rx.sets * 0.6));
+  if (rx.static) { rx.series = Math.max(1, rx.series - 1); rx.sets = rx.series * 3; }
+  else if (!rx.circ) rx.sets = Math.max(2, Math.ceil(rx.sets * 0.6));
   rx.light = true;
   return rx;
 }
