@@ -229,7 +229,8 @@ BIND.lever=(e,R)=>{
 BIND.sled=(e,R)=>{
  const A=toCat(e.rail[0]),Bp=toCat(e.rail[1]),z=V.unit(V.sub(Bp,A)),T=bodyPoint(R,e.bind),id=e.id||'sled';
  const s=Math.max(0,Math.min(V.dist(A,Bp),V.dot(V.sub(T,A),z)+(e.shift||0))),O=V.add(A,z,s);
- const y=ortho(V.unit(dirCat(e.up||[0,1,0])),z),x=V.cross(y,z),L=p=>V.add(V.add(V.add(O,x,p[0]),y,p[1]),z,p[2]);
+ /* в координатах каталога (Y отражён) векторное произведение меняет знак: x = −(y×z) даёт правую тройку мира */
+ const y=ortho(V.unit(dirCat(e.up||[0,1,0])),z),x=V.scale(V.cross(y,z),-1),L=p=>V.add(V.add(V.add(O,x,p[0]),y,p[1]),z,p[2]);
  return(e.parts||[]).map((p,i)=>{
   const q={...p,id:id+':'+(p.name||i),mount:p.mount?id+':'+p.mount:e.mountTo,tone:p.tone||'frame',role:p.role||'frame'};
   if(p.kind==='obox'){q.c=L(p.c);q.x=x;q.y=y;q.z=z;}
@@ -334,7 +335,7 @@ function build(list,R){
  const key=JSON.stringify(list.filter(e=>TYPES[e.type]));
  let st=STATIC_CACHE.get(key);if(!st){st=staticParts(list);STATIC_CACHE.set(key,st);if(STATIC_CACHE.size>64)STATIC_CACHE.delete(STATIC_CACHE.keys().next().value);}
  const out=st.parts.map(p=>({...p}));
- for(const e of list)if(BIND[e.type])for(const p of BIND[e.type](e,R)){if(e.optional)p.optional=e.optional;if(e.optionalNot)p.optionalNot=e.optionalNot;out.push(p);}
+ for(const e of list)if(BIND[e.type])for(const p of BIND[e.type](e,R)){p.dyn=true;if(e.optional)p.optional=e.optional;if(e.optionalNot)p.optionalNot=e.optionalNot;out.push(p);}
  for(const p of out){const src=list.find(e=>p.id&&p.id.startsWith((e.id||e.type)+':'));if(p.optional==null&&src?.optional)p.optional=src.optional;if(p.optionalNot==null&&src?.optionalNot)p.optionalNot=src.optionalNot;}
  return out;
 }

@@ -20,12 +20,23 @@ h1{font:600 clamp(19px,2.6vw,26px)/1.15 var(--display);letter-spacing:.01em;marg
 @media (max-width:1100px){.grid{grid-template-columns:minmax(0,1fr) 300px}.list{grid-column:1/-1}}
 @media (max-width:720px){.grid{grid-template-columns:minmax(0,1fr)}}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;min-width:0}
-.list{display:flex;flex-direction:column;gap:6px}
-@media (max-width:1100px){.list{flex-direction:row;overflow-x:auto;padding-bottom:6px}.list button{flex:0 0 210px}}
-.list button{all:unset;cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:8px 10px;border-radius:8px;border:1px solid transparent}
-.list button:hover{background:var(--chip)}
-.list button[aria-pressed="true"]{border-color:var(--accent);background:var(--chip)}
-.list button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.list{display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 120px);position:sticky;top:12px}
+@media (max-width:1100px){.list{grid-column:1/-1;max-height:none;position:static}.items{max-height:240px}}
+.items{overflow-y:auto;display:flex;flex-direction:column;gap:2px;min-height:0;overscroll-behavior:contain}
+.items h3{font:600 11px var(--body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:10px 4px 2px}
+.items h3:first-child{margin-top:2px}
+.search{font:14px var(--body);color:var(--ink);background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:7px 10px;width:100%;box-sizing:border-box}
+.search:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.filters{display:flex;gap:4px;flex-wrap:wrap}
+.filters button{font:500 12px var(--body);color:var(--muted);background:none;border:1px solid var(--line);border-radius:99px;padding:3px 9px;cursor:pointer}
+.filters button[aria-pressed="true"]{color:var(--accent);border-color:var(--accent)}
+.stats{font:12px var(--mono);color:var(--muted);margin:0}
+.nav{display:flex;gap:6px}
+.vars{display:flex;flex-wrap:wrap;gap:10px}
+.list .items button{all:unset;cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:7px 10px;border-radius:8px;border:1px solid transparent}
+.list .items button:hover{background:var(--chip)}
+.list .items button[aria-pressed="true"]{border-color:var(--accent);background:var(--chip)}
+.list .items button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .list .nm{font-weight:500;line-height:1.25}
 .list .id{grid-column:1;font:12px var(--mono);color:var(--muted)}
 .pill{font:500 11px/1 var(--mono);padding:4px 7px;border-radius:99px;white-space:nowrap;align-self:start;letter-spacing:.02em}
@@ -66,10 +77,15 @@ details ul{margin:6px 0 0;padding-left:18px;font-size:12px;color:var(--muted)}
 <div class="wrap">
  <header>
   <h1>Манекен атласа</h1>
-  <p class="lede">Пилот: упражнения с ваших скриншотов на новом манекене и реальных тренажёрах. Крутите сцену пальцем или мышью, двигайте фазу, смотрите проверки.</p>
+  <p class="lede">Все упражнения атласа на новом манекене и реальных тренажёрах — до публикации на сайте. Крутите сцену пальцем или мышью, двигайте фазу, смотрите проверки.</p>
+  <p class="stats" id="stats"></p>
  </header>
  <div class="grid">
-  <nav class="panel list" id="list" aria-label="Упражнения"></nav>
+  <nav class="panel list" aria-label="Упражнения">
+   <input class="search" id="q" type="search" placeholder="Поиск: название или id" aria-label="Поиск упражнения">
+   <div class="filters" id="filters"><button type="button" data-f="all" aria-pressed="true">Все</button><button type="button" data-f="issues" aria-pressed="false">С замечаниями</button></div>
+   <div class="items" id="list"></div>
+  </nav>
   <section class="stagebox">
    <div class="stage" id="stage">
     <canvas id="cv" aria-label="Трёхмерная сцена упражнения"></canvas>
@@ -81,7 +97,9 @@ details ul{margin:6px 0 0;padding-left:18px;font-size:12px;color:var(--muted)}
     <input id="phase" type="range" min="0" max="1000" value="0" aria-label="Фаза движения">
     <span class="tval" id="tval">t=0.00</span>
     <label><input id="joints" type="checkbox"> центры суставов</label>
+    <span class="nav"><button id="prev" type="button" aria-label="Предыдущее упражнение">←</button><button id="next" type="button" aria-label="Следующее упражнение">→</button></span>
    </div>
+   <div class="vars" id="vars"></div>
    <p class="phase" id="phaseText"></p>
   </section>
   <aside class="side">
@@ -103,24 +121,31 @@ const camera=new T.PerspectiveCamera(30,4/3,.05,60),controls=new X.OrbitControls
 let view=null,rig=null,cur=null,t=0,clock=0,playing=!matchMedia('(prefers-reduced-motion: reduce)').matches,joints=false,camKey='angle',center=new T.Vector3(),radius=2;
 const CAMS=[['angle','Под углом',40,-22],['side','Сбоку',90,0],['front','Спереди',0,0],['back','Сзади',180,0],['above','Сверху',35,-55]];
 const sevPill=r=>{const e=r.issues.filter(i=>i.severity==='error').length,w=r.issues.length-e;return e?`<span class="pill bad">${e} ошиб.</span>`:w?`<span class="pill warn">${w} предупр.</span>`:'<span class="pill ok">чисто</span>';};
-$('list').innerHTML=REVIEW.map(r=>`<button type="button" data-id="${r.id}" aria-pressed="false"><span class="nm">${r.name}</span>${sevPill(r)}<span class="id">${r.id}</span></button>`).join('');
+const OPT={kb:'гиря',db:'гантели',bb:'штанга',incline:'наклонная скамья'};let filter='all',query='',has=new Set();
+const errN=REVIEW.filter(r=>r.issues.some(i=>i.severity==='error')).length,warnN=REVIEW.filter(r=>r.issues.length&&!r.issues.some(i=>i.severity==='error')).length;
+$('stats').textContent=`${REVIEW.length} упражнений · с ошибками ${errN} · с предупреждениями ${warnN} · чисто ${REVIEW.length-errN-warnN}`;
+const shown=()=>REVIEW.filter(r=>(filter==='all'||r.issues.length)&&(!query||(r.name+' '+r.id).toLowerCase().includes(query)));
+function renderList(){let g=null;$('list').innerHTML=shown().map(r=>{const h=r.group!==g?`<h3>${g=r.group}</h3>`:'';return h+`<button type="button" data-id="${r.id}" aria-pressed="${cur?.id===r.id}"><span class="nm">${r.name}</span>${sevPill(r)}<span class="id">${r.id}</span></button>`;}).join('')||'<p class="phase">Ничего не найдено</p>';}
+renderList();
 $('cams').innerHTML=CAMS.map(([k,l])=>`<button type="button" data-cam="${k}" aria-pressed="${k==='angle'}">${l}</button>`).join('');
-const dataFor=t=>{const R=rig(t);return{exerciseId:cur.id,pose:R,body:Mannequin.bodyData(R),surfaces:[],values:{},regions:{},props:R.props,torsoRings:[],limbProfiles:{}};};
+const hasFn=k=>has.has(k);
+const dataFor=t=>{const R=rig(t);return{exerciseId:cur.id,pose:R,body:Mannequin.bodyData(R),surfaces:[],values:{},regions:{},props:R.props.filter(p=>GymEquipment.visible(p,hasFn)),torsoRings:[],limbProfiles:{}};};
 function theme(){if(!view)return;view.scene.background=new T.Color(css('--stage'));view.scene.traverse(o=>{if(o.name==='floor')o.material.color.set(css('--floor'));if(o.isGridHelper)o.material.color.set(css('--grid'));});}
 function setCam(k){camKey=k;const c=CAMS.find(c=>c[0]===k),y=c[2]*Math.PI/180,e=c[3]*Math.PI/180,d=radius*3.0;
  camera.position.set(center.x-Math.sin(y)*Math.cos(e)*d,center.y-Math.sin(e)*d,center.z+Math.cos(y)*Math.cos(e)*d);controls.target.copy(center);controls.update();
  for(const b of $('cams').children)b.setAttribute('aria-pressed',String(b.dataset.cam===k));}
-function select(id){
- if(view)view.dispose();cur=REVIEW.find(r=>r.id===id);rig=GymEquipment.rig(CATALOG_POSES[id]);view=X.createCatalogScene(dataFor(0));theme();
+function select(id,keepVars){
+ if(view)view.dispose();cur=REVIEW.find(r=>r.id===id);if(!keepVars)has=new Set();
+ $('vars').innerHTML=cur.opts.map(k=>`<label><input type="checkbox" data-opt="${k}" ${has.has(k)?'checked':''}> есть ${OPT[k]||k}</label>`).join('');rig=GymEquipment.rig(CATALOG_POSES[id]);view=X.createCatalogScene(dataFor(0));theme();
  const box=new T.Box3();for(let i=0;i<=8;i++){view.apply(dataFor(i/8),{muscles:false,joints,color:()=>'#a7b3c6'});view.scene.traverse(o=>{if(o.isMesh&&o.visible&&o.name!=='floor'&&o.parent?.name!=='joint-dots')box.expandByObject(o);});}
  box.getCenter(center);radius=box.getSize(new T.Vector3()).length()/2;setCam(camKey);
- for(const b of $('list').children)b.setAttribute('aria-pressed',String(b.dataset.id===id));
+ for(const b of $('list').querySelectorAll('button[data-id]')){const on=b.dataset.id===id;b.setAttribute('aria-pressed',String(on));if(on)b.scrollIntoView({block:'nearest'});}
  $('issues').innerHTML=cur.issues.length?`<ul class="issues">${cur.issues.map(i=>`<li><span class="pill ${i.severity==='error'?'bad':'warn'}">${i.severity==='error'?'ошибка':'предупр.'}</span><span>${i.detail}${i.depth!=null?` · ${i.depth} ${i.unit||'см'}`:''} · t=${i.t}</span></li>`).join('')}</ul>`:'<p class="empty">Нарушений нет ни в одном из 41 кадра.</p>';
  const pl=(n,a,b,c)=>{const m=n%10,h=n%100;return m===1&&h!==11?a:m>=2&&m<=4&&(h<12||h>14)?b:c;};const b=cur.before;$('before').innerHTML=`<p class="before">${b.errors.length?`<b>${b.errors.length}</b> ${pl(b.errors.length,'грубая ошибка','грубые ошибки','грубых ошибок')}`:'Грубых ошибок не было'}${b.warns?`, ${b.warns} ${pl(b.warns,'предупреждение','предупреждения','предупреждений')}`:''}.</p>`+(b.errors.length?`<details><summary>Что было не так</summary><ul>${b.errors.map(e=>`<li>${e}</li>`).join('')}</ul></details>`:'');
- const [c0,c1]=cur.cues||[];$('phaseText').textContent=cur.eccFirst?`t=0 — исходное положение, t=1 — нижняя точка. ${c1||''}`:`t=0 — исходное положение, t=1 — конечная точка. ${c0||''}`;
+ const [c0,c1]=cur.cues||[];$('phaseText').textContent=cur.loop?`Цикл: t=0 и t=1 — одна и та же точка. ${c0||''}`:cur.eccFirst?`t=0 — исходное положение, t=1 — нижняя точка. ${c1||''}`:`t=0 — исходное положение, t=1 — конечная точка. ${c0||''}`;
  try{localStorage.setItem('mv.ex',id);}catch(e){}
 }
-const ROWS=[['Колено',A=>A.knee,[0,145]],['Бедро (сгиб.)',A=>A.hipFlex,[-20,125]],['Бедро (отвед.)',A=>A.hipAbd,[-25,45]],['Голеностоп',A=>A.dorsi,[-50,20]],['Локоть',A=>A.elbow,[0,150]],['Плечо (подъём)',A=>A.elevation,[0,180]],['Предплечье (прон.)',A=>A.pron,[-90,85]],['Запястье',A=>A.wristFlex,[-75,80]]];
+const ROWS=[['Колено',A=>A.knee,[0,145]],['Бедро (сгиб.)',A=>A.hipFlex,[-20,125]],['Бедро (отвед.)',A=>A.hipAbd,[-25,45]],['Голеностоп',A=>A.dorsi,[-62,36]],['Локоть',A=>A.elbow,[0,150]],['Плечо (подъём)',A=>A.elevation,[0,180]],['Предплечье (прон.)',A=>A.pron,[-90,85]],['Запястье',A=>A.wristFlex,[-75,80]]];
 let lastAngles=0;
 function drawAngles(R){
  const a=X.angles(R),cell=(v,[lo,hi])=>`<td class="${v<lo-.5||v>hi+.5?'over':''}">${v.toFixed(0)}°</td>`;
@@ -132,16 +157,21 @@ new ResizeObserver(resize).observe($('stage'));
 let prev=performance.now();
 function frame(now){
  const dt=Math.min(.1,(now-prev)/1000);prev=now;
- if(playing&&!cur.hold){clock=(clock+dt/4)%1;const q=clock<.5?clock*2:2-clock*2;t=.5-.5*Math.cos(Math.PI*q);$('phase').value=String(Math.round(t*1000));}
+ if(playing&&!cur.hold){clock=(clock+dt/4)%1;if(cur.loop)t=clock;else{const q=clock<.5?clock*2:2-clock*2;t=.5-.5*Math.cos(Math.PI*q);}$('phase').value=String(Math.round(t*1000));}
  $('tval').textContent='t='+t.toFixed(2);
  const d=dataFor(t);view.apply(d,{muscles:false,joints,color:()=>'#a7b3c6'});controls.update();renderer.render(view.scene,camera);
  if(now-lastAngles>150){drawAngles(d.pose);lastAngles=now;}
  requestAnimationFrame(frame);
 }
 $('list').addEventListener('click',e=>{const b=e.target.closest('button[data-id]');if(b)select(b.dataset.id);});
+$('q').addEventListener('input',e=>{query=e.target.value.trim().toLowerCase();renderList();});
+$('filters').addEventListener('click',e=>{const b=e.target.closest('button[data-f]');if(!b)return;filter=b.dataset.f;for(const x of $('filters').children)x.setAttribute('aria-pressed',String(x===b));renderList();});
+const step=d=>{const l=shown(),i=l.findIndex(r=>r.id===cur.id),n=l[(i+d+l.length)%l.length];if(n)select(n.id);};
+$('prev').addEventListener('click',()=>step(-1));$('next').addEventListener('click',()=>step(1));
+$('vars').addEventListener('change',e=>{const k=e.target.dataset.opt;if(!k)return;e.target.checked?has.add(k):has.delete(k);select(cur.id,true);});
 $('cams').addEventListener('click',e=>{const b=e.target.closest('button[data-cam]');if(b)setCam(b.dataset.cam);});
 $('play').addEventListener('click',()=>{playing=!playing;$('play').textContent=playing?'Пауза':'Пуск';$('play').setAttribute('aria-pressed',String(playing));});
-$('phase').addEventListener('input',e=>{playing=false;$('play').textContent='Пуск';$('play').setAttribute('aria-pressed','false');t=+e.target.value/1000;clock=t/2;});
+$('phase').addEventListener('input',e=>{playing=false;$('play').textContent='Пуск';$('play').setAttribute('aria-pressed','false');t=+e.target.value/1000;clock=cur.loop?t:t/2;});
 $('joints').addEventListener('change',e=>{joints=e.target.checked;});
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',theme);new MutationObserver(theme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 let first=REVIEW[0].id;try{const s=localStorage.getItem('mv.ex');if(s&&CATALOG_POSES[s])first=s;}catch(e){}

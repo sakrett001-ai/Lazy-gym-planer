@@ -37,7 +37,11 @@ function angles(R) {
     A.twist = g * st.twist;
     const fa = rel(F['ua' + s], F['fa' + s]); A.elbow = -Math.atan2(fa[7], fa[4]) * M.R2D;
     const pr = rel(F['fa' + s], F['fd' + s]); A.pron = -g * Math.atan2(pr[2], pr[0]) * M.R2D;
-    const wr = M.eulerYZX(rel(F['fd' + s], F['hand' + s])); A.wristFlex = -g * wr[1]; A.wristDev = -wr[2]; A.wristTwist = wr[0];
+    /* запястье: направление кисти в рамке дистального предплечья — устойчиво и при разгибании ~90° */
+    const wr = rel(F['fd' + s], F['hand' + s]), d = [-wr[1], -wr[4], -wr[7]];
+    A.wristFlex = Math.atan2(-g * d[0], -d[1]) * M.R2D; A.wristDev = Math.asin(clamp(d[2], -1, 1)) * M.R2D;
+    { const ex = M3.mul(M3.rz(-g * A.wristFlex), M3.rx(-A.wristDev)), zE = M3.col(ex, 2), zH = M3.col(wr, 2), ax = V.unit(d);
+      const a1 = V.unit(V.perp(zE, ax)), a2 = V.unit(V.perp(zH, ax)); A.wristTwist = Math.atan2(V.dot(V.cross(a1, a2), ax), V.dot(a1, a2)) * M.R2D; }
     const th = rel(F.pelvis, F['th' + s]), fem = M3.v(th, [0, -1, 0]), ht = M.swingTwist(th);
     A.hipFlex = Math.atan2(fem[2], -fem[1]) * M.R2D; A.hipAbd = Math.atan2(g * fem[0], Math.hypot(fem[1], fem[2])) * M.R2D; A.hipRot = g * ht.twist;
     const kn = rel(F['th' + s], F['sk' + s]); A.knee = Math.atan2(kn[7], kn[4]) * M.R2D;
@@ -55,11 +59,13 @@ const LIM = {
   elevation: [0, 180], extension: 60, horizExt: 45, elevatedPosterior: 35, twist: [-80, 95],
   elbow: [-5, 150], pron: [-90, 85], wristFlex: [-75, 80], wristDev: [-30, 22],
   hipFlex: [-20, 125], hipAbd: [-25, 45], hipRot: [-40, 45], knee: [-5, 145],
-  dorsi: [-50, 20], inversion: [-20, 32], mtp: [-40, 80]
+  dorsi: [-62, 36], inversion: [-20, 32], mtp: [-40, 80]
 };
 const TOL = 10;
-function romChecks(R) {
-  const a = angles(R), out = [];
+function romChecks(R, entry = {}) {
+  const a = angles(R), out = [], contacts = entry.contacts || R.contacts || [];
+  /* ладонь, опёртая на пол или опору, разгибается пассивно под весом тела (до ~90°, отжимания) */
+  const flat = s => R.hands?.[s] === 'flat' || contacts.some(k => k.body === 'palm' + s);
   const lim = (v, [lo, hi], name, tol = TOL) => { if (v > hi) out.push({ detail: `${name}: ${v.toFixed(0)}° > ${hi}°`, excess: v - hi, tol }); else if (v < lo) out.push({ detail: `${name}: ${v.toFixed(0)}° < ${lo}°`, excess: lo - v, tol }); };
   lim(a.lumbar[0], LIM.lumbarFlex, 'поясница сгибание/разгибание'); lim(a.lumbar[1], LIM.lumbarLat, 'поясница наклон'); lim(a.lumbar[2], LIM.lumbarRot, 'поясница ротация');
   lim(a.thoracic[0], LIM.thoracicFlex, 'грудной отдел сгибание/разгибание'); lim(a.thoracic[1], LIM.thoracicLat, 'грудной отдел наклон'); lim(a.thoracic[2], LIM.thoracicRot, 'грудной отдел ротация');
@@ -77,13 +83,13 @@ function romChecks(R) {
     lim(A.twist, LIM.twist, n('плечо ротация'), 15);
     lim(A.elbow, LIM.elbow, n('локоть'), 5);
     lim(A.pron, LIM.pron, n('предплечье пронация/супинация'));
-    lim(A.wristFlex, LIM.wristFlex, n('запястье сгибание/разгибание')); lim(A.wristDev, LIM.wristDev, n('запястье отведение'));
+    lim(A.wristFlex, flat(s) ? [-90, LIM.wristFlex[1]] : LIM.wristFlex, n('запястье сгибание/разгибание')); lim(A.wristDev, LIM.wristDev, n('запястье отведение'));
     if (Math.abs(A.wristTwist) > 3) out.push({ detail: n('запястье скручено вокруг оси') + ` ${A.wristTwist.toFixed(0)}°`, excess: Math.abs(A.wristTwist), tol: 5 });
     lim(A.hipFlex, LIM.hipFlex, n('бедро сгибание/разгибание'));
     lim(A.hipAbd, LIM.hipAbd, n('бедро отведение/приведение'));
     lim(A.hipRot, LIM.hipRot, n('бедро ротация'));
     lim(A.knee, LIM.knee, n('колено'), 5);
-    lim(A.dorsi, LIM.dorsi, n('голеностоп'), 15);
+    lim(A.dorsi, LIM.dorsi, n('голеностоп'), 10);
     lim(A.inversion, LIM.inversion, n('стопа супинация/пронация'));
     if (Math.abs(A.ankleTwist) > 4) out.push({ detail: n('голеностоп скручен вокруг оси голени') + ` ${A.ankleTwist.toFixed(0)}°`, excess: Math.abs(A.ankleTwist), tol: 6 });
     lim(A.mtp, LIM.mtp, n('пальцы стопы'));
@@ -103,9 +109,9 @@ function sdCapsule(p, a, b, r) { const pa = V.sub(p, a), ba = V.sub(b, a), bb = 
 function sdOBB(p, c, axes, half) { const d = V.sub(p, c), q = axes.map((ax, i) => Math.abs(V.dot(d, ax)) - half[i]); return V.len(q.map(v => Math.max(v, 0))) + Math.min(Math.max(...q), 0); }
 function sdCyl(p, c, axis, r, halfH) { const d = V.sub(p, c), y = V.dot(d, axis), rad = V.len(V.perp(d, axis)), dx = rad - r, dy = Math.abs(y) - halfH; return Math.min(Math.max(dx, dy), 0) + Math.hypot(Math.max(dx, 0), Math.max(dy, 0)); }
 const linspace = (a, b, step) => { const n = Math.max(1, Math.ceil(V.dist(a, b) / step)), out = []; for (let i = 0; i <= n; i++) out.push(V.mix(a, b, i / n)); return out; };
-function beamAxes(s) { const y = V.unit(V.sub(s.b, s.a)); let z = V.perp(s.up || [0, -1, 0], y); if (V.len(z) < 1e-6) z = V.perp([0, 0, 1], y); z = V.unit(z); return [V.unit(V.cross(y, z)), y, z]; }
+function beamAxes(s) { const y = V.unit(V.sub(s.b, s.a)); let z = V.perp(s.up || [0, -1, 0], y); if (V.len(z) < 1e-6) z = V.perp([0, 0, 1], y); if (V.len(z) < 1e-6) z = V.perp([1, 0, 0], y); z = V.unit(z); return [V.unit(V.cross(y, z)), y, z]; }
 function collider(s) {
-  const c = { id: s.id, kind: s.kind, role: s.role || '', tone: s.tone || 'frame', mount: s.mount, free: !!s.free, part: s.part };
+  const c = { id: s.id, kind: s.kind, role: s.role || '', tone: s.tone || 'frame', mount: s.mount, free: !!s.free, part: s.part, dyn: !!s.dyn, group: s.group };
   c.soft = ['pad', 'mat'].includes(c.tone);
   if (s.kind === 'beam') {
     if (s.r) { c.sdf = p => sdCapsule(p, s.a, s.b, s.r); c.pts = linspace(s.a, s.b, 2); c.r = s.r; c.ptR = s.r; c.axis = [s.a, s.b]; }
@@ -184,6 +190,8 @@ function regionPoints(name, pts, R) {
   if (name === 'upperBack' || name === 'chest' || name === 'front' || name === 'belly') return pts.filter(p => p.seg === 'torso' && p.h >= (name === 'upperBack' ? 26 : name === 'belly' ? -4 : 10) && p.h <= (name === 'belly' ? 30 : 50));
   if (name === 'buttocks') return pts.filter(p => (p.seg === 'torso' && p.h <= 6) || (p.seg === 'th' && p.t <= .6));
   if (name === 'thighsBack') return pts.filter(p => p.seg === 'th');
+  if (name === 'shoulders') return pts.filter(p => (p.seg === 'torso' && p.h >= 47) || (p.seg === 'ua' && p.t <= .15));
+  if (name === 'neck') return pts.filter(p => p.seg === 'neck');
   if (name === 'headBack' || name === 'headAll') return pts.filter(p => p.seg === 'head');
   if (m) {
     const [, k, s] = m;
@@ -210,7 +218,7 @@ function checkFrame(R, entry = {}) {
   const declared = c => contacts.some(k => !/^grip/.test(k.body) && k.prop !== 'floor' && (c.id === k.prop || c.id.startsWith(k.prop + ':')));
   const isGripCol = (c, side) => c.grip || c.role === 'grip' || contacts.some(k => k.body === 'grip' + side && (c.id === k.prop || c.id.startsWith(k.prop + ':')));
   /* 1. Суставы */
-  const rom = romChecks(R);
+  const rom = romChecks(R, entry);
   for (const r of rom.list) push('rom', r.excess > r.tol ? 'error' : 'warn', r.detail, r.excess, '°');
   /* 2. Тело в инвентаре */
   for (const c of cols) {
@@ -230,7 +238,8 @@ function checkFrame(R, entry = {}) {
     for (const p of c.pts) {
       const dT = M.torsoSDF(R, p, cache), dH = M.headSDF(R, p), rr = c.ptR || 0;
       const tol = declared(c) ? (c.soft ? 4 : 2) : c.soft ? 2.5 : .8;
-      if (!c.grip && -dT + Math.min(rr, 2) > tol && (!worst || -dT + Math.min(rr, 2) - tol > worst.depth - worst.tol)) worst = { b: { seg: 'torso', side: 'C' }, depth: -dT + Math.min(rr, 2), tol };
+      const nearHand = c.grip && M.SIDES.some(sd => V.dist(p, R['grip' + sd]) < 10);
+      if (!nearHand && -dT + Math.min(rr, 2) > tol && (!worst || -dT + Math.min(rr, 2) - tol > worst.depth - worst.tol)) worst = { b: { seg: 'torso', side: 'C' }, depth: -dT + Math.min(rr, 2), tol };
       if (-dH + Math.min(rr, 2) > .8 && (!worst || -dH + Math.min(rr, 2) - .8 > worst.depth - worst.tol)) worst = { b: { seg: 'head', side: 'C' }, depth: -dH + Math.min(rr, 2), tol: .8 };
       for (const s of M.SIDES) for (const k of ['ua', 'fa', 'th', 'sk']) {
         if (c.grip && (k === 'fa')) continue;
@@ -340,6 +349,22 @@ function checkFrame(R, entry = {}) {
       if (!held && !resting && !onBody) push('free-weight', 'error', `${id} не в руке и не на опоре`);
     }
   }
+  /* 6б. Снаряд против снаряда: гриф в стойку, гантель в скамью, рычаг в раму.
+     Неподвижные детали сверяются один раз (на первом кадре), подвижные — в каждом. */
+  {
+    const item = c => String(c.id).split(':')[0], skip = (a, b) => item(a) === item(b) || a.mount === b.id || b.mount === a.id || a.cable || b.cable || a.unknown || b.unknown;
+    const sub = pts => pts.length <= 260 ? pts : pts.filter((_, i) => i % Math.ceil(pts.length / 260) === 0);
+    let worst = null;
+    for (let i = 0; i < cols.length; i++) for (let j = i + 1; j < cols.length; j++) {
+      const a = cols[i], b = cols[j];
+      if (skip(a, b) || (!a.dyn && !b.dyn && entry.t != null && entry.t > 0)) continue;
+      for (const [x, y] of [[a, b], [b, a]]) for (const p of sub(x.pts)) {
+        const d = (x.ptR || 0) - y.sdf(p);
+        if (d > 1.5 && (!worst || d > worst.d)) worst = { d, a: x.id + (x.part ? '/' + x.part : ''), b: y.id + (y.part ? '/' + y.part : '') };
+      }
+    }
+    if (worst) push('equipment', worst.d > 4 ? 'error' : 'warn', `${worst.a} ⟂ ${worst.b}`, worst.d);
+  }
   /* 7. Тросы и ленты */
   for (const c of cols.filter(c => c.cable)) {
     let worst = 0, where = '';
@@ -358,11 +383,16 @@ function checkFrame(R, entry = {}) {
   }
   /* 8. Равновесие: только если тело опирается лишь на пол */
   const active = contacts.filter(k => !(k.when && entry.t != null && (entry.t < k.when[0] || entry.t > k.when[1])));
-  if (!entry.dynamic && active.length && active.every(k => k.prop === 'floor')) {
-    const extra = []; for (const c of cols.filter(c => c.free && c.part !== 'plate')) { }
-    const freeMass = (entry.loads || []).map(l => [l.at === 'grips' ? V.mix(R.gripL, R.gripR, .5) : R[l.at], l.kg]);
-    const com = M.centerOfMass(R, freeMass).c;
-    const base = pts.filter(p => FLOOR - p.p[1] < 1.2 && ['foot', 'hand', 'sk', 'th', 'fa', 'torso'].includes(p.seg)).map(p => [p.p[0], p.p[2]]);
+  /* коврик и низкая платформа на полу считаются полом */
+  const floorLike = cols.filter(c => c.tone === 'mat' || (c.mount === 'floor' && c.role === 'support' && Math.min(...c.pts.map(p => FLOOR - p[1])) < .5 && Math.max(...c.pts.map(p => FLOOR - p[1])) < 4));
+  const isFloorLike = k => k.prop === 'floor' || floorLike.some(c => c.id === k.prop || c.id.startsWith(k.prop + ':'));
+  if (!entry.dynamic && active.length && active.every(isFloorLike)) {
+    /* масса снарядов в руках: гриф 20 кг + диски, гантель 12 кг, гиря 16 кг */
+    const plateKg = ([r, th]) => r >= 22 ? (th >= 5 ? 20 : th >= 4 ? 15 : 10) : r >= 11 ? 5 : r >= 9 ? 2.5 : 1.25;
+    const heldMass = props.filter(p => p.free && p.c && M.SIDES.some(sd => V.dist(R['grip' + sd], p.grip || p.c) < (p.kind === 'barbell' ? 70 : 12))).map(p => [p.c, p.kind === 'barbell' ? (p.len >= 200 ? 20 : 10) + 2 * (p.plates || []).reduce((a, q) => a + plateKg(q), 0) : p.kind === 'kettlebell' ? 16 : 12]);
+    const freeMass = (entry.loads || []).map(l => [l.at === 'grips' ? V.mix(R.gripL, R.gripR, .5) : R[l.at], l.kg]).concat(heldMass);
+    const com = M.centerOfMass(R, freeMass).c, top = Math.max(0, ...floorLike.map(c => FLOOR - Math.min(...c.pts.map(p => p[1]))));
+    const base = pts.filter(p => FLOOR - p.p[1] < 1.2 + top && ['foot', 'hand', 'sk', 'th', 'fa', 'torso'].includes(p.seg) && (FLOOR - p.p[1] < 1.2 || floorLike.some(c => c.sdf(p.p) < 1.5))).map(p => [p.p[0], p.p[2]]);
     if (base.length >= 3) {
       const hull = convexHull(base), d = hullDistance(hull, [com[0], com[2]]);
       if (d > 2) push('balance', d > 6 ? 'error' : 'warn', `центр масс вне площади опоры на ${d.toFixed(1)} см`, d);
@@ -398,7 +428,7 @@ function checkClip(frameAt, entry = {}, { samples = 41 } = {}) {
       if (!old) issues.set(key, { ...f, t: +t.toFixed(3), frames: 1 });
       else { old.frames++; if ((f.depth ?? 0) > (old.depth ?? 0)) Object.assign(old, { ...f, t: +t.toFixed(3), frames: old.frames, severity: old.severity === 'error' ? 'error' : f.severity }); else if (f.severity === 'error') old.severity = 'error'; }
     }
-    if (prev) for (const k of keys) { const d = V.dist(R[k], prev[k]); if (d > 14) issues.set('jump|' + k, { rule: 'jump', severity: 'error', detail: `${k} скачок ${d.toFixed(0)} см между кадрами`, t: +t.toFixed(3), frames: 1 }); }
+    if (prev) for (const k of keys) { const d = V.dist(R[k], prev[k]); if (d > (entry.dynamic ? 24 : 14)) issues.set('jump|' + k, { rule: 'jump', severity: 'error', detail: `${k} скачок ${d.toFixed(0)} см между кадрами`, t: +t.toFixed(3), frames: 1 }); }
     prev = R;
   }
   /* замкнутый цикл: конец совпадает с началом */

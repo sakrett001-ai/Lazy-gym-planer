@@ -37,6 +37,8 @@ function ctx(equipment) {
       const head = (sel) => { const f = R.frames.head; for (let i = 0; i < 26; i++) for (let j = 0; j < 13; j++) { const th = i / 26 * 2 * Math.PI, ph = j / 12 * Math.PI, d = [Math.sin(ph) * Math.cos(th), Math.cos(ph), Math.sin(ph) * Math.sin(th)]; if (!sel(d)) continue; const p = V.add(V.add(V.add(R.head, f.x, d[0] * M.B.head[0]), f.y, d[1] * M.B.head[1]), f.z, d[2] * M.B.head[2]); out.push(fromCat(p)); } };
       if (name === 'back') torso(-2, 52, Math.PI * .7, Math.PI);
       else if (name === 'upperBack') torso(26, 52, Math.PI * .7, Math.PI);
+      else if (name === 'shoulders') { torso(48, 56, 0, Math.PI); for (const s of ['L', 'R']) limb('ua', s, 0, .15, 0, 2 * Math.PI); }
+      else if (name === 'neck') { const R2 = M.catalogPose(q); for (let t = 0; t <= 1; t += .25) for (let a = 0; a < 2 * Math.PI; a += Math.PI / 8) out.push(fromCat(M.neckPoint(R2, t, a))); }
       else if (name === 'chest') torso(14, 46, 0, Math.PI * .3);
       else if (name === 'belly') torso(-4, 30, 0, Math.PI * .3);
       else if (name === 'front') torso(-6, 48, 0, Math.PI * .3);
@@ -122,6 +124,7 @@ function ctx(equipment) {
       const u = V.unit(up), d = V.unit(V.perp(shin, u)), lift = opts.kneeLift ?? 5.4;
       const K = V.add(contact, u, lift), hip = M.fk(q).P['hip' + s], L = V.dist(hip, K);
       if (Math.abs(L - M.B.th) > 1.2) throw Error(`Колено ${s}: от тазобедренного ${L.toFixed(1)} см вместо ${M.B.th}`);
+      if (opts.toes === 'instep' || opts.toes === 'toes') return C.kneelFoot(q, s, K, d, u, opts);
       const ankleH = opts.toes === 'tucked' ? 10 : 4.4, dh = ankleH - lift, horiz = Math.sqrt(M.B.sk ** 2 - dh ** 2);
       const A = V.add(V.add(K, d, horiz), u, dh), sd = V.unit(V.sub(A, K));
       const shR = M3.frameYZ(V.scale(sd, -1), V.scale(u, -1));
@@ -130,6 +133,25 @@ function ctx(equipment) {
       const toesR = opts.toes === 'tucked' ? M3.frameYZ(u, V.scale(d, -1)) : footR;
       const r = M.solveLeg(q, s, { o: A, R: footR, toesR }, V.scale(u, -1));
       return r;
+    },
+    /* Стопа при стоянии на коленях, по геометрии обуви:
+       'instep' — подъём стопы лежит на опоре (подошвенное сгибание plantar, наклон голени подбирается так,
+       что нижняя точка обуви касается опоры); 'toes' — пальцы подогнуты и стоят на опоре, разгибание пальцев mtp. */
+    kneelFoot(q, s, K, d, u, opts = {}) {
+      const lowest = () => { const f = M.fk(q), R = M.catalogPose(q), fr = ['foot', 'toes'].map(k => R.frames[k + s]); let m = Infinity;
+        for (const [k, F] of [['rear', fr[0]], ['toes', fr[1]]]) { const sp = M.SHOE[k]; for (const dx of [-.5, .5]) for (const dy of [-.5, .5]) for (const dz of [-.5, 0, .5]) { const p = fromCat(V.add(V.add(V.add(F.o, F.x, sp.c[0] + dx * sp.size[0]), F.y, sp.c[1] + dy * sp.size[1]), F.z, sp.c[2] + dz * sp.size[2])); m = Math.min(m, V.dot(V.sub(p, K), u)); } }
+        return m + (opts.kneeLift ?? 5.4); };
+      if (opts.toes === 'instep') {
+        const put = deg => { const a = deg * D2R, dir = V.add(V.scale(d, Math.cos(a)), u, Math.sin(a)), A = V.add(K, dir, M.B.sk); C.legTo(q, s, A, V.scale(u, -1), { dorsi: -(opts.plantar ?? 46) }); };
+        put(C.solve1D(deg => { put(deg); return lowest() - (opts.gap ?? -.3); }, -6, 35)); return q;
+      }
+      const g = (opts.mtp ?? 70), toesR = M3.frameYZ(u, V.scale(d, -1)), footR = M3.mul(toesR, M3.rx(g));
+      const contact = V.sub(K, V.scale(u, opts.kneeLift ?? 5.4));
+      const ankleAt = dist => V.sub(V.add(V.add(contact, d, dist), u, -M.B.toeSole), M3.v(footR, M.B.ball));
+      const dist = C.solve1D(x => V.dist(ankleAt(x), K) - M.B.sk, 15, 75);
+      const r = M.solveLeg(q, s, { o: ankleAt(dist), R: footR, toesR }, V.scale(u, -1));
+      if (r.reachError > .2) throw Error(`Колено ${s}: стопа не дотягивается (${r.reachError.toFixed(1)} см)`);
+      return q;
     },
     /* Поставить таз так, чтобы тазобедренный сустав стороны s оказался в точке p (ориентация таза не меняется) */
     rootAtHip(q, s, p) { const f = M.fk(q); q.root.p = V.add(q.root.p, V.sub(p, f.P['hip' + s])); return q; },

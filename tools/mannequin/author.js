@@ -28,6 +28,7 @@ function bakeOne(id, spec) {
   if (spec.dynamic) out.dynamic = spec.dynamic;
   if (spec.loop) out.loop = true;
   if (spec.laterality) out.laterality = spec.laterality;
+  if (spec.loads) out.loads = spec.loads;
   return out;
 }
 function bakeAll({ only } = {}) {

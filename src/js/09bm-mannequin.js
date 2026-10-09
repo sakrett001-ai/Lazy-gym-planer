@@ -420,12 +420,12 @@ function handShape(mode='relaxed',side='L',r=1.4){
    pts.push(P(.2,9.6,w));let used=0,prev=[.2,9.6],phi=-.6;
    while(used<len&&phi<3.3){const u=gu+rr*Math.sin(phi),v=gv+rr*Math.cos(phi);used+=Math.hypot(u-prev[0],v-prev[1]);prev=[u,v];pts.push(P(u,v,w*.96));phi+=.32;}
   }else{
-   const bend=mode==='flat'?[0,4,2]:[22,34,22],seg=[.47,.29,.24];let dir=0,u=.2,v=9.6;pts.push(P(u,v,w));
+   const bend=mode==='flat'?[0,4,2]:mode==='hook'?[10,95,48]:[22,34,22],seg=[.47,.29,.24];let dir=0,u=.2,v=9.6;pts.push(P(u,v,w));
    for(let i=0;i<3;i++){dir+=bend[i]*D2R;u+=Math.sin(dir)*len*seg[i];v+=Math.cos(dir)*len*seg[i];pts.push(P(u,v,w*(mode==='flat'?1.08:1)));}
   }
   fingers.push({pts,r:rad});
  }
- const T={grip:[[.4,2.6,3.0],[1.9,6.0,3.7],[G[0]+r+2.0,G[1]-.4,2.4],[G[0]+r*.6+1.4,G[1]+r+.9,1.0]],
+ const T={hook:[[.4,2.6,3.0],[1.0,5.8,4.4],[1.4,8.0,4.6]],grip:[[.4,2.6,3.0],[1.9,6.0,3.7],[G[0]+r+2.0,G[1]-.4,2.4],[G[0]+r*.6+1.4,G[1]+r+.9,1.0]],
   fist:[[.4,2.6,3.0],[2.2,6.0,3.3],[3.4,8.6,1.6]],flat:[[.4,2.6,3.0],[.6,5.4,5.6],[.6,7.9,6.6]],relaxed:[[.4,2.6,3.0],[1.2,5.6,4.6],[1.9,7.7,4.2]]};
  return{palm:{c:P(.2,5.6,.15),size:[B.palm.thick,8.6,B.palm.width]},fingers,thumb:{pts:(T[mode]||T.relaxed).map(p=>P(...p)),r:1.0}};
 }
