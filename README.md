@@ -29,6 +29,7 @@ npm run audit        # проверить движения без сборки �
 npm run serve        # собрать и открыть на http://localhost:8080
 npm run deploy       # собрать и опубликовать на GitHub Pages (ветка gh-pages)
 npm run i18n         # проверить, какие русские строки ещё не переведены (i18n/missing.en.json)
+npm run i18n:audit   # пройти английскую версию по всем экранам и 139 упражнениям и найти русский текст (входит в check)
 ```
 
 ## Языки
