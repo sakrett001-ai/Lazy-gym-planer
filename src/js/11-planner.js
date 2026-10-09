@@ -103,6 +103,13 @@ const midOf = r => { const m = String(r).match(/(\d+)\D+(\d+)/); if (m) return (
 function plural(n, a, b, c) { const m10 = n % 10, m100 = n % 100; if (m10 === 1 && m100 !== 11) return a; if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return b; return c; }
 const fmtNum = v => Number.isInteger(v) ? String(v) : v.toFixed(1).replace('.', ',');
 
+/* можно ли взвесить отягощение: свободные веса, тренажёры, блок, машина Смита (а не лента, турник, скамья или вес тела) */
+const WEIGHABLE = new Set(['db', 'bb', 'kb', 'cable', 'smith']);
+function weighable(ex, E) {
+  const ok = id => id !== 'gravitron' && (WEIGHABLE.has(id) || (EQUIP.find(e => e.id === id) || {}).cat === 'mach');
+  /* необязательные гантели считаются, только если они есть в этом месте */
+  return ex.eq.some(g => g.every(ok)) || (ex.opt || []).some(id => ok(id) && (!E || E.has(id)));
+}
 function available(ex, E) { return ex.eq.every(grp => grp.some(id => E.has(id))); }
 function chosenEquip(ex, E) {
   const ch = [];
@@ -207,7 +214,7 @@ function orderCircuit(list) {
 }
 
 /* ---------- дозировка ---------- */
-function prescribe(ex, week) {
+function prescribe(ex, week, E) {
   const G = GOALS[S.goal];
   const t = ex.type;
   let sets = G.sets[t];
@@ -217,14 +224,21 @@ function prescribe(ex, week) {
   if (ex.kind === 'time') { reps = G.time; unit = ''; }
   if (ex.kind === 'dist') { reps = G.dist; unit = ''; }
   const bodyweight = !ex.eq.length && !(ex.opt || []).length;
-  let load = G.load[t];
+  /* процент от 1ПМ имеет смысл только для веса, который можно взвесить: штанга, гантели, гиря, тренажёр, блок.
+     Для резины, противовеса и собственного веса — тот же запас повторов, но подбирается натяжение ленты,
+     противовес или вариант упражнения. */
+  const pct = t === 'c' && weighable(ex, E);
+  const band = ex.eq.length && ex.eq.every(g => g.every(id => id === 'band')), assisted = ex.eq.some(g => g.includes('gravitron'));
+  const how = band ? 'натяжение ленты: ' : assisted ? 'противовес: ' : 'вариант по силам: ';
+  const easy = band ? 'слабее обычного, без отказа' : assisted ? 'больше обычного, без отказа' : 'облегчённый, без отказа';
+  let load = t === 'c' && !pct ? how + {strength:'1–2 повтора в запасе', mass:'1–2 повтора в запасе', cut:'почти до отказа'}[S.goal] : G.load[t];
   if (week) {
     const rir = week.rir + (S.level === 'beg' ? 1 : 0);
     const reserve = `${rir} ${plural(rir, 'повтор', 'повтора', 'повторов')} в запасе`;
-    if (week.deload) { sets = Math.max(2, Math.round(sets * 0.6)); load = t === 'c' ? `${week.pct[S.goal]} от 1ПМ, лёгкий вес без отказа` : 'лёгкий вес, без отказа'; }
+    if (week.deload) { sets = Math.max(2, Math.round(sets * 0.6)); load = pct ? `${week.pct[S.goal]} от 1ПМ, лёгкий вес без отказа` : t === 'c' ? how + easy : 'лёгкий вес, без отказа'; }
     else {
       if (week.add && t === 'c') sets = Math.min(6, sets + week.add);
-      load = t === 'c' ? `${week.pct[S.goal]} от 1ПМ, ${reserve}` : reserve;
+      load = pct ? `${week.pct[S.goal]} от 1ПМ, ${reserve}` : t === 'c' ? how + reserve : reserve;
     }
   }
   if (ex.kind === 'time') load = ex.g === 'cardio' ? 'высокий темп без потери техники' : S.goal === 'strength' ? 'с отягощением или в усложнённом варианте' : 'ровно, без потери формы';
@@ -265,7 +279,7 @@ function buildPlan(ctx = {}) {
   }
   if (!picked.length) return {empty:'none', pool, groups};
   const G = GOALS[S.goal];
-  const items = picked.map((ex, i) => ({ex, slot:i, rx:applyLight(prescribe(ex, week), ex), name:exName(ex, E), eqLine:equipLine(ex, E), eqIds:chosenEquip(ex, E), has:propHas(ex, E), sub:subs.get(ex) || null}));
+  const items = picked.map((ex, i) => ({ex, slot:i, rx:applyLight(prescribe(ex, week, E), ex), name:exName(ex, E), eqLine:equipLine(ex, E), eqIds:chosenEquip(ex, E), has:propHas(ex, E), sub:subs.get(ex) || null}));
   const bySlot = new Map(items.map(it => [it.ex, it]));
   let blocks = [], minutes = 0, totalSets = 0;
   if (S.format === 'classic') {

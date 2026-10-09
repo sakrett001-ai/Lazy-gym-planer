@@ -2144,5 +2144,12 @@
  "Его": "It",
  "Здесь нечем заменить:": "No substitute here for:",
  "можно сделать здесь:": "can be done at:",
- "<p class=\"c-sub\"><b>Вместо:": "<p class=\"c-sub\"><b>Instead of:"
+ "<p class=\"c-sub\"><b>Вместо:": "<p class=\"c-sub\"><b>Instead of:",
+ "натяжение ленты:": "band tension:",
+ "противовес:": "counterweight:",
+ "вариант по силам:": "pick a variation:",
+ "слабее обычного, без отказа": "lighter than usual, not to failure",
+ "больше обычного, без отказа": "more than usual, not to failure",
+ "облегчённый, без отказа": "an easier one, not to failure",
+ "почти до отказа": "close to failure"
 }

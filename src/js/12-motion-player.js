@@ -127,7 +127,7 @@ function stopFigures() {
 function previewItem(id) {
   const ex=EXI[id];let E=effEquip(S.equip);
   if(!available(ex,E)) E=effEquip(EQUIP.map(e=>e.id));
-  return {ex,name:exName(ex,E),rx:prescribe(ex,S.mode==='program'?WEEKS[S.week-1]:null),has:propHas(ex,E),eqLine:equipLine(ex,E)};
+  return {ex,name:exName(ex,E),rx:prescribe(ex,S.mode==='program'?WEEKS[S.week-1]:null,E),has:propHas(ex,E),eqLine:equipLine(ex,E)};
 }
 function selectMotion(it, clock=0) {
   disposeMotion(detailMotion);
