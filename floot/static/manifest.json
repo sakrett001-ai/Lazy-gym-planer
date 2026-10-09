@@ -1,0 +1,17 @@
+{
+  "name": "Lazy Gym Planner — планировщик тренировок",
+  "short_name": "Lazy Gym",
+  "description": "Подбор тренировки под мышцы и оборудование, техника, журнал весов.",
+  "lang": "ru",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ECEFF3",
+  "theme_color": "#2347C8",
+  "icons": [
+    {"src": "/_cdn/static/a0b42e88-273b-43d4-ade1-f18788402bf2-lazy-gym-cat-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/_cdn/static/b5b1bbae-bc26-45b4-850f-7780e7e4ae65-lazy-gym-cat-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "/_cdn/static/cc2283c3-e516-4843-a8c2-e7790692d366-lazy-gym-cat-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
