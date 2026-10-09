@@ -96,7 +96,8 @@ const LIMBS={
  th:[[0,8.8,10.0,10.4,8.0],[.12,9.2,9.6,9.0,8.4],[.4,8.4,8.4,7.8,7.8],[.75,7.0,6.5,6.4,6.6],[.92,5.8,5.5,5.4,5.6],[1,5.8,5.4,5.2,5.4]],
  sk:[[0,5.2,5.0,5.2,5.4],[.1,4.2,6.0,5.2,5.6],[.3,3.7,7.3,5.4,5.8],[.6,3.0,5.2,4.0,4.1],[.85,2.6,3.4,3.0,3.0],[1,2.8,3.4,3.6,3.4]]
 };
-const NECK=[[0,5.6,6.4,6.2,6.2],[1,5.2,5.6,5.6,5.6]];
+/* Шея: [t, спереди, сзади, латерально], см; t=0 — над верхним сечением корпуса, t=1 — внутри черепа */
+const NECK=[[0,5.4,6.0,5.8],[.5,5.0,5.6,5.4],[1,4.8,5.2,5.2]],NECK_BLEND=.4;
 const CAPS={sh:6.0,el:3.9,wr:2.7,kn:5.3,an:3.5};
 /* Массы (доля от общей) и центры масс сегментов: de Leva 1996, мужчины */
 const MASS={head:.0694,upperTrunk:.1596,midTrunk:.1633,lowerTrunk:.1117,ua:.0271,fa:.0162,hand:.0061,th:.1416,sk:.0433,foot:.0137};
@@ -345,7 +346,8 @@ function torsoPoint(R,h,side,ang,extra=0){
  let p=V.add(V.add(f.c,f.z,((c>=0?a:b)+extra)*c),lat,(w+extra)*s);
  /* надплечья следуют за поднятием и протракцией плечевого пояса */
  if(h>38&&R.girdle&&R.frames.thorax){
-  const k=smooth((h-38)/12)*Math.pow(Math.max(0,s),2),gh=R.girdle[side],rest=V.add(V.add(V.add(R.frames.thorax.o,R.frames.thorax.y,21.6),R.frames.thorax.x,SIGN[side]*18),R.frames.thorax.z,0);
+  /* основание шеи следует за лопаткой лишь частично (до 60 % у h = 56): трапеция растягивается плавно, без складок */
+  const k=smooth((h-38)/12)*(1-.4*smooth((h-50)/6))*Math.pow(Math.max(0,s),2),gh=R.girdle[side],rest=V.add(V.add(V.add(R.frames.thorax.o,R.frames.thorax.y,21.6),R.frames.thorax.x,SIGN[side]*18),R.frames.thorax.z,0);
   p=V.add(p,V.sub(gh,rest),k*.85);
  }
  return p;
@@ -365,9 +367,18 @@ function limbPoint(R,kind,side,t,ang,extra=0){
  const[,a,b]=LIMB_DEF[kind],A=R[a+side],Bp=R[b+side],ax=limbAxes(R,kind,side,t),[rf,rb,rl,rm]=profileAt(LIMBS[kind],t),c=Math.cos(ang),s=Math.sin(ang);
  return V.add(V.add(V.mix(A,Bp,t),ax.front,((c>=0?rf:rb)+extra)*c),ax.lat,((s>=0?rl:rm)+extra)*s);
 }
+/* Шея: ось — от основания (на уровне верхнего сечения корпуса, впереди остистых отростков) к точке внутри черепа.
+   Нижние 40 % плавно переходят из верхнего сечения корпуса (надплечья с поднятием плечевого пояса) в круглую шею:
+   поверхность непрерывна, без уступа и открытого края сзади. ang: 0 — спереди, π/2 — левая сторона, π — сзади. */
 function neckPoint(R,t,ang){
- const n=R.frames.neck,h=R.frames.head,lo=V.add(n.o,n.y,-3),hi=V.add(h.o,h.y,1),c=V.mix(lo,hi,t),z=V.unit(V.mix(n.z,h.z,t)),x=V.unit(V.mix(n.x,h.x,t)),[rf,rb,rl]=profileAt(NECK,t);
- return V.add(V.add(c,z,(Math.cos(ang)>=0?rf:rb)*Math.cos(ang)),x,rl*Math.sin(ang));
+ const n=R.frames.neck,h=R.frames.head,lo=V.add(V.add(n.o,n.y,-1),n.z,2.5),hi=V.add(h.o,h.y,1.5),c=V.mix(lo,hi,t);
+ const z=V.unit(V.mix(n.z,h.z,t)),x=V.unit(V.mix(n.x,h.x,t)),[rf,rb,rl]=profileAt(NECK,t),cs=Math.cos(ang),sn=Math.sin(ang);
+ const p=V.add(V.add(c,z,(cs>=0?rf:rb)*cs),x,rl*sn),w=smooth(t/NECK_BLEND);
+ if(w>=1)return p;
+ /* основание — продолжение поверхности корпуса по её же касательной: стык корпуса и шеи без излома */
+ const a=((ang%(2*Math.PI))+2*Math.PI)%(2*Math.PI),side=a<=Math.PI?'L':'R',an=a<=Math.PI?a:2*Math.PI-a,hTop=TORSO.at(-1)[0];
+ const A=torsoPoint(R,hTop,side,an),A0=torsoPoint(R,hTop-2,side,an),base=V.add(A,V.unit(V.sub(A,A0)),t*V.dist(lo,hi));
+ return V.mix(base,p,w);
 }
 const TORSO_H=[];for(let h=TORSO[0][0];h<=TORSO.at(-1)[0]+1e-9;h+=2.5)TORSO_H.push(+h.toFixed(2));if(TORSO_H.at(-1)<TORSO.at(-1)[0])TORSO_H.push(TORSO.at(-1)[0]);
 /* Полная сетка тела для сцены: точки в координатах каталога */
@@ -375,7 +386,7 @@ function surface(R,{cols=24,limbRows=10,limbCols=16}={}){
  const torso=TORSO_H.map(h=>Array.from({length:cols},(_,c)=>{const a=c/cols*2*Math.PI,side=a<=Math.PI?'L':'R',ang=a<=Math.PI?a:2*Math.PI-a;return torsoPoint(R,h,side,ang);}));
  const limbs={};
  for(const s of SIDES)for(const k of Object.keys(LIMB_DEF))limbs[k+s]=Array.from({length:limbRows+1},(_,r)=>Array.from({length:limbCols},(_,c)=>{const a=c/limbCols*2*Math.PI;return limbPoint(R,k,s,r/limbRows,a);}));
- const neck=Array.from({length:5},(_,r)=>Array.from({length:16},(_,c)=>neckPoint(R,r/4,c/16*2*Math.PI)));
+ const neck=Array.from({length:9},(_,r)=>Array.from({length:20},(_,c)=>neckPoint(R,r/8,c/20*2*Math.PI)));
  return{torso,limbs,neck,torsoHeights:TORSO_H};
 }
 

@@ -1,4 +1,5 @@
-/* Контактный лист: node tools/mannequin/sheet.mjs --ids a,b --t 0,0.5,1 --cams angle,side,front --out file.png [--cols 3] */
+/* Контактный лист: node tools/mannequin/sheet.mjs --ids a,b --t 0,0.5,1 --cams angle,side,front --out file.png [--cols 3]
+   [--focus head --span 0.5] — крупный план вокруг точки позы (ширина кадра в метрах) */
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createRequire} from 'node:module';
@@ -17,7 +18,7 @@ const browser=await chromium.launch({args:['--use-gl=angle','--use-angle=swiftsh
 const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
 await page.goto('file://'+path.join(lab,'index.html'));
 const specs=[];for(const id of list)for(const t of ts)for(const cam of cams)specs.push({id,t,cam});
-const url=await page.evaluate(([specs,entries,o])=>Lab.sheet(specs,entries,o),[specs,entries,{w,h,cols,title:arg('--title',''),has:arg('--has',null)}]);
+const url=await page.evaluate(([specs,entries,o])=>Lab.sheet(specs,entries,o),[specs,entries,{w,h,cols,title:arg('--title',''),has:arg('--has',null),focus:arg('--focus',null),span:+arg('--span','0.6')}]);
 await fs.mkdir(path.dirname(path.resolve(root,out)),{recursive:true});
 await fs.writeFile(path.resolve(root,out),Buffer.from(url.split(',')[1],'base64'));
 if(errors.length)console.log('Ошибки страницы:',errors.slice(0,5));console.log(out);await browser.close();await fs.rm(lab,{recursive:true,force:true});

@@ -412,13 +412,16 @@ const SCS_Z = once(() => { const C = ctx([]), f = C.fk(scsPose(C, 0)); return (f
 function shoulderTopAt(C, q, x0, hMax = 50) {
   const R = C.M.catalogPose(q); let best = -Infinity;
   for (let h = 36; h <= hMax; h += .5) for (let a = 0; a < 2 * Math.PI; a += Math.PI / 32) for (const s of S) { const p = C.M.torsoPoint(R, h, s, a); if (Math.abs(Math.abs(p[0]) - x0) < 1.5) best = Math.max(best, C.M.FLOOR - p[1]); }
+  /* верх плеча — и корпус, и начало плечевой кости (дельтовидная), на которые ложится упор */
+  for (let t = 0; t <= .2; t += .05) for (let a = 0; a < 2 * Math.PI; a += Math.PI / 32) for (const s of S) { const p = C.M.limbPoint(R, 'ua', s, t, a); if (Math.abs(Math.abs(p[0]) - x0) < 1.5) best = Math.max(best, C.M.FLOOR - p[1]); }
   return best;
 }
 const SCS_L = once(() => {
   const C = ctx([]), { V } = C, q = scsPose(C, 0), f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5);
   /* упор наклонён по трапециевидной: прямая через верх плеч на |x| = 9 и 16 см */
-  const y9 = shoulderTopAt(C, q, 9, 53), y16 = shoulderTopAt(C, q, 16);
-  const th = Math.atan2(y9 - y16, 7), yc = (y9 + y16) / 2 - gh[1];
+  /* наклон — по верху плеч от |x| = 9 до 19,5 см (наружный край упора над дельтовидной), высота — в середине упора (|x| = 12,5) */
+  const y9 = shoulderTopAt(C, q, 9, 53), yOut = shoulderTopAt(C, q, 19.5);
+  const th = Math.atan2(y9 - yOut, 10.5), yc = y9 + (yOut - y9) * 3.5 / 10.5 - gh[1];
   return { dz: gh[2] - SCS.zr, padZ: yc - 1.0, th };
 });
 

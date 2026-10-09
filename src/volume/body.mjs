@@ -15,7 +15,11 @@ function ringGrid(rows,cols){
 function fillRing(g,rows){
  const cols=rows[0].length,p=g.attributes.position;let i=0;
  for(const row of rows)for(let c=0;c<=cols;c++)p.setXYZ(i++,...world(row[c%cols]));
- p.needsUpdate=true;g.computeVertexNormals();g.computeBoundingSphere();g.computeBoundingBox();
+ p.needsUpdate=true;g.computeVertexNormals();
+ /* шов кольца: первая и последняя вершины ряда совпадают — общая нормаль, иначе вдоль шва видна грань */
+ const n=g.attributes.normal,v=new THREE.Vector3(),u=new THREE.Vector3();
+ for(let r=0;r<rows.length;r++){const a=r*(cols+1),b=a+cols;v.fromBufferAttribute(n,a).add(u.fromBufferAttribute(n,b));if(v.lengthSq()>1e-12){v.normalize();n.setXYZ(a,v.x,v.y,v.z);n.setXYZ(b,v.x,v.y,v.z);}}
+ n.needsUpdate=true;g.computeBoundingSphere();g.computeBoundingBox();
 }
 const centroid=row=>row.reduce((a,p)=>[a[0]+p[0]/row.length,a[1]+p[1]/row.length,a[2]+p[2]/row.length],[0,0,0]);
 function handGeometry(shape){
@@ -57,8 +61,11 @@ export function createMannequinBody(root,first,{skin,joint,sole,mesh}){
  }
  function apply(data,options){
   const B=data.body,R=data.pose;
-  const top=centroid(B.torso.at(-1)),bottom=centroid(B.torso[0]);
-  fillRing(parts.torso.mesh.geometry,[B.torso[0].map(()=>bottom),...B.torso,B.torso.at(-1).map(()=>top)]);
+  /* корпус закрыт «крышками» в центроидах торцов; нормали боковой поверхности считаем по продолженной трубе,
+     иначе крышка заворачивает их вверх и на стыке с шеей виден тёмный шов */
+  const T=B.torso,top=centroid(T.at(-1)),bottom=centroid(T[0]),ext=(a,b)=>a.map((p,i)=>[2*p[0]-b[i][0],2*p[1]-b[i][1],2*p[2]-b[i][2]]);
+  const tg=parts.torso.mesh.geometry;fillRing(tg,[ext(T[0],T[1]),...T,ext(T.at(-1),T.at(-2))]);
+  {const pos=tg.attributes.position,cols=T[0].length,last=(T.length+1)*(cols+1);for(let c=0;c<=cols;c++){pos.setXYZ(c,...world(bottom));pos.setXYZ(last+c,...world(top));}pos.needsUpdate=true;tg.computeBoundingSphere();tg.computeBoundingBox();}
   for(const[k,rows]of Object.entries(B.limbs))fillRing(parts[k].mesh.geometry,rows);
   fillRing(parts.neck.mesh.geometry,B.neck);
   head.position.fromArray(world(B.head.c));head.quaternion.copy(basis({x:B.head.axes[0],y:B.head.axes[1],z:B.head.axes[2]}));
