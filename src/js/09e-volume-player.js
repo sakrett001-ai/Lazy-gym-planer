@@ -24,7 +24,7 @@ function catalogVectorGroup(svg,anim,camera){
 }
 function createMotionFigure(anim,opts){
  if(!window.GymVolume||!anim.catalogRig)return buildFigure(anim,opts);
- let f=window.GymVolume.create({...opts,data:(t,index,coarse)=>catalogVolumeData(anim,t,index,opts.has,coarse),color:muscleColor,joints:motionPrefs.joints,
+ let f=window.GymVolume.create({...opts,data:(t,index,coarse)=>catalogVolumeData(anim,t,index,opts.has,coarse),color:muscleColor,joints:motionPrefs.joints,stress:opts.stress??motionPrefs.stress,
   trace:Array.from({length:41},(_,i)=>anim.catalogRig(i/40).gripL),vectors:catalogVectors(anim),vectorFrame:catalogVectorFrame});
  if(!f){
   f=buildFigure(anim,opts);const svg=f.svg,root=document.createElement('div');root.className='volume-figure';root.setAttribute('role','img');root.setAttribute('aria-label',opts.label);root.dataset.renderer='svg';root.dataset.camera=opts.camera||'above';root.append(svg);f.svg=root;

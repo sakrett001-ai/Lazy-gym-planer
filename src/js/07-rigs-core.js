@@ -313,19 +313,29 @@ function buildSpatialFigure(anim,opts={}){
  }
  trace.setAttribute('d',tracePts.map((p,i)=>`${i?'L':'M'}${f1(p[0])},${f1(p[1])}`).join(' '));
  let nodes=[],jointNodes=[],selectedRegion='all';
+ /* метки нагрузки на суставы — поверх всего рисунка */
+ const stressLayer=el('g',{class:'stress-marks','aria-hidden':'true'},svg),stressNodes=[];
+ let stressOn=(opts.stress??(typeof motionPrefs!=='undefined'?motionPrefs.stress:true))!==false,lastT=opts.t||0,lastFrame=null;
+ function paintStress(R,t,frame){
+  const marks=stressOn&&anim.catalogId&&R.frames&&typeof jointStressPoints==='function'?jointStressPoints(anim,R,t,frame?.index||0):[];
+  marks.forEach((m,i)=>{const p=project(m.p);let n=stressNodes[i];if(!n){n=stressNodes[i]=el('g',{class:'stress-mark'},stressLayer);el('circle',{r:9,class:'stress-halo'},n);el('circle',{r:3.4,class:'stress-core'},n);}n.setAttribute('transform',`translate(${f1(p[0])},${f1(p[1])})`);n.dataset.joint=m.key;n.removeAttribute('display');});
+  for(let i=marks.length;i<stressNodes.length;i++)stressNodes[i].setAttribute('display','none');
+ }
  function at(t,frame){
+  lastT=t;lastFrame=frame||null;
   const {R,muscles,records}=compile(t,frame?.index||0);
   records.forEach((s,i)=>{let node=nodes[i];if(!node||node.tagName!==s.tag){const replacement=el(s.tag,{});if(node)node.replaceWith(replacement);else scene.appendChild(replacement);node=nodes[i]=replacement;}for(const attr of [...node.attributes])if(!(attr.name in s.attrs))node.removeAttribute(attr.name);for(const[k,v]of Object.entries(s.attrs))node.setAttribute(k,v);});
   for(let i=records.length;i<nodes.length;i++)nodes[i].remove();nodes.length=records.length;
   const names=['shL','elL','wrL','hipL','knL','anL','shR','elR','wrR','hipR','knR','anR'];
   names.forEach((name,i)=>{const p=project(R[name]),node=jointNodes[i]||(jointNodes[i]=el('circle',{r:2.1,class:'joint-dot'},dots));node.setAttribute('cx',f1(p[0]));node.setAttribute('cy',f1(p[1]));});
   svg.dataset.pose=String(t);if(muscles)svg.dataset.musclePhase=muscles.phase;allBounds.length=0;setRegion(selectedRegion);
-  setVectors?.at?.(t,frame,R);
+  setVectors?.at?.(t,frame,R);paintStress(R,t,frame);
  }
+ const setStress=show=>{stressOn=!!show;at(lastT,lastFrame);};
  const setTrace=show=>trace.setAttribute('display',show?'inline':'none');
  const setMuscles=show=>svg.classList.toggle('show-muscles',!!show&&!!anim.muscleProfile);
  const setRegion=id=>{selectedRegion=id;for(const node of svg.querySelectorAll('[data-muscle]'))node.style.opacity=id==='all'||node.dataset.muscle===id?'1':'.12';};
- setMuscles(opts.muscles);at(opts.t||0);return{svg,at,setTrace,setVectors,setMuscles,setRegion,camera};
+ setMuscles(opts.muscles);at(opts.t||0);return{svg,at,setTrace,setVectors,setMuscles,setRegion,setStress,camera};
 }
 
 function spatialExercise(id,rig,camera,cameras,hints){

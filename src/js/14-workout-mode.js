@@ -81,7 +81,7 @@ function workoutShow(index){
   $('#wv-prev').disabled=workout.index===0;$('#wv-next').disabled=workout.index===workout.queue.length-1;
   saveWorkout();workoutTick();
 }
-function paintWorkoutMotion(){if(!workout?.motion)return;const F=workout.motion,m=motionFrame(F);F.f.at(m.t,m);if($('#wv-cue').textContent!==m.cue)$('#wv-cue').textContent=m.cue;paintMusclePanel('wv',F,m);}
+function paintWorkoutMotion(){if(!workout?.motion)return;const F=workout.motion,m=motionFrame(F);F.f.at(m.t,m);if($('#wv-cue').textContent!==m.cue)$('#wv-cue').textContent=m.cue;paintMusclePanel('wv',F,m);paintStressPanel('wv',F,m);}
 function strictWorkoutNumber(value){const s=String(value).trim().replace(',','.');return /^\d+(\.\d+)?$/.test(s)?Number(s):null;}
 function commitWorkout(e){
   if(e)e.preventDefault();if(!workout||$('#wv-active').hidden)return;
@@ -173,14 +173,14 @@ function mountDetailCameras(){
   const preferred=motionProfile(a)?.pair,other=preferred!==key&&cameras.includes(preferred)?preferred:cameras.find(c=>c!==key);F.extra=make(other);$('#mv-second-stage').replaceChildren(F.extra.svg);
   $('#mv-second-label').textContent=CAMERA3[other].label;$('#mv-second-hint').textContent=a.cameraHints?.[other]||'';
  }else $('#mv-second-stage').replaceChildren();
- configureMusclePanel('mv',F.it);paintMotion(F,true);
+ configureMusclePanel('mv',F.it);configureStressPanel('mv',F);paintMotion(F,true);
 }
 function mountWorkoutCameras(){
  if(!workout?.motion)return;
  const F=workout.motion,ex=F.it.ex,key=motionCamera(ex),m=motionFrame(F);
  disposeMotion(F);F.f=createMotionFigure(ex.anim,{has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera:key,muscles:motionPrefs.muscles});F.f.setVectors(!!motionPrefs.vectors);
  $('#wv-stage').replaceChildren(F.f.svg);$('#wv-cameras').innerHTML=cameraButtons(ex,key);$('#wv-cameras').hidden=!(ex.anim.catalogCameras||ex.anim.cameras);
- $('#wv-angle').textContent=CAMERA3[key]?.label||(ex.anim.view==='front'?'Вид спереди':'Вид сбоку');configureMusclePanel('wv',F.it);paintWorkoutMotion();
+ $('#wv-angle').textContent=CAMERA3[key]?.label||(ex.anim.view==='front'?'Вид спереди':'Вид сбоку');configureMusclePanel('wv',F.it);configureStressPanel('wv',F);paintWorkoutMotion();
 }
 function setupMotionCameras(){
  $('#mv-cameras').addEventListener('click',e=>{const b=e.target.closest('[data-motion-camera]');if(b&&detailMotion&&rememberCamera(detailMotion.it.ex,b.dataset.motionCamera))mountDetailCameras();});

@@ -57,3 +57,16 @@ test('restored WebGL redraws a paused pose and disposal blocks later frames',asy
   assert.equal(r.counters.renders,after);assert.equal(figure.svg.dataset.pose,'0.61');assert.equal(r.counters.disposals,1);assert.equal(r.counters.losses,1);
  }finally{figure?.dispose();r.dom.window.close();}
 });
+test('3D joint-stress marks appear at the loaded joints, show through the body, and can be switched off',async()=>{
+ const r=await runtime();let figure;
+ try{
+  figure=r.create(r.options('squat','side'));const group=r.counters.scene.getObjectByName('joint-stress'),visible=()=>group.children.filter(g=>g.visible);
+  figure.at(0,{index:0});assert.equal(visible().length,0,'standing tall: no marks');
+  figure.at(1,{index:1});const R=r.model.EX.find(e=>e.id==='squat').anim.catalogRig(1),marks=visible();
+  assert.equal(marks.length,3,'both knees and the lower back');
+  const knee=[R.knL[0]/100,(186-R.knL[1])/100,R.knL[2]/100];
+  assert(marks.some(g=>Math.hypot(g.position.x-knee[0],g.position.y-knee[1],g.position.z-knee[2])<1e-9),'a mark sits on the left knee');
+  assert(marks.every(g=>g.children.every(o=>o.material.depthTest===false)),'marks show through the body and the bar');
+  figure.setStress(false);assert.equal(visible().length,0,'switched off');
+ }finally{figure?.dispose();r.dom.window.close();}
+});

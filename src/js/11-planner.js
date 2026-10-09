@@ -480,6 +480,13 @@ function rxHtml(it) {
   return `<div class="rx"><span class="rx-big">${r.sets} × ${r.reps}${unit}${side}</span><span class="rx-rest">${rest}</span>${r.light ? '<span class="rx-light">облегчено</span>' : ''}</div>`;
 }
 
+/* суставы под пиковой нагрузкой — короткая строка в карточке; подробности в разборе движения */
+function jointsLine(ex) {
+  const zones = typeof stressZones === 'function' ? stressZones(ex) : [];
+  if (!zones.length) return '';
+  const on = typeof motionPrefs === 'undefined' || motionPrefs.stress !== false;
+  return `<p class="c-joints"${on ? '' : ' hidden'} title="Красные метки в разборе движения показывают, когда нагрузка наибольшая"><span class="stress-dot" aria-hidden="true"></span>Пиковая нагрузка: ${esc(zones.join(', '))}</p>`;
+}
 function cardHtml(it, idx) {
   const ex = it.ex, r = it.rx;
   const lvl = {};
@@ -506,6 +513,7 @@ function cardHtml(it, idx) {
     <div class="c-map">${muscleMapSvg(lvl, {aria:'Работающие мышцы: ' + ex.pri.map(m => MUSCLE_NAMES[m]).join(', ')})}</div>
     <ul class="mus">${mus}</ul>
   </div>
+  ${jointsLine(ex)}
   ${logBlock(it)}
   <div class="c-warm">${warmupHtml(it, workWeightOf(it, null))}</div>
   <div class="c-prog">${progressionHint(it)}</div>
