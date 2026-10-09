@@ -222,6 +222,7 @@ function selectMotion(it, clock=0) {
   detailMotion={it,f:null,clock,paused:true,durations:motionDurations(it)};
   $('#mv-title').textContent=it.name;
   $('#mv-exercise').value=it.ex.id;
+  $('#mv-tools').innerHTML=`${favButton(it.ex.id,true)}<button type="button" class="btn-ghost" data-cp-add="${it.ex.id}">+ В свой план</button><p class="cp-msg" hidden><span></span> <button type="button" class="link" data-cp-go="1">Открыть план →</button></p>`;
   $('#mv-view').textContent=it.ex.viewNote||(it.ex.anim.view==='front'?'Вид спереди':'Вид сбоку');
   $('#mv-speed').value=String(motionPrefs.speed);$('#mv-joints').checked=!!motionPrefs.joints;$('#mv-trace').checked=!!motionPrefs.trace;$('#mv-vectors').checked=!!motionPrefs.vectors;
   $('#mv-tempo').textContent=it.ex.anim.hold?'Удерживайте положение и дышите ровно.':it.ex.anim.timing||it.ex.g==='cardio'||it.ex.kind?'Ритм показан схематично. Замедление помогает разобрать движение.':it.rx.static?`Статодинамика: темп ${it.rx.tempo} без пауз, показана рабочая часть амплитуды — без выпрямления до конца и без расслабления внизу.`:`Темп задания: ${it.rx.tempo}. Скорость просмотра не меняет задание.`;
@@ -391,6 +392,7 @@ document.addEventListener('click', e => {
     const lvlMax = S.level === 'beg' ? 2 : 3;
     const tried = new Set((swaps.__tried && swaps.__tried[swapKey() + ':' + slot]) || []);
     /* ближайшие по смыслу: то же движение и те же мышцы — первыми */
+    if (S.mode === 'custom') for (const it of customOf().items) inPlan.add(it.id);
     let alts = EX.filter(ex => !inPlan.has(ex.id) && available(ex, plan.E) && ex.lvl <= lvlMax && (ex.g === cur.g || PATTERN[ex.id] === PATTERN[cur.id]) && (S.format !== 'static' || staticOk(ex)))
       .sort((a, b) => analogScore(cur, b) - analogScore(cur, a));
     const msgEl = t.querySelector('span');
@@ -400,9 +402,9 @@ document.addEventListener('click', e => {
     if (!next) { tried.clear(); tried.add(cur.id); next = alts[0]; }
     swaps.__tried = swaps.__tried || {};
     swaps.__tried[swapKey() + ':' + slot] = [...tried];
-    const k = swapKey();
-    swaps[k] = swaps[k] || {};
-    swaps[k][slot] = next.id;
+    /* в своём плане замена записывается в сам план; правка подходов и отдыха остаётся */
+    if (S.mode === 'custom') { const item = customOf().items[slot]; if (item) { item.id = next.id; saveSettings(); } }
+    else { const k = swapKey(); swaps[k] = swaps[k] || {}; swaps[k][slot] = next.id; }
     done = {};
     renderPlan();
     const card = document.querySelector(`.card[data-slot="${slot}"]`);
@@ -418,7 +420,12 @@ document.addEventListener('click', e => {
     return;
   }
   if (t.dataset.fig !== undefined) {openMotion(t.dataset.fig);return;}
-  if (t.id === 'e-toggle') { eqOpen = !eqOpen; renderSetup(); return; }
+  if (t.id === 'e-toggle' || t.id === 'e-toggle-top') {
+    eqOpen = !eqOpen; renderSetup();
+    /* свернули снизу длинного списка — вернуть взгляд к заголовку раздела */
+    if (!eqOpen && t.id === 'e-toggle') { const h = $('.e-head'); if (h && h.getBoundingClientRect().top < 0) h.scrollIntoView({block:'start', behavior:reduceMotion ? 'auto' : 'smooth'}); }
+    return;
+  }
   if (t.id === 't-minus') return adjustRest(-15);
   if (t.id === 't-plus') return adjustRest(15);
   if (t.id === 't-skip') return stopRest();

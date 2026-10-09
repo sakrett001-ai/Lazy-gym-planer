@@ -45,7 +45,7 @@ function eqName(id) {
   return EQN[id];
 }
 /* ---------- недельная программа ---------- */
-const MODES = {single:{name:'Тренировку', hint:'на один день'}, program:{name:'Программу', hint:'на неделю'}};
+const MODES = {single:{name:'Тренировку', hint:'на один день'}, program:{name:'Программу', hint:'на неделю'}, custom:{name:'Свой план', hint:'из избранного'}};
 const DAY_T = {
   fa:{name:'Всё тело', g:['quads', 'chest', 'back', 'shoulders', 'biceps', 'abs']},
   fb:{name:'Всё тело', g:['hams', 'glutes', 'back', 'chest', 'triceps', 'abs']},
@@ -81,7 +81,7 @@ const WEEKS = [
 ];
 
 const DEFAULTS = {goal:'mass', format:'classic', level:'mid', count:6, groups:['chest', 'back', 'shoulders'], equip:EQUIP.map(e => e.id), seed:7,
-  mode:'single', days:3, split:'full', week:1, day:0, view:'plan', atlasM:'chest', focus:null};
+  mode:'single', days:3, split:'full', week:1, day:0, view:'plan', atlasM:'chest', focus:null, fav:[], customs:[], custom:null};
 const STORE = 'podhod.settings.v1';
 function loadSettings() {
   try { const s = JSON.parse(localStorage.getItem(STORE) || 'null'); if (s && s.groups && s.equip) return Object.assign({}, DEFAULTS, s); } catch (e) {}
@@ -263,41 +263,52 @@ function prescribe(ex, week, E) {
 
 /* ---------- сборка одной тренировки ---------- */
 function buildPlan(ctx = {}) {
-  const groups = ctx.groups || S.groups, count = ctx.count || S.count, week = ctx.week || null;
-  const sw = ctx.swaps || {};
+  /* свой план: упражнения и порядок задал человек; мышцы — только подсказка для подбора */
+  const custom = S.mode === 'custom' && !ctx.groups ? customOf() : null;
+  const groups = ctx.groups || S.groups, count = custom ? custom.items.length : ctx.count || S.count, week = ctx.week || null;
+  const sw = custom ? {} : ctx.swaps || {};
   const E = effEquip(S.equip);
   const rand = rng((ctx.seed ?? S.seed) * 9973 + count * 31 + groups.length * 7);
-  if (!groups.length) return {empty:'groups'};
-  /* программа другого места: подбор под его инвентарь, затем недоступное здесь заменяется аналогами */
-  const ref = programEquip(), PE = ref ? effEquip(ref) : E;
-  let {picked} = pickExercises(PE, rand, groups, count, ctx.avoid);
+  if (custom && !custom.items.length) return {empty:'custom', groups};
+  if (!groups.length && !custom) return {empty:'groups'};
+  /* программа другого места: подбор под его инвентарь, затем недоступное здесь заменяется аналогами;
+     в своём плане так же заменяется то, чего нет в этом месте */
+  const ref = custom ? null : programEquip(), PE = ref ? effEquip(ref) : E;
+  let picked = custom ? custom.items.map(it => EXI[it.id]) : pickExercises(PE, rand, groups, count, ctx.avoid).picked;
   const pool = EX.filter(ex => available(ex, E));
   const subs = new Map(), lost = [];
-  if (ref) {
-    const lvlMax = S.level === 'beg' ? 2 : 3, used = new Set(picked.filter(ex => available(ex, E)).map(ex => ex.id));
-    picked = picked.map(ex => {
-      if (available(ex, E)) return ex;
+  let slots = picked.map((_, i) => i);
+  if (ref || custom) {
+    const lvlMax = custom ? 3 : S.level === 'beg' ? 2 : 3, used = new Set(picked.filter(ex => available(ex, E)).map(ex => ex.id));
+    const keep = [];
+    picked = picked.map((ex, i) => {
+      if (available(ex, E)) { keep.push(i); return ex; }
       const alt = analogsFor(ex, E, {exclude:used, lvlMax, limit:1, ok:S.format === 'static' ? staticOk : null})[0];
       if (!alt) { lost.push(ex); return null; }
-      used.add(alt.ex.id); subs.set(alt.ex, {from:ex, note:alt.note}); return alt.ex;
+      used.add(alt.ex.id); subs.set(alt.ex, {from:ex, note:alt.note}); keep.push(i); return alt.ex;
     }).filter(Boolean);
+    slots = keep;
   }
   for (const [i, id] of Object.entries(sw)) {
     const ex = EXI[id];
     if (picked[i] && ex && available(ex, E) && !picked.includes(ex)) picked[i] = ex;
   }
-  if (!picked.length) return {empty:'none', pool, groups};
+  if (!picked.length) return {empty:'none', pool, groups, lost};
   const G = GOALS[S.goal];
-  const items = picked.map((ex, i) => ({ex, slot:i, rx:applyLight(prescribe(ex, week, E), ex), name:exName(ex, E), eqLine:equipLine(ex, E), eqIds:chosenEquip(ex, E), has:propHas(ex, E), sub:subs.get(ex) || null}));
+  const items = picked.map((ex, k) => {
+    const slot = slots[k], rx = applyLight(prescribe(ex, week, E), ex);
+    return {ex, slot, rx:custom ? customRx(rx, custom.items[slot], ex) : rx, name:exName(ex, E), eqLine:equipLine(ex, E), eqIds:chosenEquip(ex, E), has:propHas(ex, E), sub:subs.get(ex) || null};
+  });
   const bySlot = new Map(items.map(it => [it.ex, it]));
   let blocks = [], minutes = 0, totalSets = 0;
   if (S.format === 'classic' || S.format === 'static') {
-    const ord = orderClassic(picked).map(ex => bySlot.get(ex));
+    const ord = (custom ? picked : orderClassic(picked)).map(ex => bySlot.get(ex));
     ord.forEach((it, i) => { it.label = String(i + 1); });
     blocks = [{kind:'list', items:ord}];
     for (const it of ord) { minutes += it.rx.static ? staticSeconds(it.rx) : it.rx.sets * (it.rx.work + it.rx.rest) + 60; totalSets += it.rx.sets; }
   } else if (S.format === 'superset') {
-    const pairs = pairSupersets(picked);
+    /* в своём плане пары — соседние упражнения по порядку человека */
+    const pairs = custom ? picked.reduce((a, ex, i) => (i % 2 ? a[a.length - 1].push(ex) : a.push([ex]), a), []) : pairSupersets(picked);
     pairs.forEach((pr, pi) => {
       const L = String.fromCharCode(65 + pi);
       const its = pr.map((ex, j) => { const it = bySlot.get(ex); it.label = pr.length > 1 ? L + (j + 1) : L; return it; });
@@ -309,7 +320,7 @@ function buildPlan(ctx = {}) {
       totalSets += sets * its.length;
     });
   } else {
-    const ord = orderCircuit(picked).map(ex => bySlot.get(ex));
+    const ord = (custom ? picked : orderCircuit(picked)).map(ex => bySlot.get(ex));
     const c = G.circ;
     let rounds = c.rounds + (S.level === 'beg' ? -1 : S.level === 'adv' ? 1 : 0);
     if (week && week.deload) rounds -= 1;
@@ -319,9 +330,9 @@ function buildPlan(ctx = {}) {
     ord.forEach((it, i) => {
       it.label = String(i + 1);
       it.rounds = rounds;
-      if (!it.ex.kind) it.rx.reps = c.reps;
+      if (!it.ex.kind && !(custom && custom.items[it.slot]?.reps)) it.rx.reps = c.reps;
       it.rx.circ = true;
-      it.rx.work = it.ex.kind === 'time' ? c.work : it.ex.kind === 'dist' ? 30 : midOf(c.reps) * G.rep * (it.ex.uni ? 2 : 1);
+      it.rx.work = it.ex.kind === 'time' ? c.work : it.ex.kind === 'dist' ? 30 : midOf(it.rx.reps) * G.rep * (it.ex.uni ? 2 : 1);
     });
     blocks = [{kind:'circuit', items:ord, rounds, rest:c.rest, roundRest:c.roundRest}];
     minutes = rounds * (ord.reduce((a, it) => a + it.rx.work, 0) + c.rest * (ord.length - 1)) + (rounds - 1) * c.roundRest;
@@ -340,7 +351,7 @@ function buildPlan(ctx = {}) {
     else for (const m of it.ex.pri) w[MUSCLE_GROUP[m]] = Math.max(w[MUSCLE_GROUP[m]], 0.5);
     for (const [g, x] of Object.entries(w)) gvol[g] = (gvol[g] || 0) + k * x;
   }
-  return {blocks, items, minutes:Math.round(minutes / 60), totalSets, missing, load, gvol, pool, E, groups, count, lost};
+  return {blocks, items, minutes:Math.round(minutes / 60), totalSets, missing:custom ? [] : missing, load, gvol, pool, E, groups, count, lost, custom:!!custom};
 }
 
 /* ---------- сборка недели ---------- */
@@ -393,13 +404,17 @@ const ICON = {
 function renderSetup() {
   const seg = (name, dict, cur) => Object.entries(dict).map(([k, v]) =>
     `<button type="button" class="seg-b${k === cur ? ' on' : ''}" data-set="${name}" data-v="${k}" aria-pressed="${k === cur}"><b>${v.name}</b>${v.hint ? `<small>${v.hint}</small>` : ''}</button>`).join('');
-  const prog = S.mode === 'program';
+  const prog = S.mode === 'program', custom = S.mode === 'custom';
   $('#views').innerHTML = viewTabs();
   const jv = S.view === 'journal' || S.view === 'atlas';
   $('.setup').hidden = jv; $('.layout').classList.toggle('solo', jv);
   $('#f-mode').innerHTML = seg('mode', MODES, S.mode);
   $('#f-prog').hidden = !prog;
+  $('#f-custom').hidden = !custom;
+  if (custom) $('#f-custom-body').innerHTML = customSetupHtml();
   $('#f-muscles').hidden = prog;
+  $('#g-note').hidden = !custom;
+  $('#count-l').closest('.field').hidden = custom;
   $('#count-l').textContent = prog ? 'Упражнений в тренировке' : 'Упражнений';
   if (prog) {
     $('#f-days').innerHTML = [2, 3, 4, 5].map(d => `<button type="button" class="seg-b${d === S.days ? ' on' : ''}" data-days="${d}" aria-pressed="${d === S.days}"><b>${d}</b><small>${SCHEDULE[d].map(i => WD[i]).join(' ')}</small></button>`).join('');
@@ -436,17 +451,20 @@ function renderSetup() {
   $('#e-chips').innerHTML = EQUIP_CATS.map(c => `<div class="e-cat"><h3>${c.name}</h3><div class="chips">${EQUIP.filter(e => e.cat === c.id).map(e =>
     `<button type="button" class="chip${es.has(e.id) ? ' on' : ''}" data-e="${e.id}" aria-pressed="${es.has(e.id)}"${e.hint ? ` title="${esc(e.hint)}"` : ''}>${ICON.check}<span>${e.name}</span></button>`).join('')}</div></div>`).join('');
   $('#e-count').textContent = es.size ? `${es.size} из ${EQUIP.length}` : 'только вес тела';
-  const matched = EQUIP_PRESETS.some(p => p.eq.length === es.size && p.eq.every(e => es.has(e)));
-  const open = eqOpen || !matched;
+  /* список оборудования сворачивается всегда — и для своего набора, не совпадающего с заготовкой;
+     кнопка вверху видна без прокрутки, внизу раскрытого списка — ещё одна «Свернуть» */
+  const open = eqOpen, names = EQUIP.filter(e => es.has(e.id)).map(e => e.name);
   $('#e-chips').hidden = !open;
   $('#e-sum').hidden = open;
-  $('#e-sum').textContent = es.size === EQUIP.length ? 'Всё оборудование зала.' : EQUIP.filter(e => es.has(e.id)).map(e => e.name).join(', ') + '.';
-  $('#e-toggle').hidden = !matched;
-  $('#e-toggle').textContent = open ? 'Свернуть список' : 'Изменить список';
-  $('#e-toggle').setAttribute('aria-expanded', open);
+  $('#e-sum').textContent = es.size === EQUIP.length ? 'Всё оборудование зала.' : !names.length ? 'Только вес тела.'
+    : names.length > 10 ? names.slice(0, 10).join(', ') + ` и ещё ${names.length - 10}.` : names.join(', ') + '.';
+  $('#e-toggle').hidden = !open;
+  $('#e-toggle-top').textContent = open ? 'Свернуть' : 'Изменить список';
+  for (const b of [$('#e-toggle'), $('#e-toggle-top')]) b.setAttribute('aria-expanded', String(open));
 }
 
 function titleFor() {
+  if (S.mode === 'custom') return customOf().name;
   const gs = new Set(S.groups);
   const p = GROUP_PRESETS.find(p => p.g.length === gs.size && p.g.every(g => gs.has(g)));
   if (p) return p.id === 'full' ? 'Всё тело' : p.id === 'legs' ? 'Ноги и ягодицы' : p.id === 'push' ? 'Грудь, плечи, трицепс' : p.id === 'pull' ? 'Спина, бицепс, хват' : 'Верх тела';
@@ -504,7 +522,7 @@ function cardHtml(it, idx) {
   <div class="c-top">
     <div class="motion-tile"><button type="button" class="illus" data-fig="${idx}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Разобрать движение: ${esc(it.name)}"><span class="illus-v">${view}</span><span class="illus-zoom" aria-hidden="true">Увеличить ↗</span></button><div class="motion-bar"><span class="motion-caption">Исходное положение</span><button type="button" data-motion-pause="${idx}" aria-label="Пауза демонстрации: ${esc(it.name)}" aria-pressed="false">Пауза</button></div></div>
     <div class="c-info">
-      <div class="c-head"><span class="c-idx">${it.label}</span><span class="c-type">${ex.type === 'c' ? 'базовое' : 'изолирующее'}</span></div>
+      <div class="c-head"><span class="c-idx">${it.label}</span><span class="c-type">${ex.type === 'c' ? 'базовое' : 'изолирующее'}</span>${favButton(ex.id)}</div>
       <h3 class="c-name">${esc(it.name)}</h3>
       <p class="c-eq">${esc(it.eqLine)}</p>
       ${it.sub ? `<p class="c-sub"><b>Вместо: ${esc(exName(it.sub.from, effEquip(programEquip() || S.equip)))}</b>${it.sub.note ? ` · ${esc(it.sub.note)}` : ''}</p>` : ''}
@@ -525,6 +543,7 @@ function cardHtml(it, idx) {
     <button type="button" class="btn-ghost" data-hist="1" aria-expanded="false">${ICON.chart}<span>История</span><small>${histCount(ex.id) || ''}</small></button>
     <button type="button" class="btn-ghost" data-swap="${it.slot}">${ICON.swap}<span>Заменить</span></button>
   </div>
+  ${S.mode === 'custom' ? customToolsHtml(it) : ''}
   <div class="c-hist" hidden></div>
   <details class="tech">
     <summary>Техника выполнения</summary>
@@ -573,7 +592,7 @@ function warnHtml(p) {
 function headButtons(copyLabel) {
   return `<div class="p-btns">
         <button type="button" class="btn" id="start-workout" aria-haspopup="dialog" aria-controls="workout-view">Начать тренировку →</button>
-        <button type="button" class="btn btn-2" id="reroll">${ICON.dice}<span>Другой вариант</span></button>
+        ${S.mode === 'custom' ? '' : `<button type="button" class="btn btn-2" id="reroll">${ICON.dice}<span>Другой вариант</span></button>`}
         <button type="button" class="btn btn-2" id="copy">${ICON.copy}<span>${copyLabel}</span></button>
         ${S.mode === 'program' ? `<button type="button" class="btn btn-2" id="ics-open">${ICON.cal}<span>В календарь</span></button>` : ''}
       </div>
@@ -598,17 +617,23 @@ function renderPlan() {
     root.innerHTML = `<div class="empty"><h2>Выберите мышцы</h2><p>Отметьте хотя бы одну группу мышц в параметрах — план соберётся сразу.</p></div>`;
     return;
   }
+  if (plan.empty === 'custom') {
+    root.innerHTML = `<header class="p-head p-head-c"><div class="p-sum"><p class="eyebrow">Свой план · ${GOALS[S.goal].name} · ${FORMATS[S.format].name}</p><h1 class="p-title">${esc(titleFor())}</h1></div></header>` + customEmptyHtml() + customAddHtml();
+    return;
+  }
   if (plan.empty === 'none') {
-    root.innerHTML = `<div class="empty"><h2>Не из чего собрать тренировку</h2><p>Для выбранных мышц нет упражнений с этим оборудованием и уровнем. Добавьте оборудование или выберите другие группы мышц.</p></div>`;
+    root.innerHTML = S.mode === 'custom'
+      ? `<div class="empty"><h2>Здесь нечем выполнить этот план</h2><p>Для упражнений плана в месте «${esc(placeOf().name)}» нет инвентаря и замен: ${esc(plan.lost.map(ex => ex.name).join(', '))}. Выберите другое место или добавьте упражнения.</p></div>` + customAddHtml()
+      : `<div class="empty"><h2>Не из чего собрать тренировку</h2><p>Для выбранных мышц нет упражнений с этим оборудованием и уровнем. Добавьте оборудование или выберите другие группы мышц.</p></div>`;
     return;
   }
   const G = GOALS[S.goal];
   const setsWord = S.format === 'circuit' ? plural(plan.totalSets, 'подход', 'подхода', 'подходов') + ' за круги' : plural(plan.totalSets, 'подход', 'подхода', 'подходов');
   let html = `<header class="p-head">
     <div class="p-sum">
-      <p class="eyebrow">${G.name} · ${FORMATS[S.format].name} · ${LEVELS[S.level].name.toLowerCase()}</p>
+      <p class="eyebrow">${plan.custom ? 'Свой план · ' : ''}${G.name} · ${FORMATS[S.format].name} · ${LEVELS[S.level].name.toLowerCase()}</p>
       <h1 class="p-title">${esc(titleFor())}</h1>
-      ${focusHtml()}
+      ${plan.custom ? '' : focusHtml()}
       <dl class="stats">
         <div><dt>время</dt><dd>≈${plan.minutes}<small>мин</small></dd></div>
         <div><dt>${setsWord}</dt><dd>${plan.totalSets}</dd></div>
@@ -625,7 +650,11 @@ function renderPlan() {
       </figcaption>
     </figure>
   </header>`;
-  html += autoregHtml() + warnHtml(plan) + blocksHtml(plan) + LEGEND;
+  if (plan.custom) {
+    const hints = customHints(plan), lost = plan.lost.length ? [`Здесь нечем выполнить и нечем заменить: ${plan.lost.map(ex => ex.name).join(', ')}. В другом месте ${plan.lost.length > 1 ? 'они вернутся' : 'оно вернётся'} в план.`] : [];
+    html += autoregHtml() + (lost.length ? `<div class="warn">${lost.map(w => `<p>${esc(w)}</p>`).join('')}</div>` : '')
+      + (hints.length ? `<div class="cp-hints">${hints.map(w => `<p>${esc(w)}</p>`).join('')}</div>` : '') + blocksHtml(plan) + customAddHtml() + LEGEND;
+  } else html += autoregHtml() + warnHtml(plan) + blocksHtml(plan) + LEGEND;
   root.innerHTML = html;
   mountFigures();
 }

@@ -119,8 +119,12 @@ function atlasRow(r, m, sel) {
   const ex = r.ex, E = effEquip(S.equip), name = exName(ex, E);
   const others = ex.pri.filter(x => x !== m).map(x => MUSCLE_NAMES[x].toLowerCase());
   const how = r.role === 'pri' ? (others.length ? 'вместе с: ' + others.slice(0, 2).join(', ') : 'главная цель') : 'основная работа: ' + ex.pri.slice(0, 2).map(x => MUSCLE_NAMES[x].toLowerCase()).join(', ');
-  return `<li class="at-row${sel ? ' on' : ''}"><button type="button" class="at-ex" data-atlas-ex="${ex.id}" aria-pressed="${sel}"><span class="at-sw" style="background:${muscleColor(r.v)}" title="${MUSCLE_BANDS[muscleBand(r.v)]}"></span><span class="at-n"><b>${esc(name)}</b><small>${esc(equipLine(ex, E))} · ${esc(how)}${ex.lvl >= 3 ? ' · сложное' : ''}</small></span></button>`
+  return `<li class="at-row${sel ? ' on' : ''}">${favButton(ex.id)}<button type="button" class="at-ex" data-atlas-ex="${ex.id}" aria-pressed="${sel}"><span class="at-sw" style="background:${muscleColor(r.v)}" title="${MUSCLE_BANDS[muscleBand(r.v)]}"></span><span class="at-n"><b>${esc(name)}</b><small>${esc(equipLine(ex, E))} · ${esc(how)}${ex.lvl >= 3 ? ' · сложное' : ''}</small></span></button>`
     + `<button type="button" class="at-open" data-atlas-open="${ex.id}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Разобрать движение: ${esc(name)}">↗</button></li>`;
+}
+/* избранное и свой план для упражнения в превью */
+function atlasKeepHtml(id) {
+  return `${favButton(id, true)}<button type="button" class="btn-ghost" data-cp-add="${id}">+ В свой план</button><p class="cp-msg" hidden><span></span> <button type="button" class="link" data-cp-go="1">Открыть план →</button></p>`;
 }
 function atlasList(rows, m, sel, limit) {
   return `<ol class="at-list">${rows.map((r, i) => atlasRow(r, m, r.ex.id === sel).replace('<li class="at-row', i >= limit ? '<li hidden class="at-more at-row' : '<li class="at-row')).join('')}</ol>`
@@ -139,6 +143,7 @@ function renderAtlas() {
     <p class="eyebrow">Атлас мышц</p>
     <h1 class="p-title">Выберите мышцу</h1>
     <p class="at-lead">Нажмите на мышцу — покажем упражнения, в которых она работает, из инвентаря выбранного места.</p>
+    <p class="at-favs"><span>★ В избранном: <b class="at-favn">${S.fav.length}</b></span><button type="button" class="link" data-cp-go="1">Собрать свой план →</button></p>
   </header>
   <div class="at-grid">
     <section class="at-pick" aria-label="Мышцы">
@@ -161,6 +166,7 @@ function renderAtlas() {
         <div class="motion-bar"><span class="motion-caption">Исходное положение</span><button type="button" data-motion-pause="0" aria-pressed="true">Пауза</button></div>
       </div>
       <div class="at-under"><p class="at-pv"><b id="at-pv-name">${esc(it.name)}</b></p><div class="at-cams" role="group" aria-label="Ракурс">${Object.entries(ATLAS_CAMS).map(([c, label]) => `<button type="button" data-atlas-cam="${c}" aria-pressed="false">${label}</button>`).join('')}</div></div>
+      <div class="at-keep" id="at-keep">${atlasKeepHtml(atlasEx)}</div>
       <p class="at-hint">Оранжевым выделена выбранная мышца: чем ярче цвет, тем сильнее она работает в этот момент повторения.</p>`;
     if (A.pri.length) html += `<h3 class="at-h">Основная нагрузка <small>${A.pri.length}</small></h3>${atlasList(A.pri, m, atlasEx, 8)}`;
     else html += `<p class="warn-inline">Здесь нет упражнений, где ${esc(lower)} — основная цель. Ниже — те, где она помогает, и что нужно для остальных.</p>`;
@@ -211,7 +217,7 @@ document.addEventListener('click', e => {
   if (g) { selectAtlasMuscle(g.dataset.atlasM, true); return; }
   const t = e.target.closest('button');
   if (!t) return;
-  if (t.dataset.atlasEx) { atlasEx = t.dataset.atlasEx; atlasCam = null; mountAtlasPreview(); return; }
+  if (t.dataset.atlasEx) { atlasEx = t.dataset.atlasEx; atlasCam = null; mountAtlasPreview(); const k = $('#at-keep'); if (k) k.innerHTML = atlasKeepHtml(atlasEx); return; }
   if (t.dataset.atlasCam) { atlasCam = t.dataset.atlasCam; mountAtlasPreview(); return; }
   if (t.dataset.atlasOpen) { openMotionItem(previewItem(t.dataset.atlasOpen)); return; }
   if (t.dataset.atlasShow) { for (const li of t.previousElementSibling.querySelectorAll('.at-more')) li.hidden = false; t.remove(); return; }

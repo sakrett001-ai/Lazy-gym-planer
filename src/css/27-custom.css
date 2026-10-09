@@ -1,0 +1,74 @@
+/* Избранное и свой план.
+   Звезда избранного — тёплый янтарь: не мышечный оранжевый и не красный (он только для суставов и ошибок). */
+:root { --fav:#C98A04; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --fav:#F5C04A; } }
+:root[data-theme="dark"] { --fav:#F5C04A; }
+
+.fav { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-width:36px; min-height:36px; padding:0 6px; border:0; border-radius:9px; background:transparent; color:var(--faint); font-size:20px; line-height:1; }
+.fav:hover { color:var(--fav); background:var(--surface-2); }
+.fav.on { color:var(--fav); }
+.fav-t { border:1px solid var(--line); background:var(--surface); font-size:14px; font-weight:600; color:var(--ink); padding:0 12px; }
+.fav-t .fav-i { font-size:18px; color:var(--faint); }
+.fav-t.on .fav-i { color:var(--fav); }
+.c-head .fav { margin-left:auto; margin-right:-6px; }
+
+button.link { border:0; background:none; padding:0; color:var(--accent); font:inherit; font-weight:600; text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
+
+/* атлас: звезда в строке и под превью */
+.at-row { grid-template-columns:auto minmax(0, 1fr) auto; }
+.at-row > .fav { align-self:center; margin-left:4px; }
+.at-row .at-ex { padding-left:4px; }
+.at-keep, .mv-tools { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.at-keep { margin:2px 0 10px; }
+.mv-tools { margin:8px 0 0; }
+.cp-msg { flex-basis:100%; margin:0; font-size:13px; color:var(--good); }
+.at-favs { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; margin:6px 0 0; font-size:14px; color:var(--muted); }
+.at-favs b { color:var(--ink); }
+
+/* настройки: свои планы */
+.cp-plans { margin-bottom:8px; }
+
+/* подсказки по составу плана */
+.cp-hints { border:1px solid var(--line); border-left:3px solid var(--accent); background:var(--surface); border-radius:10px; padding:10px 12px; display:grid; gap:6px; font-size:14px; }
+.cp-hints p { margin:0; }
+
+/* карточка своего плана: порядок и дозировка */
+.cp-tools { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding-top:8px; border-top:1px dashed var(--line); }
+.cp-tools .btn-ghost:disabled { opacity:.35; cursor:default; }
+.cp-tools .cp-rm { margin-left:auto; color:var(--muted); }
+.cp-edit { padding:6px 0 2px; }
+.cp-fields { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:end; }
+.cp-f { display:grid; gap:4px; font-size:12px; color:var(--muted); }
+.cp-f input, .cp-f select { min-height:40px; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--ink); padding:7px 10px; font:inherit; font-size:15px; }
+.cp-f input { width:7.5em; font-family:var(--f-mono); }
+.stepper.sm { gap:6px; }
+.stepper.sm button { width:36px; height:36px; font-size:18px; }
+.stepper.sm output { font-size:22px; min-width:28px; }
+
+/* добавление упражнений */
+.cp-add { margin-top:18px; background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:14px; display:grid; gap:10px; }
+.cp-add h2 { margin:0; font:400 19px/1.2 var(--f-display); }
+.cp-add .f-note { margin:0; }
+.cp-tabs { display:flex; gap:4px; background:var(--surface-2); padding:4px; border-radius:11px; }
+.cp-tabs button { flex:1 1 0; border:0; background:transparent; border-radius:8px; padding:8px 6px; font-weight:600; font-size:14px; color:var(--ink); min-width:0; }
+.cp-tabs button small { font:500 11px var(--f-mono); color:var(--muted); }
+.cp-tabs button.on { background:var(--accent); color:var(--accent-ink); }
+.cp-tabs button.on small { color:inherit; opacity:.8; }
+.cp-list { list-style:none; margin:0; padding:0; display:grid; gap:6px; }
+.cp-row { display:grid; grid-template-columns:auto minmax(0, 1fr) auto; align-items:center; gap:4px; border:1px solid var(--line); border-radius:11px; padding:4px 6px 4px 4px; background:var(--surface); }
+.cp-row.away { background:var(--surface-2); }
+.cp-open { border:0; background:transparent; text-align:left; display:grid; gap:2px; padding:6px 4px; min-width:0; color:var(--ink); }
+.cp-open b { font-weight:600; font-size:14.5px; }
+.cp-open small { color:var(--muted); font-size:12.5px; }
+.cp-addb { border:1px solid var(--accent); background:var(--accent-soft); color:var(--accent); border-radius:9px; padding:8px 10px; font-weight:600; font-size:13.5px; white-space:nowrap; }
+.cp-addb:disabled { border-color:var(--line); background:transparent; color:var(--muted); }
+.cp-addb.in { color:var(--good); }
+.cp-gh { margin:8px 2px 0; font:600 11.5px/1.2 var(--f-body); letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.cp-gh small { font-family:var(--f-mono); letter-spacing:0; }
+.cp-none { color:var(--muted); font-size:14px; padding:6px 2px; }
+.cp-morel { padding:2px 4px 4px; font-size:14px; }
+.cp-empty { margin-top:12px; }
+@media (max-width:480px) {
+  .cp-tabs button { font-size:13px; }
+  .cp-addb { padding:8px; }
+}
