@@ -420,7 +420,12 @@ document.addEventListener('click', e => {
     return;
   }
   if (t.dataset.fig !== undefined) {openMotion(t.dataset.fig);return;}
-  if (t.id === 'e-toggle') { eqOpen = !eqOpen; renderSetup(); return; }
+  if (t.id === 'e-toggle' || t.id === 'e-toggle-top') {
+    eqOpen = !eqOpen; renderSetup();
+    /* свернули снизу длинного списка — вернуть взгляд к заголовку раздела */
+    if (!eqOpen && t.id === 'e-toggle') { const h = $('.e-head'); if (h && h.getBoundingClientRect().top < 0) h.scrollIntoView({block:'start', behavior:reduceMotion ? 'auto' : 'smooth'}); }
+    return;
+  }
   if (t.id === 't-minus') return adjustRest(-15);
   if (t.id === 't-plus') return adjustRest(15);
   if (t.id === 't-skip') return stopRest();

@@ -2348,5 +2348,8 @@
  "Свои планы": "Custom plans",
  "В своём плане мышцы подсказывают, что добавить: по ним собирается список «Добавить упражнение» и проверяется, все ли нагружены.": "In a custom plan the muscles suggest what to add: they drive the “Add an exercise” list and the check that every one is worked.",
  "Добавлено в план:": "Added to plan:",
- "Уже в плане:": "Already in plan:"
+ "Уже в плане:": "Already in plan:",
+ "Только вес тела.": "Bodyweight only.",
+ "и ещё": "and",
+ "Свернуть": "Collapse"
 }

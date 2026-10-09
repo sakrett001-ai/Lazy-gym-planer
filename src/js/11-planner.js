@@ -451,14 +451,16 @@ function renderSetup() {
   $('#e-chips').innerHTML = EQUIP_CATS.map(c => `<div class="e-cat"><h3>${c.name}</h3><div class="chips">${EQUIP.filter(e => e.cat === c.id).map(e =>
     `<button type="button" class="chip${es.has(e.id) ? ' on' : ''}" data-e="${e.id}" aria-pressed="${es.has(e.id)}"${e.hint ? ` title="${esc(e.hint)}"` : ''}>${ICON.check}<span>${e.name}</span></button>`).join('')}</div></div>`).join('');
   $('#e-count').textContent = es.size ? `${es.size} из ${EQUIP.length}` : 'только вес тела';
-  const matched = EQUIP_PRESETS.some(p => p.eq.length === es.size && p.eq.every(e => es.has(e)));
-  const open = eqOpen || !matched;
+  /* список оборудования сворачивается всегда — и для своего набора, не совпадающего с заготовкой;
+     кнопка вверху видна без прокрутки, внизу раскрытого списка — ещё одна «Свернуть» */
+  const open = eqOpen, names = EQUIP.filter(e => es.has(e.id)).map(e => e.name);
   $('#e-chips').hidden = !open;
   $('#e-sum').hidden = open;
-  $('#e-sum').textContent = es.size === EQUIP.length ? 'Всё оборудование зала.' : EQUIP.filter(e => es.has(e.id)).map(e => e.name).join(', ') + '.';
-  $('#e-toggle').hidden = !matched;
-  $('#e-toggle').textContent = open ? 'Свернуть список' : 'Изменить список';
-  $('#e-toggle').setAttribute('aria-expanded', open);
+  $('#e-sum').textContent = es.size === EQUIP.length ? 'Всё оборудование зала.' : !names.length ? 'Только вес тела.'
+    : names.length > 10 ? names.slice(0, 10).join(', ') + ` и ещё ${names.length - 10}.` : names.join(', ') + '.';
+  $('#e-toggle').hidden = !open;
+  $('#e-toggle-top').textContent = open ? 'Свернуть' : 'Изменить список';
+  for (const b of [$('#e-toggle'), $('#e-toggle-top')]) b.setAttribute('aria-expanded', String(open));
 }
 
 function titleFor() {

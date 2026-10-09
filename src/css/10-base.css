@@ -107,6 +107,8 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .e-cat { display:grid; gap:6px; }
 .e-cat h3 { font:500 12px/1.2 var(--f-body); color:var(--faint); }
 .e-toggle { justify-self:start; border:0; background:transparent; padding:2px 0; font-size:13.5px; font-weight:600; color:var(--accent); }
+.e-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+.e-toggle-top { flex:none; min-height:32px; padding:4px 0 4px 8px; }
 .e-sum { margin:0; font-size:13px; color:var(--muted); }
 /* места тренировок */
 .places { display:flex; flex-wrap:wrap; gap:6px; }
