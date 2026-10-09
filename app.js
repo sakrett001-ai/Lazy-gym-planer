@@ -9411,4 +9411,4 @@ renderSetup();
 renderPlan();
 logInit();
 
-window.PODHOD_VERSION='4.7.1';window.PODHOD_BUILD='4.7.1-b0d94e46bd85';window.PODHOD_LANG='ru';
+window.PODHOD_VERSION='4.8.0';window.PODHOD_BUILD='4.8.0-d9c6f42e78f8';window.PODHOD_LANG='ru';

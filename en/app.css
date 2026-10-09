@@ -794,7 +794,7 @@ html.workout-open{overflow:hidden}
 .focus-chip b { color:var(--mus); }
 .focus-chip button { border:0; background:var(--surface); border-radius:999px; padding:5px 10px; font-size:12.5px; color:var(--muted); }
 
-.volume-figure{width:100%;height:100%;min-width:0;overflow:hidden;border-radius:12px;background:#101722;display:grid;place-items:center}
+.volume-figure{width:100%;height:100%;min-width:0;overflow:hidden;border-radius:12px;background:#0b1119;display:grid;place-items:center}
 .volume-figure canvas,.volume-figure>svg{width:100%!important;height:100%!important;object-fit:contain;display:block}
 .muscle-region-select{display:grid;gap:5px;margin:10px 0;font-size:12px;color:var(--muted)}
 .muscle-region-select select{max-width:100%;min-width:0;min-height:42px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit}
