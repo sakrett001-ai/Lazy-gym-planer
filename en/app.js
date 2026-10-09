@@ -6758,7 +6758,7 @@ const WEEKS = [
 ];
 
 const DEFAULTS = {goal:'mass', format:'classic', level:'mid', count:6, groups:['chest', 'back', 'shoulders'], equip:EQUIP.map(e => e.id), seed:7,
-  mode:'single', days:3, split:'full', week:1, day:0, view:'plan', atlasM:'chest', focus:null, fav:[], customs:[], custom:null};
+  mode:'single', days:3, split:'full', week:1, day:0, view:'plan', atlasM:'chest', focus:null, fav:[], customs:[], custom:null, gen:null, author:'', fold:null};
 const STORE = 'podhod.settings.v1';
 function loadSettings() {
   try { const s = JSON.parse(localStorage.getItem(STORE) || 'null'); if (s && s.groups && s.equip) return Object.assign({}, DEFAULTS, s); } catch (e) {}
@@ -7075,6 +7075,9 @@ const ICON = {
   loop:'<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 8.5A6 6 0 1 0 15 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16 3.5v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   chart:'<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 16h14M5 13l3.5-4 3 2.5L16 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   cal:'<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3 8h14M7 2.5v3M13 2.5v3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+  save:'<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 3h8l3 3v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M7 3v4h6V3M7 17v-5h6v5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
+  share:'<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 13V3M6.5 6.5 10 3l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 10v6h10v-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  load:'<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10M6.5 9.5 10 13l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 12v4h10v-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   check:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
 
@@ -7085,6 +7088,7 @@ function renderSetup() {
   $('#views').innerHTML = viewTabs();
   const jv = S.view === 'journal' || S.view === 'atlas';
   $('.setup').hidden = jv; $('.layout').classList.toggle('solo', jv);
+  renderSetupFold();
   $('#f-mode').innerHTML = seg('mode', MODES, S.mode);
   $('#f-prog').hidden = !prog;
   $('#f-custom').hidden = !custom;
@@ -7168,14 +7172,20 @@ function volBars(gvol, groups) {
   }).join('');
 }
 
+/* вес по плану (свой план или план тренера) — рядом с подходами */
+function rxKgHtml(it) {
+  const r = it.rx; if (!r.kgPlan || typeof loadType !== 'function') return '';
+  const lt = loadType(it.ex); if (lt === 'none') return '';
+  return `<span class="rx-kg">${lt === 'assist' ? 'counterweight ' : lt === 'extra' ? '+' : ''}${planKgText(r.kgPlan)} kg</span>`;
+}
 function rxHtml(it) {
   const r = it.rx;
   const unit = r.unit ? ` <small>${r.unit}</small>` : '';
   const side = r.uni ? '<small> per side</small>' : '';
-  if (r.static) return `<div class="rx"><span class="rx-big">${r.series} × 3 × ${r.reps}${unit}${side}</span><span class="rx-rest">${r.series} ${plural(r.series, 'series', 'series', 'series')} of 3 sets · rest ${fmtRest(r.rest)}${r.series > 1 ? `, between series ${fmtRest(r.seriesRest)}` : ''}</span>${r.light ? '<span class="rx-light">scaled down</span>' : ''}</div>`;
-  if (r.circ) return `<div class="rx"><span class="rx-big">${r.reps}${unit}${side}</span></div>`;
+  if (r.static) return `<div class="rx"><span class="rx-big">${r.series} × 3 × ${r.reps}${unit}${side}</span><span class="rx-rest">${r.series} ${plural(r.series, 'series', 'series', 'series')} of 3 sets · rest ${fmtRest(r.rest)}${r.series > 1 ? `, between series ${fmtRest(r.seriesRest)}` : ''}</span>${rxKgHtml(it)}${r.light ? '<span class="rx-light">scaled down</span>' : ''}</div>`;
+  if (r.circ) return `<div class="rx"><span class="rx-big">${r.reps}${unit}${side}</span>${rxKgHtml(it)}</div>`;
   const rest = r.restShown !== undefined ? (r.restShown ? `rest ${fmtRest(r.restShown)}` : 'straight to the next one') : `rest ${fmtRest(r.rest)}`;
-  return `<div class="rx"><span class="rx-big">${r.sets} × ${r.reps}${unit}${side}</span><span class="rx-rest">${rest}</span>${r.light ? '<span class="rx-light">scaled down</span>' : ''}</div>`;
+  return `<div class="rx"><span class="rx-big">${r.sets} × ${r.reps}${unit}${side}</span><span class="rx-rest">${rest}</span>${rxKgHtml(it)}${r.light ? '<span class="rx-light">scaled down</span>' : ''}</div>`;
 }
 
 /* суставы под пиковой нагрузкой — короткая строка в карточке; подробности в разборе движения */
@@ -7195,7 +7205,7 @@ function cardHtml(it, idx) {
   if (r.tempo) meta.push(`<span title="lowering – pause – lifting – pause, seconds; X — explosive">tempo <b>${r.tempo}</b></span>`);
   if (r.load) meta.push(`<span>${r.load}</span>`);
   const view = ex.anim.catalogRig?'3D view · 5 angles':(ex.viewNote || (ex.anim.view === 'front' ? 'front view' : 'side view'));
-  return `<li class="card" data-ex="${ex.id}" data-slot="${it.slot}">
+  return `<li class="card${cardFoldClass(ex.id)}" data-ex="${ex.id}" data-slot="${it.slot}">
   <div class="c-top">
     <div class="motion-tile"><button type="button" class="illus" data-fig="${idx}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Break down the movement: ${esc(it.name)}"><span class="illus-v">${view}</span><span class="illus-zoom" aria-hidden="true">Zoom ↗</span></button><div class="motion-bar"><span class="motion-caption">Starting position</span><button type="button" data-motion-pause="${idx}" aria-label="Pause demo: ${esc(it.name)}" aria-pressed="false">Pause</button></div></div>
     <div class="c-info">
@@ -7205,23 +7215,24 @@ function cardHtml(it, idx) {
       ${it.sub ? `<p class="c-sub"><b>Instead of: ${esc(exName(it.sub.from, effEquip(programEquip() || S.equip)))}</b>${it.sub.note ? ` · ${esc(it.sub.note)}` : ''}</p>` : ''}
       ${rxHtml(it)}
       ${meta.length ? `<p class="c-meta">${meta.join('<i>·</i>')}</p>` : ''}
+      ${r.coachNote ? `<p class="c-note"><b>Note:</b> ${esc(r.coachNote)}</p>` : ''}
     </div>
   </div>
   <div class="c-mus">
+    ${musFoldHead(ex)}
     <div class="c-map">${muscleMapSvg(lvl, {aria:'Working muscles: ' + ex.pri.map(m => MUSCLE_NAMES[m]).join(', ')})}</div>
     <ul class="mus">${mus}</ul>
   </div>
   ${jointsLine(ex)}
   ${logBlock(it)}
+  <div class="c-hist" hidden></div>
   <div class="c-warm">${warmupHtml(it, workWeightOf(it, null))}</div>
   <div class="c-prog">${progressionHint(it)}</div>
   <div class="c-act">
     <button type="button" class="btn-ghost" data-workout="${ex.id}" aria-haspopup="dialog" aria-controls="workout-view">Start workout →</button>
-    <button type="button" class="btn-ghost" data-hist="1" aria-expanded="false">${ICON.chart}<span>History</span><small>${histCount(ex.id) || ''}</small></button>
     <button type="button" class="btn-ghost" data-swap="${it.slot}">${ICON.swap}<span>Swap</span></button>
   </div>
   ${S.mode === 'custom' ? customToolsHtml(it) : ''}
-  <div class="c-hist" hidden></div>
   <details class="tech">
     <summary>Technique</summary>
     <ol class="t-steps">${ex.tech.map(s => `<li>${esc(s)}</li>`).join('')}</ol>
@@ -7235,6 +7246,7 @@ function cardHtml(it, idx) {
 
 function blocksHtml(p) {
   let html = `<p class="phase"><b>Warm-up, 8–10 min.</b> Easy cardio until you break a light sweat, joint mobility, then 1–2 warm-up sets with a light weight in the first exercise.</p>`;
+  html += cardsViewHtml();
   if (S.format === 'static') html += `<p class="phase phase-static"><b>Static-dynamic.</b> Weight — about half of your 1RM. Slowly: 3 s down and 3 s up, no pauses; don’t lock out at the top and don’t relax at the bottom — the muscle stays tense the whole time. By the end of a set (30–40 s) — a strong burn, but not failure. Three sets with 30 s rest make one series.</p>`;
   let idx = 0;
   for (const b of p.blocks) {
@@ -7272,8 +7284,11 @@ function headButtons(copyLabel) {
         ${S.mode === 'custom' ? '' : `<button type="button" class="btn btn-2" id="reroll">${ICON.dice}<span>Another option</span></button>`}
         <button type="button" class="btn btn-2" id="copy">${ICON.copy}<span>${copyLabel}</span></button>
         ${S.mode === 'program' ? `<button type="button" class="btn btn-2" id="ics-open">${ICON.cal}<span>Add to calendar</span></button>` : ''}
+        ${S.mode === 'custom' ? `<button type="button" class="btn btn-2" id="plan-export">${ICON.share}<span>Export</span></button>`
+          : `<button type="button" class="btn btn-2" id="save-plan">${ICON.save}<span>${S.mode === 'program' ? 'Save the week' : 'Save as custom plan'}</span></button>`}
       </div>
-      <p class="p-hint" id="copy-msg" role="status"></p>`;
+      <p class="p-hint" id="copy-msg" role="status"></p>
+      <p class="p-hint" id="save-msg" role="status"></p>`;
 }
 /* акцент, выбранный в атласе мышц */
 function focusHtml() {
@@ -7295,7 +7310,7 @@ function renderPlan() {
     return;
   }
   if (plan.empty === 'custom') {
-    root.innerHTML = `<header class="p-head p-head-c"><div class="p-sum"><p class="eyebrow">Custom plan · ${GOALS[S.goal].name} · ${FORMATS[S.format].name}</p><h1 class="p-title">${esc(titleFor())}</h1></div></header>` + customEmptyHtml() + customAddHtml();
+    root.innerHTML = `<header class="p-head p-head-c"><div class="p-sum"><p class="eyebrow">Custom plan · ${GOALS[S.goal].name} · ${FORMATS[S.format].name}</p><h1 class="p-title">${esc(titleFor())}</h1>${customHeadHtml()}</div></header>` + customEmptyHtml() + customAddHtml();
     return;
   }
   if (plan.empty === 'none') {
@@ -7306,11 +7321,12 @@ function renderPlan() {
   }
   const G = GOALS[S.goal];
   const setsWord = S.format === 'circuit' ? plural(plan.totalSets, 'set', 'sets', 'sets') + ' across rounds' : plural(plan.totalSets, 'set', 'sets', 'sets');
-  let html = `<header class="p-head">
+  const lf = ensureFold(S).load, loadRows = Object.entries(plan.load).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([m, v]) => [MUSCLE_NAMES[m], v]);
+  let html = `<header class="p-head${lf ? ' load-folded' : ''}">
     <div class="p-sum">
       <p class="eyebrow">${plan.custom ? 'Custom plan · ' : ''}${G.name} · ${FORMATS[S.format].name} · ${LEVELS[S.level].name.toLowerCase()}</p>
       <h1 class="p-title">${esc(titleFor())}</h1>
-      ${plan.custom ? '' : focusHtml()}
+      ${plan.custom ? customHeadHtml() : focusHtml()}
       <dl class="stats">
         <div><dt>time</dt><dd>≈${plan.minutes}<small>min</small></dd></div>
         <div><dt>${setsWord}</dt><dd>${plan.totalSets}</dd></div>
@@ -7318,10 +7334,10 @@ function renderPlan() {
       </dl>
       ${headButtons('Copy plan')}
     </div>
-    <figure class="p-load">
+    <figure class="p-load${lf ? ' folded' : ''}">
       <div class="p-map">${muscleMapSvg(norm(plan.load), {labels:true, aria:'Workout load map'})}</div>
       <figcaption>
-        <p class="lb-h">Load by muscle, sets</p>
+        ${loadFoldHead('Load by muscle, sets', loadTop(loadRows))}
         <ul class="lbars">${loadBars(plan.load)}</ul>
         <p class="lb-note">Assisting work counts as half a set.</p>
       </figcaption>
@@ -7344,7 +7360,8 @@ function renderProgram() {
   const G = GOALS[S.goal], wk = prog.week;
   const allGroups = new Set(prog.days.flatMap(d => DAY_T[d.tid].g));
   const sp = SPLITS[prog.split];
-  let html = `<header class="p-head">
+  const lf = ensureFold(S).load, volRows = Object.entries(prog.gvol).filter(([g, v]) => g !== 'cardio' && v >= 1).sort((a, b) => b[1] - a[1]).map(([g, v]) => [GN[g], Math.round(v * 2) / 2]);
+  let html = `<header class="p-head${lf ? ' load-folded' : ''}">
     <div class="p-sum">
       <p class="eyebrow">${G.name} · ${FORMATS[S.format].name} · ${LEVELS[S.level].name.toLowerCase()}</p>
       <h1 class="p-title">${esc(sp.name)}, ${S.days} ${plural(S.days, 'workout', 'workouts', 'workouts')} per week</h1>
@@ -7356,10 +7373,10 @@ function renderProgram() {
       </dl>
       ${headButtons('Copy week')}
     </div>
-    <figure class="p-load">
+    <figure class="p-load${lf ? ' folded' : ''}">
       <div class="p-map">${muscleMapSvg(norm(prog.load), {labels:true, aria:'Weekly load map'})}</div>
       <figcaption>
-        <p class="lb-h">Sets per group per week</p>
+        ${loadFoldHead('Sets per group per week', loadTop(volRows))}
         <ul class="vbars">${volBars(prog.gvol, allGroups)}</ul>
         <p class="lb-note">The band is a guide for muscle growth: 10–20 sets per week. A set counts in full for the target group and as half for the other working muscles. ${S.goal === 'strength' ? 'Volume is lower in a strength cycle — that\'s normal.' : ''}</p>
       </figcaption>
@@ -7369,7 +7386,7 @@ function renderProgram() {
     <h2>4-week cycle</h2>
     <div class="wk" role="group" aria-label="Cycle week">${WEEKS.map((w, i) => `<button type="button" class="${i + 1 === S.week ? 'on' : ''}" data-week="${i + 1}" aria-pressed="${i + 1 === S.week}"><b>${i + 1}</b><small>${w.name}</small></button>`).join('')}</div>
     <p class="wk-note"><b>${wk.name}.</b> ${esc(wk.note)}</p>
-    <p class="rule"><b>How to add weight.</b> Work within the rep range on the card. Once you hit the top of the range in every set, add weight next time — 1–2.5 kg for the upper body, 2.5–5 kg for legs — and start again from the bottom of the range. If you log your sets on the cards, the planner will tell you when to increase. After the deload, repeat the cycle with the new weights.</p>
+    <details class="rule"><summary>How to add weight</summary><p>Work within the rep range on the card. Once you hit the top of the range in every set, add weight next time — 1–2.5 kg for the upper body, 2.5–5 kg for legs — and start again from the bottom of the range. If you log your sets on the cards, the planner will tell you when to increase. After the deload, repeat the cycle with the new weights.</p></details>
   </section>
   <nav class="days" role="tablist" aria-label="Days of the week">${prog.days.map((d, i) => `<button type="button" role="tab" class="${i === S.day ? 'on' : ''}" data-day="${i}" aria-selected="${i === S.day}"><b>${WD[d.wd]}</b><span>${esc(d.name)}</span><small>${d.plan.items ? `≈${d.plan.minutes} min` : 'no exercises'}</small></button>`).join('')}</nav>
   <div class="day-head"><h2>${WD_FULL[day.wd]} — ${esc(day.name)}</h2>
@@ -7526,10 +7543,28 @@ function staticSeconds(rx) {
    Свой план — тренировка из упражнений, выбранных вручную (из избранного или по мышцам): порядок, подходы,
    повторы и отдых задаёт человек; по умолчанию дозировку подставляют цель, формат и уровень, как в обычном плане.
    Своих планов может быть несколько, у каждого имя. Журнал, разминка, подсказки веса и режим тренировки — общие. */
-const CUSTOM_MAX = 12, CUSTOM_NAME = 24;
+const CUSTOM_MAX = 12, CUSTOM_NAME = 40, CUSTOM_TEXT = 40, CUSTOM_NOTE = 400, ITEM_NOTE = 200;
 const CUSTOM_REPS = /^(\d{1,3})(?:\s*[–-]\s*(\d{1,3}))?$/;
+const CUSTOM_TEMPO = /^[0-9X]{1,2}-[0-9X]{1,2}-[0-9X]{1,2}-[0-9X]{1,2}$/;
+const PLAN_KEYS = ['goal', 'format', 'level'];
 let cpTab = null, cpOpen = new Set(), cpDel = false, cpMsg = '';
 
+/* текст от человека или из чужого файла: без управляющих символов, с ограничением длины (переводы строк в заметках остаются) */
+function cleanText(v, max, lines = false) {
+  if (typeof v !== 'string') return '';
+  return v.replace(lines ? /[\u0000-\u0009\u000B-\u001F\u007F]/g : /[\u0000-\u001F\u007F]/g, lines ? '' : ' ').replace(/[ \t]+/g, ' ').trim().slice(0, max);
+}
+/* вес: одно число на все подходы или по подходам; 0–500 кг, шаг 0,25 */
+function cleanKg(v) {
+  const list = (Array.isArray(v) ? v : [v]).map(x => typeof x === 'string' ? parseFloat(x.replace(',', '.')) : x)
+    .filter(x => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 500).map(x => Math.round(x * 4) / 4).slice(0, 10);
+  return list.length ? list : null;
+}
+/* ввод веса: «60», «62,5», «60 / 62,5 / 65», «60, 62,5, 65» — запятая с пробелом, пробел, «/» и «;» разделяют подходы,
+   запятая внутри числа — десятичная */
+function parseKgInput(text) {
+  return cleanKg(String(text || '').split(/\s*[;\/]\s*|,\s+|\s+/).map(x => x.trim()).filter(Boolean));
+}
 function cleanCustomItem(it) {
   if (!it || !EXI[it.id]) return null;
   const o = {id:it.id};
@@ -7537,24 +7572,51 @@ function cleanCustomItem(it) {
   const m = typeof it.reps === 'string' && it.reps.trim().match(CUSTOM_REPS);
   if (m && +m[1] >= 1 && (!m[2] || +m[2] >= +m[1])) o.reps = m[2] ? `${+m[1]}–${+m[2]}` : String(+m[1]);
   if (Number.isInteger(it.rest) && it.rest >= 0 && it.rest <= 600) o.rest = it.rest;
+  const kg = it.kg != null ? cleanKg(it.kg) : null; if (kg) o.kg = kg;
+  if (typeof it.tempo === 'string' && CUSTOM_TEMPO.test(it.tempo.trim().toUpperCase())) o.tempo = it.tempo.trim().toUpperCase();
+  const note = cleanText(it.note, ITEM_NOTE, true); if (note) o.note = note;
   return o;
+}
+function cleanPlan(c, id) {
+  const ids = new Set(), out = {id, name:cleanText(c.name, CUSTOM_NAME) || 'My plan',
+    items:(Array.isArray(c.items) ? c.items : []).map(cleanCustomItem).filter(it => it && !ids.has(it.id) && ids.add(it.id)).slice(0, CUSTOM_MAX)};
+  for (const [k, dict] of [['goal', GOALS], ['format', FORMATS], ['level', LEVELS]]) if (typeof c[k] === 'string' && dict[c[k]]) out[k] = c[k];
+  for (const k of ['group', 'for', 'from']) { const v = cleanText(c[k], CUSTOM_TEXT); if (v) out[k] = v; }
+  const note = cleanText(c.note, CUSTOM_NOTE, true); if (note) out.note = note;
+  return out;
 }
 /* настройки из хранилища или резервной копии: только известные упражнения и разумные значения */
 function ensureCustoms(s) {
   s.fav = Array.isArray(s.fav) ? [...new Set(s.fav.filter(id => typeof id === 'string' && EXI[id]))] : [];
   const seen = new Set();
-  s.customs = (Array.isArray(s.customs) ? s.customs : []).filter(c => c && typeof c.id === 'string' && !seen.has(c.id) && seen.add(c.id)).map(c => {
-    const ids = new Set();
-    return {id:c.id, name:String(c.name || '').trim().slice(0, CUSTOM_NAME) || 'My plan',
-      items:(Array.isArray(c.items) ? c.items : []).map(cleanCustomItem).filter(it => it && !ids.has(it.id) && ids.add(it.id)).slice(0, CUSTOM_MAX)};
-  });
+  s.customs = (Array.isArray(s.customs) ? s.customs : []).filter(c => c && typeof c.id === 'string' && /^[\w-]{1,24}$/.test(c.id) && !seen.has(c.id) && seen.add(c.id)).map(c => cleanPlan(c, c.id));
   if (!s.customs.length) s.customs.push({id:'c1', name:'My plan', items:[]});
   if (!s.customs.some(c => c.id === s.custom)) s.custom = s.customs[0].id;
   if (!MODES[s.mode]) s.mode = 'single';
+  s.author = cleanText(s.author, CUSTOM_TEXT);
+  /* цель, формат и уровень обычных планов, пока открыт свой план (у своего — свои) */
+  const g = s.gen && typeof s.gen === 'object' ? s.gen : {};
+  s.gen = {goal:GOALS[g.goal] ? g.goal : s.goal, format:FORMATS[g.format] ? g.format : s.format, level:LEVELS[g.level] ? g.level : s.level};
   return s;
 }
+function newPlanId() { let id; do id = 'c' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); while (S.customs.some(c => c.id === id)); return id; }
 function customOf(s = S) { return s.customs.find(c => c.id === s.custom) || s.customs[0]; }
+
+/* У каждого своего плана свои цель, формат и уровень: план выглядит одинаково у тренера и у ученика.
+   Переключатели в параметрах правят открытый план; обычная тренировка и неделя держат свои (S.gen). */
+function loadPlanSettings() { const c = customOf(); for (const k of PLAN_KEYS) { if (!c[k]) c[k] = S[k]; S[k] = c[k]; } }
+function storePlanSetting(k) { if (S.mode === 'custom' && PLAN_KEYS.includes(k)) customOf()[k] = S[k]; else if (PLAN_KEYS.includes(k)) S.gen[k] = S[k]; }
+function switchModeSettings(prev) {
+  if (prev !== 'custom' && S.mode === 'custom') { for (const k of PLAN_KEYS) S.gen[k] = S[k]; loadPlanSettings(); }
+  else if (prev === 'custom' && S.mode !== 'custom') for (const k of PLAN_KEYS) S[k] = S.gen[k];
+}
+function openCustom(id) {
+  const prev = S.mode; if (id) S.custom = id;
+  S.mode = 'custom'; S.view = 'plan'; S.day = 0; cpOpen = new Set(); cpDel = false;
+  if (prev === 'custom') loadPlanSettings(); else switchModeSettings(prev);
+}
 ensureCustoms(S);
+if (S.mode === 'custom') loadPlanSettings();
 
 /* ---------- избранное ---------- */
 const isFav = id => S.fav.includes(id);
@@ -7611,13 +7673,23 @@ function customSet(slot, key, value) {
 
 /* дозировка по цели и формату, поверх — правка человека (кроме статодинамики: там серии заданы методом) */
 function customRx(rx, o, ex) {
-  if (!o || rx.static) return rx;
-  const r = {...rx, edited:!!(o.sets || o.reps || o.rest !== undefined)};
-  if (o.sets) r.sets = o.sets;
-  if (o.reps && !ex.kind) { r.reps = o.reps; r.work = midOf(o.reps) * GOALS[S.goal].rep * (ex.uni ? 2 : 1); }
-  if (o.rest !== undefined) r.rest = o.rest;
+  if (!o) return rx;
+  const r = {...rx};
+  if (!rx.static) {
+    if (o.sets) r.sets = o.sets;
+    if (o.reps && !ex.kind) { r.reps = o.reps; r.work = midOf(o.reps) * GOALS[S.goal].rep * (ex.uni ? 2 : 1); }
+    if (o.rest !== undefined) r.rest = o.rest;
+    if (o.tempo && !ex.kind) r.tempo = o.tempo;
+  }
+  /* вес и заметка тренера — и в статодинамике */
+  if (o.kg) r.kgPlan = o.kg;
+  if (o.note) r.coachNote = o.note;
+  r.edited = r.sets !== rx.sets || r.reps !== rx.reps || r.rest !== rx.rest || r.tempo !== rx.tempo || !!o.kg || !!o.note;
   return r;
 }
+/* вес по плану для подхода k (с нуля): список короче подходов — последний вес повторяется */
+const planKg = (rx, k) => rx && rx.kgPlan ? rx.kgPlan[Math.min(k, rx.kgPlan.length - 1)] : null;
+function planKgText(list) { return list.every(v => v === list[0]) ? fmtKg(list[0]) : list.map(fmtKg).join(' / '); }
 
 /* подсказки по составу: выбранные мышцы без упражнений и заметный перекос жимов и тяг, передней и задней поверхности бедра */
 function customHints(p) {
@@ -7634,12 +7706,21 @@ function customHints(p) {
 }
 
 /* ---------- отрисовка ---------- */
+/* список своих планов: без программы — сверху, программы — группами со своим заголовком */
 function customSetupHtml() {
-  const c = customOf();
-  return `<div class="places cp-plans" role="group" aria-label="Custom plans">${S.customs.map(p => `<button type="button" class="place${p.id === c.id ? ' on' : ''}" data-cp-plan="${p.id}" aria-pressed="${p.id === c.id}"><b>${esc(p.name)}</b><small>${p.items.length ? p.items.length + ' ' + plural(p.items.length, 'exercise', 'exercises', 'exercises') : 'empty'}</small></button>`).join('')}`
-    + `<button type="button" class="place place-add" data-cp-new="1">+ Plan</button></div>`
+  const c = customOf(), groups = [...new Set(S.customs.map(p => p.group || ''))].sort((a, b) => (a ? 1 : 0) - (b ? 1 : 0));
+  const chip = p => `<button type="button" class="place${p.id === c.id ? ' on' : ''}" data-cp-plan="${p.id}" aria-pressed="${p.id === c.id}"><b>${esc(p.name)}</b><small>${p.items.length ? p.items.length + ' ' + plural(p.items.length, 'exercise', 'exercises', 'exercises') : 'empty'}</small></button>`;
+  const lists = groups.map(g => `${g ? `<p class="cp-group">${esc(g)}</p>` : ''}<div class="places cp-plans" role="group" aria-label="${g ? esc(g) : 'Custom plans'}">${S.customs.filter(p => (p.group || '') === g).map(chip).join('')}</div>`).join('');
+  const known = [...new Set(S.customs.map(p => p.group).filter(Boolean))];
+  return `${lists}<div class="cp-acts"><button type="button" class="place place-add" data-cp-new="1">+ Plan</button><button type="button" class="btn-ghost" data-cp-copy="1">Duplicate plan</button><button type="button" class="btn-ghost" data-cp-import="1">${ICON.load}<span>Import plan</span></button></div>`
     + `<div class="place-tools"><label class="place-name">Name<input id="cp-name" type="text" maxlength="${CUSTOM_NAME}" value="${esc(c.name)}" autocomplete="off"></label>`
-    + (S.customs.length > 1 ? `<button type="button" class="place-del${cpDel ? ' armed' : ''}" data-cp-del="1">${cpDel ? 'Are you sure?' : 'Delete plan'}</button>` : '') + `</div>`;
+    + (S.customs.length > 1 ? `<button type="button" class="place-del${cpDel ? ' armed' : ''}" data-cp-del="1">${cpDel ? 'Are you sure?' : 'Delete plan'}</button>` : '') + `</div>`
+    + `<details class="cp-about"${c.group || c.for || c.note ? ' open' : ''}><summary>Program, athlete, note</summary><div class="cp-about-f">
+        <label class="place-name">Program<input id="cp-group" type="text" maxlength="${CUSTOM_TEXT}" list="cp-groups" value="${esc(c.group || '')}" placeholder="For example: Strength, week 1" autocomplete="off"><datalist id="cp-groups">${known.map(g => `<option value="${esc(g)}"></option>`).join('')}</datalist></label>
+        <label class="place-name">For<input id="cp-for" type="text" maxlength="${CUSTOM_TEXT}" value="${esc(c.for || '')}" placeholder="Athlete’s name" autocomplete="off"></label>
+        <label class="place-name cp-pnote">Plan note<textarea id="cp-pnote" rows="2" maxlength="${CUSTOM_NOTE}" placeholder="Goal, how you feel, what matters in this workout">${esc(c.note || '')}</textarea></label>
+        ${c.from ? `<p class="f-note">From: ${esc(c.from)}</p>` : ''}
+      </div></details>`;
 }
 function customRowHtml(ex, E) {
   const here = available(ex, E), inPlan = customHas(ex.id), full = customOf().items.length >= CUSTOM_MAX, name = exName(ex, here ? E : effEquip(EQUIP.map(e => e.id)));
@@ -7684,17 +7765,57 @@ function customToolsHtml(it) {
         ${r.circ ? '' : `<div class="cp-f"><span>Sets</span><div class="stepper sm"><button type="button" data-cp-step="${slot}" data-d="-1" aria-label="Fewer sets"${r.sets <= 1 ? ' disabled' : ''}>−</button><output>${r.sets}</output><button type="button" data-cp-step="${slot}" data-d="1" aria-label="More sets"${r.sets >= 10 ? ' disabled' : ''}>+</button></div></div>`}
         ${it.ex.kind ? '' : `<label class="cp-f"><span>Reps</span><input type="text" inputmode="numeric" maxlength="7" data-cp-reps="${slot}" value="${esc(r.reps)}" aria-label="Reps, for example 8–12"></label>`}
         ${r.circ ? '' : `<label class="cp-f"><span>Rest</span><select data-cp-rest="${slot}">${restOpts.map(s => `<option value="${s}"${s === r.rest ? ' selected' : ''}>${s ? fmtRest(s) : 'no rest'}</option>`).join('')}</select></label>`}
-        ${o.sets || o.reps || o.rest !== undefined ? `<button type="button" class="btn-ghost cp-reset" data-cp-reset="${slot}">Use goal default</button>` : ''}
+        ${it.ex.kind ? '' : `<label class="cp-f"><span>Tempo</span><input type="text" maxlength="11" data-cp-tempo="${slot}" value="${esc(o.tempo || '')}" placeholder="${esc(r.tempo || '3-0-1-0')}" aria-label="Tempo: lowering, pause, lifting, pause — for example 3-0-1-0" autocomplete="off"></label>`}
+        ${o.sets || o.reps || o.rest !== undefined || o.tempo ? `<button type="button" class="btn-ghost cp-reset" data-cp-reset="${slot}">Use goal default</button>` : ''}
       </div>`;
+  const lt = loadType(it.ex), kgLabel = lt === 'assist' ? 'Counterweight, kg' : lt === 'extra' ? 'Extra weight, kg' : 'Weight, kg';
+  const extra = `<div class="cp-fields">
+      ${lt === 'none' ? '' : `<label class="cp-f cp-kg"><span>${kgLabel}</span><input type="text" maxlength="60" data-cp-kg="${slot}" value="${o.kg ? esc(o.kg.map(fmtKg).join(' / ')) : ''}" placeholder="60 or 60 / 62.5 / 65" aria-label="${kgLabel}: one number for all sets, or per set separated by “/”" autocomplete="off"></label>`}
+      <label class="cp-f cp-note"><span>Exercise note</span><textarea rows="2" maxlength="${ITEM_NOTE}" data-cp-note="${slot}" placeholder="For example: 1 s pause on the chest">${esc(o.note || '')}</textarea></label>
+    </div>`;
   return `<div class="cp-tools">
     <button type="button" class="btn-ghost" data-cp-move="${slot}" data-d="-1" aria-label="Move up"${slot === 0 ? ' disabled' : ''}>↑</button>
     <button type="button" class="btn-ghost" data-cp-move="${slot}" data-d="1" aria-label="Move down"${slot >= n - 1 ? ' disabled' : ''}>↓</button>
-    <button type="button" class="btn-ghost" data-cp-edit="${slot}" aria-expanded="${open}">${r.edited ? 'Edited' : 'Sets and rest'}</button>
+    <button type="button" class="btn-ghost${r.edited ? ' cp-edited' : ''}" data-cp-edit="${slot}" aria-expanded="${open}">Sets, weight, note${r.edited ? '<i class="cp-dot" aria-label="edited"></i>' : ''}</button>
     <button type="button" class="btn-ghost cp-rm" data-cp-rm="${slot}">Remove</button>
-  </div>${open ? `<div class="cp-edit">${edit}</div>` : ''}`;
+  </div>${open ? `<div class="cp-edit">${edit}${extra}</div>` : ''}`;
 }
 function customEmptyHtml() {
-  return `<div class="empty cp-empty"><h2>The plan is empty</h2><p>Add exercises from favorites or from the list for the selected muscles. Sets, reps and rest follow the goal and format — you can adjust them in the card.</p></div>`;
+  return `<div class="empty cp-empty"><h2>The plan is empty</h2><p>Add exercises from favorites or from the list for the selected muscles. Sets, reps and rest follow the goal and format — you can adjust them in the card.</p><p><button type="button" class="btn btn-2" data-cp-import="1">${ICON.load}<span>Import a plan from a file</span></button></p></div>`;
+}
+/* под названием своего плана: программа, для кого, от кого и заметка */
+function customHeadHtml() {
+  /* название программы само может содержать «·», поэтому части разделены отступом, а значения выделены */
+  const c = customOf(), sub = [c.group ? `<span>program: <b>${esc(c.group)}</b></span>` : '', c.for ? `<span>for: <b>${esc(c.for)}</b></span>` : '', c.from ? `<span>from: <b>${esc(c.from)}</b></span>` : ''].filter(Boolean);
+  return (sub.length ? `<p class="cp-sub">${sub.join('')}</p>` : '') + (c.note ? `<p class="c-note cp-pn">${esc(c.note)}</p>` : '');
+}
+
+/* ---------- сохранить собранный план как свой ----------
+   Обычная тренировка и неделя пересобираются при любой смене настроек; сохранение фиксирует состав, порядок
+   и дозировку, какими они видны сейчас. Неделя — несколько планов с общим названием программы. */
+function uniquePlanName(name, taken = S.customs.map(c => c.name)) {
+  const base = cleanText(name, CUSTOM_NAME - 4) || 'My plan';
+  if (!taken.includes(base)) return base;
+  for (let k = 2; ; k++) { const v = `${base} (${k})`; if (!taken.includes(v)) return v; }
+}
+function freezePlan(p) {
+  return p.blocks.flatMap(b => b.items).map(it => {
+    const r = it.rx, o = {id:it.ex.id};
+    if (!r.static) {
+      if (!r.circ) { o.sets = r.sets; o.rest = r.rest; }
+      if (!it.ex.kind && CUSTOM_REPS.test(String(r.reps))) o.reps = String(r.reps);
+    }
+    return cleanCustomItem(o);
+  }).filter(Boolean).slice(0, CUSTOM_MAX);
+}
+function savePlansFrom() {
+  const set = Object.fromEntries(PLAN_KEYS.map(k => [k, S[k]])), added = [];
+  if (S.mode === 'program' && prog) {
+    const group = cleanText(`${SPLITS[prog.split].name} · week ${S.week}`, CUSTOM_TEXT);
+    for (const d of prog.days) if (d.plan.items) added.push({id:newPlanId(), name:uniquePlanName(`${WD[d.wd]} · ${d.name}`, S.customs.map(c => c.name).concat(added.map(c => c.name))), group, ...set, items:freezePlan(d.plan)});
+  } else if (plan && plan.items) added.push({id:newPlanId(), name:uniquePlanName(titleFor()), ...set, items:freezePlan(plan)});
+  S.customs.push(...added); saveSettings();
+  return added;
 }
 
 /* ---------- события ---------- */
@@ -7713,20 +7834,32 @@ document.addEventListener('click', e => {
     for (const m of document.querySelectorAll('.cp-msg')) { m.hidden = false; m.querySelector('span').textContent = cpMsg; }
     return;
   }
-  if (t.dataset.cpGo !== undefined) { if (document.querySelector('#motion-view')?.open) closeMotion(); S.view = 'plan'; S.mode = 'custom'; S.day = 0; regen(); window.scrollTo({top:0}); return; }
+  if (t.id === 'save-plan') {
+    const added = savePlansFrom(), msg = $('#save-msg');
+    if (msg && added.length) msg.innerHTML = `Saved to your plans: ${esc(added.map(c => c.name).join(', '))}. <button type="button" class="link" data-cp-go="${added[0].id}">Open →</button>`;
+    return;
+  }
+  if (t.dataset.cpGo !== undefined) { if (document.querySelector('#motion-view')?.open) closeMotion(); openCustom(S.customs.some(c => c.id === t.dataset.cpGo) ? t.dataset.cpGo : null); regen(); window.scrollTo({top:0}); return; }
   if (t.dataset.cpOpen) { openMotionItem(previewItem(t.dataset.cpOpen)); return; }
   if (t.dataset.cpMore) { for (const li of document.querySelectorAll(`[data-cp-g="${t.dataset.cpMore}"]`)) li.hidden = false; t.closest('li').remove(); return; }
   if (t.dataset.cpTab) { cpTab = t.dataset.cpTab; for (const b of document.querySelectorAll('[data-cp-tab]')) { const on = b === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); } $('#cp-list').innerHTML = customListHtml(); return; }
-  if (t.dataset.cpPlan) { S.custom = t.dataset.cpPlan; cpOpen = new Set(); cpDel = false; return regen(); }
+  if (t.dataset.cpPlan) { openCustom(t.dataset.cpPlan); return regen(); }
   if (t.dataset.cpNew !== undefined) {
-    const id = 'c' + Date.now().toString(36);
-    S.customs.push({id, name:'Plan ' + (S.customs.length + 1), items:[]}); S.custom = id; cpOpen = new Set(); cpDel = false; regen();
+    const c = customOf(), id = newPlanId();
+    S.customs.push({id, name:'Plan ' + (S.customs.length + 1), items:[], ...(c.group ? {group:c.group} : {}), ...Object.fromEntries(PLAN_KEYS.map(k => [k, S[k]]))});
+    openCustom(id); regen();
+    const inp = $('#cp-name'); if (inp) { inp.focus(); inp.select(); }
+    return;
+  }
+  if (t.dataset.cpCopy !== undefined) {
+    const c = customOf(), copy = JSON.parse(JSON.stringify(c)); copy.id = newPlanId(); copy.name = uniquePlanName(c.name + ' — copy');
+    S.customs.splice(S.customs.indexOf(c) + 1, 0, copy); openCustom(copy.id); regen();
     const inp = $('#cp-name'); if (inp) { inp.focus(); inp.select(); }
     return;
   }
   if (t.dataset.cpDel !== undefined) {
     if (!cpDel) { cpDel = true; return renderSetup(); }
-    S.customs = S.customs.filter(c => c.id !== S.custom); cpDel = false; cpOpen = new Set(); ensureCustoms(S); return regen();
+    S.customs = S.customs.filter(c => c.id !== S.custom); ensureCustoms(S); openCustom(S.customs[0].id); return regen();
   }
   if (S.mode !== 'custom' || S.view !== 'plan') return;
   if (t.dataset.cpMove !== undefined) { const s = +t.dataset.cpMove, d = +t.dataset.d; customMove(s, d); return customRerender(`[data-cp-move="${s + d}"][data-d="${d}"]`); }
@@ -7737,10 +7870,15 @@ document.addEventListener('click', e => {
     customSet(s, 'sets', Math.max(1, Math.min(10, it.rx.sets + +t.dataset.d)));
     return customRerender(`[data-cp-step="${s}"][data-d="${t.dataset.d}"]`);
   }
-  if (t.dataset.cpReset !== undefined) { const s = +t.dataset.cpReset; for (const k of ['sets', 'reps', 'rest']) customSet(s, k, null); return customRerender(`[data-cp-edit="${s}"]`); }
+  if (t.dataset.cpReset !== undefined) { const s = +t.dataset.cpReset; for (const k of ['sets', 'reps', 'rest', 'tempo']) customSet(s, k, null); return customRerender(`[data-cp-edit="${s}"]`); }
 });
 document.addEventListener('change', e => {
   const t = e.target;
+  if (['cp-group', 'cp-for', 'cp-pnote'].includes(t.id)) {
+    const c = customOf(), k = {'cp-group':'group', 'cp-for':'for', 'cp-pnote':'note'}[t.id], v = k === 'note' ? cleanText(t.value, CUSTOM_NOTE, true) : cleanText(t.value, CUSTOM_TEXT);
+    if (v) c[k] = v; else delete c[k];
+    saveSettings(); if (k === 'group') renderSetup(); if (S.mode === 'custom' && S.view === 'plan') renderPlan(); return;
+  }
   if (t.id === 'cp-name') { const v = t.value.trim().slice(0, CUSTOM_NAME); if (v) customOf().name = v; saveSettings(); renderSetup(); if (S.mode === 'custom' && S.view === 'plan') renderPlan(); return; }
   if (t.dataset.cpReps !== undefined) {
     const s = +t.dataset.cpReps, ok = cleanCustomItem({id:customOf().items[s]?.id, reps:t.value});
@@ -7748,6 +7886,339 @@ document.addEventListener('change', e => {
     return customRerender(`[data-cp-reps="${s}"]`);
   }
   if (t.dataset.cpRest !== undefined) { const s = +t.dataset.cpRest; customSet(s, 'rest', +t.value); return customRerender(`[data-cp-rest="${s}"]`); }
+  if (t.dataset.cpKg !== undefined) {
+    const s = +t.dataset.cpKg, v = t.value.trim(), kg = v ? parseKgInput(v) : null;
+    if (v && !kg) { t.setAttribute('aria-invalid', 'true'); return; }
+    customSet(s, 'kg', kg); return customRerender(`[data-cp-kg="${s}"]`);
+  }
+  if (t.dataset.cpTempo !== undefined) {
+    const s = +t.dataset.cpTempo, v = t.value.trim().toUpperCase().replace(/[–—]/g, '-');
+    if (v && !CUSTOM_TEMPO.test(v)) { t.setAttribute('aria-invalid', 'true'); return; }
+    customSet(s, 'tempo', v || null); return customRerender(`[data-cp-tempo="${s}"]`);
+  }
+  if (t.dataset.cpNote !== undefined) { const s = +t.dataset.cpNote; customSet(s, 'note', cleanText(t.value, ITEM_NOTE, true) || null); return customRerender(`[data-cp-note="${s}"]`); }
+});
+
+/* ===================== ФАЙЛЫ ПЛАНОВ =====================
+   Свои планы выгружаются в JSON и загружаются обратно — свои, от тренера, для ученика. Формат описан в docs/plan-format.md.
+   Упражнения хранятся кодами каталога (общими для русской и английской версий), название — для чтения человеком.
+   Подходы, повторы и отдых пишутся явно, как их видно в плане, — у получателя план выглядит так же. */
+const PLAN_FILE = 'lazy-gym-planner/plans', PLAN_FILE_V = 1, PLAN_FILE_MAX = 256 * 1024, PLAN_FILE_PLANS = 50;
+let planIn = null;
+
+/* план с его целью, форматом и уровнем: дозировка считается так, как её видит владелец плана */
+function withPlanSettings(c, fn) {
+  const keep = PLAN_KEYS.map(k => S[k]);
+  for (const k of PLAN_KEYS) if (c[k]) S[k] = c[k];
+  try { return fn(); } finally { PLAN_KEYS.forEach((k, i) => { S[k] = keep[i]; }); }
+}
+function exportItem(c, item) {
+  const ex = EXI[item.id];
+  return withPlanSettings(c, () => {
+    const rx = customRx(prescribe(ex, null, effEquip(EQUIP.map(e => e.id))), item, ex), o = {id:ex.id, name:ex.name};
+    if (!rx.static) {
+      if (S.format !== 'circuit') { o.sets = rx.sets; o.rest = rx.rest; }
+      if (!ex.kind) o.reps = item.reps || (S.format === 'circuit' ? GOALS[S.goal].circ.reps : String(rx.reps));
+      if (item.tempo) o.tempo = item.tempo;
+    } else if (item.sets) o.sets = item.sets; /* статодинамика: число серий человек задаёт сам, остальное — метод */
+    if (item.kg) o.kg = item.kg.length === 1 ? item.kg[0] : item.kg.slice();
+    if (item.note) o.note = item.note;
+    return o;
+  });
+}
+function exportPlan(c) {
+  const o = {name:c.name};
+  for (const k of ['group', 'for', 'note']) if (c[k]) o[k] = c[k];
+  for (const k of PLAN_KEYS) o[k] = c[k] || S.gen[k] || S[k];
+  o.items = c.items.map(it => exportItem(c, it));
+  return o;
+}
+function planFileObject(plans, from) {
+  const o = {format:PLAN_FILE, version:PLAN_FILE_V, app:typeof window !== 'undefined' && window.PODHOD_VERSION || '', exported:new Date().toISOString().slice(0, 10)};
+  if (from) o.from = from;
+  o.plans = plans.map(exportPlan);
+  return o;
+}
+/* имя файла латиницей: браузеры подменяют имя с кириллицей на «download» */
+const TRANSLIT = {а:'a', б:'b', в:'v', г:'g', д:'d', е:'e', ё:'e', ж:'zh', з:'z', и:'i', й:'y', к:'k', л:'l', м:'m', н:'n', о:'o', п:'p', р:'r', с:'s', т:'t', у:'u', ф:'f', х:'h', ц:'ts', ч:'ch', ш:'sh', щ:'sch', ъ:'', ы:'y', ь:'', э:'e', ю:'yu', я:'ya'};
+function planFileName(plans) {
+  const slug = v => String(v).toLowerCase().replace(/[а-яё]/g, ch => TRANSLIT[ch] ?? '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'plan';
+  const c = plans[0], group = plans.length > 1 && plans.every(p => p.group && p.group === c.group) ? c.group : null;
+  return `lazy-gym-${plans.length > 1 ? (group ? 'program-' + slug(group) : 'plans') : 'plan-' + slug(c.name)}.json`;
+}
+
+/* ---------- чтение файла: только известные поля, разумные значения, понятные ошибки ---------- */
+function readPlanFile(text) {
+  if (typeof text !== 'string' || !text.trim()) return {error:'The file is empty.'};
+  if (text.length > PLAN_FILE_MAX) return {error:'The file is too large for a plan.'};
+  let o; try { o = JSON.parse(text); } catch (e) { return {error:'This is not a plan file: the text cannot be read as JSON. It may have been cut off in transfer.'}; }
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return {error:'This is not a plan file.'};
+  if (o.v && (o.log || o.settings || o.body)) return {error:'This is an app backup, not a plan. Restore it in the Log section.'};
+  const raw = Array.isArray(o.plans) ? o.plans : Array.isArray(o.items) ? [o] : null;
+  if (!raw || (o.format && o.format !== PLAN_FILE)) return {error:'This is not a Lazy Gym Planner plan file.'};
+  const newer = Number(o.version) > PLAN_FILE_V;
+  const from = cleanText(o.from, CUSTOM_TEXT), plans = [], unknown = [];
+  for (const p of raw.slice(0, PLAN_FILE_PLANS)) {
+    if (!p || typeof p !== 'object') continue;
+    const items = Array.isArray(p.items) ? p.items : [];
+    for (const it of items) if (it && !EXI[it.id]) unknown.push(cleanText(it.name, 60) || cleanText(String(it.id || ''), 30) || '?');
+    const c = cleanPlan({...p, items:items.map(it => it && typeof it === 'object' ? {...it, sets:Number.isInteger(it.sets) ? it.sets : undefined, rest:Number.isInteger(it.rest) ? it.rest : undefined} : it)}, '');
+    if (from && !c.from) c.from = from;
+    plans.push(c);
+  }
+  if (!plans.length) return {error:'The file contains no plans.'};
+  return {plans, from, note:cleanText(o.note, CUSTOM_NOTE, true), unknown:[...new Set(unknown)], newer, cut:raw.length > PLAN_FILE_PLANS};
+}
+/* добавление: всегда новыми планами, занятые имена получают «(2)» */
+function addPlans(plans) {
+  const taken = S.customs.map(c => c.name), added = [];
+  for (const p of plans) { const c = {...p, id:newPlanId(), name:uniquePlanName(p.name, taken)}; taken.push(c.name); S.customs.push(c); added.push(c); }
+  saveSettings(); return added;
+}
+
+/* ---------- окно выгрузки ---------- */
+function planOutScope(scope) {
+  const c = customOf();
+  return scope === 'all' ? S.customs.filter(p => p.items.length) : scope === 'group' && c.group ? S.customs.filter(p => p.group === c.group) : [c];
+}
+function planOutHtml() {
+  const c = customOf(), group = c.group ? S.customs.filter(p => p.group === c.group).length : 0, all = S.customs.filter(p => p.items.length).length;
+  const radio = (v, label, on, dis) => `<label class="po-opt"><input type="radio" name="po-scope" value="${v}"${on ? ' checked' : ''}${dis ? ' disabled' : ''}><span>${label}</span></label>`;
+  const share = typeof navigator !== 'undefined' && navigator.canShare && typeof File === 'function';
+  return `<form method="dialog" class="gear po">
+    <h2>Export plan</h2>
+    <p class="gear-hint">The .json file opens in Lazy Gym Planner on any phone or computer: “Custom plan” → “Import plan”. The log and logged weights are not included.</p>
+    <fieldset class="po-set"><legend>What to export</legend>
+      ${radio('one', `This plan: ${esc(c.name)}`, true)}
+      ${group > 1 ? radio('group', `The whole program (${esc(c.group)}): ${group} ${plural(group, 'plan', 'plans', 'plans')}`) : ''}
+      ${all > 1 ? radio('all', `All custom plans: ${all}`) : ''}
+    </fieldset>
+    <div class="ics-grid">
+      <label>For<input id="po-for" type="text" maxlength="${CUSTOM_TEXT}" value="${esc(c.for || '')}" placeholder="Athlete’s name" autocomplete="off"></label>
+      <label>From<input id="po-from" type="text" maxlength="${CUSTOM_TEXT}" value="${esc(S.author || '')}" placeholder="Your name" autocomplete="off"></label>
+    </div>
+    <p class="p-hint" id="po-msg" role="status"></p>
+    <div class="gear-btns po-btns">
+      <button type="button" class="btn btn-2" id="po-close">Close</button>
+      <button type="button" class="btn btn-2" id="po-copy">Copy text</button>
+      ${share ? '<button type="button" class="btn btn-2" id="po-share">Share</button>' : ''}
+      <button type="button" class="btn" id="po-save">Save file</button>
+    </div>
+  </form>`;
+}
+function openPlanOut() {
+  let d = $('#plan-out');
+  if (!d) { d = document.createElement('dialog'); d.id = 'plan-out'; d.className = 'gear-view'; d.setAttribute('aria-label', 'Export plan'); document.body.appendChild(d); }
+  d.innerHTML = planOutHtml(); d.showModal();
+}
+function planOutPayload() {
+  const scope = (document.querySelector('input[name="po-scope"]:checked') || {}).value || 'one', plans = planOutScope(scope);
+  const forWho = cleanText($('#po-for').value, CUSTOM_TEXT), from = cleanText($('#po-from').value, CUSTOM_TEXT);
+  S.author = from;
+  /* «для кого» остаётся в самих планах: при следующей выгрузке подставится */
+  for (const p of plans) { if (forWho) p.for = forWho; else delete p.for; }
+  saveSettings();
+  const obj = planFileObject(plans, from);
+  return {plans, text:JSON.stringify(obj, null, 1) + '\n', name:planFileName(plans)};
+}
+async function planOutAction(kind) {
+  const msg = $('#po-msg'), {plans, text, name} = planOutPayload();
+  if (!plans.length || plans.every(p => !p.items.length)) { msg.textContent = 'The plan has no exercises — nothing to export.'; return; }
+  if (kind === 'copy') {
+    try { await navigator.clipboard.writeText(text); msg.textContent = 'The file text is copied. Paste it into “Import plan” on another device.'; }
+    catch (e) { msg.innerHTML = 'Automatic copy failed. Select the text:<textarea readonly rows="5"></textarea>'; const ta = msg.querySelector('textarea'); ta.value = text; ta.focus(); ta.select(); }
+    return;
+  }
+  if (kind === 'share') {
+    try {
+      const file = new File([text], name, {type:'application/json'});
+      if (!navigator.canShare({files:[file]})) throw new Error('no files');
+      await navigator.share({files:[file], title:plans.length > 1 ? 'Workout plans' : plans[0].name});
+      msg.textContent = 'Sent.';
+    } catch (e) { msg.textContent = e && e.name === 'AbortError' ? 'Sharing canceled.' : 'Sharing the file failed — save it and send it manually.'; }
+    return;
+  }
+  const r = await saveFile(name, text, 'application/json');
+  msg.textContent = r === 'ok' ? `File saved: ${name}` : r === 'declined' ? 'Save canceled.' : 'Saving the file failed.';
+}
+
+/* ---------- окно загрузки ---------- */
+function planInHtml() {
+  const r = planIn;
+  let body = '';
+  if (r && r.error) body = `<p class="warn">${esc(r.error)}</p>`;
+  else if (r) {
+    /* общая программа и адресат — один раз сверху; у плана — только то, что отличает его от соседей */
+    const groups = [...new Set(r.plans.map(p => p.group || ''))], common = groups.length === 1 && groups[0];
+    const meta = [common ? `<span>program: <b>${esc(common)}</b></span>` : '', r.from ? `<span>from: <b>${esc(r.from)}</b></span>` : '', r.plans[0].for ? `<span>for: <b>${esc(r.plans[0].for)}</b></span>` : ''].join('');
+    const setup = p => [GOALS[p.goal]?.name, FORMATS[p.format]?.name, LEVELS[p.level]?.name].filter(Boolean).join(', ').toLowerCase();
+    body = `${meta ? `<p class="cp-sub pi-meta">${meta}</p>` : ''}${r.note ? `<p class="c-note">${esc(r.note)}</p>` : ''}
+      ${r.newer ? '<p class="warn">The file was made in a newer version of the app: anything this version doesn’t know will be skipped. Update the app.</p>' : ''}
+      ${r.unknown.length ? `<p class="warn">This version of the app doesn’t know these exercises: ${esc(r.unknown.join(', '))}. They will be skipped.</p>` : ''}
+      ${r.cut ? `<p class="warn">The file has more than ${PLAN_FILE_PLANS} plans — the first ones will be imported: ${PLAN_FILE_PLANS}.</p>` : ''}
+      <fieldset class="po-set"><legend>Plans in the file</legend>${r.plans.map((p, i) => `<label class="po-opt pi-plan"><input type="checkbox" data-pi="${i}" checked><span><b>${esc(p.name)}</b><small>${p.items.length} ${plural(p.items.length, 'exercise', 'exercises', 'exercises')}${setup(p) ? ` — ${setup(p)}` : ''}</small>${!common && p.group ? `<small>program: ${esc(p.group)}</small>` : ''}</span></label>`).join('')}</fieldset>`;
+  }
+  return `<form method="dialog" class="gear pi">
+    <h2>Import plan</h2>
+    <p class="gear-hint">Choose a .json file exported from Lazy Gym Planner — your own or from a coach. The plans are added to yours; nothing is overwritten.</p>
+    <label class="btn btn-2 pi-file" for="pi-file">Choose file</label><input type="file" id="pi-file" accept=".json,application/json,text/plain" hidden>
+    <details class="pi-paste"${r && r.pasted && r.error ? ' open' : ''}><summary>or paste the file text</summary><textarea id="pi-text" rows="4" placeholder='{"format": "lazy-gym-planner/plans", …}'></textarea><button type="button" class="btn btn-2" id="pi-read">Read</button></details>
+    ${body}
+    <p class="p-hint" id="pi-msg" role="status"></p>
+    <div class="gear-btns"><button type="button" class="btn btn-2" id="pi-close">Close</button>${r && r.plans ? `<button type="button" class="btn" id="pi-add">Add to my plans</button>` : ''}</div>
+  </form>`;
+}
+function openPlanIn() {
+  planIn = null;
+  let d = $('#plan-in');
+  if (!d) { d = document.createElement('dialog'); d.id = 'plan-in'; d.className = 'gear-view'; d.setAttribute('aria-label', 'Import plan'); document.body.appendChild(d); }
+  d.innerHTML = planInHtml(); d.showModal();
+}
+function showPlanIn(result) { planIn = result; $('#plan-in').innerHTML = planInHtml(); const f = $('#pi-add') || $('#pi-close'); if (f) f.focus(); }
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.id === 'plan-export') { openPlanOut(); return; }
+  if (t.id === 'po-close') { $('#plan-out').close(); return; }
+  if (t.id === 'po-save') { planOutAction('save'); return; }
+  if (t.id === 'po-share') { planOutAction('share'); return; }
+  if (t.id === 'po-copy') { planOutAction('copy'); return; }
+  if (t.dataset.cpImport !== undefined) { openPlanIn(); return; }
+  if (t.id === 'pi-close') { $('#plan-in').close(); return; }
+  if (t.id === 'pi-read') { showPlanIn({...readPlanFile($('#pi-text').value), pasted:true}); return; }
+  if (t.id === 'pi-add') {
+    const pick = [...document.querySelectorAll('[data-pi]')].filter(x => x.checked).map(x => planIn.plans[+x.dataset.pi]);
+    if (!pick.length) { $('#pi-msg').textContent = 'Select at least one plan.'; return; }
+    const added = addPlans(pick); $('#plan-in').close(); planIn = null;
+    openCustom(added[0].id); regen(); window.scrollTo({top:0});
+    return;
+  }
+});
+document.addEventListener('change', e => {
+  if (e.target.id !== 'pi-file') return;
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  if (f.size > PLAN_FILE_MAX) { showPlanIn({error:'The file is too large for a plan.'}); return; }
+  const rd = new FileReader();
+  rd.onload = () => showPlanIn(readPlanFile(String(rd.result || '')));
+  rd.onerror = () => showPlanIn({error:'The file can’t be read.'});
+  rd.readAsText(f);
+});
+
+/* ===================== СВОРАЧИВАНИЕ БЛОКОВ =====================
+   Объёмные блоки сворачиваются в строку-сводку, из которой видно главное:
+   • параметры (на телефоне и планшете — на компьютере они в боковой колонке и не мешают);
+   • нагрузка по мышцам в шапке плана;
+   • в карточке упражнения — мышцы и таблица записи подходов (подсказка по весу остаётся на виду).
+   «Подробно / Компактно» над карточками задаёт, как они открываются; отдельную карточку можно развернуть или
+   свернуть — это помнится до перезагрузки страницы. Параметры, нагрузка и вид карточек сохраняются в настройках. */
+const FOLD_CARDS = ['compact', 'full'];
+function ensureFold(s) {
+  const f = s.fold && typeof s.fold === 'object' ? s.fold : {};
+  s.fold = {setup:f.setup === true, load:f.load === true, cards:FOLD_CARDS.includes(f.cards) ? f.cards : 'compact'};
+  return s.fold;
+}
+ensureFold(S);
+const FOLD_GROUPS = ['mus', 'log'];
+const cardFold = new Map(); /* «группа:упражнение» → раскрыт ли блок в этой карточке, если человек менял его сам */
+function cardOpen(g, id) { const k = g + ':' + id; return cardFold.has(k) ? cardFold.get(k) : ensureFold(S).cards === 'full'; }
+function cardFoldClass(id) { return FOLD_GROUPS.filter(g => cardOpen(g, id)).map(g => ' open-' + g).join(''); }
+const lowFirst = s => s ? s.charAt(0).toLowerCase() + s.slice(1) : s;
+const chev = '<i class="cg-chev" aria-hidden="true"></i>';
+
+/* ---------- карточка: мышцы и запись подходов ---------- */
+function musFoldHead(ex) {
+  const open = cardOpen('mus', ex.id), list = ms => ms.map((m, i) => i ? lowFirst(MUSCLE_NAMES[m]) : MUSCLE_NAMES[m]).join(', ');
+  return `<button type="button" class="cg-h" data-cfold="mus" aria-expanded="${open}"><span class="cg-x"><span class="cg-t">Muscles</span><span class="cg-s cg-mus"><span class="cg-p">${list(ex.pri)}</span>${ex.sec.length ? `<span class="cg-sec">${list(ex.sec)}</span>` : ''}</span></span>${chev}</button>`;
+}
+function logFoldBar(it, n, done) {
+  const id = it.ex.id, open = cardOpen('log', id), cnt = histCount(id);
+  return `<div class="lt-bar"><button type="button" class="cg-h lt-tog" data-cfold="log" aria-expanded="${open}" aria-controls="lt-${id}"><span class="cg-x"><span class="cg-t">Sets</span><span class="cg-s${done ? ' cg-done' : ''}">${logBarText(done, n)}</span></span>${chev}</button>
+    <button type="button" class="btn-ghost" data-hist="1" aria-expanded="false">${ICON.chart}<span>History</span><small>${cnt || ''}</small></button></div>`;
+}
+function logBarText(done, n) { return `${done} of ${n}`; }
+/* отметили или сняли подход — счётчик в заголовке записи */
+function logBarUpdate(card) {
+  const s = card && card.querySelector('.lt-tog .cg-s'); if (!s) return;
+  const done = card.querySelectorAll('.lt-r.done').length;
+  s.textContent = logBarText(done, card.querySelectorAll('.lt-r').length); s.classList.toggle('cg-done', done > 0);
+}
+/* после перерисовки записи: кнопка «История» знает, открыта ли история */
+function syncCardLog(card) {
+  const h = card.querySelector('.c-hist'), hb = card.querySelector('[data-hist]');
+  if (h && hb) hb.setAttribute('aria-expanded', String(!h.hidden));
+}
+function setCardsView(v) {
+  ensureFold(S).cards = v; cardFold.clear(); saveSettings();
+  document.querySelectorAll('.card[data-ex]').forEach(card => {
+    for (const g of FOLD_GROUPS) {
+      const open = cardOpen(g, card.dataset.ex);
+      card.classList.toggle('open-' + g, open);
+      card.querySelectorAll(`[data-cfold="${g}"]`).forEach(b => b.setAttribute('aria-expanded', String(open)));
+    }
+  });
+  document.querySelectorAll('[data-cards]').forEach(b => { const on = b.dataset.cards === v; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+}
+function cardsViewHtml() {
+  const v = ensureFold(S).cards, b = (k, label) => `<button type="button" data-cards="${k}" class="${v === k ? 'on' : ''}" aria-pressed="${v === k}">${label}</button>`;
+  return `<div class="fold-bar"><span>Cards</span><div class="fold-seg" role="group" aria-label="Card view">${b('compact', 'Compact')}${b('full', 'Detailed')}</div></div>`;
+}
+
+/* ---------- шапка плана: нагрузка по мышцам ---------- */
+function loadFoldHead(title, top) {
+  const open = !ensureFold(S).load;
+  return `<button type="button" class="cg-h lb-h" data-lfold="1" aria-expanded="${open}"><span class="cg-x"><span class="cg-t">${title}</span><span class="cg-s">${top}</span></span>${chev}</button>`;
+}
+function loadTop(rows) { return rows.slice(0, 3).map(([n, v], i) => `${i ? lowFirst(n) : n} ${fmtNum(v)}`).join(', '); }
+
+/* ---------- параметры на телефоне ---------- */
+function setupSummary() {
+  const out = [];
+  const go = (sel, text) => out.push(`<button type="button" class="sb-chip" data-sgo="${sel}">${esc(text)}</button>`);
+  if (S.mode === 'program') { go('#f-mode', 'Weekly program'); go('#f-prog', `${S.days} ${plural(S.days, 'workout', 'workouts', 'workouts')} · ${SPLITS[splitFor(S.days)].name}`); }
+  else if (S.mode === 'custom') { go('#f-mode', 'Custom plan'); go('#f-custom', customOf().name); }
+  else go('#f-mode', 'One-day workout');
+  go('#f-goal', `${GOALS[S.goal].name} · ${FORMATS[S.format].name.toLowerCase()} · ${LEVELS[S.level].name.toLowerCase()}`);
+  if (S.mode === 'single') { go('#count-l', `${S.count} ${plural(S.count, 'exercise', 'exercises', 'exercises')}`); go('#f-muscles', S.groups.length ? titleFor() : 'No muscles selected'); }
+  go('#e-places', placeOf().name);
+  return out.join('');
+}
+function setupBarHtml() {
+  const folded = ensureFold(S).setup;
+  return `<div class="sb-head"><h2 class="lbl">Settings</h2><button type="button" class="sb-tog" data-sfold="1" aria-expanded="${!folded}">${folded ? 'Expand' : 'Collapse'}${chev}</button></div>${folded ? `<div class="sb-chips">${setupSummary()}</div>` : ''}`;
+}
+function renderSetupFold() {
+  const folded = ensureFold(S).setup, bar = $('#setup-bar');
+  $('.setup').classList.toggle('folded', folded);
+  if (bar) bar.innerHTML = setupBarHtml();
+}
+function setSetupFold(folded, from) {
+  ensureFold(S).setup = folded; saveSettings(); renderSetupFold();
+  /* свернули снизу — возвращаемся к сводке, иначе план «уезжает» вверх */
+  if (folded && from === 'end') { const bar = $('#setup-bar'); if (bar && bar.getBoundingClientRect().top < 0) bar.scrollIntoView({block:'start'}); }
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.cfold) {
+    const card = t.closest('.card'), g = t.dataset.cfold, id = card.dataset.ex, open = !card.classList.contains('open-' + g);
+    cardFold.set(g + ':' + id, open); card.classList.toggle('open-' + g, open);
+    card.querySelectorAll(`[data-cfold="${g}"]`).forEach(b => b.setAttribute('aria-expanded', String(open)));
+    return;
+  }
+  if (t.dataset.cards) { setCardsView(t.dataset.cards); return; }
+  if (t.dataset.lfold) {
+    const folded = !ensureFold(S).load; S.fold.load = folded; saveSettings();
+    const fig = t.closest('.p-load'); if (fig) fig.classList.toggle('folded', folded);
+    const head = t.closest('.p-head'); if (head) head.classList.toggle('load-folded', folded);
+    t.setAttribute('aria-expanded', String(!folded));
+    return;
+  }
+  if (t.dataset.sfold) { setSetupFold(!ensureFold(S).setup, t.id === 'setup-fold-end' ? 'end' : 'top'); return; }
+  if (t.dataset.sgo) {
+    setSetupFold(false);
+    const n = $(t.dataset.sgo), f = n && (n.closest('.field') || n);
+    if (f) { f.scrollIntoView({block:'start'}); const b = f.querySelector('button, input, select'); if (b) b.focus({preventScroll:true}); }
+  }
 });
 
 /* ---------- Проигрыватель движений: карточки и увеличенный разбор ---------- */
@@ -8072,8 +8543,10 @@ function blocksText(p) {
     for (const it of b.items) {
       const r = it.rx;
       const side = r.uni ? ' per side' : '';
-      if (r.static) { lines.push(`${it.label}. ${it.name} — ${r.series} × 3 × ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}, tempo ${r.tempo} without relaxing, rest ${fmtRest(r.rest)}${r.series > 1 ? `, between series ${fmtRest(r.seriesRest)}` : ''}`); continue; }
-      lines.push(r.circ ? `${it.label}. ${it.name} — ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}` : `${it.label}. ${it.name} — ${r.sets} × ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}${b.kind === 'list' ? `, rest ${fmtRest(r.rest)}` : ''}`);
+      if (r.static) { const kgS = r.kgPlan && loadType(it.ex) !== 'none' ? `, ${planKgText(r.kgPlan)} kg` : ''; lines.push(`${it.label}. ${it.name} — ${r.series} × 3 × ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}, tempo ${r.tempo} without relaxing, rest ${fmtRest(r.rest)}${r.series > 1 ? `, between series ${fmtRest(r.seriesRest)}` : ''}${kgS}`); if (r.coachNote) lines.push(`   Note: ${r.coachNote.replace(/\n+/g, ' ')}`); continue; }
+      const kg = r.kgPlan && loadType(it.ex) !== 'none' ? `, ${planKgText(r.kgPlan)} kg` : '';
+      lines.push(r.circ ? `${it.label}. ${it.name} — ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}${kg}` : `${it.label}. ${it.name} — ${r.sets} × ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}${kg}${b.kind === 'list' ? `, rest ${fmtRest(r.rest)}` : ''}`);
+      if (r.coachNote) lines.push(`   Note: ${r.coachNote.replace(/\n+/g, ' ')}`);
     }
   }
   return lines;
@@ -8103,7 +8576,11 @@ function regen(resetSwaps = true) { if (resetSwaps) swaps = {}; done = {}; saveS
 document.addEventListener('click', e => {
   const t = e.target.closest('button, summary');
   if (!t) return;
-  if (t.dataset.set) { S[t.dataset.set] = t.dataset.v; if (t.dataset.set === 'mode') S.day = 0; return regen(); }
+  if (t.dataset.set) {
+    const k = t.dataset.set, prev = S.mode; S[k] = t.dataset.v;
+    if (k === 'mode') { S.day = 0; switchModeSettings(prev); } else storePlanSetting(k);
+    return regen();
+  }
   if (t.dataset.days) { S.days = +t.dataset.days; S.split = DEFAULT_SPLIT[S.days]; S.day = 0; return regen(); }
   if (t.dataset.split) { S.split = t.dataset.split; S.day = 0; return regen(); }
   if (t.dataset.week) { S.week = +t.dataset.week; done = {}; saveSettings(); renderPlan(); return; }
@@ -8349,6 +8826,14 @@ function suggest(it) {
   const week = S.mode === 'program' ? WEEKS[S.week - 1] : null;
   const step = stepFor(it);
   const res = {tone:'new', kg:null, reps:[], text:'', prev:null};
+  /* вес по плану (свой план, план тренера) — цель вместо подсказки по прогрессии */
+  if (it.rx.kgPlan && lt !== 'none') {
+    const prev = past[past.length - 1] || null, ps = prev ? prev.s.filter(Boolean) : [];
+    res.tone = 'plan'; res.kgs = it.rx.kgPlan; res.kg = it.rx.kgPlan[0]; res.prev = prev;
+    const what = lt === 'assist' ? 'Planned counterweight' : lt === 'extra' ? 'Planned extra weight' : 'Planned weight';
+    res.text = `${what}: ${planKgText(it.rx.kgPlan)} kg.` + (ps.length ? ` Last time: ${ps.map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(', ')}.` : '');
+    return res;
+  }
   if (it.rx.static && !past.length) {
     const last = all[all.length - 1], kgs = last ? last.s.filter(Boolean).map(x => x[0]).filter(v => v > 0) : [];
     if (lt === 'kg' && kgs.length) {
@@ -8426,7 +8911,7 @@ function suggest(it) {
 }
 
 /* ---------- блок записи в карточке ---------- */
-const SUG_ICON = {up:'↑', same:'→', down:'↓', deload:'↓', new:'+'};
+const SUG_ICON = {up:'↑', same:'→', down:'↓', deload:'↓', new:'+', plan:'≡'};
 function logRows(it) {
   const ex = it.ex, lt = loadType(ex), sg = suggest(it);
   const today = todaySession(ex.id, false);
@@ -8439,7 +8924,7 @@ function logRows(it) {
     const v = tset[k];
     const p = prevSets[k] || prevSets[prevSets.length - 1];
     const pTxt = p ? (p[0] ? fmtKg(p[0]) + ' × ' : '') + p[1] : '—';
-    const phKg = sg.kg != null ? fmtKg(sg.kg) : (lt === 'kg' ? '' : '—');
+    const pk = planKg(it.rx, k), phKg = pk != null ? fmtKg(pk) : sg.kg != null ? fmtKg(sg.kg) : (lt === 'kg' ? '' : '—');
     const phR = sg.reps[k] ?? sg.reps[sg.reps.length - 1] ?? (lo === hi ? String(lo) : `${lo}–${hi}`);
     const done = !!v;
     rows += `<div class="lt-r${done ? ' done' : ''}${it.rx.static && k > 0 && k % 3 === 0 ? ' lt-series' : ''}" data-k="${k}">
@@ -8449,12 +8934,14 @@ function logRows(it) {
       <button type="button" class="lt-ok" data-tick="${ex.id}" data-k="${k}" aria-pressed="${done}" aria-label="Set ${k + 1} done">${ICON.check}</button>
     </div>`;
   }
+  const doneN = tset.slice(0, n).filter(Boolean).length;
   return {sg, html:`<p class="sug sug-${sg.tone}"><b aria-hidden="true">${SUG_ICON[sg.tone]}</b><span>${esc(sg.text)}</span></p>
-    <div class="lt${lt === 'none' ? ' lt-nokg' : ''}" role="group" aria-label="Set log">
+    ${logFoldBar(it, n, doneN)}
+    <div class="lt-fold" id="lt-${ex.id}"><div class="lt${lt === 'none' ? ' lt-nokg' : ''}" role="group" aria-label="Set log">
       <div class="lt-h"><span>#</span><span>Last time</span>${lt === 'none' ? '' : `<span>${lt === 'kg' ? 'Weight, kg' : lt === 'assist' ? 'Counterweight' : 'Extra kg'}</span>`}<span>${repLabel(ex)}</span><span></span></div>
       ${rows}
     </div>
-    <div class="lt-foot"><button type="button" class="lt-add" data-addset="${ex.id}">+ set</button>${ex.uni ? '<span>reps — per side</span>' : ''}${it.rx.circ ? '<span>row — one round</span>' : ''}</div>`};
+    <div class="lt-foot"><button type="button" class="lt-add" data-addset="${ex.id}">+ set</button>${ex.uni ? '<span>reps — per side</span>' : ''}${it.rx.circ ? '<span>row — one round</span>' : ''}</div></div>`};
 }
 function logBlock(it) { return `<div class="c-log" data-log="${it.ex.id}">${logRows(it).html}</div>`; }
 
@@ -8512,8 +8999,10 @@ function refreshCard(card) {
   const box = card.querySelector('.c-log');
   const ae = document.activeElement;
   if (box && !(box.contains(ae) && ae.tagName === 'INPUT')) {
-    const refocus = box.contains(ae) && ae.dataset.k !== undefined ? `[data-${ae.dataset.tick ? 'tick' : 'addset'}][data-k="${ae.dataset.k}"]` : null;
+    const refocus = !box.contains(ae) ? null : ae.dataset.k !== undefined ? `[data-${ae.dataset.tick ? 'tick' : 'addset'}][data-k="${ae.dataset.k}"]`
+      : ae.dataset.cfold ? '[data-cfold]' : ae.dataset.hist ? '[data-hist]' : null;
     box.innerHTML = logRows(it).html;
+    syncCardLog(card);
     if (refocus) { const n = box.querySelector(refocus); if (n) n.focus(); }
   }
   refreshWarmup(card);
@@ -8740,6 +9229,7 @@ function refreshHist(id) {
   const card = document.querySelector(`.card[data-ex="${id}"]`); if (!card) return;
   const h = card.querySelector('.c-hist'); if (h && !h.hidden) h.innerHTML = histHtml(EXI[id]);
   const hb = card.querySelector('[data-hist] small'); if (hb) { const n = histCount(id); hb.textContent = n || ''; }
+  logBarUpdate(card);
   const tab = document.querySelector('[data-view="journal"] small'); if (tab) tab.textContent = journalDays() || '';
 }
 const delArm = {};
@@ -8770,7 +9260,7 @@ document.addEventListener('click', e => {
     const n = box.querySelectorAll('.lt-r').length;
     it.rx.sets = Math.max(it.rx.sets, n + 1);
     if (it.rx.circ) it.rounds = Math.max(it.rounds || 0, n + 1);
-    box.innerHTML = logRows(it).html;
+    box.innerHTML = logRows(it).html; if (box.closest('.card')) syncCardLog(box.closest('.card'));
     const inp = box.querySelector(`.lt-r[data-k="${n}"] .lt-in`); if (inp) inp.focus();
     return;
   }
@@ -9104,7 +9594,8 @@ function workoutShow(index){
   $('#wv-unilateral').hidden=!ex.uni;$('#wv-unilateral').textContent='Do both sides. Log the reps for one side.';
   $('#wv-weight-label').hidden=lt==='none';$('#wv-weight-caption').textContent=lt==='extra'?'Extra weight, kg':lt==='assist'?'Counterweight, kg':'Weight, kg';$('#wv-rep-caption').textContent=repLabel(ex);$('#wv-reps').setAttribute('inputmode',ex.kind==='dist'?'decimal':'numeric');
   const draft=workout.drafts[workoutDraftKey(s)],today=todaySession(ex.id,false)?.s||[],last=today.slice(0,s.k).filter(Boolean).slice(-1)[0];
-  $('#wv-kg').value=draft?draft.kg:stored?stored[0]!=null?fmtKg(stored[0]):'':last?.[0]!=null?fmtKg(last[0]):prev?.[0]!=null?fmtKg(prev[0]):'';
+  const planned=planKg(it.rx,s.k);
+  $('#wv-kg').value=draft?draft.kg:stored?stored[0]!=null?fmtKg(stored[0]):'':planned!=null?fmtKg(planned):last?.[0]!=null?fmtKg(last[0]):prev?.[0]!=null?fmtKg(prev[0]):'';
   $('#wv-reps').value=draft?draft.reps:stored?String(stored[1]):'';$('#wv-reps').placeholder=it.rx.reps;
   $('#wv-input-hint').textContent=lt==='extra'?'Extra weight can be left blank. Enter your actual result.':lt==='none'?'Enter the actual result of the set.':'Weight is filled in from your last entry, if there is one. Adjust it and enter your result.';
   $('#wv-error').textContent='';$('#wv-kg').removeAttribute('aria-invalid');$('#wv-reps').removeAttribute('aria-invalid');
@@ -9685,4 +10176,4 @@ logInit();
 plural = (n, a, b, c) => n === 1 ? a : c;
 DEC = '.';
 
-window.PODHOD_VERSION='4.9.0';window.PODHOD_BUILD='4.9.0-688d63541977';window.PODHOD_LANG='en';
+window.PODHOD_VERSION='4.10.0';window.PODHOD_BUILD='4.10.0-001bb8ddc586';window.PODHOD_LANG='en';

@@ -905,3 +905,122 @@ button.link { border:0; background:none; padding:0; color:var(--accent); font:in
   .cp-tabs button { font-size:13px; }
   .cp-addb { padding:8px; }
 }
+
+/* вес и заметка по плану */
+.rx-kg { font:600 13px/1.2 var(--f-mono); background:var(--accent-soft); color:var(--accent); border-radius:6px; padding:4px 7px; }
+.c-note { margin:6px 0 0; font-size:13.5px; line-height:1.4; white-space:pre-line; border-left:3px solid var(--accent); padding:2px 0 2px 9px; color:var(--ink); }
+.c-note b { font-weight:600; color:var(--muted); }
+.sug-plan { background:var(--accent-soft); } .sug-plan b { background:var(--accent); color:var(--accent-ink); }
+.cp-edited { font-weight:600; }
+.cp-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--accent); margin-left:6px; vertical-align:middle; }
+.cp-f input[aria-invalid="true"] { border-color:var(--hot); }
+.cp-kg { flex:1 1 180px; } .cp-kg input { width:100%; }
+.cp-note { flex:1 1 100%; } .cp-note textarea { width:100%; min-height:56px; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--ink); padding:7px 10px; font:inherit; font-size:14px; resize:vertical; }
+.cp-edit .cp-fields + .cp-fields { margin-top:10px; }
+
+/* свои планы: программы группами, действия, «о плане» */
+.cp-group { margin:10px 0 4px; font:600 11.5px/1.2 var(--f-body); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+.cp-acts { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:8px 0; }
+.cp-acts .place-add { min-height:44px; }
+.cp-about { margin-top:10px; border:1px solid var(--line); border-radius:11px; padding:8px 12px; background:var(--surface); }
+.cp-about summary { cursor:pointer; font-size:13.5px; font-weight:600; color:var(--ink); }
+.cp-about-f { display:grid; gap:10px; padding-top:10px; }
+.cp-about textarea { min-height:56px; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--ink); padding:7px 10px; font:inherit; font-size:14px; resize:vertical; }
+.cp-sub { margin:4px 0 0; font-size:14px; color:var(--muted); display:flex; flex-wrap:wrap; gap:2px 16px; }
+.cp-sub b { font-weight:600; color:var(--ink); }
+.cp-pn { margin-top:8px; }
+
+/* окна выгрузки и загрузки */
+.po-set { border:0; margin:0; padding:0; display:grid; gap:6px; }
+.po-set legend { font-size:13px; color:var(--muted); margin-bottom:4px; padding:0; }
+.gear .po-opt { display:flex; align-items:flex-start; gap:10px; font-size:14px; color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:9px 12px; cursor:pointer; }
+.gear .po-opt input { width:18px; height:18px; margin:1px 0 0; flex:none; accent-color:var(--accent); }
+.gear .po-opt span { display:grid; gap:2px; }
+.gear .po-opt small { color:var(--muted); font-size:12.5px; }
+.po-btns { flex-wrap:wrap; }
+.pi-file { justify-self:start; cursor:pointer; }
+.pi-paste summary { cursor:pointer; font-size:13.5px; color:var(--accent); font-weight:600; }
+.pi-paste textarea, .po .p-hint textarea { width:100%; margin-top:8px; border:1px solid var(--line); border-radius:9px; background:var(--surface-2); color:var(--ink); padding:7px 10px; font:12.5px/1.35 var(--f-mono); }
+.pi-paste .btn { margin-top:6px; }
+.pi-meta { margin:0; }
+#po-msg:empty, #pi-msg:empty { display:none; }
+/* узкий экран: поля и кнопки окон не вылезают за край */
+.po input, .pi input { min-width:0; width:100%; }
+.po .ics-grid { grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); }
+.po-btns .btn, .pi .gear-btns .btn { flex:1 1 auto; justify-content:center; }
+.po input { font-family:var(--f-body); }
+/* широкий экран: порядок и правка — в колонке текста карточки, под кнопками, а не под рисунком */
+@media (min-width:700px) { .cp-tools, .cp-edit { grid-column:2; min-width:0; } }
+
+/* Сворачиваемые блоки: заголовок-кнопка со сводкой и шевроном (11f-fold.js). */
+.cg-h { display:flex; align-items:center; gap:10px; width:100%; min-height:40px; border:0; background:transparent; padding:6px 4px; margin:0; text-align:left; color:var(--ink); font:inherit; cursor:pointer; border-radius:8px; }
+.cg-h:hover { background:var(--surface-2); }
+.cg-x { flex:1 1 auto; min-width:0; display:flex; flex-wrap:wrap; align-items:baseline; gap:3px 12px; }
+.cg-t { flex:0 1 auto; font:600 11.5px/1.2 var(--f-body); letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.cg-s { flex:1 1 150px; min-width:0; font-size:13.5px; line-height:1.35; color:var(--ink); }
+.cg-chev { flex:none; width:8px; height:8px; margin:0 4px 3px auto; border-right:2px solid var(--muted); border-bottom:2px solid var(--muted); transform:rotate(45deg); transition:transform .15s; }
+[aria-expanded="true"] > .cg-chev { transform:rotate(-135deg); margin-bottom:-3px; }
+@media (prefers-reduced-motion:reduce) { .cg-chev { transition:none; } }
+
+/* карточка: мышцы одной строкой — основные (заливка) и помогающие (кольцо), как в чипах */
+.c-mus > .cg-h { grid-column:1 / -1; }
+.card:not(.open-mus) .c-map, .card:not(.open-mus) .c-mus .mus { display:none; }
+.card.open-mus .cg-mus { display:none; }
+.cg-mus .cg-p::before, .cg-mus .cg-sec::before { content:''; display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; vertical-align:1px; }
+.cg-mus .cg-p::before { background:var(--mus); }
+.cg-mus .cg-sec { color:var(--muted); margin-left:12px; }
+.cg-mus .cg-sec::before { box-shadow:inset 0 0 0 1.6px var(--mus); opacity:.7; }
+.card:not(.open-mus) .c-mus { gap:0; padding-top:6px; }
+
+/* карточка: запись подходов — подсказка видна всегда, таблица по кнопке */
+.lt-bar { display:flex; align-items:center; gap:8px; }
+.lt-bar .lt-tog { flex:1 1 auto; min-width:0; }
+.lt-bar .btn-ghost { flex:none; }
+.lt-tog .cg-s { color:var(--muted); font:500 13px var(--f-mono); }
+.lt-tog .cg-done { color:var(--good); font-weight:600; }
+.card:not(.open-log) .lt-fold { display:none; }
+.lt-fold { display:grid; gap:8px; }
+
+/* вид карточек */
+.fold-bar { display:flex; align-items:center; justify-content:space-between; gap:8px 12px; flex-wrap:wrap; margin:0 0 12px; }
+.fold-bar > span { font:600 11.5px/1.2 var(--f-body); letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.fold-seg { display:flex; gap:3px; background:var(--surface-2); padding:3px; border-radius:10px; }
+.fold-seg button { border:0; background:transparent; border-radius:8px; padding:6px 12px; min-height:36px; font-size:13.5px; font-weight:600; color:var(--ink); }
+.fold-seg button.on { background:var(--accent); color:var(--accent-ink); }
+
+/* шапка плана: нагрузка по мышцам */
+.lb-h.cg-h { margin:0 0 6px; min-height:36px; padding:4px; font:inherit; letter-spacing:0; text-transform:none; color:var(--ink); }
+.p-load:not(.folded) .lb-h .cg-s { display:none; }
+.p-load.folded { grid-template-columns:minmax(0, 1fr); border-top:1px solid var(--line); padding-top:8px; }
+.p-load.folded .p-map, .p-load.folded .lbars, .p-load.folded .vbars, .p-load.folded .lb-note { display:none; }
+.p-load.folded .lb-h.cg-h { margin:0; }
+@media (min-width:700px) { .p-head.load-folded { grid-template-columns:minmax(0, 1fr); } }
+
+/* программа: правило прибавки веса по кнопке */
+details.rule summary { cursor:pointer; font-weight:600; color:var(--ink); padding:4px 0; }
+details.rule p { margin:6px 0 0; }
+
+/* параметры: на телефоне и планшете сворачиваются в строку выбранного */
+.setup-bar, .setup-fold-end { display:none; }
+@media (max-width:959px) {
+  .setup-bar { display:block; padding-top:12px; }
+  .sb-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .sb-head .lbl { margin:0; color:var(--ink); font-size:12.5px; }
+  .sb-tog, .setup-fold-end { align-items:center; justify-content:center; gap:10px; border:1px solid var(--line); background:transparent; border-radius:9px; padding:7px 12px; min-height:40px; font:inherit; font-weight:600; font-size:13.5px; color:var(--accent); }
+  .sb-tog { display:inline-flex; }
+  .sb-tog .cg-chev, .setup-fold-end .cg-chev { border-color:currentColor; }
+  .sb-chips { display:flex; flex-wrap:wrap; gap:6px; padding:10px 0 2px; }
+  .sb-chip { border:1px solid var(--line); background:var(--surface-2); border-radius:999px; padding:6px 12px; min-height:34px; font:inherit; font-size:13.5px; color:var(--ink); text-align:left; }
+  .sb-chip:hover { border-color:var(--accent); }
+  .setup-bar + .field { border-top:1px solid var(--line); margin-top:12px; }
+  .setup.folded > .field { display:none; }
+  .setup.folded { padding-bottom:12px; }
+  .setup:not(.folded) > .setup-fold-end { display:flex; width:100%; margin-top:16px; }
+  .setup-fold-end .cg-chev { transform:rotate(-135deg); margin:3px 0 0; }
+}
+.lt-tog .cg-x { flex-wrap:nowrap; align-items:center; }
+.lt-tog .cg-s { flex:0 1 auto; white-space:nowrap; }
+
+/* узкий телефон: подписи столбцов записи не наезжают друг на друга («Противовес» — самая длинная) */
+.lt-h span { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+@media (max-width:400px) { .lt-h span { letter-spacing:0; } }

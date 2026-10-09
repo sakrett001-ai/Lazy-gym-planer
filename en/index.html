@@ -8,15 +8,15 @@
 <meta name="theme-color" content="#0E1116" media="(prefers-color-scheme: dark)">
 <meta name="description" content="Lazy Gym Planner — workout planner: picks exercises for your muscles and equipment, shows technique, logs your weights.">
 <title>Lazy Gym Planner</title>
-<link rel="manifest" href="manifest.webmanifest?v=4.9.0-688d63541977">
-<link rel="icon" href="../favicon-32.png?v=4.9.0-688d63541977" type="image/png" sizes="32x32">
-<link rel="apple-touch-icon" href="../apple-touch-icon.png?v=4.9.0-688d63541977" sizes="180x180">
+<link rel="manifest" href="manifest.webmanifest?v=4.10.0-001bb8ddc586">
+<link rel="icon" href="../favicon-32.png?v=4.10.0-001bb8ddc586" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png?v=4.10.0-001bb8ddc586" sizes="180x180">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Lazy Gym">
 <link rel="alternate" hreflang="ru" href="../">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
-<link rel="stylesheet" href="app.css?v=4.9.0-688d63541977">
+<link rel="stylesheet" href="app.css?v=4.10.0-001bb8ddc586">
 </head>
 <body>
 </head>
@@ -31,6 +31,7 @@
   </header>
   <main class="layout">
     <aside class="setup" aria-label="Workout settings">
+      <div class="setup-bar" id="setup-bar"></div>
       <section class="field"><h2 class="lbl">What to build</h2><div class="seg" id="f-mode" role="group" aria-label="What to build"></div></section>
       <section class="field" id="f-custom" hidden><h2 class="lbl">Custom plans</h2><div id="f-custom-body"></div></section>
       <section class="field" id="f-prog"><h2 class="lbl">Workouts per week</h2><div class="seg seg-4" id="f-days" role="group" aria-label="Workouts per week"></div>
@@ -44,6 +45,7 @@
       <section class="field" id="f-muscles"><h2 class="lbl">Muscles</h2><p class="f-note" id="g-note" hidden>In a custom plan the muscles suggest what to add: they drive the “Add an exercise” list and the check that every one is worked.</p><div class="pres" id="g-presets"></div><div class="chips" id="g-chips"></div></section>
       <section class="field"><h2 class="lbl">Where you train</h2><div class="places" id="e-places" role="group" aria-label="Training places"></div><div class="place-tools" id="e-place-tools"></div><div class="e-head"><h3 class="lbl lbl-sub">Equipment here <em id="e-count"></em></h3><button type="button" class="e-toggle e-toggle-top" id="e-toggle-top" aria-controls="e-chips"></button></div><div class="pres" id="e-presets"></div><p class="e-sum" id="e-sum"></p><div class="e-cats" id="e-chips"></div><button type="button" class="e-toggle" id="e-toggle" aria-controls="e-chips">Collapse list</button>
         <p class="f-note">Bodyweight exercises are always available.</p></section>
+      <button type="button" class="setup-fold-end" id="setup-fold-end" data-sfold="1">Collapse settings<i class="cg-chev" aria-hidden="true"></i></button>
     </aside>
     <section class="plan" id="plan" aria-live="polite"></section>
   </main>
@@ -81,7 +83,7 @@
 
 <dialog id="motion-view" class="motion-view" aria-labelledby="mv-title">
  <div class="mv-shell">
-  <header class="mv-head"><div><p class="mv-eyebrow">LAZY GYM PLANNER · MOTION ATLAS · 4.9.0</p><h2 id="mv-title">Exercise breakdown</h2></div><button type="button" id="mv-close" aria-label="Close breakdown">Close ×</button></header>
+  <header class="mv-head"><div><p class="mv-eyebrow">LAZY GYM PLANNER · MOTION ATLAS · 4.10.0</p><h2 id="mv-title">Exercise breakdown</h2></div><button type="button" id="mv-close" aria-label="Close breakdown">Close ×</button></header>
   <div class="mv-select"><button type="button" data-mv-nav="-1" aria-label="Previous exercise">←</button><label for="mv-exercise">Exercise<select id="mv-exercise"></select></label><button type="button" data-mv-nav="1" aria-label="Next exercise">→</button></div>
   <div class="mv-tools" id="mv-tools"></div>
   <div class="mv-grid">
@@ -98,13 +100,13 @@
     <section id="mv-muscle-panel" class="muscle-panel" aria-label="Muscle involvement by phase" hidden><h3>Muscles by phase</h3><div class="muscle-scale" aria-hidden="true"><span>Neutral</span><span class="muscle-scale-gradient"></span><span>Stronger</span></div><p class="muscle-explanation">Educational diagram: color shows approximate muscle involvement, not measured force or EMG. Curves are illustrative. Muscle parts work together; most parts share the group profile.</p><label class="muscle-region-select">Highlight region<select id="mv-region" aria-label="Highlight muscle region"><option value="all">All regions</option></select></label><p id="mv-muscle-note" class="muscle-phase-note"></p><ul id="mv-muscle-list" class="muscle-list"></ul><p class="muscle-explanation">Switch views to see hidden surfaces.</p></section>
     <p id="mv-tempo" class="mv-small"></p>
    </section>
-   <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Working muscles</h3><p class="mv-muscle-label">Primary</p><p id="mv-primary"></p><p class="mv-muscle-label">Secondary</p><p id="mv-secondary"></p></div></div><p class="mv-small">Highlight a muscle region on the volumetric mannequin or change the view. Deeper parts are listed in the explanations.</p><h3>How to perform</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Common mistakes and breathing</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>About the demos</summary><p>The diagrams help break down the sequence of the movement. Range of motion depends on the exercise and the individual; the schematic silhouette does not prescribe required joint angles.</p><div id="mv-sources"></div><p class="mv-small">Demonstration version 4.9.0</p></details></aside>
+   <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Working muscles</h3><p class="mv-muscle-label">Primary</p><p id="mv-primary"></p><p class="mv-muscle-label">Secondary</p><p id="mv-secondary"></p></div></div><p class="mv-small">Highlight a muscle region on the volumetric mannequin or change the view. Deeper parts are listed in the explanations.</p><h3>How to perform</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Common mistakes and breathing</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>About the demos</summary><p>The diagrams help break down the sequence of the movement. Range of motion depends on the exercise and the individual; the schematic silhouette does not prescribe required joint angles.</p><div id="mv-sources"></div><p class="mv-small">Demonstration version 4.10.0</p></details></aside>
   </div>
  </div>
 </dialog>
 
-<script src="../volume.js?v=4.9.0-688d63541977"></script>
-<script src="app.js?v=4.9.0-688d63541977"></script>
-<script src="pwa.js?v=4.9.0-688d63541977"></script>
+<script src="../volume.js?v=4.10.0-001bb8ddc586"></script>
+<script src="app.js?v=4.10.0-001bb8ddc586"></script>
+<script src="pwa.js?v=4.10.0-001bb8ddc586"></script>
 </body>
 </html>
