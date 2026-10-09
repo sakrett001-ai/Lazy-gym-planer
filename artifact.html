@@ -893,7 +893,7 @@ html.workout-open{overflow:hidden}
 
 <dialog id="motion-view" class="motion-view" aria-labelledby="mv-title">
  <div class="mv-shell">
-  <header class="mv-head"><div><p class="mv-eyebrow">LAZY GYM PLANNER · АТЛАС ДВИЖЕНИЙ · 4.7.0</p><h2 id="mv-title">Разбор упражнения</h2></div><button type="button" id="mv-close" aria-label="Закрыть разбор">Закрыть ×</button></header>
+  <header class="mv-head"><div><p class="mv-eyebrow">LAZY GYM PLANNER · АТЛАС ДВИЖЕНИЙ · 4.7.1</p><h2 id="mv-title">Разбор упражнения</h2></div><button type="button" id="mv-close" aria-label="Закрыть разбор">Закрыть ×</button></header>
   <div class="mv-select"><button type="button" data-mv-nav="-1" aria-label="Предыдущее упражнение">←</button><label for="mv-exercise">Упражнение<select id="mv-exercise"></select></label><button type="button" data-mv-nav="1" aria-label="Следующее упражнение">→</button></div>
   <div class="mv-grid">
    <section class="mv-demo" aria-label="Демонстрация движения">
@@ -909,7 +909,7 @@ html.workout-open{overflow:hidden}
     <section id="mv-muscle-panel" class="muscle-panel" aria-label="Участие мышц по фазам" hidden><h3>Мышцы по фазам</h3><div class="muscle-scale" aria-hidden="true"><span>Нейтрально</span><span class="muscle-scale-gradient"></span><span>Сильнее</span></div><p class="muscle-explanation">Учебная схема: цвет показывает примерное участие мышцы, а не измеренную силу или ЭМГ. Кривые условные. Части мышцы работают совместно; для большинства частей используется общий профиль группы.</p><label class="muscle-region-select">Выделить область<select id="mv-region" aria-label="Выделить мышечную область"><option value="all">Все области</option></select></label><p id="mv-muscle-note" class="muscle-phase-note"></p><ul id="mv-muscle-list" class="muscle-list"></ul><p class="muscle-explanation">Скрытые поверхности видны в другом ракурсе.</p></section>
     <p id="mv-tempo" class="mv-small"></p>
    </section>
-   <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Работающие мышцы</h3><p class="mv-muscle-label">Основные</p><p id="mv-primary"></p><p class="mv-muscle-label">Вспомогательные</p><p id="mv-secondary"></p></div></div><p class="mv-small">На объёмном манекене можно выделить мышечную область и сменить ракурс. Глубокие части перечислены в пояснениях.</p><h3>Как выполнять</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Ошибки и дыхание</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>О демонстрациях</summary><p>Схемы помогают разобрать последовательность движения. Амплитуда зависит от упражнения и особенностей человека; схематичный силуэт не задаёт обязательные углы суставов.</p><div id="mv-sources"></div><p class="mv-small">Версия демонстраций 4.7.0</p></details></aside>
+   <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Работающие мышцы</h3><p class="mv-muscle-label">Основные</p><p id="mv-primary"></p><p class="mv-muscle-label">Вспомогательные</p><p id="mv-secondary"></p></div></div><p class="mv-small">На объёмном манекене можно выделить мышечную область и сменить ракурс. Глубокие части перечислены в пояснениях.</p><h3>Как выполнять</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Ошибки и дыхание</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>О демонстрациях</summary><p>Схемы помогают разобрать последовательность движения. Амплитуда зависит от упражнения и особенностей человека; схематичный силуэт не задаёт обязательные углы суставов.</p><div id="mv-sources"></div><p class="mv-small">Версия демонстраций 4.7.1</p></details></aside>
   </div>
  </div>
 </dialog>
@@ -5248,6 +5248,11 @@ function vectorGroup(svg, anim, camera) {
   return show => g.setAttribute('display', show ? 'inline' : 'none');
 }
 
+/* рамка кадра SVG-фигуры без самой фигуры, по частям: job.step(n) считает n положений из 41 и возвращает true в конце.
+   null — у фигуры нет общей памяти рамок (не манекен каталога). */
+function figureFrameJob(anim, opts = {}) {
+  return anim.catalogRig ? buildSpatialFigure(catalogFigureAnim(anim), {...opts, frameOnly:true}) : null;
+}
 function buildFigure(anim, opts = {}) {
   if(anim.catalogRig)return buildSpatialFigure(catalogFigureAnim(anim),opts);
   if(anim.rig3d)return buildSpatialFigure(anim,opts);
@@ -7476,6 +7481,30 @@ function spatialPose(anim,t){
  for(const[k,v]of Object.entries(R))if(Array.isArray(v)&&v.length===3&&v.every(Number.isFinite))J[k]=project(v).slice(0,2);
  J.sh=project(R.sh).slice(0,2);J.hip=project(R.hip).slice(0,2);return J;
 }
+/* Рамки кадров SVG-фигур: «упражнение|ракурс|пропорция|пол|видимый инвентарь» → {viewBox, floor, trace}.
+   Хранятся и между запусками (localStorage), пока не сменится сборка: хэш сборки — PODHOD_BUILD. */
+const SPATIAL_FRAMES=new Map(),SPATIAL_FRAMES_KEY='podhod.frames.v1';
+let spatialFramesLoaded=false,spatialFramesSave=0;
+function spatialFramesBuild(){return typeof window!=='undefined'&&window.PODHOD_BUILD||null;}
+function spatialFrameGet(key){
+ if(!spatialFramesLoaded){
+  spatialFramesLoaded=true;
+  try{const saved=JSON.parse(localStorage.getItem(SPATIAL_FRAMES_KEY)||'null');if(saved&&saved.build&&saved.build===spatialFramesBuild())for(const[k,v]of Object.entries(saved.frames||{}))if(!SPATIAL_FRAMES.has(k)&&v&&typeof v.viewBox==='string'&&typeof v.trace==='string'&&Array.isArray(v.floor)&&v.floor.length===4)SPATIAL_FRAMES.set(k,v);}catch(e){}
+ }
+ return SPATIAL_FRAMES.get(key)||null;
+}
+/* запись пачкой через полторы секунды или при уходе со страницы; запись другой сборки заменяется целиком, объём ограничен */
+function spatialFramesFlush(){
+ clearTimeout(spatialFramesSave);spatialFramesSave=0;
+ const build=spatialFramesBuild();if(!build)return;
+ try{localStorage.setItem(SPATIAL_FRAMES_KEY,JSON.stringify({build,frames:Object.fromEntries([...SPATIAL_FRAMES].slice(-240))}));}catch(e){}
+}
+function spatialFrameSet(key,frame){
+ SPATIAL_FRAMES.set(key,frame);
+ if(!spatialFramesBuild()||spatialFramesSave)return;
+ if(!spatialFramesSave&&typeof addEventListener==='function'&&!spatialFrameSet.hooked){spatialFrameSet.hooked=true;addEventListener('pagehide',()=>{if(spatialFramesSave)spatialFramesFlush();});}
+ spatialFramesSave=setTimeout(spatialFramesFlush,1500);
+}
 function buildSpatialFigure(anim,opts={}){
  const camera=opts.camera||anim.camera||'side',project=camera3(camera),paletteRoot=el('svg',{}),palette=athletePalette(paletteRoot);
  const svg=el('svg',{class:'fig spatial-figure',role:'img','aria-label':`${opts.label||''} — ${CAMERA3[camera].label}`});
@@ -7583,9 +7612,10 @@ function buildSpatialFigure(anim,opts={}){
  }
  /* Манекен: силуэты сегментов строятся из той же поверхности, что и объёмная сцена */
  function mannequinBody(R,boundsOnly){
+  /* для рамки — только нужные точки поверхности (все ряды туловища, каждый третий ряд конечностей) */
+  if(boundsOnly){const B=Mannequin.boundsSurface(R);for(const row of B.torso)allBounds.push(...row.map(project));for(const rows of Object.values(B.limbs))for(const row of rows)allBounds.push(...row.map(project));allBounds.push(project(V3.add(R.head,R.headU,12)));return;}
   const B=Mannequin.bodyData(R),H=B.torsoHeights,every=(rows,k)=>rows.filter((_,i)=>i%k===0||i===rows.length-1);
   const L=(f,p)=>[f.o[0]+f.x[0]*p[0]+f.y[0]*p[1]+f.z[0]*p[2],f.o[1]+f.x[1]*p[0]+f.y[1]*p[1]+f.z[1]*p[2],f.o[2]+f.x[2]*p[0]+f.y[2]*p[1]+f.z[2]*p[2]];
-  if(boundsOnly){for(const row of B.torso)allBounds.push(...row.map(project));for(const rows of Object.values(B.limbs))for(const row of every(rows,3))allBounds.push(...row.map(project));allBounds.push(project(V3.add(R.head,R.headU,12)));return;}
   const part=(lo,hi)=>B.torso.filter((_,i)=>H[i]>=lo&&H[i]<=hi).flat();
   silhouette(part(-9,10),palette.shorts,{'data-part':'pelvis'});silhouette(part(8,26),palette.kit,{'data-part':'waist'});silhouette(part(23,56),palette.kit,{'data-part':'chest'});
   silhouette(B.neck.flat(),palette.skin,{'data-part':'neck'});
@@ -7659,30 +7689,45 @@ function buildSpatialFigure(anim,opts={}){
   R.props.forEach(prop);return{R,muscles,records:records.sort((a,b)=>a.depth-b.depth)};
  }
  // Bounds include equipment, every sampled pose, and the floor; camera stays still.
- for(let i=0;i<=40;i++){compile(i/40,0,false);tracePts.push(project(anim.rig3d(i/40).gripL));}
+ /* Рамка кадра (viewBox, пол, след хвата) по 41 положению. Считается один раз на упражнение, ракурс, пропорцию
+    и набор видимого инвентаря и запоминается (SPATIAL_FRAMES, между запусками — в localStorage по хэшу сборки).
+    opts.frameOnly: только рамка, по частям — figureFrameJob() досчитывает её в простое, пока карточка не на экране. */
+ const frameKey=anim.catalogId?[anim.catalogId,camera,opts.ratio||1.15,anim.noGround?1:0,anim.rig3d(0).props.map(q=>GymEquipment.visible(q,opts.has)?1:0).join('')].join('|'):null;
+ let framed=frameKey?spatialFrameGet(frameKey):null,frameNext=0;
  const setVectors=anim.catalogId?catalogVectorGroup(svg,anim,camera):vectorGroup(svg,anim,camera);
- if(setVectors.bounds)allBounds.push(...setVectors.bounds);
- let floorCorners=[[-76,187,0],[76,187,0],[76,187,195],[-76,187,195]];
- if(anim.rig3d(0).frames){
-  /* пол под всей сценой манекена: суставы по фазам и детали инвентаря */
-  const xs=[],zs=[],add=p=>{if(p&&p.length===3){xs.push(p[0]);zs.push(p[2]);}};
-  for(let i=0;i<=4;i++){const R=anim.rig3d(i/4);for(const k of ['hip','head','anL','anR','toeL','toeR','heelL','heelR','gripL','gripR','knL','knR'])add(R[k]);
-   for(const q of R.props){if(!GymEquipment.visible(q,opts.has))continue;for(const k of ['a','b','c'])add(q[k]);if(q.pts)q.pts.forEach(add);if(q.size&&q.c){const r=Math.max(...q.size)/2;add(V3.add(q.c,[r,0,r]));add(V3.add(q.c,[-r,0,-r]));}}}
-  const x0=Math.min(...xs)-18,x1=Math.max(...xs)+18,z0=Math.min(...zs)-18,z1=Math.max(...zs)+18;
-  floorCorners=[[x0,186.5,z0],[x1,186.5,z0],[x1,186.5,z1],[x0,186.5,z1]];
+ function frameSample(){const{R}=compile(frameNext/40,0,false);tracePts.push(project(R.gripL));frameNext++;}
+ function frameFinish(){
+  if(setVectors.bounds)allBounds.push(...setVectors.bounds);
+  let floor=[[-76,187,0],[76,187,0],[76,187,195],[-76,187,195]];
+  if(anim.rig3d(0).frames){
+   /* пол под всей сценой манекена: суставы по фазам и детали инвентаря */
+   const xs=[],zs=[],add=p=>{if(p&&p.length===3){xs.push(p[0]);zs.push(p[2]);}};
+   for(let i=0;i<=4;i++){const R=anim.rig3d(i/4);for(const k of ['hip','head','anL','anR','toeL','toeR','heelL','heelR','gripL','gripR','knL','knR'])add(R[k]);
+    for(const q of R.props){if(!GymEquipment.visible(q,opts.has))continue;for(const k of ['a','b','c'])add(q[k]);if(q.pts)q.pts.forEach(add);if(q.size&&q.c){const r=Math.max(...q.size)/2;add(V3.add(q.c,[r,0,r]));add(V3.add(q.c,[-r,0,-r]));}}}
+   const x0=Math.min(...xs)-18,x1=Math.max(...xs)+18,z0=Math.min(...zs)-18,z1=Math.max(...zs)+18;
+   floor=[[x0,186.5,z0],[x1,186.5,z0],[x1,186.5,z1],[x0,186.5,z1]];
+  }
+  if(!anim.noGround)allBounds.push(...floor.map(project));
+  let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+  for(const p of allBounds){if(p[0]<x0)x0=p[0];if(p[0]>x1)x1=p[0];if(p[1]<y0)y0=p[1];if(p[1]>y1)y1=p[1];}
+  const minX=x0-13,maxX=x1+13,minY=y0-16,maxY=y1+10;
+  const ratio=opts.ratio||1.15,cx=(minX+maxX)/2,cy=(minY+maxY)/2;let w=maxX-minX,h=maxY-minY;
+  if(w/h<ratio)w=h*ratio;else h=w/ratio;
+  framed={viewBox:`${f1(cx-w/2)} ${f1(cy-h/2)} ${f1(w)} ${f1(h)}`,floor,trace:tracePts.map((p,i)=>`${i?'L':'M'}${f1(p[0])},${f1(p[1])}`).join(' ')};
+  allBounds.length=0;if(frameKey)spatialFrameSet(frameKey,framed);
+  return framed;
  }
- if(!anim.noGround)allBounds.push(...floorCorners.map(project));
- let minX=Math.min(...allBounds.map(p=>p[0]))-13,maxX=Math.max(...allBounds.map(p=>p[0]))+13,minY=Math.min(...allBounds.map(p=>p[1]))-16,maxY=Math.max(...allBounds.map(p=>p[1]))+10;
- const ratio=opts.ratio||1.15,cx=(minX+maxX)/2,cy=(minY+maxY)/2;let w=maxX-minX,h=maxY-minY;
- if(w/h<ratio)w=h*ratio;else h=w/ratio;
- svg.setAttribute('viewBox',`${f1(cx-w/2)} ${f1(cy-h/2)} ${f1(w)} ${f1(h)}`);
+ if(opts.frameOnly)return{key:frameKey,done:!!framed,step(n=1){if(this.done)return true;for(let k=0;k<n&&frameNext<=40;k++)frameSample();if(frameNext>40){frameFinish();this.done=true;}return this.done;}};
+ if(!framed){while(frameNext<=40)frameSample();frameFinish();}
+ svg.setAttribute('viewBox',framed.viewBox);
  if(!anim.noGround){
+  const floorCorners=framed.floor;
   el('path',{d:path2(floorCorners.map(project)),class:'spatial-floor'},ground);
   const fx0=floorCorners[0][0]+6,fx1=floorCorners[1][0]-6,fz0=floorCorners[0][2],fz1=floorCorners[2][2];
   for(let z=Math.ceil(fz0/50)*50;z<fz1;z+=50){const a=project([fx0,187,z]),b=project([fx1,187,z]);el('line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1],class:'spatial-grid'},ground);}
  }
- trace.setAttribute('d',tracePts.map((p,i)=>`${i?'L':'M'}${f1(p[0])},${f1(p[1])}`).join(' '));
- let nodes=[],jointNodes=[],selectedRegion='all';
+ trace.setAttribute('d',framed.trace);
+ let nodes=[],nodeAttrs=[],jointNodes=[],selectedRegion='all';
  /* метки нагрузки на суставы — поверх всего рисунка */
  const stressLayer=el('g',{class:'stress-marks','aria-hidden':'true'},svg),stressNodes=[];
  let stressOn=(opts.stress??(typeof motionPrefs!=='undefined'?motionPrefs.stress:true))!==false,lastT=opts.t||0,lastFrame=null;
@@ -7694,8 +7739,9 @@ function buildSpatialFigure(anim,opts={}){
  function at(t,frame){
   lastT=t;lastFrame=frame||null;
   const {R,muscles,records}=compile(t,frame?.index||0);
-  records.forEach((s,i)=>{let node=nodes[i];if(!node||node.tagName!==s.tag){const replacement=el(s.tag,{});if(node)node.replaceWith(replacement);else scene.appendChild(replacement);node=nodes[i]=replacement;}for(const attr of [...node.attributes])if(!(attr.name in s.attrs))node.removeAttribute(attr.name);for(const[k,v]of Object.entries(s.attrs))node.setAttribute(k,v);});
-  for(let i=records.length;i<nodes.length;i++)nodes[i].remove();nodes.length=records.length;
+  /* атрибут пишется, только если он изменился с прошлого кадра: у неподвижного инвентаря и цветов — почти никогда */
+  records.forEach((s,i)=>{let node=nodes[i];if(!node||node.tagName!==s.tag){const replacement=el(s.tag,{});if(node)node.replaceWith(replacement);else scene.appendChild(replacement);node=nodes[i]=replacement;nodeAttrs[i]=null;}const old=nodeAttrs[i];for(const attr of [...node.attributes])if(!(attr.name in s.attrs))node.removeAttribute(attr.name);for(const k in s.attrs){const v=s.attrs[k];if(!old||old[k]!==v||!node.hasAttribute(k))node.setAttribute(k,v);}nodeAttrs[i]=s.attrs;});
+  for(let i=records.length;i<nodes.length;i++)nodes[i].remove();nodes.length=nodeAttrs.length=records.length;
   const names=['shL','elL','wrL','hipL','knL','anL','shR','elR','wrR','hipR','knR','anR'];
   names.forEach((name,i)=>{const p=project(R[name]),node=jointNodes[i]||(jointNodes[i]=el('circle',{r:2.1,class:'joint-dot'},dots));node.setAttribute('cx',f1(p[0]));node.setAttribute('cy',f1(p[1]));});
   svg.dataset.pose=String(t);if(muscles)svg.dataset.musclePhase=muscles.phase;allBounds.length=0;setRegion(selectedRegion);
@@ -8422,8 +8468,10 @@ function spineFrame(R,h){
  const ax=axesOf(seg);return{c:pointOn(seg,h),...ax};
 }
 /* Точка поверхности корпуса: side — 'L'/'R', ang ∈ [0, π] от передней линии через бок к спине */
-function torsoPoint(R,h,side,ang,extra=0){
- const f=spineFrame(R,h),[w,a,b]=sectionAt(h),c=Math.cos(ang),s=Math.sin(ang),lat=V.scale(f.x,SIGN[side]); /* f.x — левая сторона тела */
+function torsoPoint(R,h,side,ang,extra=0){return torsoPointIn(R,h,side,ang,extra,spineFrame(R,h),sectionAt(h));}
+/* то же по готовой рамке сечения: сетка тела считает рамку и профиль один раз на ряд, а не на каждую точку */
+function torsoPointIn(R,h,side,ang,extra,f,[w,a,b]){
+ const c=Math.cos(ang),s=Math.sin(ang),lat=V.scale(f.x,SIGN[side]); /* f.x — левая сторона тела */
  let p=V.add(V.add(f.c,f.z,((c>=0?a:b)+extra)*c),lat,(w+extra)*s);
  /* надплечья следуют за поднятием и протракцией плечевого пояса */
  if(h>38&&R.girdle&&R.frames.thorax){
@@ -8445,30 +8493,55 @@ function limbAxes(R,kind,side,t){
  const f=fr[kind+side];return{front:f.z,lat:V.scale(f.x,g),axis:V.scale(f.y,-1)};
 }
 function limbPoint(R,kind,side,t,ang,extra=0){
- const[,a,b]=LIMB_DEF[kind],A=R[a+side],Bp=R[b+side],ax=limbAxes(R,kind,side,t),[rf,rb,rl,rm]=profileAt(LIMBS[kind],t),c=Math.cos(ang),s=Math.sin(ang);
- return V.add(V.add(V.mix(A,Bp,t),ax.front,((c>=0?rf:rb)+extra)*c),ax.lat,((s>=0?rl:rm)+extra)*s);
+ const[,a,b]=LIMB_DEF[kind];return limbPointIn(V.mix(R[a+side],R[b+side],t),limbAxes(R,kind,side,t),profileAt(LIMBS[kind],t),ang,extra);
+}
+/* ряд точек на одном сечении: рамка, оси и профиль считаются один раз (сетки тела и мышечных зон) */
+function torsoRow(R,h,side){const f=spineFrame(R,h),sec=sectionAt(h);return(ang,extra=0)=>torsoPointIn(R,h,side,ang,extra,f,sec);}
+function limbRow(R,kind,side,t){const[,a,b]=LIMB_DEF[kind],center=V.mix(R[a+side],R[b+side],t),ax=limbAxes(R,kind,side,t),prof=profileAt(LIMBS[kind],t);return(ang,extra=0)=>limbPointIn(center,ax,prof,ang,extra);}
+/* то же по готовому сечению (центр, оси, профиль) — для сетки, где сечение общее для ряда точек */
+function limbPointIn(center,ax,[rf,rb,rl,rm],ang,extra=0){
+ const c=Math.cos(ang),s=Math.sin(ang);
+ return V.add(V.add(center,ax.front,((c>=0?rf:rb)+extra)*c),ax.lat,((s>=0?rl:rm)+extra)*s);
 }
 /* Шея: ось — от основания (на уровне верхнего сечения корпуса, впереди остистых отростков) к точке внутри черепа.
    Нижние 40 % плавно переходят из верхнего сечения корпуса (надплечья с поднятием плечевого пояса) в круглую шею:
    поверхность непрерывна, без уступа и открытого края сзади. ang: 0 — спереди, π/2 — левая сторона, π — сзади. */
-function neckPoint(R,t,ang){
+function neckPoint(R,t,ang,top){
  const n=R.frames.neck,h=R.frames.head,lo=V.add(V.add(n.o,n.y,-1),n.z,2.5),hi=V.add(h.o,h.y,1.5),c=V.mix(lo,hi,t);
  const z=V.unit(V.mix(n.z,h.z,t)),x=V.unit(V.mix(n.x,h.x,t)),[rf,rb,rl]=profileAt(NECK,t),cs=Math.cos(ang),sn=Math.sin(ang);
  const p=V.add(V.add(c,z,(cs>=0?rf:rb)*cs),x,rl*sn),w=smooth(t/NECK_BLEND);
  if(w>=1)return p;
  /* основание — продолжение поверхности корпуса по её же касательной: стык корпуса и шеи без излома */
  const a=((ang%(2*Math.PI))+2*Math.PI)%(2*Math.PI),side=a<=Math.PI?'L':'R',an=a<=Math.PI?a:2*Math.PI-a,hTop=TORSO.at(-1)[0];
- const A=torsoPoint(R,hTop,side,an),A0=torsoPoint(R,hTop-2,side,an),base=V.add(A,V.unit(V.sub(A,A0)),t*V.dist(lo,hi));
+ const A=top?torsoPointIn(R,hTop,side,an,0,top.f,top.sec):torsoPoint(R,hTop,side,an),A0=top?torsoPointIn(R,hTop-2,side,an,0,top.f0,top.sec0):torsoPoint(R,hTop-2,side,an),base=V.add(A,V.unit(V.sub(A,A0)),t*V.dist(lo,hi));
  return V.mix(base,p,w);
 }
 const TORSO_H=[];for(let h=TORSO[0][0];h<=TORSO.at(-1)[0]+1e-9;h+=2.5)TORSO_H.push(+h.toFixed(2));if(TORSO_H.at(-1)<TORSO.at(-1)[0])TORSO_H.push(TORSO.at(-1)[0]);
 /* Полная сетка тела для сцены: точки в координатах каталога */
 function surface(R,{cols=24,limbRows=10,limbCols=16}={}){
- const torso=TORSO_H.map(h=>Array.from({length:cols},(_,c)=>{const a=c/cols*2*Math.PI,side=a<=Math.PI?'L':'R',ang=a<=Math.PI?a:2*Math.PI-a;return torsoPoint(R,h,side,ang);}));
+ /* рамка и профиль сечения считаются один раз на ряд — точки те же, что у torsoPoint/limbPoint/neckPoint */
+ const torso=TORSO_H.map(h=>{const f=spineFrame(R,h),sec=sectionAt(h);return Array.from({length:cols},(_,c)=>{const a=c/cols*2*Math.PI,side=a<=Math.PI?'L':'R',ang=a<=Math.PI?a:2*Math.PI-a;return torsoPointIn(R,h,side,ang,0,f,sec);});});
  const limbs={};
- for(const s of SIDES)for(const k of Object.keys(LIMB_DEF))limbs[k+s]=Array.from({length:limbRows+1},(_,r)=>Array.from({length:limbCols},(_,c)=>{const a=c/limbCols*2*Math.PI;return limbPoint(R,k,s,r/limbRows,a);}));
- const neck=Array.from({length:9},(_,r)=>Array.from({length:20},(_,c)=>neckPoint(R,r/8,c/20*2*Math.PI)));
+ for(const s of SIDES)for(const k of Object.keys(LIMB_DEF)){
+  const[,a,b]=LIMB_DEF[k],A=R[a+s],Bp=R[b+s];
+  limbs[k+s]=Array.from({length:limbRows+1},(_,r)=>{const t=r/limbRows,center=V.mix(A,Bp,t),ax=limbAxes(R,k,s,t),prof=profileAt(LIMBS[k],t);return Array.from({length:limbCols},(_,c)=>limbPointIn(center,ax,prof,c/limbCols*2*Math.PI));});
+ }
+ const hTop=TORSO.at(-1)[0],top={f:spineFrame(R,hTop),sec:sectionAt(hTop),f0:spineFrame(R,hTop-2),sec0:sectionAt(hTop-2)};
+ const neck=Array.from({length:9},(_,r)=>Array.from({length:20},(_,c)=>neckPoint(R,r/8,c/20*2*Math.PI,top)));
  return{torso,limbs,neck,torsoHeights:TORSO_H};
+}
+
+/* Точки для рамки кадра SVG-фигуры: все ряды туловища и каждый третий ряд конечностей (с последним) — ровно те точки
+   surface(), по которым считается рамка, без шеи, кистей и стоп; совпадают с surface() до бита. */
+function boundsSurface(R,{cols=24,limbRows=10,limbCols=16,limbStep=3}={}){
+ const torso=TORSO_H.map(h=>{const f=spineFrame(R,h),sec=sectionAt(h);return Array.from({length:cols},(_,c)=>{const a=c/cols*2*Math.PI,side=a<=Math.PI?'L':'R',ang=a<=Math.PI?a:2*Math.PI-a;return torsoPointIn(R,h,side,ang,0,f,sec);});});
+ const rows=[];for(let r=0;r<=limbRows;r++)if(r%limbStep===0||r===limbRows)rows.push(r);
+ const limbs={};
+ for(const s of SIDES)for(const k of Object.keys(LIMB_DEF)){
+  const[,a,b]=LIMB_DEF[k],A=R[a+s],Bp=R[b+s];
+  limbs[k+s]=rows.map(r=>{const t=r/limbRows,center=V.mix(A,Bp,t),ax=limbAxes(R,k,s,t),prof=profileAt(LIMBS[k],t);return Array.from({length:limbCols},(_,c)=>limbPointIn(center,ax,prof,c/limbCols*2*Math.PI));});
+ }
+ return{torso,limbs};
 }
 
 /* ---------- Знаковые расстояния тела (каталог) ---------- */
@@ -8587,7 +8660,7 @@ function centerOfMass(R,extra=[]){
 return{V,M3,Q,B,TORSO,TORSO_H,TORSO_JOINTS,LIMBS,NECK,CAPS,MASS,LIMITS,SIDES,SIGN,FLOOR,D2R,R2D,clamp,
  neutral,clone,pack,unpack,PACK,PACK_SIZE,fk,solePoints,twoBone,solveArm,solveArmWrist,setArmFromPoints,footFrame,heelFrame,solveLeg,rootRot,rootFromAxes,
  swing,swingTwist,eulerXZY,eulerYZX,spineRot,makeTrack,monotone,toCat,dirCat,catalogPose,
- profileAt,sectionAt,spineFrame,torsoPoint,limbAxes,limbPoint,neckPoint,surface,limbSDF,torsoSDF,torsoCache,headSDF,ellipseRadius,centerOfMass,LIMB_DEF,
+ profileAt,sectionAt,spineFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,ellipseRadius,centerOfMass,LIMB_DEF,
  handShape,SHOE,bodyData,jointAngles};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=Mannequin;
@@ -11085,22 +11158,23 @@ const MANNEQUIN_LIMB_PATCHES={
 const MANNEQUIN_DELTS=[['delt_f',-.75,.75],['delt_s',.8,1.75],['delt_r',1.8,2.75]];
 function mannequinMuscleSurfaces(R,profile,{coarse=false}={}){
  const faces=[],V=Mannequin.V,lift=.25;
- const grid=(id,side,rows,cols,point)=>{
+ /* row(u) возвращает точку ряда (v, e): сечение ряда считается один раз — и для вершин, и для центров граней */
+ const grid=(id,side,rows,cols,row)=>{
   if(!profile.regions[id]?.visible)return;
-  const P=[];for(let r=0;r<=rows;r++){P.push([]);for(let c=0;c<=cols;c++)P[r].push(point(r/rows,c/cols,lift));}
-  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
-   const pts=[P[r][c],P[r][c+1],P[r+1][c+1],P[r+1][c]],mid=point((r+.5)/rows,(c+.5)/cols,0),out=point((r+.5)/rows,(c+.5)/cols,1);
+  const P=[];for(let r=0;r<=rows;r++){const at=row(r/rows);P.push([]);for(let c=0;c<=cols;c++)P[r].push(at(c/cols,lift));}
+  for(let r=0;r<rows;r++){const at=row((r+.5)/rows);for(let c=0;c<cols;c++){
+   const pts=[P[r][c],P[r][c+1],P[r+1][c+1],P[r+1][c]],mid=at((c+.5)/cols,0),out=at((c+.5)/cols,1);
    faces.push({id,parent:profile.regions[id].parent,side,points:pts,normal:V.unit(V.sub(out,mid)),anchor:mid});
-  }
+  }}
  };
  const step=coarse?2:1;
  for(const side of ['L','R']){
-  for(const[id,h0,h1,a0,a1]of MANNEQUIN_TORSO_PATCHES)grid(id,side,Math.max(1,Math.round((h1-h0)/(2.5*step))),Math.max(2,Math.round((a1-a0)/(.13*step))),(u,v,e)=>Mannequin.torsoPoint(R,h0+(h1-h0)*u,side,a0+(a1-a0)*v,e));
+  for(const[id,h0,h1,a0,a1]of MANNEQUIN_TORSO_PATCHES)grid(id,side,Math.max(1,Math.round((h1-h0)/(2.5*step))),Math.max(2,Math.round((a1-a0)/(.13*step))),u=>{const at=Mannequin.torsoRow(R,h0+(h1-h0)*u,side);return(v,e)=>at(a0+(a1-a0)*v,e);});
   for(const[kind,list]of Object.entries(MANNEQUIN_LIMB_PATCHES))for(const[id,t0,t1,a0,a1]of list)
-   grid(id,side,Math.max(1,Math.round((t1-t0)/(.06*step))),Math.max(2,Math.round((a1-a0)/(.2*step))),(u,v,e)=>Mannequin.limbPoint(R,kind,side,t0+(t1-t0)*u,a0+(a1-a0)*v,e));
+   grid(id,side,Math.max(1,Math.round((t1-t0)/(.06*step))),Math.max(2,Math.round((a1-a0)/(.2*step))),u=>{const at=Mannequin.limbRow(R,kind,side,t0+(t1-t0)*u);return(v,e)=>at(a0+(a1-a0)*v,e);});
   /* дельтовидная: сектор «шапки» плечевого сустава, от верха вниз на ~95° */
   const ua=R.frames['ua'+side],g=side==='L'?1:-1,cap=V.add(V.add(R['sh'+side],ua.y,-1.4),ua.x,g*.7),lat=V.scale(ua.x,g),r=Mannequin.CAPS.sh;
-  for(const[id,a0,a1]of MANNEQUIN_DELTS)grid(id,side,coarse?3:5,coarse?3:6,(u,v,e)=>{
+  for(const[id,a0,a1]of MANNEQUIN_DELTS)grid(id,side,coarse?3:5,coarse?3:6,u=>(v,e)=>{
    const polar=(.18+.85*u)*Math.PI/2*1.05,az=a0+(a1-a0)*v,dir=V.add(V.add(V.scale(ua.y,Math.cos(polar)),ua.z,Math.sin(polar)*Math.cos(az)),lat,Math.sin(polar)*Math.sin(az));
    return V.add(cap,dir,r+e);
   });
@@ -12307,37 +12381,92 @@ function scheduleMotionLoop() {
     if (!document.hidden) {
       if (detailMotion) {if (!detailMotion.paused) {detailMotion.clock+=dt*Number(motionPrefs.speed);paintMotion(detailMotion,true);}}
       else if(workout && $('#workout-view').open){const F=workout.motion;if(F && !F.paused && !$('#wv-active').hidden){F.clock+=dt;paintWorkoutMotion();}}
-      else for (const F of figs) if (F.vis && !F.paused) {F.clock+=dt;paintMotion(F);}
+      else for (const F of figs) if (F.f && F.vis && !F.paused && F.active!==false) {
+        /* карточки и атлас — 30 кадров в секунду: часы идут каждый кадр, рисунок — через кадр */
+        F.clock+=dt;F.since=(F.since||0)+dt;
+        if(F.since>=CARD_FRAME_MS){F.since=0;paintMotion(F);}
+      }
     }
     rafId=requestAnimationFrame(loop);
   };
   rafId=requestAnimationFrame(loop);
 }
+/* Карточки плана. Рисунок строится, когда карточка подходит к экрану; двигаются только те, на которые смотрят:
+   на телефоне — одна (самая видимая или та, где только что нажали «Пуск»), на широком экране — две,
+   и ещё та, что под мышью или в фокусе. Остальные стоят в текущей фазе; пауза пользователя не трогается. */
+const CARD_FRAME_MS=30, CARD_NEAR='400px 0px';
+let ioSeen=null;
+function activeCardCount(){return window.innerWidth>=900?2:1;}
+function pickActiveCards(){
+  const cards=figs.filter(F=>F.card&&F.f);
+  const mid=window.innerHeight/2,dist=F=>{const r=F.btn.getBoundingClientRect();return Math.abs(r.top+r.height/2-mid);};
+  /* порядок: под мышью или в фокусе, потом последняя нажатая «Пуск» (пока видна хотя бы наполовину),
+     потом самая видимая и ближе к середине экрана */
+  const pick=F=>F.seen>=.4?F.pick||0:0;
+  const order=cards.filter(F=>!F.paused&&(F.seen>0||F.hover)).sort((a,b)=>(b.hover|0)-(a.hover|0)||pick(b)-pick(a)||Math.round(b.seen*5)-Math.round(a.seen*5)||dist(a)-dist(b));
+  const on=new Set(order.slice(0,activeCardCount()+(order[0]?.hover?1:0)));
+  let k=0;for(const F of figs)if(F.card){const was=F.active;F.active=on.has(F);if(F.active&&!was)F.since=CARD_FRAME_MS/2*(k++%2);}
+}
+function buildCardFigure(F){
+  if(F.f||F.failed)return;
+  try {
+    /* начатую заранее рамку досчитать, а не начинать заново */
+    if(F.job){F.job.step(41);F.job=null;}
+    F.f=buildFigure(F.it.ex.anim,{primary:F.it.ex.pri,has:F.it.has,ratio:1,t:0,label:F.it.name,muscles:motionPrefs.muscles});
+    F.btn.prepend(F.f.svg);paintMotion(F);
+  } catch(e) {F.failed=true;console.error('Демонстрация',F.it.ex.id,e);}
+}
+/* Рамки ещё не построенных карточек досчитываются заранее, по два положения за раз: в простое, а если простоя
+   нет (идёт анимация на слабом телефоне) — не реже чем раз в четверть секунды. Тогда при прокрутке карточка
+   строится сразу, без долгой паузы. */
+let framePrefetchGen=0;
+function prefetchCardFrames(){
+  const gen=++framePrefetchGen,queue=figs.filter(F=>F.card);let F=null;
+  const idle=window.requestIdleCallback?cb=>requestIdleCallback(cb,{timeout:200}):cb=>setTimeout(()=>{const end=performance.now()+8;cb({timeRemaining:()=>Math.max(0,end-performance.now())});},40);
+  const work=deadline=>{
+    if(gen!==framePrefetchGen)return;
+    do {
+      if(!F||!F.job){
+        F=queue.shift();if(!F)return;
+        if(F.f||F.failed){F=null;continue;}
+        try{F.job=figureFrameJob(F.it.ex.anim,{has:F.it.has,ratio:1});}catch(e){F.job=null;}
+        if(!F.job||F.job.done){F.job=null;continue;}
+      }
+      /* без простоя (сработал таймаут) — кусок побольше: шесть положений ≈ 3 мс на компьютере */
+      if(F.job.step(deadline.didTimeout?6:2))F.job=null;
+    } while(deadline.timeRemaining()>3);
+    idle(work);
+  };
+  idle(work);
+}
 function mountFigures() {
   figs=[];
   const flat=plan.blocks.flatMap(b=>b.items);
   document.querySelectorAll('[data-fig]').forEach(btn=>{
-    const it=flat[+btn.dataset.fig];
-    try {
-      const f=buildFigure(it.ex.anim,{primary:it.ex.pri,has:it.has,ratio:1,t:0,label:it.name,muscles:motionPrefs.muscles});
-      btn.prepend(f.svg);
-      const F={btn,it,f,vis:true,paused:reduceMotion,clock:0,durations:motionDurations(it)};
-      figs.push(F);paintMotion(F);
-      if(motionProfile(it.ex.anim)){const note=document.createElement('p');note.className='muscle-tile-note';note.textContent='Цвет — учебная схема';note.hidden=!motionPrefs.muscles;btn.closest('.motion-tile').appendChild(note);}
-      const pause=btn.closest('.motion-tile').querySelector('[data-motion-pause]');
-      if(pause){pause.textContent=F.paused?'Пуск':'Пауза';pause.setAttribute('aria-pressed',String(!F.paused));pause.setAttribute('aria-label',`${F.paused?'Воспроизвести':'Приостановить'} демонстрацию: ${it.name}`);}
-    } catch(e) {console.error('Демонстрация',it.ex.id,e);}
+    const it=flat[+btn.dataset.fig];if(!it)return;
+    const F={btn,it,f:null,card:true,vis:false,seen:0,active:false,paused:reduceMotion,clock:0,durations:motionDurations(it)};
+    figs.push(F);
+    const tile=btn.closest('.motion-tile');
+    if(motionProfile(it.ex.anim)){const note=document.createElement('p');note.className='muscle-tile-note';note.textContent='Цвет — учебная схема';note.hidden=!motionPrefs.muscles;tile.appendChild(note);}
+    const pause=tile.querySelector('[data-motion-pause]');
+    if(pause){pause.textContent=F.paused?'Пуск':'Пауза';pause.setAttribute('aria-pressed',String(!F.paused));pause.setAttribute('aria-label',`${F.paused?'Воспроизвести':'Приостановить'} демонстрацию: ${it.name}`);}
+    const hover=on=>e=>{if(e.pointerType&&e.pointerType!=='mouse')return;F.hover=on;pickActiveCards();};
+    tile.addEventListener('pointerenter',hover(true));tile.addEventListener('pointerleave',hover(false));
+    btn.addEventListener('focus',()=>{F.hover=true;pickActiveCards();});btn.addEventListener('blur',()=>{F.hover=false;pickActiveCards();});
   });
   if ('IntersectionObserver' in window) {
-    io=new IntersectionObserver(es=>{for(const e of es){const F=figs.find(x=>x.btn===e.target);if(F)F.vis=e.isIntersecting;}},{rootMargin:'80px'});
-    figs.forEach(F=>io.observe(F.btn));
-  }
+    const byBtn=new Map(figs.map(F=>[F.btn,F]));
+    io=new IntersectionObserver(es=>{for(const e of es){const F=byBtn.get(e.target);if(!F)continue;F.vis=e.isIntersecting;if(F.vis)buildCardFigure(F);}pickActiveCards();},{rootMargin:CARD_NEAR});
+    ioSeen=new IntersectionObserver(es=>{for(const e of es){const F=byBtn.get(e.target);if(F)F.seen=e.isIntersecting?e.intersectionRatio:0;}pickActiveCards();},{threshold:[0,.2,.4,.6,.8,1]});
+    for(const F of figs){io.observe(F.btn);ioSeen.observe(F.btn);}
+    prefetchCardFrames();
+  } else for(const F of figs){F.vis=true;F.active=true;buildCardFigure(F);}
   scheduleMotionLoop();
 }
 function stopFigures() {
   if(workout && $('#workout-view').open)closeWorkout();
   if(detailMotion) closeMotion();
-  cancelAnimationFrame(rafId);if(io)io.disconnect();io=null;for(const F of figs)disposeMotion(F);figs=[];
+  cancelAnimationFrame(rafId);framePrefetchGen++;if(io)io.disconnect();if(ioSeen)ioSeen.disconnect();io=ioSeen=null;for(const F of figs)disposeMotion(F);figs=[];
 }
 function previewItem(id) {
   const ex=EXI[id];let E=effEquip(S.equip);
@@ -12384,11 +12513,12 @@ function closeMotion() {
   detailReturn=null;
 }
 function setupMotionViewer() {
+  window.addEventListener('resize',()=>pickActiveCards(),{passive:true});
   $('#mv-exercise').innerHTML=GROUPS.map(g=>`<optgroup label="${esc(g.name)}">${EX.filter(ex=>ex.g===g.id).map(ex=>`<option value="${ex.id}">${esc(ex.name)}</option>`).join('')}</optgroup>`).join('');
 
   document.addEventListener('click',e=>{
     const t=e.target.closest('button');if(!t)return;
-    if(t.dataset.motionPause!==undefined){const F=figs.find(f=>+f.btn.dataset.fig===+t.dataset.motionPause);if(F){F.paused=!F.paused;t.textContent=F.paused?'Пуск':'Пауза';t.setAttribute('aria-pressed',String(!F.paused));t.setAttribute('aria-label',`${F.paused?'Воспроизвести':'Приостановить'} демонстрацию: ${F.it.name}`);}return;}
+    if(t.dataset.motionPause!==undefined){const F=figs.find(f=>+f.btn.dataset.fig===+t.dataset.motionPause);if(F){F.paused=!F.paused;if(F.card){F.pick=performance.now();pickActiveCards();}t.textContent=F.paused?'Пуск':'Пауза';t.setAttribute('aria-pressed',String(!F.paused));t.setAttribute('aria-label',`${F.paused?'Воспроизвести':'Приостановить'} демонстрацию: ${F.it.name}`);}return;}
     if(t.id==='motion-atlas'){openMotion(figs[0]?figs[0].btn.dataset.fig:-1);return;}
     if(t.id==='mv-close'){closeMotion();return;}
     if(!detailMotion)return;
@@ -14043,6 +14173,6 @@ renderSetup();
 renderPlan();
 logInit();
 
-window.PODHOD_VERSION='4.7.0';window.PODHOD_LANG='ru';
+window.PODHOD_VERSION='4.7.1';window.PODHOD_BUILD='4.7.1-b0d94e46bd85';window.PODHOD_LANG='ru';
 
 </script>
