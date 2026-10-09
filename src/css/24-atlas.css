@@ -1,0 +1,84 @@
+/* Атлас мышц: слева схема и список мышц (липкие на широком экране), справа — выбранная мышца, превью на манекене и упражнения. */
+.at-head { background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:16px; display:grid; gap:6px; }
+@media (min-width:700px) { .at-head { padding:22px; } }
+.at-head .eyebrow { margin:0; }
+.at-lead { margin:0; color:var(--muted); max-width:62ch; }
+.at-where { display:grid; gap:6px; }
+.at-wl { font:600 11.5px/1.2 var(--f-body); letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.at-places .place { min-width:76px; padding:6px 12px; }
+.at-places .place small { font-size:12px; }
+
+.at-grid { display:grid; gap:14px; align-items:start; }
+@media (min-width:900px) {
+  .at-grid { grid-template-columns:minmax(260px, 330px) minmax(0, 1fr); gap:20px; }
+  .at-pick { position:sticky; top:calc(env(safe-area-inset-top, 0px) + 12px); max-height:calc(100vh - 24px); overflow:auto; }
+}
+.at-pick, .at-detail { background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:16px; min-width:0; }
+.at-detail { display:grid; gap:12px; }
+.at-detail .motion-tile { grid-column:auto; grid-row:auto; }
+@media (min-width:700px) { .at-detail { padding:20px 22px; } }
+
+.at-map { max-width:300px; margin:0 auto 6px; }
+.amap { width:100%; height:auto; display:block; }
+.amap .am-m { cursor:pointer; outline:none; }
+.amap .am-m .mm-b { transition:fill .15s; stroke:transparent; stroke-width:.8; }
+.amap .am-m:hover .mm-b, .amap .am-m:focus-visible .mm-b { fill:var(--mus-soft); stroke:var(--mus); }
+.amap .am-m.none .mm-b { fill:var(--mm-n); }
+.amap .am-m.on .mm-b { fill:var(--mus); stroke:var(--mus); }
+
+.at-gh { margin:12px 0 6px; font:600 11.5px/1.2 var(--f-body); letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.at-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.at-chip { display:inline-flex; align-items:center; gap:7px; border:1px solid var(--line); background:var(--surface); border-radius:999px; padding:6px 8px 6px 12px; font-size:14px; line-height:1.2; min-height:36px; }
+.at-chip small { font:600 11px/1 var(--f-mono); color:var(--muted); background:var(--surface-2); border-radius:999px; padding:3px 6px; }
+.at-chip.none { color:var(--faint); }
+.at-chip.on { background:var(--mus-soft); border-color:var(--mus); box-shadow:inset 0 0 0 1px var(--mus); font-weight:600; }
+.at-chip.on small { background:var(--surface); color:var(--ink); }
+.at-pick .f-note { margin-top:12px; }
+@media (min-width:900px) {
+  .at-map { max-width:250px; }
+  .at-gh { margin-top:10px; }
+  .at-chip { font-size:13.5px; min-height:32px; padding:4px 7px 4px 11px; }
+}
+
+.at-name { font:400 clamp(24px, 4.4vw, 32px)/1.08 var(--f-display); }
+.at-desc { margin:0; max-width:64ch; }
+.at-acts { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
+.at-focus-on { font-size:13px; color:var(--muted); }
+
+.at-tile { border-radius:13px; }
+.at-tile .illus { aspect-ratio:5 / 4; max-height:min(64vh, 520px); }
+.at-stage { position:absolute; inset:0; display:block; }
+.at-stage > * { width:100%; height:100%; }
+.at-under { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 12px; margin-top:-2px; }
+.at-pv { margin:0; font-size:15px; min-width:0; }
+.at-cams { display:flex; gap:3px; background:var(--surface-2); border:1px solid var(--line); border-radius:10px; padding:3px; }
+.at-cams button { border:0; background:transparent; border-radius:7px; padding:6px 10px; font-size:13px; font-weight:600; min-height:34px; color:var(--muted); white-space:nowrap; }
+@media (max-width:480px) { .at-cams { flex:1 1 100%; } .at-cams button { flex:1 1 auto; padding:6px 4px; font-size:12.5px; } }
+.at-cams button[aria-pressed="true"] { background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.12); }
+.at-hint { margin:-4px 0 0; font-size:13px; color:var(--muted); }
+
+.at-h { margin:6px 0 0; font:600 11.5px/1.2 var(--f-body); letter-spacing:.08em; text-transform:uppercase; color:var(--muted); display:flex; align-items:center; gap:8px; }
+.at-h small { font:600 11px/1 var(--f-mono); letter-spacing:0; background:var(--surface-2); border-radius:999px; padding:3px 7px; }
+.at-list, .at-olist { list-style:none; margin:0; padding:0; display:grid; gap:6px; }
+.at-row { display:grid; grid-template-columns:minmax(0, 1fr) auto; border:1px solid var(--line); border-radius:11px; overflow:hidden; background:var(--surface); }
+.at-row.on { border-color:var(--mus); box-shadow:inset 3px 0 0 var(--mus); }
+.at-ex { display:grid; grid-template-columns:auto minmax(0, 1fr); gap:10px; align-items:center; text-align:left; border:0; background:transparent; padding:9px 10px 9px 12px; min-height:52px; }
+.at-sw { width:12px; height:12px; border-radius:4px; box-shadow:inset 0 0 0 1px rgba(0,0,0,.12); }
+.at-n { display:grid; gap:2px; min-width:0; }
+.at-n b { font-weight:600; font-size:14.5px; line-height:1.25; }
+.at-n small { font-size:12.5px; line-height:1.3; color:var(--muted); }
+.at-open { border:0; border-left:1px solid var(--line); background:var(--surface-2); min-width:48px; font-size:17px; color:var(--muted); }
+.at-open:hover { color:var(--ink); }
+.at-show { justify-self:start; border:1px dashed var(--line); background:transparent; border-radius:9px; padding:8px 12px; font-size:13.5px; color:var(--muted); }
+.at-other { border-top:1px solid var(--line); padding-top:10px; }
+.at-other summary { cursor:pointer; font-weight:600; font-size:14px; display:flex; align-items:center; gap:8px; min-height:36px; }
+.at-other summary small { font:600 11px/1 var(--f-mono); background:var(--surface-2); border-radius:999px; padding:3px 7px; color:var(--muted); }
+.at-olist { margin-top:8px; }
+.at-orow { display:grid; gap:2px; width:100%; text-align:left; border:1px solid var(--line); border-radius:10px; padding:8px 12px; font-size:14px; color:var(--ink); }
+.at-orow small { font-size:12.5px; color:var(--muted); }
+.warn-inline { margin:0; background:var(--warn-bg); color:var(--warn-ink); border-radius:12px; padding:10px 14px; font-size:14px; }
+
+/* акцент в шапке плана */
+.focus-chip { display:inline-flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin:10px 0 0; padding:6px 6px 6px 12px; border-radius:999px; background:var(--mus-soft); color:var(--ink); font-size:14px; }
+.focus-chip b { color:var(--mus); }
+.focus-chip button { border:0; background:var(--surface); border-radius:999px; padding:5px 10px; font-size:12.5px; color:var(--muted); }

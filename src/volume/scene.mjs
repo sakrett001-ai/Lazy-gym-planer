@@ -8,7 +8,7 @@ const unit=a=>{const l=len(a);if(l<1e-8)throw Error('Degenerate scene direction'
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 export const world=p=>[p[0]/100,(186-p[1])/100,p[2]/100];
 const direction=p=>[p[0],-p[1],p[2]],vec=p=>new THREE.Vector3(...p);
-const CAMERA_SETTINGS={above:[35,-55],angle:[55,-15],side:[90,0],front:[0,0],back:[180,0]};
+const CAMERA_SETTINGS={above:[35,-55],angle:[55,-15],side:[90,0],front:[0,0],back:[180,0],rear:[235,-15]};
 function frame(a,b,reference){
  const z=unit(sub(b,a));let x=sub(reference,z.map(v=>v*dot(reference,z)));
  if(len(x)<1e-5)x=cross(z,Math.abs(z[0])<.8?[1,0,0]:[0,0,1]);x=unit(x);return{x,y:unit(cross(z,x)),z};
