@@ -6722,7 +6722,7 @@ function eqName(id) {
   return EQN[id];
 }
 /* ---------- недельная программа ---------- */
-const MODES = {single:{name:'Workout', hint:'for one day'}, program:{name:'Program', hint:'for a week'}};
+const MODES = {single:{name:'Workout', hint:'for one day'}, program:{name:'Program', hint:'for a week'}, custom:{name:'Custom plan', hint:'from favorites'}};
 const DAY_T = {
   fa:{name:'Full body', g:['quads', 'chest', 'back', 'shoulders', 'biceps', 'abs']},
   fb:{name:'Full body', g:['hams', 'glutes', 'back', 'chest', 'triceps', 'abs']},
@@ -6758,7 +6758,7 @@ const WEEKS = [
 ];
 
 const DEFAULTS = {goal:'mass', format:'classic', level:'mid', count:6, groups:['chest', 'back', 'shoulders'], equip:EQUIP.map(e => e.id), seed:7,
-  mode:'single', days:3, split:'full', week:1, day:0, view:'plan', atlasM:'chest', focus:null};
+  mode:'single', days:3, split:'full', week:1, day:0, view:'plan', atlasM:'chest', focus:null, fav:[], customs:[], custom:null};
 const STORE = 'podhod.settings.v1';
 function loadSettings() {
   try { const s = JSON.parse(localStorage.getItem(STORE) || 'null'); if (s && s.groups && s.equip) return Object.assign({}, DEFAULTS, s); } catch (e) {}
@@ -6940,41 +6940,52 @@ function prescribe(ex, week, E) {
 
 /* ---------- сборка одной тренировки ---------- */
 function buildPlan(ctx = {}) {
-  const groups = ctx.groups || S.groups, count = ctx.count || S.count, week = ctx.week || null;
-  const sw = ctx.swaps || {};
+  /* свой план: упражнения и порядок задал человек; мышцы — только подсказка для подбора */
+  const custom = S.mode === 'custom' && !ctx.groups ? customOf() : null;
+  const groups = ctx.groups || S.groups, count = custom ? custom.items.length : ctx.count || S.count, week = ctx.week || null;
+  const sw = custom ? {} : ctx.swaps || {};
   const E = effEquip(S.equip);
   const rand = rng((ctx.seed ?? S.seed) * 9973 + count * 31 + groups.length * 7);
-  if (!groups.length) return {empty:'groups'};
-  /* программа другого места: подбор под его инвентарь, затем недоступное здесь заменяется аналогами */
-  const ref = programEquip(), PE = ref ? effEquip(ref) : E;
-  let {picked} = pickExercises(PE, rand, groups, count, ctx.avoid);
+  if (custom && !custom.items.length) return {empty:'custom', groups};
+  if (!groups.length && !custom) return {empty:'groups'};
+  /* программа другого места: подбор под его инвентарь, затем недоступное здесь заменяется аналогами;
+     в своём плане так же заменяется то, чего нет в этом месте */
+  const ref = custom ? null : programEquip(), PE = ref ? effEquip(ref) : E;
+  let picked = custom ? custom.items.map(it => EXI[it.id]) : pickExercises(PE, rand, groups, count, ctx.avoid).picked;
   const pool = EX.filter(ex => available(ex, E));
   const subs = new Map(), lost = [];
-  if (ref) {
-    const lvlMax = S.level === 'beg' ? 2 : 3, used = new Set(picked.filter(ex => available(ex, E)).map(ex => ex.id));
-    picked = picked.map(ex => {
-      if (available(ex, E)) return ex;
+  let slots = picked.map((_, i) => i);
+  if (ref || custom) {
+    const lvlMax = custom ? 3 : S.level === 'beg' ? 2 : 3, used = new Set(picked.filter(ex => available(ex, E)).map(ex => ex.id));
+    const keep = [];
+    picked = picked.map((ex, i) => {
+      if (available(ex, E)) { keep.push(i); return ex; }
       const alt = analogsFor(ex, E, {exclude:used, lvlMax, limit:1, ok:S.format === 'static' ? staticOk : null})[0];
       if (!alt) { lost.push(ex); return null; }
-      used.add(alt.ex.id); subs.set(alt.ex, {from:ex, note:alt.note}); return alt.ex;
+      used.add(alt.ex.id); subs.set(alt.ex, {from:ex, note:alt.note}); keep.push(i); return alt.ex;
     }).filter(Boolean);
+    slots = keep;
   }
   for (const [i, id] of Object.entries(sw)) {
     const ex = EXI[id];
     if (picked[i] && ex && available(ex, E) && !picked.includes(ex)) picked[i] = ex;
   }
-  if (!picked.length) return {empty:'none', pool, groups};
+  if (!picked.length) return {empty:'none', pool, groups, lost};
   const G = GOALS[S.goal];
-  const items = picked.map((ex, i) => ({ex, slot:i, rx:applyLight(prescribe(ex, week, E), ex), name:exName(ex, E), eqLine:equipLine(ex, E), eqIds:chosenEquip(ex, E), has:propHas(ex, E), sub:subs.get(ex) || null}));
+  const items = picked.map((ex, k) => {
+    const slot = slots[k], rx = applyLight(prescribe(ex, week, E), ex);
+    return {ex, slot, rx:custom ? customRx(rx, custom.items[slot], ex) : rx, name:exName(ex, E), eqLine:equipLine(ex, E), eqIds:chosenEquip(ex, E), has:propHas(ex, E), sub:subs.get(ex) || null};
+  });
   const bySlot = new Map(items.map(it => [it.ex, it]));
   let blocks = [], minutes = 0, totalSets = 0;
   if (S.format === 'classic' || S.format === 'static') {
-    const ord = orderClassic(picked).map(ex => bySlot.get(ex));
+    const ord = (custom ? picked : orderClassic(picked)).map(ex => bySlot.get(ex));
     ord.forEach((it, i) => { it.label = String(i + 1); });
     blocks = [{kind:'list', items:ord}];
     for (const it of ord) { minutes += it.rx.static ? staticSeconds(it.rx) : it.rx.sets * (it.rx.work + it.rx.rest) + 60; totalSets += it.rx.sets; }
   } else if (S.format === 'superset') {
-    const pairs = pairSupersets(picked);
+    /* в своём плане пары — соседние упражнения по порядку человека */
+    const pairs = custom ? picked.reduce((a, ex, i) => (i % 2 ? a[a.length - 1].push(ex) : a.push([ex]), a), []) : pairSupersets(picked);
     pairs.forEach((pr, pi) => {
       const L = String.fromCharCode(65 + pi);
       const its = pr.map((ex, j) => { const it = bySlot.get(ex); it.label = pr.length > 1 ? L + (j + 1) : L; return it; });
@@ -6986,7 +6997,7 @@ function buildPlan(ctx = {}) {
       totalSets += sets * its.length;
     });
   } else {
-    const ord = orderCircuit(picked).map(ex => bySlot.get(ex));
+    const ord = (custom ? picked : orderCircuit(picked)).map(ex => bySlot.get(ex));
     const c = G.circ;
     let rounds = c.rounds + (S.level === 'beg' ? -1 : S.level === 'adv' ? 1 : 0);
     if (week && week.deload) rounds -= 1;
@@ -6996,9 +7007,9 @@ function buildPlan(ctx = {}) {
     ord.forEach((it, i) => {
       it.label = String(i + 1);
       it.rounds = rounds;
-      if (!it.ex.kind) it.rx.reps = c.reps;
+      if (!it.ex.kind && !(custom && custom.items[it.slot]?.reps)) it.rx.reps = c.reps;
       it.rx.circ = true;
-      it.rx.work = it.ex.kind === 'time' ? c.work : it.ex.kind === 'dist' ? 30 : midOf(c.reps) * G.rep * (it.ex.uni ? 2 : 1);
+      it.rx.work = it.ex.kind === 'time' ? c.work : it.ex.kind === 'dist' ? 30 : midOf(it.rx.reps) * G.rep * (it.ex.uni ? 2 : 1);
     });
     blocks = [{kind:'circuit', items:ord, rounds, rest:c.rest, roundRest:c.roundRest}];
     minutes = rounds * (ord.reduce((a, it) => a + it.rx.work, 0) + c.rest * (ord.length - 1)) + (rounds - 1) * c.roundRest;
@@ -7017,7 +7028,7 @@ function buildPlan(ctx = {}) {
     else for (const m of it.ex.pri) w[MUSCLE_GROUP[m]] = Math.max(w[MUSCLE_GROUP[m]], 0.5);
     for (const [g, x] of Object.entries(w)) gvol[g] = (gvol[g] || 0) + k * x;
   }
-  return {blocks, items, minutes:Math.round(minutes / 60), totalSets, missing, load, gvol, pool, E, groups, count, lost};
+  return {blocks, items, minutes:Math.round(minutes / 60), totalSets, missing:custom ? [] : missing, load, gvol, pool, E, groups, count, lost, custom:!!custom};
 }
 
 /* ---------- сборка недели ---------- */
@@ -7070,13 +7081,17 @@ const ICON = {
 function renderSetup() {
   const seg = (name, dict, cur) => Object.entries(dict).map(([k, v]) =>
     `<button type="button" class="seg-b${k === cur ? ' on' : ''}" data-set="${name}" data-v="${k}" aria-pressed="${k === cur}"><b>${v.name}</b>${v.hint ? `<small>${v.hint}</small>` : ''}</button>`).join('');
-  const prog = S.mode === 'program';
+  const prog = S.mode === 'program', custom = S.mode === 'custom';
   $('#views').innerHTML = viewTabs();
   const jv = S.view === 'journal' || S.view === 'atlas';
   $('.setup').hidden = jv; $('.layout').classList.toggle('solo', jv);
   $('#f-mode').innerHTML = seg('mode', MODES, S.mode);
   $('#f-prog').hidden = !prog;
+  $('#f-custom').hidden = !custom;
+  if (custom) $('#f-custom-body').innerHTML = customSetupHtml();
   $('#f-muscles').hidden = prog;
+  $('#g-note').hidden = !custom;
+  $('#count-l').closest('.field').hidden = custom;
   $('#count-l').textContent = prog ? 'Exercises per workout' : 'Exercises';
   if (prog) {
     $('#f-days').innerHTML = [2, 3, 4, 5].map(d => `<button type="button" class="seg-b${d === S.days ? ' on' : ''}" data-days="${d}" aria-pressed="${d === S.days}"><b>${d}</b><small>${SCHEDULE[d].map(i => WD[i]).join(' ')}</small></button>`).join('');
@@ -7113,17 +7128,20 @@ function renderSetup() {
   $('#e-chips').innerHTML = EQUIP_CATS.map(c => `<div class="e-cat"><h3>${c.name}</h3><div class="chips">${EQUIP.filter(e => e.cat === c.id).map(e =>
     `<button type="button" class="chip${es.has(e.id) ? ' on' : ''}" data-e="${e.id}" aria-pressed="${es.has(e.id)}"${e.hint ? ` title="${esc(e.hint)}"` : ''}>${ICON.check}<span>${e.name}</span></button>`).join('')}</div></div>`).join('');
   $('#e-count').textContent = es.size ? `${es.size} of ${EQUIP.length}` : 'bodyweight only';
-  const matched = EQUIP_PRESETS.some(p => p.eq.length === es.size && p.eq.every(e => es.has(e)));
-  const open = eqOpen || !matched;
+  /* список оборудования сворачивается всегда — и для своего набора, не совпадающего с заготовкой;
+     кнопка вверху видна без прокрутки, внизу раскрытого списка — ещё одна «Свернуть» */
+  const open = eqOpen, names = EQUIP.filter(e => es.has(e.id)).map(e => e.name);
   $('#e-chips').hidden = !open;
   $('#e-sum').hidden = open;
-  $('#e-sum').textContent = es.size === EQUIP.length ? 'All gym equipment.' : EQUIP.filter(e => es.has(e.id)).map(e => e.name).join(', ') + '.';
-  $('#e-toggle').hidden = !matched;
-  $('#e-toggle').textContent = open ? 'Collapse list' : 'Edit list';
-  $('#e-toggle').setAttribute('aria-expanded', open);
+  $('#e-sum').textContent = es.size === EQUIP.length ? 'All gym equipment.' : !names.length ? 'Bodyweight only.'
+    : names.length > 10 ? names.slice(0, 10).join(', ') + ` and ${names.length - 10}.` : names.join(', ') + '.';
+  $('#e-toggle').hidden = !open;
+  $('#e-toggle-top').textContent = open ? 'Collapse' : 'Edit list';
+  for (const b of [$('#e-toggle'), $('#e-toggle-top')]) b.setAttribute('aria-expanded', String(open));
 }
 
 function titleFor() {
+  if (S.mode === 'custom') return customOf().name;
   const gs = new Set(S.groups);
   const p = GROUP_PRESETS.find(p => p.g.length === gs.size && p.g.every(g => gs.has(g)));
   if (p) return p.id === 'full' ? 'Full body' : p.id === 'legs' ? 'Legs & glutes' : p.id === 'push' ? 'Chest, shoulders, triceps' : p.id === 'pull' ? 'Back, biceps, grip' : 'Upper body';
@@ -7181,7 +7199,7 @@ function cardHtml(it, idx) {
   <div class="c-top">
     <div class="motion-tile"><button type="button" class="illus" data-fig="${idx}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Break down the movement: ${esc(it.name)}"><span class="illus-v">${view}</span><span class="illus-zoom" aria-hidden="true">Zoom ↗</span></button><div class="motion-bar"><span class="motion-caption">Starting position</span><button type="button" data-motion-pause="${idx}" aria-label="Pause demo: ${esc(it.name)}" aria-pressed="false">Pause</button></div></div>
     <div class="c-info">
-      <div class="c-head"><span class="c-idx">${it.label}</span><span class="c-type">${ex.type === 'c' ? 'compound' : 'isolation'}</span></div>
+      <div class="c-head"><span class="c-idx">${it.label}</span><span class="c-type">${ex.type === 'c' ? 'compound' : 'isolation'}</span>${favButton(ex.id)}</div>
       <h3 class="c-name">${esc(it.name)}</h3>
       <p class="c-eq">${esc(it.eqLine)}</p>
       ${it.sub ? `<p class="c-sub"><b>Instead of: ${esc(exName(it.sub.from, effEquip(programEquip() || S.equip)))}</b>${it.sub.note ? ` · ${esc(it.sub.note)}` : ''}</p>` : ''}
@@ -7202,6 +7220,7 @@ function cardHtml(it, idx) {
     <button type="button" class="btn-ghost" data-hist="1" aria-expanded="false">${ICON.chart}<span>History</span><small>${histCount(ex.id) || ''}</small></button>
     <button type="button" class="btn-ghost" data-swap="${it.slot}">${ICON.swap}<span>Swap</span></button>
   </div>
+  ${S.mode === 'custom' ? customToolsHtml(it) : ''}
   <div class="c-hist" hidden></div>
   <details class="tech">
     <summary>Technique</summary>
@@ -7250,7 +7269,7 @@ function warnHtml(p) {
 function headButtons(copyLabel) {
   return `<div class="p-btns">
         <button type="button" class="btn" id="start-workout" aria-haspopup="dialog" aria-controls="workout-view">Start workout →</button>
-        <button type="button" class="btn btn-2" id="reroll">${ICON.dice}<span>Another option</span></button>
+        ${S.mode === 'custom' ? '' : `<button type="button" class="btn btn-2" id="reroll">${ICON.dice}<span>Another option</span></button>`}
         <button type="button" class="btn btn-2" id="copy">${ICON.copy}<span>${copyLabel}</span></button>
         ${S.mode === 'program' ? `<button type="button" class="btn btn-2" id="ics-open">${ICON.cal}<span>Add to calendar</span></button>` : ''}
       </div>
@@ -7275,17 +7294,23 @@ function renderPlan() {
     root.innerHTML = `<div class="empty"><h2>Pick muscles</h2><p>Select at least one muscle group in the settings and the plan will be built right away.</p></div>`;
     return;
   }
+  if (plan.empty === 'custom') {
+    root.innerHTML = `<header class="p-head p-head-c"><div class="p-sum"><p class="eyebrow">Custom plan · ${GOALS[S.goal].name} · ${FORMATS[S.format].name}</p><h1 class="p-title">${esc(titleFor())}</h1></div></header>` + customEmptyHtml() + customAddHtml();
+    return;
+  }
   if (plan.empty === 'none') {
-    root.innerHTML = `<div class="empty"><h2>Nothing to build a workout from</h2><p>There are no exercises for the selected muscles with this equipment and level. Add equipment or pick other muscle groups.</p></div>`;
+    root.innerHTML = S.mode === 'custom'
+      ? `<div class="empty"><h2>This plan can’t be done here</h2><p>At “${esc(placeOf().name)}” there is no equipment or substitute for: ${esc(plan.lost.map(ex => ex.name).join(', '))}. Choose another place or add exercises.</p></div>` + customAddHtml()
+      : `<div class="empty"><h2>Nothing to build a workout from</h2><p>There are no exercises for the selected muscles with this equipment and level. Add equipment or pick other muscle groups.</p></div>`;
     return;
   }
   const G = GOALS[S.goal];
   const setsWord = S.format === 'circuit' ? plural(plan.totalSets, 'set', 'sets', 'sets') + ' across rounds' : plural(plan.totalSets, 'set', 'sets', 'sets');
   let html = `<header class="p-head">
     <div class="p-sum">
-      <p class="eyebrow">${G.name} · ${FORMATS[S.format].name} · ${LEVELS[S.level].name.toLowerCase()}</p>
+      <p class="eyebrow">${plan.custom ? 'Custom plan · ' : ''}${G.name} · ${FORMATS[S.format].name} · ${LEVELS[S.level].name.toLowerCase()}</p>
       <h1 class="p-title">${esc(titleFor())}</h1>
-      ${focusHtml()}
+      ${plan.custom ? '' : focusHtml()}
       <dl class="stats">
         <div><dt>time</dt><dd>≈${plan.minutes}<small>min</small></dd></div>
         <div><dt>${setsWord}</dt><dd>${plan.totalSets}</dd></div>
@@ -7302,7 +7327,11 @@ function renderPlan() {
       </figcaption>
     </figure>
   </header>`;
-  html += autoregHtml() + warnHtml(plan) + blocksHtml(plan) + LEGEND;
+  if (plan.custom) {
+    const hints = customHints(plan), lost = plan.lost.length ? [`Can’t be done or substituted here: ${plan.lost.map(ex => ex.name).join(', ')}. At another place ${plan.lost.length > 1 ? 'they come back' : 'it comes back'} into the plan.`] : [];
+    html += autoregHtml() + (lost.length ? `<div class="warn">${lost.map(w => `<p>${esc(w)}</p>`).join('')}</div>` : '')
+      + (hints.length ? `<div class="cp-hints">${hints.map(w => `<p>${esc(w)}</p>`).join('')}</div>` : '') + blocksHtml(plan) + customAddHtml() + LEGEND;
+  } else html += autoregHtml() + warnHtml(plan) + blocksHtml(plan) + LEGEND;
   root.innerHTML = html;
   mountFigures();
 }
@@ -7491,6 +7520,235 @@ function restAfter(rx, k) {
 function staticSeconds(rx) {
   return rx.series * (STATIC.perSeries * rx.work + (STATIC.perSeries - 1) * rx.rest) + (rx.series - 1) * rx.seriesRest + STATIC.nextExercise;
 }
+
+/* ===================== ИЗБРАННОЕ И СВОЙ ПЛАН =====================
+   Избранное — упражнения, отмеченные звёздочкой в атласе, в разборе движения или в карточке плана.
+   Свой план — тренировка из упражнений, выбранных вручную (из избранного или по мышцам): порядок, подходы,
+   повторы и отдых задаёт человек; по умолчанию дозировку подставляют цель, формат и уровень, как в обычном плане.
+   Своих планов может быть несколько, у каждого имя. Журнал, разминка, подсказки веса и режим тренировки — общие. */
+const CUSTOM_MAX = 12, CUSTOM_NAME = 24;
+const CUSTOM_REPS = /^(\d{1,3})(?:\s*[–-]\s*(\d{1,3}))?$/;
+let cpTab = null, cpOpen = new Set(), cpDel = false, cpMsg = '';
+
+function cleanCustomItem(it) {
+  if (!it || !EXI[it.id]) return null;
+  const o = {id:it.id};
+  if (Number.isInteger(it.sets) && it.sets >= 1 && it.sets <= 10) o.sets = it.sets;
+  const m = typeof it.reps === 'string' && it.reps.trim().match(CUSTOM_REPS);
+  if (m && +m[1] >= 1 && (!m[2] || +m[2] >= +m[1])) o.reps = m[2] ? `${+m[1]}–${+m[2]}` : String(+m[1]);
+  if (Number.isInteger(it.rest) && it.rest >= 0 && it.rest <= 600) o.rest = it.rest;
+  return o;
+}
+/* настройки из хранилища или резервной копии: только известные упражнения и разумные значения */
+function ensureCustoms(s) {
+  s.fav = Array.isArray(s.fav) ? [...new Set(s.fav.filter(id => typeof id === 'string' && EXI[id]))] : [];
+  const seen = new Set();
+  s.customs = (Array.isArray(s.customs) ? s.customs : []).filter(c => c && typeof c.id === 'string' && !seen.has(c.id) && seen.add(c.id)).map(c => {
+    const ids = new Set();
+    return {id:c.id, name:String(c.name || '').trim().slice(0, CUSTOM_NAME) || 'My plan',
+      items:(Array.isArray(c.items) ? c.items : []).map(cleanCustomItem).filter(it => it && !ids.has(it.id) && ids.add(it.id)).slice(0, CUSTOM_MAX)};
+  });
+  if (!s.customs.length) s.customs.push({id:'c1', name:'My plan', items:[]});
+  if (!s.customs.some(c => c.id === s.custom)) s.custom = s.customs[0].id;
+  if (!MODES[s.mode]) s.mode = 'single';
+  return s;
+}
+function customOf(s = S) { return s.customs.find(c => c.id === s.custom) || s.customs[0]; }
+ensureCustoms(S);
+
+/* ---------- избранное ---------- */
+const isFav = id => S.fav.includes(id);
+function toggleFav(id) {
+  if (!EXI[id]) return;
+  S.fav = isFav(id) ? S.fav.filter(x => x !== id) : S.fav.concat(id);
+  saveSettings(); refreshFav(id);
+}
+function favLabel(on) { return on ? 'Remove from favorites' : 'Add to favorites'; }
+function favButton(id, text = false) {
+  const on = isFav(id);
+  return `<button type="button" class="fav${on ? ' on' : ''}${text ? ' fav-t' : ''}" data-fav="${id}" aria-pressed="${on}" aria-label="${favLabel(on)}: ${esc(EXI[id].name)}" title="${favLabel(on)}"><span class="fav-i" aria-hidden="true">${on ? '★' : '☆'}</span>${text ? `<span class="fav-l">${on ? 'In favorites' : 'Add to favorites'}</span>` : ''}</button>`;
+}
+/* звёздочки обновляются на месте: анимации и открытые панели не перестраиваются */
+function refreshFav(id) {
+  const on = isFav(id);
+  for (const b of document.querySelectorAll(`[data-fav="${id}"]`)) {
+    b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); b.setAttribute('title', favLabel(on));
+    b.setAttribute('aria-label', `${favLabel(on)}: ${EXI[id].name}`);
+    const i = b.querySelector('.fav-i'); if (i) i.textContent = on ? '★' : '☆';
+    const l = b.querySelector('.fav-l'); if (l) l.textContent = on ? 'In favorites' : 'Add to favorites';
+  }
+  const n = document.querySelector('[data-cp-tab="fav"] small'); if (n) n.textContent = S.fav.length || '';
+  const c = document.querySelector('.at-favn'); if (c) c.textContent = S.fav.length;
+  if (S.view === 'plan' && S.mode === 'custom' && (cpTab || 'fav') === 'fav' && $('#cp-list')) $('#cp-list').innerHTML = customListHtml();
+}
+
+/* ---------- свой план: правка ---------- */
+const customHas = id => customOf().items.some(it => it.id === id);
+function customAdd(id) {
+  const c = customOf();
+  if (!EXI[id] || customHas(id) || c.items.length >= CUSTOM_MAX) return false;
+  c.items.push({id}); saveSettings(); return true;
+}
+function customMove(slot, d) {
+  const items = customOf().items, j = slot + d;
+  if (slot < 0 || j < 0 || slot >= items.length || j >= items.length) return;
+  [items[slot], items[j]] = [items[j], items[slot]];
+  const a = cpOpen.has(slot), b = cpOpen.has(j); cpOpen.delete(slot); cpOpen.delete(j); if (a) cpOpen.add(j); if (b) cpOpen.add(slot);
+  saveSettings();
+}
+function customRemove(slot) {
+  const items = customOf().items; items.splice(slot, 1);
+  cpOpen = new Set([...cpOpen].filter(i => i !== slot).map(i => i > slot ? i - 1 : i)); saveSettings();
+}
+function customSet(slot, key, value) {
+  const items = customOf().items, it = items[slot]; if (!it) return;
+  const next = {...it}, clear = value === null || value === undefined || value === '';
+  if (clear) delete next[key]; else next[key] = value;
+  const ok = cleanCustomItem(next);
+  if (!ok || (!clear && !(key in ok))) return;   /* неверное значение не стирает прежнее */
+  items[slot] = ok; saveSettings();
+}
+
+/* дозировка по цели и формату, поверх — правка человека (кроме статодинамики: там серии заданы методом) */
+function customRx(rx, o, ex) {
+  if (!o || rx.static) return rx;
+  const r = {...rx, edited:!!(o.sets || o.reps || o.rest !== undefined)};
+  if (o.sets) r.sets = o.sets;
+  if (o.reps && !ex.kind) { r.reps = o.reps; r.work = midOf(o.reps) * GOALS[S.goal].rep * (ex.uni ? 2 : 1); }
+  if (o.rest !== undefined) r.rest = o.rest;
+  return r;
+}
+
+/* подсказки по составу: выбранные мышцы без упражнений и заметный перекос жимов и тяг, передней и задней поверхности бедра */
+function customHints(p) {
+  const out = [], v = g => p.gvol[g] || 0;
+  const idle = S.groups.filter(g => g !== 'cardio' && v(g) < 1);
+  if (idle.length) out.push(`Not worked yet: ${idle.map(g => GN[g].toLowerCase()).join(', ')}. Add an exercise below — or deselect these muscles in the settings.`);
+  /* перекос — по основным упражнениям (не по вспомогательной работе) и только когда в плане есть обе стороны:
+     день «только жим» или «только тяга» — осознанный выбор */
+  const sets = g => p.items.filter(it => g.includes(it.ex.g)).reduce((a, it) => a + (it.rounds || it.rx.sets), 0);
+  const push = sets(['chest', 'shoulders']), pull = sets(['back']);
+  if (pull >= 1 && push >= 4 && push > pull * 2.5) out.push('There are clearly more presses than pulls. Shoulder joints like balance: add a back pull — horizontal or vertical.');
+  else if (push >= 1 && pull >= 4 && pull > push * 2.5) out.push('There are clearly more pulls than presses. For balance, add a press — for the chest or shoulders.');
+  return out;
+}
+
+/* ---------- отрисовка ---------- */
+function customSetupHtml() {
+  const c = customOf();
+  return `<div class="places cp-plans" role="group" aria-label="Custom plans">${S.customs.map(p => `<button type="button" class="place${p.id === c.id ? ' on' : ''}" data-cp-plan="${p.id}" aria-pressed="${p.id === c.id}"><b>${esc(p.name)}</b><small>${p.items.length ? p.items.length + ' ' + plural(p.items.length, 'exercise', 'exercises', 'exercises') : 'empty'}</small></button>`).join('')}`
+    + `<button type="button" class="place place-add" data-cp-new="1">+ Plan</button></div>`
+    + `<div class="place-tools"><label class="place-name">Name<input id="cp-name" type="text" maxlength="${CUSTOM_NAME}" value="${esc(c.name)}" autocomplete="off"></label>`
+    + (S.customs.length > 1 ? `<button type="button" class="place-del${cpDel ? ' armed' : ''}" data-cp-del="1">${cpDel ? 'Are you sure?' : 'Delete plan'}</button>` : '') + `</div>`;
+}
+function customRowHtml(ex, E) {
+  const here = available(ex, E), inPlan = customHas(ex.id), full = customOf().items.length >= CUSTOM_MAX, name = exName(ex, here ? E : effEquip(EQUIP.map(e => e.id)));
+  const add = inPlan ? `<button type="button" class="cp-addb in" disabled>✓ In plan</button>`
+    : full ? `<button type="button" class="cp-addb" disabled>Max ${CUSTOM_MAX}</button>`
+    : `<button type="button" class="cp-addb" data-cp-add="${ex.id}" aria-label="Add to plan: ${esc(name)}">+ Add</button>`;
+  return `<li class="cp-row${here ? '' : ' away'}">${favButton(ex.id)}<button type="button" class="cp-open" data-cp-open="${ex.id}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Break down the movement: ${esc(name)}"><b>${esc(name)}</b><small>${esc(here ? equipLine(ex, E) : 'no equipment here — the plan will use a substitute')} · ${esc(ex.pri.slice(0, 2).map(m => MUSCLE_NAMES[m].toLowerCase()).join(', '))}${ex.lvl >= 3 ? ' · advanced' : ''}</small></button>${add}</li>`;
+}
+function customListHtml() {
+  const E = effEquip(S.equip), tab = cpTab || (S.fav.length ? 'fav' : 'groups');
+  if (tab === 'fav') {
+    if (!S.fav.length) return `<li class="cp-none">No favorites yet. Mark exercises with the star ☆ — here, in the muscle atlas or in the movement breakdown.</li>`;
+    return S.fav.map(id => customRowHtml(EXI[id], E)).join('');
+  }
+  if (!S.groups.length) return `<li class="cp-none">Select muscles in the settings — exercises for them will appear here.</li>`;
+  const lvlMax = S.level === 'beg' ? 2 : 3;
+  return S.groups.map(g => {
+    const list = EX.filter(ex => ex.g === g && available(ex, E) && ex.lvl <= lvlMax).sort((a, b) => (a.type === 'c' ? 0 : 1) - (b.type === 'c' ? 0 : 1) || (EX_W[b.id] ?? 1) - (EX_W[a.id] ?? 1));
+    /* по шесть на группу, остальное — по кнопке: на телефоне список не превращается в ленту */
+    const rows = list.map((ex, i) => customRowHtml(ex, E).replace('<li class="cp-row', i >= 6 ? `<li hidden data-cp-g="${g}" class="cp-row` : '<li class="cp-row'));
+    return list.length ? `<li class="cp-gh">${esc(GN[g])} <small>${list.length}</small></li>` + rows.join('') + (list.length > 6 ? `<li class="cp-morel"><button type="button" class="link" data-cp-more="${g}">More: ${list.length - 6}</button></li>` : '') : '';
+  }).join('') || `<li class="cp-none">No exercises for these muscles here — add equipment to this place.</li>`;
+}
+function customAddHtml() {
+  const tab = cpTab || (S.fav.length ? 'fav' : 'groups'), E = effEquip(S.equip), lvlMax = S.level === 'beg' ? 2 : 3;
+  const nG = EX.filter(ex => S.groups.includes(ex.g) && available(ex, E) && ex.lvl <= lvlMax).length;
+  const t = (id, label, n) => `<button type="button" role="tab" data-cp-tab="${id}" aria-selected="${tab === id}" class="${tab === id ? 'on' : ''}">${label} <small>${n || ''}</small></button>`;
+  return `<section class="cp-add" id="cp-add" aria-labelledby="cp-add-h">
+    <h2 id="cp-add-h">Add an exercise</h2>
+    <div class="cp-tabs" role="tablist" aria-label="Where to add from">${t('fav', '★ Favorites', S.fav.length)}${t('groups', 'By selected muscles', nG)}</div>
+    <ol class="cp-list" id="cp-list">${customListHtml()}</ol>
+    <p class="f-note">The star ☆ adds an exercise to favorites. More options with muscle details are in the atlas. <button type="button" class="link" data-view="atlas">Open the muscle atlas →</button></p>
+  </section>`;
+}
+/* панель под карточкой своего плана: порядок, подходы, повторы, отдых */
+function customToolsHtml(it) {
+  const c = customOf(), slot = it.slot, o = c.items[slot] || {}, r = it.rx, open = cpOpen.has(slot), n = c.items.length;
+  const restOpts = [0, 15, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300];
+  if (!restOpts.includes(r.rest)) restOpts.push(r.rest), restOpts.sort((a, b) => a - b);
+  const edit = r.static ? `<p class="f-note">In static-dynamics the series, tempo and rest are set by the method — change the goal or level instead.</p>`
+    : `<div class="cp-fields">
+        ${r.circ ? '' : `<div class="cp-f"><span>Sets</span><div class="stepper sm"><button type="button" data-cp-step="${slot}" data-d="-1" aria-label="Fewer sets"${r.sets <= 1 ? ' disabled' : ''}>−</button><output>${r.sets}</output><button type="button" data-cp-step="${slot}" data-d="1" aria-label="More sets"${r.sets >= 10 ? ' disabled' : ''}>+</button></div></div>`}
+        ${it.ex.kind ? '' : `<label class="cp-f"><span>Reps</span><input type="text" inputmode="numeric" maxlength="7" data-cp-reps="${slot}" value="${esc(r.reps)}" aria-label="Reps, for example 8–12"></label>`}
+        ${r.circ ? '' : `<label class="cp-f"><span>Rest</span><select data-cp-rest="${slot}">${restOpts.map(s => `<option value="${s}"${s === r.rest ? ' selected' : ''}>${s ? fmtRest(s) : 'no rest'}</option>`).join('')}</select></label>`}
+        ${o.sets || o.reps || o.rest !== undefined ? `<button type="button" class="btn-ghost cp-reset" data-cp-reset="${slot}">Use goal default</button>` : ''}
+      </div>`;
+  return `<div class="cp-tools">
+    <button type="button" class="btn-ghost" data-cp-move="${slot}" data-d="-1" aria-label="Move up"${slot === 0 ? ' disabled' : ''}>↑</button>
+    <button type="button" class="btn-ghost" data-cp-move="${slot}" data-d="1" aria-label="Move down"${slot >= n - 1 ? ' disabled' : ''}>↓</button>
+    <button type="button" class="btn-ghost" data-cp-edit="${slot}" aria-expanded="${open}">${r.edited ? 'Edited' : 'Sets and rest'}</button>
+    <button type="button" class="btn-ghost cp-rm" data-cp-rm="${slot}">Remove</button>
+  </div>${open ? `<div class="cp-edit">${edit}</div>` : ''}`;
+}
+function customEmptyHtml() {
+  return `<div class="empty cp-empty"><h2>The plan is empty</h2><p>Add exercises from favorites or from the list for the selected muscles. Sets, reps and rest follow the goal and format — you can adjust them in the card.</p></div>`;
+}
+
+/* ---------- события ---------- */
+function customRerender(focusSel) {
+  const y = window.scrollY; saveSettings(); renderSetup(); renderPlan(); window.scrollTo(0, y);
+  if (focusSel) { const el = document.querySelector(focusSel); if (el) el.focus(); }
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('button');
+  if (!t) return;
+  if (t.dataset.fav) { toggleFav(t.dataset.fav); return; }
+  if (t.dataset.cpAdd) {
+    const id = t.dataset.cpAdd, ok = customAdd(id);
+    if (S.view === 'plan' && S.mode === 'custom') return customRerender(`[data-cp-tab="${cpTab || (S.fav.length ? 'fav' : 'groups')}"]`);
+    cpMsg = ok ? `Added to plan: ${customOf().name}` : customHas(id) ? `Already in plan: ${customOf().name}` : `A plan holds at most ${CUSTOM_MAX} exercises`;
+    for (const m of document.querySelectorAll('.cp-msg')) { m.hidden = false; m.querySelector('span').textContent = cpMsg; }
+    return;
+  }
+  if (t.dataset.cpGo !== undefined) { if (document.querySelector('#motion-view')?.open) closeMotion(); S.view = 'plan'; S.mode = 'custom'; S.day = 0; regen(); window.scrollTo({top:0}); return; }
+  if (t.dataset.cpOpen) { openMotionItem(previewItem(t.dataset.cpOpen)); return; }
+  if (t.dataset.cpMore) { for (const li of document.querySelectorAll(`[data-cp-g="${t.dataset.cpMore}"]`)) li.hidden = false; t.closest('li').remove(); return; }
+  if (t.dataset.cpTab) { cpTab = t.dataset.cpTab; for (const b of document.querySelectorAll('[data-cp-tab]')) { const on = b === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); } $('#cp-list').innerHTML = customListHtml(); return; }
+  if (t.dataset.cpPlan) { S.custom = t.dataset.cpPlan; cpOpen = new Set(); cpDel = false; return regen(); }
+  if (t.dataset.cpNew !== undefined) {
+    const id = 'c' + Date.now().toString(36);
+    S.customs.push({id, name:'Plan ' + (S.customs.length + 1), items:[]}); S.custom = id; cpOpen = new Set(); cpDel = false; regen();
+    const inp = $('#cp-name'); if (inp) { inp.focus(); inp.select(); }
+    return;
+  }
+  if (t.dataset.cpDel !== undefined) {
+    if (!cpDel) { cpDel = true; return renderSetup(); }
+    S.customs = S.customs.filter(c => c.id !== S.custom); cpDel = false; cpOpen = new Set(); ensureCustoms(S); return regen();
+  }
+  if (S.mode !== 'custom' || S.view !== 'plan') return;
+  if (t.dataset.cpMove !== undefined) { const s = +t.dataset.cpMove, d = +t.dataset.d; customMove(s, d); return customRerender(`[data-cp-move="${s + d}"][data-d="${d}"]`); }
+  if (t.dataset.cpRm !== undefined) { customRemove(+t.dataset.cpRm); return customRerender(); }
+  if (t.dataset.cpEdit !== undefined) { const s = +t.dataset.cpEdit; cpOpen.has(s) ? cpOpen.delete(s) : cpOpen.add(s); return customRerender(`[data-cp-edit="${s}"]`); }
+  if (t.dataset.cpStep !== undefined) {
+    const s = +t.dataset.cpStep, it = plan.items.find(x => x.slot === s);
+    customSet(s, 'sets', Math.max(1, Math.min(10, it.rx.sets + +t.dataset.d)));
+    return customRerender(`[data-cp-step="${s}"][data-d="${t.dataset.d}"]`);
+  }
+  if (t.dataset.cpReset !== undefined) { const s = +t.dataset.cpReset; for (const k of ['sets', 'reps', 'rest']) customSet(s, k, null); return customRerender(`[data-cp-edit="${s}"]`); }
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.id === 'cp-name') { const v = t.value.trim().slice(0, CUSTOM_NAME); if (v) customOf().name = v; saveSettings(); renderSetup(); if (S.mode === 'custom' && S.view === 'plan') renderPlan(); return; }
+  if (t.dataset.cpReps !== undefined) {
+    const s = +t.dataset.cpReps, ok = cleanCustomItem({id:customOf().items[s]?.id, reps:t.value});
+    if (ok && ok.reps) customSet(s, 'reps', ok.reps); else { t.value = plan.items.find(x => x.slot === s)?.rx.reps || ''; return; }
+    return customRerender(`[data-cp-reps="${s}"]`);
+  }
+  if (t.dataset.cpRest !== undefined) { const s = +t.dataset.cpRest; customSet(s, 'rest', +t.value); return customRerender(`[data-cp-rest="${s}"]`); }
+});
 
 /* ---------- Проигрыватель движений: карточки и увеличенный разбор ---------- */
 let figs = [], rafId = 0, io = null;
@@ -7716,6 +7974,7 @@ function selectMotion(it, clock=0) {
   detailMotion={it,f:null,clock,paused:true,durations:motionDurations(it)};
   $('#mv-title').textContent=it.name;
   $('#mv-exercise').value=it.ex.id;
+  $('#mv-tools').innerHTML=`${favButton(it.ex.id,true)}<button type="button" class="btn-ghost" data-cp-add="${it.ex.id}">+ Add to custom plan</button><p class="cp-msg" hidden><span></span> <button type="button" class="link" data-cp-go="1">Open plan →</button></p>`;
   $('#mv-view').textContent=it.ex.viewNote||(it.ex.anim.view==='front'?'Front view':'Side view');
   $('#mv-speed').value=String(motionPrefs.speed);$('#mv-joints').checked=!!motionPrefs.joints;$('#mv-trace').checked=!!motionPrefs.trace;$('#mv-vectors').checked=!!motionPrefs.vectors;
   $('#mv-tempo').textContent=it.ex.anim.hold?'Hold the position and breathe steadily.':it.ex.anim.timing||it.ex.g==='cardio'||it.ex.kind?'The rhythm is shown schematically. Slowing it down helps you study the movement.':it.rx.static?`Static-dynamic: tempo ${it.rx.tempo} with no pauses; the working part of the range is shown — no lockout at the top and no relaxing at the bottom.`:`Prescribed tempo: ${it.rx.tempo}. Playback speed doesn't change the prescription.`;
@@ -7885,6 +8144,7 @@ document.addEventListener('click', e => {
     const lvlMax = S.level === 'beg' ? 2 : 3;
     const tried = new Set((swaps.__tried && swaps.__tried[swapKey() + ':' + slot]) || []);
     /* ближайшие по смыслу: то же движение и те же мышцы — первыми */
+    if (S.mode === 'custom') for (const it of customOf().items) inPlan.add(it.id);
     let alts = EX.filter(ex => !inPlan.has(ex.id) && available(ex, plan.E) && ex.lvl <= lvlMax && (ex.g === cur.g || PATTERN[ex.id] === PATTERN[cur.id]) && (S.format !== 'static' || staticOk(ex)))
       .sort((a, b) => analogScore(cur, b) - analogScore(cur, a));
     const msgEl = t.querySelector('span');
@@ -7894,9 +8154,9 @@ document.addEventListener('click', e => {
     if (!next) { tried.clear(); tried.add(cur.id); next = alts[0]; }
     swaps.__tried = swaps.__tried || {};
     swaps.__tried[swapKey() + ':' + slot] = [...tried];
-    const k = swapKey();
-    swaps[k] = swaps[k] || {};
-    swaps[k][slot] = next.id;
+    /* в своём плане замена записывается в сам план; правка подходов и отдыха остаётся */
+    if (S.mode === 'custom') { const item = customOf().items[slot]; if (item) { item.id = next.id; saveSettings(); } }
+    else { const k = swapKey(); swaps[k] = swaps[k] || {}; swaps[k][slot] = next.id; }
     done = {};
     renderPlan();
     const card = document.querySelector(`.card[data-slot="${slot}"]`);
@@ -7912,7 +8172,12 @@ document.addEventListener('click', e => {
     return;
   }
   if (t.dataset.fig !== undefined) {openMotion(t.dataset.fig);return;}
-  if (t.id === 'e-toggle') { eqOpen = !eqOpen; renderSetup(); return; }
+  if (t.id === 'e-toggle' || t.id === 'e-toggle-top') {
+    eqOpen = !eqOpen; renderSetup();
+    /* свернули снизу длинного списка — вернуть взгляд к заголовку раздела */
+    if (!eqOpen && t.id === 'e-toggle') { const h = $('.e-head'); if (h && h.getBoundingClientRect().top < 0) h.scrollIntoView({block:'start', behavior:reduceMotion ? 'auto' : 'smooth'}); }
+    return;
+  }
   if (t.id === 't-minus') return adjustRest(-15);
   if (t.id === 't-plus') return adjustRest(15);
   if (t.id === 't-skip') return stopRest();
@@ -8656,8 +8921,12 @@ function atlasRow(r, m, sel) {
   const ex = r.ex, E = effEquip(S.equip), name = exName(ex, E);
   const others = ex.pri.filter(x => x !== m).map(x => MUSCLE_NAMES[x].toLowerCase());
   const how = r.role === 'pri' ? (others.length ? 'together with: ' + others.slice(0, 2).join(', ') : 'main target') : 'mainly works: ' + ex.pri.slice(0, 2).map(x => MUSCLE_NAMES[x].toLowerCase()).join(', ');
-  return `<li class="at-row${sel ? ' on' : ''}"><button type="button" class="at-ex" data-atlas-ex="${ex.id}" aria-pressed="${sel}"><span class="at-sw" style="background:${muscleColor(r.v)}" title="${MUSCLE_BANDS[muscleBand(r.v)]}"></span><span class="at-n"><b>${esc(name)}</b><small>${esc(equipLine(ex, E))} · ${esc(how)}${ex.lvl >= 3 ? ' · advanced' : ''}</small></span></button>`
+  return `<li class="at-row${sel ? ' on' : ''}">${favButton(ex.id)}<button type="button" class="at-ex" data-atlas-ex="${ex.id}" aria-pressed="${sel}"><span class="at-sw" style="background:${muscleColor(r.v)}" title="${MUSCLE_BANDS[muscleBand(r.v)]}"></span><span class="at-n"><b>${esc(name)}</b><small>${esc(equipLine(ex, E))} · ${esc(how)}${ex.lvl >= 3 ? ' · advanced' : ''}</small></span></button>`
     + `<button type="button" class="at-open" data-atlas-open="${ex.id}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Break down the movement: ${esc(name)}">↗</button></li>`;
+}
+/* избранное и свой план для упражнения в превью */
+function atlasKeepHtml(id) {
+  return `${favButton(id, true)}<button type="button" class="btn-ghost" data-cp-add="${id}">+ Add to custom plan</button><p class="cp-msg" hidden><span></span> <button type="button" class="link" data-cp-go="1">Open plan →</button></p>`;
 }
 function atlasList(rows, m, sel, limit) {
   return `<ol class="at-list">${rows.map((r, i) => atlasRow(r, m, r.ex.id === sel).replace('<li class="at-row', i >= limit ? '<li hidden class="at-more at-row' : '<li class="at-row')).join('')}</ol>`
@@ -8676,6 +8945,7 @@ function renderAtlas() {
     <p class="eyebrow">Muscle atlas</p>
     <h1 class="p-title">Pick a muscle</h1>
     <p class="at-lead">Tap a muscle to see the exercises that work it, using the equipment of the selected place.</p>
+    <p class="at-favs"><span>★ Favorites: <b class="at-favn">${S.fav.length}</b></span><button type="button" class="link" data-cp-go="1">Build a custom plan →</button></p>
   </header>
   <div class="at-grid">
     <section class="at-pick" aria-label="Muscles">
@@ -8698,6 +8968,7 @@ function renderAtlas() {
         <div class="motion-bar"><span class="motion-caption">Start position</span><button type="button" data-motion-pause="0" aria-pressed="true">Pause</button></div>
       </div>
       <div class="at-under"><p class="at-pv"><b id="at-pv-name">${esc(it.name)}</b></p><div class="at-cams" role="group" aria-label="View">${Object.entries(ATLAS_CAMS).map(([c, label]) => `<button type="button" data-atlas-cam="${c}" aria-pressed="false">${label}</button>`).join('')}</div></div>
+      <div class="at-keep" id="at-keep">${atlasKeepHtml(atlasEx)}</div>
       <p class="at-hint">The chosen muscle is shown in orange: the brighter the color, the harder it works at that moment of the rep.</p>`;
     if (A.pri.length) html += `<h3 class="at-h">Main mover <small>${A.pri.length}</small></h3>${atlasList(A.pri, m, atlasEx, 8)}`;
     else html += `<p class="warn-inline">No exercise here has ${esc(lower)} as its main target. Below are exercises where it assists, and what the others need.</p>`;
@@ -8748,7 +9019,7 @@ document.addEventListener('click', e => {
   if (g) { selectAtlasMuscle(g.dataset.atlasM, true); return; }
   const t = e.target.closest('button');
   if (!t) return;
-  if (t.dataset.atlasEx) { atlasEx = t.dataset.atlasEx; atlasCam = null; mountAtlasPreview(); return; }
+  if (t.dataset.atlasEx) { atlasEx = t.dataset.atlasEx; atlasCam = null; mountAtlasPreview(); const k = $('#at-keep'); if (k) k.innerHTML = atlasKeepHtml(atlasEx); return; }
   if (t.dataset.atlasCam) { atlasCam = t.dataset.atlasCam; mountAtlasPreview(); return; }
   if (t.dataset.atlasOpen) { openMotionItem(previewItem(t.dataset.atlasOpen)); return; }
   if (t.dataset.atlasShow) { for (const li of t.previousElementSibling.querySelectorAll('.at-more')) li.hidden = false; t.remove(); return; }
@@ -9414,4 +9685,4 @@ logInit();
 plural = (n, a, b, c) => n === 1 ? a : c;
 DEC = '.';
 
-window.PODHOD_VERSION='4.8.0';window.PODHOD_BUILD='4.8.0-d9c6f42e78f8';window.PODHOD_LANG='en';
+window.PODHOD_VERSION='4.9.0';window.PODHOD_BUILD='4.9.0-688d63541977';window.PODHOD_LANG='en';
