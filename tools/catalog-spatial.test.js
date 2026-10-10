@@ -1,7 +1,7 @@
 const{test}=require('node:test'),assert=require('node:assert/strict');
 const{loadModel}=require('./biomechanics-audit'),{auditCatalog}=require('./catalog-audit');
 const model=loadModel(),api=model.get('({catalogProps,catalogVolumeData,muscleFrame,catalogMuscleSurfaces})');
-test('every catalog motion has a continuous spatial skeleton, five cameras and complete region coverage',()=>{const r=auditCatalog(model);assert.deepEqual(r.failures,[]);assert.equal(r.stats.poses,139*101);assert.equal(r.stats.cameraPoses,139*101*5);});
+test('every catalog motion has a continuous spatial skeleton, five cameras and complete region coverage',()=>{const r=auditCatalog(model);assert.deepEqual(r.failures,[]);assert.equal(r.stats.poses,141*101);assert.equal(r.stats.cameraPoses,141*101*5);});
 test('negative: a bone changed only in the new catalog model is detected',()=>{
  const ex=model.EX.find(e=>e.id==='kbswing'),anim={...ex.anim,catalogRig:t=>{const R=ex.anim.catalogRig(t);if(t>.35&&t<.41)R.wrL[1]+=5;return R;}};
  const r=auditCatalog({...model,EX:[{...ex,anim}]});assert(r.failures.some(f=>f.rule==='bone:elL-wrL'));

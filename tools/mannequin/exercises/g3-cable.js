@@ -364,6 +364,50 @@ module.exports = {
     }
   },
 
+  /* Тяга верхнего блока узкой V-рукоятью: ладони смотрят друг на друга, кисти у середины тела. t=0 — руки вытянуты
+     вверх, t=1 — рукоять у грудины, локти опущены вниз-вперёд вдоль корпуса, лопатки опущены и сведены. Корпус
+     отклонён назад чуть больше, чем при широком хвате. Большой палец смотрит назад, к лицу (нейтральный хват над головой). */
+  latpullv: {
+    keys: [0, .25, .5, .75, 1],
+    get equipment() { const E = LP_EQ(), A = EQ.anchors([E]).lat; return [E, cable(E, '', { id: 'cab', attach: 'V', hands: ['L', 'R'], clip: 11, wrap: [0, 0, -1], rest: 53 }), { type: 'g3line', id: 'boomCable', pts: [rp(A.boomCableA), rp(A.boomCableB)] }]; },
+    contacts: [{ body: 'buttocks', prop: 'lat:seat' }, { body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
+    gripRadius: { L: 1.5, R: 1.5 },
+    pose(t, C) {
+      const { V } = C, e = C.ease(t), q = latSeat(C, C.lerp(8, 12, e)), L = LP();
+      for (const s of S) q[s].girdle = [C.lerp(28, -6, e), C.lerp(4, -10, e)];
+      q.neck = [C.lerp(-10, -4, e), 0, 0];
+      const f = C.fk(q), gm = V.mix(f.P.ghL, f.P.ghR, .5), top = gm[1] + 59, bot = L.chest[1] + 3;
+      const y = C.lerp(top, bot, e), z = L.barZ + C.lerp(0, 1.5, e);
+      for (const s of S) {
+        const lat = C.lat(q, s), g = [C.M.SIGN[s] * 6.5, y, z];
+        const pole = V.unit(V.add(V.add(lat, [0, 0, 1], C.lerp(.9, 1.1, e)), [0, -1, 0], C.lerp(.2, .9, e)));
+        C.grip(q, s, g, V.unit([-C.M.SIGN[s] * .1, C.lerp(.35, .05, e), -1]), pole, { wristExt: 4 });
+      }
+      return q;
+    }
+  },
+
+  /* Тяга верхнего блока обратным хватом на ширине плеч: ладони к себе, большие пальцы наружу. t=0 — руки вытянуты,
+     t=1 — гриф у верхней части груди, локти внизу перед корпусом. Рукоять та же, что в широком хвате (≈118 см). */
+  latpulluh: {
+    keys: [0, .25, .5, .75, 1],
+    get equipment() { const E = LP_EQ(), A = EQ.anchors([E]).lat; return [E, cable(E, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 43, bend: 8, wrap: [0, 0, -1], rest: 47 }), { type: 'g3line', id: 'boomCable', pts: [rp(A.boomCableA), rp(A.boomCableB)] }]; },
+    contacts: [{ body: 'buttocks', prop: 'lat:seat' }, { body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
+    pose(t, C) {
+      const { V } = C, e = C.ease(t), q = latSeat(C, C.lerp(8, 13, e)), L = LP();
+      for (const s of S) q[s].girdle = [C.lerp(28, -4, e), C.lerp(4, -12, e)];
+      q.neck = [C.lerp(-10, -6, e), 0, 0];
+      const f = C.fk(q), gm = V.mix(f.P.ghL, f.P.ghR, .5), top = gm[1] + 60, bot = L.chest[1] + 6;
+      const y = C.lerp(top, bot, e), z = L.barZ + C.lerp(0, 7, e);
+      for (const s of S) {
+        const lat = C.lat(q, s), g = [C.M.SIGN[s] * 16, y, z];
+        const pole = V.unit(V.add(V.add([0, 0, 1], lat, C.lerp(-.15, .1, e)), [0, -1, 0], C.lerp(.1, .7, e)));
+        C.grip(q, s, g, [C.M.SIGN[s], 0, 0], pole, { wristExt: 2 });
+      }
+      return q;
+    }
+  },
+
   /* Сидя на скамье, стопы на упорах, колени слегка согнуты, V-рукоять. t=0 — руки вытянуты, корпус чуть наклонён вперёд;
      t=1 — рукоять у живота, лопатки сведены, корпус отклонён назад на ~10°, спина нейтральна. */
   cablerow: {
