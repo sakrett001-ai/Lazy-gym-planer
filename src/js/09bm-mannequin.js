@@ -147,7 +147,9 @@ function fk(q){
  for(const s of SIDES){
   const g=SIGN[s],J=q[s];
   const sc=at(F.thorax,[g*B.sc[0],B.sc[1],B.sc[2]]),gr=M3.mul(M3.rz(g*J.girdle[0]),M3.ry(-g*J.girdle[1]));
-  P['sc'+s]=sc;P['gh'+s]=V.add(sc,M3.v(M3.mul(F.thorax.R,gr),[g*B.ghRel[0],B.ghRel[1],B.ghRel[2]]));
+  /* рамка плечевого пояса (ключица и лопатка): начало — грудино-ключичный шарнир, оси грудной клетки после поворота пояса */
+  F['cl'+s]={o:sc,R:M3.mul(F.thorax.R,gr)};
+  P['sc'+s]=sc;P['gh'+s]=V.add(sc,M3.v(F['cl'+s].R,[g*B.ghRel[0],B.ghRel[1],B.ghRel[2]]));
   F['ua'+s]={o:P['gh'+s],R:M3.mul(F.thorax.R,M3.mul(swing(-J.shoulder[0],g*J.shoulder[1]),M3.ry(g*J.shoulder[2])))};
   P['el'+s]=at(F['ua'+s],[0,-B.ua,0]);
   F['fa'+s]={o:P['el'+s],R:M3.mul(F['ua'+s].R,M3.rx(-J.elbow))};

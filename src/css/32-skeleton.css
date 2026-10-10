@@ -1,0 +1,4 @@
+/* Режим «Скелет» в подробном разборе: подпись об источнике костей под переключателями */
+.mv-skeleton-note { margin:6px 0 0; font-size:12px; line-height:1.4; color:var(--muted); max-width:62ch; }
+.mv-toggles label:has(input:disabled) { opacity:.55; }
+.mv-toggles input[aria-busy="true"] { cursor:progress; }

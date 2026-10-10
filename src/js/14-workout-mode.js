@@ -174,7 +174,7 @@ function mountDetailCameras(){
   const preferred=motionProfile(a)?.pair,other=preferred!==key&&cameras.includes(preferred)?preferred:cameras.find(c=>c!==key);F.extra=make(other);$('#mv-second-stage').replaceChildren(F.extra.svg);
   $('#mv-second-label').textContent=CAMERA3[other].label;$('#mv-second-hint').textContent=a.cameraHints?.[other]||'';
  }else $('#mv-second-stage').replaceChildren();
- configureMusclePanel('mv',F.it);configureStressPanel('mv',F);paintMotion(F,true);
+ configureMusclePanel('mv',F.it);configureStressPanel('mv',F);applySkeleton(F);paintMotion(F,true);
 }
 function mountWorkoutCameras(){
  if(!workout?.motion)return;

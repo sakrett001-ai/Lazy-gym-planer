@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {createMannequinBody} from './body.mjs';
+import {createSkeletonLayer} from './skeleton.mjs';
 import {isNewProp,propKey,createPropNode,updatePropNode} from './props.mjs';
 
 const add=(a,b,k=1)=>a.map((v,i)=>v+b[i]*k),sub=(a,b)=>a.map((v,i)=>v-b[i]),dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),len=a=>Math.hypot(...a);
@@ -111,6 +112,12 @@ export function createCatalogScene(first,{coarse=false}={}){
  const floorGrid=fadingGrid(5,20,0x485b76,[0,-.01,1]);scene.add(floorGrid);
  const mannequin=first.body?createMannequinBody(scene,first,{skin,joint,sole,mesh}):null;
  const parts=mannequin?mannequin.parts:{};let body=mannequin?mannequin.parts.torso.mesh:null,head=mannequin?mannequin.parts.head.mesh:null,nose,neck,dots;
+ /* режим «Скелет»: кости внутри, кожа полупрозрачная и не отбрасывает тень на кости; мышцы по фазам скрыты */
+ const skeletonLayer=createSkeletonLayer(scene);let ghosted=false;
+ function ghost(on){
+  if(on!==ghosted){ghosted=on;for(const m of [skin,joint,sole]){m.transparent=on;m.opacity=on?.22:1;m.depthWrite=!on;m.needsUpdate=true;}}
+  if(mannequin)mannequin.group.traverse(o=>{if(o.isMesh)o.castShadow=!on;});
+ }
  if(!mannequin){
  body=mesh(scene,grid(first.torsoRings.length-1,torsoCols),skin,'torso');
  head=mesh(scene,new THREE.SphereGeometry(1,18,12),skin,'head');nose=mesh(scene,new THREE.SphereGeometry(1,10,8),joint,'nose');neck=mesh(scene,new THREE.CylinderGeometry(1,1,1,12),skin,'neck');
@@ -186,7 +193,11 @@ export function createCatalogScene(first,{coarse=false}={}){
  }
  function apply(data,nextOptions={}){
   lastData=data;options={...options,...nextOptions};const R=data.pose;
-  if(mannequin)mannequin.apply(data,options);else{
+  if(mannequin)mannequin.apply(data,options);
+  const skeletonOn=!!(mannequin&&options.skeleton&&data.body);
+  if(skeletonOn)skeletonLayer.update(options.skeleton,R,data.body);else skeletonLayer.hide();
+  if(mannequin&&(skeletonOn||ghosted))ghost(skeletonOn);
+  if(!mannequin){
   updateGrid(body.geometry,data.torsoRings.length-1,torsoCols,(t,q)=>{
    const i=Math.min(data.torsoRings.length-2,Math.floor(t*(data.torsoRings.length-1))),f=t*(data.torsoRings.length-1)-i,a=data.torsoRings[i],b=data.torsoRings[i+1],h=a[0]+(b[0]-a[0])*f,w=a[1]+(b[1]-a[1])*f,ant=a[2]+(b[2]-a[2])*f,post=a[3]+(b[3]-a[3])*f,angle=q*Math.PI*2,s=Math.cos(angle);
    return add(add(torsoCenter(R,h),R.x,w*Math.sin(angle)),R.chestN||R.n,(s>=0?ant:post)*s);
@@ -211,7 +222,7 @@ export function createCatalogScene(first,{coarse=false}={}){
    let o=regionMeshes.get(key);if(!o){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(faces.length*6*3),3));const m=material('#a7b3c6',{roughness:.82});m.polygonOffset=true;m.polygonOffsetFactor=-1;m.polygonOffsetUnits=-1;o=mesh(regionsGroup,g,m,key);o.receiveShadow=false;o.userData={region:faces[0].id,side:faces[0].side};regionMeshes.set(key,o);}
    if(o.geometry.attributes.position.count!==faces.length*6){o.geometry.dispose();o.geometry=new THREE.BufferGeometry();o.geometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array(faces.length*6*3),3));}
    let i=0;const p=o.geometry.attributes.position;for(const f of faces)for(const j of [0,1,2,0,2,3])p.setXYZ(i++,...world(f.points[j]));p.needsUpdate=true;o.geometry.computeVertexNormals();o.geometry.computeBoundingSphere();o.geometry.computeBoundingBox();
-   const id=faces[0].id,side=faces[0].side,active=options.muscles!==false&&(!options.selected||options.selected==='all'||options.selected===id||options.selected===faces[0].parent);o.visible=options.muscles!==false;o.material.color.set(active?options.color(data.sideValues?.[side]?.[id]??data.values[id]??.28):'#a0adc0');
+   const id=faces[0].id,side=faces[0].side,muscles=options.muscles!==false&&!skeletonOn,active=muscles&&(!options.selected||options.selected==='all'||options.selected===id||options.selected===faces[0].parent);o.visible=muscles;o.material.color.set(active?options.color(data.sideValues?.[side]?.[id]??data.values[id]??.28):'#a0adc0');
    /* собственное свечение участка: жёлтый и оранжевый в тени не уходят в коричневый */
    if(active)o.material.emissive.copy(o.material.color).multiplyScalar(STUDIO.muscleGlow);else o.material.emissive.setRGB(0,0,0);
   }
@@ -276,6 +287,6 @@ export function createCatalogScene(first,{coarse=false}={}){
   const cam=key.shadow.camera;cam.left=-r;cam.right=r;cam.top=r;cam.bottom=-r;cam.near=.1;cam.far=8+r*2;cam.updateProjectionMatrix();key.shadow.needsUpdate=true;
  }
  apply(first,{color:()=> '#a7b3c6'});
- return{scene,cameras,apply,includeBounds,resize,bounds,regionMeshes,parts,body,head,mannequin,propNodes:()=>propNodes,studio,fitShadow,setShadows,
+ return{scene,cameras,apply,includeBounds,resize,bounds,regionMeshes,parts,body,head,mannequin,skeleton:skeletonLayer,propNodes:()=>propNodes,studio,fitShadow,setShadows,
   dispose(){const materials=new Set();scene.traverse(o=>{o.geometry?.dispose();if(o.material)for(const m of [].concat(o.material)){materials.add(m);m.map?.dispose();}});for(const m of materials)m.dispose();for(const t of studioTextures)t.dispose();studioTextures=[];}};
 }

@@ -15,10 +15,10 @@ export function createVolumeFigure(options){
  try{context=canvas.getContext('webgl2',attributes);if(context){renderer=new THREE.WebGLRenderer({canvas,context,...attributes});renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));}}catch(e){renderer=null;}
  if(!renderer){rendererUnavailable=true;context?.getExtension('WEBGL_lose_context')?.loseContext();return null;}root.dataset.renderer='webgl';
  const data=(t,index)=>options.data(t,index,false),initial=data(0,0);
- const scene=createCatalogScene(initial),cameras=scene.cameras;root.append(renderer.domElement);let disposed=false,lastT=options.t||0,lastIndex=0,camera=options.camera||'above',selected='all',muscles=options.muscles!==false,joints=!!options.joints,stress=options.stress!==false;
+ const scene=createCatalogScene(initial),cameras=scene.cameras;root.append(renderer.domElement);let disposed=false,lastT=options.t||0,lastIndex=0,camera=options.camera||'above',selected='all',muscles=options.muscles!==false,joints=!!options.joints,stress=options.stress!==false,skeleton=null;
  if(!cameras[camera])throw Error('Unknown volume camera '+camera);
  let updateVectors=()=>{};
- const apply=(t,index)=>{const d=data(t,index);scene.apply(d,{color:options.color,selected,muscles,joints,stress});updateVectors(t,index,d.pose);};
+ const apply=(t,index)=>{const d=data(t,index);scene.apply(d,{color:options.color,selected,muscles,joints,stress,skeleton});updateVectors(t,index,d.pose);};
  const trace=new THREE.Line(new THREE.BufferGeometry().setFromPoints(options.trace.map(p=>new THREE.Vector3(...world(p)))),new THREE.LineBasicMaterial({color:'#b4c3d9',transparent:true,opacity:.7}));trace.visible=false;scene.scene.add(trace);
  const vectors=new THREE.Group();vectors.name='movement-vectors';vectors.visible=false;scene.scene.add(vectors);
  for(const v of options.vectors){const a=new THREE.Vector3(...world(v.a)),b=new THREE.Vector3(...world(v.b)),d=b.clone().sub(a);vectors.add(new THREE.ArrowHelper(d.clone().normalize(),a,d.length(),/^(sh|hip)$/.test(v.key)?0x77a9d3:0xe97155,.075,.035));}
@@ -50,7 +50,9 @@ export function createVolumeFigure(options){
  const setRegion=id=>{selected=id;at(lastT,{index:lastIndex});};
  const setJoints=show=>{joints=!!show;at(lastT,{index:lastIndex});};
  const setStress=show=>{stress=!!show;at(lastT,{index:lastIndex});};
+ /* кости (данные Skeleton.load()) или null — выключить */
+ const setSkeleton=data=>{skeleton=data||null;root.dataset.skeleton=skeleton?'on':'off';at(lastT,{index:lastIndex});};
  at(lastT,{index:lastIndex});
- return{svg:root,at,camera,setMuscles,setRegion,setJoints,setStress,setTrace(show){trace.visible=!!show;draw();},setVectors(show){vectors.visible=!!show;draw();},dispose(){if(disposed)return;disposed=true;canvas.removeEventListener('webglcontextrestored',restore);observer?.disconnect();scene.dispose();renderer.dispose?.();renderer.forceContextLoss?.();}};
+ return{svg:root,at,camera,setMuscles,setRegion,setJoints,setStress,setSkeleton,setTrace(show){trace.visible=!!show;draw();},setVectors(show){vectors.visible=!!show;draw();},dispose(){if(disposed)return;disposed=true;canvas.removeEventListener('webglcontextrestored',restore);observer?.disconnect();scene.dispose();renderer.dispose?.();renderer.forceContextLoss?.();}};
 }
 window.GymVolume={create:createVolumeFigure};

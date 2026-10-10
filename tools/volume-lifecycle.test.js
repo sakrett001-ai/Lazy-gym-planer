@@ -91,3 +91,29 @@ test('studio light: semantic colours bypass tone mapping, the body casts but nev
   view.setShadows(false);assert.equal(renderer.shadowMap.enabled,false,'slow graphics: shadows switch off');
  }finally{view.dispose();}
 });
+test('skeleton mode: bones follow the pose inside a see-through skin, phase muscle colours hide, switching off restores the body',async()=>{
+ const r=await runtime();let figure;
+ const zlib=require('node:zlib'),Skeleton=require('../src/js/09bq-skeleton.js');
+ globalThis.Skeleton=Skeleton;
+ const data=Skeleton.decode(zlib.gunzipSync(fs.readFileSync(path.join(__dirname,'../src/data/skeleton.bin'))));
+ try{
+  figure=r.create({...r.options('squat','side'),muscles:true});figure.at(1,{index:1});
+  const s=r.counters.scene,layer=s.getObjectByName('skeleton'),torso=s.getObjectByName('torso'),regions=s.getObjectByName('regions');
+  assert.equal(layer.visible,false,'off by default');
+  assert(regions.children.some(o=>o.visible),'phase muscle colours are on');
+  figure.setSkeleton(data);
+  assert.equal(figure.svg.dataset.skeleton,'on');
+  assert.equal(layer.visible,true);assert.equal(layer.children.length,data.bones.length);
+  assert.equal(torso.material.transparent,true);assert(torso.material.opacity<.4,'skin is see-through');assert.equal(torso.material.depthWrite,false);
+  assert.equal(torso.castShadow,false,'the skin does not shadow the bones');
+  assert(regions.children.every(o=>!o.visible),'phase muscle colours hide while the skeleton is on');
+  /* бедренная кость: начало рамки — тазобедренный сустав позы */
+  const R=r.model.EX.find(e=>e.id==='squat').anim.catalogRig(1),femur=layer.getObjectByName('bone-femurL'),e=femur.matrix.elements;
+  const hip=[R.hipL[0]/100,(186-R.hipL[1])/100,R.hipL[2]/100];
+  assert(Math.hypot(e[12]-hip[0],e[13]-hip[1],e[14]-hip[2])<1e-6,'the femur hangs from the hip joint');
+  for(const m of layer.children)assert(m.matrix.elements.every(Number.isFinite),'finite matrix: '+m.name);
+  figure.setSkeleton(null);
+  assert.equal(layer.visible,false);assert.equal(torso.material.transparent,false);assert.equal(torso.material.opacity,1);assert.equal(torso.castShadow,true);
+  assert(regions.children.some(o=>o.visible),'muscle colours return');
+ }finally{figure?.dispose();r.dom.window.close();delete globalThis.Skeleton;}
+});

@@ -1,7 +1,7 @@
 /* ---------- Проигрыватель движений: карточки и увеличенный разбор ---------- */
 let figs = [], rafId = 0, io = null;
 const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-const motionPrefs = (() => {try {return Object.assign({speed:.5,joints:true,trace:false,vectors:true,muscles:true},JSON.parse(localStorage.getItem('podhod.motion.v2') || '{}'));}catch(e){return {speed:.5,joints:true,trace:false,vectors:true,muscles:true};}})();
+const motionPrefs = (() => {try {return Object.assign({speed:.5,joints:true,trace:false,vectors:true,muscles:true,skeleton:false},JSON.parse(localStorage.getItem('podhod.motion.v2') || '{}'));}catch(e){return {speed:.5,joints:true,trace:false,vectors:true,muscles:true,skeleton:false};}})();
 if (![.25,.5,1].includes(+motionPrefs.speed)) motionPrefs.speed = .5;
 if(typeof motionPrefs.muscles!=='boolean')motionPrefs.muscles=true;
 if(typeof motionPrefs.stress!=='boolean')motionPrefs.stress=true;
@@ -240,6 +240,22 @@ function selectMotion(it, clock=0) {
   $('#mv-sources').innerHTML=src.length?`<p class="mv-muscle-label">Подробнее о технике</p>${src.join('')}`:'';
   mountDetailCameras();
 }
+/* Режим «Скелет» в подробном разборе: кости внутри полупрозрачной кожи. Данные костей (≈220 КБ) грузятся при первом
+   включении и дальше переиспользуются; без объёмной графики переключатель недоступен. */
+const SKELETON_CREDIT='Кости — по открытым моделям MyoSim (Apache 2.0): ноги и таз — Rajagopal и др., 2016; рука — Holzbaur и др., 2005. Пока включён скелет, мышцы по фазам скрыты.';
+function applySkeleton(F=detailMotion){
+  const box=$('#mv-skeleton'),note=$('#mv-skeleton-note');if(!box)return;
+  const list=F?[F.f,F.extra].filter(Boolean):[],able=list.some(f=>typeof f.setSkeleton==='function');
+  box.disabled=!able;box.closest('label').title=able?'':'Нужна объёмная графика (WebGL)';box.checked=able&&!!motionPrefs.skeleton;
+  const say=text=>{note.textContent=text;note.hidden=!text;};
+  if(!box.checked){for(const f of list)f.setSkeleton?.(null);say('');return;}
+  if(Skeleton.data){for(const f of list)f.setSkeleton(Skeleton.data);say(SKELETON_CREDIT);return;}
+  box.setAttribute('aria-busy','true');say('Загружаем кости…');
+  Skeleton.load().then(d=>{
+    box.removeAttribute('aria-busy');if(detailMotion!==F||!motionPrefs.skeleton)return;
+    for(const f of list)f.setSkeleton?.(d);say(SKELETON_CREDIT);
+  },()=>{box.removeAttribute('aria-busy');box.checked=false;motionPrefs.skeleton=false;saveMotionPrefs();say('Не удалось загрузить кости. Проверьте связь и включите ещё раз.');});
+}
 function openMotion(idx) {
   const F=figs.find(f=>+f.btn.dataset.fig===Number(idx));
   openMotionItem(F?F.it:previewItem(EX[0].id),F?F.clock:0);
@@ -281,6 +297,7 @@ function setupMotionViewer() {
   $('#mv-vectors').addEventListener('change',e=>{motionPrefs.vectors=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean))f.setVectors(e.target.checked);saveMotionPrefs();});
   $('#mv-trace').addEventListener('change',e=>{motionPrefs.trace=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean))f.setTrace(e.target.checked);saveMotionPrefs();});
   $('#mv-muscle-toggle').addEventListener('change',e=>changeMusclePreference(e.target.checked));
+  $('#mv-skeleton').addEventListener('change',e=>{motionPrefs.skeleton=e.target.checked;saveMotionPrefs();applySkeleton();});
   $('#wv-muscle-toggle').addEventListener('change',e=>changeMusclePreference(e.target.checked));
   for(const prefix of ['mv','wv'])$('#'+prefix+'-stress-toggle').addEventListener('change',e=>changeStressPreference(e.target.checked));
   for(const prefix of ['mv','wv'])$('#'+prefix+'-region').addEventListener('change',e=>selectMuscleRegion(prefix,e.target.value));

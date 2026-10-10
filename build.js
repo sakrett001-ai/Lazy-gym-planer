@@ -33,7 +33,9 @@ const jsSrc = list(path.join(SRC, 'js'), '.js').map(read).join('\n');
 const bodySrc = read(path.join(SRC, 'body.html'));
 const pwaSrc = read(path.join(SRC, 'pwa.js')).replace(/__VERSION__/g, VERSION);
 const manifestSrc = JSON.parse(read(path.join(SRC, 'manifest.webmanifest')));
-const ASSET_VERSION = VERSION + '-' + require('node:crypto').createHash('sha256').update([volumeSrc,cssSrc,jsSrc,bodySrc,pwaSrc,JSON.stringify(manifestSrc),read(path.join(SRC,'sw.js')),read(path.join(__dirname,'i18n/en.json'))].join('\n')).digest('hex').slice(0,12);
+/* кости манекена (режим «Скелет»): PWA грузит файл по требованию, офлайн-файлы — со встроенными данными (base64) */
+const skeletonBin = fs.readFileSync(path.join(SRC, 'data', 'skeleton.bin')), skeletonB64 = skeletonBin.toString('base64');
+const ASSET_VERSION = VERSION + '-' + require('node:crypto').createHash('sha256').update([volumeSrc,cssSrc,jsSrc,bodySrc,pwaSrc,JSON.stringify(manifestSrc),read(path.join(SRC,'sw.js')),read(path.join(__dirname,'i18n/en.json')),skeletonB64].join('\n')).digest('hex').slice(0,12);
 const reset = `:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}`;
 const headMeta = L => `<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -49,6 +51,9 @@ for (const f of fs.readdirSync(fontsDir)) fs.copyFileSync(path.join(fontsDir, f)
 for (const f of ['icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'favicon-32.png']) { const p = path.join(SRC, f); if (fs.existsSync(p)) fs.copyFileSync(p, path.join(DIST, f)); }
 fs.writeFileSync(path.join(DIST, 'sw.js'), read(path.join(SRC, 'sw.js')).replace(/__VERSION__/g, ASSET_VERSION));
 fs.writeFileSync(path.join(DIST, '.nojekyll'), '');
+fs.writeFileSync(path.join(DIST, 'skeleton.bin'), skeletonBin);
+fs.copyFileSync(path.join(__dirname, 'third_party', 'myosim', 'LICENSE'), path.join(DIST, 'skeleton-LICENSE.txt'));
+fs.copyFileSync(path.join(__dirname, 'third_party', 'myosim', 'NOTICE.md'), path.join(DIST, 'skeleton-NOTICE.md'));
 
 const report = [];
 for (const [lang, L] of Object.entries(LANGS)) {
@@ -96,7 +101,7 @@ ${body}
 `);
 
   /* 2. офлайн-файл: ссылка на другой язык ведёт на соседний офлайн-файл */
-  const single = `<title>${L.title}</title>\n<style>\n${inlineFonts(css)}\n</style>\n${body.replace(`href="${L.other.href}"`, `href="${L.other.offline}"`)}\n<script>\n${volumeSrc}\n</script>\n<script>\n${js}\n</script>\n`;
+  const single = `<title>${L.title}</title>\n<style>\n${inlineFonts(css)}\n</style>\n${body.replace(`href="${L.other.href}"`, `href="${L.other.offline}"`)}\n<script>\n${volumeSrc}\n</script>\n<script>window.SKELETON_BIN='${skeletonB64}';</script>\n<script>\n${js}\n</script>\n`;
   fs.writeFileSync(path.join(DIST, `lazy-gym-planner-offline-${lang}.html`), `<!doctype html>
 <html lang="${L.html}">
 <head>
