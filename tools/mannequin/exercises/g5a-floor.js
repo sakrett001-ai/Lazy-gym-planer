@@ -281,7 +281,7 @@ function sidePlankBody(C, theta) {
   C.root(q, [0, 40, 0], up, fwd);
   const f = C.fk(q), left = M.M3.col(f.F.pelvis.R, 0), down = V.scale(up, -1);
   /* голеностопы одна над другой с зазором 10,5 см по боковой оси, ноги прямые */
-  for (const s of S) { const hip = f.P['hip' + s], A = V.add(V.add(hip, down, 85.9), left, -M.SIGN[s] * (M.B.hipHalf - 5.25)); C.legTo(q, s, A, fwd, { dorsi: 0 }); }
+  for (const s of S) { const hip = f.P['hip' + s], A = V.add(V.add(hip, down, M.B.th + M.B.sk - .1), left, -M.SIGN[s] * (M.B.hipHalf - 5.25)); C.legTo(q, s, A, fwd, { dorsi: 0 }); }
   return q;
 }
 const SIDEPLANK = once(() => {
@@ -337,7 +337,7 @@ const PLANKUP = once(() => {
   const body = (th, roll = 0, yaw = 0) => { const q = proneOnToes(C, { theta: th, yaw, ...base }); q.thoracic[2] = roll * .78; q.lumbar[2] = roll * .22; return q; };
   const thF = plankTheta(C, base), qF = body(thF);
   const fore = {}; for (const s of S) { const t = C.M.clone(qF); fore[s] = forearmOnMat(C, t, s, { lift: .8 }); }
-  const top = pushLayout({ x: 23.5, ahead: 15, out: 12, elTop: 11, feet, pole0: [.39, -.02, 1.13], pole1: [.39, -.02, 1.13], g0: [-6.5, 3.2], g1: [-6.5, 3.2] });
+  const top = pushLayout({ x: 23.5, ahead: 15, out: 9, elTop: 11, feet, pole0: [.39, -.02, 1.13], pole1: [.39, -.02, 1.13], g0: [-6.5, 3.2], g1: [-6.5, 3.2] });
   const palmW = s => palmWrist(C, s, top.palms[s], top.fingers(s), [0, 1, 0]);
   /* невязка опоры стороны s в состоянии F/P */
   const res = (q, s, st) => { const gh = C.fk(q).P['gh' + s]; return st === 'F' ? V.dist(gh, fore[s].E) - C.M.B.ua : V.dist(gh, palmW(s)) - armSpan(C, 12); };
@@ -379,7 +379,7 @@ function bridgePose(C, L, e) {
   const q = bridgeBody(C, C.lerp(L.alpha0, L.alpha1, e), L.zs, { thoracic: L.thor * e });
   for (const s of L.sides) footFlat(C, q, s, C.M.SIGN[s] * -L.half, L.zf);
   /* свободная нога выпрямлена, бедро зеркально опорному (бёдра параллельны, таз без перекоса) */
-  if (L.one) { const o = L.one === 'L' ? 'R' : 'L', f = C.fk(q), d = C.V.unit(C.V.sub(f.P['kn' + L.one], f.P['hip' + L.one])); C.legTo(q, o, C.V.add(f.P['hip' + o], [-d[0], d[1], d[2]], 85.9), [0, 1, 0], { dorsi: -10 }); }
+  if (L.one) { const o = L.one === 'L' ? 'R' : 'L', f = C.fk(q), d = C.V.unit(C.V.sub(f.P['kn' + L.one], f.P['hip' + L.one])); C.legTo(q, o, C.V.add(f.P['hip' + o], [-d[0], d[1], d[2]], C.M.B.th + C.M.B.sk - .1), [0, 1, 0], { dorsi: -10 }); }
   for (const s of S) palmBesideHip(C, q, s, L.palms[s]);
   return q;
 }
@@ -396,7 +396,7 @@ function legRaiseBody(C, e) {
 }
 function legAngle(C, q, s, a, { dorsi = -15, knee = 0 } = {}) {
   const { V, M } = C, r = a * C.D2R, hip = C.fk(q).P['hip' + s], d = V.unit([M.SIGN[s] * -.02, Math.sin(r), -Math.cos(r)]);
-  C.legTo(q, s, V.add(hip, d, 85.85 - knee), [0, Math.cos(r), Math.sin(r)], { dorsi });
+  C.legTo(q, s, V.add(hip, d, M.B.th + M.B.sk - .15 - knee), [0, Math.cos(r), Math.sin(r)], { dorsi });
 }
 const LEGRAISE = once(() => {
   const C = ctx([]), q = legRaiseBody(C, 0);
@@ -439,7 +439,7 @@ module.exports = {
       { body: 'upperBack', prop: 'mat', when: [0, .05] }, { body: 'handL', prop: 'mat', when: [0, .05] }, { body: 'handR', prop: 'mat', when: [0, .05] }],
     pose(t, C) {
       const e = C.ease(t), body = (e, neck) => {
-        const q = supine(C, { tilt: C.lerp(4, 9, e), lumbar: C.lerp(4, 9, e), thoracic: C.lerp(0, 28, e), neck });
+        const q = supine(C, { tilt: C.lerp(4, 12, e), lumbar: C.lerp(4, 12, e), thoracic: C.lerp(0, 28, e), neck });
         for (const s of S) { q[s].hip = [60, 8, 4]; q[s].knee = 95; }
         return lieOn(C, q, 'back', [0, -10]);
       };
@@ -447,7 +447,7 @@ module.exports = {
       const q0 = body(0, 0); C.neckTo(q0, 'headBack', [0, MAT + 3.4, 0], [0, 1, 0], 0);
       const q = body(e, q0.neck[0] + C.lerp(0, 14, e));
       feetFlatAtKnee(C, q, 118);
-      for (const s of S) { q[s].girdle = [C.lerp(4, 8, e), C.lerp(0, 10, e)]; handBehindHead(C, q, s, { fwd: .6 }); }
+      for (const s of S) { q[s].girdle = [C.lerp(4, 8, e), C.lerp(0, 10, e)]; handBehindHead(C, q, s, { fwd: .6, up: 1 }); }
       return q;
     }
   },

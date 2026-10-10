@@ -4,8 +4,8 @@
 import numpy as np, json, fast_simplification, sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from extract import chain, load
-S_T = 1.03          # рост манекена 175 см против 170 см в исходных моделях
-B = dict(ua=28.3, fa=27.0, th=42.4, sk=43.6, hipHalf=8.8)
+S_T = 1.03          # рост манекена 174,5 см против 170 см в исходных моделях
+B = dict(ua=28.3, fa=27.0, th=40.7, sk=41.8, hipHalf=8.8)   # как B в src/js/09bm-mannequin.js
 def M(v): v=np.asarray(v,float); return np.stack([-v[...,2], v[...,1], v[...,0]],-1)   # OpenSim (x вперёд, y вверх, z вправо) → манекен
 def unit(v): return v/np.linalg.norm(v)
 def rot_between(a,b):
@@ -43,7 +43,7 @@ TOR=chain('torso/assets/myotorso_chain.xml','torso/assets/myotorso_assets.xml','
 hjR,hjL=P(LEG,'femur_r'),P(LEG,'femur_l'); mid=(hjR+hjL)/2; sx=B['hipHalf']/abs(hjL[0]-mid[0])
 CFG=json.load(open(os.environ['SKEL_CFG'])) if os.environ.get('SKEL_CFG') else {}
 OUT=sys.argv[1] if len(sys.argv)>1 else os.path.join(os.path.dirname(os.path.abspath(__file__)),'../../qa/skeleton/bones.json')
-TH_PITCH=CFG.get('th_pitch',12.0); TH_DY=CFG.get('th_dy',-4.5); TH_DZ=CFG.get('th_dz',1.0); RIB_X=CFG.get('rib_x',.96)
+TH_PITCH=CFG.get('th_pitch',12.0); TH_DY=CFG.get('th_dy',0.0); TH_DZ=CFG.get('th_dz',1.0); RIB_X=CFG.get('rib_x',.96)
 PIV=np.array([0,24.,-12.])   # ось наклона грудного блока: на уровне шарнира грудного отдела, у задней поверхности
 def thoraxFit(q,w):
     a=np.radians(TH_PITCH*w); c,s_=np.cos(a),np.sin(a); d=np.asarray(q)-PIV
@@ -73,7 +73,8 @@ for (b,m,file,Rg,pg) in TOR['meshes']:
 HD=chain('head/assets/myohead_rigid_chain.xml','head/assets/myohead_simple_assets.xml','neck')
 off=np.array([-10.07,8.15,0.])
 def hat(m): v,f=mesh(HD,m); return trunkMap(v+M(off),1),f
-neckO=np.array([0,57.,-4]); headO=np.array([0,67.5,-0.5]); headC=np.array([0,71.5,1.5])
+# начала рамок шеи и головы и центр головы в рамке таза (нейтральная поза): 24 + B.c7, + B.headJoint, + B.headCenter
+neckO=np.array([0,61.2,-4]); headO=np.array([0,70.7,-0.5]); headC=np.array([0,73.6,1.5])
 vc,fc=hat('hat_cervical')
 vs,fs=hat('hat_skull'); vj,fj=hat('hat_jaw'); allv=np.vstack([vs,vj]); c=(allv.min(0)+allv.max(0))/2
 s_head=CFG.get('s_head',1.0); dhead=np.array(CFG.get('d_head',[0,0,0.]))
@@ -92,7 +93,8 @@ for nm,v,f,t in (('skull',vs,fs,2600),('jaw',vj,fj,900)):
 
 # ---------- правая рука (левая — зеркально) ----------
 ARM=chain('arm/assets/myoarm_r_chain.xml','arm/assets/myoarm_r_assets.xml','clavicle_r')
-gh=P(ARM,'scapphant_r'); tgt=np.array([-16,-1.9,-4.]); Rg_=rot_between(gh,tgt); sg=np.linalg.norm(tgt)/np.linalg.norm(gh)
+# центр плечевого сустава от грудино-ключичного — B.ghRel (правая сторона)
+gh=P(ARM,'scapphant_r'); tgt=np.array([-16,-3.1,-4.]); Rg_=rot_between(gh,tgt); sg=np.linalg.norm(tgt)/np.linalg.norm(gh)
 girdle=lambda v:(sg*(Rg_@np.asarray(v).T)).T
 arm=[]
 for nm,t in (('clavicle_r',300),('scapula_r',1100)):
@@ -148,8 +150,8 @@ for s,sx_ in (('R','r'),('L','l')):
     add('patella',s,'th',loc,f,140,track=track)
     T=long_bone(kn,an,B['sk']); v,f=mesh(LEG,f'{sx_}_tibia'); add('tibia',s,'sk',T(v),f,800)
     v,f=mesh(LEG,f'{sx_}_fibula'); add('fibula',s,'sk',T(v),f,400)
-    # стопа: голеностоп → (0,0,0), плюснефаланговый сустав → (0,−6,5;13,5)
-    tgt=np.array([0,-6.5,13.5]); Rf=rot_between(mtp-an,tgt); sf=np.linalg.norm(tgt)/np.linalg.norm(mtp-an); FT=lambda v:(sf*(Rf@(np.asarray(v)-an).T)).T
+    # стопа: голеностоп → (0,0,0), плюснефаланговый сустав → B.ball (0; −5,35; 13,5)
+    tgt=np.array([0,-5.35,13.5]); Rf=rot_between(mtp-an,tgt); sf=np.linalg.norm(tgt)/np.linalg.norm(mtp-an); FT=lambda v:(sf*(Rf@(np.asarray(v)-an).T)).T
     for nm,t in ((f'{sx_}_talus',300),(f'{sx_}_foot',1500)):
         v,f=mesh(LEG,nm); add(nm[2:],s,'foot',FT(v),f,t)
     v,f=mesh(LEG,f'{sx_}_bofoot'); add('toes',s,'toes',FT(v)-tgt,f,1200)

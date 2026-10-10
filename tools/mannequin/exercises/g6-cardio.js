@@ -302,12 +302,15 @@ function runPose(C, t) {
 }
 
 /* ---------- Гребной тренажёр ---------- */
-const ROW = { seatTop: 36, railTop: 27, hipUp: 10, beta: 42, footX: 9.5, plateY: 18, kneeFin: 8, kneeCatch: 108, heelCatch: 22, leanCatch: 28, leanFin: -14, gripX: 20, armDrop: 28, shift: -13 };
+const ROW = { seatTop: 36, railTop: 27, hipUp: 10, beta: 42, footX: 11, plateY: 18, kneeFin: 8, kneeCatch: 100, heelCatch: 22, leanCatch: 24, leanFin: -14, gripX: 20, armDrop: 28, shift: -13 };
 /* тело сидя на подвижном сиденье: z — положение таза, lean — наклон корпуса (вперёд +), вращение идёт в тазу */
 function rowBody(C, z, lean) {
   const q = C.base(), P = (lean * .38) * D2R;
   C.root(q, [0, ROW.seatTop + ROW.hipUp, z], [0, Math.cos(P), Math.sin(P)], [0, -Math.sin(P), Math.cos(P)]);
   q.lumbar = [lean * .34 + 2, 0, 0]; q.thoracic = [lean * .28 + 3, 0, 0]; q.neck = [-lean * .9 - 4, 0, 0];
+  /* таз на сиденье: нижняя точка ягодиц (корпус, без бёдер) на 1 см ниже верха сиденья — мягкие ткани и подушка */
+  let lo = Infinity; for (let h = C.M.TORSO[0][0]; h <= 4; h += 1) for (let a = .6; a <= 1.001; a += .05) lo = Math.min(lo, C.chestPoint(q, h, a * Math.PI)[1]);
+  q.root.p[1] += ROW.seatTop - 1 - lo;
   return q;
 }
 const rowLayout = once(() => {

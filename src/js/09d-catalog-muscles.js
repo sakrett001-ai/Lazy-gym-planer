@@ -103,8 +103,8 @@ function catalogMuscleSurfaces(R,profile,{coarse=false}={}){
 /* Мышечные зоны на манекене: те же учебные области, но на поверхности нового тела.
    Корпус: h — высота вдоль оси корпуса от середины тазобедренных суставов, угол от передней линии к боку и спине.
    Конечности: t — доля сегмента, угол от передней поверхности к латеральной. Дельты лежат на «шапке» плеча. */
-const MANNEQUIN_TORSO_PATCHES=[['pec_clavicular',41,48,.06,1.12],['pec_sternal',34,41,.06,1.22],['pec_costal',29,34,.08,1.02],['abs',3,29,.04,.5],['obliques',3,28,.56,1.36],
- ['lats',13,39,1.52,2.62],['midback',33,48,2.62,3.1],['lowback',3,24,2.7,3.1],['glute_max',-9,4,1.72,3.1],['glute_lateral',-6,7,1.16,1.7],['trap_upper',47,56,2.05,3.1],['trap_mid',39,47,2.3,2.68]];
+const MANNEQUIN_TORSO_PATCHES=[['pec_clavicular',43,51.8,.06,1.12],['pec_sternal',34,43,.06,1.22],['pec_costal',29,34,.08,1.02],['abs',3,29,.04,.5],['obliques',3,28,.56,1.36],
+ ['lats',13,40.2,1.52,2.62],['midback',33,51.8,2.62,3.1],['lowback',3,24,2.7,3.1],['glute_max',-5.3,4,1.72,3.1],['glute_lateral',-3.5,7,1.16,1.7],['trap_upper',50.8,59.8,2.05,3.1],['trap_mid',40.2,50.8,2.3,2.68]];
 const MANNEQUIN_LIMB_PATCHES={
  ua:[['bi_long',.33,.84,.05,.8],['bi_short',.33,.84,-.8,-.05],['tri_long',.3,.86,2.5,3.9],['tri_lateral',.3,.85,1.7,2.45]],
  fa:[['forearms',.12,.76,-1.25,1.25]],
@@ -129,7 +129,7 @@ function mannequinMuscleSurfaces(R,profile,{coarse=false}={}){
   for(const[kind,list]of Object.entries(MANNEQUIN_LIMB_PATCHES))for(const[id,t0,t1,a0,a1]of list)
    grid(id,side,Math.max(1,Math.round((t1-t0)/(.06*step))),Math.max(2,Math.round((a1-a0)/(.2*step))),u=>{const at=Mannequin.limbRow(R,kind,side,t0+(t1-t0)*u);return(v,e)=>at(a0+(a1-a0)*v,e);});
   /* дельтовидная: сектор «шапки» плечевого сустава, от верха вниз на ~95° */
-  const ua=R.frames['ua'+side],g=side==='L'?1:-1,cap=V.add(V.add(R['sh'+side],ua.y,-1.4),ua.x,g*.7),lat=V.scale(ua.x,g),r=Mannequin.CAPS.sh;
+  const ua=R.frames['ua'+side],g=side==='L'?1:-1,cap=V.add(V.add(R['sh'+side],ua.y,Mannequin.SH_CAP[0]),ua.x,g*Mannequin.SH_CAP[1]),lat=V.scale(ua.x,g),r=Mannequin.CAPS.sh;
   for(const[id,a0,a1]of MANNEQUIN_DELTS)grid(id,side,coarse?3:5,coarse?3:6,u=>(v,e)=>{
    const polar=(.18+.85*u)*Math.PI/2*1.05,az=a0+(a1-a0)*v,dir=V.add(V.add(V.scale(ua.y,Math.cos(polar)),ua.z,Math.sin(polar)*Math.cos(az)),lat,Math.sin(polar)*Math.sin(az));
    return V.add(cap,dir,r+e);

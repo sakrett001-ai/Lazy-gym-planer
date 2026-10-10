@@ -171,11 +171,11 @@ function withBox(c) { c.box = aabb(c.pts, Math.max(c.r || 0, c.ptR || 0) + 1); r
 /* ---------- контакты ---------- */
 function regionPoints(name, pts, R) {
   const m = /^(sole|grip|palm|knee|shin|hand|ua|fa|th|sk|foot)(L|R)?$/.exec(name);
-  if (name === 'back') return pts.filter(p => p.seg === 'torso' && p.h >= -4 && p.h <= 52);
-  if (name === 'upperBack' || name === 'chest' || name === 'front' || name === 'belly') return pts.filter(p => p.seg === 'torso' && p.h >= (name === 'upperBack' ? 26 : name === 'belly' ? -4 : 10) && p.h <= (name === 'belly' ? 30 : 50));
+  if (name === 'back') return pts.filter(p => p.seg === 'torso' && p.h >= -2.4 && p.h <= 55.8);
+  if (name === 'upperBack' || name === 'chest' || name === 'front' || name === 'belly') return pts.filter(p => p.seg === 'torso' && p.h >= (name === 'upperBack' ? 26 : name === 'belly' ? -2.4 : 10) && p.h <= (name === 'belly' ? 30 : 53.8));
   if (name === 'buttocks') return pts.filter(p => (p.seg === 'torso' && p.h <= 6) || (p.seg === 'th' && p.t <= .6));
   if (name === 'thighsBack') return pts.filter(p => p.seg === 'th');
-  if (name === 'shoulders') return pts.filter(p => (p.seg === 'torso' && p.h >= 47) || (p.seg === 'ua' && p.t <= .15));
+  if (name === 'shoulders') return pts.filter(p => (p.seg === 'torso' && p.h >= 50.8) || (p.seg === 'ua' && p.t <= .15));
   if (name === 'neck') return pts.filter(p => p.seg === 'neck');
   if (name === 'headBack' || name === 'headAll') return pts.filter(p => p.seg === 'head');
   if (m) {

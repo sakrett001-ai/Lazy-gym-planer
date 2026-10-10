@@ -28,7 +28,7 @@ function placeFeet(C, q, { ax = 11, az = 0, out = 8, kneeOut = .2, heel = 0 } = 
 /* Высота таза, при которой колени согнуты на kneeDeg (стопы уже стоят в ax/az; таз — в текущей ориентации) */
 function hipHeightFor(C, q, kneeDeg, { ax = 11, az = 0 } = {}) {
   const { V, M } = C, L = Math.sqrt(M.B.th ** 2 + M.B.sk ** 2 + 2 * M.B.th * M.B.sk * Math.cos(kneeDeg * C.D2R));
-  const f = C.fk(q), hip = f.P.hipL, an = [ax, 8.5, az];
+  const f = C.fk(q), hip = f.P.hipL, an = [ax, M.B.ankle, az];
   const dx = hip[0] - an[0], dz = hip[2] - an[2];
   return q.root.p[1] + (an[1] + Math.sqrt(Math.max(0, L * L - dx * dx - dz * dz)) - hip[1]);
 }
@@ -159,12 +159,12 @@ const DL = memo(t => {
   if (t >= 1 - 1e-6) {
     /* локаут: таз и колени выпрямлены без переразгибания, гриф касается бёдер */
     const build = sa => hangPose(C, { ...base, theta: 0, spine: [0, 0, 0], sa, knee: 3, girdle: [-2, -6] });
-    const sa = C.solve1D(sa => legBarGap(C, build(sa), build(sa)._bar) - .9, -14, 4, 24);
+    const sa = C.solve1D(sa => legBarGap(C, build(sa), build(sa)._bar) - .9, -24, 4, 24);
     return build(sa);
   }
   /* t, [y, z] грифа, плечи впереди грифа, зазор гриф—нога, [поясница, грудной, шея], диапазон наклона таза */
-  const K = [[0, [22.6, 9], 4, .5, [8, 7, -16], [44, 64]], [.1, [29, 8.8], 3.8, .9, [8, 8, -14], [44, 64]], [.2, [36, 8.6], 3.5, .9, [6, 7, -13], [44, 60]], [.4, [49, 8.4], 2.5, 1, [3, 3, -9], [36, 50]],
-    [.6, [60, 8.8], 1.5, 1, [1, 2, -6], [22, 38]], [.8, [69, 9.4], .5, 1, [0, 0, -3], [8, 26]]];
+  const K = [[0, [22.6, 9], 4, .5, [8, 7, -16], [44, 64]], [.1, [28.7, 8.8], 3.8, .9, [8, 8, -14], [44, 64]], [.2, [35.5, 8.6], 3.5, .9, [6, 7, -13], [44, 60]], [.4, [47.9, 8.4], 2.5, 1, [3, 3, -9], [36, 50]],
+    [.6, [58.5, 8.8], 1.5, 1, [1, 2, -6], [22, 38]], [.8, [67.1, 9.4], .5, 1, [0, 0, -3], [8, 26]]];
   const k = K.find(p => Math.abs(p[0] - t) < 1e-6);
   const build = th => hingeAtBar(C, { ...base, theta: th, spine: k[4], bar: [0, k[1][0], k[1][1]], sa: k[2], girdle: [0, 6] });
   /* наклон таза подбирается так, чтобы гриф шёл вдоль голеней и бёдер с заданным зазором */
@@ -213,7 +213,7 @@ function rackArms(C, q, { ua = [.3, -1, .5], fa = [.1, 1, 0], ext = 40 } = {}) {
    arms(q) ставит руки и возвращает положение грифа */
 function ohpStand(C, o) {
   const q = C.base();
-  pelvisPitch(C, q, o.theta, [0, 94, 0]);
+  pelvisPitch(C, q, o.theta, [0, 89, 0]);
   q.lumbar = [o.spine[0], 0, 0]; q.thoracic = [o.spine[1], 0, 0]; q.neck = [o.spine[2], 0, 0];
   for (const s of S) q[s].girdle = [...o.girdle];
   let bar;
@@ -246,7 +246,7 @@ const OHP = memo(t => {
 
 /* ---------- Гриф на трапециях (присед, наклоны, Смит) ---------- */
 /* Точка грифа на верхней части трапеций: чуть ниже C7, гриф лежит на спине (поджатие мышц ≈ 0,4 см) */
-function barOnTraps(C, q, h = 52, r = 1.4) {
+function barOnTraps(C, q, h = 55.8, r = 1.4) {
   const R = C.M.catalogPose(q), p = C.M.torsoPoint(R, h, 'L', Math.PI), c = C.M.spineFrame(R, h).c;
   const P = [p[0], C.M.FLOOR - p[1], p[2]], Cc = [c[0], C.M.FLOOR - c[1], c[2]], n = C.V.unit(C.V.sub(P, Cc));
   return C.V.add(P, n, r - .4);
@@ -259,8 +259,8 @@ function backBarPose(C, o) {
   q.lumbar = [o.spine[0], 0, 0]; q.thoracic = [o.spine[1], 0, 0]; q.neck = [o.spine[2], 0, 0];
   for (const s of S) q[s].girdle = o.girdle || [4, -8];
   const hands = q => {
-    const bar = barOnTraps(C, q, o.barH ?? 52), T = C.axes(q, 'thorax');
-    for (const s of S) { const lat = V.scale(T.x, C.M.SIGN[s]), pole = V.unit(V.add(V.add(V.scale(T.y, -1), T.z, -(o.elbowBack ?? .8)), lat, o.elbowOut ?? .9)); gripBarSplit(C, q, s, bar, half, pole, T.x, { wristExt: 10, share: .6, maxTurn: 24 }); }
+    const bar = barOnTraps(C, q, o.barH ?? 55.8), T = C.axes(q, 'thorax');
+    for (const s of S) { const lat = V.scale(T.x, C.M.SIGN[s]), pole = V.unit(V.add(V.add(V.scale(T.y, -1), T.z, -(o.elbowBack ?? .9)), lat, o.elbowOut ?? .9)); gripBarSplit(C, q, s, bar, half, pole, T.x, { wristExt: 10, share: .6, maxTurn: 24 }); }
     return bar;
   };
   if (o.fixed) { placeFeet(C, q, o.st); q._bar = hands(q); return q; }
@@ -268,14 +268,14 @@ function backBarPose(C, o) {
     /* гриф на направляющих (Смит): таз сдвигается по горизонтали так, чтобы гриф был на линии направляющих */
     for (let i = 0; i < 8; i++) {
       if (o.knee != null) q.root.p[1] = hipHeightFor(C, q, o.knee, o.st);
-      const b = barOnTraps(C, q, o.barH ?? 52); q.root.p[2] += o.barZ - b[2]; q.root.p[0] -= b[0];
+      const b = barOnTraps(C, q, o.barH ?? 55.8); q.root.p[2] += o.barZ - b[2]; q.root.p[0] -= b[0];
       if (Math.abs(o.barZ - b[2]) < .02) break;
     }
     if (o.knee != null) q.root.p[1] = hipHeightFor(C, q, o.knee, o.st);
     placeFeet(C, q, o.st); q._bar = hands(q); return q;
   }
-  C.balanceOver(q, [0, 0, o.st.az + (o.mid ?? 5)], { loads: q => [[barOnTraps(C, q, o.barH ?? 52), o.kg]], resolve: q => { if (o.knee != null) q.root.p[1] = hipHeightFor(C, q, o.knee, o.st); placeFeet(C, q, o.st); hands(q); } });
-  q._bar = barOnTraps(C, q, o.barH ?? 52);
+  C.balanceOver(q, [0, 0, o.st.az + (o.mid ?? 5)], { loads: q => [[barOnTraps(C, q, o.barH ?? 55.8), o.kg]], resolve: q => { if (o.knee != null) q.root.p[1] = hipHeightFor(C, q, o.knee, o.st); placeFeet(C, q, o.st); hands(q); } });
+  q._bar = barOnTraps(C, q, o.barH ?? 55.8);
   return q;
 }
 
@@ -284,7 +284,7 @@ const SQ_ST = { ax: 15, az: 0, out: 15, kneeOut: 0 };
 const SQ = memo(t => {
   const C = ctx([]), e = t;
   /* опускание: таз и колени сгибаются одновременно; внизу бёдра около параллели, гриф над серединой стопы */
-  const th = 45 * Math.pow(e, .5), hy = e < 1e-6 ? null : C.lerp(94, 56.5, Math.pow(e, 1.1));
+  const th = 45 * Math.pow(e, .5), hy = e < 1e-6 ? null : C.lerp(89, 53, Math.pow(e, 1.1));
   return backBarPose(C, { theta: th, hy: hy ?? 94, knee: hy == null ? 3 : null, spine: [8 * e, 3 * e, -14 * e], st: SQ_ST, kg: SQ_KG, half: 49, girdle: [12, -20] });
 });
 
@@ -293,9 +293,9 @@ const GM_ST = { ax: 11, az: 0, out: 8, kneeOut: 0 };
 const GM = memo(t => {
   const C = ctx([]);
   /* t, наклон таза, колени, [поясница, грудной, шея] */
-  const K = [[0, 0, 4, [0, 0, 0]], [.25, 20, 10, [1, 1, -5]], [.5, 39, 15, [3, 2, -11]], [.75, 52, 20, [4, 4, -16]], [1, 62, 25, [6, 6, -21]]];
+  const K = [[0, 0, 4, [0, 0, 0]], [.25, 20, 10, [1, 1, -5]], [.5, 39, 15, [3, 2, -11]], [.75, 51, 20, [4, 4, -16]], [1, 60, 25, [6, 6, -21]]];
   const k = K.find(p => Math.abs(p[0] - t) < 1e-6);
-  return backBarPose(C, { theta: k[1], hy: 90, knee: k[2], spine: k[3], st: GM_ST, kg: GM_KG, half: 49, girdle: [12, -20] });
+  return backBarPose(C, { theta: k[1], hy: 85.2, knee: k[2], spine: k[3], st: GM_ST, kg: GM_KG, half: 49, girdle: [12, -20] });
 });
 
 /* ---------- Приседания в машине Смита ---------- */
@@ -304,7 +304,7 @@ const SSQ_ST = { ax: 15, az: 14, out: 12, kneeOut: 0 };
 const SSQ = memo(t => {
   const C = ctx([]), e = t;
   /* стопы на 14 см впереди грифа: корпус прямее, пятки на полу, колени по носкам */
-  const th = 30 * Math.pow(e, .6), hy = e < 1e-6 ? null : C.lerp(94, 57, Math.pow(e, 1.1));
+  const th = 30 * Math.pow(e, .6), hy = e < 1e-6 ? null : C.lerp(89, 53.5, Math.pow(e, 1.1));
   return backBarPose(C, { theta: th, hy: hy ?? 94, knee: hy == null ? 4 : null, spine: [6 * e, 2 * e, -8 * e], st: SSQ_ST, half: 49, girdle: [12, -20], barZ: 0 });
 });
 
@@ -369,7 +369,7 @@ const WRIST = once(() => {
     const f = C.fk(q), out = {};
     for (const s of S) {
       const th = f.F['th' + s], hip = f.P['hip' + s], kn = f.P['kn' + s], up = M.M3.col(th.R, 2), dir = V.unit(V.sub(kn, hip));
-      const W = V.add(V.add(kn, dir, 3.5), up, 5.8 + 2.5), E = V.add(V.add(W, dir, -M.B.fa), up, 4.6);
+      const W = V.add(V.add(kn, dir, 8.5), up, 5.8 + 2.5), E = V.add(V.add(W, dir, -M.B.fa), up, 4.6);
       out[s] = { W, E, w: V.unit(V.sub(W, E)) };
     }
     return out;
@@ -441,7 +441,7 @@ function sitIncline(C, bench, { arch = [-4, -6], girdle = [-4, -12], feetZ = -76
   return q;
 }
 /* Жим на наклонной: верх — гриф над плечевыми суставами на прямых руках, низ — у верха груди под ключицами */
-function inclinePress(C, q, t, { half = 40, chestH = 42, path = 'free', smithZ, smithY, elbowTop = 6 } = {}) {
+function inclinePress(C, q, t, { half = 40, chestH = 44.4, path = 'free', smithZ, smithY, elbowTop = 6 } = {}) {
   const { V } = C, e = C.ease(t), f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5), T = C.axes(q, 'thorax');
   const chest = V.add(C.chestPoint(q, chestH), T.z, 1.7);
   const pole = lat => V.unit(V.add(V.add([0, -1, 0], lat, 1.05), T.y, -.45));
@@ -455,7 +455,7 @@ function inclinePress(C, q, t, { half = 40, chestH = 42, path = 'free', smithZ, 
   arms(q, bar, false);
   return { bar, top, bottom };
 }
-const INC_BENCH = { type: 'g1InclineRack', id: 'bench', back: 38, seat: 5 };
+const INC_BENCH = { type: 'g1InclineRack', id: 'bench', back: 38, seat: 5, seatH: 42 };
 const INC = once(() => {
   const C = ctx([INC_BENCH]), q = sitIncline(C, 'bench');
   const r = inclinePress(C, C.M.clone(q), 0, {});
@@ -466,8 +466,8 @@ const INC = once(() => {
 /* ---------- Жим в машине Смита на наклонной скамье ---------- */
 const SINC_BENCH = { type: 'adjBench', id: 'bench', back: 30, seat: 5 };
 const SINC = once(() => {
-  const C = ctx([SINC_BENCH]), q = sitIncline(C, 'bench', { feetZ: -78 }), T = C.axes(q, 'thorax');
-  const chest = C.V.add(C.chestPoint(q, 43), T.z, 1.7);
+  const C = ctx([SINC_BENCH]), q = sitIncline(C, 'bench', { feetZ: -72 }), T = C.axes(q, 'thorax');
+  const chest = C.V.add(C.chestPoint(q, 45.8), T.z, 1.7);
   return { q, z: +chest[2].toFixed(1), y: chest[1] };
 });
 
@@ -521,7 +521,7 @@ function benchPressDecline(C, q, t, { half = 40, chestH = 30, elbowTop = 6 } = {
 /* ---------- Скамья Скотта ---------- */
 /* Сидя лицом к упору: корпус чуть наклонён вперёд, плечи лежат на наклонном упоре (45°), подмышки — на верхней кромке.
    Упор рассчитывается от позы: плоскость упора — под плечевыми костями на глубину трицепса. */
-const PRE_SLOPE = 45, PRE_SEAT = 56;
+const PRE_SLOPE = 45, PRE_SEAT = 53;
 const PREACHER = once(() => {
   const C = ctx([]), { V, M } = C, q = C.base(), lean = 6 * C.D2R;
   C.root(q, [0, PRE_SEAT + 10, -7], [0, Math.cos(lean), Math.sin(lean)], [0, -Math.sin(lean), Math.cos(lean)]);

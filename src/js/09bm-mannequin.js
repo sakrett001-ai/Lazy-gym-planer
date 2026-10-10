@@ -69,41 +69,62 @@ function swingTwist(M){
  return{vx:sv[0],vz:sv[1],twist:Math.atan2(Tw[2],Tw[0])*R2D,elevation:ang*R2D};
 }
 
-/* ---------- Антропометрия: мужчина 175 см, 78 кг; высота голеностопа 8,5 см (как в кроссовках с подошвой 2 см) ---------- */
-const BACK_N=[2.3,2.7,2.8,2.5,2.2];   /* показатель суперэллипса спины на высотах 38, 44, 49, 53, 56 см */
+/* ---------- Антропометрия: мужчина 174,5 см, 78 кг, босиком ----------
+   Длины — по костным точкам обследования ANSUR II (мужчины 170–180 см, 72–84 кг; сводка и замер —
+   tools/mannequin/anthro-ansur2.json и anthro.js): тазобедренный сустав — на высоте вершины большого вертела (89,5 см),
+   коленный — наружного надмыщелка бедра (48,8), голеностопный — 7 см (наружная лодыжка 7,2). Корпус: грудино-ключичный
+   сустав — на 0,8 см ниже яремной вырезки (142,8), плечевой — на 3,5 см ниже акромиона (142,9), C7 — 150,7, макушка — 174,5.
+   Руки — de Leva (1996): плечо до локтя и длина кисти совпадают с ANSUR II. */
 const B={
- stature:175,mass:78,
- ua:28.3,fa:27.0,th:42.4,sk:43.6,               // плечо, предплечье, бедро, голень — между центрами суставов
+ stature:174.5,mass:78,
+ ua:28.3,fa:27.0,th:40.7,sk:41.8,               // плечо, предплечье, бедро, голень — между центрами суставов
  hipHalf:8.8,                                    // центры тазобедренных суставов ±8,8 см
  lumbar:[0,10,0],thoracic:[0,14,0],              // поясничный и грудопоясничный «шарниры» по оси корпуса
- c7:[0,33,-4],headJoint:[0,10.5,3.5],headCenter:[0,4,2],
- sc:[2,23.5,4],ghRel:[16,-1.9,-4],               // грудино-ключичный шарнир и центр плечевого сустава от него
+ c7:[0,37.2,-4],headJoint:[0,9.5,3.5],headCenter:[0,2.9,2],
+ sc:[2,28.5,4],ghRel:[16,-3.1,-4],               // грудино-ключичный шарнир и центр плечевого сустава от него
  head:[7.9,11.4,9.8],                            // полуоси головы: ширина, высота, глубина
  grip:[2.6,-8.0,0],knuckle:[0,-9.8,0],           // центр хвата: 8 см дистальнее и 2,6 см ладоннее запястья
  palm:{width:8.4,thick:3.0,len:10.2},finger:8.6,
- ankle:8.5,heel:-6.5,ball:[0,-6.5,13.5],toe:[0,-0.6,7.2],toeSole:-2.0, // опорные точки стопы от центра голеностопа (форма — FOOT_SECTIONS)
+ ankle:7.0,heel:-6.5,ball:[0,-5.35,13.5],toe:[0,-0.49,7.2],toeSole:-1.65, // опорные точки стопы от центра голеностопа (форма — FOOT_SECTIONS)
  sole:{heelW:6.0,ballM:4.6,ballL:4.3,ballLZ:10.8,hallux:[2.8,5.0],toe5:[-4.0,2.4]} // опора подошвы: ширина пятки, головки 1-й и 5-й плюсневых, подушечки пальцев
 };
-B.hipHeight=B.sk+B.th+B.ankle;                   // 94,5 см от пола до центров тазобедренных суставов
-/* Сечения корпуса: h — высота над серединой тазобедренных суставов вдоль оси корпуса;
-   w — полуширина, a — до передней поверхности, b — до задней; n — показатель суперэллипса задней половины
-   (2 — эллипс). Вверху спины задняя половина «квадратнее»: лопатки, остистые мышцы и трапеция дают плоскую широкую
-   спину, а не круглую бочку; под ней лежат лопатки скелета (режим «Скелет»). */
-const TORSO=[[-9,12.5,4.5,8.5,2],[-4,15.8,7.2,12.2,2],[0,16.8,8.6,11.8,2],[6,16.4,10.0,10.4,2],[12,15.0,10.4,9.6,2],[18,14.6,10.4,9.6,2],[24,15.1,10.6,10.0,2],
- [31,16.1,12.0,10.6,2],[38,16.7,12.4,11.0,BACK_N[0]],[44,16.0,11.0,11.0,BACK_N[1]],[49,15.4,7.8,10.5,BACK_N[2]],[53,11.4,4.6,8.8,BACK_N[3]],[56,6.6,3.2,7.0,BACK_N[4]]];
+B.hipHeight=B.sk+B.th+B.ankle;                   // 89,5 см от пола до центров тазобедренных суставов
+/* Сечения корпуса: h — высота над серединой тазобедренных суставов вдоль оси корпуса; w — полуширина, a — до передней
+   поверхности, b — до задней; nb, nf — показатели суперэллипса задней и передней половины (2 — эллипс). Размеры —
+   по обхватам, ширинам и глубинам ANSUR II (мужчины 170–180 см, 72–84 кг): грудь на уровне сосков (h ≈ 39) — обхват
+   ≈ 96, глубина 25; талия у пупка (h ≈ 16) — обхват 86, глубина 21,4; ягодицы (h ≈ −1,4) — обхват ≈ 96,5, глубина
+   23,5, ширина бёдер 33,6; основание шеи — 43. Самое узкое место — талия между рёбрами и гребнями таза (h ≈ 24, ширина
+   28,8): у пупка шире (30,3), грудь 30,4, под мышками — 31,6 (широчайшие). Сечение груди близко к прямоугольнику — плоские грудь и спина,
+   широчайшие по бокам: сзади nb = 4,4, спереди nf = 3,2 (спереди скруглено сильнее — там руки, сведённые перед грудью;
+   у эллипса того же размера обхват был бы на 13 см меньше). Вверху
+   спины задняя половина «квадратнее» передней: лопатки и трапеция; под ними лежат лопатки скелета (режим «Скелет»).
+   Ширина груди в ANSUR II — 28,3 при обхвате 101,7: с выпуклым сечением оба числа не совпадают, взят компромисс
+   (ширина 30,4, обхват 96). Замер — node tools/mannequin/anthro.js. */
+const TORSO=[[-5.3,12.5,4.5,8.5,2,2],[-2.4,15.8,7.8,14.2,3.2,2.6],[0,16.4,8.8,13.0,3.0,2.4],[6,16.2,10.4,10.8,2.4,2.2],[12,15.6,11.4,10.2,2.6,2.6],
+ [18,14.9,11.2,10.0,2.8,2.8],[24,14.4,11.0,10.4,3,3],[31,14.6,12.0,11.0,3.4,3.0],[38.8,15.2,13.0,12.0,4.4,3.2],[47.2,15.8,11.4,11.6,3.6,2.6],
+ [52.8,15.4,7.8,10.5,2.8,2],[56.8,11.6,5.6,9.0,2.5,2],[59.8,8.2,5.4,8.0,2.2,2]];
 const TORSO_JOINTS=[10,24];
+/* Низ таза скошен: спереди и посередине (промежность) — на 5,3 см ниже тазобедренных суставов (ANSUR II: промежность
+   84,2 при вертеле 89,5), сзади (седалищные бугры с мягкими тканями — опора сидя) — на 9 см. Ниже h = 0 сечение
+   опускается вдоль оси на долю K·w(θ): w = ((1 − cos θ)/2)^2,5, θ — направление от оси (0 — вперёд, π — назад). */
+const SEAT_K=9/5.3-1,seatW=cosT=>Math.pow(clamp((1-cosT)/2,0,1),2.5);
 /* суперэллипс: доля по оси при показателе n (сохраняет знак) */
 const sePow=(v,n)=>n===2?v:Math.sign(v)*Math.pow(Math.abs(v),2/n);
-/* Профили конечностей: [t, спереди, сзади, латерально, медиально], см */
+/* Профили конечностей: [t, спереди, сзади, латерально, медиально], см. Обхваты — по ANSUR II: бедро под ягодичной складкой
+   60, над коленом 39,6, голень 38, над лодыжками 22,4, запястье 17,3; ширина бёдер стоя 33,6 (латерально у таза ≤ 7,8). */
 const LIMBS={
  ua:[[0,5.4,5.6,6.0,4.8],[.15,5.3,5.6,5.8,4.6],[.45,5.3,5.2,5.2,4.6],[.8,4.3,4.4,4.3,4.0],[1,3.7,4.0,4.0,3.9]],
- fa:[[0,4.0,4.2,4.6,4.3],[.2,4.6,4.3,5.0,4.6],[.55,3.6,3.3,3.9,3.6],[.85,2.5,2.3,3.1,2.8],[1,2.1,2.1,3.0,2.7]],
- th:[[0,8.8,10.0,10.4,8.0],[.12,9.2,9.6,9.0,8.4],[.4,8.4,8.4,7.8,7.8],[.75,7.0,6.5,6.4,6.6],[.92,5.8,5.5,5.4,5.6],[1,5.8,5.4,5.2,5.4]],
- sk:[[0,5.2,5.0,5.2,5.4],[.1,4.2,6.0,5.2,5.6],[.3,3.7,7.3,5.4,5.8],[.6,3.0,5.2,4.0,4.1],[.85,2.6,3.4,3.0,3.0],[1,2.8,3.4,3.6,3.4]]
+ fa:[[0,4.0,4.2,4.6,4.3],[.2,4.6,4.3,5.0,4.6],[.55,3.6,3.4,3.9,3.6],[.85,2.7,2.5,3.2,3.0],[1,2.4,2.4,3.1,2.9]],
+ th:[[0,10.2,10.2,7.8,8.6],[.12,11.4,10.6,8.0,8.8],[.4,9.4,8.8,7.8,8.2],[.75,7.2,6.8,6.6,6.8],[.92,6.3,6.2,6.1,6.3],[1,6.0,5.8,5.7,5.8]],
+ sk:[[0,5.2,5.0,5.2,5.4],[.1,4.3,6.2,5.5,5.9],[.3,4.0,7.5,6.1,6.6],[.6,3.3,5.6,4.5,4.6],[.85,3.0,4.3,3.4,3.4],[1,2.9,3.6,3.7,3.5]]
 };
 /* Шея: [t, спереди, сзади, латерально], см; t=0 — над верхним сечением корпуса, t=1 — внутри черепа */
-const NECK=[[0,5.4,6.0,5.8],[.5,5.0,5.6,5.4],[1,4.8,5.2,5.2]],NECK_BLEND=.4;
-const CAPS={sh:6.5,el:3.9,wr:2.7,kn:5.3,an:2.6};
+const NECK=[[0,6.6,7.8,7.6],[.5,5.7,6.9,6.4],[1,5.4,6.4,6.0]],NECK_BLEND=.4;
+const CAPS={sh:6.0,el:3.9,wr:2.7,kn:5.3,an:2.6};
+/* центр «шапки» плеча (дельтовидная) от центра плечевого сустава: вдоль плеча (−вниз) и наружу. Центр — на уровне
+   сустава, верх шапки — на 6 см выше: под ним акромион и конец ключицы (ANSUR II: акромион на 3,5 см выше центра
+   сустава, кожа над ним тонкая); ширина по дельтам — 49,4 (ANSUR II 49,7) */
+const SH_CAP=[0,.7];
 /* Массы (доля от общей) и центры масс сегментов: de Leva 1996, мужчины */
 const MASS={head:.0694,upperTrunk:.1596,midTrunk:.1633,lowerTrunk:.1117,ua:.0271,fa:.0162,hand:.0061,th:.1416,sk:.0433,foot:.0137};
 /* Пределы, градусы: [мин, макс]. Положительные направления — в описании DOF ниже. */
@@ -308,7 +329,7 @@ function catalogPose(q){
  const r=fk(q),P=r.P,F=r.F,R={basis:'mannequin',props:[],contacts:[]};
  R.hip=toCat(F.pelvis.o);R.u=dirCat(M3.col(F.pelvis.R,1));R.n=dirCat(M3.col(F.pelvis.R,2));R.x=dirCat(V.scale(M3.col(F.pelvis.R,0),-1)); /* x — анатомически правая сторона */
  R.waist=toCat(at(F.lumbar,[0,8,0]));R.chestU=dirCat(M3.col(F.thorax.R,1));R.chestN=dirCat(M3.col(F.thorax.R,2));
- R.sh=toCat(at(F.thorax,[0,21.6,0]));R.neckBase=toCat(at(F.thorax,[0,30,-3]));
+ R.sh=toCat(at(F.thorax,[0,25.4,0]));R.neckBase=toCat(at(F.thorax,[0,33.8,-3]));
  R.head=toCat(P.head);R.headU=dirCat(M3.col(F.head.R,1));R.headN=dirCat(M3.col(F.head.R,2));
  for(const s of SIDES){
   R['sh'+s]=toCat(P['gh'+s]);R['el'+s]=toCat(P['el'+s]);R['wr'+s]=toCat(P['wr'+s]);R['grip'+s]=toCat(P['grip'+s]);R['hand'+s]=toCat(P['knuckle'+s]);
@@ -351,13 +372,14 @@ function spineFrame(R,h){
 /* Точка поверхности корпуса: side — 'L'/'R', ang ∈ [0, π] от передней линии через бок к спине */
 function torsoPoint(R,h,side,ang,extra=0){return torsoPointIn(R,h,side,ang,extra,spineFrame(R,h),sectionAt(h));}
 /* то же по готовой рамке сечения: сетка тела считает рамку и профиль один раз на ряд, а не на каждую точку */
-function torsoPointIn(R,h,side,ang,extra,f,[w,a,b,n=2]){
- const c0=Math.cos(ang),s0=Math.sin(ang),back=c0<0,c=back?sePow(c0,n):c0,s=back?sePow(s0,n):s0,lat=V.scale(f.x,SIGN[side]); /* f.x — левая сторона тела */
+function torsoPointIn(R,h,side,ang,extra,f,[w,a,b,n=2,nf=2]){
+ const c0=Math.cos(ang),s0=Math.sin(ang),k=c0<0?n:nf,c=sePow(c0,k),s=sePow(s0,k),lat=V.scale(f.x,SIGN[side]); /* f.x — левая сторона тела */
  let p=V.add(V.add(f.c,f.z,((c0>=0?a:b)+extra)*c),lat,(w+extra)*s);
+ if(h<0){const d=V.sub(p,f.c),rho=V.len(d);p=V.add(p,f.y,h*SEAT_K*seatW(rho<1e-9?0:V.dot(d,f.z)/rho));}
  /* надплечья следуют за поднятием и протракцией плечевого пояса */
- if(h>38&&R.girdle&&R.frames.thorax){
-  /* основание шеи следует за лопаткой лишь частично (до 60 % у h = 56): трапеция растягивается плавно, без складок */
-  const k=smooth((h-38)/12)*(1-.4*smooth((h-50)/6))*Math.pow(Math.max(0,s),2),gh=R.girdle[side],rest=V.add(V.add(V.add(R.frames.thorax.o,R.frames.thorax.y,21.6),R.frames.thorax.x,SIGN[side]*18),R.frames.thorax.z,0);
+ if(h>38.8&&R.girdle&&R.frames.thorax){
+  /* основание шеи следует за лопаткой лишь частично (до 60 % у верхнего сечения): трапеция растягивается плавно, без складок */
+  const k=smooth((h-38.8)/15)*(1-.4*smooth((h-53.8)/6))*Math.pow(Math.max(0,s),2),gh=R.girdle[side],rest=V.add(V.add(V.add(R.frames.thorax.o,R.frames.thorax.y,25.4),R.frames.thorax.x,SIGN[side]*18),R.frames.thorax.z,0);
   p=V.add(p,V.sub(gh,rest),k*.85);
  }
  return p;
@@ -429,10 +451,10 @@ function boundsSurface(R,{cols=TORSO_COLS,limbRows=10,limbCols=16,limbStep=3}={}
 }
 
 /* ---------- Знаковые расстояния тела (каталог) ---------- */
-function ellipseRadius(lx,ly,rf,rb,rl,rm,nBack=2){
- const a=lx>=0?rf:rb,b=ly>=0?rl:rm;
- /* задняя половина корпуса — суперэллипс: расстояние до кривой вдоль направления (lx, ly) */
- if(lx<0&&nBack!==2){const r=Math.hypot(lx,ly),u=Math.abs(lx)/r,v=Math.abs(ly)/r;return Math.pow(Math.pow(u/a,nBack)+Math.pow(v/b,nBack),-1/nBack);}
+function ellipseRadius(lx,ly,rf,rb,rl,rm,nBack=2,nFront=2){
+ const a=lx>=0?rf:rb,b=ly>=0?rl:rm,ne=lx>=0?nFront:nBack;
+ /* суперэллипс (сечение корпуса): расстояние до кривой вдоль направления (lx, ly) */
+ if(ne!==2){const r=Math.hypot(lx,ly),u=Math.abs(lx)/r,v=Math.abs(ly)/r;return Math.pow(Math.pow(u/a,ne)+Math.pow(v/b,ne),-1/ne);}
  const th=Math.atan2(ly/b,lx/a);return Math.hypot(a*Math.cos(th),b*Math.sin(th));
 }
 function limbSDF(R,kind,side,p){
@@ -442,15 +464,17 @@ function limbSDF(R,kind,side,p){
  const radial=rho-r,axial=t<=0||t>=1?Math.abs(along):0;
  return axial>0?(radial>0?Math.hypot(radial,axial):axial):radial;
 }
-const TORSO_SAMPLES=[];for(let h=-9;h<=56;h+=1)TORSO_SAMPLES.push(h);
+const TORSO_SAMPLES=[];for(let h=TORSO[0][0];h<=TORSO.at(-1)[0]+1e-9;h+=1)TORSO_SAMPLES.push(h);
 function torsoSDF(R,p,cache){
  const frames=cache||TORSO_SAMPLES.map(h=>({h,f:spineFrame(R,h)}));
  let best=null;
  for(const s of frames){const off=V.sub(p,s.f.c),along=V.dot(off,s.f.y);if(!best||Math.abs(along)<Math.abs(best.along))best={s,along,off};}
- const{s,off,along}=best,lz=V.dot(off,s.f.z),lx=V.dot(off,s.f.x),[w,a,b,n]=sectionAt(s.h),rho=Math.hypot(lz,lx);
- const r=rho<1e-9?Math.min(w,a,b):ellipseRadius(lz,lx,a,b,w,w,n),radial=rho-r;
+ const{s,off,along}=best,lz=V.dot(off,s.f.z),lx=V.dot(off,s.f.x),rho=Math.hypot(lz,lx),hp=s.h+along;
+ /* ниже тазобедренных — скошенный низ: сечение берётся с «номинальной» высоты, торец — на высоте lo·(1 + K·w) */
+ const k=hp<0?1+SEAT_K*seatW(rho<1e-9?0:lz/rho):1,[w,a,b,n,nf]=sectionAt(hp<0?hp/k:s.h);
+ const r=rho<1e-9?Math.min(w,a,b):ellipseRadius(lz,lx,a,b,w,w,n,nf),radial=rho-r;
  /* торец корпуса (низ таза, основание шеи): внутри — до ближайшей поверхности, снаружи — до кромки */
- const lo=TORSO[0][0],hi=TORSO.at(-1)[0],hp=s.h+along,axial=Math.max(lo-hp,hp-hi);
+ const lo=TORSO[0][0]*k,hi=TORSO.at(-1)[0],axial=Math.max(lo-hp,hp-hi);
  return axial>0?(radial>0?Math.hypot(radial,axial):axial):Math.max(radial,axial);
 }
 function torsoCache(R){return TORSO_SAMPLES.map(h=>({h,f:spineFrame(R,h)}));}
@@ -484,21 +508,22 @@ function handShape(mode='relaxed',side='L',r=1.4){
 /* Стопа (босая). Рамка — как у сегмента foot: начало в центре голеностопного сустава, +Z — к пальцам, +Y — вверх
    по голени, латеральная сторона — g·X. Подошва лежит на −B.ankle (стопа на полу).
    Задний и средний отдел — сечения вдоль Z: [z, верх (тыл стопы), низ латерально, низ медиально, полуширина
-   латерально, полуширина медиально, смещение центра медиально; необязательно — показатели суперэллипса верха и боков]. Медиальный край подошвы поднят сводом (до 1,6 см
+   латерально, полуширина медиально, смещение центра медиально; необязательно — показатели суперэллипса верха и боков]. Медиальный край подошвы поднят сводом (до 1,3 см
    над полом у ладьевидной кости), латеральный лежит на полу. Перед — подушечка вокруг оси плюснефаланговых
-   суставов (центр — точка ball, радиус 2 см до пола): при подъёме пятки опора остаётся на ней.
+   суставов (центр — точка ball, 1,65 см над полом): при подъёме пятки опора остаётся на ней.
    Пальцы — в рамке toes (начало в точке ball): [смещение к медиальному краю, z основания, длина до кончика,
    радиус, разворот наружу (рад; мизинец чуть повёрнут внутрь)]. Пятый плюснефаланговый сустав на ~3 см позади первого —
    линия косая; латеральный край стопы от пятки до головки пятой плюсневой почти прямой, ширина переднего отдела
    прибавляется с медиальной стороны.
    Размеры для роста 175 см: длина стопы 26,9 см (0,152·H), ширина по головкам плюсневых костей 9,6 см (0,055·H) —
-   Winter 2009, рис. 4.1; ширина пятки 6,6 см — ANSUR II. Высота центра голеностопа оставлена 8,5 см, как у
-   кинематики всех поз (босая стопа — 6,8 см, 0,039·H): подошвенные мягкие ткани нарисованы на 1,7 см толще. */
+   Winter 2009, рис. 4.1; ширина пятки 6,6 см — ANSUR II. Центр голеностопа — 7 см над полом, как у босого
+   человека (0,039·H ≈ 6,8 см; наружная лодыжка в ANSUR II — 7,2 см); высоты стопы — от прежней формы для 8,5 см
+   (в кроссовках) с коэффициентом 7/8,5. */
 const FOOT_SECTIONS=[
- [-7.35,-5.5,-7.2,-7.2,.8,.6,0],[-7.1,-3.6,-7.9,-7.9,2.2,1.7,0],[-6.4,-2.4,-8.4,-8.4,3.2,2.5,0],[-5.2,-1.4,-8.5,-8.5,3.6,2.9,0],
- [-3.4,-.4,-8.5,-8.5,3.8,3.3,0,2.8,3.2],[-1.2,-.1,-8.5,-8.45,3.9,3.45,0,2.8,3.2],[1.0,-.6,-8.5,-8.1,4.0,3.55,0,2.6,3],[3.4,-1.5,-8.5,-7.4,4.15,3.7,0],
- [6.0,-2.4,-8.5,-6.95,4.3,3.95,0],[8.6,-3.5,-8.5,-7.25,4.45,4.4,0],[11.0,-4.35,-8.5,-8.2,4.55,4.95,0],[12.6,-4.75,-8.5,-8.5,3.9,5.2,0],
- [13.6,-4.95,-8.5,-8.5,3.1,5.2,0],[14.6,-5.45,-8.2,-8.2,2.2,4.7,.4],[15.3,-6.0,-7.45,-7.45,1.1,3.5,1.0],[15.6,-6.5,-7.0,-7.0,.3,1.6,1.9]
+ [-7.35,-4.53,-5.93,-5.93,.8,.6,0],[-7.1,-2.96,-6.51,-6.51,2.2,1.7,0],[-6.4,-1.98,-6.92,-6.92,3.2,2.5,0],[-5.2,-1.15,-7,-7,3.6,2.9,0],
+ [-3.4,-.33,-7,-7,3.8,3.3,0,2.8,3.2],[-1.2,-.08,-7,-6.96,3.9,3.45,0,2.8,3.2],[1.0,-.49,-7,-6.67,4.0,3.55,0,2.6,3],[3.4,-1.24,-7,-6.09,4.15,3.7,0],
+ [6.0,-1.98,-7,-5.72,4.3,3.95,0],[8.6,-2.88,-7,-5.97,4.45,4.4,0],[11.0,-3.58,-7,-6.75,4.55,4.95,0],[12.6,-3.91,-7,-7,3.9,5.2,0],
+ [13.6,-4.08,-7,-7,3.1,5.2,0],[14.6,-4.49,-6.75,-6.75,2.2,4.7,.4],[15.3,-4.94,-6.14,-6.14,1.1,3.5,1.0],[15.6,-5.35,-5.76,-5.76,.3,1.6,1.9]
 ];
 const TOES=[[2.9,.2,5.7,1.2,.08],[.8,-.2,5.6,.86,.02],[-1.05,-.9,5.0,.82,.03],[-2.6,-1.8,4.5,.78,.03],[-3.85,-2.8,3.9,.78,-.06]];
 /* точка сечения: phi — угол вокруг оси Z от +X через верх; nt/nb/nx — показатели суперэллипса (верх круглее, подошва площе) */
@@ -511,7 +536,7 @@ function footRingPoint(sec,g,phi){
 }
 /* ось пальца: от основания по фалангам, кончик — так, чтобы подушечка касалась плоскости подошвы (B.toeSole) */
 function toePath(t,g){
- const[m,z0,len,r,splay]=t,big=r>1,seg=big?[.55,.45]:[.42,.32,.26],bend=big?[0,10]:[-6,22,14],y0=big?-.4:-.5,yaw=g*splay;
+ const[m,z0,len,r,splay]=t,big=r>1,seg=big?[.55,.45]:[.42,.32,.26],bend=big?[0,10]:[-6,22,14],y0=big?-.33:-.41,yaw=g*splay;
  const run=pitch=>{let a=pitch*D2R,p=[-g*m,y0,z0];const pts=[p];
   for(let i=0;i<seg.length;i++){a+=bend[i]*D2R;const l=(len-r)*seg[i],h=Math.cos(a);p=[p[0]+Math.sin(yaw)*h*l,p[1]-Math.sin(a)*l,p[2]+Math.cos(yaw)*h*l];pts.push(p);}
   return pts;};
@@ -580,7 +605,7 @@ function bodyData(R){
 
  for(const s of SIDES){
   const ua=fr['ua'+s],g=SIGN[s];
-  caps.push({key:'sh'+s,c:V.add(V.add(R['sh'+s],ua.y,-1.4),ua.x,g*.7),r:CAPS.sh},{key:'el'+s,c:R['el'+s],r:CAPS.el},{key:'wr'+s,c:R['wr'+s],r:CAPS.wr},{key:'kn'+s,c:V.add(R['kn'+s],fr['sk'+s].z,.4),r:CAPS.kn},{key:'an'+s,c:R['an'+s],r:CAPS.an});
+  caps.push({key:'sh'+s,c:V.add(V.add(R['sh'+s],ua.y,SH_CAP[0]),ua.x,g*SH_CAP[1]),r:CAPS.sh},{key:'el'+s,c:R['el'+s],r:CAPS.el},{key:'wr'+s,c:R['wr'+s],r:CAPS.wr},{key:'kn'+s,c:V.add(R['kn'+s],fr['sk'+s].z,.4),r:CAPS.kn},{key:'an'+s,c:R['an'+s],r:CAPS.an});
  }
  const hands={},feet={};
  for(const s of SIDES){const mode=R.hands?.[s]||'relaxed',r=R.gripRadius?.[s]??1.4;hands[s]={frame:fr['hand'+s],mode,r,key:mode+':'+s+':'+r.toFixed(2),shape:handShape(mode,s,r)};const sh=footShape(s),fo=fr['foot'+s],to=fr['toes'+s];feet[s]={rear:fo,toes:to,shape:sh,rows:sh.rear.map((row,i)=>row.map((p,j)=>footPointWorld(fo,to,{part:'rear',p,w:sh.rearW[i][j]})))};}
@@ -628,7 +653,7 @@ function centerOfMass(R,extra=[]){
  const m=B.mass,parts=[];
  const add=(p,frac)=>parts.push([p,frac*m]);
  add(R.head,MASS.head);
- add(spineFrame(R,40).c,MASS.upperTrunk);add(spineFrame(R,20).c,MASS.midTrunk);add(spineFrame(R,2).c,MASS.lowerTrunk);
+ add(spineFrame(R,41.6).c,MASS.upperTrunk);add(spineFrame(R,20).c,MASS.midTrunk);add(spineFrame(R,2).c,MASS.lowerTrunk);
  for(const s of SIDES){
   add(V.mix(R['sh'+s],R['el'+s],.5772),MASS.ua);add(V.mix(R['el'+s],R['wr'+s],.4574),MASS.fa);add(V.mix(R['wr'+s],R['hand'+s],.79),MASS.hand);
   add(V.mix(R['hip'+s],R['kn'+s],.4095),MASS.th);add(V.mix(R['kn'+s],R['an'+s],.4459),MASS.sk);add(V.mix(R['heel'+s],R['toe'+s],.4415),MASS.foot);
@@ -637,7 +662,7 @@ function centerOfMass(R,extra=[]){
  const M=parts.reduce((s,[,w])=>s+w,0);return{c:parts.reduce((acc,[p,w])=>V.add(acc,p,w/M),[0,0,0]),mass:M};
 }
 
-return{V,M3,Q,B,TORSO,TORSO_H,TORSO_JOINTS,LIMBS,NECK,CAPS,MASS,LIMITS,SIDES,SIGN,FLOOR,D2R,R2D,clamp,
+return{V,M3,Q,B,TORSO,TORSO_H,TORSO_JOINTS,LIMBS,NECK,CAPS,SH_CAP,MASS,LIMITS,SIDES,SIGN,FLOOR,D2R,R2D,clamp,
  neutral,clone,pack,unpack,PACK,PACK_SIZE,fk,solePoints,twoBone,solveArm,solveArmWrist,setArmFromPoints,footFrame,heelFrame,solveLeg,rootRot,rootFromAxes,
  swing,swingTwist,eulerXZY,eulerYZX,spineRot,makeTrack,monotone,toCat,dirCat,catalogPose,
  profileAt,sectionAt,spineFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,ellipseRadius,centerOfMass,LIMB_DEF,

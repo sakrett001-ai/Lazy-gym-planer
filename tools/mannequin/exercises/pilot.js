@@ -85,14 +85,16 @@ module.exports = {
     gripRadius: { L: 1.6, R: 1.4 },
     pose(t, C) {
       const { V } = C, q = C.base(), e = C.ease(t), a = 3 * C.D2R;
-      C.root(q, [9, 92, -20], [0, Math.sin(a), Math.cos(a)], [0, -Math.cos(a), Math.sin(a)]);
+      C.root(q, [9, 87.1, -20], [0, Math.sin(a), Math.cos(a)], [0, -Math.cos(a), Math.sin(a)]);
       q.thoracic = [-3, 0, C.lerp(0, 7, e)]; q.lumbar = [0, 0, 0]; q.neck = [-8, 0, 0];
       q.L.girdle = [C.lerp(-2, 4, e), C.lerp(12, -16, e)]; q.R.girdle = [0, 4];
-      C.rootAtHip(q, 'R', [-1, 44 + 5.4 + 42.4, -24]);
-      C.kneel(q, 'R', [-1, 44, -24], [0, 0, -1], [0, 1, 0], { toes: 'flat', plantar: 44 });
+      /* бедро опорной на скамье ноги наклонено: колено на 20° позади таза, иначе стоящая нога не достаёт до пола */
+      const kb = 20 * C.D2R, kz = -24 - C.M.B.th * Math.sin(kb);
+      C.rootAtHip(q, 'R', [-1, 44 + 5.4 + C.M.B.th * Math.cos(kb), -24]);
+      C.kneel(q, 'R', [-1, 44, kz], [0, 0, -1], [0, 1, 0], { toes: 'flat', plantar: 44 });
       let f = C.fk(q);
       C.palm(q, 'R', [f.P.ghR[0] + 4, 44, f.P.ghR[2] + 12], [.8, 0, 1], [0, 1, 0], [-.4, 0, -1]);
-      C.foot(q, 'L', [33, 0, -22], 0, V.unit([.3, 0, 1]), { forward: V.unit([.22, 0, 1]) });
+      C.foot(q, 'L', [31, 0, -22], 0, V.unit([.3, 0, 1]), { forward: V.unit([.22, 0, 1]) });
       f = C.fk(q);
       const T = C.axes(q, 'thorax'), gh = f.P.ghL;
       const g0 = V.add(V.add(gh, [0, -1, 0], 60.5), [0, 0, 1], 4);
@@ -280,7 +282,7 @@ module.exports = {
       for (const s of S) {
         const f = C.fk(q), hip = f.P['hip' + s], lat = C.latP(q, s);
         const sup = d => V.add([hip[0], 0, hip[2] - d], lat, 3), heel = 55;
-        const d = C.solve1D(d => V.dist(hip, C.M.footFrame(sup(d), 0, { forward: [0, 0, 1], heel }).o) - 84.8, 20, 100);
+        const d = C.solve1D(d => V.dist(hip, C.M.footFrame(sup(d), 0, { forward: [0, 0, 1], heel }).o) - (M.B.th + M.B.sk - 1.2), 20, 100);
         C.foot(q, s, sup(d), 0, V.unit(V.add([0, -1, 0], lat, .2)), { forward: [0, 0, 1], heel });
       }
       const f = C.fk(q), T = C.axes(q, 'thorax');

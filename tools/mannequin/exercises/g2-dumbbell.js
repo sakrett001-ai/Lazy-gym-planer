@@ -173,7 +173,7 @@ function instepOn(C, q, s, x, ankleZ, top, phi, pole, squash = 1) {
 /* Разгибание из-за головы: поза одного ключа; prev — варианты хвата предыдущего ключа */
 function ohextKey(t, C, prev) {
   const { V } = C, q = C.base(), e = C.ease(t);
-  C.root(q, [0, 94.2, 0], [0, 1, 0], [0, 0, 1]); q.lumbar = [1, 0, 0]; q.thoracic = [0, 0, 0]; q.neck = [C.lerp(4, 10, e), 0, 0];
+  C.root(q, [0, 89.2, 0], [0, 1, 0], [0, 0, 1]); q.lumbar = [1, 0, 0]; q.thoracic = [0, 0, 0]; q.neck = [C.lerp(4, 10, e), 0, 0];
   const feet = q => { for (const s of S) plant(C, q, s, [C.M.SIGN[s] * 11, 0, -1]); };
   for (const s of S) q[s].girdle = [C.lerp(26, 22, e), C.lerp(2, 0, e)];
   const cands = [];
@@ -183,7 +183,7 @@ function ohextKey(t, C, prev) {
   const arms = q => {
     const f = C.fk(q), head = f.P.head, gh = V.mix(f.P.ghL, f.P.ghR, .5);
     /* верхний диск идёт по дуге вокруг локтей: над головой → за затылок */
-    const E = [0, gh[1] + 27, head[2] + 2], th = C.lerp(-15.6, 96, Math.pow(e, .8)) * C.D2R, r = e < .5 ? 26 + 2 * Math.sin(Math.PI * e) : C.lerp(26, 20, (e - .5) * 2);
+    const E = [0, gh[1] + 26, head[2] + 2], th = C.lerp(-15.6, 96, Math.pow(e, .8)) * C.D2R, r = e < .5 ? 26 + 2 * Math.sin(Math.PI * e) : C.lerp(26, 20, (e - .5) * 2);
     const P = V.add(E, [0, Math.cos(th), -Math.sin(th)], r), tilt = C.lerp(18, 12, e) * C.D2R;
     chosen = cup(C, q, P, [0, Math.cos(tilt), Math.sin(tilt)], [0, 0, -1], { w: 4.8, cands: () => cands, prev, lam: 25,
       prefer: (q, s) => { const el = C.fk(q).P['el' + s]; return 1.2 * Math.max(0, Math.abs(el[0]) - 11) ** 2; } });
@@ -267,11 +267,13 @@ module.exports = {
     gripRadius: { L: 1.6, R: 1.4 },
     pose(t, C) {
       const { V } = C, q = C.base(), e = C.ease(t), a = 4 * C.D2R;
-      C.root(q, [9, 92, -20], [0, Math.sin(a), Math.cos(a)], [0, -Math.cos(a), Math.sin(a)]);
+      C.root(q, [9, 87.1, -20], [0, Math.sin(a), Math.cos(a)], [0, -Math.cos(a), Math.sin(a)]);
       q.thoracic = [-3, 0, 0]; q.lumbar = [0, 0, 0]; q.neck = [-10, 0, 0];
       q.L.girdle = [-2, -8]; q.R.girdle = [0, 4];
-      C.rootAtHip(q, 'R', [-1, 44 + 5.4 + 42.4, -24]);
-      C.kneel(q, 'R', [-1, 44, -24], [0, 0, -1], [0, 1, 0], { toes: 'flat', plantar: 44 });
+      /* бедро опорной на скамье ноги наклонено: колено на 20° позади таза, иначе стоящая нога не достаёт до пола */
+      const kb = 20 * C.D2R, kz = -24 - C.M.B.th * Math.sin(kb);
+      C.rootAtHip(q, 'R', [-1, 44 + 5.4 + C.M.B.th * Math.cos(kb), -24]);
+      C.kneel(q, 'R', [-1, 44, kz], [0, 0, -1], [0, 1, 0], { toes: 'flat', plantar: 44 });
       let f = C.fk(q);
       palmBest(C, q, 'R', [f.P.ghR[0] + 4, 44, f.P.ghR[2] + 12], [0, 1, 0], fan(C, [0, 1, 0], [.9, 0, 1], 10).filter(v => v[2] > .3), [[-.4, 0, -1], [-.6, .2, -1], [-.2, 0, -1], [-.8, 0, -.6]].map(v => V.unit(v)));
       C.foot(q, 'L', [22, 0, -23], 0, V.unit([.3, 0, 1]), { forward: V.unit([.22, 0, 1]) });
@@ -308,7 +310,7 @@ module.exports = {
         }
         return q;
       };
-      const elbowOf = q => { const f = C.fk(q); return V.add(V.add(f.P.ghL, [0, -1, 0], 27), [-1, 0, 0], 8.5); };
+      const elbowOf = q => { const f = C.fk(q); return V.add(V.add(f.P.ghL, [0, -1, 0], 27), [-1, 0, 0], 6); };
       const along = q => { const f = C.fk(q), a = f.P.hipL, b = f.P.knL, ab = V.sub(b, a); return V.dot(V.sub(elbowOf(q), a), ab) / V.dot(ab, ab); };
       const lean = C.solve1D(l => along(seat(l)) - .8, 15, 60);
       const q = seat(lean);
@@ -334,7 +336,7 @@ module.exports = {
     equipment: [{ type: 'flatBench', id: 'bench' }, { type: 'g2CupDumbbell', id: 'cup', hands: ['L', 'R'] }],
     contacts: [{ body: 'back', prop: 'bench:pad' }, { body: 'headBack', prop: 'bench:pad' }, { body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, ...CUP_CONTACTS],
     pose(t, C) {
-      const { V } = C, q = lieOnBench(C, C.base(), { arch: .6 }), e = C.ease(t);
+      const { V } = C, q = lieOnBench(C, C.base(), { arch: .9 }), e = C.ease(t);
       for (const s of S) q[s].girdle = [C.lerp(-2, 10, e), C.lerp(6, -4, e)];
       const f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5), th = C.lerp(14, 84, e) * C.D2R;
       const P = V.add(gh, [0, Math.cos(th), Math.sin(th)], 50);
@@ -355,13 +357,13 @@ module.exports = {
     gripRadius: { L: 1.4, R: 1.6 },
     pose(t, C) {
       const { V, M } = C, q = C.base(), e = C.ease(t), lean = C.lerp(2, 76, e), ankL = [4, 0, 0];
-      pelvisLean(C, q, [-4, C.lerp(93.3, 91, e), C.lerp(0, -16, e)], lean * .9); q.lumbar = [lean * .03, 0, 0]; q.thoracic = [lean * .05, 0, 0]; q.neck = [-lean * .45, 0, 0];
+      pelvisLean(C, q, [-4, C.lerp(88.3, 86.1, e), C.lerp(0, -16, e)], lean * .9); q.lumbar = [lean * .03, 0, 0]; q.thoracic = [lean * .05, 0, 0]; q.neck = [-lean * .45, 0, 0];
       for (const s of S) q[s].girdle = [0, C.lerp(0, 6, e)];
       const pose2 = q => {
         plant(C, q, 'L', ankL, { toeOut: 5, pole: [.05, 0, 1] });
         const f = C.fk(q), P = C.axes(q, 'pelvis'), hipR = f.P.hipR, b = C.lerp(16, 4, e) * C.D2R;
         /* свободная нога: продолжает линию корпуса (чуть позади неё в начале), колено почти прямое, носок вниз */
-        const along = V.unit(V.add(V.scale(P.y, -Math.cos(b)), P.z, -Math.sin(b))), reach = C.lerp(73, 85.6, Math.min(1, e * 2.6));
+        const along = V.unit(V.add(V.add(V.scale(P.y, -Math.cos(b)), P.z, -Math.sin(b)), C.latP(q, 'R'), .05)), reach = C.lerp(70, 82.1, Math.min(1, e * 2.6));
         C.legTo(q, 'R', V.add(hipR, along, reach), V.unit(V.add(P.z, [0, -1, 0], .2)), { dorsi: C.lerp(-12, -2, e) });
         const sh = f.P.ghR, shL = f.P.ghL, latR = C.latP(q, 'R'), latL = C.latP(q, 'L');
         holdDir(C, q, 'R', V.add(V.add(sh, latR, C.lerp(8, 2, e)), [0, -60.8, 2]), V.unit([0, .2, -1]), [0, 0, 1]);
@@ -383,13 +385,13 @@ module.exports = {
     pose(t, C) {
       const { V } = C, q = C.base(), H = 44, u = C.ease(Math.min(1, t / .82));
       /* таз из геометрии рабочей ноги: угол голени от вертикали s и сгибание колена k */
-      const ankL = [10, H + 8.5, -7], s = C.lerp(18, 2, u) * C.D2R, k = C.lerp(110, 6, u) * C.D2R;
-      const knee = [ankL[0], ankL[1] + 43.6 * Math.cos(s), ankL[2] + 43.6 * Math.sin(s)], hipL = [knee[0], knee[1] + 42.4 * Math.cos(s - k), knee[2] + 42.4 * Math.sin(s - k)];
+      const ankL = [10, H + C.M.B.ankle, -7], s = C.lerp(18, 2, u) * C.D2R, k = C.lerp(110, 6, u) * C.D2R;
+      const { th: TH, sk: SK } = C.M.B, knee = [ankL[0], ankL[1] + SK * Math.cos(s), ankL[2] + SK * Math.sin(s)], hipL = [knee[0], knee[1] + TH * Math.cos(s - k), knee[2] + TH * Math.sin(s - k)];
       const lean = C.lerp(26, 2, C.ease(Math.min(1, t / .9)));
       pelvisLean(C, q, [hipL[0] - 10 + 1.2, hipL[1], hipL[2]], lean * .8); q.lumbar = [lean * .1, 0, 0]; q.thoracic = [lean * .1 - 1, 0, 0]; q.neck = [-lean * .35, 0, 0];
       hangArms(C, q);
       plant(C, q, 'L', ankL, { y: H, toeOut: 0, pole: [0, 0, 1], fwd: [0, 0, 1] });
-      const home = [-10, 0, -44], land = [-10, H, -7];
+      const home = [-10, 0, -38], land = [-10, H, -7];
       if (t <= .1) plant(C, q, 'R', home, { toeOut: 3, heel: 35 * C.ease(t / .1) });
       else if (t < .9) {
         /* правая стопа по дуге: вверх, затем вперёд над краем скамьи с запасом по высоте */
@@ -410,7 +412,7 @@ module.exports = {
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
       const { V } = C, q = C.base(), e = C.ease(t), lean = C.lerp(8, 14, e);
-      pelvisLean(C, q, [1, C.lerp(80, 59, e), C.lerp(-3, 0, e)], lean * .8); q.lumbar = [lean * .1, 0, 0]; q.thoracic = [lean * .1 - 2, 0, 0]; q.neck = [-lean * .3, 0, 0];
+      pelvisLean(C, q, [1, C.lerp(75.6, 54.4, e), C.lerp(-3, 0, e)], lean * .8); q.lumbar = [lean * .1, 0, 0]; q.thoracic = [lean * .1 - 2, 0, 0]; q.neck = [-lean * .3, 0, 0];
       hangArms(C, q);
       plant(C, q, 'L', [10, 0, 41], { toeOut: 4, pole: [.04, 0, 1] });
       instepOn(C, q, 'R', -8, -29, 44, 35, [0, -.3, 1]);
@@ -426,7 +428,7 @@ module.exports = {
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, ...DB_OPT_CONTACTS],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
-      const { V } = C, q = C.base(), e = C.ease(t), hipY = C.lerp(81, 52.5, e), hipZ = C.lerp(-5, -6.4, e);
+      const { V } = C, q = C.base(), e = C.ease(t), hipY = C.lerp(76.5, 49.2, e), hipZ = C.lerp(-5, -6.4, e);
       pelvisLean(C, q, [0, hipY, hipZ], C.lerp(3, 5, e)); q.thoracic = [-2, 0, 0]; q.neck = [-2, 0, 0];
       hangArms(C, q);
       const feet = q => { plant(C, q, 'L', [10, 0, 36], { toeOut: 4, pole: [.04, 0, 1] }); rearFoot(C, q, 'R', [-10, 0, -51], { hipFlex: C.lerp(-14, -4, e) }); };
@@ -447,11 +449,11 @@ module.exports = {
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor', when: [0, .06] }, { body: 'soleR', prop: 'floor', when: [.58, 1] }, ...DB_OPT_CONTACTS],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
-      const { V } = C, q = C.base(), ball = -80, T0 = .06, T1 = .58;
+      const { V } = C, q = C.base(), ball = -77, T0 = .06, T1 = .58;
       const tz = u => { u = Math.max(0, Math.min(1, u)); const k = .3, v = 1 / (1 - k); return u < k ? v * u * u / (2 * k) : u > 1 - k ? 1 - v * (1 - u) * (1 - u) / (2 * k) : v * (u - k / 2); };
       const a = tz((t - T0) / (T1 - T0)), d = C.ease(Math.max(0, (t - T1) / (1 - T1)));
-      const hipY = t < T0 ? C.lerp(93.6, 93, t / T0) : t < T1 ? C.lerp(93, 73, a) : C.lerp(73, 52.5, d);
-      const hipZ = t < T1 ? C.lerp(0, -27, a) : C.lerp(-27, -40, d), lean = t < T1 ? C.lerp(2, 12, a) : C.lerp(12, 5, d);
+      const hipY = t < T0 ? C.lerp(88.6, 88.1, t / T0) : t < T1 ? C.lerp(88.1, 68.9, a) : C.lerp(68.9, 49.2, d);
+      const hipZ = t < T1 ? C.lerp(0, -26, a) : C.lerp(-26, -38.5, d), lean = t < T1 ? C.lerp(2, 12, a) : C.lerp(12, 5, d);
       const shift = t < T0 ? t / T0 : t < T1 ? 1 : 1 - d;
       pelvisLean(C, q, [5 * shift, hipY, hipZ], lean * .8); q.lumbar = [lean * .1, 0, 0]; q.thoracic = [lean * .1 - 2, 0, 0]; q.neck = [-lean * .3, 0, 0];
       hangArms(C, q);
@@ -484,7 +486,7 @@ module.exports = {
       const sq = ph < .3 ? tz(ph / .3) : ph < .6 ? 1 - tz((ph - .3) / .3) : 0;
       const pr = ph < .47 ? 0 : ph < .75 ? tz((ph - .47) / .28) : ph < .78 ? 1 : 1 - tz((ph - .78) / .22);
       const lean = C.lerp(2, 40, sq);
-      pelvisLean(C, q, [0, C.lerp(93.9, 53, sq), C.lerp(0, -20, sq)], lean * .8);
+      pelvisLean(C, q, [0, C.lerp(88.9, 49.7, sq), C.lerp(0, -20, sq)], lean * .8);
       q.lumbar = [lean * .1 - 2 * pr, 0, 0]; q.thoracic = [lean * .1 - 2 * pr, 0, 0]; q.neck = [-lean * .35 + 4 * pr, 0, 0];
       const feet = q => { for (const s of S) plant(C, q, s, [M.SIGN[s] * 15, 0, -2], { toeOut: 12 }); };
       const arms = q => {
@@ -515,13 +517,13 @@ module.exports = {
     gripRadius: { L: 1.7, R: 1.7 },
     pose(t, C) {
       const { V, M } = C, q = C.base(), e = C.ease(t), lean = C.lerp(2, 42, e);
-      pelvisLean(C, q, [0, C.lerp(93.4, 53, e), C.lerp(0, -20, e)], lean * .8);
+      pelvisLean(C, q, [0, C.lerp(88.4, 49.7, e), C.lerp(0, -20, e)], lean * .8);
       q.lumbar = [lean * .1, 0, 0]; q.thoracic = [lean * .1, 0, 0]; q.neck = [-lean * .35, 0, 0];
       for (const s of S) q[s].girdle = [0, 6];
       const feet = q => { for (const s of S) plant(C, q, s, [M.SIGN[s] * 15, 0, -2], { toeOut: 12 }); };
       const hands = q => {
         /* кулаки у груди, большие пальцы вверх (снаряд вертикален), локти вниз */
-        const T = C.axes(q, 'thorax'), Hc = V.add(V.add(T.o, T.y, 8), T.z, 26), b = 5 * C.D2R, fw = V.unit(V.perp(T.z, [0, 1, 0]));
+        const T = C.axes(q, 'thorax'), Hc = V.add(V.add(T.o, T.y, 11.5), T.z, 26), b = 5 * C.D2R, fw = V.unit(V.perp(T.z, [0, 1, 0]));
         const th = V.unit(V.add(V.scale([0, 1, 0], Math.cos(b)), fw, -Math.sin(b)));
         for (const s of S) { const lat = C.lat(q, s); C.grip(q, s, V.add(Hc, lat, 8.65), th, V.unit(V.add(V.add([0, -1, 0], lat, .3), fw, -.2))); }
       };
@@ -541,7 +543,7 @@ module.exports = {
     gripRadius: { L: 1.7, R: 1.7 },
     pose(t, C) {
       const { V, M } = C, q = C.base(), e = C.ease(t), u = Math.pow(e, .75);
-      const k = Math.min(1, u * 1.2), lean = C.lerp(60, -2, Math.min(1, u * 1.15)), hz = C.lerp(-25, 0, k), hy = C.lerp(83.5, 92.7, k);
+      const k = Math.min(1, u * 1.2), lean = C.lerp(60, -2, Math.min(1, u * 1.15)), hz = C.lerp(-25, 0, k), hy = C.lerp(78.9, 87.8, k);
       pelvisLean(C, q, [0, hy, hz], lean * .9);
       q.lumbar = [lean * .03, 0, 0]; q.thoracic = [lean * .05, 0, 0]; q.neck = [C.lerp(-16, 0, u), 0, 0];
       for (const s of S) plant(C, q, s, [M.SIGN[s] * 24.5, 0, -2], { toeOut: 20 });
@@ -565,7 +567,7 @@ module.exports = {
     contacts: [{ body: 'soleL', prop: 'step:top' }, { body: 'soleR', prop: 'step:top' }, { body: 'gripL', prop: 'dbL', optional: true }, { body: 'gripR', prop: 'dbR', optional: true }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
-      const { V, M } = C, q = C.base(), e = C.ease(t), H = C.point('step', 'top')[1], heel = C.lerp(-6, 36, e), ballZ = -15;
+      const { V, M } = C, q = C.base(), e = C.ease(t), H = C.point('step', 'top')[1], heel = C.lerp(-5.5, 36, e), ballZ = -15;
       C.root(q, [0, 100, -20], [0, 1, 0], [0, 0, 1]);
       q.neck = [2, 0, 0];
       for (const s of S) { q[s].girdle = [-2, -4]; armAngles(q, s, [-2, 13, 0], 8, 0); }
@@ -614,7 +616,7 @@ module.exports = {
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
       const q = C.base(), e = C.ease(t);
-      pelvisLean(C, q, [0, 94, 0], 6); q.lumbar = [1, 0, 0]; q.thoracic = [2, 0, 0]; q.neck = [-6, 0, 0];
+      pelvisLean(C, q, [0, 89, 0], 6); q.lumbar = [1, 0, 0]; q.thoracic = [2, 0, 0]; q.neck = [-6, 0, 0];
       const feet = q => { for (const s of S) plant(C, q, s, [C.M.SIGN[s] * 11, 0, -1]); };
       for (const s of S) { armAngles(q, s, [C.lerp(10, 22, e), C.lerp(14, 84, e), C.lerp(2, -4, e)], 16, C.lerp(2, 6, e)); C.rhythm(q, s, [0, -2]); }
       settle(C, q, { lo: 2, hi: 7, loads: loadsIn(C, S, 6), resolve: feet });
@@ -630,7 +632,7 @@ module.exports = {
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
       const { V } = C, q = C.base(), e = C.ease(t);
-      C.root(q, [0, 94.2, 0], [0, 1, 0], [0, 0, 1]); q.neck = [0, 0, 0];
+      C.root(q, [0, 89.2, 0], [0, 1, 0], [0, 0, 1]); q.neck = [0, 0, 0];
       const feet = q => { for (const s of S) plant(C, q, s, [C.M.SIGN[s] * 11, 0, -1]); };
       for (const s of S) { armAngles(q, s, [C.lerp(17, 90, e), C.lerp(7, 6, e), C.lerp(-14, -10, e)], C.lerp(8, 10, e), 80); C.rhythm(q, s); }
       settle(C, q, { lo: 1, hi: 7, loads: loadsIn(C, S, 6), resolve: feet });
@@ -646,7 +648,7 @@ module.exports = {
     gripRadius: { L: 1.4, R: 1.6 },
     pose(t, C) {
       const { V, M } = C, q = C.base(), e = C.ease(t);
-      C.root(q, [0, 93.4, 0], [0, 1, 0], [0, 0, 1]);
+      C.root(q, [0, 88.4, 0], [0, 1, 0], [0, 0, 1]);
       q.lumbar = [0, C.lerp(0, 13, e), 0]; q.thoracic = [0, C.lerp(0, 15, e), 0]; q.neck = [0, C.lerp(0, 4, e), 0];
       const feet = q => { for (const s of S) plant(C, q, s, [C.M.SIGN[s] * 12, 0, -1]); };
       const arms = q => {
@@ -756,7 +758,7 @@ module.exports = {
     pose(t, C) {
       const { V, M } = C, e = C.ease(t), q = sitOnAdj(C, C.base(), { lumbar: -4, thoracic: -4, hip: 52, feetZ: -30, girdle: [-4, -12] }), bp = C.frame('bench', 'backPad');
       C.neckTo(q, 'headBack', bp.o, M.M3.col(bp.R, 1), -.5);
-      const f = C.fk(q), chest = C.chestPoint(q, 40);
+      const f = C.fk(q), chest = C.chestPoint(q, 41.6);
       for (const s of S) {
         q[s].girdle = [-4, C.lerp(-6, -14, e)];
         const lat = C.lat(q, s), gh = f.P['gh' + s];
@@ -819,7 +821,7 @@ module.exports = {
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
       const q = C.base(), e = C.ease(t);
-      C.root(q, [0, 94.2, 0], [0, 1, 0], [0, 0, 1]);
+      C.root(q, [0, 89.2, 0], [0, 1, 0], [0, 0, 1]);
       q.thoracic = [0, 0, 0]; q.neck = [2, 0, 0];
       const feet = q => { for (const s of S) plant(C, q, s, [C.M.SIGN[s] * 11, 0, -1]); };
       for (const s of S) { q[s].girdle = [0, C.lerp(-4, 2, e)]; armAngles(q, s, [C.lerp(6, 16, e), C.lerp(16, 13, e), C.lerp(-4, 8, e)], C.lerp(12, 136, e), C.lerp(-86, -90, e)); }
@@ -836,7 +838,7 @@ module.exports = {
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
       const q = C.base(), e = C.ease(t);
-      C.root(q, [0, 94.2, 0], [0, 1, 0], [0, 0, 1]);
+      C.root(q, [0, 89.2, 0], [0, 1, 0], [0, 0, 1]);
       q.neck = [2, 0, 0];
       const feet = q => { for (const s of S) plant(C, q, s, [C.M.SIGN[s] * 11, 0, -1]); };
       for (const s of S) { q[s].girdle = [0, 0]; armAngles(q, s, [C.lerp(2, 14, e), C.lerp(9, 8, e), 0], C.lerp(10, 134, e), C.lerp(4, 8, e)); }
