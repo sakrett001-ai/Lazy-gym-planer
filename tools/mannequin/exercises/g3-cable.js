@@ -431,6 +431,30 @@ module.exports = {
     }
   },
 
+  /* Тяга горизонтального блока широкой прямой рукоятью (гриф 90 см) хватом сверху, кисти шире плеч. t=0 — руки
+     вытянуты, лопатки разведены, корпус чуть наклонён вперёд; t=1 — гриф у нижней части груди, локти разведены
+     в стороны и уведены назад, лопатки сведены, корпус отклонён назад. */
+  cablerowwide: {
+    keys: [0, .25, .5, .75, 1],
+    equipment: [ROW_EQ, cable(ROW_EQ, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 14, wrap: [0, 1, 0], rest: 33 })],
+    contacts: [{ body: 'buttocks', prop: 'row:seat' }, { body: 'soleL', prop: 'row:plateL' }, { body: 'soleR', prop: 'row:plateR' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
+    gripRadius: { L: 1.5, R: 1.5 },
+    pose(t, C) {
+      const { V } = C, e = C.ease(t), q = rowBody(C, C.lerp(7, -8, e), ROW().hipZ);
+      for (const s of S) q[s].girdle = [C.lerp(4, 0, e), C.lerp(18, -16, e)];
+      q.neck = [C.lerp(-8, 4, e), 0, 0];
+      const f = C.fk(q), gm = V.mix(f.P.ghL, f.P.ghR, .5), lo = C.chestPoint(q, 28);
+      const g0 = [0, gm[1] - 12, gm[2] + 60], g1 = [0, lo[1], lo[2] + 9];
+      const mid = V.add(V.mix(g0, g1, e), [0, 1, 0], 3 * Math.sin(Math.PI * e));
+      for (const s of S) {
+        const lat = C.lat(q, s), g = V.add(mid, [C.M.SIGN[s], 0, 0], 31);
+        const pole = V.unit(V.mix(V.add(V.add([0, -1, 0], lat, .8), [0, 0, -.2], 1), V.add(V.add([0, -.3, -1], lat, 1.2), [0, 0, 0], 1), e));
+        C.grip(q, s, g, [-C.M.SIGN[s], 0, 0], pole, { wristExt: 4 });
+      }
+      return q;
+    }
+  },
+
   /* Шаг вперёд от линии блоков, корпус чуть наклонён, у каждой руки свой трос и D-рукоять.
      t=0 — руки разведены в стороны, локти мягко согнуты; t=1 — рукояти сведены по дуге вниз-вперёд перед грудью. */
   cablefly: {

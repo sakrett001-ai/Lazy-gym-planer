@@ -1,6 +1,7 @@
 const SOURCES_BY_EX = {
   kbswing:[['Мах гирей — NSCA','https://www.nsca.com/education/articles/kinetic-select/two-arm-kettlebell-swing/']],
   cablerow:[['Горизонтальная тяга — ACE','https://www.acefitness.org/resources/everyone/exercise-library/48/seated-row/']],
+  cablerowwide:[['Горизонтальная тяга — ACE','https://www.acefitness.org/resources/everyone/exercise-library/48/seated-row/'],['Узкий и широкий хват в горизонтальной тяге — Padovan и др., 2025','https://jhk.termedia.pl/High-Density-Surface-Electromyography-Excitation-of-Prime-Movers-in-the-Narrow-vs,209550,0,2.html']],
   pushup:[['Отжимания — ACE','https://www.acefitness.org/resources/everyone/exercise-library/41/push-up/']],
   airsquat:[['Приседания — ACE','https://www.acefitness.org/resources/everyone/exercise-library/135/bodyweight-squat/']],
   squat:[['Приседания — ACE','https://www.acefitness.org/resources/everyone/exercise-library/135/bodyweight-squat/']],
@@ -60,6 +61,7 @@ const MOTION_FOCUS={
  bridge:{setup:'Лягте на спину, согните колени и поставьте стопы на пол.',control:'Плечи и стопы сохраняют опору, таз поднимается без переразгибания спины.'},
  hipthrust:{setup:'Верх спины опирается на край скамьи, стопы устойчивы.',control:'Движется таз; опора спиной сохраняется. Завершайте подъём без прогиба.'},
  dbrow:{setup:'Колено и ладонь опираются на скамью.',control:'Локоть движется к тазу; опорная рука и корпус сохраняют положение.'},
+ cablerowwide:{setup:'Стопы на упорах, колени слегка согнуты, хват сверху шире плеч.',control:'Локти в стороны и назад, гриф к нижней части груди; корпус отклоняется не больше чем на 10–15°.'},
  latpullv:{setup:'Бёдра под валиками, ладони на V-рукояти смотрят друг на друга.',control:'Локти вниз вдоль корпуса, рукоять перед лицом к груди; корпус не раскачивается.'},
  latpulluh:{setup:'Бёдра под валиками, хват снизу примерно на ширине плеч.',control:'Локти вниз вдоль корпуса, рукоять перед лицом к груди; корпус не раскачивается.'},
  bbrow:{setup:'Наклоните корпус и удерживайте его положение.',control:'Движение создаёт тяга руками; корпус не подбрасывает штангу.'},

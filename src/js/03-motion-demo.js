@@ -13,7 +13,7 @@ dbRow.A.armN = {ik:add(add(dbRow.A.hip,dir(dbRow.A.torso),52),[0,1],56.8), b:'ba
 dbRow.B.armN = {ik:add(add(dbRow.B.hip,dir(dbRow.B.torso),16),[Math.cos(70*D2R),Math.sin(70*D2R)],13), b:'back',hA:180};
 /* тяга к животу сидя: корпус работает вместе с руками — из небольшого наклона вперёд (лопатки вперёд)
    в небольшое отклонение назад (10–15°), как в гребле; больше — уже раскачивание */
-for (const id of ['cablerow','bandrow']) {
+for (const id of ['cablerow','cablerowwide','bandrow']) {
   const a = DEMO[id].anim, hip = a.A.hip;
   a.A.torso = 14; a.B.torso = -10;
   a.A.arm = {ik:add(add(hip,dir(14),52),[50,20]),b:'back',hA:90};
