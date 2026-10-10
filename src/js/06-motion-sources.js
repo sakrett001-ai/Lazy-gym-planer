@@ -7,6 +7,8 @@ const SOURCES_BY_EX = {
   bridge:[['Ягодичный мост — ACE','https://www.acefitness.org/resources/everyone/exercise-library/49/glute-bridge/']],
   hipthrust:[['Hip thrust — Contreras, Cronin, Schoenfeld','https://bretcontreras.com/wp-content/uploads/Barbell-Hip-Thrust.pdf']],
   latpull:[['Тяга верхнего блока — ACE','https://www.acefitness.org/resources/everyone/exercise-library/158/seated-lat-pulldown/']],
+  latpullv:[['Тяга верхнего блока — ACE','https://www.acefitness.org/resources/everyone/exercise-library/158/seated-lat-pulldown/'],['Хват в тяге верхнего блока — Lusk и др., 2010','https://doi.org/10.1519/JSC.0b013e3181ddb0ab']],
+  latpulluh:[['Тяга верхнего блока — ACE','https://www.acefitness.org/resources/everyone/exercise-library/158/seated-lat-pulldown/'],['Хват в тяге верхнего блока — Lusk и др., 2010','https://doi.org/10.1519/JSC.0b013e3181ddb0ab']],
   bulgarian:[['Болгарский выпад — Human Kinetics','https://us.humankinetics.com/blogs/excerpt/building-strength-for-soccer-with-the-rear-foot-elevated-split-squat']],
   chinup:[['Подтягивания обратным хватом — ACE','https://www.acefitness.org/resources/everyone/exercise-library/190/chin-ups/']]
 };
@@ -58,6 +60,8 @@ const MOTION_FOCUS={
  bridge:{setup:'Лягте на спину, согните колени и поставьте стопы на пол.',control:'Плечи и стопы сохраняют опору, таз поднимается без переразгибания спины.'},
  hipthrust:{setup:'Верх спины опирается на край скамьи, стопы устойчивы.',control:'Движется таз; опора спиной сохраняется. Завершайте подъём без прогиба.'},
  dbrow:{setup:'Колено и ладонь опираются на скамью.',control:'Локоть движется к тазу; опорная рука и корпус сохраняют положение.'},
+ latpullv:{setup:'Бёдра под валиками, ладони на V-рукояти смотрят друг на друга.',control:'Локти вниз вдоль корпуса, рукоять перед лицом к груди; корпус не раскачивается.'},
+ latpulluh:{setup:'Бёдра под валиками, хват снизу примерно на ширине плеч.',control:'Локти вниз вдоль корпуса, рукоять перед лицом к груди; корпус не раскачивается.'},
  bbrow:{setup:'Наклоните корпус и удерживайте его положение.',control:'Движение создаёт тяга руками; корпус не подбрасывает штангу.'},
  deadlift:{setup:'Снаряд близко к ногам, руки прямые.',control:'Разгибайте таз и колени согласованно, сохраняйте снаряд близко к телу.'},
  rdl:{setup:'Снаряд в прямых руках, колени немного согнуты.',control:'Отводите таз назад; глубину ограничивает контроль спины.'},
