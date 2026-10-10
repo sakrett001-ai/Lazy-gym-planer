@@ -523,7 +523,9 @@ const EX = [
    'Не давайте весу раскачивать корпус. Ставьте снаряды на пол, приседая, а не наклоняясь.'],
  err:['Сутулость', 'Наклон в сторону', 'Длинные шаги с раскачкой'],
  breath:'Ровное дыхание, без задержек.',
- anim:{view:'side',
+ note:'На манекене шаг показан на месте, как на беговой дорожке. В зале идите вперёд по прямой на заданное расстояние или время.',
+ /* объёмная поза — tools/mannequin/exercises/g2-dumbbell.js (WALK); цикл из двух шагов */
+ anim:{view:'side', period:1400,
   A:{hip:[94, 99], torso:0, arm:{a:[182, 180]}, legN:{ik:[116, 180], b:'fwd', f:90}, legF:{ik:[74, 177], b:'fwd', f:112}},
   B:{hip:[94, 99], torso:0, arm:{a:[178, 180]}, legN:{ik:[74, 177], b:'fwd', f:112}, legF:{ik:[116, 180], b:'fwd', f:90}},
   props:[{k:'db', at:'gripF', o:'perp', layer:'farProps', if:'db'}, {k:'db', at:'gripN', o:'perp', layer:'front', if:'db'}, {k:'kb', at:'gripN', down:true, layer:'front', if:'kb'}]}},
