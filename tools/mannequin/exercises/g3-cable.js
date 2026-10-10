@@ -80,7 +80,7 @@ const PD_TOWER = { type: 'g3Tower', id: 'col', h: 196, at: [0, 0, 70], yaw: 180 
 const PD_FEET = { L: [11, 15, 8], R: [-11, 15, -8] };
 const PD = once(() => {
   const C = ctx([PD_TOWER]), q = C.base();
-  stand(C, q, { root: [0, 92.5, 0], lean: 12, feet: PD_FEET });
+  stand(C, q, { root: [0, 87.6, 0], lean: 12, feet: PD_FEET });
   q.lumbar = [-2, 0, 0]; q.thoracic = [2, 0, 0]; q.neck = [-6, 0, 0];
   for (const s of S) { q[s].girdle = [-2, 2]; q[s].shoulder = [-4, 8, 0]; q[s].elbow = 60; }
   balance(C, q, PD_FEET, { shift: [0, 2] });
@@ -92,7 +92,7 @@ const CC_TOWER = { type: 'g3Tower', id: 'col', h: 20, at: [0, 0, 78], yaw: 180 }
 const CC_FEET = { L: [11, 14, 8], R: [-11, 14, -8] };
 const CC = once(() => {
   const C = ctx([CC_TOWER]), q = C.base();
-  stand(C, q, { root: [0, 93, 0], lean: 3, feet: CC_FEET });
+  stand(C, q, { root: [0, 88.1, 0], lean: 3, feet: CC_FEET });
   q.lumbar = [-3, 0, 0]; q.thoracic = [0, 0, 0]; q.neck = [6, 0, 0];
   for (const s of S) { q[s].girdle = [-2, -2]; q[s].shoulder = [4, 8, 0]; q[s].elbow = 60; }
   balance(C, q, CC_FEET, { shift: [0, 0] });
@@ -103,7 +103,7 @@ const FP_TOWER = { type: 'g3Tower', id: 'col', h: 166, at: [0, 0, 128], yaw: 180
 const FP_FEET = { L: [13, 12, 8], R: [-13, 12, -8] };
 const FP = once(() => {
   const C = ctx([FP_TOWER]), q = C.base();
-  stand(C, q, { root: [0, 93, 0], lean: 2, feet: FP_FEET });
+  stand(C, q, { root: [0, 88.1, 0], lean: 2, feet: FP_FEET });
   q.lumbar = [-2, 0, 0]; q.thoracic = [0, 0, 0]; q.neck = [0, 0, 0];
   balance(C, q, FP_FEET, { shift: [0, 1] });
   return { q };
@@ -115,7 +115,7 @@ const SP_TOWER = { type: 'g3Tower', id: 'col', h: 200, at: [0, 0, 135], yaw: 180
 const SP_FEET = { L: [13, 16, 8], R: [-13, 16, -8] };
 const SP = once(() => {
   const C = ctx([SP_TOWER]), q = C.base();
-  stand(C, q, { root: [0, 92.5, 0], lean: 21, feet: SP_FEET });
+  stand(C, q, { root: [0, 87.6, 0], lean: 21, feet: SP_FEET });
   q.lumbar = [-4, 0, 0]; q.thoracic = [2, 0, 0]; q.neck = [-14, 0, 0];
   balance(C, q, SP_FEET, { shift: [0, 3] });
   return { q };
@@ -126,7 +126,7 @@ const CL_TOWER = { type: 'g3Tower', id: 'col', h: 20, at: [66, 0, 18], yaw: -90 
 const CL_FEET = { L: [12, 13, 6], R: [-12, 13, -6] };
 const CL = once(() => {
   const C = ctx([CL_TOWER]), q = C.base();
-  stand(C, q, { root: [0, 93.5, 0], lean: 2, feet: CL_FEET });
+  stand(C, q, { root: [0, 88.5, 0], lean: 2, feet: CL_FEET });
   q.lumbar = [-2, 0, 0]; q.neck = [2, 0, -6];
   balance(C, q, CL_FEET);
   return { q };
@@ -138,7 +138,7 @@ const CR = once(() => {
   const C = ctx([CR_TOWER, CR_MAT]), { V } = C, q = C.base(), a = 30 * C.D2R, b = 20 * C.D2R;
   C.root(q, [0, 50, 0], [0, Math.cos(a), Math.sin(a)], [0, -Math.sin(a), Math.cos(a)]);
   const K = s => [C.M.SIGN[s] * 10.5, 4.5 + 5.4, 0];
-  C.rootAtHip(q, 'L', V.add(K('L'), [-1.7, Math.cos(b) * 42.36, -Math.sin(b) * 42.36]));
+  C.rootAtHip(q, 'L', V.add(K('L'), [-1.7, Math.cos(b) * (C.M.B.th - .04), -Math.sin(b) * (C.M.B.th - .04)]));
   for (const s of S) kneelTucked(C, q, s, [C.M.SIGN[s] * 10.5, 4.5, 0], 10.5, 0);
   return { q };
 });
@@ -157,7 +157,7 @@ const OH_TOWER = { type: 'g3Tower', id: 'col', h: 186, at: [0, 0, -118], yaw: 0 
 const OH_FEET = { L: [12, 40, 6], R: [-12, -22, -6, 18] };
 const OH = once(() => {
   const C = ctx([OH_TOWER]), q = C.base();
-  stand(C, q, { root: [0, 89, 4], lean: 24, feet: OH_FEET });
+  stand(C, q, { root: [0, 84.2, 4], lean: 24, feet: OH_FEET });
   q.lumbar = [-4, 0, 0]; q.thoracic = [-2, 0, 0]; q.neck = [-8, 0, 0];
   balance(C, q, OH_FEET, { shift: [0, 4] });
   return { q };
@@ -175,7 +175,7 @@ const XO_LO = { type: 'g3Crossover', id: 'xo', span: 330, hL: 20, hR: 20 };
 const XF_FEET = { L: [11, 58, 6], R: [-12, 8, -10, 14] };
 const XF = once(() => {
   const C = ctx([XO_HI]), q = C.base();
-  stand(C, q, { root: [0, 90.5, 30], lean: 17, feet: XF_FEET, heel: { R: 14 } });
+  stand(C, q, { root: [0, 85.3, 30], lean: 17, feet: XF_FEET, heel: { R: 14 } });
   q.lumbar = [-4, 0, 0]; q.thoracic = [2, 0, 0]; q.neck = [-12, 0, 0];
   balance(C, q, XF_FEET, { shift: [0, 4], resolve: qq => placeFeet(C, qq, XF_FEET, { R: 14 }) });
   return { q };
@@ -183,7 +183,7 @@ const XF = once(() => {
 const LF_FEET = { L: [11, 56, 6], R: [-12, 8, -10, 18] };
 const LF = once(() => {
   const C = ctx([XO_LO]), q = C.base();
-  stand(C, q, { root: [0, 89.5, 30], lean: 9, feet: LF_FEET, heel: { R: 18 } });
+  stand(C, q, { root: [0, 84.7, 30], lean: 9, feet: LF_FEET, heel: { R: 18 } });
   q.lumbar = [-4, 0, 0]; q.thoracic = [0, 0, 0]; q.neck = [-4, 0, 0];
   balance(C, q, LF_FEET, { shift: [0, 3], resolve: qq => placeFeet(C, qq, LF_FEET, { R: 18 }) });
   return { q };
@@ -203,7 +203,7 @@ const LP = once(() => {
   const C = ctx([]), { V } = C, q = latSeat(C, 8), f = C.fk(q);
   /* валики: над бёдрами на 70 % длины бедра, с поджатием 1 см */
   const th = V.mix(f.P.hipL, f.P.knL, .68), padH = th[1] + 7.6 + 6.5 - 1, padZ = th[2];
-  const chest = C.chestPoint(q, 41), barZ = chest[2] + 4.5;
+  const chest = C.chestPoint(q, 43), barZ = chest[2] + 4.5;
   return { padH, padZ, barZ, chest };
 });
 const LP_EQ = once(() => { const L = LP(); return { type: 'g3LatPulldown', id: 'lat', seatH: 46, padH: r1(L.padH), padZ: r1(L.padZ), pulleyZ: r1(L.barZ + 3) }; });
@@ -227,7 +227,7 @@ function rowBody(C, lean, hipZ) {
 const ROW = once(() => {
   const C = ctx([ROW_EQ]), { V, M } = C, n = C.point('row', 'plateNormal');
   /* таз ставится так, чтобы колени были согнуты на ~20° при стопах на упорах */
-  const reach = hz => { const q = C.base(); C.root(q, [0, 52.7, hz], [0, 1, 0], [0, 0, 1]); const f = C.fk(q), pf = C.frame('row', 'plateL'), along = M.M3.col(pf.R, 2), ff = M.footFrame(V.add(V.add(pf.o, along, 4), n, 1), 0, { up: n, forward: along }); return V.dist(f.P.hipL, ff.o) - 84; };
+  const reach = hz => { const q = C.base(); C.root(q, [0, 52.7, hz], [0, 1, 0], [0, 0, 1]); const f = C.fk(q), pf = C.frame('row', 'plateL'), along = M.M3.col(pf.R, 2), ff = M.footFrame(V.add(V.add(pf.o, along, 4), n, 1), 0, { up: n, forward: along }); return V.dist(f.P.hipL, ff.o) - (M.B.th + M.B.sk - 2); };
   return { hipZ: C.solve1D(hz => -reach(hz), -30, 20) };
 });
 
@@ -235,7 +235,7 @@ const ROW = once(() => {
 const BAND_FEET = { L: [10.5, 13, 7], R: [-10.5, 13, -7] };
 const BAND = once(() => {
   const C = ctx([]), q = C.base();
-  stand(C, q, { root: [0, 93.5, 0], lean: 1, feet: BAND_FEET });
+  stand(C, q, { root: [0, 88.5, 0], lean: 1, feet: BAND_FEET });
   q.lumbar = [-2, 0, 0]; q.neck = [2, 0, 0];
   balance(C, q, BAND_FEET);
   return { q };
@@ -247,7 +247,7 @@ const DOOR_SIDE = { type: 'g3Door', id: 'door', anchor: 'side', h: 165, at: [112
 const BPD_FEET = { L: [11, 14, 8], R: [-11, 14, -8] };
 const BPD = once(() => {
   const C = ctx([]), q = C.base();
-  stand(C, q, { root: [0, 92.5, 0], lean: 10, feet: BPD_FEET });
+  stand(C, q, { root: [0, 87.6, 0], lean: 10, feet: BPD_FEET });
   q.lumbar = [-2, 0, 0]; q.thoracic = [2, 0, 0]; q.neck = [-6, 0, 0];
   balance(C, q, BPD_FEET, { shift: [0, 2] });
   return { q };
@@ -255,7 +255,7 @@ const BPD = once(() => {
 const BFP_FEET = { L: [13, 12, 8], R: [-13, 12, -8] };
 const BFP = once(() => {
   const C = ctx([]), q = C.base();
-  stand(C, q, { root: [0, 93, 0], lean: 2, feet: BFP_FEET });
+  stand(C, q, { root: [0, 88.1, 0], lean: 2, feet: BFP_FEET });
   q.lumbar = [-2, 0, 0];
   balance(C, q, BFP_FEET, { shift: [0, 1] });
   return { q };
@@ -545,7 +545,7 @@ module.exports = {
     contacts: [{ body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'col:grabR' }, { body: 'gripR', prop: 'col:grabL' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
-      const { V } = C, e = C.ease(t), L = kickLayout({ lean: 30, tower: GK_TOWER, footR: [-11, 0, 26], root: [0, 91, 10] }), q = L.q;
+      const { V } = C, e = C.ease(t), L = kickLayout({ lean: 30, tower: GK_TOWER, footR: [-11, 0, 26], root: [0, 86.1, 10] }), q = L.q;
       const f = C.fk(q), hip = f.P.hipL, a = C.lerp(22, -40, e) * C.D2R, k = (C.lerp(64, 22, e) + 20 * Math.sin(Math.PI * e)) * C.D2R;
       const th = [0, -Math.cos(a), Math.sin(a)], an = V.add(V.add(hip, th, C.M.B.th), [0, -Math.cos(a - k), Math.sin(a - k)], C.M.B.sk);
       C.legTo(q, 'L', V.add(an, [1.5, 0, 0], 1), V.unit([.05, -.2, 1]), { dorsi: C.lerp(4, -22, e) });
@@ -561,7 +561,7 @@ module.exports = {
     contacts: [{ body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'col:grabR' }, { body: 'gripR', prop: 'col:grabL' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
-      const { V } = C, e = C.ease(t), L = kickLayout({ lean: 16, tower: KB_TOWER, footR: [-11, 0, 24], root: [0, 93.5, 8] }), q = L.q;
+      const { V } = C, e = C.ease(t), L = kickLayout({ lean: 16, tower: KB_TOWER, footR: [-11, 0, 24], root: [0, 88.5, 8] }), q = L.q;
       q.neck = [-8, 0, 0];
       const f = C.fk(q), hip = f.P.hipL, a = C.lerp(-15, -34, e) * C.D2R, k = C.lerp(24, 3, e) * C.D2R;
       const th = [0, -Math.cos(a), Math.sin(a)], an = V.add(V.add(hip, th, C.M.B.th), [0, -Math.cos(a - k), Math.sin(a - k)], C.M.B.sk);
@@ -605,7 +605,7 @@ module.exports = {
       /* направление рук: от блока к правому колену; корпус и таз поворачиваются вслед за руками */
       const d0 = V.unit(V.sub(P, sc)), d1 = V.unit(V.sub([-22, 50, 40], sc)), d = slerpDir(V, d0, d1, e), psi = Math.atan2(d[0], d[2]) / C.D2R;
       const rot = psi * .92, feet = { L: [27, 12, C.lerp(18, -22, e)], R: [-27, 12, C.lerp(26, -16, e)] }, heel = { L: C.lerp(0, 30, e), R: C.lerp(30, 0, e) };
-      stand(C, q, { root: [C.lerp(6, -6, e), C.lerp(91.5, 86.8, e), C.lerp(4, -1, e)], yaw: rot * .4, lean: C.lerp(3, 27, e), feet, heel });
+      stand(C, q, { root: [C.lerp(6, -6, e), C.lerp(86.6, 82.1, e), C.lerp(4, -1, e)], yaw: rot * .4, lean: C.lerp(3, 27, e), feet, heel });
       q.lumbar = [C.lerp(-2, 6, e), C.lerp(2, -4, e), rot * .12]; q.thoracic = [C.lerp(-4, 12, e), C.lerp(4, -6, e), rot * .48]; q.neck = [C.lerp(-16, 14, e), 0, C.lerp(6, -8, e)];
       placeFeet(C, q, feet, heel);
       for (const s of S) q[s].girdle = [C.lerp(16, 2, e), 10];
@@ -628,12 +628,12 @@ module.exports = {
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = C.base();
-      stand(C, q, { root: [0, C.lerp(91.5, 84, e), C.lerp(2, -16, e)], lean: C.lerp(2, 62, e), feet: PT_FEET });
+      stand(C, q, { root: [0, C.lerp(86.6, 79.4, e), C.lerp(2, -16, e)], lean: C.lerp(2, 62, e), feet: PT_FEET });
       q.lumbar = [C.lerp(-2, 2, e), 0, 0]; q.thoracic = [C.lerp(0, 6, e), 0, 0]; q.neck = [C.lerp(2, -24, e), 0, 0];
       balance(C, q, PT_FEET, { shift: [0, C.lerp(0, -4, e)] });
       for (const s of S) q[s].girdle = [C.lerp(-4, 4, e), C.lerp(2, 8, e)];
       const f = C.fk(q), gm = V.mix(f.P.ghL, f.P.ghR, .5);
-      const target = V.mix([0, 75, f.P.hipL[2] + 19], [0, 43, f.P.knL[2] - 9], e);
+      const target = V.mix([0, 72, f.P.hipL[2] + 21], [0, 41, f.P.knL[2] - 9], e);
       for (const s of S) {
         const lat = C.lat(q, s), gh = f.P['gh' + s], g0 = V.add(target, lat, 3), g = V.add(gh, V.unit(V.sub(g0, gh)), Math.min(61, V.dist(g0, gh)));
         C.hold(q, s, g, V.unit(V.add([0, 0, -1], lat, C.lerp(1.5, .3, e))), { pron: 0, allowShort: true });

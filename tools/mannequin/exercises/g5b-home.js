@@ -18,8 +18,8 @@ const turnP = p => p && [-p[0], p[1], -p[2]];
 const turnEq = list => list.map(e => ({ ...e, ...(e.at ? { at: turnP(e.at) } : {}), ...(e.from ? { from: turnP(e.from) } : {}), ...(e.axis ? { axis: turnP(e.axis) } : {}), yaw: ((e.yaw || 0) + 180) % 360 }));
 /* корпус прямой линией, наклон theta (град) вперёд от вертикали вокруг голеностопов (ankle — [y, z]) */
 function leanBody(C, theta, ankleY, ankleZ, { hipAbd = 3, dir = 1 } = {}) {
-  const q = C.base(), a = theta * D;
-  C.root(q, [0, ankleY + 85.9 * Math.cos(a), ankleZ + dir * 85.9 * Math.sin(a)], [0, Math.cos(a), dir * Math.sin(a)], [0, -dir * Math.sin(a), Math.cos(a)]);
+  const q = C.base(), a = theta * D, L = C.M.B.th + C.M.B.sk - .1;
+  C.root(q, [0, ankleY + L * Math.cos(a), ankleZ + dir * L * Math.sin(a)], [0, Math.cos(a), dir * Math.sin(a)], [0, -dir * Math.sin(a), Math.cos(a)]);
   for (const s of S) { q[s].hip = [0, hipAbd, 0]; q[s].knee = 0; }
   return q;
 }
@@ -113,7 +113,7 @@ function dipLayout(C, o) {
 const INC = once(() => {
   const C = ctx([]), { V } = C, padY = 44, opts = { feetX: 9, dorsi: 6 };
   /* низ: нижняя точка груди в 4 см над краем скамьи; край — под грудью; ладони у края, кисти рядом с грудью */
-  const chestLow = a => { const q = plankBody(C, a, opts); let best = null; for (let h = 28; h <= 44; h += 1) { const p = C.chestPoint(q, h); if (!best || p[1] < best[1]) best = p; } return best; };
+  const chestLow = a => { const q = plankBody(C, a, opts); let best = null; for (let h = 28; h <= 47.2; h += 1) { const p = C.chestPoint(q, h); if (!best || p[1] < best[1]) best = p; } return best; };
   const a0 = C.solve1D(a => chestLow(a)[1] - (padY + 4), 2, 45), cl = chestLow(a0), edge = cl[2] - 1.5;
   const palm = S.map(s => [SG[s] * 23, padY, edge + 6.5]);
   /* верх: руки выпрямлены (плечевой пояс в протракции, как в позе) */
@@ -124,10 +124,10 @@ const INC = once(() => {
 
 /* Отжимания с ногами на скамье: подушечки стоп на краю скамьи, пальцы обхватывают край, пятки вверх; ладони на полу.
    Низ: грудь в 5 см от пола, кисти под плечами; верх — руки выпрямлены. */
-const PK = { phi0: 32, phi1: 43, headAhead: 7, opts: { feetX: 10, dorsi: 10, knee: 10 } };
-const PKD = { phi0: 55.5, phi1: 64, headAhead: 6, opts: { ballY: 44, ballZ: 0, feetX: 9, dorsi: 10, knee: 10 } };
+const PK = { phi0: 28, phi1: 39, headAhead: 7, opts: { feetX: 10, dorsi: 10, knee: 10 } };
+const PKD = { phi0: 50, phi1: 60, headAhead: 6, opts: { ballY: 44, ballZ: 0, feetX: 9, dorsi: 10, knee: 10 } };
 const DECP = { ahead: 11, pl: .25, pu: 0 };
-const lowestFront = (C, q, h0 = 26, h1 = 46) => { let best = null; for (let h = h0; h <= h1; h += 1) for (const a of [0, .25, -.25]) { const p = C.chestPoint(q, h, a); if (!best || p[1] < best[1]) best = p; } return best; };
+const lowestFront = (C, q, h0 = 26, h1 = 49.8) => { let best = null; for (let h = h0; h <= h1; h += 1) for (const a of [0, .25, -.25]) { const p = C.chestPoint(q, h, a); if (!best || p[1] < best[1]) best = p; } return best; };
 const DEC = once(() => {
   const C = ctx([]), { V } = C, opts = { ballY: 44, ballZ: 0, feetX: 9, dorsi: 12, mtpMax: 58 };
   const low = a => { const q = plankBody(C, a, opts); q.neck = [-12, 0, 0]; return Math.min(lowestFront(C, q)[1], ...C.region(q, 'headAll').map(p => p[1])); };
@@ -143,14 +143,14 @@ const PIKED = once(() => pikeLayout(ctx([]), PKD));
 
 /* обратные отжимания: скамья поперёк (передняя грань z = 0), стул передним краем к z = 0 */
 const BDIP = { top: 44, edge: 0, gr: 2.2, hx: 21, gap: 2.5, distal: 38, feetX: 11, heelZ: 80, toe: [30, 40], flare: .25,
-  pelvis: [4, -4], lumbar: [0, 4], thoracic: [2, 12], neck: [4, 2], girdleTop: [-4, -6], girdleBot: [8, -14], reachTop: 54.6, reachBot: 43.5 };
+  pelvis: [4, -4], lumbar: [0, 4], thoracic: [2, 12], neck: [4, 2], girdleTop: [-4, -6], girdleBot: [8, -14], reachTop: 54.6, reachBot: 44.3 };
 const CDIP = { top: 45, edge: 0, gr: 1.5, hx: 15, gap: 2.5, distal: 38, turn: 20, feetX: 11, heelZ: 55, toe: [18, 24], flare: .2,
-  pelvis: [4, -4], lumbar: [0, 4], thoracic: [2, 12], neck: [4, 2], girdleTop: [-4, -6], girdleBot: [8, -14], reachTop: 54.6, reachBot: 41 };
+  pelvis: [4, -4], lumbar: [0, 4], thoracic: [2, 12], neck: [4, 2], girdleTop: [-4, -6], girdleBot: [8, -14], reachTop: 54.6, reachBot: 43 };
 const BDIP_L = once(() => dipLayout(ctx([]), BDIP)), CDIP_L = once(() => dipLayout(ctx([]), CDIP));
 
 /* Приседание на одной ноге на скамью: опорная — левая, правая вытянута вперёд. k: 0 — внизу (касание скамьи), 1 — стоя.
    Таз и центр масс смещаются над опорной стопой (balanceOver). */
-const PB = { ankle: [8, 0], yaw: 8, hipTop: 93.4, tilt: 22, lumbar: 14, thoracic: 15, freeFlex: 83.5, freeKnee: 1, comZ: [-1.5, 4] };
+const PB = { ankle: [8, 0], yaw: 6, hipTop: 88.4, tilt: 22, lumbar: 14, thoracic: 15, freeFlex: 83.5, freeKnee: 1, comZ: [-1.5, 4] };
 function pistolPose(C, k, hipY) {
   const { V } = C, q = C.base(), u = 1 - k, tilt = PB.tilt * u * D;
   C.root(q, [6 * u + 2, hipY, -14 * u], [0, Math.cos(tilt), Math.sin(tilt)], [0, -Math.sin(tilt), Math.cos(tilt)]);
@@ -166,7 +166,7 @@ function pistolPose(C, k, hipY) {
   return q;
 }
 /* нижняя точка ягодиц (только таз, без бёдер) — для касания скамьи */
-const seatLow = (C, q) => { let m = null; for (let h = -9; h <= 3; h += 1) for (let a = .45; a <= 1.001; a += .05) { const p = C.chestPoint(q, h, a * Math.PI); if (!m || p[1] < m[1]) m = p; } return m; };
+const seatLow = (C, q) => { let m = null; for (let h = -5.3; h <= 3; h += 1) for (let a = .7; a <= 1.001; a += .05) { const p = C.chestPoint(q, h, a * Math.PI); if (!m || p[1] < m[1]) m = p; } return m; };
 const PISTOL = once(() => {
   const C = ctx([]), yBot = C.solve1D(y => seatLow(C, pistolPose(C, 0, y))[1] - 43.6, 40, 80), lowP = seatLow(C, pistolPose(C, 0, yBot));
   return { yBot, benchZ: lowP[2] - 14.5 + 6 };
@@ -174,17 +174,17 @@ const PISTOL = once(() => {
 
 /* Боковой выпад вправо: стопы широко (голеностопы ±SL.ax), носки почти вперёд. k: 0 — выпад на правую ногу, 1 — центр.
    Левая нога остаётся прямой: высота таза подбирается так, чтобы она дотягивалась до стопы почти без сгибания колена. */
-const SL = { ax: 43, yawL: 31, yawR: 12, hipX: -25, hipZ: -22, tilt: 34, lumbar: 6, thoracic: 8, comX: -22, comZ: 0 };
+const SL = { ax: 40, yawL: 31, yawR: 12, hipX: -23.5, hipZ: -21, tilt: 34, lumbar: 6, thoracic: 8, comX: -22, comZ: 0 };
 function sideLungePose(C, k) {
   const { V } = C, u = 1 - C.ease(k), feet = { L: footAt(V, 'L', [SL.ax, 0], SL.yawL), R: footAt(V, 'R', [-SL.ax, 0], SL.yawR) };
   const body = (y, x, z) => { const q = C.base(), a = SL.tilt * u * D;
     C.root(q, [x, y, z], [0, Math.cos(a), Math.sin(a)], [0, -Math.sin(a), Math.cos(a)]);
     q.lumbar = [SL.lumbar * u, 0, 0]; q.thoracic = [SL.thoracic * u, 0, 0]; q.neck = [-14 * u, 0, 0]; return q; };
-  const straightL = (x, z) => C.solve1D(y => { const f = C.fk(body(y, x, z)); return V.dist(f.P.hipL, [SL.ax, 8.5, 0]) - 85.75; }, 20, 95);
+  const straightL = (x, z) => C.solve1D(y => { const f = C.fk(body(y, x, z)); return V.dist(f.P.hipL, [SL.ax, C.M.B.ankle, 0]) - (C.M.B.th + C.M.B.sk - .25); }, 20, 95);
   const resolve = q => {
     for (const s of S) { const F = feet[s]; C.foot(q, s, F.sup, 0, V.unit(V.add(F.fw, [SG[s], 0, 0], .15)), { forward: F.fw }); }
     const T = C.axes(q, 'thorax');
-    for (const s of S) { const lat = C.lat(q, s), w = V.add(V.add(V.add(T.o, T.y, 8), T.z, 30), lat, 4.6); q[s].girdle = [0, 6];
+    for (const s of S) { const lat = C.lat(q, s), w = V.add(V.add(V.add(T.o, T.y, 11.8), T.z, 30), lat, 4.6); q[s].girdle = [0, 6];
       C.armTo(q, s, w, V.unit(V.add([0, -1, 0], lat, .8)), { pron: 8, wrist: [0, 0], mode: 'relaxed' }); }
   };
   let x = C.lerp(0, SL.hipX, u), z = C.lerp(0, SL.hipZ, u), q = body(straightL(x, z), x, z);
@@ -199,7 +199,7 @@ function sideLungePose(C, k) {
 const TR = { door: 31, handleY: 100, gx: 15, th0: 38 };
 const TR_HANDLE = [0, TR.handleY, TR.door + .6];
 function towelRowBody(C, theta, k) {
-  const q = leanBody(C, theta, 8.5, 0, { dir: -1 });
+  const q = leanBody(C, theta, C.M.B.ankle, 0, { dir: -1 });
   for (const s of S) q[s].girdle = [C.lerp(2, 0, k), C.lerp(8, -16, k)];
   return q;
 }
@@ -228,7 +228,7 @@ function tableBody(C, theta, Zh) {
 const TROWL = once(() => {
   const C = ctx([]), { V } = C, under = TBL.h - TBL.t, grip = s => [-SG[s] * TBL.gx, TBL.h - TBL.gr, TBL.edge - TBL.gr]; /* лёжа на спине левая сторона — −X */
   /* t=1: грудь у края столешницы — сразу за ребром (chestDz) на уровне верхней грани (chestDy) */
-  const chest = (th, Zh) => { const q = tableBody(C, th, Zh); let best = null; for (let h = 24; h <= 44; h += 1) { const p = C.chestPoint(q, h); if (!best || p[1] > best[1]) best = p; } return best; };
+  const chest = (th, Zh) => { const q = tableBody(C, th, Zh); let best = null; for (let h = 24; h <= 47.2; h += 1) { const p = C.chestPoint(q, h); if (!best || p[1] > best[1]) best = p; } return best; };
   const th1 = C.solve1D(th => chest(th, 0)[1] - (TBL.h + TBL.chestDy), 5, 60), Zh = TBL.edge + TBL.chestDz - chest(th1, 0)[2];
   /* t=0: руки выпрямлены */
   /* стол низкий (75 см): внизу руки почти прямые, тело висит в 2–3 см над полом, не лёжа на нём */
@@ -252,7 +252,7 @@ const nordicFoot = once(() => {
 });
 function nordicBody(C, phi) {
   const { V } = C, q = C.base(), a = phi * D, K = NRD.pad + 5.4, up = [0, Math.cos(a), Math.sin(a)], F = nordicFoot();
-  C.root(q, V.add([0, K, 0], up, 42.4), up, [0, -Math.sin(a), Math.cos(a)]);
+  C.root(q, V.add([0, K, 0], up, C.M.B.th), up, [0, -Math.sin(a), Math.cos(a)]);
   for (const s of S) { q[s].hip = [0, 2, 0]; C.foot(q, s, [SG[s] * NRD.kx, 0, F.ballZ], 0, [0, -1, -.3], { forward: [0, 0, 1], heel: NRD.heel }); }
   return q;
 }
@@ -277,7 +277,7 @@ function calfPose(C, k) {
   const ff = M.footFrame(sup, 0, { forward: [0, 0, 1], heel });
   q.R.hip = [4, 3, 4]; q.R.knee = 80; q.R.ankle = [-20, 0];
   let x = CALF.ballX - 6, z = sup[2] - 4;
-  const place = () => { C.root(q, [x, 0, z], [0, 1, 0], [0, 0, 1]); const f = C.fk(q), dy = Math.sqrt(85.92 ** 2 - (ff.o[0] - f.P.hipL[0]) ** 2 - (ff.o[2] - f.P.hipL[2]) ** 2); q.root.p[1] = ff.o[1] + dy; };
+  const place = () => { C.root(q, [x, 0, z], [0, 1, 0], [0, 0, 1]); const f = C.fk(q), L5 = Math.sqrt(M.B.th ** 2 + M.B.sk ** 2 + 2 * M.B.th * M.B.sk * Math.cos(5 * C.D2R)), dy = Math.sqrt(L5 ** 2 - (ff.o[0] - f.P.hipL[0]) ** 2 - (ff.o[2] - f.P.hipL[2]) ** 2); q.root.p[1] = ff.o[1] + dy; };
   const resolve = () => {
     C.foot(q, 'L', sup, 0, [0, 0, 1], { forward: [0, 0, 1], heel });
     const lat = C.lat(q, 'R'); q.R.girdle = [2, 4];
@@ -302,7 +302,7 @@ function towelCurlArms(C, q, k) {
 const towelUnder = (C, q) => { const f = C.fk(q), F = f.F.footR; return C.V.add(F.o, C.M3.v(F.R, [0, -(C.M.B.ankle + 1), 5])); };
 function towelCurlPose(C, k, r) {
   const { V } = C, q = C.base(), FL = footAt(V, 'L', TC.lAnkle, 8);
-  C.root(q, [2, 93.6, 1], [0, 1, 0], [0, 0, 1]);
+  C.root(q, [2, 88.6, 1], [0, 1, 0], [0, 0, 1]);
   towelCurlArms(C, q, k);
   /* правая нога: r = 0 — стопа на полу, r > 0 — колено поднимается (бедро вперёд-вверх, голень вертикально) */
   const legR = q => {
@@ -363,7 +363,7 @@ module.exports = {
       } else {
         /* руки у груди, ладони вперёд — готовы принять вес */
         const T = C.axes(q, 'thorax');
-        for (const s of S) { const lat = C.lat(q, s), w = V.add(V.add(V.add(T.o, T.y, 14), T.z, 20), lat, 15); q[s].girdle = [2, 6];
+        for (const s of S) { const lat = C.lat(q, s), w = V.add(V.add(V.add(T.o, T.y, 14.8), T.z, 20), lat, 15); q[s].girdle = [2, 6];
           C.armTo(q, s, w, V.unit(V.add([0, -1, 0], lat, .5)), { pron: 70, wrist: [-25, 0], mode: 'relaxed' }); }
       }
       return q;
@@ -528,7 +528,7 @@ module.exports = {
       S.forEach((s, i) => {
         q[s].girdle = [C.lerp(-2, 3, e), C.lerp(-14, 12, e)];
         const lat = C.lat(q, s), pole = V.unit(V.add(V.add(V.scale(ax, -1), lat, .4), [0, 1, 0], .3));
-        C.palm(q, s, L.palm[i], V.unit([-SG[s] * .04, 0, 1]), [0, 1, 0], pole);
+        C.palm(q, s, L.palm[i], V.unit([-SG[s] * .1, 0, 1]), [0, 1, 0], pole);
       });
       return q;
     }
@@ -542,7 +542,7 @@ module.exports = {
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }],
     pose(t, C) {
       const { V } = C, e = C.ease(t), k = Math.pow(e, .6), q = C.base(), tilt = C.lerp(0, 32, k) * D;
-      C.root(q, [0, C.lerp(94, 50.5, e), C.lerp(0, -22, e)], [0, Math.cos(tilt), Math.sin(tilt)], [0, -Math.sin(tilt), Math.cos(tilt)]);
+      C.root(q, [0, C.lerp(89, 47.3, e), C.lerp(0, -22, e)], [0, Math.cos(tilt), Math.sin(tilt)], [0, -Math.sin(tilt), Math.cos(tilt)]);
       q.lumbar = [C.lerp(0, 9, k), 0, 0]; q.thoracic = [C.lerp(0, 7, k), 0, 0]; q.neck = [C.lerp(0, -26, k), 0, 0];
       const feet = S.map(s => ({ s, ...footAt(V, s, [SG[s] * 14, 0], 12) }));
       const resolve = q => {
@@ -563,7 +563,7 @@ module.exports = {
     contacts: [{ body: 'back', prop: 'wall:panel' }, { body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'palmL', prop: 'wall:panel' }, { body: 'palmR', prop: 'wall:panel' }],
     pose(t, C) {
       const { V } = C, q = C.base();
-      C.root(q, [0, 52.1, 0], [0, 1, 0], [0, 0, 1]);
+      C.root(q, [0, C.M.B.ankle + C.M.B.sk, 0], [0, 1, 0], [0, 0, 1]);
       q.lumbar = [-1, 0, 0]; q.thoracic = [C.lerp(-3, -4, t), 0, 0]; q.neck = [4, 0, 0];
       for (const s of S) { q[s].hip = [90, 4, 4]; q[s].knee = 90; }
       C.restOn(q, 'back', [0, 0, -38], [0, 0, 1], -.8);
@@ -589,7 +589,7 @@ module.exports = {
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'palmL', prop: 'wall:panel' }, { body: 'palmR', prop: 'wall:panel' }],
     pose(t, C) {
       const { V } = C, Zw = 67, palmY = WP.y, palmX = WP.x;
-      const body = (th, e) => { const q = leanBody(C, th, 8.5, 0); for (const s of S) q[s].girdle = [C.lerp(3, 7, e), C.lerp(-10, 10, e)]; return q; };
+      const body = (th, e) => { const q = leanBody(C, th, C.M.B.ankle, 0); for (const s of S) q[s].girdle = [C.lerp(3, 7, e), C.lerp(-10, 10, e)]; return q; };
       const wristOf = s => [SG[s] * (palmX - .5), palmY - 5.6, Zw - 1.8];
       const L = this._layout || (this._layout = (() => {
         const reach = (th, e, k) => { const q = body(th, e), f = C.fk(q); return V.dist(f.P.ghL, wristOf('L')) - k; };

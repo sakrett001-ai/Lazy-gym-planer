@@ -437,7 +437,7 @@ function scsPose(C, heel, shZ = null) {
 const SCS_HD = { x: 26, dz: 28, dy: -12 };
 const SCS_Z = once(() => { const C = ctx([]), f = C.fk(scsPose(C, 0)); return (f.P.ghL[2] + f.P.ghR[2]) / 2; });
 /* профиль верха плеч: наибольшая высота поверхности корпуса над полосой |x| ≈ x0 (до h = 50 — зона упора) */
-function shoulderTopAt(C, q, x0, hMax = 50) {
+function shoulderTopAt(C, q, x0, hMax = 53.8) {
   const R = C.M.catalogPose(q); let best = -Infinity;
   for (let h = 36; h <= hMax; h += .5) for (let a = 0; a < 2 * Math.PI; a += Math.PI / 32) for (const s of S) { const p = C.M.torsoPoint(R, h, s, a); if (Math.abs(Math.abs(p[0]) - x0) < 1.5) best = Math.max(best, C.M.FLOOR - p[1]); }
   /* верх плеча — и корпус, и начало плечевой кости (дельтовидная), на которые ложится упор */
@@ -448,7 +448,7 @@ const SCS_L = once(() => {
   const C = ctx([]), { V } = C, q = scsPose(C, 0), f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5);
   /* упор наклонён по трапециевидной: прямая через верх плеч на |x| = 9 и 16 см */
   /* наклон — по верху плеч от |x| = 9 до 19,5 см (наружный край упора над дельтовидной), высота — в середине упора (|x| = 12,5) */
-  const y9 = shoulderTopAt(C, q, 9, 53), yOut = shoulderTopAt(C, q, 19.5);
+  const y9 = shoulderTopAt(C, q, 9, 56.8), yOut = shoulderTopAt(C, q, 19.5);
   const th = Math.atan2(y9 - yOut, 10.5), yc = y9 + (yOut - y9) * 3.5 / 10.5 - gh[1];
   return { dz: gh[2] - SCS.zr, padZ: yc - 1.0, th };
 });
@@ -467,7 +467,7 @@ const HK = once(() => {
   /* плоскость спинки и упоры: по телу в верхнем положении; направляющие — на 30 см позади оси таза */
   const q0 = body(u0), back = Math.min(...C.region(q0, 'back').map(p => V.dot(p, nb))) + 1.0, hip0 = V.add(H0, d, u0);
   const R0 = V.add(H0, nb, -30), yBack = -(back - V.dot(R0, nb));
-  const rail = { a: V.add(R0, d, -26).slice(1), b: V.add(R0, d, 175).slice(1) };
+  const rail = { a: V.add(R0, d, -30).slice(1), b: V.add(R0, d, 175).slice(1) };
   return { C, d, nb, pu, pf, H0, sup, body, u0, u1, R0, yBack, rail, machine: { type: 'hackSquat', id: 'hk', rx: 22, rail, plate: { c: V.add(sup, pf, -6).slice(1), ang: 20, w: 70, l: 46 } } };
 });
 
@@ -479,7 +479,7 @@ const HK_SLED = once(() => {
   /* верх плеч по оси d над полосами |x| ≈ 9 и 16 (по зоне упора, до h = 50…53): упор наклонён по трапециевидной */
   const R = C.M.catalogPose(q);
   const topAt = (x0, hMax) => { let best = null; for (let h = 36; h <= hMax; h += .5) for (let a = 0; a < 2 * Math.PI; a += Math.PI / 32) for (const s of S) { const p = C.M.torsoPoint(R, h, s, a), l = loc([p[0], C.M.FLOOR - p[1], p[2]]); if (Math.abs(Math.abs(l[0]) - x0) < 1.5 && (!best || l[2] > best[2])) best = l; } return best; };
-  const t9 = topAt(9, 53), t16 = topAt(16, 50), th = Math.atan2(t9[2] - t16[2], 7), top = (t9[2] + t16[2]) / 2, ySh = (t9[1] + t16[1]) / 2;
+  const t9 = topAt(9, 56.8), t16 = topAt(16, 53.8), th = Math.atan2(t9[2] - t16[2], 7), top = (t9[2] + t16[2]) / 2, ySh = (t9[1] + t16[1]) / 2;
   const gh = loc(V.mix(f.P.ghL, f.P.ghR, .5)), yb = L.yBack, zs = top - 1.0, parts = [];
   parts.push({ name: 'back', kind: 'obox', c: [0, yb + 3.5, (zs - 18 - 16) / 2], size: [32, 7, zs - 18 + 16], tone: 'pad', role: 'support', mount: 'plate', round: 1.8 });
   parts.push({ name: 'plate', kind: 'obox', c: [0, yb + 8, (zs - 18 - 16) / 2], size: [26, 2, zs - 18 + 12], mount: 'frame' });
@@ -545,7 +545,7 @@ module.exports = {
       q.lumbar = [C.lerp(2, 16, e), 0, 0]; q.thoracic = [C.lerp(4, 30, e), 0, 0]; q.neck = [C.lerp(8, 18, e), 0, 0];
       for (const s of S) q[s].girdle = [0, 10];
       const T = C.axes(q, 'thorax');
-      const wr = { L: V.add(V.add(V.add(T.o, T.x, -7), T.y, 15), T.z, 15.5), R: V.add(V.add(V.add(T.o, T.x, 7), T.y, 10), T.z, 22.5) };
+      const wr = { L: V.add(V.add(V.add(T.o, T.x, -7), T.y, 16.2), T.z, 15.5), R: V.add(V.add(V.add(T.o, T.x, 7), T.y, 10), T.z, 22.5) };
       for (const s of S) C.armTo(q, s, wr[s], V.unit(V.add(V.scale(T.y, -1), T.x, M.SIGN[s] * 1.1)), { pron: 60, mode: 'relaxed' });
       return q;
     }
@@ -594,7 +594,7 @@ module.exports = {
     contacts: [{ body: 'soleL', prop: 'cs:stepTop' }, { body: 'soleR', prop: 'cs:stepTop' }, { body: 'upperBack', prop: 'csSled:padL' }, { body: 'upperBack', prop: 'csSled:padR' },
       { body: 'gripL', prop: 'csSled:handleL' }, { body: 'gripR', prop: 'csSled:handleR' }],
     pose(t, C) {
-      const { V } = C, L = SCS_L(), e = C.ease(t), q = scsPose(C, C.lerp(-7, 30, e), SCS_Z()), f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5);
+      const { V } = C, L = SCS_L(), e = C.ease(t), q = scsPose(C, C.lerp(-6.5, 30, e), SCS_Z()), f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5);
       for (const s of S) {
         const lat = C.lat(q, s), g = [C.M.SIGN[s] * SCS_HD.x, gh[1] + SCS_HD.dy, gh[2] + SCS_HD.dz];
         C.grip(q, s, g, V.unit([0, .9, -.4]), V.unit(V.add(V.add([0, -1, 0], lat, .3), [0, 0, 1], .3)));
@@ -811,7 +811,7 @@ module.exports = {
       tiltBack(C, q, 4 * Math.sin(Math.PI * e), 1);
       q.thoracic = [C.lerp(0, -8, e), 0, 0]; q.lumbar = [C.lerp(-2, -3, e), 0, 0]; q.neck = [C.lerp(0, -6, e), 0, 0];
       for (const s of S) { q[s].hip = [C.lerp(14, 22, e), 3, 4]; q[s].knee = C.lerp(48, 56, e); q[s].ankle = [-28, 0]; q[s].girdle = [C.lerp(24, -6, e), C.lerp(6, -8, e)]; }
-      const y = C.lerp(BAR[1] - 61.5, BAR[1] - 15, e), z = BAR[2] + C.lerp(-1, -7, e) - 7 * Math.sin(Math.PI * e);
+      const y = C.lerp(BAR[1] - 61.5, BAR[1] - 16, e), z = BAR[2] + C.lerp(-1, -7, e) - 7 * Math.sin(Math.PI * e);
       C.rootAtShoulders(q, [0, y, z]);
       for (const s of S) {
         const lat = C.lat(q, s);
@@ -891,23 +891,8 @@ module.exports = {
 
   /* Жим ногами 45° (eccFirst): t=0 — верх, колени не выпрямлены до конца (~18°); t=1 — низ, колени ~90°.
      Стопы на ширине плеч, носки чуть наружу, колени по линии носков; спина и таз прижаты, руки на рукоятях. */
-  legpress: {
-    keys: [0, .25, .5, .75, 1],
-    equipment: (() => { const L = LP(); return [L.machine, { type: 'g4sled', id: 'sled', rail: [V3(L.R0, L.d, -10), V3(L.R0, L.d, 186)], up: L.nu, bind: { mix: ['ballL', 'ballR'] }, mountTo: 'lp:railL', parts: lpSled(L, -4) }]; })(),
-    contacts: [{ body: 'buttocks', prop: 'lp:seat' }, { body: 'back', prop: 'lp:back' }, { body: 'soleL', prop: 'sled:plate' }, { body: 'soleR', prop: 'sled:plate' },
-      { body: 'gripL', prop: 'lp:handleL' }, { body: 'gripR', prop: 'lp:handleR' }],
-    pose(t, C) {
-      const { V } = C, L = LP(), e = C.ease(t), q = C.M.clone(L.q), s0 = 98, s1 = 75, sp = C.lerp(s0, s1, e);
-      for (const s of S) lpFoot(C, q, L, s, V.add(V.add(V.add(L.H, L.d, sp), L.nu, L.h), C.latP(q, s), 13));
-      for (const s of S) {
-        q[s].girdle = [-2, -4];
-        const m = L.machine.handle, g = [C.M.SIGN[s] * m.x, m.y, m.z], lat = C.lat(q, s);
-        const T = C.axes(q);
-        C.grip(q, s, g, [0, ...m.ax], V.unit(V.add(V.add(V.scale(lat, .5), T.z, -1), T.y, -.5)));
-      }
-      return q;
-    }
-  },
+  /* Положение платформы вверху и внизу — по углу в колене: 20° (колени не выпрямлены до конца) и 88°. */
+  legpress: lpFeetSpec(0, 20, 88),
 
   /* Жим ногами со стопами выше и ниже на той же платформе: стопы сдвинуты вдоль платформы, ширина и разворот те же.
      Положение платформы в верхней и нижней точке подбирается по углу в колене. Стопы высоко — колено сгибается
@@ -933,7 +918,7 @@ module.exports = {
       /* руки скрещены на груди: кисти у противоположных плеч, правое предплечье поверх левого */
       for (const s of S) q[s].girdle = [0, 10];
       const T = C.axes(q, 'thorax');
-      const wr = { L: V.add(V.add(V.add(T.o, T.x, -7), T.y, 15), T.z, 15.5), R: V.add(V.add(V.add(T.o, T.x, 7), T.y, 10), T.z, 22.5) };
+      const wr = { L: V.add(V.add(V.add(T.o, T.x, -7), T.y, 16.2), T.z, 15.5), R: V.add(V.add(V.add(T.o, T.x, 7), T.y, 10), T.z, 22.5) };
       for (const s of S) C.armTo(q, s, wr[s], V.unit(V.add(V.scale(T.y, -1), T.x, M.SIGN[s] * 1.1)), { pron: 60, mode: 'relaxed' });
       return q;
     }

@@ -18,7 +18,8 @@ Lazy Gym Planner — PWA-планировщик тренировок с атла
 
 | Файл | Назначение |
 |---|---|
-| `src/js/09bm-mannequin.js` | Манекен: антропометрия de Leva/Winter, 47 степеней свободы, кинематика, поверхность тела. |
+| `src/js/09bm-mannequin.js` | Манекен: размеры по ANSUR II, массы сегментов de Leva/Winter, 47 степеней свободы, кинематика, поверхность тела. |
+| `tools/mannequin/anthro.js`, `anthro-ansur2.json` | Сверка пропорций манекена с живыми людьми (ANSUR II): `node tools/mannequin/anthro.js`. |
 | `src/js/09bn-equipment.js`, `src/js/09bo-*.js` | Инвентарь и тренажёры в реальных размерах; подвижные части следуют за позой (`BIND`). |
 | `tools/mannequin/exercises/*.js` | Спецификации упражнений: инвентарь, контакты, поза `pose(t, C)`. |
 | `src/js/09bp-poses.js` | **Генерируется** `npm run mannequin:bake`. Руками не править. |

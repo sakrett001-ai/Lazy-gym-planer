@@ -52,7 +52,7 @@ test('SVG limb skin encloses its highlighted regions; a narrowed rendered limb f
   };
   check();
   const skin=figure.svg.querySelector('[data-limb="thL"]'),center=ex.anim.catalogRig(.7).hipL[0];let index=0;
-  skin.setAttribute('d',skin.getAttribute('d').replace(/-?\d*\.?\d+/g,v=>String(index++%2?Number(v):center+(Number(v)-center)*.75)));
+  skin.setAttribute('d',skin.getAttribute('d').replace(/-?\d*\.?\d+/g,v=>String(index++%2?Number(v):center+(Number(v)-center)*.6)));
   assert.throws(check,/muscle contour/);
  }finally{dom.window.close();}
 });
