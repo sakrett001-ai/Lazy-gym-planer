@@ -1035,6 +1035,17 @@ details.rule p { margin:6px 0 0; }
 .gentle-warn { color:var(--muted); font-size:13px; }
 .unfit { color:color-mix(in srgb, var(--hot) 80%, var(--ink)); font-weight:600; }
 
+/* Переключатель хвата в карточке (11h-variants.js). */
+.c-var { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:0; border-top:1px solid var(--line); padding-top:10px; }
+@media (min-width:700px) { .c-var { grid-column:2; min-width:0; } }
+.c-var > span { font-size:13px; color:var(--muted); margin-right:2px; }
+.c-var button { border:1px solid var(--line); background:var(--surface); color:var(--ink); border-radius:999px; padding:5px 11px; min-height:34px; font:inherit; font-size:13px; font-weight:600; }
+.c-var button:hover { border-color:var(--accent); }
+.c-var button.on { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+.h-var { margin-top:10px; border-top:1px solid var(--line); padding-top:8px; }
+.h-var ul { list-style:none; margin:4px 0 0; padding:0; display:grid; gap:4px; font-size:13px; color:var(--muted); }
+.h-var b { color:var(--ink); font-weight:600; }
+
 </style>
 </head>
 <body>
@@ -1101,7 +1112,7 @@ details.rule p { margin:6px 0 0; }
 
 <dialog id="motion-view" class="motion-view" aria-labelledby="mv-title">
  <div class="mv-shell">
-  <header class="mv-head"><div><p class="mv-eyebrow">LAZY GYM PLANNER · АТЛАС ДВИЖЕНИЙ · 4.12.0</p><h2 id="mv-title">Разбор упражнения</h2></div><button type="button" id="mv-close" aria-label="Закрыть разбор">Закрыть ×</button></header>
+  <header class="mv-head"><div><p class="mv-eyebrow">LAZY GYM PLANNER · АТЛАС ДВИЖЕНИЙ · 4.13.0</p><h2 id="mv-title">Разбор упражнения</h2></div><button type="button" id="mv-close" aria-label="Закрыть разбор">Закрыть ×</button></header>
   <div class="mv-select"><button type="button" data-mv-nav="-1" aria-label="Предыдущее упражнение">←</button><label for="mv-exercise">Упражнение<select id="mv-exercise"></select></label><button type="button" data-mv-nav="1" aria-label="Следующее упражнение">→</button></div>
   <div class="mv-tools" id="mv-tools"></div>
   <div class="mv-grid">
@@ -1118,7 +1129,7 @@ details.rule p { margin:6px 0 0; }
     <section id="mv-muscle-panel" class="muscle-panel" aria-label="Участие мышц по фазам" hidden><h3>Мышцы по фазам</h3><div class="muscle-scale" aria-hidden="true"><span>Нейтрально</span><span class="muscle-scale-gradient"></span><span>Сильнее</span></div><p class="muscle-explanation">Учебная схема: цвет показывает примерное участие мышцы, а не измеренную силу или ЭМГ. Кривые условные. Части мышцы работают совместно; для большинства частей используется общий профиль группы.</p><label class="muscle-region-select">Выделить область<select id="mv-region" aria-label="Выделить мышечную область"><option value="all">Все области</option></select></label><p id="mv-muscle-note" class="muscle-phase-note"></p><ul id="mv-muscle-list" class="muscle-list"></ul><p class="muscle-explanation">Скрытые поверхности видны в другом ракурсе.</p></section>
     <p id="mv-tempo" class="mv-small"></p>
    </section>
-   <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Работающие мышцы</h3><p class="mv-muscle-label">Основные</p><p id="mv-primary"></p><p class="mv-muscle-label">Вспомогательные</p><p id="mv-secondary"></p></div></div><p class="mv-small">На объёмном манекене можно выделить мышечную область и сменить ракурс. Глубокие части перечислены в пояснениях.</p><h3>Как выполнять</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Ошибки и дыхание</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>О демонстрациях</summary><p>Схемы помогают разобрать последовательность движения. Амплитуда зависит от упражнения и особенностей человека; схематичный силуэт не задаёт обязательные углы суставов.</p><div id="mv-sources"></div><p class="mv-small">Версия демонстраций 4.12.0</p></details></aside>
+   <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Работающие мышцы</h3><p class="mv-muscle-label">Основные</p><p id="mv-primary"></p><p class="mv-muscle-label">Вспомогательные</p><p id="mv-secondary"></p></div></div><p class="mv-small">На объёмном манекене можно выделить мышечную область и сменить ракурс. Глубокие части перечислены в пояснениях.</p><h3>Как выполнять</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Ошибки и дыхание</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>О демонстрациях</summary><p>Схемы помогают разобрать последовательность движения. Амплитуда зависит от упражнения и особенностей человека; схематичный силуэт не задаёт обязательные углы суставов.</p><div id="mv-sources"></div><p class="mv-small">Версия демонстраций 4.13.0</p></details></aside>
   </div>
  </div>
 </dialog>
@@ -12212,6 +12223,7 @@ function cardHtml(it, idx) {
       ${r.coachNote ? `<p class="c-note"><b>Заметка:</b> ${esc(r.coachNote)}</p>` : ''}
     </div>
   </div>
+  ${variantRowHtml(it)}
   <div class="c-mus">
     ${musFoldHead(ex)}
     <div class="c-map">${muscleMapSvg(lvl, {aria:'Работающие мышцы: ' + ex.pri.map(m => MUSCLE_NAMES[m]).join(', ')})}</div>
@@ -13354,6 +13366,66 @@ document.addEventListener('toggle', e => {
   ensureFold(S).gentle = !e.target.open; saveSettings();
 }, true);
 
+/* ===================== ХВАТЫ И ПОСТАНОВКА РУК =====================
+   Один снаряд — разные хваты: подтягивания прямым и обратным хватом, жим лёжа обычным и узким, сгибания с
+   супинацией и «молотом», отжимания с обычной, широкой и узкой постановкой рук. Для человека это одна карточка
+   с переключателем; внутри каждый хват — своё упражнение каталога: своя поза манекена, свои мышцы, свои метки
+   нагрузки на суставы и свой вес в журнале (узким хватом обычно поднимают иначе, и подсказки «прибавьте» не
+   смешиваются). Переключение меняет упражнение в той же карточке: место в плане и, в своём плане, дозировка
+   сохраняются. В семью входят только упражнения на одном и том же инвентаре. */
+const VARIANT_FAMILIES = [
+  {id:'pullbar', what:'Хват', items:[['pullup', 'Прямой'], ['chinup', 'Обратный']]},
+  {id:'bench', what:'Хват', items:[['bbbench', 'Обычный'], ['closegrip', 'Узкий']]},
+  {id:'dbcurl', what:'Хват', items:[['dbcurl', 'Ладони вверх'], ['hammer', 'Молот']]},
+  {id:'pushup', what:'Постановка рук', items:[['pushup', 'Обычно'], ['widepush', 'Широко'], ['diamond', 'Узко']]}
+];
+const VARIANT_OF = Object.fromEntries(VARIANT_FAMILIES.flatMap(f => f.items.map(([id, label]) => [id, {family:f, label}])));
+
+/* хваты, которые можно выбрать здесь и сейчас: есть инвентарь, по уровню, не нагружают бережёмые суставы */
+function variantsFor(ex, E, taken = new Set()) {
+  const v = VARIANT_OF[ex.id]; if (!v) return [];
+  const lvlMax = S.level === 'beg' || S.goal === 'gentle' ? 2 : 3;
+  const list = v.family.items.map(([id, label]) => ({ex:EXI[id], label}))
+    .filter(x => x.ex && (x.ex === ex || (!taken.has(x.ex.id) && available(x.ex, E) && x.ex.lvl <= lvlMax && fitsBody(x.ex) && (S.format !== 'static' || staticOk(x.ex)))));
+  return list.length > 1 ? list : [];
+}
+/* хват, который уже стоит в другой карточке плана, не предлагается: два одинаковых упражнения в плане не нужны */
+function variantTaken() {
+  const ids = new Set(plan && plan.items ? plan.items.map(x => x.ex.id) : []);
+  if (S.mode === 'custom') for (const x of customOf().items) ids.add(x.id);
+  return ids;
+}
+function variantRowHtml(it, E = plan && plan.E || effEquip(S.equip)) {
+  const list = variantsFor(it.ex, E, variantTaken()); if (!list.length) return '';
+  const what = VARIANT_OF[it.ex.id].family.what;
+  return `<div class="c-var" role="group" aria-label="${what}"><span>${what}:</span>${list.map(x => {
+    const on = x.ex === it.ex;
+    return `<button type="button" class="${on ? 'on' : ''}" data-variant="${x.ex.id}" data-slot="${it.slot}" aria-pressed="${on}"${on ? '' : ` title="${esc(x.ex.name)}"`}>${esc(x.label)}</button>`;
+  }).join('')}</div>`;
+}
+/* в истории упражнения — что записано другими хватами той же семьи */
+function variantHistNote(ex) {
+  const v = VARIANT_OF[ex.id]; if (!v) return '';
+  const rows = v.family.items.filter(([id]) => id !== ex.id).map(([id, label]) => {
+    const ss = (LOG.data[id] || []).filter(x => x.s.some(Boolean)); if (!ss.length) return '';
+    const last = ss[ss.length - 1];
+    return `<li><b>${esc(label)}</b> · ${ss.length} ${plural(ss.length, 'запись', 'записи', 'записей')}, последняя ${fmtDay(last.d, true)}: ${last.s.filter(Boolean).map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(' · ')}</li>`;
+  }).filter(Boolean);
+  return rows.length ? `<div class="h-var"><p class="h-cap">Другие хваты — ведутся отдельно</p><ul>${rows.join('')}</ul></div>` : '';
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('button[data-variant]'); if (!t || !plan || !plan.items) return;
+  const slot = +t.dataset.slot, it = plan.items.find(x => x.slot === slot), next = EXI[t.dataset.variant];
+  if (!it || !next || it.ex === next) return;
+  /* в своём плане хват записывается в сам план (подходы, вес и заметка остаются); в собранном — как замена */
+  if (S.mode === 'custom') { const item = customOf().items[slot]; if (!item || customOf().items.some(x => x.id === next.id)) return; item.id = next.id; saveSettings(); }
+  else { const k = swapKey(); swaps[k] = swaps[k] || {}; swaps[k][slot] = next.id; }
+  done = {}; renderPlan();
+  const card = document.querySelector(`.card[data-slot="${slot}"]`), b = card && card.querySelector(`[data-variant="${next.id}"]`);
+  if (b) b.focus({preventScroll:true});
+});
+
 /* ---------- Проигрыватель движений: карточки и увеличенный разбор ---------- */
 let figs = [], rafId = 0, io = null;
 const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -14112,7 +14184,7 @@ function sparkSvg(pts, unit, step = 0.5) {
 }
 function histHtml(ex) {
   const ss = (LOG.data[ex.id] || []).filter(x => x.s.some(Boolean));
-  if (!ss.length) return `<p class="h-empty">Записей пока нет. Отметьте подходы выше — здесь появится история и график.</p>`;
+  if (!ss.length) return `<p class="h-empty">Записей пока нет. Отметьте подходы выше — здесь появится история и график.</p>${variantHistNote(ex)}`;
   const m = metricOf(ex);
   const pts = ss.map(s => ({d:s.d, v:m.f(s)})).filter(p => p.v != null).slice(-24);
   const best = pts.length ? Math.max(...pts.map(p => p.v)) : null;
@@ -14120,7 +14192,7 @@ function histHtml(ex) {
     <span class="h-s">${s.s.filter(Boolean).map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(' · ')}</span>
     <button type="button" class="h-del" data-del="${ex.id}" data-d="${s.d}" aria-label="Удалить запись за ${fmtDay(s.d, true)}">Удалить</button></li>`).join('');
   return `<div class="h-chart"><p class="h-cap">${m.name}, ${m.unit}${best != null ? ` · лучший ${fmtKg(Math.round(best * 2) / 2)}` : ''}</p>${sparkSvg(pts, m.unit)}</div>
-    <ul class="h-list">${rows}</ul>${ss.length > 6 ? `<p class="h-more">Всего записей: ${ss.length}. Полная история — в разделе «Журнал».</p>` : ''}`;
+    <ul class="h-list">${rows}</ul>${ss.length > 6 ? `<p class="h-more">Всего записей: ${ss.length}. Полная история — в разделе «Журнал».</p>` : ''}${variantHistNote(ex)}`;
 }
 function histCount(id) { return (LOG.data[id] || []).filter(x => x.s.some(Boolean)).length; }
 
@@ -15307,6 +15379,6 @@ renderPlan();
 prefetchStressIds();
 logInit();
 
-window.PODHOD_VERSION='4.12.0';window.PODHOD_BUILD='4.12.0-ee37c5a2b210';window.PODHOD_LANG='ru';
+window.PODHOD_VERSION='4.13.0';window.PODHOD_BUILD='4.13.0-8fba2f02030e';window.PODHOD_LANG='ru';
 
 </script>

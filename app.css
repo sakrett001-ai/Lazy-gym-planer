@@ -1032,3 +1032,14 @@ details.rule p { margin:6px 0 0; }
 .gentle-box b { font-weight:600; }
 .gentle-warn { color:var(--muted); font-size:13px; }
 .unfit { color:color-mix(in srgb, var(--hot) 80%, var(--ink)); font-weight:600; }
+
+/* Переключатель хвата в карточке (11h-variants.js). */
+.c-var { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:0; border-top:1px solid var(--line); padding-top:10px; }
+@media (min-width:700px) { .c-var { grid-column:2; min-width:0; } }
+.c-var > span { font-size:13px; color:var(--muted); margin-right:2px; }
+.c-var button { border:1px solid var(--line); background:var(--surface); color:var(--ink); border-radius:999px; padding:5px 11px; min-height:34px; font:inherit; font-size:13px; font-weight:600; }
+.c-var button:hover { border-color:var(--accent); }
+.c-var button.on { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+.h-var { margin-top:10px; border-top:1px solid var(--line); padding-top:8px; }
+.h-var ul { list-style:none; margin:4px 0 0; padding:0; display:grid; gap:4px; font-size:13px; color:var(--muted); }
+.h-var b { color:var(--ink); font-weight:600; }
