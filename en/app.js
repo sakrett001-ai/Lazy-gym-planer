@@ -6481,6 +6481,9 @@ function selectMuscleRegion(prefix,id){
    поясница    — наклон корпуса ≥40° без опоры с весом: McGill 1997, J Biomech 30(5):465–475;
    плечи       — плечо за линией корпуса ≥20° в жимах и брусьях, длинный рычаг в разведениях:
                  Fees et al. 1998, AJSM 26(5):732–742; брусья — McKenzie et al. 2022, IJERPH 19(21):14390;
+   плечи вверх — жим над головой: плечо поднято на 90–120° под весом — подакромиальное пространство здесь самое узкое
+                 (при работе мышц — уже всего около 90°): Graichen et al. 1999, AJR 172(4):1081–1086; жимы над головой —
+                 среди упражнений, на которые чаще жалуются при боли в плече: Kolber et al. 2010, JSCR 24(6):1696–1704;
    локти       — сгибание ≥100° с весом над головой в изолирующих упражнениях на трицепс (практическое правило);
    запястья    — разгибание кисти ≥60° под весом тела: J Wrist Surg 2017, 6(4):276–279;
    ахилл       — тыльное сгибание ≥15° с весом в подъёмах на носки: Weinert-Aplin et al. 2015, JSSM 14:459–465;
@@ -6494,6 +6497,7 @@ const STRESS_RULES = [
   {id:'lumbar', parts:['lower back'], zone:'Lower back', what:'Leaning forward with a load and no support — peak load on the lower back.', tip:'Keep a neutral back, hinge at the hips, keep the weight close to your legs.'},
   {id:'shPress', parts:['shoulders'], zone:'Shoulders', what:'The upper arm goes behind the torso under load — stress on the front of the shoulder joint.', tip:'Lower only to a comfortable depth, shoulder blades squeezed and set.'},
   {id:'shLever', parts:['shoulders'], zone:'Shoulders', what:'Long lever: the weight is far from the shoulder.', tip:'Keep elbows slightly bent, don’t sink at the bottom.'},
+  {id:'shOverhead', parts:['shoulders'], zone:'Shoulders', what:'The arm passes through the 90–120° arc under load — the space under the acromion is narrowest and the shoulder tendons are squeezed the most.', tip:'Press in front of the head, never behind it, elbows slightly in front of the torso; if it hurts, stop lower or swap the exercise.'},
   {id:'hang', parts:['shoulders'], zone:'Shoulders', what:'Hanging: body weight stretches the shoulder joint.', tip:'Active hang: shoulders away from your ears, no dropping into the bottom.'},
   {id:'pullTop', parts:['shoulders'], zone:'Shoulders', what:'Top of the pull-up: shoulders roll forward and up to the ears.', tip:'Chest to the bar, shoulder blades down and back, no jerking.'},
   {id:'neck', parts:['neck'], zone:'Neck', what:'When strength runs out, people reach for the bar with their neck — this overloads the cervical spine.', tip:'Keep your chin neutral and eyes forward: better to fall short than to reach with your neck.'},
@@ -6508,6 +6512,8 @@ const STRESS_FRAMES = 40;
 const STRESS_CACHE = new Map();
 /* наклоны от таза, если таблица движений планировщика ещё не загружена (проверка рисунков без приложения) */
 const STRESS_HINGE = new Set(['deadlift', 'rdl', 'sllift', 'goodmorning', 'kbswing', 'hyper', 'pullthrough']);
+/* жимы вверх — так же, на случай проверки без таблицы движений */
+const STRESS_VPUSH = new Set(['dbpress', 'ohp', 'pikepush', 'arnold', 'declinepike', 'shoulderpressm', 'smithohp']);
 
 /* что держит и на что опирается тело — по контактам спецификации */
 function stressContacts(ex) {
@@ -6557,6 +6563,9 @@ function stressRulesAt(ex, k, f) {
   if (k.sole('') && !k.seated && (k.loaded || k.backBar) && f.trunk >= 40) add('lumbar', ['lumbar']);
   const push = ['chest', 'triceps', 'shoulders'].includes(ex.g);
   if (push && (k.loaded || k.handsBear)) add('shPress', both(s => f[s].behind >= 20, 'sh'));
+  /* жим вверх: плечо в дуге 90–120° — только в жимах, а не в тяге к лицу или махах (там другая задача и малый вес) */
+  const vpush = typeof PATTERN !== 'undefined' ? PATTERN[ex.id] === 'vpush' : STRESS_VPUSH.has(ex.id);
+  if (vpush && (k.loaded || k.handsBear)) add('shOverhead', both(s => f[s].elevation >= 90 && f[s].elevation <= 120, 'sh'));
   if (ex.g === 'chest' && k.loaded) add('shLever', both(s => (f[s].elbow <= 35 && f[s].reach >= 45 && f[s].beta >= 60 && f[s].beta <= 120 && f.trunk > 60) || (f[s].elevation >= 130 && f[s].reach >= 35), 'sh'));
   if (k.bar) {
     add('hang', both(s => f[s].elevation >= 140, 'sh'));
@@ -10330,4 +10339,4 @@ logInit();
 plural = (n, a, b, c) => n === 1 ? a : c;
 DEC = '.';
 
-window.PODHOD_VERSION='4.11.0';window.PODHOD_BUILD='4.11.0-b4d1a85a8ee0';window.PODHOD_LANG='en';
+window.PODHOD_VERSION='4.12.0';window.PODHOD_BUILD='4.12.0-ee37c5a2b210';window.PODHOD_LANG='en';

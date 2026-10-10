@@ -11,19 +11,19 @@
   "theme_color": "#2347C8",
   "icons": [
     {
-      "src": "icon-192.png?v=4.11.0-b4d1a85a8ee0",
+      "src": "icon-192.png?v=4.12.0-ee37c5a2b210",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icon-512.png?v=4.11.0-b4d1a85a8ee0",
+      "src": "icon-512.png?v=4.12.0-ee37c5a2b210",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icon-maskable-512.png?v=4.11.0-b4d1a85a8ee0",
+      "src": "icon-maskable-512.png?v=4.12.0-ee37c5a2b210",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

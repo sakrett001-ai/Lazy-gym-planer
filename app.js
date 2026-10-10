@@ -6481,6 +6481,9 @@ function selectMuscleRegion(prefix,id){
    поясница    — наклон корпуса ≥40° без опоры с весом: McGill 1997, J Biomech 30(5):465–475;
    плечи       — плечо за линией корпуса ≥20° в жимах и брусьях, длинный рычаг в разведениях:
                  Fees et al. 1998, AJSM 26(5):732–742; брусья — McKenzie et al. 2022, IJERPH 19(21):14390;
+   плечи вверх — жим над головой: плечо поднято на 90–120° под весом — подакромиальное пространство здесь самое узкое
+                 (при работе мышц — уже всего около 90°): Graichen et al. 1999, AJR 172(4):1081–1086; жимы над головой —
+                 среди упражнений, на которые чаще жалуются при боли в плече: Kolber et al. 2010, JSCR 24(6):1696–1704;
    локти       — сгибание ≥100° с весом над головой в изолирующих упражнениях на трицепс (практическое правило);
    запястья    — разгибание кисти ≥60° под весом тела: J Wrist Surg 2017, 6(4):276–279;
    ахилл       — тыльное сгибание ≥15° с весом в подъёмах на носки: Weinert-Aplin et al. 2015, JSSM 14:459–465;
@@ -6494,6 +6497,7 @@ const STRESS_RULES = [
   {id:'lumbar', parts:['поясница'], zone:'Поясница', what:'Наклон корпуса с весом без опоры — пик нагрузки на поясницу.', tip:'Спина нейтральная, движение от таза, вес ближе к ногам.'},
   {id:'shPress', parts:['плечи'], zone:'Плечи', what:'Плечо ушло за линию корпуса под весом — нагрузка на переднюю часть сустава.', tip:'Опускайтесь до комфортной глубины, лопатки сведены и прижаты.'},
   {id:'shLever', parts:['плечи'], zone:'Плечи', what:'Длинный рычаг: вес далеко от плеча.', tip:'Локти слегка согнуты, без провала в нижней точке.'},
+  {id:'shOverhead', parts:['плечи'], zone:'Плечи', what:'Рука проходит дугу 90–120° под весом — пространство под акромионом самое узкое, сухожилия плеча сдавлены сильнее всего.', tip:'Жмите перед головой, не из-за головы, локти чуть впереди корпуса; при боли — остановитесь ниже или замените упражнение.'},
   {id:'hang', parts:['плечи'], zone:'Плечи', what:'Вис: плечевой сустав растянут весом тела.', tip:'Активный вис: плечи от ушей, без падения в нижнюю точку.'},
   {id:'pullTop', parts:['плечи'], zone:'Плечи', what:'Верх подтягивания: плечи уходят вперёд и к ушам.', tip:'Грудь к перекладине, лопатки вниз и назад, без рывка.'},
   {id:'neck', parts:['шея'], zone:'Шея', what:'Когда не хватает сил, к перекладине тянутся шеей — это перегружает шейный отдел.', tip:'Подбородок нейтрально, взгляд вперёд: лучше недотянуть, чем дотягиваться шеей.'},
@@ -6508,6 +6512,8 @@ const STRESS_FRAMES = 40;
 const STRESS_CACHE = new Map();
 /* наклоны от таза, если таблица движений планировщика ещё не загружена (проверка рисунков без приложения) */
 const STRESS_HINGE = new Set(['deadlift', 'rdl', 'sllift', 'goodmorning', 'kbswing', 'hyper', 'pullthrough']);
+/* жимы вверх — так же, на случай проверки без таблицы движений */
+const STRESS_VPUSH = new Set(['dbpress', 'ohp', 'pikepush', 'arnold', 'declinepike', 'shoulderpressm', 'smithohp']);
 
 /* что держит и на что опирается тело — по контактам спецификации */
 function stressContacts(ex) {
@@ -6557,6 +6563,9 @@ function stressRulesAt(ex, k, f) {
   if (k.sole('') && !k.seated && (k.loaded || k.backBar) && f.trunk >= 40) add('lumbar', ['lumbar']);
   const push = ['chest', 'triceps', 'shoulders'].includes(ex.g);
   if (push && (k.loaded || k.handsBear)) add('shPress', both(s => f[s].behind >= 20, 'sh'));
+  /* жим вверх: плечо в дуге 90–120° — только в жимах, а не в тяге к лицу или махах (там другая задача и малый вес) */
+  const vpush = typeof PATTERN !== 'undefined' ? PATTERN[ex.id] === 'vpush' : STRESS_VPUSH.has(ex.id);
+  if (vpush && (k.loaded || k.handsBear)) add('shOverhead', both(s => f[s].elevation >= 90 && f[s].elevation <= 120, 'sh'));
   if (ex.g === 'chest' && k.loaded) add('shLever', both(s => (f[s].elbow <= 35 && f[s].reach >= 45 && f[s].beta >= 60 && f[s].beta <= 120 && f.trunk > 60) || (f[s].elevation >= 130 && f[s].reach >= 35), 'sh'));
   if (k.bar) {
     add('hang', both(s => f[s].elevation >= 140, 'sh'));
@@ -10327,4 +10336,4 @@ renderPlan();
 prefetchStressIds();
 logInit();
 
-window.PODHOD_VERSION='4.11.0';window.PODHOD_BUILD='4.11.0-b4d1a85a8ee0';window.PODHOD_LANG='ru';
+window.PODHOD_VERSION='4.12.0';window.PODHOD_BUILD='4.12.0-ee37c5a2b210';window.PODHOD_LANG='ru';
