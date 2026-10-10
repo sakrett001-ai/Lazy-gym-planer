@@ -192,6 +192,68 @@ function ohextKey(t, C, prev) {
   return { q, chosen };
 }
 
+/* ---------- Ходьба на месте, как на беговой дорожке (прогулка фермера) ----------
+   Цикл из двух шагов; фаза ноги φ: 0 — постановка пятки, 0…0,1 — перекат с пятки (двойная опора),
+   0,1…0,5 — опора на всю стопу и подъём пятки (одиночная опора), 0,5…0,6 — толчок носком (двойная опора),
+   0,6…1 — перенос ноги. Опорная стопа уезжает назад вместе с «лентой» с постоянной скоростью; таз стоит на месте,
+   опускается в двойной опоре и поднимается в середине опоры. Короткий шаг (длина шага 48 см), стопы на ширине таза.
+   Пятка отрывается, когда нога иначе не дотягивается или голеностоп доходит до 15° тыльного сгибания;
+   в толчке голеностоп разгибается до −12°, колено сгибается до ≈40°.
+   Перенос: голеностоп идёт по кривой — назад-вверх, под тазом, вперёд-вниз к пятке; колено сгибается до ≈60°. */
+const WALK = { x: 9, toeOut: 6, ds: .1, stance: .6, stride: 96, zA: 24, strike: 15, sway: 2, yaw: 4, kneeMid: 8, dorsiMax: 15 };
+const smooth01 = u => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
+/* «плоская» стопа на ленте: z голеностопа, если бы стопа стояла на всей подошве (голеностоп в 13,5 см позади подушечки
+   и в 5,2 см впереди нижней точки пятки) */
+const walkAnkleZ = ph => WALK.zA - WALK.stride * ph;
+function walkBody(C, t, y0, bob = WALK.bob) {
+  const q = C.base(), psi = -WALK.yaw * Math.cos(2 * Math.PI * t) * C.D2R;
+  const y = y0 + bob * Math.cos(4 * Math.PI * (t - .3)), x = WALK.sway * Math.cos(2 * Math.PI * (t - .3));
+  C.root(q, [x, y, 0], [0, 1, 0], [Math.sin(psi), 0, Math.cos(psi)]);
+  /* грудная клетка разворачивается навстречу тазу: плечи почти не крутятся */
+  q.lumbar = [0, 0, 0]; q.thoracic = [-2, 0, WALK.yaw * .8 * Math.cos(2 * Math.PI * t)]; q.neck = [-2, 0, WALK.yaw * .2 * Math.cos(2 * Math.PI * t)];
+  return q;
+}
+function walkFoot(C, q, s, ph) {
+  const { V } = C, g = C.M.SIGN[s], yaw = g * WALK.toeOut, x = g * WALK.x, za = walkAnkleZ(ph);
+  const pole = V.unit([g * .15, .05, 1]), fwd = [Math.sin(yaw * C.D2R), 0, Math.cos(yaw * C.D2R)];
+  /* перекат с пятки: носок опускается с 15° до пола */
+  if (ph < WALK.ds) return C.heel(q, s, [x - fwd[0] * 5.2, 0, za - fwd[2] * 5.2], yaw, WALK.strike * (1 - smooth01(ph / WALK.ds)), pole);
+  const ball = [x + fwd[0] * 13.5, 0, za + fwd[2] * 13.5], put = h => C.foot(q, s, ball, yaw, pole, { forward: fwd, heel: h, allowShort: true });
+  /* пятка отрывается, когда нога иначе не дотягивается (колено почти прямое) или голень наклонилась вперёд до 15°;
+     к толчку колено плавно сгибается до 40° (φ 0,38…0,6), голеностоп разгибается до −12° (φ 0,49…0,6) — стопа отталкивается носком */
+  const kMin = Math.max(3, 40 * smooth01((ph - .38) / (WALK.stance - .38))), dMax = C.lerp(WALK.dorsiMax, -12, smooth01((ph - .49) / (WALK.stance - .49)));
+  const ok = h => { const r = put(h); return r.reachError < .02 && q[s].knee >= kMin && q[s].ankle[0] <= dMax; };
+  let lo = 0, hi = 0;
+  if (!ok(0)) { while (hi < 70 && !ok(hi += 2)); lo = Math.max(0, hi - 2); for (let i = 0; i < 14; i++) { const m = (lo + hi) / 2; if (ok(m)) hi = m; else lo = m; } }
+  return put(hi);
+}
+const walkLayout = once(() => {
+  const C = ctx([]), { V, M } = C, span = k => Math.sqrt(M.B.th ** 2 + M.B.sk ** 2 + 2 * M.B.th * M.B.sk * Math.cos(k * C.D2R));
+  /* высота таза: при постановке пятки колено согнуто на 4°, в середине опоры (φ = 0,3) — на 8°;
+     между ними таз плавно поднимается и опускается (два раза за цикл) */
+  const g = WALK.toeOut * C.D2R, fwd = [Math.sin(g), 0, Math.cos(g)], za = walkAnkleZ(0);
+  const anHS = M.heelFrame([WALK.x - fwd[0] * 5.2, 0, za - fwd[2] * 5.2], WALK.toeOut, WALK.strike).o;
+  const anMid = M.footFrame([WALK.x + fwd[0] * 13.5, 0, walkAnkleZ(.3) + fwd[2] * 13.5], WALK.toeOut, {}).o;
+  const at = (t, an, k) => C.solve1D(y => V.dist(C.fk(walkBody(C, t, y, 0)).P.hipL, an) - span(k), 80, 100);
+  const yHS = at(0, anHS, 4), yMid = at(.3, anMid, WALK.kneeMid), bob = (yMid - yHS) / (1 - Math.cos(1.2 * Math.PI));
+  return { y0: yMid - bob, bob };
+});
+/* поза ноги s в момент t: опора — по ленте, перенос — голеностоп по кривой между настоящими позами отрыва и постановки */
+function walkLeg(C, q, s, t) {
+  const { V } = C, L = walkLayout(), g = C.M.SIGN[s], ph = (((t + (s === 'R' ? .5 : 0)) % 1) + 1) % 1;
+  if (ph < WALK.stance) { walkFoot(C, q, s, ph); return; }
+  const at = (tt, p) => { const b = walkBody(C, tt, L.y0, L.bob); walkFoot(C, b, s, p); const f = C.fk(b); return { a: f.P['an' + s], d: b[s].ankle[0], m: b[s].mtp || 0 }; };
+  const u = (ph - WALK.stance) / (1 - WALK.stance), t0 = t - (ph - WALK.stance), t1 = t + (1 - ph);
+  const A0 = at(t0, WALK.stance), A1 = at(t1, 0), x = g * WALK.x;
+  const pts = [A0.a, [x, A0.a[1] + 8, A0.a[2] + 3], [x, 22, -8], [x, 16, 9], [x, A1.a[1] + 1.5, A1.a[2] - 5], A1.a];
+  const n = pts.length - 1, f = Math.min(n - 1e-9, u * n), i = Math.floor(f), w = f - i, P = k => pts[Math.max(0, Math.min(n, k))];
+  const cr = (p0, p1, p2, p3) => [0, 1, 2].map(j => .5 * (2 * p1[j] + (-p0[j] + p2[j]) * w + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * w * w + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * w * w * w));
+  const ankle = cr(P(i - 1), P(i), P(i + 1), P(i + 2));
+  const dorsi = u < .35 ? C.lerp(A0.d, 0, smooth01(u / .35)) : u < .75 ? C.lerp(0, 3, (u - .35) / .4) : C.lerp(3, A1.d, smooth01((u - .75) / .25));
+  C.legTo(q, s, ankle, V.unit([g * .12, .1, 1]), { dorsi });
+  q[s].mtp = A0.m * (1 - smooth01(u / .3));
+}
+
 module.exports = {
 
   /* Разгибание руки с гантелью в наклоне (левая рука): правые колено и ладонь на скамье, левая стопа на полу,
@@ -520,33 +582,25 @@ module.exports = {
     }
   },
 
-  /* Прогулка фермера: замкнутый цикл — шаг на месте (стопы чередуются), корпус вертикален, плечи опущены и отведены,
-     снаряды неподвижно висят по бокам. t 0…0.5 — шаг левой (опора на правую), 0.5…1 — шаг правой.
+  /* Прогулка фермера: замкнутый цикл из двух шагов на месте, как на беговой дорожке (см. WALK): пятка встаёт впереди,
+     стопа уезжает назад под корпус, толчок носком, перенос ноги с согнутым коленом. Корпус вертикален, плечи опущены
+     и отведены, снаряды висят по бокам. t=0 — постановка левой пятки, t=0,5 — правой.
+     dynamic: ходьба — динамическое равновесие (центр масс переходит с одной стопы на другую), как в выпадах с шагом.
      Гантели по умолчанию; гири — если выбраны гири (optional 'kb'). */
   farmer: {
-    keys: Array.from({ length: 17 }, (_, i) => i / 16),
+    keys: Array.from({ length: 21 }, (_, i) => i / 20),
     loop: true,
+    dynamic: true,
     equipment: [{ type: 'dumbbell', id: 'dbL', hand: 'L', optionalNot: 'kb' }, { type: 'dumbbell', id: 'dbR', hand: 'R', optionalNot: 'kb' },
       { type: 'kettlebell', id: 'kbL', hands: ['L'], hang: 'gravity', optional: 'kb' }, { type: 'kettlebell', id: 'kbR', hands: ['R'], hang: 'gravity', optional: 'kb' }],
-    contacts: [{ body: 'soleL', prop: 'floor', when: [0, .14] }, { body: 'soleL', prop: 'floor', when: [.36, 1] }, { body: 'soleR', prop: 'floor', when: [0, .64] }, { body: 'soleR', prop: 'floor', when: [.86, 1] },
+    contacts: [{ body: 'soleL', prop: 'floor', when: [0, .6] }, { body: 'soleR', prop: 'floor', when: [0, .1] }, { body: 'soleR', prop: 'floor', when: [.5, 1] },
       { body: 'gripL', prop: 'dbL', optional: true }, { body: 'gripR', prop: 'dbR', optional: true }, { body: 'gripL', prop: 'kbL', optional: true }, { body: 'gripR', prop: 'kbR', optional: true }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
-      const { V } = C, q = C.base(), ph = ((t % 1) + 1) % 1;
-      const swing = ph < .5 ? 'L' : 'R', u = (ph % .5) / .5, stance = swing === 'L' ? 'R' : 'L';
-      const lift = Math.sin(Math.PI * u), single = Math.max(0, Math.sin(Math.PI * Math.min(1, Math.max(0, (u - .1) / .8))));
-      C.root(q, [0, 93.8 + .3 * single, 0], [0, 1, 0], [0, 0, 1]);
-      q.thoracic = [-2, 0, 0]; q.neck = [-2, 0, 0];
-      for (const s of S) { q[s].girdle = [-4, -6]; armAngles(q, s, [-3, 15, 0], 8, 0); }
-      const home = s => [C.M.SIGN[s] * 9.5, 0, -1];
-      const feet = q => {
-        plant(C, q, stance, home(stance));
-        const a = home(swing);
-        if (u < .3 || u > .7) plant(C, q, swing, a, { heel: (u < .5 ? u / .3 : (1 - u) / .3) * (u < .5 ? 34 : 20) });
-        else { const v = (u - .3) / .4, h = 7 * Math.sin(Math.PI * v), hl = v < .5 ? C.lerp(34, 12, v * 2) : C.lerp(12, 20, v * 2 - 1); plant(C, q, swing, [a[0], 0, a[2] - 1.5 * Math.sin(Math.PI * v)], { y: h, heel: hl, pole: [0, 0, 1] }); }
-      };
-      const xs = -C.M.SIGN[swing] * 7.2 * single;
-      settle(C, q, { lo: 1.5, hi: 6, x: xs, xTol: .4, loads: loadsIn(C, S, 16), resolve: feet });
+      const ph = ((t % 1) + 1) % 1, L = walkLayout(), q = walkBody(C, ph, L.y0, L.bob);
+      /* руки со снарядами почти не качаются: ±2° в противофазе ногам */
+      for (const s of S) { q[s].girdle = [-4, -6]; armAngles(q, s, [-3 - 2 * C.M.SIGN[s] * Math.cos(2 * Math.PI * ph), 15, 0], 8, 0); }
+      for (const s of S) walkLeg(C, q, s, ph);
       return q;
     }
   },
