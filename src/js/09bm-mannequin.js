@@ -70,6 +70,7 @@ function swingTwist(M){
 }
 
 /* ---------- Антропометрия: мужчина 175 см, 78 кг; высота голеностопа 8,5 см (как в кроссовках с подошвой 2 см) ---------- */
+const BACK_N=[2.3,2.7,2.8,2.5,2.2];   /* показатель суперэллипса спины на высотах 38, 44, 49, 53, 56 см */
 const B={
  stature:175,mass:78,
  ua:28.3,fa:27.0,th:42.4,sk:43.6,               // плечо, предплечье, бедро, голень — между центрами суставов
@@ -85,10 +86,14 @@ const B={
 };
 B.hipHeight=B.sk+B.th+B.ankle;                   // 94,5 см от пола до центров тазобедренных суставов
 /* Сечения корпуса: h — высота над серединой тазобедренных суставов вдоль оси корпуса;
-   w — полуширина, a — до передней поверхности, b — до задней. */
-const TORSO=[[-9,12.5,4.5,8.5],[-4,15.8,7.2,12.2],[0,16.8,8.6,11.8],[6,16.4,10.0,10.4],[12,15.0,10.4,9.6],[18,14.6,10.4,9.6],[24,15.1,10.6,10.0],
- [31,16.1,12.0,10.6],[38,16.7,12.4,11.0],[44,16.0,11.0,11.0],[49,13.8,7.8,10.2],[53,10.0,4.6,8.6],[56,6.6,3.2,7.0]];
+   w — полуширина, a — до передней поверхности, b — до задней; n — показатель суперэллипса задней половины
+   (2 — эллипс). Вверху спины задняя половина «квадратнее»: лопатки, остистые мышцы и трапеция дают плоскую широкую
+   спину, а не круглую бочку; под ней лежат лопатки скелета (режим «Скелет»). */
+const TORSO=[[-9,12.5,4.5,8.5,2],[-4,15.8,7.2,12.2,2],[0,16.8,8.6,11.8,2],[6,16.4,10.0,10.4,2],[12,15.0,10.4,9.6,2],[18,14.6,10.4,9.6,2],[24,15.1,10.6,10.0,2],
+ [31,16.1,12.0,10.6,2],[38,16.7,12.4,11.0,BACK_N[0]],[44,16.0,11.0,11.0,BACK_N[1]],[49,15.4,7.8,10.5,BACK_N[2]],[53,11.4,4.6,8.8,BACK_N[3]],[56,6.6,3.2,7.0,BACK_N[4]]];
 const TORSO_JOINTS=[10,24];
+/* суперэллипс: доля по оси при показателе n (сохраняет знак) */
+const sePow=(v,n)=>n===2?v:Math.sign(v)*Math.pow(Math.abs(v),2/n);
 /* Профили конечностей: [t, спереди, сзади, латерально, медиально], см */
 const LIMBS={
  ua:[[0,5.4,5.6,6.0,4.8],[.15,5.3,5.6,5.8,4.6],[.45,5.3,5.2,5.2,4.6],[.8,4.3,4.4,4.3,4.0],[1,3.7,4.0,4.0,3.9]],
@@ -98,7 +103,7 @@ const LIMBS={
 };
 /* Шея: [t, спереди, сзади, латерально], см; t=0 — над верхним сечением корпуса, t=1 — внутри черепа */
 const NECK=[[0,5.4,6.0,5.8],[.5,5.0,5.6,5.4],[1,4.8,5.2,5.2]],NECK_BLEND=.4;
-const CAPS={sh:6.0,el:3.9,wr:2.7,kn:5.3,an:2.6};
+const CAPS={sh:6.5,el:3.9,wr:2.7,kn:5.3,an:2.6};
 /* Массы (доля от общей) и центры масс сегментов: de Leva 1996, мужчины */
 const MASS={head:.0694,upperTrunk:.1596,midTrunk:.1633,lowerTrunk:.1117,ua:.0271,fa:.0162,hand:.0061,th:.1416,sk:.0433,foot:.0137};
 /* Пределы, градусы: [мин, макс]. Положительные направления — в описании DOF ниже. */
@@ -324,15 +329,17 @@ function profileAt(prof,t){
  return prof.at(-1).slice(1);
 }
 const sectionAt=h=>profileAt(TORSO,h);
-/* Ось корпуса: таз до 10 см, поясница 10–24, грудная клетка выше; скругление ±3 см у шарниров */
+/* Ось корпуса: таз до 10 см, поясница 10–24, грудная клетка выше; скругление у шарниров (см. ниже) */
 function spineFrame(R,h){
  const fr=R.frames,segs=[[fr.pelvis,0],[fr.lumbar,10],[fr.thorax,24]];
  const pointOn=(i,hh)=>{const[f,h0]=segs[i];return V.add(f.o,f.y,hh-h0);};
  const axesOf=i=>{const f=segs[i][0];return{x:f.x,y:f.y,z:f.z};};
  let seg=h<10?0:h<24?1:2;
- for(const[j,hj]of [[1,10],[2,24]]){
-  if(Math.abs(h-hj)<3){
-   const u=(h-hj+3)/6,P0=pointOn(j-1,hj-3),P1=pointOn(j,hj),P2=pointOn(j,hj+3);
+ /* скругление у шарниров: у поясничного ±3 см; у грудного — в основном ниже шарнира (−4,5…+1 см), чтобы рёберная дуга
+    (h ≥ 25) оставалась жёсткой с грудной клеткой, как рёбра скелета, и не прорезала кожу при скручивании */
+ for(const[j,hj,lo,hi]of [[1,10,3,3],[2,24,4.5,1]]){
+  if(h>hj-lo&&h<hj+hi){
+   const u=(h-hj+lo)/(lo+hi),P0=pointOn(j-1,hj-lo),P1=pointOn(j,hj),P2=pointOn(j,hj+hi);
    const c=[0,1,2].map(k=>(1-u)*(1-u)*P0[k]+2*u*(1-u)*P1[k]+u*u*P2[k]);
    const a=axesOf(j-1),b=axesOf(j),w=smooth(u),mixU=(p,q)=>V.unit(V.mix(p,q,w));
    const y=mixU(a.y,b.y),z=V.unit(V.perp(mixU(a.z,b.z),y)),x=V.unit(V.perp(V.perp(mixU(a.x,b.x),y),z));
@@ -344,9 +351,9 @@ function spineFrame(R,h){
 /* Точка поверхности корпуса: side — 'L'/'R', ang ∈ [0, π] от передней линии через бок к спине */
 function torsoPoint(R,h,side,ang,extra=0){return torsoPointIn(R,h,side,ang,extra,spineFrame(R,h),sectionAt(h));}
 /* то же по готовой рамке сечения: сетка тела считает рамку и профиль один раз на ряд, а не на каждую точку */
-function torsoPointIn(R,h,side,ang,extra,f,[w,a,b]){
- const c=Math.cos(ang),s=Math.sin(ang),lat=V.scale(f.x,SIGN[side]); /* f.x — левая сторона тела */
- let p=V.add(V.add(f.c,f.z,((c>=0?a:b)+extra)*c),lat,(w+extra)*s);
+function torsoPointIn(R,h,side,ang,extra,f,[w,a,b,n=2]){
+ const c0=Math.cos(ang),s0=Math.sin(ang),back=c0<0,c=back?sePow(c0,n):c0,s=back?sePow(s0,n):s0,lat=V.scale(f.x,SIGN[side]); /* f.x — левая сторона тела */
+ let p=V.add(V.add(f.c,f.z,((c0>=0?a:b)+extra)*c),lat,(w+extra)*s);
  /* надплечья следуют за поднятием и протракцией плечевого пояса */
  if(h>38&&R.girdle&&R.frames.thorax){
   /* основание шеи следует за лопаткой лишь частично (до 60 % у h = 56): трапеция растягивается плавно, без складок */
@@ -390,9 +397,12 @@ function neckPoint(R,t,ang,top){
  const A=top?torsoPointIn(R,hTop,side,an,0,top.f,top.sec):torsoPoint(R,hTop,side,an),A0=top?torsoPointIn(R,hTop-2,side,an,0,top.f0,top.sec0):torsoPoint(R,hTop-2,side,an),base=V.add(A,V.unit(V.sub(A,A0)),t*V.dist(lo,hi));
  return V.mix(base,p,w);
 }
+/* столбцов по окружности корпуса: суперэллипс спины даёт более крутой переход от спины к боку, при 24 хорда сетки
+   уходила под мышечные зоны трапеции на 1,7 мм; при 32 — не больше 1,2 мм, как у эллипса */
+const TORSO_COLS=32;
 const TORSO_H=[];for(let h=TORSO[0][0];h<=TORSO.at(-1)[0]+1e-9;h+=2.5)TORSO_H.push(+h.toFixed(2));if(TORSO_H.at(-1)<TORSO.at(-1)[0])TORSO_H.push(TORSO.at(-1)[0]);
 /* Полная сетка тела для сцены: точки в координатах каталога */
-function surface(R,{cols=24,limbRows=10,limbCols=16}={}){
+function surface(R,{cols=TORSO_COLS,limbRows=10,limbCols=16}={}){
  /* рамка и профиль сечения считаются один раз на ряд — точки те же, что у torsoPoint/limbPoint/neckPoint */
  const torso=TORSO_H.map(h=>{const f=spineFrame(R,h),sec=sectionAt(h);return Array.from({length:cols},(_,c)=>{const a=c/cols*2*Math.PI,side=a<=Math.PI?'L':'R',ang=a<=Math.PI?a:2*Math.PI-a;return torsoPointIn(R,h,side,ang,0,f,sec);});});
  const limbs={};
@@ -407,7 +417,7 @@ function surface(R,{cols=24,limbRows=10,limbCols=16}={}){
 
 /* Точки для рамки кадра SVG-фигуры: все ряды туловища и каждый третий ряд конечностей (с последним) — ровно те точки
    surface(), по которым считается рамка, без шеи, кистей и стоп; совпадают с surface() до бита. */
-function boundsSurface(R,{cols=24,limbRows=10,limbCols=16,limbStep=3}={}){
+function boundsSurface(R,{cols=TORSO_COLS,limbRows=10,limbCols=16,limbStep=3}={}){
  const torso=TORSO_H.map(h=>{const f=spineFrame(R,h),sec=sectionAt(h);return Array.from({length:cols},(_,c)=>{const a=c/cols*2*Math.PI,side=a<=Math.PI?'L':'R',ang=a<=Math.PI?a:2*Math.PI-a;return torsoPointIn(R,h,side,ang,0,f,sec);});});
  const rows=[];for(let r=0;r<=limbRows;r++)if(r%limbStep===0||r===limbRows)rows.push(r);
  const limbs={};
@@ -419,8 +429,11 @@ function boundsSurface(R,{cols=24,limbRows=10,limbCols=16,limbStep=3}={}){
 }
 
 /* ---------- Знаковые расстояния тела (каталог) ---------- */
-function ellipseRadius(lx,ly,rf,rb,rl,rm){
- const a=lx>=0?rf:rb,b=ly>=0?rl:rm,th=Math.atan2(ly/b,lx/a);return Math.hypot(a*Math.cos(th),b*Math.sin(th));
+function ellipseRadius(lx,ly,rf,rb,rl,rm,nBack=2){
+ const a=lx>=0?rf:rb,b=ly>=0?rl:rm;
+ /* задняя половина корпуса — суперэллипс: расстояние до кривой вдоль направления (lx, ly) */
+ if(lx<0&&nBack!==2){const r=Math.hypot(lx,ly),u=Math.abs(lx)/r,v=Math.abs(ly)/r;return Math.pow(Math.pow(u/a,nBack)+Math.pow(v/b,nBack),-1/nBack);}
+ const th=Math.atan2(ly/b,lx/a);return Math.hypot(a*Math.cos(th),b*Math.sin(th));
 }
 function limbSDF(R,kind,side,p){
  const[,a,b]=LIMB_DEF[kind],A=R[a+side],Bp=R[b+side],d=V.sub(Bp,A),L2=V.dot(d,d),t=clamp(V.dot(V.sub(p,A),d)/L2,0,1);
@@ -434,8 +447,8 @@ function torsoSDF(R,p,cache){
  const frames=cache||TORSO_SAMPLES.map(h=>({h,f:spineFrame(R,h)}));
  let best=null;
  for(const s of frames){const off=V.sub(p,s.f.c),along=V.dot(off,s.f.y);if(!best||Math.abs(along)<Math.abs(best.along))best={s,along,off};}
- const{s,off,along}=best,lz=V.dot(off,s.f.z),lx=V.dot(off,s.f.x),[w,a,b]=sectionAt(s.h),rho=Math.hypot(lz,lx);
- const r=rho<1e-9?Math.min(w,a,b):ellipseRadius(lz,lx,a,b,w,w),radial=rho-r;
+ const{s,off,along}=best,lz=V.dot(off,s.f.z),lx=V.dot(off,s.f.x),[w,a,b,n]=sectionAt(s.h),rho=Math.hypot(lz,lx);
+ const r=rho<1e-9?Math.min(w,a,b):ellipseRadius(lz,lx,a,b,w,w,n),radial=rho-r;
  /* торец корпуса (низ таза, основание шеи): внутри — до ближайшей поверхности, снаружи — до кромки */
  const lo=TORSO[0][0],hi=TORSO.at(-1)[0],hp=s.h+along,axial=Math.max(lo-hp,hp-hi);
  return axial>0?(radial>0?Math.hypot(radial,axial):axial):Math.max(radial,axial);
