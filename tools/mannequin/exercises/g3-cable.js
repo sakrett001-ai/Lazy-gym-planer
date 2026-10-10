@@ -663,6 +663,28 @@ module.exports = {
     }
   },
 
+  /* Сгибание рук на нижнем блоке с канатом — «молот»: ладони друг к другу, большие пальцы вверх, узлы каната над кистями.
+     t=0 — руки выпрямлены, кисти перед бёдрами; t=1 — кисти у груди, локти у корпуса. */
+  ropecurl: {
+    keys: [0, .25, .5, .75, 1],
+    equipment: [CC_TOWER, cable(CC_TOWER, '', { id: 'cab', attach: 'rope', hands: ['L', 'R'], ropeLen: 26, rest: 62 })],
+    contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
+    gripRadius: { L: 1.3, R: 1.3 },
+    pose(t, C) {
+      const { V } = C, e = C.ease(t), q = C.M.clone(CC().q), f = C.fk(q);
+      for (const s of S) {
+        const gh = f.P['gh' + s], lat = C.lat(q, s), down = [0, -1, 0], fwd = [0, 0, 1];
+        q[s].girdle = [-2, C.lerp(-2, 2, e)];
+        const ua = V.unit(V.add(V.add(down, fwd, C.lerp(.1, .2, e)), lat, .12)), el = V.add(gh, ua, C.M.B.ua);
+        const phi = C.lerp(16, 128, e) * C.D2R, fore = V.add(V.scale(down, Math.cos(phi)), fwd, Math.sin(phi));
+        const g = V.add(el, fore, 27 + 7); g[0] = C.M.SIGN[s] * C.lerp(16, 12, e);
+        const pole = V.unit(V.add(V.add(V.sub(el, V.mix(gh, g, .45)), [0, 0, -1], 6), lat, -2.5));
+        C.hold(q, s, g, pole, { pron: 0 });
+      }
+      return q;
+    }
+  },
+
   /* t=0 — руки вытянуты к блоку, канат перед лицом; t=1 — кисти у ушей, локти высоко в стороны. */
   facepull: {
     keys: [0, .25, .5, .75, 1],
@@ -718,6 +740,28 @@ module.exports = {
         const g = gripFrom(C, el, fore, palm); g[0] = C.M.SIGN[s] * 13.5;
         const pole = V.unit(V.add(V.add(V.sub(el, V.mix(gh, g, .45)), [0, 0, -1], 4), lat, 2));
         C.grip(q, s, g, [-C.M.SIGN[s], 0, 0], pole, { wristExt: 6 });
+      }
+      return q;
+    }
+  },
+
+  /* Разгибание рук на верхнем блоке с канатом: нейтральный хват (ладони друг к другу), узлы каната под мизинцами.
+     t=0 — локти согнуты под 90°, кисти у низа груди, концы каната почти вместе; t=1 — руки выпрямлены, концы каната
+     разведены к бёдрам, предплечья чуть повёрнуты ладонями назад. Локти у корпуса всю амплитуду. */
+  ropepushdown: {
+    keys: [0, .25, .5, .75, 1],
+    equipment: [PD_TOWER, cable(PD_TOWER, '', { id: 'cab', attach: 'rope', hands: ['L', 'R'], ropeLen: 26, rest: 89 })],
+    contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
+    gripRadius: { L: 1.3, R: 1.3 },
+    pose(t, C) {
+      const { V } = C, e = C.ease(t), q = C.M.clone(PD().q), f = C.fk(q);
+      for (const s of S) {
+        const gh = f.P['gh' + s], lat = C.lat(q, s), down = [0, -1, 0], fwd = [0, 0, 1];
+        const ua = V.unit(V.add(V.add(down, fwd, C.lerp(.1, .16, e)), lat, .1)), el = V.add(gh, ua, C.M.B.ua);
+        const phi = C.lerp(88, 6, e) * C.D2R, fore = V.add(V.scale(down, Math.cos(phi)), fwd, Math.sin(phi));
+        const g = V.add(el, fore, 27 + 7); g[0] = C.M.SIGN[s] * C.lerp(6, 16, e);
+        const pole = V.unit(V.add(V.add(V.sub(el, V.mix(gh, g, .45)), [0, 0, -1], 4), lat, 2));
+        C.hold(q, s, g, pole, { pron: C.lerp(5, 30, e) });
       }
       return q;
     }
