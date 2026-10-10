@@ -37,8 +37,10 @@ test('long bones run from joint to joint in every phase', () => {
 });
 
 test('bones stay inside the body: deep bones fully, bones under the skin within a few millimetres', () => {
-  /* под самой кожей у живого человека: передний край большеберцовой, лучевая у запястья, надколенник, рёбра, гребни таза, свод черепа */
-  const deep = ['femur', 'humerus', 'ulna', 'sacrum', 'L1', 'L3', 'L5', 'thoracic6'], shallow = { tibia: .8, radius: .8, patella: 1, ribcage: 1, pelvis_: 1.8, skull: .6 };
+  /* под самой кожей у живого человека: передний край большеберцовой, лучевая у запястья, надколенник, рёбра, гребни таза, свод черепа,
+     ключица, ость и акромион лопатки (лопатка пока движется только с плечевым поясом, без скольжения по рёбрам — запас больше) */
+  const deep = ['femur', 'humerus', 'ulna', 'sacrum', 'L1', 'L3', 'L5', 'thoracic6'];
+  const shallow = { tibia: .8, radius: .8, patella: 1, ribcage: 1, pelvis_: 1.8, skull: .6, clavicle: .8, scapula: 1.8 };
   let worst = {};
   for (const { id, t, R } of poses) {
     const body = M.bodyData(R), cache = M.torsoCache(R), m = Skeleton.frames(R, body, data.bones);
