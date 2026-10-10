@@ -8,7 +8,7 @@
 const FOLD_CARDS = ['compact', 'full'];
 function ensureFold(s) {
   const f = s.fold && typeof s.fold === 'object' ? s.fold : {};
-  s.fold = {setup:f.setup === true, load:f.load === true, cards:FOLD_CARDS.includes(f.cards) ? f.cards : 'compact'};
+  s.fold = {setup:f.setup === true, load:f.load === true, cards:FOLD_CARDS.includes(f.cards) ? f.cards : 'compact', gentle:f.gentle === true};
   return s.fold;
 }
 ensureFold(S);
@@ -73,6 +73,7 @@ function setupSummary() {
   else go('#f-mode', 'Тренировка на день');
   go('#f-goal', `${GOALS[S.goal].name} · ${FORMATS[S.format].name.toLowerCase()} · ${LEVELS[S.level].name.toLowerCase()}`);
   if (S.mode === 'single') { go('#count-l', `${S.count} ${plural(S.count, 'упражнение', 'упражнения', 'упражнений')}`); go('#f-muscles', S.groups.length ? titleFor() : 'Мышцы не выбраны'); }
+  if (typeof PROTECT_BY !== 'undefined' && S.protect && S.protect.length) go('#f-joints', 'Бережём ' + hitsText(S.protect.map(id => PROTECT_BY[id])));
   go('#e-places', placeOf().name);
   return out.join('');
 }

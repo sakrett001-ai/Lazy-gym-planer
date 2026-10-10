@@ -18,13 +18,13 @@ function app() {
 
 test('fold settings: compact cards by default, garbage replaced, kept in the backup', () => {
   const a = app();
-  assert.deepEqual(plain(a.S.fold), { setup: false, load: false, cards: 'compact' });
+  assert.deepEqual(plain(a.S.fold), { setup: false, load: false, cards: 'compact', gentle: false });
   a.S.fold = { setup: 'yes', load: true, cards: 'tiny', extra: 1 };
-  assert.deepEqual(plain(a.ensureFold(a.S)), { setup: false, load: true, cards: 'compact' }, 'only known values survive');
+  assert.deepEqual(plain(a.ensureFold(a.S)), { setup: false, load: true, cards: 'compact', gentle: false }, 'only known values survive');
   a.S.fold = 'broken'; a.ensureFold(a.S);
   assert.equal(a.S.fold.cards, 'compact');
-  a.S.fold = { setup: true, load: true, cards: 'full' };
-  assert.deepEqual(plain(a.m.get('backupObject()')).settings.fold, { setup: true, load: true, cards: 'full' }, 'the backup carries the view');
+  a.S.fold = { setup: true, load: true, cards: 'full', gentle: true };
+  assert.deepEqual(plain(a.m.get('backupObject()')).settings.fold, { setup: true, load: true, cards: 'full', gentle: true }, 'the backup carries the view');
 });
 
 test('cards: compact folds muscles and the set table, keeps the weight hint; a card can be opened on its own', () => {

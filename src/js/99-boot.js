@@ -5,4 +5,5 @@ setupWorkout();
 setupMotionCameras();
 renderSetup();
 renderPlan();
+prefetchStressIds();
 logInit();

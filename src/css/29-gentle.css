@@ -1,0 +1,7 @@
+/* Бережный режим (11g-gentle.js): плашка с правилом боли и пометки в списках. */
+.gentle-box { border:1px solid var(--line); border-left:3px solid var(--good); background:var(--surface); border-radius:10px; padding:10px 14px; margin:0 0 14px; font-size:14px; line-height:1.45; }
+.gentle-box summary { cursor:pointer; font-weight:600; color:var(--ink); min-height:28px; }
+.gentle-box p { margin:8px 0 0; }
+.gentle-box b { font-weight:600; }
+.gentle-warn { color:var(--muted); font-size:13px; }
+.unfit { color:color-mix(in srgb, var(--hot) 80%, var(--ink)); font-weight:600; }

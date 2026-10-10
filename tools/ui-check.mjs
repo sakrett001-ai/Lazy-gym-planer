@@ -24,7 +24,8 @@ async function open(width) {
   });
   return page;
 }
-const shown = (page, sel) => page.evaluate(s => { const e = document.querySelector(s); return !!e && e.getClientRects().length > 0 && e.offsetHeight > 0; }, sel);
+/* checkVisibility учитывает и закрытый <details>: его содержимое в Chromium сохраняет размеры, но не рисуется */
+const shown = (page, sel) => page.evaluate(s => { const e = document.querySelector(s); return !!e && e.getClientRects().length > 0 && e.offsetHeight > 0 && (!e.checkVisibility || e.checkVisibility({ contentVisibilityAuto: true, visibilityProperty: true })); }, sel);
 
 /* телефон */
 const page = await open(360);
@@ -68,6 +69,17 @@ check(await shown(page, `${c0} .c-map`) && await shown(page, '.card:nth-child(2)
 await page.click('[data-cards="compact"]');
 check(await page.evaluate(() => [...document.querySelectorAll('.card')].every(c => !c.classList.contains('open-log'))), '«Компактно» сворачивает все, ручные раскрытия сбрасываются');
 
+/* бережный режим: отметка сустава сразу перестраивает план, плашка с правилом боли сворачивается и помнит это */
+await page.evaluate(() => { S.mode = 'single'; S.groups = ['quads', 'glutes', 'hams', 'calves']; S.fold.setup = false; regen(); });
+await page.click('[data-protect="knees"]');
+check(await page.evaluate(() => S.protect.includes('knees') && plan.items.every(it => !stressIdsOf(it.ex).some(r => ['knee', 'kneeOpen', 'landing'].includes(r)))), 'отметка «Колени» убирает из плана нагрузку на колени');
+check(await shown(page, '.gentle-box p'), 'плашка бережного режима раскрыта');
+await page.click('.gentle-box summary'); await page.waitForTimeout(100); /* событие toggle приходит следующей задачей */
+check(await page.evaluate(() => S.fold.gentle === true), 'свёрнутая плашка запоминается');
+await page.evaluate(() => regen());
+check(!(await shown(page, '.gentle-box p')), 'и остаётся свёрнутой после пересборки');
+await page.click('[data-protect="knees"]');
+check(await page.evaluate(() => !S.protect.length && !document.querySelector('.gentle-box')), 'снятая отметка убирает плашку');
 await page.evaluate(() => { S.mode = 'program'; regen(); });
 check(await page.evaluate(() => { const d = document.querySelector('details.rule'); return !!d && !d.open; }), 'программа: правило прибавки свёрнуто');
 await page.close();
@@ -81,4 +93,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание параметров, нагрузки и карточек работает на телефоне и компьютере.');
+console.log('Интерфейс: сворачивание параметров, нагрузки и карточек и бережный режим работают на телефоне и компьютере.');
