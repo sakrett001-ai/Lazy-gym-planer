@@ -1,6 +1,7 @@
 /* ---------- запуск ---------- */
 logLoadLocal();
 setupMotionViewer();
+setupGallery();
 setupWorkout();
 setupMotionCameras();
 renderSetup();

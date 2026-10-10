@@ -1,0 +1,48 @@
+/* Витрина атласа движений (13c-gallery.js): фильтр «Чем работать», миниатюры по группам мышц. */
+.vh { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+.mv-back { font-weight:600; }
+.mv-mode-gallery .mv-head h2 { max-width:none; }
+.mv-gallery { margin-top:18px; }
+.mv-gtools { position:sticky; top:-24px; z-index:2; margin:0 -24px; padding:12px 24px 10px; background:var(--surface); border-bottom:1px solid var(--line); display:grid; gap:10px; }
+.mv-gkinds { display:flex; flex-wrap:wrap; gap:6px; }
+.mv-gkinds button { border:1px solid var(--line); background:var(--surface); color:var(--ink); border-radius:999px; padding:6px 12px; min-height:38px; font:inherit; font-size:14px; font-weight:600; }
+.mv-gkinds button small { font-weight:500; color:var(--muted); margin-left:2px; font-variant-numeric:tabular-nums; }
+.mv-gkinds button:hover { border-color:var(--accent); }
+.mv-gkinds button.on { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+.mv-gkinds button.on small { color:inherit; opacity:.8; }
+.mv-gfilters { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; justify-content:space-between; }
+.mv-ghere { display:flex; align-items:center; gap:8px; font-size:14px; color:var(--ink); min-height:38px; }
+.mv-ghere input { width:18px; height:18px; accent-color:var(--accent); }
+.mv-gsearch { flex:1 1 220px; max-width:340px; }
+.mv-gsearch input { width:100%; height:40px; border:1px solid var(--line); border-radius:10px; background:var(--surface-2); color:var(--ink); padding:0 12px; font:inherit; font-size:15px; }
+.mv-gsearch input:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+.mv-gcount { margin:12px 0 0; font-size:13px; color:var(--muted); }
+.mv-gempty { margin:28px 0; color:var(--muted); }
+.mv-gsec { margin-top:22px; }
+.mv-gsec h3 { margin:0 0 10px; font:600 17px/1.2 var(--f-body); }
+.mv-gsec h3 small { color:var(--muted); font-weight:500; font-size:14px; margin-left:4px; font-variant-numeric:tabular-nums; }
+.mv-ggrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:12px; }
+.mv-tile { display:grid; grid-template-rows:auto auto 1fr; gap:4px; text-align:left; padding:8px 8px 10px; border:1px solid var(--line); border-radius:14px; background:var(--surface); color:var(--ink); font:inherit; cursor:pointer; min-width:0; }
+.mv-tile:hover { border-color:var(--accent); }
+.mv-tile:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.mv-thumb { display:block; aspect-ratio:1; border-radius:10px; overflow:hidden; background:radial-gradient(ellipse at 50% 65%, var(--surface), var(--illus)); }
+.mv-thumb:not(.ready) { animation:mv-thumb-wait 1.4s ease-in-out infinite alternate; }
+.mv-thumb svg { display:block; width:100%; height:100%; }
+.mv-tname { margin-top:4px; font-size:14px; font-weight:600; line-height:1.25; overflow-wrap:anywhere; }
+.mv-tfav { color:var(--accent); }
+.mv-tsub { font-size:12px; color:var(--muted); line-height:1.3; }
+.mv-tile.off .mv-thumb { opacity:.55; }
+.mv-tile.off .mv-tname { color:var(--muted); }
+@keyframes mv-thumb-wait { from { opacity:.55; } to { opacity:1; } }
+@media (max-width:700px) {
+  /* на телефоне панель не липнет (заняла бы треть экрана), а «Чем работать» листается в одну строку */
+  .mv-gtools { position:static; margin:0 -16px; padding:4px 16px 10px; }
+  .mv-gkinds { flex-wrap:nowrap; overflow-x:auto; margin:0 -16px; padding:0 16px 2px; scrollbar-width:none; }
+  .mv-gkinds::-webkit-scrollbar { display:none; }
+  .mv-gkinds button { flex:none; }
+  .mv-ggrid { grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; }
+  .mv-select { flex-wrap:wrap; }
+  .mv-select .mv-back { flex-basis:100%; }
+  .mv-gsearch { max-width:none; }
+}
+@media (prefers-reduced-motion:reduce) { .mv-thumb:not(.ready) { animation:none; } }
