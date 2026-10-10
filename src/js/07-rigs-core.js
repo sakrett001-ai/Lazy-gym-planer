@@ -256,10 +256,10 @@ function buildSpatialFigure(anim,opts={}){
    const ft=B.feet[s],foot=[...every(ft.rows,3).flatMap(r=>r.filter((_,j)=>j%2===0)),...ft.shape.toes.flatMap(t=>t.pts.flatMap(p=>[[p[0],p[1]-t.r,p[2]],[p[0],p[1]+t.r,p[2]]])).map(p=>L(ft.toes,p))];
    silhouette(foot,skin,{'data-limb':'foot'+s});
   }
-  const hf=R.frames.head,head=[];
-  for(let i=0;i<16;i++)for(let j=1;j<8;j++){const th=i/16*2*Math.PI,ph=j/8*Math.PI,d=[Math.sin(ph)*Math.cos(th)*B.head.radii[0],Math.cos(ph)*B.head.radii[1],Math.sin(ph)*Math.sin(th)*B.head.radii[2]];head.push(L({o:R.head,x:hf.x,y:hf.y,z:hf.z},d));}
+  /* голова — силуэт по точкам её поверхности (Mannequin.headSamples, с ушами); нос — треугольник по спинке и кончику */
+  const hf=R.frames.head,HF={o:R.head,x:hf.x,y:hf.y,z:hf.z},head=Mannequin.headSamples().map(p=>L(HF,p));
   silhouette(head,palette.skin,{'data-part':'head'});
-  face([L({o:R.head,x:hf.x,y:hf.y,z:hf.z},[-1.2,0,9.4]),L({o:R.head,x:hf.x,y:hf.y,z:hf.z},[0,-2.6,10.6]),L({o:R.head,x:hf.x,y:hf.y,z:hf.z},[1.2,0,9.4])],'#a3b3cb');
+  face([L(HF,[-1.1,-0.8,9.4]),L(HF,[0,-3.0,11.6]),L(HF,[1.1,-0.8,9.4])],'#a3b3cb');
  }
  function body(R,boundsOnly=false){
   if(R.frames)return mannequinBody(R,boundsOnly);

@@ -82,7 +82,7 @@ const B={
  lumbar:[0,10,0],thoracic:[0,14,0],              // поясничный и грудопоясничный «шарниры» по оси корпуса
  c7:[0,37.2,-4],headJoint:[0,9.5,3.5],headCenter:[0,2.9,2],
  sc:[2,28.5,4],ghRel:[16,-3.1,-4],               // грудино-ключичный шарнир и центр плечевого сустава от него
- head:[7.9,11.4,9.8],                            // полуоси головы: ширина, высота, глубина
+ head:[7.65,11.4,10.3],                          // габарит головы от её центра: ширина, высота (до макушки), глубина; форма — HEAD_PARTS
  grip:[2.6,-8.0,0],knuckle:[0,-9.8,0],           // центр хвата: 8 см дистальнее и 2,6 см ладоннее запястья
  palm:{width:8.4,thick:3.0,len:10.2},finger:8.6,
  ankle:7.0,heel:-6.5,ball:[0,-5.35,13.5],toe:[0,-0.49,7.2],toeSole:-1.65, // опорные точки стопы от центра голеностопа (форма — FOOT_SECTIONS)
@@ -120,6 +120,31 @@ const LIMBS={
 };
 /* Шея: [t, спереди, сзади, латерально], см; t=0 — над верхним сечением корпуса, t=1 — внутри черепа */
 const NECK=[[0,6.6,7.8,7.6],[.5,5.7,6.9,6.4],[1,5.4,6.4,6.0]],NECK_BLEND=.4;
+/* Голова: гладкое объединение эллипсоидов в рамке головы (начало — центр головы B.headCenter, см; x — влево, y — вверх,
+   z — вперёд). Размеры — ANSUR II (мужчины 170–180 см, 72–84 кг): длина 19,9, ширина 15,3, обхват 57,2, козелок — макушка
+   13,1, переносица — подбородок 12,2, скулы 14,1, дуга «козелок — подбородок — козелок» 32,8, ухо 6,3 × 3,6 с выступом 2,3
+   (замеры — tools/mannequin/anthro.js). Череп и нижняя челюсть скелета остаются внутри. Лицо нейтральное, как у манекена
+   художника: надбровья, нос, скулы, губы и подбородок — формой, без глаз и рта.
+   Части: c — центр, r — полуоси, rot — повороты вокруг x, y, z (градусы), k — радиус сглаживания стыка (по умолчанию
+   HEAD_K), sub — вычесть. Уши — отдельные пластины HEAD_EAR (левая; правая — зеркально). */
+/* Сечения головы по высоте (рамка головы): [y, полуширина, z центра сечения (там — наибольшая ширина), z спереди,
+   z сзади, степень суперэллипса спереди, сзади]. Свод выше y 2,2 строится по эллипсоиду (HEAD_VAULT), ниже — лицо
+   и нижняя челюсть. Средняя линия спереди: надпереносье 9,45, переносица 9,2, верхняя губа 9,25, нижняя 9,05,
+   подбородочная борозда 8,85, подбородок 8,95, ментон −11,35. Скулы — полуширина ≈7,05 на уровне y −1,5. */
+const HEAD_VAULT={y:2.2,top:11.4,w:7.65,zc:-0.6,front:9.45,back:-10.45};
+const HEAD_ROWS=(()=>{const V0=HEAD_VAULT,H=V0.top-V0.y,out=[];
+ for(const a of [88,80,70,58,45,30,15]){const t=a*D2R,y=V0.y+H*Math.sin(t),s=Math.cos(t);
+  out.push([y,V0.w*Math.pow(s,.7),V0.zc,V0.zc+(V0.front-V0.zc)*s,V0.zc+(V0.back-V0.zc)*Math.pow(s,.9),2.6,2.5]);}
+ return[...out,
+  [2.2,7.65,-0.6,9.45,-10.45,2.5,2.5],[0.9,7.57,-0.6,9.2,-10.2,2.4,2.4],[-0.3,7.38,-0.5,9.05,-9.8,2.3,2.3],[-1.5,7.02,-0.2,9.0,-9.3,2.3,2.2],
+  [-3.0,6.95,0.35,9.05,-7.8,2.4,2.1],[-4.5,6.85,0.8,9.15,-6.2,2.5,2],[-5.9,6.6,1.25,9.25,-4.8,2.5,2],[-7.1,6.35,1.6,9.05,-3.6,2.4,2],
+  [-8.3,5.9,2.0,8.85,-2.0,2.3,2],[-9.3,5.1,2.7,8.95,-0.6,2.1,2],[-10.3,4.0,3.6,8.45,1.0,2,2],[-11.0,2.6,4.6,7.5,2.6,2,2],[-11.35,.6,5.6,6.3,4.6,2,2]];})();
+const HEAD_PARTS=[
+ {c:[0,-1.2,9.3],r:[1.2,2.4,1.05],rot:[-34.8,0,0],k:1.2}, // спинка носа
+ {c:[0,-3.1,10.5],r:[1.35,1.25,1.1],k:1.2},               // кончик носа
+ {c:[0,-3.8,9.6],r:[1.6,0.85,1.0],k:1}                    // крылья носа
+];
+const HEAD_EAR={c:[7.9,-1.2,-1.7],r:[.7,3.15,1.8],rot:[-15,-48,0]};
 const CAPS={sh:6.0,el:3.9,wr:2.7,kn:5.3,an:2.6};
 /* центр «шапки» плеча (дельтовидная) от центра плечевого сустава: вдоль плеча (−вниз) и наружу. Центр — на уровне
    сустава, верх шапки — на 6 см выше: под ним акромион и конец ключицы (ANSUR II: акромион на 3,5 см выше центра
@@ -478,9 +503,83 @@ function torsoSDF(R,p,cache){
  return axial>0?(radial>0?Math.hypot(radial,axial):axial):Math.max(radial,axial);
 }
 function torsoCache(R){return TORSO_SAMPLES.map(h=>({h,f:spineFrame(R,h)}));}
-function headSDF(R,p){
- const c=R.head,ax=[R.frames.head.x,R.frames.head.y,R.frames.head.z],r=B.head,d=V.sub(p,c),qv=ax.map((a,i)=>V.dot(d,a)/r[i]);
- const k0=Math.hypot(...qv),k1=Math.hypot(...ax.map((a,i)=>V.dot(d,a)/(r[i]*r[i])));return k1<1e-9?-Math.min(...r):k0*(k0-1)/k1;
+/* ---------- Голова: знаковое расстояние и сетка ---------- */
+const rotXYZ=([ax=0,ay=0,az=0]=[])=>{const a=ax*D2R,b=ay*D2R,c=az*D2R,ca=Math.cos(a),sa=Math.sin(a),cb=Math.cos(b),sb=Math.sin(b),cc=Math.cos(c),sc=Math.sin(c);
+ /* столбцы — локальные оси эллипсоида в рамке головы: Rz·Ry·Rx */
+ return[[cc*cb,sc*cb,-sb],[cc*sb*sa-sc*ca,sc*sb*sa+cc*ca,cb*sa],[cc*sb*ca+sc*sa,sc*sb*ca-cc*sa,cb*ca]];};
+const HEAD_ELL=HEAD_PARTS.map(e=>({...e,ax:rotXYZ(e.rot)}));
+/* уши: левое — HEAD_EAR, правое — зеркально по x */
+const HEAD_EARS={L:{...HEAD_EAR,ax:rotXYZ(HEAD_EAR.rot)},R:{...HEAD_EAR,c:[-HEAD_EAR.c[0],HEAD_EAR.c[1],HEAD_EAR.c[2]],ax:rotXYZ([HEAD_EAR.rot[0],-HEAD_EAR.rot[1],-HEAD_EAR.rot[2]])}};
+/* приближённое расстояние до эллипсоида (Quílez): точное на поверхности, без разрывов внутри и снаружи */
+function ellSDF(e,p){
+ const dx=p[0]-e.c[0],dy=p[1]-e.c[1],dz=p[2]-e.c[2],a=e.ax,r=e.r;
+ const lx=(a[0][0]*dx+a[0][1]*dy+a[0][2]*dz)/r[0],ly=(a[1][0]*dx+a[1][1]*dy+a[1][2]*dz)/r[1],lz=(a[2][0]*dx+a[2][1]*dy+a[2][2]*dz)/r[2];
+ const k0=Math.sqrt(lx*lx+ly*ly+lz*lz),k1=Math.sqrt((lx/r[0])**2+(ly/r[1])**2+(lz/r[2])**2);
+ return k1<1e-9?-Math.min(r[0],r[1],r[2]):k0*(k0-1)/k1;
+}
+const smin=(a,b,k)=>{const h=Math.max(k-Math.abs(a-b),0)/k;return Math.min(a,b)-h*h*k*.25;};
+/* сечения: кубическая интерполяция строк по высоте (гладкая — без полос на свету) */
+/* касательные — как у сплайна Катмулла — Рома (без «плато» в экстремумах, как у монотонной интерполяции) */
+const HEAD_ROWS_K=(()=>{const K=HEAD_ROWS.slice().reverse(),ys=K.map(r=>r[0]),n=ys.length;
+ const tan=v=>v.map((_,i)=>{const a=Math.max(0,i-1),b=Math.min(n-1,i+1);return(v[b]-v[a])/(ys[b]-ys[a]);});
+ return{ys,cols:[1,2,3,4,5,6].map(c=>{const v=K.map(r=>r[c]);return{v,m:tan(v)};})};})();
+function headRow(y){
+ const{ys,cols}=HEAD_ROWS_K;let i=0;while(i<ys.length-2&&y>ys[i+1])i++;
+ const h=ys[i+1]-ys[i],t=(y-ys[i])/h,t2=t*t,t3=t2*t;
+ return cols.map(c=>(2*t3-3*t2+1)*c.v[i]+(t3-2*t2+t)*h*c.m[i]+(-2*t3+3*t2)*c.v[i+1]+(t3-t2)*h*c.m[i+1]);
+}
+/* форма головы без ушей: знак верный (внутри < 0), величина — расстояние по горизонтали в сечении */
+function headShape(p){
+ const{ys}=HEAD_ROWS_K,y0=ys[0],y1=ys.at(-1),y=clamp(p[1],y0,y1),[w,zc,zf,zb,nf,nb]=headRow(y),lz=p[2]-zc,lx=p[0],rho=Math.hypot(lx,lz);
+ const radial=rho-(rho<1e-9?Math.min(w,zf-zc,zc-zb):ellipseRadius(lz,lx,zf-zc,zc-zb,w,w,nb,nf)),axial=Math.max(y0-p[1],p[1]-y1);
+ let d=axial>0?(radial>0?Math.hypot(radial,axial):axial):Math.max(radial,axial);
+ for(const e of HEAD_ELL)d=smin(d,ellSDF(e,p),e.k);
+ return d;
+}
+/* расстояние до поверхности головы в её рамке; ears=false — без ушей (сетка головы, уши — отдельные пластины) */
+function headLocalSDF(p,ears=true){
+ const d=headShape(p);
+ return ears?smin(d,Math.min(ellSDF(HEAD_EARS.L,p),ellSDF(HEAD_EARS.R,p)),.5):d;
+}
+const headLocal=(R,p)=>{const d=V.sub(p,R.head),f=R.frames.head;return[V.dot(d,f.x),V.dot(d,f.y),V.dot(d,f.z)];};
+const headWorld=(R,l)=>{const f=R.frames.head;return V.add(V.add(V.add(R.head,f.x,l[0]),f.y,l[1]),f.z,l[2]);};
+function headSDF(R,p){return headLocalSDF(headLocal(R,p));}
+/* Сетка головы (без ушей): широтно-долготная, вершины — на поверхности вдоль лучей из центра (голова звездообразна
+   относительно центра), нормали — по градиенту расстояния. Считается один раз. */
+let HEAD_MESH=null;
+/* радиус поверхности вдоль луча u из центра головы: бисекция в окне [lo, hi] (окно расширяется, если не охватывает) */
+function headRay(u,lo=0,hi=16,it=20){
+ const f=r=>headShape([u[0]*r,u[1]*r,u[2]*r]);
+ if(lo>0&&f(lo)>=0)lo=0;if(f(hi)<0)hi=16;
+ for(let k=0;k<it;k++){const m=(lo+hi)/2;if(f(m)<0)lo=m;else hi=m;}
+ return(lo+hi)/2;
+}
+function headMesh(nLon=72,nLat=52){
+ if(HEAD_MESH&&HEAD_MESH.nLon===nLon&&HEAD_MESH.nLat===nLat)return HEAD_MESH;
+ const f=headShape,pts=[],nrm=[],h=.01;let prev=null;
+ for(let j=0;j<=nLat;j++){prev=null;for(let i=0;i<=nLon;i++){
+  const th=j/nLat*Math.PI,ph=i/nLon*2*Math.PI,u=[Math.sin(th)*Math.sin(ph),Math.cos(th),Math.sin(th)*Math.cos(ph)];
+  /* соседняя вершина ряда даёт узкое окно поиска: 14 шагов вместо 20 */
+  const r=prev===null?headRay(u):headRay(u,Math.max(0,prev-2),prev+2,14);prev=r;
+  const p=[u[0]*r,u[1]*r,u[2]*r],f0=f(p),g=[0,1,2].map(a=>{const q=p.slice();q[a]+=h;return f(q)-f0;});
+  pts.push(p);nrm.push(V.unit(g));
+ }}
+ const idx=[];for(let j=0;j<nLat;j++)for(let i=0;i<nLon;i++){const a=j*(nLon+1)+i,b=a+nLon+1;if(j>0)idx.push(a,b,a+1);if(j<nLat-1)idx.push(a+1,b,b+1);}
+ return HEAD_MESH={nLon,nLat,pts,nrm,idx};
+}
+/* Точки поверхности головы с ушами (в рамке головы) — для проверок, силуэтов и замеров. */
+let HEAD_SAMPLES=null;
+function headSamples(){
+ if(HEAD_SAMPLES)return HEAD_SAMPLES;
+ /* своя редкая сетка лучей (≈20° по долготе, ≈11° по широте): каталогу не нужна полная сетка головы */
+ const out=[];
+ for(let j=1;j<17;j++)for(let i=0;i<24;i++){const th=j/17*Math.PI,ph=i/24*2*Math.PI,u=[Math.sin(th)*Math.sin(ph),Math.cos(th),Math.sin(th)*Math.cos(ph)];out.push(V.scale(u,headRay(u)));}
+ out.push([0,headRay([0,1,0]),0]);
+ /* выступающие точки лица: кончик носа, подбородок, ментон, надпереносье — в проверках их нельзя пропустить */
+ for(const t of [[0,-3,11.7],[-.8,-3.6,10.9],[.8,-3.6,10.9],[0,-9.3,9],[0,-11.3,5.5],[0,2.2,9.4]]){const u=V.unit(t);out.push(V.scale(u,headRay(u)));}
+ for(const e of [HEAD_EARS.L,HEAD_EARS.R])for(let a=0;a<12;a++){const t=a/12*2*Math.PI,l=[0,e.r[1]*Math.sin(t),e.r[2]*Math.cos(t)];
+  for(const w of [-e.r[0]*.6,e.r[0]*.6])out.push([0,1,2].map(i=>e.c[i]+e.ax[0][i]*w+e.ax[1][i]*l[1]+e.ax[2][i]*l[2]));}
+ return HEAD_SAMPLES=out;
 }
 
 /* ---------- Кисть и стопа: опорные точки для сетки (локальные координаты кисти/стопы, см) ---------- */
@@ -609,7 +708,7 @@ function bodyData(R){
  }
  const hands={},feet={};
  for(const s of SIDES){const mode=R.hands?.[s]||'relaxed',r=R.gripRadius?.[s]??1.4;hands[s]={frame:fr['hand'+s],mode,r,key:mode+':'+s+':'+r.toFixed(2),shape:handShape(mode,s,r)};const sh=footShape(s),fo=fr['foot'+s],to=fr['toes'+s];feet[s]={rear:fo,toes:to,shape:sh,rows:sh.rear.map((row,i)=>row.map((p,j)=>footPointWorld(fo,to,{part:'rear',p,w:sh.rearW[i][j]})))};}
- return{...S,head:{c:R.head,axes:[fr.head.x,fr.head.y,fr.head.z],radii:B.head},caps,hands,feet};
+ return{...S,head:{c:R.head,axes:[fr.head.x,fr.head.y,fr.head.z],radii:B.head,mesh:headMesh(),ears:HEAD_EARS},caps,hands,feet};
 }
 
 /* ---------- Углы суставов по рамкам сегментов ----------
@@ -665,7 +764,8 @@ function centerOfMass(R,extra=[]){
 return{V,M3,Q,B,TORSO,TORSO_H,TORSO_JOINTS,LIMBS,NECK,CAPS,SH_CAP,MASS,LIMITS,SIDES,SIGN,FLOOR,D2R,R2D,clamp,
  neutral,clone,pack,unpack,PACK,PACK_SIZE,fk,solePoints,twoBone,solveArm,solveArmWrist,setArmFromPoints,footFrame,heelFrame,solveLeg,rootRot,rootFromAxes,
  swing,swingTwist,eulerXZY,eulerYZX,spineRot,makeTrack,monotone,toCat,dirCat,catalogPose,
- profileAt,sectionAt,spineFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,ellipseRadius,centerOfMass,LIMB_DEF,
+ profileAt,sectionAt,spineFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,
+ headLocalSDF,headLocal,headWorld,headMesh,headSamples,HEAD_PARTS,HEAD_EAR,HEAD_EARS,ellipseRadius,centerOfMass,LIMB_DEF,
  handShape,footShape,footPoints,footPointWorld,footBlendW,FOOT_SECTIONS,TOES,malleoli,bodyData,jointAngles};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=Mannequin;

@@ -53,9 +53,13 @@ export function createMannequinBody(root,first,{skin,joint,sole,mesh:sceneMesh})
  for(const[k,rows]of Object.entries(B.limbs))parts[k]={mesh:mesh(group,ringGrid(rows.length-1,rows[0].length),skin,k)};
  parts.neck={mesh:mesh(group,ringGrid(B.neck.length-1,B.neck[0].length),skin,'neck')};
  const head=new THREE.Group();head.name='head';group.add(head);
- const skull=mesh(head,new THREE.SphereGeometry(1,24,16),skin,'skull');skull.scale.set(...B.head.radii.map(v=>v/100));
- const nose=mesh(head,new THREE.SphereGeometry(1,10,8),skin,'nose');nose.position.set(0,-.012,.094);nose.scale.set(.015,.022,.019);
- for(const s of [-1,1]){const ear=mesh(head,new THREE.SphereGeometry(1,10,8),skin,'ear');ear.position.set(s*.077,.004,.004);ear.scale.set(.009,.028,.019);}
+ /* голова — готовая сетка в её рамке (Mannequin.headMesh: точки и нормали, см), уши — пластины-эллипсоиды */
+ {const H=B.head.mesh,g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(H.pts.flatMap(p=>p.map(v=>v/100))),3));
+  g.setAttribute('normal',new THREE.BufferAttribute(new Float32Array(H.nrm.flat()),3));g.setIndex(H.idx);g.computeBoundingSphere();g.computeBoundingBox();
+  mesh(head,g,skin,'skull');
+  for(const e of Object.values(B.head.ears)){const ear=mesh(head,new THREE.SphereGeometry(1,16,12),skin,'ear');ear.position.set(...e.c.map(v=>v/100));
+   ear.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(vec(e.ax[0]),vec(e.ax[1]),vec(e.ax[2])));ear.scale.set(...e.r.map(v=>v/100));}}
  parts.head={mesh:head};
  for(const c of B.caps)parts['cap-'+c.key]={mesh:mesh(group,new THREE.SphereGeometry(1,16,12),skin,'cap-'+c.key)};
  const handCache=new Map();

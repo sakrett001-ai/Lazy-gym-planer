@@ -556,12 +556,12 @@ module.exports = {
   superman: {
     keys: [0, .25, .5, .75, 1],
     equipment: [{ type: 'mat', id: 'mat', len: 225, width: 75, at: [0, 0, 12] }],
-    contacts: [{ body: 'belly', prop: 'mat' }, { body: 'front', prop: 'mat', when: [0, .02] }, { body: 'headAll', prop: 'mat', when: [0, .02] },
+    contacts: [{ body: 'belly', prop: 'mat' }, { body: 'front', prop: 'mat', when: [0, .02] }, { body: 'forehead', prop: 'mat', when: [0, .02] },
       { body: 'palmL', prop: 'mat', when: [0, .02] }, { body: 'palmR', prop: 'mat', when: [0, .02] }, { body: 'thL', prop: 'mat', when: [0, .02] }, { body: 'thR', prop: 'mat', when: [0, .02] }],
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = prone(C, { lumbar: C.lerp(0, -14, e), thoracic: C.lerp(0, -8, e), region: e < .01 ? 'front' : 'belly' });
       for (const s of S) q[s].girdle = [C.lerp(8, 10, e), C.lerp(4, -6, e)];
-      if (e < .01) C.neckTo(q, 'headAll', [0, MAT, 0], [0, 1, 0], -.3); else q.neck = [C.lerp(2, 6, e), 0, 0];
+      if (e < .01) C.neckTo(q, 'headAll', [0, MAT, 0], [0, 1, 0], .2); else q.neck = [C.lerp(2, 6, e), 0, 0];
       proneLegs(C, q, C.lerp(-6, 12, e));
       /* руки: впереди головы, ладони вниз; внизу кисти лежат на коврике, вверху подняты вместе с грудью */
       const T = C.axes(q, 'thorax');
@@ -579,10 +579,10 @@ module.exports = {
   ytw: {
     keys: [0, .125, .25, .375, .5, .625, .75, .875, 1],
     equipment: [{ type: 'mat', id: 'mat', len: 200, width: 90, at: [0, 0, 15] }],
-    contacts: [{ body: 'front', prop: 'mat' }, { body: 'headAll', prop: 'mat' }, { body: 'thL', prop: 'mat' }, { body: 'thR', prop: 'mat' }],
+    contacts: [{ body: 'front', prop: 'mat' }, { body: 'forehead', prop: 'mat' }, { body: 'thL', prop: 'mat' }, { body: 'thR', prop: 'mat' }],
     pose(t, C) {
       const { V } = C, q = prone(C);
-      C.neckTo(q, 'headAll', [0, MAT, 0], [0, 1, 0], -.3);
+      C.neckTo(q, 'headAll', [0, MAT, 0], [0, 1, 0], .2);
       proneLegs(C, q, -6);
       /* подъём рук: вверху (t=0; 0,5; 1) — YTW.lift, между — опущены до YTW.low (над ковриком) */
       const dip = (1 - Math.cos(4 * Math.PI * t)) / 2, lift = C.lerp(YTW.lift, YTW.low, dip) * C.D2R;

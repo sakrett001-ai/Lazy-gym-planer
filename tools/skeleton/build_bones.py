@@ -78,18 +78,24 @@ neckO=np.array([0,61.2,-4]); headO=np.array([0,70.7,-0.5]); headC=np.array([0,73
 vc,fc=hat('hat_cervical')
 vs,fs=hat('hat_skull'); vj,fj=hat('hat_jaw'); allv=np.vstack([vs,vj]); c=(allv.min(0)+allv.max(0))/2
 s_head=CFG.get('s_head',1.0); dhead=np.array(CFG.get('d_head',[0,0,0.]))
-skullP=lambda v:(v-c)*s_head+headC+dhead          # череп — в рамке головы манекена (нейтральная поза)
+# Череп MyoSim короткий для среднего мужчины ANSUR II: длина свода 17,1 см при ширине 14,4 (головной указатель 84;
+# у мужчин обычно 76–80), и между затылочной костью и кожей головы (длина 19,9) оставалось 1,5 см. Растягиваем череп
+# и челюсть по длине в 1,06 раза вокруг точки на 4 см впереди центра головы: лицо почти не сдвигается, затылок уходит
+# назад, мягкие ткани на затылке ≈0,7 см.
+s_head_z=CFG.get('s_head_z',1.06); z0_head=headC[2]+4
+def skullP(v):                                    # череп — в рамке головы манекена (нейтральная поза)
+    p=(v-c)*s_head+headC+dhead; p[:,2]=z0_head+(p[:,2]-z0_head)*s_head_z; return p
 # шейный отдел: тело C7 — к верхней замыкательной пластинке Th1 (как она стоит в грудном блоке), C1 — к основанию черепа
 t1=[b for b in bones if b['name']=='thoracic1'][0]; t1v=np.array(t1['v']).reshape(-1,3)+TH0
 body=t1v[t1v[:,2]>np.median(t1v[:,2])]; t1top=np.array([0,body[:,1].max(),body[:,2].mean()])
-sk=skullP(vs); col=sk[(np.abs(sk[:,0])<1.2)]; zc=np.median(col[:,2]); base=col[(col[:,2]>zc-3)&(col[:,2]<zc+1)]; skb=np.array([0,base[:,1].min(),base[:,2].mean()])
+sk=(vs-c)*s_head+headC+dhead; col=sk[(np.abs(sk[:,0])<1.2)]; zc=np.median(col[:,2]); base=col[(col[:,2]>zc-3)&(col[:,2]<zc+1)]; skb=np.array([0,base[:,1].min(),base[:,2].mean()])  # основание черепа — без растяжения: шея остаётся на месте
 def endpoint(v,top):
     y=v[:,1]; sl=v[(y>y.max()-1.2)] if top else v[(y<y.min()+1.2)]; ant=sl[sl[:,2]>np.median(sl[:,2])]; return np.array([0,ant[:,1].mean(),ant[:,2].mean()])
 c0,c1=endpoint(vc,False),endpoint(vc,True); Rn=rot_between(c1-c0,skb-t1top); sn=np.linalg.norm(skb-t1top)/np.linalg.norm(c1-c0)
 print('шея: Th1',np.round(t1top,1),'основание черепа',np.round(skb,1),'масштаб',round(sn,3))
 add('cervical','','neck',(sn*(Rn@(vc-c0).T)).T+t1top-neckO,fc,1300)
 for nm,v,f,t in (('skull',vs,fs,2600),('jaw',vj,fj,900)):
-    add(nm,'','head',(v-c)*s_head+headC+dhead-headO,f,t)
+    add(nm,'','head',skullP(v)-headO,f,t)
 
 # ---------- правая рука (левая — зеркально) ----------
 ARM=chain('arm/assets/myoarm_r_chain.xml','arm/assets/myoarm_r_assets.xml','clavicle_r')

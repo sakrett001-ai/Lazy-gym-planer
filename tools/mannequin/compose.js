@@ -34,7 +34,7 @@ function ctx(equipment) {
       const R = M.catalogPose(q), out = [];
       const torso = (h0, h1, a0, a1) => { for (let h = h0; h <= h1; h += 2) for (let a = a0; a <= a1 + 1e-9; a += Math.PI / 16) for (const s of ['L', 'R']) out.push(fromCat(M.torsoPoint(R, h, s, a))); };
       const limb = (k, s, t0, t1, a0, a1) => { for (let t = t0; t <= t1 + 1e-9; t += .05) for (let a = a0; a <= a1 + 1e-9; a += Math.PI / 12) out.push(fromCat(M.limbPoint(R, k, s, t, a))); };
-      const head = (sel) => { const f = R.frames.head; for (let i = 0; i < 26; i++) for (let j = 0; j < 13; j++) { const th = i / 26 * 2 * Math.PI, ph = j / 12 * Math.PI, d = [Math.sin(ph) * Math.cos(th), Math.cos(ph), Math.sin(ph) * Math.sin(th)]; if (!sel(d)) continue; const p = V.add(V.add(V.add(R.head, f.x, d[0] * M.B.head[0]), f.y, d[1] * M.B.head[1]), f.z, d[2] * M.B.head[2]); out.push(fromCat(p)); } };
+      const head = (sel) => { for (const l of M.headSamples()) { if (sel(V.unit(l))) out.push(fromCat(M.headWorld(R, l))); } };
       if (name === 'back') torso(-1.2, 55.8, Math.PI * .7, Math.PI);
       else if (name === 'upperBack') torso(26, 55.8, Math.PI * .7, Math.PI);
       else if (name === 'shoulders') { torso(51.8, 59.8, 0, Math.PI); for (const s of ['L', 'R']) limb('ua', s, 0, .15, 0, 2 * Math.PI); }
@@ -46,6 +46,7 @@ function ctx(equipment) {
       else if (name === 'thighsBack') { for (const s of ['L', 'R']) limb('th', s, 0, .9, Math.PI * .6, Math.PI * 1.4); }
       else if (name === 'headBack') head(d => d[2] < -.3);
       else if (name === 'headAll') head(() => true);
+      else if (name === 'forehead') { for (const l of M.headSamples()) if (l[1] > 3.5 && l[2] > 5 && Math.abs(l[0]) < 4.5) out.push(fromCat(M.headWorld(R, l))); }
       else if (/^(ua|fa|th|sk)(L|R)$/.test(name)) limb(name.slice(0, 2), name.slice(2), 0, 1, 0, 2 * Math.PI);
       else if (/^knee(L|R)$/.test(name)) { const s = name.slice(4); limb('sk', s, 0, .25, -Math.PI * .5, Math.PI * .5); limb('th', s, .85, 1, -Math.PI * .5, Math.PI * .5); }
       else if (/^shin(L|R)$/.test(name)) limb('sk', name.slice(4), 0, .8, -Math.PI * .5, Math.PI * .5);

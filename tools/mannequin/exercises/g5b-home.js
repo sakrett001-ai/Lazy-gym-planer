@@ -124,7 +124,7 @@ const INC = once(() => {
 
 /* Отжимания с ногами на скамье: подушечки стоп на краю скамьи, пальцы обхватывают край, пятки вверх; ладони на полу.
    Низ: грудь в 5 см от пола, кисти под плечами; верх — руки выпрямлены. */
-const PK = { phi0: 28, phi1: 39, headAhead: 7, opts: { feetX: 10, dorsi: 10, knee: 10 } };
+const PK = { phi0: 26, phi1: 39, headAhead: 7, opts: { feetX: 10, dorsi: 10, knee: 10 } };
 const PKD = { phi0: 50, phi1: 60, headAhead: 6, opts: { ballY: 44, ballZ: 0, feetX: 9, dorsi: 10, knee: 10 } };
 const DECP = { ahead: 11, pl: .25, pu: 0 };
 const lowestFront = (C, q, h0 = 26, h1 = 49.8) => { let best = null; for (let h = h0; h <= h1; h += 1) for (const a of [0, .25, -.25]) { const p = C.chestPoint(q, h, a); if (!best || p[1] < best[1]) best = p; } return best; };
