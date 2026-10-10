@@ -73,7 +73,8 @@ test('weekly programmes and substitutes from another place stay static-dynamic',
   for (const it of p.items) assert(a.staticOk(it.ex), 'substitute ' + it.ex.id + ' is eligible');
 });
 test('the mannequin shows the working part of the range: no lockout, no sinking', () => {
-  const a = app(), p = a.buildPlan(), it = p.items.find(x => !x.ex.anim.loop);
+  /* упражнение с темпом из назначения: не цикл и не последовательность поз со своим периодом (как «Y-T-W») */
+  const a = app(), p = a.buildPlan(), it = p.items.find(x => !x.ex.anim.loop && !x.ex.anim.period);
   const F = { it, clock: 0, durations: a.motionDurations(it) }, total = F.durations.reduce((s, v) => s + v, 0), ts = [];
   for (let k = 0; k <= 200; k++) { F.clock = k / 200 * total; ts.push(a.motionFrame(F).t); }
   assert(Math.min(...ts) >= a.STATIC.partial[0] - 1e-9 && Math.max(...ts) <= a.STATIC.partial[1] + 1e-9, 'stays inside the partial range');

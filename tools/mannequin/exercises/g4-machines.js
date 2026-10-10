@@ -134,6 +134,34 @@ function lpSled(L, pc, h = L.h) {
   for (const sg of [1, -1]) parts.push({ name: 'hornPost' + (sg > 0 ? 'L' : 'R'), kind: 'beam', a: [sg * 28, 7, lowEdge[2] + 62], b: [sg * 28, 21, lowEdge[2] + 62], w: 6, h: 6, mount: 'car' + (sg > 0 ? 'L' : 'R') });
   return parts;
 }
+/* жим ногами со стопами, сдвинутыми вдоль платформы на shift см (+ — к верхнему краю); kTop, kBot — угол в колене
+   в верхней и нижней точке. Подушечки уходят от поверхности направляющих на shift·cos 25°, вдоль направляющих —
+   на shift·sin 25° (это поглощает положение платформы, которое подбирается по углу в колене). */
+function lpFeetSpec(shift, kTop, kBot) {
+  const h = 8 + shift * Math.cos(25 * D2R), pc = -4 - shift;
+  const stroke = once(() => {
+    const C = ctx([]), L = LP(), q = C.M.clone(L.q), { V } = C;
+    const sup = sp => V.add(V.add(V.add(L.H, L.d, sp), L.nu, h), C.latP(q, 'L'), 13);
+    const at = k => C.solve1D(x => { lpFoot(C, q, L, 'L', sup(x), 0, true); return q.L.knee - k; }, 40, 130);
+    return [at(kTop), at(kBot)];
+  });
+  return {
+    keys: [0, .25, .5, .75, 1],
+    equipment: (() => { const L = LP(); return [L.machine, { type: 'g4sled', id: 'sled', rail: [V3(L.R0, L.d, -10), V3(L.R0, L.d, 186)], up: L.nu, bind: { mix: ['ballL', 'ballR'] }, mountTo: 'lp:railL', parts: lpSled(L, pc, h) }]; })(),
+    contacts: [{ body: 'buttocks', prop: 'lp:seat' }, { body: 'back', prop: 'lp:back' }, { body: 'soleL', prop: 'sled:plate' }, { body: 'soleR', prop: 'sled:plate' },
+      { body: 'gripL', prop: 'lp:handleL' }, { body: 'gripR', prop: 'lp:handleR' }],
+    pose(t, C) {
+      const { V } = C, L = LP(), e = C.ease(t), q = C.M.clone(L.q), [s0, s1] = stroke(), sp = C.lerp(s0, s1, e);
+      for (const s of S) lpFoot(C, q, L, s, V.add(V.add(V.add(L.H, L.d, sp), L.nu, h), C.latP(q, s), 13));
+      for (const s of S) {
+        q[s].girdle = [-2, -4];
+        const m = L.machine.handle, g = [C.M.SIGN[s] * m.x, m.y, m.z], lat = C.lat(q, s), T = C.axes(q);
+        C.grip(q, s, g, [0, ...m.ax], V.unit(V.add(V.add(V.scale(lat, .5), T.z, -1), T.y, -.5)));
+      }
+      return q;
+    }
+  };
+}
 
 /* ================= Турник силовой рамы ================= */
 /* Перекладина Ø3,2 на высоте 228 см, вынесена на 12 см перед передними стойками (z = −67). */
@@ -880,6 +908,14 @@ module.exports = {
       return q;
     }
   },
+
+  /* Жим ногами со стопами выше и ниже на той же платформе: стопы сдвинуты вдоль платформы, ширина и разворот те же.
+     Положение платформы в верхней и нижней точке подбирается по углу в колене. Стопы высоко — колено сгибается
+     меньше, бедро больше; глубину ограничивает сгибание бедра (таз не должен отрываться от сиденья), а вверху
+     колени остаются чуть согнутыми — иначе натягивается задняя поверхность бедра. Стопы низко — колено сгибается
+     больше, голень наклоняется к платформе; глубину ограничивает голеностоп (пятки не отрываются). */
+  legpresshigh: lpFeetSpec(9, 30, 80),
+  legpresslow: lpFeetSpec(-10, 18, 96),
 
   /* Гиперэкстензия 45°: упор чуть ниже паховой складки, валики за голенями, руки скрещены на груди.
      t=0 — тело прямой линией (без переразгибания), t=1 — нижняя точка наклона. */

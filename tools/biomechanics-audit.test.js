@@ -18,8 +18,8 @@ function chestRow(mutate) {
 }
 test('all poses and cameras satisfy declared geometry and contact constraints', () => {
   const r = auditModel(model);
-  assert.equal(r.stats.exercises,144);
-  assert.equal(r.stats.poses,144*101);
+  assert.equal(r.stats.exercises,146);
+  assert.equal(r.stats.poses,146*101);
   assert.equal(r.stats.cameraPoses,29*101);
   assert.equal(r.stats.muscleProfiles,3);
   assert.equal(r.stats.musclePoses,3*101);
