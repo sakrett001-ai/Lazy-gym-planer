@@ -317,7 +317,7 @@ function sparkSvg(pts, unit, step = 0.5) {
 }
 function histHtml(ex) {
   const ss = (LOG.data[ex.id] || []).filter(x => x.s.some(Boolean));
-  if (!ss.length) return `<p class="h-empty">Записей пока нет. Отметьте подходы выше — здесь появится история и график.</p>`;
+  if (!ss.length) return `<p class="h-empty">Записей пока нет. Отметьте подходы выше — здесь появится история и график.</p>${variantHistNote(ex)}`;
   const m = metricOf(ex);
   const pts = ss.map(s => ({d:s.d, v:m.f(s)})).filter(p => p.v != null).slice(-24);
   const best = pts.length ? Math.max(...pts.map(p => p.v)) : null;
@@ -325,7 +325,7 @@ function histHtml(ex) {
     <span class="h-s">${s.s.filter(Boolean).map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(' · ')}</span>
     <button type="button" class="h-del" data-del="${ex.id}" data-d="${s.d}" aria-label="Удалить запись за ${fmtDay(s.d, true)}">Удалить</button></li>`).join('');
   return `<div class="h-chart"><p class="h-cap">${m.name}, ${m.unit}${best != null ? ` · лучший ${fmtKg(Math.round(best * 2) / 2)}` : ''}</p>${sparkSvg(pts, m.unit)}</div>
-    <ul class="h-list">${rows}</ul>${ss.length > 6 ? `<p class="h-more">Всего записей: ${ss.length}. Полная история — в разделе «Журнал».</p>` : ''}`;
+    <ul class="h-list">${rows}</ul>${ss.length > 6 ? `<p class="h-more">Всего записей: ${ss.length}. Полная история — в разделе «Журнал».</p>` : ''}${variantHistNote(ex)}`;
 }
 function histCount(id) { return (LOG.data[id] || []).filter(x => x.s.some(Boolean)).length; }
 
