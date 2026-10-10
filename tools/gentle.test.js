@@ -43,6 +43,10 @@ test('protected joints: no exercise with their peak load is picked, in any group
   assert(legs.items.length >= 4, 'legs still get a workout without knee-heavy exercises: ' + ids(legs));
   reset({ protect: ['shoulders', 'neck'], groups: ['back', 'biceps'] });
   assert(!ids(a.buildPlan()).some(id => ['pullup', 'chinup', 'assistpull'].includes(id)), 'no pull-ups when neck and shoulders are protected');
+  for (const seed of [1, 7, 23]) {
+    reset({ protect: ['shoulders'], groups: ['shoulders', 'triceps'], seed });
+    assert(!ids(a.buildPlan()).some(id => a.PATTERN[id] === 'vpush'), 'no overhead presses when shoulders are protected: ' + ids(a.buildPlan()));
+  }
   /* «Ступени: тяжелее» не ведёт к упражнению, которое нагружает бережёмый сустав */
   const hint = id => m.get('progressionHint')({ ex: a.EXI[id], rx: { reps: '12–15' } });
   reset();
