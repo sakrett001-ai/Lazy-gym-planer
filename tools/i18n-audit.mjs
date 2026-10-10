@@ -181,6 +181,19 @@ for (const id of ids) {
   for (const pose of ['start', 'middle', 'end', 'return']) { await run(`document.querySelector('[data-mv-pose="${pose}"]').click()`); await scan(`motion ${id} ${pose}`); }
   await run('closeMotion()');
 }
+/* 6б. витрина атласа: все фильтры «Чем работать», недоступные упражнения в другом месте, пустой поиск */
+step('6б. витрина');
+await run('openGallery()');
+for (const k of ['all', 'free', 'mach', 'band', 'body']) { await run(`document.querySelector('[data-gallery-kind="${k}"]').click()`); await scan(`gallery ${k}`); }
+await run(`(()=>{S.place='home';ensurePlaces(S);gallery.kind='all';renderGallery();})()`);
+await scan('gallery home, unavailable tiles');
+await run(`(()=>{gallery.here=true;renderGallery();})()`);
+await scan('gallery home, only available');
+await run(`(()=>{gallery.here=false;gallery.q='zzz';renderGallery();})()`);
+await scan('gallery empty search');
+await run(`(()=>{gallery.q='';S.place='gym';ensurePlaces(S);renderGallery();document.querySelector('[data-gallery-open]').click();})()`);
+await scan('gallery → detail');
+await run('closeMotion()');
 /* 7. режим тренировки и отдых */
 step('7. режим');
 await run(`(()=>{S.format='classic';regen();})()`);

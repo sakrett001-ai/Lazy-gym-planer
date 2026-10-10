@@ -124,6 +124,7 @@ function scheduleMotionLoop() {
     const dt = lastMotionNow===null ? 0 : Math.min(80,now-lastMotionNow); lastMotionNow=now;
     if (!document.hidden) {
       if (detailMotion) {if (!detailMotion.paused) {detailMotion.clock+=dt*Number(motionPrefs.speed);paintMotion(detailMotion,true);}}
+      else if(gallery.on){/* витрина атласа закрывает план: карточки за ней не анимируются */}
       else if(workout && $('#workout-view').open){const F=workout.motion;if(F && !F.paused && !$('#wv-active').hidden){F.clock+=dt;paintWorkoutMotion();}}
       else for (const F of figs) if (F.f && F.vis && !F.paused && F.active!==false) {
         /* карточки и атлас — 30 кадров в секунду: часы идут каждый кадр, рисунок — через кадр */
@@ -245,13 +246,13 @@ function openMotion(idx) {
 }
 function openMotionItem(it,clock=0){
   detailReturn=document.activeElement;
-  selectMotion(it,clock);
+  showDetail();selectMotion(it,clock);
   const d=$('#motion-view');if(!d.open)d.showModal();
   document.documentElement.classList.add('motion-open');
   $('#mv-close').focus();scheduleMotionLoop();
 }
 function closeMotion() {
-  const d=$('#motion-view');disposeMotion(detailMotion);detailMotion=null;
+  const d=$('#motion-view');disposeMotion(detailMotion);detailMotion=null;closeGallery();
   if(d&&d.open)d.close();
   document.documentElement.classList.remove('motion-open');
   if(detailReturn&&detailReturn.isConnected)detailReturn.focus();
@@ -264,13 +265,14 @@ function setupMotionViewer() {
   document.addEventListener('click',e=>{
     const t=e.target.closest('button');if(!t)return;
     if(t.dataset.motionPause!==undefined){const F=figs.find(f=>+f.btn.dataset.fig===+t.dataset.motionPause);if(F){F.paused=!F.paused;if(F.card){F.pick=performance.now();pickActiveCards();}t.textContent=F.paused?'Пуск':'Пауза';t.setAttribute('aria-pressed',String(!F.paused));t.setAttribute('aria-label',`${F.paused?'Воспроизвести':'Приостановить'} демонстрацию: ${F.it.name}`);}return;}
-    if(t.id==='motion-atlas'){openMotion(figs[0]?figs[0].btn.dataset.fig:-1);return;}
+    if(t.id==='motion-atlas'){openGallery();return;}
     if(t.id==='mv-close'){closeMotion();return;}
     if(!detailMotion)return;
     if(t.id==='mv-play'){detailMotion.paused=!detailMotion.paused;paintMotion(detailMotion,true);}
     if(t.dataset.mvStep){const m=motionFrame(detailMotion);detailMotion.paused=true;detailMotion.clock=Math.max(0,Math.min(m.total-1,(m.progress+Number(t.dataset.mvStep))*m.total));paintMotion(detailMotion,true);}
     if(t.dataset.mvPose){const d=detailMotion.durations;detailMotion.paused=true;detailMotion.clock=({start:0,middle:d[0]*.5,end:d[0]+d[1]*.5,return:d[0]+d[1]+d[2]*.5})[t.dataset.mvPose];paintMotion(detailMotion,true);}
-    if(t.dataset.mvNav){const i=EX.findIndex(x=>x.id===detailMotion.it.ex.id);selectMotion(previewItem(EX[(i+Number(t.dataset.mvNav)+EX.length)%EX.length].id));}
+    /* соседние упражнения — в том же порядке, что в списке (по группам мышц) */
+    if(t.dataset.mvNav){const ids=[...$('#mv-exercise').options].map(o=>o.value),i=ids.indexOf(detailMotion.it.ex.id);selectMotion(previewItem(ids[(i+Number(t.dataset.mvNav)+ids.length)%ids.length]));}
   });
   $('#mv-progress').addEventListener('input',e=>{if(!detailMotion)return;const m=motionFrame(detailMotion);detailMotion.paused=true;detailMotion.clock=Number(e.target.value)/1000*(m.total-1);paintMotion(detailMotion,true);});
   $('#mv-speed').addEventListener('change',e=>{motionPrefs.speed=Number(e.target.value);saveMotionPrefs();});
@@ -283,7 +285,7 @@ function setupMotionViewer() {
   for(const prefix of ['mv','wv'])$('#'+prefix+'-stress-toggle').addEventListener('change',e=>changeStressPreference(e.target.checked));
   for(const prefix of ['mv','wv'])$('#'+prefix+'-region').addEventListener('change',e=>selectMuscleRegion(prefix,e.target.value));
   $('#motion-view').addEventListener('cancel',e=>{e.preventDefault();closeMotion();});
-  $('#motion-view').addEventListener('close',()=>{disposeMotion(detailMotion);detailMotion=null;document.documentElement.classList.remove('motion-open');});
+  $('#motion-view').addEventListener('close',()=>{disposeMotion(detailMotion);detailMotion=null;closeGallery();document.documentElement.classList.remove('motion-open');});
   $('#motion-view').addEventListener('keydown',e=>{if(e.code==='Space'&&!['INPUT','SELECT','BUTTON','TEXTAREA'].includes(e.target.tagName)){e.preventDefault();if(detailMotion){detailMotion.paused=!detailMotion.paused;paintMotion(detailMotion,true);}}});
 }
 

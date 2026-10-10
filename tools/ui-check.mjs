@@ -96,6 +96,32 @@ await page.evaluate(() => { S.mode = 'program'; regen(); });
 check(await page.evaluate(() => { const d = document.querySelector('details.rule'); return !!d && !d.open; }), 'программа: правило прибавки свёрнуто');
 await page.close();
 
+/* атлас движений: витрина с фильтром «Чем работать», миниатюра открывает разбор, «← Все упражнения» возвращает */
+{
+  const g = await open(1280);
+  await g.click('#motion-atlas'); await g.waitForTimeout(150);
+  check(await shown(g, '#mv-gallery') && !(await shown(g, '#mv-detail')), 'кнопка атласа открывает витрину, а не разбор');
+  check(await g.evaluate(() => document.querySelectorAll('.mv-tile').length === EX.length && document.querySelectorAll('.mv-gsec').length === GROUPS.filter(x => EX.some(e => e.g === x.id)).length), 'на витрине все упражнения по группам мышц');
+  await g.click('[data-gallery-kind="band"]');
+  check(await g.evaluate(() => { const t = [...document.querySelectorAll('.mv-tile')]; return t.length > 0 && t.every(b => workKind(EXI[b.dataset.galleryOpen]) === 'band') && document.querySelector('[data-gallery-kind="band"]').getAttribute('aria-pressed') === 'true'; }), 'фильтр «Резинки» оставляет только упражнения с резинкой');
+  await g.click('[data-gallery-kind="all"]');
+  await g.evaluate(() => { S.place = 'home'; ensurePlaces(S); }); await g.click('#mv-ghere');
+  check(await g.evaluate(() => { const E = effEquip(S.equip), t = [...document.querySelectorAll('.mv-tile')]; return t.length > 0 && t.length < EX.length && t.every(b => available(EXI[b.dataset.galleryOpen], E)); }), '«только то, что есть в месте» скрывает недоступное');
+  await g.click('#mv-ghere');
+  await g.fill('#mv-gq', 'тяга верхнего');
+  check(await g.evaluate(() => { const t = [...document.querySelectorAll('.mv-tile')].map(b => b.dataset.galleryOpen); return t.includes('latpull') && t.every(id => EXI[id].name.toLowerCase().includes('тяга верхнего')) && document.activeElement.id === 'mv-gq'; }), 'поиск по названию, курсор остаётся в поле');
+  await g.click('[data-gallery-open="latpull"]'); await g.waitForTimeout(100);
+  check(await shown(g, '#mv-detail') && !(await shown(g, '#mv-gallery')) && await g.evaluate(() => $('#mv-exercise').value === 'latpull' && detailMotion?.it.ex.id === 'latpull'), 'миниатюра открывает разбор этого упражнения');
+  await g.click('#mv-back'); await g.waitForTimeout(100);
+  check(await shown(g, '#mv-gallery') && await g.evaluate(() => document.activeElement?.dataset.galleryOpen === 'latpull' && !detailMotion), '«← Все упражнения» возвращает к витрине на то же упражнение');
+  await g.keyboard.press('Escape'); await g.waitForTimeout(100);
+  check(await g.evaluate(() => !$('#motion-view').open && !gallery.on), 'Esc закрывает атлас');
+  await g.evaluate(() => { S.place = 'gym'; ensurePlaces(S); regen(); });
+  await g.evaluate(() => openMotion(0)); await g.waitForTimeout(100);
+  check(await shown(g, '#mv-detail') && !(await shown(g, '#mv-gallery')), '«Увеличить» в карточке плана открывает сразу разбор');
+  await g.close();
+}
+
 /* компьютер: параметры в боковой колонке не сворачиваются */
 const desk = await open(1280);
 await desk.evaluate(() => { S.fold.setup = true; regen(); });
@@ -105,4 +131,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание блоков, хваты и бережный режим работают на телефоне и компьютере.');
+console.log('Интерфейс: сворачивание блоков, хваты, бережный режим и витрина атласа работают на телефоне и компьютере.');

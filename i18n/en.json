@@ -2511,5 +2511,21 @@
  "Широко": "Wide",
  "Узко": "Narrow",
  ", последняя": ", last",
- "<div class=\"h-var\"><p class=\"h-cap\">Другие хваты — ведутся отдельно</p><ul>": "<div class=\"h-var\"><p class=\"h-cap\">Other grips — logged separately</p><ul>"
+ "<div class=\"h-var\"><p class=\"h-cap\">Другие хваты — ведутся отдельно</p><ul>": "<div class=\"h-var\"><p class=\"h-cap\">Other grips — logged separately</p><ul>",
+ "Всё": "All",
+ "Свободные веса": "Free weights",
+ "Тренажёры и блоки": "Machines and cables",
+ "Резинки": "Bands",
+ "Свой вес": "Bodyweight",
+ "<span class=\"mv-tfav\" aria-label=\"В избранном\">★</span>": "<span class=\"mv-tfav\" aria-label=\"In favourites\">★</span>",
+ "<div class=\"mv-gtools\"><div class=\"mv-gkinds\" role=\"group\" aria-label=\"Чем работать\">": "<div class=\"mv-gtools\"><div class=\"mv-gkinds\" role=\"group\" aria-label=\"What to work with\">",
+ "\" placeholder=\"Найти: жим, тяга, присед…\" autocomplete=\"off\"></label></div></div>": "\" placeholder=\"Find: press, row, squat…\" autocomplete=\"off\"></label></div></div>",
+ "<p class=\"mv-gempty\">Ничего не найдено. Выберите «Всё» или измените поиск.</p>": "<p class=\"mv-gempty\">Nothing found. Choose «All» or change the search.</p>",
+ "Миниатюра": "Thumbnail",
+ "Все упражнения": "All exercises",
+ "← Все упражнения": "← All exercises",
+ "Нет в месте «": "Not at “",
+ "> Только то, что есть в месте «": "> Only what is available at “",
+ "»</label><label class=\"mv-gsearch\"><span class=\"vh\">Найти упражнение</span><input type=\"search\" id=\"mv-gq\" value=\"": "”</label><label class=\"mv-gsearch\"><span class=\"vh\">Find an exercise</span><input type=\"search\" id=\"mv-gq\" value=\"",
+ "», нужно:": "”, needs:"
 }

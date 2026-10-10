@@ -64,7 +64,9 @@
 <dialog id="motion-view" class="motion-view" aria-labelledby="mv-title">
  <div class="mv-shell">
   <header class="mv-head"><div><p class="mv-eyebrow">LAZY GYM PLANNER · АТЛАС ДВИЖЕНИЙ · __VERSION__</p><h2 id="mv-title">Разбор упражнения</h2></div><button type="button" id="mv-close" aria-label="Закрыть разбор">Закрыть ×</button></header>
-  <div class="mv-select"><button type="button" data-mv-nav="-1" aria-label="Предыдущее упражнение">←</button><label for="mv-exercise">Упражнение<select id="mv-exercise"></select></label><button type="button" data-mv-nav="1" aria-label="Следующее упражнение">→</button></div>
+  <section id="mv-gallery" class="mv-gallery" aria-label="Все упражнения" hidden></section>
+  <div id="mv-detail">
+  <div class="mv-select"><button type="button" id="mv-back" class="mv-back">← Все упражнения</button><button type="button" data-mv-nav="-1" aria-label="Предыдущее упражнение">←</button><label for="mv-exercise">Упражнение<select id="mv-exercise"></select></label><button type="button" data-mv-nav="1" aria-label="Следующее упражнение">→</button></div>
   <div class="mv-tools" id="mv-tools"></div>
   <div class="mv-grid">
    <section class="mv-demo" aria-label="Демонстрация движения">
@@ -81,6 +83,7 @@
     <p id="mv-tempo" class="mv-small"></p>
    </section>
    <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Работающие мышцы</h3><p class="mv-muscle-label">Основные</p><p id="mv-primary"></p><p class="mv-muscle-label">Вспомогательные</p><p id="mv-secondary"></p></div></div><p class="mv-small">На объёмном манекене можно выделить мышечную область и сменить ракурс. Глубокие части перечислены в пояснениях.</p><h3>Как выполнять</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Ошибки и дыхание</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>О демонстрациях</summary><p>Схемы помогают разобрать последовательность движения. Амплитуда зависит от упражнения и особенностей человека; схематичный силуэт не задаёт обязательные углы суставов.</p><div id="mv-sources"></div><p class="mv-small">Версия демонстраций __VERSION__</p></details></aside>
+  </div>
   </div>
  </div>
 </dialog>
