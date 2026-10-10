@@ -14,6 +14,50 @@ const { V, FLOOR, B } = M;
 const H = p => FLOOR - p[1]; /* высота над полом, см */
 const skeleton = SK.decode(zlib.gunzipSync(fs.readFileSync(root + '/src/data/skeleton.bin')));
 
+/* ---------- голова: замеры по форме (рамка головы: x — влево, y — вверх, z — вперёд, см) ---------- */
+const hsdf = p => M.headLocalSDF(p, false);
+/* луч из точки o в направлении d до поверхности (без ушей) */
+function cast(o, d, hi = 16) { let lo = 0; for (let k = 0; k < 40; k++) { const m = (lo + hi) / 2; if (hsdf(V.add(o, d, m)) < 0) lo = m; else hi = m; } return V.add(o, d, lo); }
+const rayUp = z => cast([0, 0, z], [0, 1, 0])[1];
+/* сечение плоскостью y = const: точки поверхности по кругу из (0, y, 0) */
+const ring = (y, n = 360) => Array.from({ length: n }, (_, i) => { const a = i / n * 2 * Math.PI; return cast([0, y, 0], [Math.sin(a), 0, Math.cos(a)]); });
+const perimXZ = P => P.reduce((s, p, i) => s + Math.hypot(p[0] - P[(i + 1) % P.length][0], p[2] - P[(i + 1) % P.length][2]), 0);
+/* профиль средней линии лица: z передней поверхности на высоте y */
+const front = y => cast([0, y, 0], [0, 0, 1])[2];
+function headMeasures() {
+  const out = {}, E = M.HEAD_EARS.L;
+  let top = -Infinity; for (let z = -4; z <= 4; z += .1) top = Math.max(top, rayUp(z));
+  /* ширина — наибольшая выше ушей; длина — от надпереносья до затылка (выше переносицы); обхват — по горизонтали
+     на уровне наибольшей длины (над надбровьями, через затылочный бугор) */
+  let breadth = 0, length = 0, ly = 0;
+  for (let y = -1; y <= 8; y += .25) { const r = ring(y, 240); breadth = Math.max(breadth, 2 * Math.max(...r.map(p => Math.abs(p[0])))); if (y < 1.5) continue; const L = front(y) - cast([0, y, 0], [0, 0, -1])[2]; if (L > length) { length = L; ly = y; } }
+  out.headbreadth = breadth; out.headlength = length; out.headcircumference = perimXZ(ring(ly));
+  /* переносица — самая глубокая точка профиля между надпереносьем и кончиком носа; ментон — нижняя точка подбородка */
+  const prof = []; for (let y = 4; y >= -12; y -= .05) prof.push([y, front(y)]);
+  const tip = prof.filter(p => p[0] < 0 && p[0] > -6).reduce((a, b) => b[1] > a[1] ? b : a);
+  const sell = prof.filter(p => p[0] > tip[0] && p[0] < 2.5).reduce((a, b) => b[1] < a[1] ? b : a);
+  const pog = prof.filter(p => p[0] < -8 && p[0] > -10.8).reduce((a, b) => b[1] > a[1] ? b : a);
+  let men = null; for (let z = 2; z <= 9; z += .05) { const y = cast([0, 0, z], [0, -1, 0])[1]; if (!men || y < men[0]) men = [y, z]; }
+  out.mentonsellionlength = sell[0] - men[0];
+  /* скулы — наибольшая ширина передней половины лица на уровне скуловых дуг (y −2,5…−0,5, ниже висков) */
+  let biz = 0; for (let y = -2.5; y <= -.5; y += .25) biz = Math.max(biz, 2 * Math.max(...ring(y).filter(p => p[2] > 1.5).map(p => Math.abs(p[0]))));
+  out.bizygomaticbreadth = biz;
+  /* козелок — у переднего края уха, чуть ниже его середины */
+  const trag = [E.c[0] - .3, E.c[1] - .3, E.c[2] + E.r[2] * .85];
+  out.tragiontopofhead = top - trag[1];
+  out.earlength = 2 * E.r[1]; out.earbreadth = 2 * E.r[2];
+  { let maxX = 0; for (let a = 0; a < 2 * Math.PI; a += .05) for (let b = -Math.PI / 2; b <= Math.PI / 2; b += .05) { const l = [E.r[0] * Math.cos(b) * Math.cos(a), E.r[1] * Math.sin(b), E.r[2] * Math.cos(b) * Math.sin(a)]; maxX = Math.max(maxX, E.c[0] + E.ax[0][0] * l[0] + E.ax[1][0] * l[1] + E.ax[2][0] * l[2]); }
+    out.earprotrusion = maxX - Math.max(...ring(E.c[1]).filter(p => p[0] > 0 && Math.abs(p[2] - E.c[2]) < 1).map(p => p[0])); }
+  /* дуги «козелок — подбородок — козелок» и «козелок — под челюстью — козелок»: по плоскости через оба козелка
+     и переднюю точку подбородка (ментон для подчелюстной — приближённо) */
+  for (const [key, C] of [['bitragionchinarc', [0, pog[0], pog[1]]], ['bitragionsubmandibulararc', [0, men[0], men[1]]]]) {
+    const o = [0, trag[1], trag[2]], w = V.unit(V.sub(C, o)), pts = [];
+    for (let i = 0; i <= 180; i++) { const a = i / 180 * Math.PI; pts.push(cast(o, V.add(V.scale([1, 0, 0], Math.cos(a)), w, Math.sin(a)))); }
+    out[key] = pts.reduce((s, p, i) => i ? s + V.dist(p, pts[i - 1]) : 0, 0);
+  }
+  return out;
+}
+
 function setup(q) {
   const R = M.catalogPose(q), body = M.bodyData(R), cache = M.torsoCache(R), mats = SK.frames(R, body, skeleton.bones);
   const bone = (name, side = '') => {
@@ -67,9 +111,9 @@ function measure() {
   const m = {}, note = {};
   const R = N.R, ref = k => REF.values[k][1];
 
-  /* рост: верх эллипсоида головы */
-  { const ax = [R.frames.head.x, R.frames.head.y, R.frames.head.z]; let top = -Infinity;
-    for (const th of range(0, Math.PI, 60)) for (const ph of range(0, 2 * Math.PI, 60)) { const u = [Math.sin(th) * Math.cos(ph), Math.cos(th), Math.sin(th) * Math.sin(ph)]; const p = ax.reduce((acc, a, i) => V.add(acc, a, B.head[i] * u[i]), R.head); top = Math.max(top, H(p)); }
+  /* рост: верх головы (точки её поверхности) */
+  { let top = -Infinity; for (const l of M.headSamples()) top = Math.max(top, H(M.headWorld(R, l)));
+    for (let z = -4; z <= 4; z += .25) top = Math.max(top, H(M.headWorld(R, [0, rayUp(z), z])));
     m.stature = top; }
 
   /* костные точки */
@@ -128,9 +172,9 @@ function measure() {
   m.forearmcircumferenceflexed = Math.max(...range(.05, .5, 18).map(t => ringAt('fa', t))); note.forearmcircumferenceflexed = 'у манекена кисть не сжата';
   m.wristcircumference = ringAt('fa', .95);
 
-  /* голова: эллипсоид */
-  { const [a, , c] = B.head; m.headbreadth = 2 * a; m.headlength = 2 * c;
-    const h = ((c - a) / (c + a)) ** 2; m.headcircumference = Math.PI * (a + c) * (1 + 3 * h / (10 + Math.sqrt(4 - 3 * h))); }
+  /* голова и лицо — по форме головы в её рамке (не зависит от позы) */
+  Object.assign(m, headMeasures());
+  note.bitragionsubmandibulararc = 'дуга через ментон — приближённо'; note.bitragionchinarc = 'по плоскости сечения';
 
   /* кисть (ладонь раскрыта) и стопа */
   { /* кисть в своей рамке: −Y — к пальцам, Z — поперёк ладони (к большому пальцу) */
@@ -162,7 +206,8 @@ const GROUPS = [
   ['Обхваты корпуса и шеи', ['chestcircumference', 'waistcircumference', 'buttockcircumference', 'shouldercircumference', 'neckcircumference', 'neckcircumferencebase']],
   ['Обхваты рук и ног', ['bicepscircumferenceflexed', 'forearmcircumferenceflexed', 'wristcircumference', 'thighcircumference', 'lowerthighcircumference', 'calfcircumference', 'anklecircumference']],
   ['Длины', ['acromionradialelength', 'radialestylionlength', 'shoulderelbowlength', 'forearmhandlength', 'span']],
-  ['Голова, кисть, стопа', ['headcircumference', 'headlength', 'headbreadth', 'handlength', 'handbreadth', 'footlength', 'footbreadthhorizontal']],
+  ['Голова и лицо', ['headcircumference', 'headlength', 'headbreadth', 'tragiontopofhead', 'mentonsellionlength', 'bizygomaticbreadth', 'bitragionchinarc', 'bitragionsubmandibulararc', 'earlength', 'earbreadth', 'earprotrusion']],
+  ['Кисть и стопа', ['handlength', 'handbreadth', 'footlength', 'footbreadthhorizontal']],
   ['Масса', ['weightkg']]
 ];
 const NAMES = {
@@ -176,7 +221,9 @@ const NAMES = {
   wristcircumference: 'Обхват запястья', thighcircumference: 'Обхват бедра', lowerthighcircumference: 'Обхват бедра над коленом', calfcircumference: 'Обхват голени',
   anklecircumference: 'Обхват над лодыжками', acromionradialelength: 'Плечо: акромион — головка лучевой', radialestylionlength: 'Предплечье: лучевая кость', shoulderelbowlength: 'Плечо — низ локтя (90°)',
   forearmhandlength: 'Локоть — кончик пальца (90°)', span: 'Размах рук', headcircumference: 'Обхват головы', headlength: 'Длина головы', headbreadth: 'Ширина головы',
-  handlength: 'Длина кисти', handbreadth: 'Ширина кисти', footlength: 'Длина стопы', footbreadthhorizontal: 'Ширина стопы', weightkg: 'Масса, кг'
+  tragiontopofhead: 'Козелок — макушка', mentonsellionlength: 'Переносица — подбородок', bizygomaticbreadth: 'Ширина по скулам',
+  bitragionchinarc: 'Дуга козелок — подбородок', bitragionsubmandibulararc: 'Дуга козелок — под челюстью', earlength: 'Длина уха', earbreadth: 'Ширина уха',
+  earprotrusion: 'Выступ уха', handlength: 'Длина кисти', handbreadth: 'Ширина кисти', footlength: 'Длина стопы', footbreadthhorizontal: 'Ширина стопы', weightkg: 'Масса, кг'
 };
 function report() {
   const { m, note } = measure(), rows = [];

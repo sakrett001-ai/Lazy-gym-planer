@@ -154,7 +154,8 @@ module.exports = {
       /* корпус: плечевые суставы под перекладиной на высоте вытянутых рук; сверху — перекладина у верха груди */
       const f0 = C.fk(q), ghMid = V.mix(f0.P.ghL, f0.P.ghR, .5);
       const hang = [0, bar[1] - 60.3, bar[2] - 1], top = [0, bar[1] - 12.5, bar[2] - 9];
-      C.rootAtShoulders(q, V.mix(hang, top, e));
+      /* по пути вверх корпус чуть уходит назад: лицо проходит перед перекладиной, не задевая её носом и подбородком */
+      C.rootAtShoulders(q, V.add(V.mix(hang, top, e), [0, 0, -1], 4 * Math.sin(Math.PI * e)));
       for (const s of S) {
         const lat = C.lat(q, s), pole = V.unit(V.add(V.add([0, -1, 0], lat, 1.0), [0, 0, 1], .25));
         C.grip(q, s, V.add(bar, lat, 33), V.scale(lat, -1), pole);

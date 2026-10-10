@@ -809,9 +809,10 @@ module.exports = {
       const { V } = C, e = C.ease(t), q = C.base();
       C.root(q, [0, 100, BAR[2] - 2], [0, 1, 0], [0, 0, 1]);
       tiltBack(C, q, 4 * Math.sin(Math.PI * e), 1);
-      q.thoracic = [C.lerp(0, -8, e), 0, 0]; q.lumbar = [C.lerp(-2, -3, e), 0, 0]; q.neck = [C.lerp(0, -6, e), 0, 0];
+      /* голова к верху отклоняется назад: подбородок проходит над перекладиной, лицо её не задевает */
+      q.thoracic = [C.lerp(0, -8, e), 0, 0]; q.lumbar = [C.lerp(-2, -3, e), 0, 0]; q.neck = [C.lerp(0, -14, e), 0, 0];
       for (const s of S) { q[s].hip = [C.lerp(14, 22, e), 3, 4]; q[s].knee = C.lerp(48, 56, e); q[s].ankle = [-28, 0]; q[s].girdle = [C.lerp(24, -6, e), C.lerp(6, -8, e)]; }
-      const y = C.lerp(BAR[1] - 61.5, BAR[1] - 16, e), z = BAR[2] + C.lerp(-1, -7, e) - 7 * Math.sin(Math.PI * e);
+      const y = C.lerp(BAR[1] - 61.5, BAR[1] - 16, e), z = BAR[2] + C.lerp(-1, -7.5, e) - 10 * Math.sin(Math.PI * e);
       C.rootAtShoulders(q, [0, y, z]);
       for (const s of S) {
         const lat = C.lat(q, s);

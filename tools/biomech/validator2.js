@@ -136,8 +136,7 @@ function bodyPoints(R) {
   S.torsoHeights.forEach((h, i) => S.torso[i].forEach((p, c) => pts.push({ seg: 'torso', side: c <= 12 ? 'L' : 'R', h, p })));
   for (const [k, rows] of Object.entries(S.limbs)) rows.forEach((row, r) => row.forEach(p => pts.push({ seg: k.slice(0, 2), side: k.slice(2), t: r / (rows.length - 1), p })));
   S.neck.forEach(row => row.forEach(p => pts.push({ seg: 'neck', side: 'C', p })));
-  const f = R.frames.head;
-  for (let i = 0; i < 20; i++) for (let j = 1; j < 10; j++) { const th = i / 20 * 2 * Math.PI, ph = j / 10 * Math.PI, d = [Math.sin(ph) * Math.cos(th), Math.cos(ph), Math.sin(ph) * Math.sin(th)]; pts.push({ seg: 'head', side: 'C', p: V.add(V.add(V.add(R.head, f.x, d[0] * M.B.head[0]), f.y, d[1] * M.B.head[1]), f.z, d[2] * M.B.head[2]) }); }
+  for (const l of M.headSamples()) pts.push({ seg: 'head', side: 'C', p: M.headWorld(R, l) });
   for (const s of M.SIDES) {
     const hf = R.frames['hand' + s], sh = M.handShape(R.hands?.[s] || 'relaxed', s, R.gripRadius?.[s] ?? 1.4), L = p => V.add(V.add(V.add(hf.o, hf.x, p[0]), hf.y, p[1]), hf.z, p[2]);
     for (const fg of [...sh.fingers, sh.thumb]) fg.pts.forEach((p, i) => pts.push({ seg: 'hand', side: s, part: 'finger', p: L(p), r: fg.r }));
@@ -177,7 +176,7 @@ function regionPoints(name, pts, R) {
   if (name === 'thighsBack') return pts.filter(p => p.seg === 'th');
   if (name === 'shoulders') return pts.filter(p => (p.seg === 'torso' && p.h >= 50.8) || (p.seg === 'ua' && p.t <= .15));
   if (name === 'neck') return pts.filter(p => p.seg === 'neck');
-  if (name === 'headBack' || name === 'headAll') return pts.filter(p => p.seg === 'head');
+  if (name === 'headBack' || name === 'headAll' || name === 'forehead') return pts.filter(p => p.seg === 'head');
   if (m) {
     const [, k, s] = m;
     if (k === 'sole') return pts.filter(p => p.seg === 'foot' && p.side === s && p.sole);
