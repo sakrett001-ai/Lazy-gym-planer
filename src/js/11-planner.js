@@ -26,7 +26,7 @@ const PATTERN = {};
  ['hpush', 'pushup bbbench dbbench dip diamond closegrip wallpush inclinepush kneepush widepush archer'], ['ipush', 'dbincline smithincline inclinebb'], ['dpush', 'declinebb declinepush'],
  ['fly', 'dbfly cablefly pecdeck'], ['pullover', 'pullover straightpull'], ['vpull', 'pullup chinup latpull latpullv latpulluh'], ['hrow', 'bbrow dbrow cablerow cablerowwide bandrow invrow towelrow tablerow'],
  ['vpush', 'dbpress ohp pikepush arnold declinepike'], ['raise', 'latraise bandlatraise cablelat'], ['rear', 'facepull bandfacepull reversefly ytw reversesnow superman'],
- ['curl', 'bbcurl dbcurl hammer cablecurl bandcurl preacher inclinecurl concentration towelcurl'], ['ext', 'skull pushdown bandpushdown ohext benchdip kickback chairdip'],
+ ['curl', 'bbcurl dbcurl hammer cablecurl ropecurl bandcurl preacher inclinecurl concentration towelcurl'], ['ext', 'skull pushdown ropepushdown bandpushdown ohext benchdip kickback chairdip'],
  ['lunge', 'lunge bulgarian stepup revlunge sidelunge pistolbox'], ['bridge', 'hipthrust bridge glutekick glutebridge1'], ['flex', 'crunch cablecrunch lyinglegraise legraise declinecrunch captainraise hangknee bicycle'],
  ['hold', 'plank sideplank rollout hollow plankup deadbug birddog wallsit'], ['side', 'sidebend'], ['calf', 'calfraise lpcalf calf1'], ['grip', 'farmer hang wristcurl'],
  ['jump', 'jumpingjack jumpsquat'], ['burpee', 'burpee thruster'], ['climb', 'mountain'],

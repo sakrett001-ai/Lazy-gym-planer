@@ -11,6 +11,8 @@ const SOURCES_BY_EX = {
   latpullv:[['Тяга верхнего блока — ACE','https://www.acefitness.org/resources/everyone/exercise-library/158/seated-lat-pulldown/'],['Хват в тяге верхнего блока — Lusk и др., 2010','https://doi.org/10.1519/JSC.0b013e3181ddb0ab']],
   latpulluh:[['Тяга верхнего блока — ACE','https://www.acefitness.org/resources/everyone/exercise-library/158/seated-lat-pulldown/'],['Хват в тяге верхнего блока — Lusk и др., 2010','https://doi.org/10.1519/JSC.0b013e3181ddb0ab']],
   bulgarian:[['Болгарский выпад — Human Kinetics','https://us.humankinetics.com/blogs/excerpt/building-strength-for-soccer-with-the-rear-foot-elevated-split-squat']],
+  ropepushdown:[['Лучшие упражнения на трицепс — ACE, 2011','https://acefitness.org/certifiednewsarticle/1562/ace-sponsored-research-best-triceps-exercises/']],
+  ropecurl:[['Бицепс и плечелучевая при разном хвате — Kleiber и др., 2015','https://doi.org/10.3389/fphys.2015.00215']],
   chinup:[['Подтягивания обратным хватом — ACE','https://www.acefitness.org/resources/everyone/exercise-library/190/chin-ups/']]
 };
 const MOTION_SOURCES = [
@@ -61,6 +63,8 @@ const MOTION_FOCUS={
  bridge:{setup:'Лягте на спину, согните колени и поставьте стопы на пол.',control:'Плечи и стопы сохраняют опору, таз поднимается без переразгибания спины.'},
  hipthrust:{setup:'Верх спины опирается на край скамьи, стопы устойчивы.',control:'Движется таз; опора спиной сохраняется. Завершайте подъём без прогиба.'},
  dbrow:{setup:'Колено и ладонь опираются на скамью.',control:'Локоть движется к тазу; опорная рука и корпус сохраняют положение.'},
+ ropepushdown:{setup:'Локти прижаты к бокам, канат в ладонях, узлы под мизинцами.',control:'Плечи неподвижны; внизу концы каната расходятся к бёдрам.'},
+ ropecurl:{setup:'Лицом к нижнему блоку, канат в ладонях, большие пальцы вверх.',control:'Локти у корпуса, кисти — продолжение предплечий; корпус не отклоняется.'},
  cablerowwide:{setup:'Стопы на упорах, колени слегка согнуты, хват сверху шире плеч.',control:'Локти в стороны и назад, гриф к нижней части груди; корпус отклоняется не больше чем на 10–15°.'},
  latpullv:{setup:'Бёдра под валиками, ладони на V-рукояти смотрят друг на друга.',control:'Локти вниз вдоль корпуса, рукоять перед лицом к груди; корпус не раскачивается.'},
  latpulluh:{setup:'Бёдра под валиками, хват снизу примерно на ширине плеч.',control:'Локти вниз вдоль корпуса, рукоять перед лицом к груди; корпус не раскачивается.'},

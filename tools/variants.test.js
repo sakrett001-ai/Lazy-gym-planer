@@ -12,7 +12,7 @@ const a = m.get(`({S,EX,EXI,VARIANT_FAMILIES,VARIANT_OF,variantsFor,variantRowHt
 function reset(extra = {}) {
   a.S.places = a.PLACE_DEFAULTS.map(p => ({ ...p, equip: p.equip.slice() })); a.S.place = 'gym'; a.S.adapt = null; a.ensurePlaces(a.S);
   Object.assign(a.S, { mode: 'custom', format: 'classic', goal: 'mass', level: 'mid', groups: ['back', 'chest'], seed: 7, protect: [], fav: [], gen: null }, extra);
-  a.S.customs = [{ id: 'p1', name: 'Хваты', items: [{ id: 'pullup', sets: 4, kg: [10], note: 'Медленно вниз' }, { id: 'dbcurl' }, { id: 'pushup' }, { id: 'bbbench' }, { id: 'latpull' }, { id: 'cablerow' }] }];
+  a.S.customs = [{ id: 'p1', name: 'Хваты', items: [{ id: 'pullup', sets: 4, kg: [10], note: 'Медленно вниз' }, { id: 'dbcurl' }, { id: 'pushup' }, { id: 'bbbench' }, { id: 'latpull' }, { id: 'cablerow' }, { id: 'pushdown' }, { id: 'cablecurl' }] }];
   a.S.custom = 'p1'; a.ensureCustoms(a.S); a.ensureProtect(a.S); a.openCustom('p1');
   m.get('plan = buildPlan()');
   return m.get('plan');
@@ -38,6 +38,8 @@ test('the card offers the grips you can do here; the chosen one is pressed', () 
   assert.deepEqual(buttons(row(by('bbbench'))), ['bbbench*', 'closegrip']);
   assert.deepEqual(buttons(row(by('latpull'))), ['latpull*', 'latpullv', 'latpulluh'], 'lat pulldown: wide, V-handle, underhand');
   assert.deepEqual(buttons(row(by('cablerow'))), ['cablerow*', 'cablerowwide'], 'seated row: V-handle, wide bar');
+  assert.deepEqual(buttons(row(by('pushdown'))), ['pushdown*', 'ropepushdown'], 'pushdown: straight bar, rope');
+  assert.deepEqual(buttons(row(by('cablecurl'))), ['cablecurl*', 'ropecurl'], 'cable curl: straight bar, rope');
   assert(a.cardHtml(by('pullup'), 0).includes('class="c-var"'), 'the switch is in the card');
   /* хват, который уже стоит в другой карточке, не предлагается */
   a.S.customs[0].items.push({ id: 'chinup' }); a.ensureCustoms(a.S); m.get('plan = buildPlan()');
