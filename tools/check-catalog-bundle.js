@@ -13,7 +13,7 @@ for(const lang of ['ru','en']){
  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'));};
  w.eval(fs.readFileSync(path.join(root,'dist/volume.js'),'utf8'));
  w.eval(fs.readFileSync(path.join(dir,'app.js'),'utf8')+'\nwindow.qaCatalog={EX,openMotionItem,previewItem,closeMotion,motionPrefs,getMotion:()=>detailMotion,startWorkout,closeWorkout,getWorkout:()=>workout};');
- const q=w.qaCatalog;assert.equal(q.EX.length,144);assert.equal(d.querySelectorAll('#mv-exercise option').length,144);
+ const q=w.qaCatalog;assert.equal(q.EX.length,146);assert.equal(d.querySelectorAll('#mv-exercise option').length,146);
  console.log('  Application booted');
  q.openMotionItem(q.previewItem('bbbench'));assert(d.querySelector('#mv-stage .volume-figure svg path'));assert.equal(d.querySelector('#mv-stage .volume-figure').dataset.camera,'above');
  const slider=d.getElementById('mv-progress');slider.value='470';slider.dispatchEvent(new w.Event('input'));const clock=q.getMotion().clock,pose=d.querySelector('#mv-stage .volume-figure').dataset.pose;

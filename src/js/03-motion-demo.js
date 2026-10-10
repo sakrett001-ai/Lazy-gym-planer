@@ -69,7 +69,7 @@ burpee.sample=t=>{
   if(i===0)P.arm={a:burpeeArms[0].map((a,j)=>a+(burpeeArms[1][j]-a)*q),hA:180*q};
   return P;
 };
-const eccFirst = new Set('pushup diamond dip bbbench dbbench dbincline smithincline dbfly hyper pikepush skull benchdip ohext bulgarian rdl squat goblet airsquat lunge legpress smithsquat inclinebb declinebb closegrip pullover declinepush goodmorning rollout'.split(' '));
+const eccFirst = new Set('pushup diamond dip bbbench dbbench dbincline smithincline dbfly hyper pikepush skull benchdip ohext bulgarian rdl squat goblet airsquat lunge legpress legpresshigh legpresslow smithsquat inclinebb declinebb closegrip pullover declinepush goodmorning rollout'.split(' '));
 const isometric = new Set(['plank','sideplank','hang']);
 const MOTION_CUES = {
   bbrow:['Локти ведут снаряд к поясу. Корпус сохраняет положение.','Опускайте штангу подконтрольно, постепенно разгибая руки.'],

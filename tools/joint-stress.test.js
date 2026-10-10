@@ -25,7 +25,7 @@ test('joint angles are the validator\'s own calculation', () => {
 });
 
 const EXPECT = {
-  knee: { on: ['squat', 'goblet', 'smithsquat', 'hacksquat', 'legpress', 'lunge', 'revlunge', 'bulgarian', 'stepup', 'pistolbox'], off: ['dbpress', 'latpull', 'deadlift', 'jumpsquat', 'glutebridge1', 'crunch', 'legext', 'calfraise'] },
+  knee: { on: ['squat', 'goblet', 'smithsquat', 'hacksquat', 'legpress', 'legpresslow', 'lunge', 'revlunge', 'bulgarian', 'stepup', 'pistolbox'], off: ['dbpress', 'latpull', 'deadlift', 'jumpsquat', 'glutebridge1', 'crunch', 'legext', 'calfraise'] },
   kneeOpen: { on: ['legext'], off: ['legcurl', 'squat', 'legpress'] },
   lumbar: { on: ['deadlift', 'rdl', 'sllift', 'goodmorning', 'bbrow', 'kbswing', 'squat'], off: ['latpull', 'cablerow', 'dbrow', 'shrug', 'ohp', 'chestrowdb', 'legpress'] },
   shPress: { on: ['bbbench', 'smithbench', 'inclinebb', 'closegrip', 'dip', 'assistdip', 'benchdip', 'pecdeck'], off: ['ohp', 'pushup', 'latpull', 'bbrow', 'dbcurl'] },
