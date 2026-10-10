@@ -22,6 +22,8 @@ Lazy Gym Planner — PWA-планировщик тренировок с атла
 | `src/js/09bn-equipment.js`, `src/js/09bo-*.js` | Инвентарь и тренажёры в реальных размерах; подвижные части следуют за позой (`BIND`). |
 | `tools/mannequin/exercises/*.js` | Спецификации упражнений: инвентарь, контакты, поза `pose(t, C)`. |
 | `src/js/09bp-poses.js` | **Генерируется** `npm run mannequin:bake`. Руками не править. |
+| `src/js/09bq-skeleton.js`, `src/volume/skeleton.mjs` | Скелет: раскладка костей по рамкам манекена и слой костей в сцене (режим «Скелет»). |
+| `src/data/skeleton.bin`, `tools/skeleton/` | Кости MyoSim (Apache 2.0, `third_party/myosim`). **Генерируется**: `build_bones.py` → `pack.js`; руками не править. |
 | `tools/biomech/validator2.js` | Валидатор биомеханики и столкновений. |
 | `src/js/09f-joint-stress.js` | Красные метки пиковой нагрузки на суставы: правила по углам манекена (`Mannequin.jointAngles`, общий расчёт с валидатором), пороги и источники. |
 | `docs/mannequin-authoring.md` | Подробное руководство по авторингу: координаты, помощники, приёмы. |

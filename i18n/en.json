@@ -2573,5 +2573,10 @@
  "Постановка стоп": "Foot position",
  "Высоко": "High",
  "Низко": "Low",
- "На манекене шаг показан на месте, как на беговой дорожке. В зале идите вперёд по прямой на заданное расстояние или время.": "The mannequin walks in place, as on a treadmill. In the gym, walk forward in a straight line for the set distance or time."
+ "На манекене шаг показан на месте, как на беговой дорожке. В зале идите вперёд по прямой на заданное расстояние или время.": "The mannequin walks in place, as on a treadmill. In the gym, walk forward in a straight line for the set distance or time.",
+ "Кости — по открытым моделям MyoSim (Apache 2.0): ноги и таз — Rajagopal и др., 2016; рука — Holzbaur и др., 2005. Пока включён скелет, мышцы по фазам скрыты.": "Bones are based on the open MyoSim models (Apache 2.0): legs and pelvis — Rajagopal et al., 2016; arm — Holzbaur et al., 2005. While the skeleton is on, the phase muscle colours are hidden.",
+ "Нужна объёмная графика (WebGL)": "Requires 3D graphics (WebGL)",
+ "Загружаем кости…": "Loading bones…",
+ "Не удалось загрузить кости. Проверьте связь и включите ещё раз.": "Could not load the bones. Check your connection and turn it on again.",
+ "Скелет": "Skeleton"
 }

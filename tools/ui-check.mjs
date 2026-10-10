@@ -119,6 +119,18 @@ await page.close();
   await g.evaluate(() => { S.place = 'gym'; ensurePlaces(S); regen(); });
   await g.evaluate(() => openMotion(0)); await g.waitForTimeout(100);
   check(await shown(g, '#mv-detail') && !(await shown(g, '#mv-gallery')), '«Увеличить» в карточке плана открывает сразу разбор');
+  /* режим «Скелет»: у плоской схемы без объёмной графики переключатель недоступен; у объёмной фигуры кости
+     грузятся (в офлайн-файле — встроенные данные) и передаются фигуре, под переключателем — авторы моделей */
+  check(await g.evaluate(() => $('#mv-skeleton').disabled && !$('#mv-skeleton').checked), 'без объёмной графики «Скелет» недоступен');
+  const got = await g.evaluate(async () => {
+    const calls = []; const f = detailMotion.f; f.setSkeleton = d => calls.push(d ? d.bones.length : 0);
+    applySkeleton(); const box = $('#mv-skeleton'); if (box.disabled) return 'disabled';
+    box.click(); for (let i = 0; i < 50 && !calls.some(n => n > 0); i++) await new Promise(r => setTimeout(r, 50));
+    const on = { calls: calls.slice(), note: $('#mv-skeleton-note').textContent, pref: motionPrefs.skeleton };
+    box.click(); return { on, off: calls.at(-1), pref: motionPrefs.skeleton, hidden: $('#mv-skeleton-note').hidden };
+  });
+  check(got !== 'disabled' && got.on.calls.at(-1) === 102 && /MyoSim/.test(got.on.note) && got.on.pref === true, '«Скелет» загружает 102 кости и показывает авторов моделей');
+  check(got !== 'disabled' && got.off === 0 && got.pref === false && got.hidden, 'повторное нажатие выключает скелет');
   await g.close();
 }
 
@@ -131,4 +143,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание блоков, хваты, бережный режим и витрина атласа работают на телефоне и компьютере.');
+console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, витрина атласа и режим «Скелет» работают на телефоне и компьютере.');
