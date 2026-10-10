@@ -9,7 +9,7 @@ const validator = require('./biomech/validator2.js');
 
 const m = loadModel({ fullApp: true });
 m.get('renderSetup=()=>{}; logRefresh=()=>{}; LOG.mode="local";');
-const A = m.get('({EXI,STRESS_RULES,jointStress,jointStressAt,jointStressPoints,stressZones,stressPoint})');
+const A = m.get('({EX,EXI,PATTERN,STRESS_RULES,STRESS_HINGE,STRESS_VPUSH,jointStress,jointStressAt,jointStressPoints,stressZones,stressPoint})');
 const ex = id => A.EXI[id];
 /* массивы из контекста приложения — в обычные, чтобы сравнивать по содержимому */
 const plain = x => JSON.parse(JSON.stringify(x));
@@ -30,6 +30,8 @@ const EXPECT = {
   lumbar: { on: ['deadlift', 'rdl', 'sllift', 'goodmorning', 'bbrow', 'kbswing', 'squat'], off: ['latpull', 'cablerow', 'dbrow', 'shrug', 'ohp', 'chestrowdb', 'legpress'] },
   shPress: { on: ['bbbench', 'smithbench', 'inclinebb', 'closegrip', 'dip', 'assistdip', 'benchdip', 'pecdeck'], off: ['ohp', 'pushup', 'latpull', 'bbrow', 'dbcurl'] },
   shLever: { on: ['dbfly', 'pullover'], off: ['bbbench', 'cablefly', 'latraise'] },
+  shOverhead: { on: ['ohp', 'dbpress', 'arnold', 'shoulderpressm', 'smithohp', 'pikepush', 'declinepike'],
+    off: ['latraise', 'bandlatraise', 'frontraise', 'facepull', 'bandfacepull', 'latpull', 'pullup', 'ohext', 'cableohext', 'bbbench', 'dbincline', 'pullover'] },
   hang: { on: ['pullup', 'chinup', 'hang', 'legraise', 'hangknee'], off: ['latpull', 'dip', 'ohp'] },
   pullTop: { on: ['pullup', 'chinup', 'assistpull'], off: ['hang', 'legraise', 'latpull', 'invrow'] },
   neck: { on: ['pullup', 'chinup', 'assistpull'], off: ['crunch', 'latpull', 'hang', 'shrug'] },
@@ -58,7 +60,21 @@ test('marks follow the phase: bottom of a squat and a bench press, end range of 
     if (on) assert(knee <= 30.5, 'leg extension mark only near a straight knee: ' + knee.toFixed(0));
   }
   assert(at('pullup', 0).includes('hang') && !at('pullup', 0).includes('neck'), 'pull-up bottom: hanging shoulders, neck is fine');
+  /* жим вверх: метка только пока плечо в дуге 90–120°; внизу у груди и наверху на прямых руках — нет */
+  assert(!at('ohp', 0).includes('shOverhead') && !at('ohp', 1).includes('shOverhead'), 'overhead press: no mark at the chest or at lockout');
+  const press = ex('ohp');
+  let lit = 0;
+  for (let i = 0; i <= 40; i++) {
+    const on = A.jointStressAt(press, i / 40).some(x => x.rule.id === 'shOverhead'), el = M.jointAngles(press.anim.catalogRig(i / 40)).L.elevation;
+    if (on) { lit++; assert(el >= 89.5 && el <= 120.5, 'overhead press mark only in the 90–120° arc: ' + el.toFixed(0)); }
+  }
+  assert(lit >= 3, 'the arc is crossed in several frames');
   assert(at('pullup', 1).includes('neck') && at('pullup', 1).includes('pullTop'), 'pull-up top: neck and shoulders');
+});
+test('fallback sets match the movement table, so marks do not change when it is not loaded', () => {
+  const by = p => plain(A.EX.filter(e => A.PATTERN[e.id] === p).map(e => e.id)).sort();
+  assert.deepEqual(plain([...A.STRESS_VPUSH]).sort(), by('vpush'));
+  for (const id of A.STRESS_HINGE) assert.equal(A.PATTERN[id], 'hinge', id);
 });
 test('single-leg exercises mark only the working leg', () => {
   const S = A.jointStress(ex('stepup')).rules.find(r => r.id === 'knee'), keys = new Set(S.f.flat());
