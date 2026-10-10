@@ -69,6 +69,18 @@ check(await shown(page, `${c0} .c-map`) && await shown(page, '.card:nth-child(2)
 await page.click('[data-cards="compact"]');
 check(await page.evaluate(() => [...document.querySelectorAll('.card')].every(c => !c.classList.contains('open-log'))), '«Компактно» сворачивает все, ручные раскрытия сбрасываются');
 
+/* хваты: переключатель в карточке меняет упражнение в той же карточке; в своём плане — записывается в план */
+await page.evaluate(() => { S.fold.setup = true; S.customs = [{ id: 'v1', name: 'Хваты', items: [{ id: 'pullup', sets: 4 }, { id: 'dbcurl' }] }]; S.custom = 'v1'; ensureCustoms(S); openCustom('v1'); regen(); });
+await page.click('.card[data-slot="0"] [data-variant="chinup"]');
+check(await page.evaluate(() => customOf().items[0].id === 'chinup' && customOf().items[0].sets === 4 && document.querySelector('.card[data-slot="0"]').dataset.ex === 'chinup'
+  && document.querySelector('.card[data-slot="0"] [data-variant="chinup"]').getAttribute('aria-pressed') === 'true'), 'хват в своём плане: упражнение сменилось, подходы остались');
+await page.evaluate(() => { S.mode = 'single'; S.groups = ['back', 'biceps']; S.count = 5; S.seed = 3; regen(); });
+const gripCard = await page.evaluate(() => { const b = document.querySelector('.card [data-variant][aria-pressed="false"]'); return b ? [b.closest('.card').dataset.slot, b.dataset.variant] : null; });
+check(gripCard, 'в собранной тренировке на спину и бицепс есть карточка с хватами');
+if (gripCard) {
+  await page.click(`.card[data-slot="${gripCard[0]}"] [data-variant="${gripCard[1]}"]`);
+  check(await page.evaluate(([slot, id]) => document.querySelector(`.card[data-slot="${slot}"]`).dataset.ex === id, gripCard), 'хват в собранной тренировке: замена в той же карточке');
+}
 /* бережный режим: отметка сустава сразу перестраивает план, плашка с правилом боли сворачивается и помнит это */
 await page.evaluate(() => { S.mode = 'single'; S.groups = ['quads', 'glutes', 'hams', 'calves']; S.fold.setup = false; regen(); });
 await page.click('[data-protect="knees"]');
@@ -93,4 +105,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание параметров, нагрузки и карточек и бережный режим работают на телефоне и компьютере.');
+console.log('Интерфейс: сворачивание блоков, хваты и бережный режим работают на телефоне и компьютере.');

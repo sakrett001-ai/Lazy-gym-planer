@@ -553,6 +553,7 @@ function cardHtml(it, idx) {
       ${r.coachNote ? `<p class="c-note"><b>Заметка:</b> ${esc(r.coachNote)}</p>` : ''}
     </div>
   </div>
+  ${variantRowHtml(it)}
   <div class="c-mus">
     ${musFoldHead(ex)}
     <div class="c-map">${muscleMapSvg(lvl, {aria:'Работающие мышцы: ' + ex.pri.map(m => MUSCLE_NAMES[m]).join(', ')})}</div>

@@ -62,6 +62,13 @@ for (const mode of ['single', 'program', 'custom']) {
   await scan('folded ' + mode);
 }
 await run(`(()=>{S.fold={setup:false,load:false,cards:'compact'};S.mode='single';regen();})()`);
+/* хваты: переключатель в карточке и записи другим хватом в истории */
+step('хваты');
+await run(`(()=>{const d=n=>{const x=new Date();x.setDate(x.getDate()-n);return x.toISOString().slice(0,10);};LOG.data.pullup=[{d:d(4),s:[[null,8],[null,7]]}];
+  Object.assign(S,{view:'plan',mode:'custom',goal:'mass',format:'classic'});S.customs=[{id:'v1',name:'Grips',items:[{id:'chinup'},{id:'pushup'},{id:'dbcurl'},{id:'bbbench'}]}];S.custom='v1';ensureCustoms(S);openCustom('v1');regen();
+  document.querySelectorAll('[data-hist]').forEach(b=>b.click());})()`);
+await scan('grip switches and other-grip history');
+await run(`(()=>{delete LOG.data.pullup;S.customs=[];S.custom=null;ensureCustoms(S);S.mode='single';regen();})()`);
 /* бережный режим: все суставы, замены в своём плане, то, что нечем заменить, пометки в атласе */
 step('бережный режим');
 await run(`(()=>{Object.assign(S,{view:'plan',mode:'single',format:'classic',goal:'gentle',level:'mid',groups:['quads','glutes','hams','calves'],protect:PROTECT.map(p=>p.id)});S.fold.gentle=false;regen();})()`);
