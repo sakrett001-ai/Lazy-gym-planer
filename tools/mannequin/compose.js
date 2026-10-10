@@ -139,7 +139,7 @@ function ctx(equipment) {
        что нижняя точка обуви касается опоры); 'toes' — пальцы подогнуты и стоят на опоре, разгибание пальцев mtp. */
     kneelFoot(q, s, K, d, u, opts = {}) {
       const lowest = () => { const R = M.catalogPose(q), fr = { rear: R.frames['foot' + s], toes: R.frames['toes' + s] }; let m = Infinity;
-        for (const { part, p: l } of M.footPoints(s)) { const F = fr[part], p = fromCat(V.add(V.add(V.add(F.o, F.x, l[0]), F.y, l[1]), F.z, l[2])); m = Math.min(m, V.dot(V.sub(p, K), u)); }
+        for (const fp of M.footPoints(s)) { const p = fromCat(M.footPointWorld(fr.rear, fr.toes, fp)); m = Math.min(m, V.dot(V.sub(p, K), u)); }
         return m + (opts.kneeLift ?? 5.4); };
       if (opts.toes === 'instep') {
         const put = deg => { const a = deg * D2R, dir = V.add(V.scale(d, Math.cos(a)), u, Math.sin(a)), A = V.add(K, dir, M.B.sk); C.legTo(q, s, A, V.scale(u, -1), { dorsi: -(opts.plantar ?? 46) }); };

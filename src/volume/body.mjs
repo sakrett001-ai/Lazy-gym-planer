@@ -31,18 +31,18 @@ function handGeometry(shape){
  }
  return geos;
 }
-/* стопа: задний и средний отдел — оболочка по сечениям (рамка foot), пальцы — трубки с подушечками (рамка toes);
-   форма постоянная, поэтому сетка строится один раз, а в кадре меняются только положения рамок */
+/* стопа: задний и средний отдел — оболочка по сечениям; её точки приложение уже перевело в мир (передний отдел
+   гнётся вместе с пальцами), сетка заполняется в кадре, как у конечностей. Пальцы — трубки с подушечками в рамке toes:
+   их форма постоянная, сетка строится один раз, в кадре меняется только положение рамки. */
 const cmLocal=p=>[p[0]/100,p[1]/100,p[2]/100];
-function footGeometry(shape){
- const rear=ringGrid(shape.rear.length-1,shape.rear[0].length);fillRing(rear,shape.rear,cmLocal);
+function toeGeometry(shape){
  const toes=[];
  for(const t of shape.toes){
   const pts=t.pts.map(p=>vec(cmLocal(p)));toes.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),Math.max(6,pts.length*3),t.r/100,8,false));
   const base=new THREE.SphereGeometry(t.r/100,8,6);base.translate(...cmLocal(t.pts[0]));toes.push(base);
   const tip=new THREE.SphereGeometry(t.r/100,10,8);tip.translate(...cmLocal(t.pts.at(-1)));toes.push(tip);
  }
- return{rear,toes};
+ return toes;
 }
 export function createMannequinBody(root,first,{skin,joint,sole,mesh:sceneMesh}){
  /* тело тень отбрасывает, но не принимает: тень не ложится на цвет мышц (и на кисти, пересобираемые по хвату) */
@@ -61,8 +61,8 @@ export function createMannequinBody(root,first,{skin,joint,sole,mesh:sceneMesh})
  const handCache=new Map();
  for(const s of ['L','R']){
   const hand=new THREE.Group();hand.name='hand'+s;group.add(hand);parts['hand'+s]={mesh:hand,key:null};
-  const fg=footGeometry(first.body.feet[s].shape),rear=mesh(group,fg.rear,skin,'foot-rear'+s),toes=new THREE.Group();toes.name='foot-toes'+s;group.add(toes);
-  for(const g of fg.toes)mesh(toes,g,skin,'toe'+s);
+  const F=first.body.feet[s],rear=mesh(group,ringGrid(F.rows.length-1,F.rows[0].length),skin,'foot-rear'+s),toes=new THREE.Group();toes.name='foot-toes'+s;group.add(toes);
+  for(const g of toeGeometry(F.shape))mesh(toes,g,skin,'toe'+s);
   parts['foot-rear'+s]={mesh:rear};parts['foot-toes'+s]={mesh:toes};
  }
  const dots=new THREE.Group();dots.name='joint-dots';root.add(dots);const dotMat=new THREE.MeshBasicMaterial({color:'#e2f1ff',depthTest:false,toneMapped:false});
@@ -92,7 +92,8 @@ export function createMannequinBody(root,first,{skin,joint,sole,mesh:sceneMesh})
   for(const c of B.caps){const m=parts['cap-'+c.key].mesh;m.position.fromArray(world(c.c));m.scale.setScalar(c.r/100);}
   for(const s of ['L','R']){
    setHand(s,B.hands[s]);
-   for(const k of ['rear','toes']){const f=B.feet[s][k],m=parts['foot-'+k+s].mesh;m.position.fromArray(world(f.o));m.quaternion.copy(basis(f));}
+   fillRing(parts['foot-rear'+s].mesh.geometry,B.feet[s].rows);
+   {const f=B.feet[s].toes,m=parts['foot-toes'+s].mesh;m.position.fromArray(world(f.o));m.quaternion.copy(basis(f));}
    for(const key of ['sh','el','wr','hip','kn','an'])parts['dot'+key+s].mesh.position.fromArray(world(R[key+s]));
   }
   dots.visible=!!options.joints;

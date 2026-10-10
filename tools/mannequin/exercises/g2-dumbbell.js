@@ -163,8 +163,7 @@ function instepOn(C, q, s, x, ankleZ, top, phi, pole, squash = 1) {
   let y = top - Math.min(...M.footPoints(s).map(({ p }) => M.M3.v(R, p)[1])) - squash, r;
   for (let i = 0; i < 4; i++) {
     r = M.solveLeg(q, s, { o: [x, y, ankleZ], R, toesR: R }, pole);
-    const f = C.fk(q), fr = { rear: f.F['foot' + s], toes: f.F['toes' + s] };
-    const low = Math.min(...M.footPoints(s).map(({ part, p }) => V.add(fr[part].o, M.M3.v(fr[part].R, p))[1])), d = top - squash - low;
+    const f = C.fk(q), low = Math.min(...M.footPoints(s).map(fp => M.footPointWorld(f.F['foot' + s], f.F['toes' + s], fp)[1])), d = top - squash - low;
     if (Math.abs(d) < .05) break; y += d;
   }
   if (r.reachError > .05) throw Error(`Нога ${s} не дотягивается до скамьи: ${r.reachError.toFixed(1)} см`);

@@ -503,6 +503,17 @@ function toePath(t,g){
  let lo=-20,hi=40;for(let i=0;i<40;i++){const mid=(lo+hi)/2;if(run(mid).at(-1)[1]>B.toeSole+r)lo=mid;else hi=mid;}
  return run((lo+hi)/2);
 }
+/* Передний отдел у плюснефаланговых суставов гнётся вместе с пальцами: точки оболочки смешиваются между рамками foot
+   и toes (как при скиннинге). Линия сгиба косая, как линия головок плюсневых костей: у первой — z ≈ 13,7,
+   у пятой — z ≈ 10,7; ширина перехода ±1,6 см. m — смещение к медиальному краю. */
+function footBlendW(p,g){const m=clamp(-g*p[0],-4.5,5),zc=12.2+.375*m,u=clamp((p[2]-zc+1.6)/3.2,0,1);return u*u*(3-2*u);}
+const frameAxes=F=>F.R?{o:F.o,x:M3.col(F.R,0),y:M3.col(F.R,1),z:M3.col(F.R,2)}:F;
+const atAxes=(F,p)=>V.add(V.add(V.add(F.o,F.x,p[0]),F.y,p[1]),F.z,p[2]);
+/* точка стопы {part, p, w} в координатах рамок foot и toes (внутренние {o,R} или каталожные {o,x,y,z}) */
+function footPointWorld(rear,toes,{part,p,w=0}){
+ const b=frameAxes(toes);if(part==='toes')return atAxes(b,p);
+ const a=atAxes(frameAxes(rear),p);return w?V.mix(a,atAxes(b,V.sub(p,B.ball)),w):a;
+}
 const FOOT_CACHE={};
 /* Форма стопы для сетки: кольца заднего и среднего отдела (в рамке foot) и пальцы (в рамке toes) */
 function footShape(side='L'){
@@ -514,16 +525,17 @@ function footShape(side='L'){
  for(let j=0;j<rings.length-1;j++)for(let k=0;k<sub;k++){const t=k/sub,A=rings[Math.max(0,j-1)],Bq=rings[j],Cq=rings[j+1],D=rings[Math.min(rings.length-1,j+2)];rows.push(Bq.map((_,i)=>cr(A[i],Bq[i],Cq[i],D[i],t)));}
  rows.push(rings.at(-1));
  const cap=row=>{const c=row.reduce((a,p)=>V.add(a,p,1/row.length),[0,0,0]);return row.map(()=>c);};
- const shape={rear:[cap(rows[0]),...rows,cap(rows.at(-1))],toes:TOES.map(t=>({pts:toePath(t,g),r:t[3]}))};
+ const rear=[cap(rows[0]),...rows,cap(rows.at(-1))],shape={rear,rearW:rear.map(r=>r.map(p=>footBlendW(p,g))),toes:TOES.map(t=>({pts:toePath(t,g),r:t[3]}))};
  return FOOT_CACHE[side]=shape;
 }
 /* Точки поверхности стопы для проверок (валидатор, авторинг): part — rear (рамка foot) или toes (рамка toes);
-   sole — подошвенная сторона. */
+   sole — подошвенная сторона; w — доля рамки toes у переднего отдела. В мир — footPointWorld. */
 function footPoints(side='L'){
  const key='pts'+side;if(FOOT_CACHE[key])return FOOT_CACHE[key];
  const g=SIGN[side],out=[];
- for(const sec of FOOT_SECTIONS.slice(1,-1))for(let i=0;i<10;i++){const phi=i/10*2*Math.PI+Math.PI/10;out.push({part:'rear',sole:Math.sin(phi)<-.5,p:footRingPoint(sec,g,phi)});}
- for(const sec of FOOT_SECTIONS.slice(1,-1))out.push({part:'rear',sole:true,p:footRingPoint(sec,g,1.5*Math.PI)});
+ const rp=(sec,phi,sole)=>{const p=footRingPoint(sec,g,phi);return{part:'rear',sole,p,w:footBlendW(p,g)};};
+ for(const sec of FOOT_SECTIONS.slice(1,-1))for(let i=0;i<10;i++){const phi=i/10*2*Math.PI+Math.PI/10;out.push(rp(sec,phi,Math.sin(phi)<-.5));}
+ for(const sec of FOOT_SECTIONS.slice(1,-1))out.push(rp(sec,1.5*Math.PI,true));
  for(const t of TOES){const pts=toePath(t,g),r=t[3];
   pts.forEach((p,i)=>{out.push({part:'toes',sole:true,p:[p[0],p[1]-r,p[2]]},{part:'toes',sole:false,p:[p[0],p[1]+r,p[2]]});if(i)out.push({part:'toes',sole:false,p:[p[0]+g*r,p[1],p[2]]},{part:'toes',sole:false,p:[p[0]-g*r,p[1],p[2]]});});
   const a=pts.at(-2),b=pts.at(-1),d=V.unit(V.sub(b,a));out.push({part:'toes',sole:false,p:V.add(b,d,r)});}
@@ -556,7 +568,7 @@ function bodyData(R){
   caps.push({key:'sh'+s,c:V.add(V.add(R['sh'+s],ua.y,-1.4),ua.x,g*.7),r:CAPS.sh},{key:'el'+s,c:R['el'+s],r:CAPS.el},{key:'wr'+s,c:R['wr'+s],r:CAPS.wr},{key:'kn'+s,c:V.add(R['kn'+s],fr['sk'+s].z,.4),r:CAPS.kn},{key:'an'+s,c:R['an'+s],r:CAPS.an});
  }
  const hands={},feet={};
- for(const s of SIDES){const mode=R.hands?.[s]||'relaxed',r=R.gripRadius?.[s]??1.4;hands[s]={frame:fr['hand'+s],mode,r,key:mode+':'+s+':'+r.toFixed(2),shape:handShape(mode,s,r)};feet[s]={rear:fr['foot'+s],toes:fr['toes'+s],shape:footShape(s)};}
+ for(const s of SIDES){const mode=R.hands?.[s]||'relaxed',r=R.gripRadius?.[s]??1.4;hands[s]={frame:fr['hand'+s],mode,r,key:mode+':'+s+':'+r.toFixed(2),shape:handShape(mode,s,r)};const sh=footShape(s),fo=fr['foot'+s],to=fr['toes'+s];feet[s]={rear:fo,toes:to,shape:sh,rows:sh.rear.map((row,i)=>row.map((p,j)=>footPointWorld(fo,to,{part:'rear',p,w:sh.rearW[i][j]})))};}
  return{...S,head:{c:R.head,axes:[fr.head.x,fr.head.y,fr.head.z],radii:B.head},caps,hands,feet};
 }
 
@@ -614,6 +626,6 @@ return{V,M3,Q,B,TORSO,TORSO_H,TORSO_JOINTS,LIMBS,NECK,CAPS,MASS,LIMITS,SIDES,SIG
  neutral,clone,pack,unpack,PACK,PACK_SIZE,fk,solePoints,twoBone,solveArm,solveArmWrist,setArmFromPoints,footFrame,heelFrame,solveLeg,rootRot,rootFromAxes,
  swing,swingTwist,eulerXZY,eulerYZX,spineRot,makeTrack,monotone,toCat,dirCat,catalogPose,
  profileAt,sectionAt,spineFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,ellipseRadius,centerOfMass,LIMB_DEF,
- handShape,footShape,footPoints,FOOT_SECTIONS,TOES,malleoli,bodyData,jointAngles};
+ handShape,footShape,footPoints,footPointWorld,footBlendW,FOOT_SECTIONS,TOES,malleoli,bodyData,jointAngles};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=Mannequin;

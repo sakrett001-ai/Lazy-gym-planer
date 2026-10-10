@@ -292,8 +292,8 @@ const SIDEPLANK = once(() => {
 });
 /* нижняя точка стопы стороны s (по точкам её поверхности) */
 function lowestFoot(C, q, s) {
-  const { V, M } = C, f = C.fk(q), fr = { rear: f.F['foot' + s], toes: f.F['toes' + s] };
-  return Math.min(...M.footPoints(s).map(({ part, p }) => V.add(fr[part].o, M.M3.v(fr[part].R, p))[1]));
+  const { M } = C, f = C.fk(q);
+  return Math.min(...M.footPoints(s).map(fp => M.footPointWorld(f.F['foot' + s], f.F['toes' + s], fp)[1]));
 }
 /* Упор на коленях и ладонях (четвереньки): колени под тазобедренными суставами, ладони на уровне плеч чуть впереди
    (разгибание запястья ≤ 75°), руки почти прямые, спина ровная. */
