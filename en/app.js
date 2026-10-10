@@ -6656,7 +6656,9 @@ function progressionHint(it) {
   const past = pastSessions(ex.id);
   const [lo, hi] = parseRange(it.rx.reps);
   const topTwice = past.length >= 2 && past.slice(-2).every(s => { const sets = s.s.filter(Boolean); return sets.length && sets.every(x => x[1] >= hi && !(x[0] > 0)); });
-  const nextId = PROG_NEXT[ex.id], prevId = PROG_PREV[ex.id];
+  /* в бережном режиме ступень, которая нагружает бережёмые суставы, пропускается — берётся следующая подходящая */
+  const step = (id, map) => { let x = map[id]; while (x && typeof fitsBody === 'function' && EXI[x] && !fitsBody(EXI[x])) x = map[x]; return x; };
+  const nextId = step(ex.id, PROG_NEXT), prevId = step(ex.id, PROG_PREV);
   const lowTwice = past.length >= 2 && past.slice(-2).every(s => { const sets = s.s.filter(Boolean); return sets.length && sets.some(x => x[1] < lo); });
   if (topTwice && nextId && EXI[nextId]) return `<p class="prog prog-up"><b>↑</b><span>Two workouts in a row at the top of the range. Next step: <button type="button" class="lk" data-prog="${nextId}">${esc(EXI[nextId].name)}</button>.</span></p>`;
   if (lowTwice && prevId && EXI[prevId]) return `<p class="prog prog-down"><b>↓</b><span>Twice fell short of ${lo} reps. Easier step: <button type="button" class="lk" data-prog="${prevId}">${esc(EXI[prevId].name)}</button>.</span></p>`;
@@ -6685,7 +6687,11 @@ const GOALS = {
     circ:{rounds:3, reps:'10–12', work:30, rest:20, roundRest:120}, ss:{rest:90}},
   cut:{name:'Definition', hint:'12–20 reps', reps:{c:'12–15', i:'15–20'}, sets:{c:3, i:3}, rest:{c:60, i:40}, tempo:'2-0-1-0',
     load:{c:'≈ 55–65% of 1RM, close to failure', i:'until a strong burn'}, rep:3, time:'45–60 s', dist:'40 m',
-    circ:{rounds:4, reps:'15–20', work:40, rest:15, roundRest:90}, ss:{rest:60}}
+    circ:{rounds:4, reps:'15–20', work:40, rest:15, roundRest:90}, ss:{rest:60}},
+  /* бережно: суставы болят или идёт восстановление (11g-gentle.js) — Garber et al., MSSE 2011, 43(7):1334–1359 */
+  gentle:{name:'Gentle', hint:'12–15 reps', reps:{c:'12–15', i:'12–15'}, sets:{c:2, i:2}, rest:{c:90, i:60}, tempo:'3-0-2-0',
+    load:{c:'≈ 40–60% of 1RM, 3–4 reps in reserve, pain-free', i:'light weight, 3–4 reps in reserve, pain-free'}, rep:5, time:'20–30 s', dist:'20 m',
+    circ:{rounds:2, reps:'12–15', work:30, rest:30, roundRest:120}, ss:{rest:90}}
 };
 const FORMATS = {classic:{name:'Straight sets', hint:'set by set'}, superset:{name:'Supersets', hint:'pairs without rest'}, circuit:{name:'Circuit', hint:'rounds back to back'},
   static:{name:'Static-dynamic', hint:'constant tension'}};
@@ -6747,18 +6753,18 @@ const WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const WD_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 /* мезоцикл: 4 недели с ростом нагрузки и разгрузкой */
 const WEEKS = [
-  {name:'Intro', rir:3, add:0, pct:{strength:'≈ 75–80%', mass:'≈ 65–70%', cut:'≈ 55–60%'},
+  {name:'Intro', rir:3, add:0, pct:{strength:'≈ 75–80%', mass:'≈ 65–70%', cut:'≈ 55–60%', gentle:'≈ 40–50%'},
     note:'Choose working weights that leave 3 reps in reserve in every set. Log weight and reps: next weeks\' progress is built on them.'},
-  {name:'Loading', rir:2, add:1, pct:{strength:'≈ 80–85%', mass:'≈ 70–75%', cut:'≈ 60–65%'},
+  {name:'Loading', rir:2, add:1, pct:{strength:'≈ 80–85%', mass:'≈ 70–75%', cut:'≈ 60–65%', gentle:'≈ 45–55%'},
     note:'Compound exercises get an extra set. Increase weight using double progression; keep 2 reps in reserve.'},
-  {name:'Peak', rir:1, add:1, pct:{strength:'≈ 85–90%', mass:'≈ 75–80%', cut:'≈ 65–70%'},
+  {name:'Peak', rir:1, add:1, pct:{strength:'≈ 85–90%', mass:'≈ 75–80%', cut:'≈ 65–70%', gentle:'≈ 50–60%'},
     note:'The hardest week of the cycle: 1 rep in reserve, clean technique. If your sleep or well-being is poor, stay at the week 2 load.'},
-  {name:'Deload', rir:4, deload:true, pct:{strength:'≈ 65–70%', mass:'≈ 55–60%', cut:'≈ 50–55%'},
+  {name:'Deload', rir:4, deload:true, pct:{strength:'≈ 65–70%', mass:'≈ 55–60%', cut:'≈ 50–55%', gentle:'≈ 40%'},
     note:'About 40% fewer sets, weight 10–15% lower. This is recovery before a new cycle, not a skipped week: muscles grow when they have time to recover.'}
 ];
 
 const DEFAULTS = {goal:'mass', format:'classic', level:'mid', count:6, groups:['chest', 'back', 'shoulders'], equip:EQUIP.map(e => e.id), seed:7,
-  mode:'single', days:3, split:'full', week:1, day:0, view:'plan', atlasM:'chest', focus:null, fav:[], customs:[], custom:null, gen:null, author:'', fold:null};
+  mode:'single', days:3, split:'full', week:1, day:0, view:'plan', atlasM:'chest', focus:null, fav:[], customs:[], custom:null, gen:null, author:'', fold:null, protect:[]};
 const STORE = 'podhod.settings.v1';
 function loadSettings() {
   try { const s = JSON.parse(localStorage.getItem(STORE) || 'null'); if (s && s.groups && s.equip) return Object.assign({}, DEFAULTS, s); } catch (e) {}
@@ -6815,13 +6821,15 @@ function splitFor(days) { return SPLITS[S.split] && SPLITS[S.split].days[days] ?
 function pickExercises(E, rand, groups, count, avoid) {
   const G = new Set(groups);
   const lvlMax = S.level === 'beg' ? 2 : 3;
-  const pool = EX.filter(ex => available(ex, E) && ex.lvl <= lvlMax && (ex.g !== 'cardio' || G.has('cardio')) && (S.format !== 'static' || staticOk(ex)));
+  const pool = EX.filter(ex => available(ex, E) && ex.lvl <= lvlMax && (ex.g !== 'cardio' || G.has('cardio')) && (S.format !== 'static' || staticOk(ex)) && fitsBody(ex));
+  /* бережно: при прочих равных — упражнения без пиковой нагрузки на суставы */
+  const strain = S.goal === 'gentle' ? new Map(pool.map(ex => [ex, stressIdsOf(ex).length])) : null;
   const totalW = groups.reduce((a, g) => a + GROUP_W[g], 0) || 1;
   const quota = {};
   for (const g of groups) quota[g] = count * GROUP_W[g] / totalW;
   const picked = [];
   const usedPat = {};
-  const compBonus = {strength:0.7, mass:0.35, cut:0.05}[S.goal];
+  const compBonus = {strength:0.7, mass:0.35, cut:0.05, gentle:0.1}[S.goal];
   /* акцент из атласа: если группа мышцы есть в этой тренировке, треть упражнений нагружают её как основную
      (в недельной программе — одно на каждые 5 упражнений дня, объём набирается за неделю);
      сверх этого — небольшой плюс, а где мышца помогает — ещё меньший */
@@ -6840,6 +6848,7 @@ function pickExercises(E, rand, groups, count, avoid) {
       if (gain <= 0) return;
       let sc = gain + (ex.type === 'c' ? compBonus : 0) + jitter[i] * 0.5 + ((EX_W[ex.id] ?? 1) - 1) * 1.4;
       if (ex.eq.length) sc += 0.25;
+      if (strain) sc -= 0.5 * strain.get(ex);
       if (S.goal === 'strength' && ex.eq.some(g => g.includes('bb'))) sc += 0.3;
       for (const m of ex.pri) if (!G.has(MUSCLE_GROUP[m])) sc -= 0.3;
       const pat = PATTERN[ex.id] || 'solo:' + ex.id;
@@ -6916,9 +6925,10 @@ function prescribe(ex, week, E) {
   const band = ex.eq.length && ex.eq.every(g => g.every(id => id === 'band')), assisted = ex.eq.some(g => g.includes('gravitron'));
   const how = band ? 'band tension: ' : assisted ? 'counterweight: ' : 'pick a variation: ';
   const easy = band ? 'lighter than usual, not to failure' : assisted ? 'more than usual, not to failure' : 'an easier one, not to failure';
-  let load = t === 'c' && !pct ? how + {strength:'1–2 reps in reserve', mass:'1–2 reps in reserve', cut:'close to failure'}[S.goal] : G.load[t];
+  let load = t === 'c' && !pct ? how + {strength:'1–2 reps in reserve', mass:'1–2 reps in reserve', cut:'close to failure', gentle:'3–4 reps in reserve, pain-free'}[S.goal] : G.load[t];
   if (week) {
-    const rir = week.rir + (S.level === 'beg' ? 1 : 0);
+    /* бережно: запас не меньше трёх повторов и на пиковой неделе */
+    const rir = (S.goal === 'gentle' ? Math.max(3, week.rir) : week.rir) + (S.level === 'beg' ? 1 : 0);
     const reserve = `${rir} ${plural(rir, 'rep', 'reps', 'reps')} in reserve`;
     if (week.deload) { sets = Math.max(2, Math.round(sets * 0.6)); load = pct ? `${week.pct[S.goal]} of 1RM, light weight, not to failure` : t === 'c' ? how + easy : 'light weight, not to failure'; }
     else {
@@ -6926,9 +6936,9 @@ function prescribe(ex, week, E) {
       load = pct ? `${week.pct[S.goal]} of 1RM, ${reserve}` : t === 'c' ? how + reserve : reserve;
     }
   }
-  if (ex.kind === 'time') load = ex.g === 'cardio' ? 'fast pace without losing technique' : S.goal === 'strength' ? 'weighted or with a harder variation' : 'steady, without losing form';
-  else if (ex.g === 'cardio') load = 'explosively and at an even pace';
-  if (ex.kind === 'dist') load = S.goal === 'strength' ? 'heaviest implements possible' : 'heavy implements, no stops';
+  if (ex.kind === 'time') load = ex.g === 'cardio' ? (S.goal === 'gentle' ? 'moderate pace: you can talk without gasping' : 'fast pace without losing technique') : S.goal === 'strength' ? 'weighted or with a harder variation' : 'steady, without losing form';
+  else if (ex.g === 'cardio') load = S.goal === 'gentle' ? 'smoothly, at an even pace' : 'explosively and at an even pace';
+  if (ex.kind === 'dist') load = S.goal === 'strength' ? 'heaviest implements possible' : S.goal === 'gentle' ? 'moderate weight, steady steps' : 'heavy implements, no stops';
   const notes = [];
   if (bodyweight && ex.kind !== 'time' && S.goal === 'strength') notes.push('If the range feels easy, add weight or slow the lowering to 4 s.');
   if (!week && S.level === 'beg') load = load.replace('1–2 reps', '2–3 reps');
@@ -6952,23 +6962,26 @@ function buildPlan(ctx = {}) {
      в своём плане так же заменяется то, чего нет в этом месте */
   const ref = custom ? null : programEquip(), PE = ref ? effEquip(ref) : E;
   let picked = custom ? custom.items.map(it => EXI[it.id]) : pickExercises(PE, rand, groups, count, ctx.avoid).picked;
-  const pool = EX.filter(ex => available(ex, E));
+  /* «можно здесь»: есть инвентарь, и упражнение не нагружает суставы, которые бережём (11g-gentle.js) */
+  const usable = ex => available(ex, E) && fitsBody(ex);
+  const pool = EX.filter(usable);
   const subs = new Map(), lost = [];
   let slots = picked.map((_, i) => i);
   if (ref || custom) {
-    const lvlMax = custom ? 3 : S.level === 'beg' ? 2 : 3, used = new Set(picked.filter(ex => available(ex, E)).map(ex => ex.id));
-    const keep = [];
+    const lvlMax = custom ? 3 : S.level === 'beg' ? 2 : 3, used = new Set(picked.filter(usable).map(ex => ex.id));
+    const keep = [], ok = S.format === 'static' ? b => staticOk(b) && fitsBody(b) : fitsBody;
     picked = picked.map((ex, i) => {
-      if (available(ex, E)) { keep.push(i); return ex; }
-      const alt = analogsFor(ex, E, {exclude:used, lvlMax, limit:1, ok:S.format === 'static' ? staticOk : null})[0];
+      if (usable(ex)) { keep.push(i); return ex; }
+      const alt = analogsFor(ex, E, {exclude:used, lvlMax, limit:1, ok})[0];
       if (!alt) { lost.push(ex); return null; }
-      used.add(alt.ex.id); subs.set(alt.ex, {from:ex, note:alt.note}); keep.push(i); return alt.ex;
+      const why = available(ex, E) ? unfitWhy(ex) : '';
+      used.add(alt.ex.id); subs.set(alt.ex, {from:ex, note:[why, alt.note].filter(Boolean).join(' · ')}); keep.push(i); return alt.ex;
     }).filter(Boolean);
     slots = keep;
   }
   for (const [i, id] of Object.entries(sw)) {
     const ex = EXI[id];
-    if (picked[i] && ex && available(ex, E) && !picked.includes(ex)) picked[i] = ex;
+    if (picked[i] && ex && usable(ex) && !picked.includes(ex)) picked[i] = ex;
   }
   if (!picked.length) return {empty:'none', pool, groups, lost};
   const G = GOALS[S.goal];
@@ -7108,6 +7121,7 @@ function renderSetup() {
   $('#f-goal').innerHTML = seg('goal', GOALS, S.goal);
   $('#f-format').innerHTML = seg('format', FORMATS, S.format);
   $('#f-level').innerHTML = seg('level', LEVELS, S.level);
+  renderProtect();
   $('#count-v').textContent = S.count;
   $('#count-minus').disabled = S.count <= 3; $('#count-plus').disabled = S.count >= 10;
   const gs = new Set(S.groups);
@@ -7273,9 +7287,13 @@ function blocksHtml(p) {
 const LEGEND = `<p class="legend">1RM is the weight you can lift once. Tempo is seconds for the lowering, the pause at the bottom, the lifting and the pause at the top; X means an explosive lift.</p>`;
 function warnHtml(p) {
   const warn = [];
-  if (p.items.length < p.count) warn.push(`Selected ${p.items.length} ${plural(p.items.length, 'exercise', 'exercises', 'exercises')} of ${p.count}: there are no other options for these muscles and equipment.`);
+  const gentle = S.goal === 'gentle' || S.protect.length > 0;
+  if (p.items.length < p.count) warn.push(`Selected ${p.items.length} ${plural(p.items.length, 'exercise', 'exercises', 'exercises')} of ${p.count}: ${gentle ? 'there are no other options for these muscles and equipment in gentle mode.' : 'there are no other options for these muscles and equipment.'}`);
   if (p.lost && p.lost.length) warn.push(`No substitute here for: ${p.lost.map(ex => ex.name).join(', ')}. ${p.lost.length > 1 ? 'They' : 'It'} can be done at: ${placeOf(S, S.adapt).name}.`);
-  if (p.missing.length) warn.push(`No exercises left for: ${p.missing.map(g => GN[g].toLowerCase()).join(', ')}. They need different equipment.`);
+  /* мышца без упражнений: не хватает инвентаря — или всё, что есть, нагружает суставы, которые бережём */
+  const byBody = p.missing.filter(g => EX.some(ex => available(ex, p.E) && groupsOf(ex).has(g))), byEq = p.missing.filter(g => !byBody.includes(g));
+  if (byEq.length) warn.push(`No exercises left for: ${byEq.map(g => GN[g].toLowerCase()).join(', ')}. They need different equipment.`);
+  if (byBody.length) warn.push(`Left without exercises in gentle mode: ${byBody.map(g => GN[g].toLowerCase()).join(', ')}. Everything available for them puts load on what you are protecting.`);
   return warn.length ? `<div class="warn">${warn.map(w => `<p>${esc(w)}</p>`).join('')}</div>` : '';
 }
 function headButtons(copyLabel) {
@@ -7315,7 +7333,7 @@ function renderPlan() {
   }
   if (plan.empty === 'none') {
     root.innerHTML = S.mode === 'custom'
-      ? `<div class="empty"><h2>This plan can’t be done here</h2><p>At “${esc(placeOf().name)}” there is no equipment or substitute for: ${esc(plan.lost.map(ex => ex.name).join(', '))}. Choose another place or add exercises.</p></div>` + customAddHtml()
+      ? `<div class="empty"><h2>Nothing here to do this plan with</h2>${lostMessages(plan.lost, effEquip(S.equip)).map(m => `<p>${esc(m)}</p>`).join('')}<p>Choose another place or add exercises.</p></div>` + customAddHtml()
       : `<div class="empty"><h2>Nothing to build a workout from</h2><p>There are no exercises for the selected muscles with this equipment and level. Add equipment or pick other muscle groups.</p></div>`;
     return;
   }
@@ -7344,10 +7362,10 @@ function renderPlan() {
     </figure>
   </header>`;
   if (plan.custom) {
-    const hints = customHints(plan), lost = plan.lost.length ? [`Can’t be done or substituted here: ${plan.lost.map(ex => ex.name).join(', ')}. At another place ${plan.lost.length > 1 ? 'they come back' : 'it comes back'} into the plan.`] : [];
-    html += autoregHtml() + (lost.length ? `<div class="warn">${lost.map(w => `<p>${esc(w)}</p>`).join('')}</div>` : '')
+    const hints = customHints(plan), lost = lostMessages(plan.lost, plan.E);
+    html += autoregHtml() + gentleHtml() + (lost.length ? `<div class="warn">${lost.map(w => `<p>${esc(w)}</p>`).join('')}</div>` : '')
       + (hints.length ? `<div class="cp-hints">${hints.map(w => `<p>${esc(w)}</p>`).join('')}</div>` : '') + blocksHtml(plan) + customAddHtml() + LEGEND;
-  } else html += autoregHtml() + warnHtml(plan) + blocksHtml(plan) + LEGEND;
+  } else html += autoregHtml() + gentleHtml() + warnHtml(plan) + blocksHtml(plan) + LEGEND;
   root.innerHTML = html;
   mountFigures();
 }
@@ -7378,7 +7396,7 @@ function renderProgram() {
       <figcaption>
         ${loadFoldHead('Sets per group per week', loadTop(volRows))}
         <ul class="vbars">${volBars(prog.gvol, allGroups)}</ul>
-        <p class="lb-note">The band is a guide for muscle growth: 10–20 sets per week. A set counts in full for the target group and as half for the other working muscles. ${S.goal === 'strength' ? 'Volume is lower in a strength cycle — that\'s normal.' : ''}</p>
+        <p class="lb-note">The band is a guide for muscle growth: 10–20 sets per week. A set counts in full for the target group and as half for the other working muscles. ${S.goal === 'strength' ? 'Volume is lower in a strength cycle — that\'s normal.' : S.goal === 'gentle' ? 'In gentle mode the volume is lower on purpose: joints and technique come first.' : ''}</p>
       </figcaption>
     </figure>
   </header>
@@ -7392,7 +7410,7 @@ function renderProgram() {
   <div class="day-head"><h2>${WD_FULL[day.wd]} — ${esc(day.name)}</h2>
     <p>${(plan.groups || DAY_T[day.tid].g).map(g => GN[g].toLowerCase()).join(', ')}${plan.items ? ` · ≈${plan.minutes} min · ${plan.totalSets} ${plural(plan.totalSets, 'set', 'sets', 'sets')}` : ''}</p></div>`;
   if (!plan.items) html += `<div class="empty"><h2>No exercises for this day</h2><p>The selected equipment has nothing to load these muscles. Add equipment or pick a different split.</p></div>`;
-  else html += autoregHtml() + warnHtml(plan) + blocksHtml(plan);
+  else html += autoregHtml() + gentleHtml() + warnHtml(plan) + blocksHtml(plan);
   html += LEGEND;
   $('#plan').innerHTML = html;
   if (plan.items) mountFigures();
@@ -7727,7 +7745,7 @@ function customRowHtml(ex, E) {
   const add = inPlan ? `<button type="button" class="cp-addb in" disabled>✓ In plan</button>`
     : full ? `<button type="button" class="cp-addb" disabled>Max ${CUSTOM_MAX}</button>`
     : `<button type="button" class="cp-addb" data-cp-add="${ex.id}" aria-label="Add to plan: ${esc(name)}">+ Add</button>`;
-  return `<li class="cp-row${here ? '' : ' away'}">${favButton(ex.id)}<button type="button" class="cp-open" data-cp-open="${ex.id}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Break down the movement: ${esc(name)}"><b>${esc(name)}</b><small>${esc(here ? equipLine(ex, E) : 'no equipment here — the plan will use a substitute')} · ${esc(ex.pri.slice(0, 2).map(m => MUSCLE_NAMES[m].toLowerCase()).join(', '))}${ex.lvl >= 3 ? ' · advanced' : ''}</small></button>${add}</li>`;
+  return `<li class="cp-row${here ? '' : ' away'}">${favButton(ex.id)}<button type="button" class="cp-open" data-cp-open="${ex.id}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Break down the movement: ${esc(name)}"><b>${esc(name)}</b><small>${esc(here ? equipLine(ex, E) : 'no equipment here — the plan will use a substitute')} · ${esc(ex.pri.slice(0, 2).map(m => MUSCLE_NAMES[m].toLowerCase()).join(', '))}${ex.lvl >= 3 ? ' · advanced' : ''}${unfitHtml(ex, true)}</small></button>${add}</li>`;
 }
 function customListHtml() {
   const E = effEquip(S.equip), tab = cpTab || (S.fav.length ? 'fav' : 'groups');
@@ -7738,7 +7756,7 @@ function customListHtml() {
   if (!S.groups.length) return `<li class="cp-none">Select muscles in the settings — exercises for them will appear here.</li>`;
   const lvlMax = S.level === 'beg' ? 2 : 3;
   return S.groups.map(g => {
-    const list = EX.filter(ex => ex.g === g && available(ex, E) && ex.lvl <= lvlMax).sort((a, b) => (a.type === 'c' ? 0 : 1) - (b.type === 'c' ? 0 : 1) || (EX_W[b.id] ?? 1) - (EX_W[a.id] ?? 1));
+    const list = EX.filter(ex => ex.g === g && available(ex, E) && ex.lvl <= lvlMax).sort((a, b) => (fitsBody(a) ? 0 : 1) - (fitsBody(b) ? 0 : 1) || (a.type === 'c' ? 0 : 1) - (b.type === 'c' ? 0 : 1) || (EX_W[b.id] ?? 1) - (EX_W[a.id] ?? 1));
     /* по шесть на группу, остальное — по кнопке: на телефоне список не превращается в ленту */
     const rows = list.map((ex, i) => customRowHtml(ex, E).replace('<li class="cp-row', i >= 6 ? `<li hidden data-cp-g="${g}" class="cp-row` : '<li class="cp-row'));
     return list.length ? `<li class="cp-gh">${esc(GN[g])} <small>${list.length}</small></li>` + rows.join('') + (list.length > 6 ? `<li class="cp-morel"><button type="button" class="link" data-cp-more="${g}">More: ${list.length - 6}</button></li>` : '') : '';
@@ -8114,7 +8132,7 @@ document.addEventListener('change', e => {
 const FOLD_CARDS = ['compact', 'full'];
 function ensureFold(s) {
   const f = s.fold && typeof s.fold === 'object' ? s.fold : {};
-  s.fold = {setup:f.setup === true, load:f.load === true, cards:FOLD_CARDS.includes(f.cards) ? f.cards : 'compact'};
+  s.fold = {setup:f.setup === true, load:f.load === true, cards:FOLD_CARDS.includes(f.cards) ? f.cards : 'compact', gentle:f.gentle === true};
   return s.fold;
 }
 ensureFold(S);
@@ -8179,6 +8197,7 @@ function setupSummary() {
   else go('#f-mode', 'One-day workout');
   go('#f-goal', `${GOALS[S.goal].name} · ${FORMATS[S.format].name.toLowerCase()} · ${LEVELS[S.level].name.toLowerCase()}`);
   if (S.mode === 'single') { go('#count-l', `${S.count} ${plural(S.count, 'exercise', 'exercises', 'exercises')}`); go('#f-muscles', S.groups.length ? titleFor() : 'No muscles selected'); }
+  if (typeof PROTECT_BY !== 'undefined' && S.protect && S.protect.length) go('#f-joints', 'Protecting ' + hitsText(S.protect.map(id => PROTECT_BY[id])));
   go('#e-places', placeOf().name);
   return out.join('');
 }
@@ -8220,6 +8239,140 @@ document.addEventListener('click', e => {
     if (f) { f.scrollIntoView({block:'start'}); const b = f.querySelector('button, input, select'); if (b) b.focus({preventScroll:true}); }
   }
 });
+
+/* ===================== БЕРЕЖНЫЙ РЕЖИМ =====================
+   Две независимые настройки:
+   • «Беречь суставы» (S.protect) — с любой целью: упражнения с пиковой нагрузкой на отмеченные суставы не
+     подбираются, в своём плане и при переносе программы заменяются похожими без неё. Пиковая нагрузка — те же
+     правила, что красные метки на манекене (09f-joint-stress.js); пороги здесь не меняются.
+   • Цель «Бережно» (GOALS.gentle) — для тех, у кого болят суставы или идёт восстановление: 12–15 повторов лёгким
+     весом с запасом 3–4 повтора, медленно; без прыжков, рывковых и сложных (третьего уровня) упражнений;
+     при подборе предпочтение упражнениям без пиковой нагрузки на суставы.
+     Основание дозировки: Garber C.E. et al. ACSM Position Stand, MSSE 2011, 43(7):1334–1359 — 10–15 повторов
+     и 40–50% от 1ПМ для начинающих и старших, 60–70% для новичков; одна-две серии.
+   • Правило боли — модель контроля боли: Silbernagel K.G., Thomeé R. et al., Am J Sports Med 2007, 35(6):897–906:
+     боль во время нагрузки до 5 из 10, к утру проходит, от недели к неделе не нарастает. */
+/* acc — «нагрузка на что»: шею, поясницу, заднюю поверхность бедра */
+const PROTECT = [
+  {id:'neck', name:'Neck', acc:'neck', part:'neck'},
+  {id:'shoulders', name:'Shoulders', acc:'shoulders', part:'shoulders'},
+  {id:'elbows', name:'Elbows', acc:'elbows', part:'elbows'},
+  {id:'wrists', name:'Wrists', acc:'wrists', part:'wrists'},
+  {id:'lumbar', name:'Lower back', acc:'lower back', part:'lower back'},
+  {id:'knees', name:'Knees', acc:'knees', part:'knees'},
+  {id:'achilles', name:'Achilles tendons', acc:'Achilles tendons', part:'Achilles tendons'},
+  {id:'hams', name:'Hamstrings', acc:'hamstrings', part:'hamstrings'}
+].map(p => ({...p, rules:STRESS_RULES.filter(r => r.parts.includes(p.part)).map(r => r.id)}));
+const PROTECT_BY = Object.fromEntries(PROTECT.map(p => [p.id, p]));
+/* ударные и рывковые движения: пиковая нагрузка на суставы в несколько раз больше веса тела */
+const GENTLE_SKIP_PATTERNS = new Set(['jump', 'burpee', 'climb']), GENTLE_SKIP = new Set(['kbswing']);
+
+function ensureProtect(s) {
+  s.protect = Array.isArray(s.protect) ? PROTECT.map(p => p.id).filter(id => s.protect.includes(id)) : [];
+  return s.protect;
+}
+ensureProtect(S);
+
+/* ---------- какие суставы нагружает упражнение: считается по 41 положению манекена один раз за сборку ---------- */
+const STRESS_IDS = new Map(), STRESS_IDS_KEY = 'podhod.stress.v1';
+let stressIdsLoaded = false, stressIdsSave = 0;
+function stressIdsBuild() { return typeof window !== 'undefined' && window.PODHOD_BUILD || null; }
+function stressIdsOf(ex) {
+  if (!stressIdsLoaded) {
+    stressIdsLoaded = true;
+    try {
+      const saved = JSON.parse(localStorage.getItem(STRESS_IDS_KEY) || 'null');
+      if (saved && saved.build && saved.build === stressIdsBuild())
+        for (const [id, v] of Object.entries(saved.ids || {})) if (EXI[id] && Array.isArray(v) && v.every(r => STRESS_RULE[r])) STRESS_IDS.set(id, v);
+    } catch (e) {}
+  }
+  let v = STRESS_IDS.get(ex.id);
+  if (!v) { v = jointStress(ex).rules.map(r => r.id); STRESS_IDS.set(ex.id, v); stressIdsSchedule(); }
+  return v;
+}
+function stressIdsSchedule() {
+  if (!stressIdsBuild() || stressIdsSave) return;
+  stressIdsSave = setTimeout(() => {
+    stressIdsSave = 0;
+    try { localStorage.setItem(STRESS_IDS_KEY, JSON.stringify({build:stressIdsBuild(), ids:Object.fromEntries(STRESS_IDS)})); } catch (e) {}
+  }, 1500);
+}
+/* досчитать заранее, в простое: тогда переключение суставов и цели не ждёт расчёта */
+function prefetchStressIds() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  const queue = EX.filter(ex => !STRESS_IDS.has(ex.id));
+  const idle = window.requestIdleCallback ? cb => requestIdleCallback(cb, {timeout:1500}) : cb => setTimeout(() => { const end = performance.now() + 8; cb({timeRemaining:() => Math.max(0, end - performance.now())}); }, 60);
+  const work = deadline => {
+    do { const ex = queue.shift(); if (!ex) return; try { stressIdsOf(ex); } catch (e) {} } while (deadline.timeRemaining() > 10);
+    idle(work);
+  };
+  idle(work);
+}
+
+/* ---------- подходит ли упражнение при выбранных суставах и цели ---------- */
+function protectRules() { const set = new Set(); for (const id of ensureProtect(S)) for (const r of PROTECT_BY[id].rules) set.add(r); return set; }
+function protectHits(ex) {
+  if (!ensureProtect(S).length) return [];
+  const ids = stressIdsOf(ex);
+  return S.protect.map(id => PROTECT_BY[id]).filter(p => p.rules.some(r => ids.includes(r)));
+}
+function jointOk(ex) { return !protectHits(ex).length; }
+function gentleOk(ex) { return S.goal !== 'gentle' || (ex.lvl <= 2 && !GENTLE_SKIP.has(ex.id) && !GENTLE_SKIP_PATTERNS.has(PATTERN[ex.id])); }
+function fitsBody(ex) { return gentleOk(ex) && jointOk(ex); }
+const joinNames = list => list.length > 1 ? list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1] : list[0] || '';
+function hitsText(hits) { return joinNames(hits.map(p => p.acc)); }
+/* почему упражнение не подходит — для замены и для списка «нечем заменить» */
+function unfitWhy(ex) {
+  const hits = protectHits(ex);
+  if (hits.length) return `loads ${hitsText(hits)}`;
+  if (!gentleOk(ex)) return ex.lvl > 2 ? 'advanced variant' : 'impact or ballistic load';
+  return '';
+}
+
+/* пометка в списках атласа и «Добавить упражнение»: чем упражнение не подходит бережному режиму */
+function unfitHtml(ex, willSwap = false) {
+  const why = unfitWhy(ex);
+  return why ? ` · <span class="unfit">${esc(why)}${willSwap ? ' — will be replaced in the plan' : ''}</span>` : '';
+}
+/* что не вошло в свой план или перенесённую программу и почему */
+function lostMessages(lost, E) {
+  const eq = lost.filter(ex => !available(ex, E)), body = lost.filter(ex => available(ex, E)), out = [];
+  if (eq.length) out.push(`Can’t be done or substituted here: ${eq.map(ex => ex.name).join(', ')}. At another place ${eq.length > 1 ? 'they come back' : 'it comes back'} into the plan.`);
+  if (body.length) out.push(`${body.length > 1 ? 'Gentle mode: no replacement, left out of the plan' : 'Gentle mode: no replacement, left out of the plan'}: ${body.map(ex => `${ex.name} (${unfitWhy(ex)})`).join(', ')}.`);
+  return out;
+}
+
+/* ---------- настройки: «Беречь суставы» ---------- */
+function renderProtect() {
+  const on = new Set(ensureProtect(S));
+  $('#j-chips').innerHTML = PROTECT.map(p => `<button type="button" class="chip${on.has(p.id) ? ' on' : ''}" data-protect="${p.id}" aria-pressed="${on.has(p.id)}">${ICON.check}<span>${p.name}</span></button>`).join('');
+  $('#j-note').textContent = on.size
+    ? `Exercises with peak load on ${hitsText(S.protect.map(id => PROTECT_BY[id]))} are not picked; in a custom plan they are replaced with similar ones.`
+    : 'Mark the joints that hurt or are recovering: the plan will avoid exercises with peak load on them — by the same rules as the red marks on the mannequin.';
+}
+
+/* ---------- плашка в плане: дозировка, правило боли, когда к врачу ---------- */
+function gentleHtml() {
+  const gentle = S.goal === 'gentle', prot = ensureProtect(S).map(id => PROTECT_BY[id]);
+  if (!gentle && !prot.length) return '';
+  const lead = gentle
+    ? `<p><b>Gentle.</b> 12–15 reps with a light weight, 3–4 in reserve, slowly and without jerking. Jumps, ballistic and advanced exercises are not picked.${prot.length ? ` No peak load on ${hitsText(prot)}.` : ''}</p>`
+    : `<p><b>No peak load on ${hitsText(prot)}.</b> Such exercises are not picked, and in a custom plan they are replaced with similar ones.</p>`;
+  return `<details class="gentle-box"${ensureFold(S).gentle ? '' : ' open'}><summary>Gentle mode: the pain rule</summary>${lead}
+    <p><b>Pain during an exercise</b> on a 0–10 scale: up to 2 — keep going; 3–5 — acceptable if it is gone by the next morning and does not build up from week to week; above 5 — stop, reduce the weight or range of motion, or swap the exercise.</p>
+    <p class="gentle-warn">This does not replace a doctor. Acute pain, swelling, numbness, a joint that feels unstable, a recent injury or surgery — see a doctor or physiotherapist first.</p></details>`;
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t || !t.dataset.protect) return;
+  const id = t.dataset.protect; if (!PROTECT_BY[id]) return;
+  S.protect = S.protect.includes(id) ? S.protect.filter(x => x !== id) : S.protect.concat(id);
+  ensureProtect(S); regen();
+});
+document.addEventListener('toggle', e => {
+  if (!e.target.classList || !e.target.classList.contains('gentle-box')) return;
+  ensureFold(S).gentle = !e.target.open; saveSettings();
+}, true);
 
 /* ---------- Проигрыватель движений: карточки и увеличенный разбор ---------- */
 let figs = [], rafId = 0, io = null;
@@ -8618,11 +8771,11 @@ document.addEventListener('click', e => {
     const slot = +t.dataset.swap;
     const cur = plan.items.find(it => it.slot === slot).ex;
     const inPlan = new Set(plan.items.map(it => it.ex.id));
-    const lvlMax = S.level === 'beg' ? 2 : 3;
+    const lvlMax = S.level === 'beg' || S.goal === 'gentle' ? 2 : 3;
     const tried = new Set((swaps.__tried && swaps.__tried[swapKey() + ':' + slot]) || []);
     /* ближайшие по смыслу: то же движение и те же мышцы — первыми */
     if (S.mode === 'custom') for (const it of customOf().items) inPlan.add(it.id);
-    let alts = EX.filter(ex => !inPlan.has(ex.id) && available(ex, plan.E) && ex.lvl <= lvlMax && (ex.g === cur.g || PATTERN[ex.id] === PATTERN[cur.id]) && (S.format !== 'static' || staticOk(ex)))
+    let alts = EX.filter(ex => !inPlan.has(ex.id) && available(ex, plan.E) && ex.lvl <= lvlMax && (ex.g === cur.g || PATTERN[ex.id] === PATTERN[cur.id]) && (S.format !== 'static' || staticOk(ex)) && fitsBody(ex))
       .sort((a, b) => analogScore(cur, b) - analogScore(cur, a));
     const msgEl = t.querySelector('span');
     if (!alts.length) { msgEl.textContent = 'No substitute'; setTimeout(() => { msgEl.textContent = 'Swap'; }, 1800); return; }
@@ -9411,7 +9564,7 @@ function atlasRow(r, m, sel) {
   const ex = r.ex, E = effEquip(S.equip), name = exName(ex, E);
   const others = ex.pri.filter(x => x !== m).map(x => MUSCLE_NAMES[x].toLowerCase());
   const how = r.role === 'pri' ? (others.length ? 'together with: ' + others.slice(0, 2).join(', ') : 'main target') : 'mainly works: ' + ex.pri.slice(0, 2).map(x => MUSCLE_NAMES[x].toLowerCase()).join(', ');
-  return `<li class="at-row${sel ? ' on' : ''}">${favButton(ex.id)}<button type="button" class="at-ex" data-atlas-ex="${ex.id}" aria-pressed="${sel}"><span class="at-sw" style="background:${muscleColor(r.v)}" title="${MUSCLE_BANDS[muscleBand(r.v)]}"></span><span class="at-n"><b>${esc(name)}</b><small>${esc(equipLine(ex, E))} · ${esc(how)}${ex.lvl >= 3 ? ' · advanced' : ''}</small></span></button>`
+  return `<li class="at-row${sel ? ' on' : ''}">${favButton(ex.id)}<button type="button" class="at-ex" data-atlas-ex="${ex.id}" aria-pressed="${sel}"><span class="at-sw" style="background:${muscleColor(r.v)}" title="${MUSCLE_BANDS[muscleBand(r.v)]}"></span><span class="at-n"><b>${esc(name)}</b><small>${esc(equipLine(ex, E))} · ${esc(how)}${ex.lvl >= 3 ? ' · advanced' : ''}${unfitHtml(ex)}</small></span></button>`
     + `<button type="button" class="at-open" data-atlas-open="${ex.id}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Break down the movement: ${esc(name)}">↗</button></li>`;
 }
 /* избранное и свой план для упражнения в превью */
@@ -10171,9 +10324,10 @@ setupWorkout();
 setupMotionCameras();
 renderSetup();
 renderPlan();
+prefetchStressIds();
 logInit();
 
 plural = (n, a, b, c) => n === 1 ? a : c;
 DEC = '.';
 
-window.PODHOD_VERSION='4.10.0';window.PODHOD_BUILD='4.10.0-001bb8ddc586';window.PODHOD_LANG='en';
+window.PODHOD_VERSION='4.11.0';window.PODHOD_BUILD='4.11.0-b4d1a85a8ee0';window.PODHOD_LANG='en';
