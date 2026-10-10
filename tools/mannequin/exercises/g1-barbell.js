@@ -421,7 +421,7 @@ const HT = memo(t => {
 /* ---------- Наклонная скамья (станция и регулируемая скамья в Смите) ---------- */
 /* Сидя на наклонной скамье спиной к спинке: спина на спинке, таз на сиденье, стопы на полу перед сиденьем.
    bench — id скамьи с опорными рамками backPad/seatPad (атлет смотрит к −Z, голова — вверх по спинке). */
-function sitIncline(C, bench, { arch = [-4, -6], girdle = [-4, -12], feetZ = -62, feetX = 24 } = {}) {
+function sitIncline(C, bench, { arch = [-4, -6], girdle = [-4, -12], feetZ = -76, feetX = 24 } = {}) {
   const { V, M } = C, q = C.base(), bp = C.frame(bench, 'backPad'), sp = C.frame(bench, 'seatPad');
   const by = M.M3.col(bp.R, 1), bz = M.M3.col(bp.R, 2), sn = M.M3.col(sp.R, 1);
   C.root(q, V.add(V.add(bp.o, bz, 14), by, 12), bz, by);
@@ -466,7 +466,7 @@ const INC = once(() => {
 /* ---------- Жим в машине Смита на наклонной скамье ---------- */
 const SINC_BENCH = { type: 'adjBench', id: 'bench', back: 30, seat: 5 };
 const SINC = once(() => {
-  const C = ctx([SINC_BENCH]), q = sitIncline(C, 'bench', { feetZ: -64 }), T = C.axes(q, 'thorax');
+  const C = ctx([SINC_BENCH]), q = sitIncline(C, 'bench', { feetZ: -78 }), T = C.axes(q, 'thorax');
   const chest = C.V.add(C.chestPoint(q, 43), T.z, 1.7);
   return { q, z: +chest[2].toFixed(1), y: chest[1] };
 });

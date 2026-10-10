@@ -143,10 +143,12 @@ function bodyPoints(R) {
     for (const fg of [...sh.fingers, sh.thumb]) fg.pts.forEach((p, i) => pts.push({ seg: 'hand', side: s, part: 'finger', p: L(p), r: fg.r }));
     const pc = sh.palm.c, ps = sh.palm.size;
     for (const dx of [-.5, .5]) for (const dy of [-.5, 0, .5]) for (const dz of [-.5, 0, .5]) pts.push({ seg: 'hand', side: s, part: 'palm', p: L([pc[0] + dx * ps[0], pc[1] + dy * ps[1], pc[2] + dz * ps[2]]) });
-    for (const k of ['rear', 'toes']) {
-      const fr = R.frames[(k === 'rear' ? 'foot' : 'toes') + s], spec = M.SHOE[k], Lf = p => V.add(V.add(V.add(fr.o, fr.x, p[0]), fr.y, p[1]), fr.z, p[2]);
-      for (const dx of [-.45, 0, .45]) for (const dy of [-.5, .5]) for (const dz of [-.5, -.25, 0, .25, .5]) pts.push({ seg: 'foot', side: s, part: k, sole: dy < 0, p: Lf([spec.c[0] + dx * spec.size[0], spec.c[1] + dy * spec.size[1], spec.c[2] + dz * spec.size[2]]) });
-    }
+    /* стопа — точки её поверхности (Mannequin.footPoints): задний и средний отдел в рамке foot, пальцы в рамке toes,
+       передний отдел у плюснефаланговых суставов — между ними */
+    const ff = { rear: R.frames['foot' + s], toes: R.frames['toes' + s] };
+    for (const fp of M.footPoints(s)) pts.push({ seg: 'foot', side: s, part: fp.part, sole: fp.sole, p: M.footPointWorld(ff.rear, ff.toes, fp) });
+    /* лодыжки выступают из голени: проверяются как её поверхность */
+    for (const p of M.malleoli(R, s)) pts.push({ seg: 'sk', side: s, t: 1, p });
   }
   return pts;
 }

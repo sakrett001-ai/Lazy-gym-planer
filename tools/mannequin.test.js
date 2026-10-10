@@ -109,3 +109,23 @@ test('поверхность тела замкнута и симметрична
   assert.ok(M.torsoSDF(R, V.add(c, [0, 0, 40])) > 25, 'точка спереди снаружи');
   const mid = V.mix(R.shL, R.elL, .5); assert.ok(M.limbSDF(R, 'ua', 'L', mid) < -3, 'ось плеча внутри руки');
 });
+
+test('босая стопа: размеры по Winter и ANSUR II, свод, подушечки пальцев на плоскости подошвы, точки для проверок', () => {
+  for (const s of ['L', 'R']) {
+    const g = M.SIGN[s], sh = M.footShape(s), pts = sh.rear.flat();
+    const toeTip = Math.max(...sh.toes.map(t => M.B.ball[2] + t.pts.at(-1)[2] + t.r)), heel = Math.min(...pts.map(p => p[2]));
+    near(toeTip - heel, .152 * M.B.stature, .6, 'длина стопы 0,152·H');
+    const width = Math.max(...pts.map(p => p[0])) - Math.min(...pts.map(p => p[0]));
+    near(width, .055 * M.B.stature, .5, 'ширина по головкам плюсневых 0,055·H');
+    near(Math.min(...pts.map(p => p[1])), -M.B.ankle, .05, 'подошва на полу');
+    for (const t of sh.toes) near(t.pts.at(-1)[1] - t.r, M.B.toeSole, .02, 'подушечка пальца на плоскости подошвы');
+    assert.ok(new Set(sh.rear.map(r => r.length)).size === 1, 'кольца одной длины');
+    /* свод: медиальный край подошвы посередине стопы поднят, латеральный лежит на полу */
+    const mid = M.FOOT_SECTIONS.find(sec => sec[0] === 6);
+    assert.ok(mid[3] - mid[2] > 1.2, 'медиальный край приподнят сводом');
+    const fp = M.footPoints(s);
+    assert.ok(fp.length > 150 && fp.some(p => p.sole && p.part === 'toes') && fp.some(p => p.sole && p.part === 'rear'), 'точки поверхности с подошвой и пальцами');
+    /* большой палец — с медиальной стороны */
+    assert.ok(-g * sh.toes[0].pts[0][0] > 2, 'большой палец медиально');
+  }
+});
