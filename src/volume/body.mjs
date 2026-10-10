@@ -6,15 +6,14 @@ import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js'
 export const world=p=>[p[0]/100,(186-p[1])/100,p[2]/100];
 const direction=p=>[p[0],-p[1],p[2]],vec=p=>new THREE.Vector3(...p);
 function basis(f){return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(vec(direction(f.x)),vec(direction(f.y)),vec(direction(f.z))));}
-function local(f,p){return[f.o[0]+f.x[0]*p[0]+f.y[0]*p[1]+f.z[0]*p[2],f.o[1]+f.x[1]*p[0]+f.y[1]*p[1]+f.z[1]*p[2],f.o[2]+f.x[2]*p[0]+f.y[2]*p[1]+f.z[2]*p[2]];}
 function ringGrid(rows,cols){
  const g=new THREE.BufferGeometry(),idx=[];g.setAttribute('position',new THREE.BufferAttribute(new Float32Array((rows+1)*(cols+1)*3),3));
  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const a=r*(cols+1)+c,b=a+1,d=a+cols+1;idx.push(a,b,d,b,d+1,d);}
  g.setIndex(idx);return g;
 }
-function fillRing(g,rows){
+function fillRing(g,rows,map=world){
  const cols=rows[0].length,p=g.attributes.position;let i=0;
- for(const row of rows)for(let c=0;c<=cols;c++)p.setXYZ(i++,...world(row[c%cols]));
+ for(const row of rows)for(let c=0;c<=cols;c++)p.setXYZ(i++,...map(row[c%cols]));
  p.needsUpdate=true;g.computeVertexNormals();
  /* шов кольца: первая и последняя вершины ряда совпадают — общая нормаль, иначе вдоль шва видна грань */
  const n=g.attributes.normal,v=new THREE.Vector3(),u=new THREE.Vector3();
@@ -31,6 +30,19 @@ function handGeometry(shape){
   const tip=new THREE.SphereGeometry(f.r*cm,8,6);tip.translate(...f.pts.at(-1).map(v=>v*cm));geos.push(tip);
  }
  return geos;
+}
+/* стопа: задний и средний отдел — оболочка по сечениям (рамка foot), пальцы — трубки с подушечками (рамка toes);
+   форма постоянная, поэтому сетка строится один раз, а в кадре меняются только положения рамок */
+const cmLocal=p=>[p[0]/100,p[1]/100,p[2]/100];
+function footGeometry(shape){
+ const rear=ringGrid(shape.rear.length-1,shape.rear[0].length);fillRing(rear,shape.rear,cmLocal);
+ const toes=[];
+ for(const t of shape.toes){
+  const pts=t.pts.map(p=>vec(cmLocal(p)));toes.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),Math.max(6,pts.length*3),t.r/100,8,false));
+  const base=new THREE.SphereGeometry(t.r/100,8,6);base.translate(...cmLocal(t.pts[0]));toes.push(base);
+  const tip=new THREE.SphereGeometry(t.r/100,10,8);tip.translate(...cmLocal(t.pts.at(-1)));toes.push(tip);
+ }
+ return{rear,toes};
 }
 export function createMannequinBody(root,first,{skin,joint,sole,mesh:sceneMesh}){
  /* тело тень отбрасывает, но не принимает: тень не ложится на цвет мышц (и на кисти, пересобираемые по хвату) */
@@ -49,7 +61,9 @@ export function createMannequinBody(root,first,{skin,joint,sole,mesh:sceneMesh})
  const handCache=new Map();
  for(const s of ['L','R']){
   const hand=new THREE.Group();hand.name='hand'+s;group.add(hand);parts['hand'+s]={mesh:hand,key:null};
-  for(const k of ['rear','toes']){const shoe=mesh(group,new RoundedBoxGeometry(1,1,1,3,k==='rear'?.22:.3),sole,'shoe-'+k+s);parts['shoe-'+k+s]={mesh:shoe};}
+  const fg=footGeometry(first.body.feet[s].shape),rear=mesh(group,fg.rear,skin,'foot-rear'+s),toes=new THREE.Group();toes.name='foot-toes'+s;group.add(toes);
+  for(const g of fg.toes)mesh(toes,g,skin,'toe'+s);
+  parts['foot-rear'+s]={mesh:rear};parts['foot-toes'+s]={mesh:toes};
  }
  const dots=new THREE.Group();dots.name='joint-dots';root.add(dots);const dotMat=new THREE.MeshBasicMaterial({color:'#e2f1ff',depthTest:false,toneMapped:false});
  /* тёмная обводка: светлая точка сустава видна и на светлом теле, и на тёмном фоне */
@@ -78,10 +92,7 @@ export function createMannequinBody(root,first,{skin,joint,sole,mesh:sceneMesh})
   for(const c of B.caps){const m=parts['cap-'+c.key].mesh;m.position.fromArray(world(c.c));m.scale.setScalar(c.r/100);}
   for(const s of ['L','R']){
    setHand(s,B.hands[s]);
-   for(const k of ['rear','toes']){
-    const f=B.feet[s][k],spec=B.shoe[k],m=parts['shoe-'+k+s].mesh;
-    m.position.fromArray(world(local(f,spec.c)));m.quaternion.copy(basis(f));m.scale.set(...spec.size.map(v=>v/100));
-   }
+   for(const k of ['rear','toes']){const f=B.feet[s][k],m=parts['foot-'+k+s].mesh;m.position.fromArray(world(f.o));m.quaternion.copy(basis(f));}
    for(const key of ['sh','el','wr','hip','kn','an'])parts['dot'+key+s].mesh.position.fromArray(world(R[key+s]));
   }
   dots.visible=!!options.joints;

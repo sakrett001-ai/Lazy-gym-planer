@@ -290,11 +290,10 @@ const SIDEPLANK = once(() => {
   const gap = th => { const q = sidePlankBody(C, th), f = C.fk(q), low = Math.min(...C.region(q, 'shinR').map(p => p[1]), lowestFoot(C, q, 'R')); return f.P.ghR[1] - low - (ELBOW_H + C.M.B.ua); };
   return { theta: C.solve1D(gap, 0, 40) };
 });
-/* нижняя точка обуви стороны s (по опорным точкам подошвы и рёбрам) */
+/* нижняя точка стопы стороны s (по точкам её поверхности) */
 function lowestFoot(C, q, s) {
-  const { V, M } = C, f = C.fk(q), F = f.F['foot' + s], T = f.F['toes' + s], out = [];
-  for (const [fr, k] of [[F, 'rear'], [T, 'toes']]) { const sp = M.SHOE[k]; for (const dx of [-.5, .5]) for (const dy of [-.5, .5]) for (const dz of [-.5, 0, .5]) out.push(V.add(fr.o, M.M3.v(fr.R, [sp.c[0] + dx * sp.size[0], sp.c[1] + dy * sp.size[1], sp.c[2] + dz * sp.size[2]]))[1]); }
-  return Math.min(...out);
+  const { V, M } = C, f = C.fk(q), fr = { rear: f.F['foot' + s], toes: f.F['toes' + s] };
+  return Math.min(...M.footPoints(s).map(({ part, p }) => V.add(fr[part].o, M.M3.v(fr[part].R, p))[1]));
 }
 /* Упор на коленях и ладонях (четвереньки): колени под тазобедренными суставами, ладони на уровне плеч чуть впереди
    (разгибание запястья ≤ 75°), руки почти прямые, спина ровная. */

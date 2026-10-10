@@ -7,18 +7,18 @@ const once = f => { let v; return () => v ?? (v = f()); };
 
 /* ---------- Раскладки, от которых зависит инвентарь (оси рычагов, направляющие) ---------- */
 /* Сидя спиной к вертикальной подушке «бабочки» или грудью к ней */
-function seatedAgainstPad(C, { seatH, padZ, facing, padRegion, lean = 0, lumbar = 0 }) {
+function seatedAgainstPad(C, { seatH, padZ, facing, padRegion, lean = 0, lumbar = 0, feet = 9 }) {
   const { V } = C, q = C.base(), dir = facing === 'pad' ? 1 : -1, a = lean * C.D2R;
   C.root(q, [0, seatH + 12, 0], [0, Math.cos(a), dir * Math.sin(a)], [0, -Math.sin(a), dir * Math.cos(a)]);
   q.lumbar = [lumbar, 0, 0];
   for (const s of S) { q[s].hip = [88, 6, 4]; q[s].knee = 88; }
   C.restOn(q, 'buttocks', [0, seatH, 0], [0, 1, 0], -1.3);
   C.restOn(q, padRegion, [0, 0, padZ], [0, 0, -1], -1.0);
-  for (const s of S) { const f = C.fk(q), kn = f.P['kn' + s], lat = C.latP(q, s); C.foot(q, s, V.add([kn[0], 0, kn[2] + dir * 9], lat, 2), 0, V.unit(V.add([0, 0, dir], lat, .25)), { forward: V.unit(V.add([0, 0, dir], lat, .2)) }); }
+  for (const s of S) { const f = C.fk(q), kn = f.P['kn' + s], lat = C.latP(q, s); C.foot(q, s, V.add([kn[0], 0, kn[2] + dir * feet], lat, 2), 0, V.unit(V.add([0, 0, dir], lat, .25)), { forward: V.unit(V.add([0, 0, dir], lat, .2)) }); }
   return q;
 }
 const PEC = once(() => {
-  const C = ctx([]), q = seatedAgainstPad(C, { seatH: 48, padZ: 18, facing: 'away', padRegion: 'back' }), f = C.fk(q);
+  const C = ctx([]), q = seatedAgainstPad(C, { seatH: 48, padZ: 18, facing: 'away', padRegion: 'back', feet: 13 }), f = C.fk(q);
   return { q, gh: { L: f.P.ghL, R: f.P.ghR } };
 });
 const RFLY = once(() => {
@@ -220,7 +220,7 @@ module.exports = {
       const { V } = C, e = C.ease(t), L = SOHP(), q = C.M.clone(L.q), z = L.head[2] - 16.5;
       for (const s of S) {
         const f = C.fk(q), kn = f.P['kn' + s], lat = C.latP(q, s);
-        C.foot(q, s, V.add([kn[0], 0, kn[2] - 6], lat, 6), 0, V.unit(V.add([0, 0, -1], lat, .3)), { forward: V.unit(V.add([0, 0, -1], lat, .25)) });
+        C.foot(q, s, V.add([kn[0], 0, kn[2] - 26], lat, 6), 0, V.unit(V.add([0, 0, -1], lat, .3)), { forward: V.unit(V.add([0, 0, -1], lat, .25)) });
       }
       const chin = L.head[1] - 11.5, yTop = L.gh[1] + 55, y = C.lerp(chin + 1, yTop, e);
       for (const s of S) {

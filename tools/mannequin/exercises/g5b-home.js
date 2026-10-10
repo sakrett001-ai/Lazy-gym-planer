@@ -259,7 +259,7 @@ function nordicBody(C, phi) {
 /* верх подошв (у подъёма стопа смотрит подошвой вверх-назад) — под него подводится низ дивана */
 const NORDIC = once(() => {
   const C = ctx([]), q = nordicBody(C, 0), R = C.M.catalogPose(q), pts = [];
-  for (const s of S) { const fr = R.frames['foot' + s], sh = C.M.SHOE.rear; for (const dx of [-.5, 0, .5]) for (const dy of [-.5, .5]) for (const dz of [-.5, -.25, 0, .25, .5]) { const l = [sh.c[0] + dx * sh.size[0], sh.c[1] + dy * sh.size[1], sh.c[2] + dz * sh.size[2]]; pts.push(C.V.add(C.V.add(C.V.add(fr.o, fr.x, l[0]), fr.y, l[1]), fr.z, l[2])); } }
+  for (const s of S) { const fr = { rear: R.frames['foot' + s], toes: R.frames['toes' + s] }; for (const { part, p: l } of C.M.footPoints(s)) pts.push(C.V.add(C.V.add(C.V.add(fr[part].o, fr[part].x, l[0]), fr[part].y, l[1]), fr[part].z, l[2])); }
   const top = Math.max(...pts.map(p => 186 - p[1])), zs = pts.map(p => p[2]);
   /* низ: кисти под плечами (чуть впереди); толчок руками — до почти прямых рук (phi1) */
   const f0 = C.fk(nordicBody(C, NRD.phi0)), palm = s => [f0.P['gh' + s][0] + SG[s] * 4, 0, f0.P['gh' + s][2] + 4 + 5.6];

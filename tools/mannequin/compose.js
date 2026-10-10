@@ -134,12 +134,12 @@ function ctx(equipment) {
       const r = M.solveLeg(q, s, { o: A, R: footR, toesR }, V.scale(u, -1));
       return r;
     },
-    /* Стопа при стоянии на коленях, по геометрии обуви:
+    /* Стопа при стоянии на коленях, по геометрии стопы (Mannequin.footPoints):
        'instep' — подъём стопы лежит на опоре (подошвенное сгибание plantar, наклон голени подбирается так,
        что нижняя точка обуви касается опоры); 'toes' — пальцы подогнуты и стоят на опоре, разгибание пальцев mtp. */
     kneelFoot(q, s, K, d, u, opts = {}) {
-      const lowest = () => { const f = M.fk(q), R = M.catalogPose(q), fr = ['foot', 'toes'].map(k => R.frames[k + s]); let m = Infinity;
-        for (const [k, F] of [['rear', fr[0]], ['toes', fr[1]]]) { const sp = M.SHOE[k]; for (const dx of [-.5, .5]) for (const dy of [-.5, .5]) for (const dz of [-.5, 0, .5]) { const p = fromCat(V.add(V.add(V.add(F.o, F.x, sp.c[0] + dx * sp.size[0]), F.y, sp.c[1] + dy * sp.size[1]), F.z, sp.c[2] + dz * sp.size[2])); m = Math.min(m, V.dot(V.sub(p, K), u)); } }
+      const lowest = () => { const R = M.catalogPose(q), fr = { rear: R.frames['foot' + s], toes: R.frames['toes' + s] }; let m = Infinity;
+        for (const { part, p: l } of M.footPoints(s)) { const F = fr[part], p = fromCat(V.add(V.add(V.add(F.o, F.x, l[0]), F.y, l[1]), F.z, l[2])); m = Math.min(m, V.dot(V.sub(p, K), u)); }
         return m + (opts.kneeLift ?? 5.4); };
       if (opts.toes === 'instep') {
         const put = deg => { const a = deg * D2R, dir = V.add(V.scale(d, Math.cos(a)), u, Math.sin(a)), A = V.add(K, dir, M.B.sk); C.legTo(q, s, A, V.scale(u, -1), { dorsi: -(opts.plantar ?? 46) }); };

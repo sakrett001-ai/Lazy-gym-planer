@@ -252,7 +252,9 @@ function buildSpatialFigure(anim,opts={}){
    const h=B.hands[s],hand=[...h.shape.fingers.flatMap(f=>f.pts),...h.shape.thumb.pts];
    for(const dx of [-.5,.5])for(const dy of [-.5,.5])for(const dz of [-.5,.5])hand.push([h.shape.palm.c[0]+dx*h.shape.palm.size[0],h.shape.palm.c[1]+dy*h.shape.palm.size[1],h.shape.palm.c[2]+dz*h.shape.palm.size[2]]);
    silhouette(hand.map(p=>L(h.frame,p)),skin,{'data-limb':'hand'+s});
-   for(const k of ['rear','toes']){const f=B.feet[s][k],sp=B.shoe[k],pts=[];for(const dx of [-.5,.5])for(const dy of [-.5,.5])for(const dz of [-.5,.5])pts.push(L(f,[sp.c[0]+dx*sp.size[0],sp.c[1]+dy*sp.size[1],sp.c[2]+dz*sp.size[2]]));silhouette(pts,palette.shoe,{'data-limb':'shoe'+s});}
+   /* стопа: силуэт заднего и среднего отдела (каждое третье кольцо, каждая вторая точка) и пальцев */
+   const ft=B.feet[s],foot=[...every(ft.shape.rear,3).flatMap(r=>r.filter((_,j)=>j%2===0)).map(p=>L(ft.rear,p)),...ft.shape.toes.flatMap(t=>t.pts.flatMap(p=>[[p[0],p[1]-t.r,p[2]],[p[0],p[1]+t.r,p[2]]])).map(p=>L(ft.toes,p))];
+   silhouette(foot,skin,{'data-limb':'foot'+s});
   }
   const hf=R.frames.head,head=[];
   for(let i=0;i<16;i++)for(let j=1;j<8;j++){const th=i/16*2*Math.PI,ph=j/8*Math.PI,d=[Math.sin(ph)*Math.cos(th)*B.head.radii[0],Math.cos(ph)*B.head.radii[1],Math.sin(ph)*Math.sin(th)*B.head.radii[2]];head.push(L({o:R.head,x:hf.x,y:hf.y,z:hf.z},d));}

@@ -69,9 +69,9 @@ function swingTwist(M){
  return{vx:sv[0],vz:sv[1],twist:Math.atan2(Tw[2],Tw[0])*R2D,elevation:ang*R2D};
 }
 
-/* ---------- Антропометрия: мужчина 175 см, 78 кг, в кроссовках (подошва 2 см) ---------- */
+/* ---------- Антропометрия: мужчина 175 см, 78 кг; высота голеностопа 8,5 см (как в кроссовках с подошвой 2 см) ---------- */
 const B={
- stature:175,mass:78,sole:2,
+ stature:175,mass:78,
  ua:28.3,fa:27.0,th:42.4,sk:43.6,               // плечо, предплечье, бедро, голень — между центрами суставов
  hipHalf:8.8,                                    // центры тазобедренных суставов ±8,8 см
  lumbar:[0,10,0],thoracic:[0,14,0],              // поясничный и грудопоясничный «шарниры» по оси корпуса
@@ -80,10 +80,10 @@ const B={
  head:[7.9,11.4,9.8],                            // полуоси головы: ширина, высота, глубина
  grip:[2.6,-8.0,0],knuckle:[0,-9.8,0],           // центр хвата: 8 см дистальнее и 2,6 см ладоннее запястья
  palm:{width:8.4,thick:3.0,len:10.2},finger:8.6,
- ankle:8.5,heel:-6.5,ball:[0,-6.5,13.5],toe:[0,-0.6,7.2],toeSole:-2.0, // стопа в кроссовке от центра голеностопа
- shoe:{heelW:7.6,ballW:10.2,toeW:8.6,heelTop:-1.2,ballTop:-2.2,toeTop:1.0}
+ ankle:8.5,heel:-6.5,ball:[0,-6.5,13.5],toe:[0,-0.6,7.2],toeSole:-2.0, // опорные точки стопы от центра голеностопа (форма — FOOT_SECTIONS)
+ sole:{heelW:6.0,ballM:4.6,ballL:4.3,ballLZ:10.8,hallux:[2.8,5.0],toe5:[-4.0,2.4]} // опора подошвы: ширина пятки, головки 1-й и 5-й плюсневых, подушечки пальцев
 };
-B.hipHeight=B.sk+B.th+B.ankle;                   // 94,5 см от пола до центров тазобедренных суставов (в обуви)
+B.hipHeight=B.sk+B.th+B.ankle;                   // 94,5 см от пола до центров тазобедренных суставов
 /* Сечения корпуса: h — высота над серединой тазобедренных суставов вдоль оси корпуса;
    w — полуширина, a — до передней поверхности, b — до задней. */
 const TORSO=[[-9,12.5,4.5,8.5],[-4,15.8,7.2,12.2],[0,16.8,8.6,11.8],[6,16.4,10.0,10.4],[12,15.0,10.4,9.6],[18,14.6,10.4,9.6],[24,15.1,10.6,10.0],
@@ -98,7 +98,7 @@ const LIMBS={
 };
 /* Шея: [t, спереди, сзади, латерально], см; t=0 — над верхним сечением корпуса, t=1 — внутри черепа */
 const NECK=[[0,5.4,6.0,5.8],[.5,5.0,5.6,5.4],[1,4.8,5.2,5.2]],NECK_BLEND=.4;
-const CAPS={sh:6.0,el:3.9,wr:2.7,kn:5.3,an:3.5};
+const CAPS={sh:6.0,el:3.9,wr:2.7,kn:5.3,an:2.6};
 /* Массы (доля от общей) и центры масс сегментов: de Leva 1996, мужчины */
 const MASS={head:.0694,upperTrunk:.1596,midTrunk:.1633,lowerTrunk:.1117,ua:.0271,fa:.0162,hand:.0061,th:.1416,sk:.0433,foot:.0137};
 /* Пределы, градусы: [мин, макс]. Положительные направления — в описании DOF ниже. */
@@ -169,9 +169,9 @@ function fk(q){
 }
 /* Опорные точки подошвы (для контакта с полом и опорой) */
 function solePoints(fkr,s){
- const F=fkr.F['foot'+s],T=fkr.F['toes'+s],g=SIGN[s],w=B.shoe;
- return[[0,-B.ankle,B.heel],[g*w.heelW/2,-B.ankle,B.heel+1.5],[-g*w.heelW/2,-B.ankle,B.heel+1.5],[g*w.ballW/2,-B.ankle,B.ball[2]],[-g*w.ballW/2,-B.ankle,B.ball[2]]].map(p=>({p:at(F,p),part:'rear'}))
-  .concat([[0,B.toeSole,B.toe[2]],[g*w.toeW/2,B.toeSole,3],[-g*w.toeW/2,B.toeSole,3]].map(p=>({p:at(T,p),part:'toes'})));
+ const F=fkr.F['foot'+s],T=fkr.F['toes'+s],g=SIGN[s],w=B.sole;
+ return[[0,-B.ankle,B.heel],[g*w.heelW/2,-B.ankle,B.heel+1.5],[-g*w.heelW/2,-B.ankle,B.heel+1.5],[g*w.ballL,-B.ankle,w.ballLZ],[-g*w.ballM,-B.ankle,B.ball[2]]].map(p=>({p:at(F,p),part:'rear'}))
+  .concat([[-g*w.hallux[0],B.toeSole,w.hallux[1]],[0,B.toeSole,4.2],[-g*w.toe5[0],B.toeSole,w.toe5[1]]].map(p=>({p:at(T,p),part:'toes'})));
 }
 
 /* ---------- Обратная кинематика ---------- */
@@ -241,10 +241,9 @@ function footFrame(support,yaw,opts={}){
 /* Стопа, стоящая пяткой (носок поднят): опора под пяткой, pitch — подъём носка, град */
 function heelFrame(support,yaw,pitch,opts={}){
  const up=V.unit(opts.up||[0,1,0]),fwd0=opts.forward||[Math.sin(yaw*D2R),0,Math.cos(yaw*D2R)],R=M3.mul(M3.frameYZ(up,fwd0),M3.rx(-pitch));
- /* самая низкая точка скруглённой пятки обуви касается опоры */
- const rb=SHOE.rear,zb=rb.c[2]-rb.size[2]/2,ry=rb.size[1]*.22,rz=rb.size[2]*.22,cy=-B.ankle+ry,cz=zb+rz;let best=null;
- for(let i=0;i<=24;i++){const a=Math.PI+i/24*Math.PI/2,p=[0,cy+ry*Math.sin(a),cz+rz*Math.cos(a)],w=V.dot(M3.v(R,p),up);if(!best||w<best.w)best={p,w};}
- for(const p of [[0,-B.ankle,zb+rz],[0,cy,zb]]){const w=V.dot(M3.v(R,p),up);if(w<best.w)best={p,w};}
+ /* самая низкая точка скруглённой пятки касается опоры: средняя линия задних сечений стопы */
+ let best=null;
+ for(const sec of FOOT_SECTIONS.filter(sec=>sec[0]<=0))for(let i=0;i<=36;i++){const p=footRingPoint(sec,1,Math.PI+i/36*Math.PI);p[0]=0;const w=V.dot(M3.v(R,p),up);if(!best||w<best.w)best={p,w};}
  return{o:V.sub(support,M3.v(R,best.p)),R,toesR:R};
 }
 function solveLeg(q,s,foot,pole){
@@ -445,7 +444,7 @@ function headSDF(R,p){
  const k0=Math.hypot(...qv),k1=Math.hypot(...ax.map((a,i)=>V.dot(d,a)/(r[i]*r[i])));return k1<1e-9?-Math.min(...r):k0*(k0-1)/k1;
 }
 
-/* ---------- Кисть и обувь: опорные точки для сетки (локальные координаты кисти/стопы, см) ---------- */
+/* ---------- Кисть и стопа: опорные точки для сетки (локальные координаты кисти/стопы, см) ---------- */
 /* Кисть: начало — центр лучезапястного сустава; −Y — к пальцам; ладонь смотрит в −g·X; +Z — сторона большого пальца.
    mode: grip — обхват ручки радиуса r; flat — ладонь на опоре; relaxed — расслабленная; fist — кулак. */
 const FINGERS=[[2.9,8.0,.85],[1.0,8.8,.86],[-.9,8.2,.8],[-2.8,6.6,.72]];
@@ -467,17 +466,98 @@ function handShape(mode='relaxed',side='L',r=1.4){
   fist:[[.4,2.6,3.0],[2.2,6.0,3.3],[3.4,8.6,1.6]],flat:[[.4,2.6,3.0],[.6,5.4,5.6],[.6,7.9,6.6]],relaxed:[[.4,2.6,3.0],[1.2,5.6,4.6],[1.9,7.7,4.2]]};
  return{palm:{c:P(.2,5.6,.15),size:[B.palm.thick,8.6,B.palm.width]},fingers,thumb:{pts:(T[mode]||T.relaxed).map(p=>P(...p)),r:1.0}};
 }
-const SHOE={rear:{c:[0,-5.0,3.6],size:[9.4,7.0,21.4]},toes:{c:[0,-.4,3.8],size:[9.0,3.2,7.6]}};
-/* Данные тела для сцены: сетки, голова, кисти, обувь, «шапки» суставов */
+/* Стопа (босая). Рамка — как у сегмента foot: начало в центре голеностопного сустава, +Z — к пальцам, +Y — вверх
+   по голени, латеральная сторона — g·X. Подошва лежит на −B.ankle (стопа на полу).
+   Задний и средний отдел — сечения вдоль Z: [z, верх (тыл стопы), низ латерально, низ медиально, полуширина
+   латерально, полуширина медиально, смещение центра медиально; необязательно — показатели суперэллипса верха и боков]. Медиальный край подошвы поднят сводом (до 1,6 см
+   над полом у ладьевидной кости), латеральный лежит на полу. Перед — подушечка вокруг оси плюснефаланговых
+   суставов (центр — точка ball, радиус 2 см до пола): при подъёме пятки опора остаётся на ней.
+   Пальцы — в рамке toes (начало в точке ball): [смещение к медиальному краю, z основания, длина до кончика,
+   радиус, разворот наружу (рад; мизинец чуть повёрнут внутрь)]. Пятый плюснефаланговый сустав на ~3 см позади первого —
+   линия косая; латеральный край стопы от пятки до головки пятой плюсневой почти прямой, ширина переднего отдела
+   прибавляется с медиальной стороны.
+   Размеры для роста 175 см: длина стопы 26,9 см (0,152·H), ширина по головкам плюсневых костей 9,6 см (0,055·H) —
+   Winter 2009, рис. 4.1; ширина пятки 6,6 см — ANSUR II. Высота центра голеностопа оставлена 8,5 см, как у
+   кинематики всех поз (босая стопа — 6,8 см, 0,039·H): подошвенные мягкие ткани нарисованы на 1,7 см толще. */
+const FOOT_SECTIONS=[
+ [-7.35,-5.5,-7.2,-7.2,.8,.6,0],[-7.1,-3.6,-7.9,-7.9,2.2,1.7,0],[-6.4,-2.4,-8.4,-8.4,3.2,2.5,0],[-5.2,-1.4,-8.5,-8.5,3.6,2.9,0],
+ [-3.4,-.4,-8.5,-8.5,3.8,3.3,0,2.8,3.2],[-1.2,-.1,-8.5,-8.45,3.9,3.45,0,2.8,3.2],[1.0,-.6,-8.5,-8.1,4.0,3.55,0,2.6,3],[3.4,-1.5,-8.5,-7.4,4.15,3.7,0],
+ [6.0,-2.4,-8.5,-6.95,4.3,3.95,0],[8.6,-3.5,-8.5,-7.25,4.45,4.4,0],[11.0,-4.35,-8.5,-8.2,4.55,4.95,0],[12.6,-4.75,-8.5,-8.5,3.9,5.2,0],
+ [13.6,-4.95,-8.5,-8.5,3.1,5.2,0],[14.6,-5.45,-8.2,-8.2,2.2,4.7,.4],[15.3,-6.0,-7.45,-7.45,1.1,3.5,1.0],[15.6,-6.5,-7.0,-7.0,.3,1.6,1.9]
+];
+const TOES=[[2.9,.2,5.7,1.2,.08],[.8,-.2,5.6,.86,.02],[-1.05,-.9,5.0,.82,.03],[-2.6,-1.8,4.5,.78,.03],[-3.85,-2.8,3.9,.78,-.06]];
+/* точка сечения: phi — угол вокруг оси Z от +X через верх; nt/nb/nx — показатели суперэллипса (верх круглее, подошва площе) */
+function footRingPoint(sec,g,phi){
+ const[z,top,bl,bm,wl,wm,cm,nt=2.2,nx=2.6]=sec,nb=3.6,c=Math.cos(phi),sn=Math.sin(phi),lat=c*g>=0;
+ const x=-g*cm+Math.sign(c)*(lat?wl:wm)*Math.pow(Math.abs(c),2/nx);
+ const k=(1+c*g)/2,bot=bm+(bl-bm)*k,yc=(top+bl)/2;
+ const y=sn>=0?yc+(top-yc)*Math.pow(sn,2/nt):yc-(yc-bot)*Math.pow(-sn,2/nb);
+ return[x,y,z];
+}
+/* ось пальца: от основания по фалангам, кончик — так, чтобы подушечка касалась плоскости подошвы (B.toeSole) */
+function toePath(t,g){
+ const[m,z0,len,r,splay]=t,big=r>1,seg=big?[.55,.45]:[.42,.32,.26],bend=big?[0,10]:[-6,22,14],y0=big?-.4:-.5,yaw=g*splay;
+ const run=pitch=>{let a=pitch*D2R,p=[-g*m,y0,z0];const pts=[p];
+  for(let i=0;i<seg.length;i++){a+=bend[i]*D2R;const l=(len-r)*seg[i],h=Math.cos(a);p=[p[0]+Math.sin(yaw)*h*l,p[1]-Math.sin(a)*l,p[2]+Math.cos(yaw)*h*l];pts.push(p);}
+  return pts;};
+ let lo=-20,hi=40;for(let i=0;i<40;i++){const mid=(lo+hi)/2;if(run(mid).at(-1)[1]>B.toeSole+r)lo=mid;else hi=mid;}
+ return run((lo+hi)/2);
+}
+const FOOT_CACHE={};
+/* Форма стопы для сетки: кольца заднего и среднего отдела (в рамке foot) и пальцы (в рамке toes) */
+function footShape(side='L'){
+ if(FOOT_CACHE[side])return FOOT_CACHE[side];
+ const g=SIGN[side],N=24,sub=3,rings=FOOT_SECTIONS.map(sec=>Array.from({length:N},(_,i)=>footRingPoint(sec,g,i/N*2*Math.PI)));
+ /* сглаживание вдоль стопы: Catmull–Rom по каждой образующей */
+ const cr=(a,b,c,d,t)=>a.map((_,k)=>.5*(2*b[k]+(-a[k]+c[k])*t+(2*a[k]-5*b[k]+4*c[k]-d[k])*t*t+(-a[k]+3*b[k]-3*c[k]+d[k])*t*t*t));
+ const rows=[];
+ for(let j=0;j<rings.length-1;j++)for(let k=0;k<sub;k++){const t=k/sub,A=rings[Math.max(0,j-1)],Bq=rings[j],Cq=rings[j+1],D=rings[Math.min(rings.length-1,j+2)];rows.push(Bq.map((_,i)=>cr(A[i],Bq[i],Cq[i],D[i],t)));}
+ rows.push(rings.at(-1));
+ const cap=row=>{const c=row.reduce((a,p)=>V.add(a,p,1/row.length),[0,0,0]);return row.map(()=>c);};
+ const shape={rear:[cap(rows[0]),...rows,cap(rows.at(-1))],toes:TOES.map(t=>({pts:toePath(t,g),r:t[3]}))};
+ return FOOT_CACHE[side]=shape;
+}
+/* Точки поверхности стопы для проверок (валидатор, авторинг): part — rear (рамка foot) или toes (рамка toes);
+   sole — подошвенная сторона. */
+function footPoints(side='L'){
+ const key='pts'+side;if(FOOT_CACHE[key])return FOOT_CACHE[key];
+ const g=SIGN[side],out=[];
+ for(const sec of FOOT_SECTIONS.slice(1,-1))for(let i=0;i<10;i++){const phi=i/10*2*Math.PI+Math.PI/10;out.push({part:'rear',sole:Math.sin(phi)<-.5,p:footRingPoint(sec,g,phi)});}
+ for(const sec of FOOT_SECTIONS.slice(1,-1))out.push({part:'rear',sole:true,p:footRingPoint(sec,g,1.5*Math.PI)});
+ for(const t of TOES){const pts=toePath(t,g),r=t[3];
+  pts.forEach((p,i)=>{out.push({part:'toes',sole:true,p:[p[0],p[1]-r,p[2]]},{part:'toes',sole:false,p:[p[0],p[1]+r,p[2]]});if(i)out.push({part:'toes',sole:false,p:[p[0]+g*r,p[1],p[2]]},{part:'toes',sole:false,p:[p[0]-g*r,p[1],p[2]]});});
+  const a=pts.at(-2),b=pts.at(-1),d=V.unit(V.sub(b,a));out.push({part:'toes',sole:false,p:V.add(b,d,r)});}
+ return FOOT_CACHE[key]=out;
+}
+/* Лодыжки — выступы большеберцовой (медиальная: на уровне сустава, чуть впереди) и малоберцовой (латеральная:
+   на 1 см ниже, чуть позади) костей. Для сетки — утолщение нижних колец голени: [угол сечения (0 — спереди,
+   π/2 — латерально), t по голени, высота выступа, см]; для проверок — точки на вершинах выступов. */
+const MALLEOLI={lat:[Math.PI/2+.25,1.025,.8],med:[1.5*Math.PI+.2,1.0,.7]};
+const malleolusBump=(ang,t)=>Object.values(MALLEOLI).reduce((a,[c,tc,h])=>a+h*Math.pow(Math.max(0,Math.cos(ang-c)),6)*Math.max(0,1-Math.abs(t-tc)/.07),0);
+function malleoli(R,s){
+ return Object.values(MALLEOLI).flatMap(([c,tc,h])=>[-.25,0,.25].map(d=>limbRow(R,'sk',s,tc)(c+d,malleolusBump(c+d,tc))));
+}
+/* Данные тела для сцены: сетки, голова, кисти, стопы, «шапки» суставов и лодыжки */
 function bodyData(R){
  const S=surface(R),fr=R.frames,caps=[];
+ /* Голеностоп для сетки (проверки — по surface): голень продолжается на 3 см ниже центра сустава, сужаясь, и это
+    продолжение поворачивается вместе со стопой (точки смешиваются между рамками голени и стопы, как при скиннинге).
+    Конец трубы всегда внутри стопы — при любом сгибании голеностопа нет открытого края, стык — складка на коже. */
+ for(const s of SIDES){
+  const rows=S.limbs['sk'+s],n=rows[0].length,sk=R.frames['sk'+s],ff=R.frames['foot'+s],an=R['an'+s];
+  const ring=(t,ex=0)=>{const row=limbRow(R,'sk',s,t);return Array.from({length:n},(_,c)=>{const a=c/n*2*Math.PI;return row(a,ex+malleolusBump(a,t));});};
+  const follow=(p,w)=>{const d=V.sub(p,an),l=[V.dot(d,sk.x),V.dot(d,sk.y),V.dot(d,sk.z)];return V.mix(p,V.add(V.add(V.add(an,ff.x,l[0]),ff.y,l[1]),ff.z,l[2]),w);};
+  rows.splice(rows.length-1,1,ring(.965),ring(1));
+  for(const[t,ex,w]of [[1.035,-.35,.5],[1.07,-1.1,1]])rows.push(ring(t,ex).map(p=>follow(p,w)));
+ }
+
  for(const s of SIDES){
   const ua=fr['ua'+s],g=SIGN[s];
-  caps.push({key:'sh'+s,c:V.add(V.add(R['sh'+s],ua.y,-1.4),ua.x,g*.7),r:CAPS.sh},{key:'el'+s,c:R['el'+s],r:CAPS.el},{key:'wr'+s,c:R['wr'+s],r:CAPS.wr},{key:'kn'+s,c:V.add(R['kn'+s],fr['sk'+s].z,.4),r:CAPS.kn});
+  caps.push({key:'sh'+s,c:V.add(V.add(R['sh'+s],ua.y,-1.4),ua.x,g*.7),r:CAPS.sh},{key:'el'+s,c:R['el'+s],r:CAPS.el},{key:'wr'+s,c:R['wr'+s],r:CAPS.wr},{key:'kn'+s,c:V.add(R['kn'+s],fr['sk'+s].z,.4),r:CAPS.kn},{key:'an'+s,c:R['an'+s],r:CAPS.an});
  }
  const hands={},feet={};
- for(const s of SIDES){const mode=R.hands?.[s]||'relaxed',r=R.gripRadius?.[s]??1.4;hands[s]={frame:fr['hand'+s],mode,r,key:mode+':'+s+':'+r.toFixed(2),shape:handShape(mode,s,r)};feet[s]={rear:fr['foot'+s],toes:fr['toes'+s]};}
- return{...S,head:{c:R.head,axes:[fr.head.x,fr.head.y,fr.head.z],radii:B.head},caps,hands,feet,shoe:SHOE};
+ for(const s of SIDES){const mode=R.hands?.[s]||'relaxed',r=R.gripRadius?.[s]??1.4;hands[s]={frame:fr['hand'+s],mode,r,key:mode+':'+s+':'+r.toFixed(2),shape:handShape(mode,s,r)};feet[s]={rear:fr['foot'+s],toes:fr['toes'+s],shape:footShape(s)};}
+ return{...S,head:{c:R.head,axes:[fr.head.x,fr.head.y,fr.head.z],radii:B.head},caps,hands,feet};
 }
 
 /* ---------- Углы суставов по рамкам сегментов ----------
@@ -534,6 +614,6 @@ return{V,M3,Q,B,TORSO,TORSO_H,TORSO_JOINTS,LIMBS,NECK,CAPS,MASS,LIMITS,SIDES,SIG
  neutral,clone,pack,unpack,PACK,PACK_SIZE,fk,solePoints,twoBone,solveArm,solveArmWrist,setArmFromPoints,footFrame,heelFrame,solveLeg,rootRot,rootFromAxes,
  swing,swingTwist,eulerXZY,eulerYZX,spineRot,makeTrack,monotone,toCat,dirCat,catalogPose,
  profileAt,sectionAt,spineFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,ellipseRadius,centerOfMass,LIMB_DEF,
- handShape,SHOE,bodyData,jointAngles};
+ handShape,footShape,footPoints,FOOT_SECTIONS,TOES,malleoli,bodyData,jointAngles};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=Mannequin;

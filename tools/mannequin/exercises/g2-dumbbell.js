@@ -153,13 +153,20 @@ function rearFoot(C, q, s, ball, { hipFlex = -4, lo = 10, hi = 79, pole = [0, 0,
   }
   C.foot(q, s, ball, 0, pole, { forward: fwd, heel: best }); return best;
 }
-/* Стопа подъёмом на опоре (болгарские выпады): носок назад и вниз под углом phi, верх носочной части обуви
+/* Стопа подъёмом на опоре (болгарские выпады): носок назад и вниз под углом phi, нижняя точка тыла стопы и пальцев
    касается плоскости опоры на высоте top; ankleZ — положение голеностопа по Z; squash — поджатие подушки */
 function instepOn(C, q, s, x, ankleZ, top, phi, pole, squash = 1) {
   const { V, M } = C, a = phi * C.D2R, zf = [0, -Math.sin(a), -Math.cos(a)], yf = [0, -Math.cos(a), Math.sin(a)];
-  const tipDy = 5.3 * Math.cos(a) - 21.1 * Math.sin(a), y = top - tipDy - squash;
   const R = M.M3.cols(V.cross(yf, zf), yf, zf);
-  const r = M.solveLeg(q, s, { o: [x, y, ankleZ], R, toesR: R }, pole);
+  /* голеностоп ставится так, чтобы нижняя точка стопы (у босой стопы — тыл большого пальца, он сбоку от оси)
+     касалась опоры; стопа после решения ноги может слегка повернуться, поэтому высота уточняется по факту */
+  let y = top - Math.min(...M.footPoints(s).map(({ p }) => M.M3.v(R, p)[1])) - squash, r;
+  for (let i = 0; i < 4; i++) {
+    r = M.solveLeg(q, s, { o: [x, y, ankleZ], R, toesR: R }, pole);
+    const f = C.fk(q), fr = { rear: f.F['foot' + s], toes: f.F['toes' + s] };
+    const low = Math.min(...M.footPoints(s).map(({ part, p }) => V.add(fr[part].o, M.M3.v(fr[part].R, p))[1])), d = top - squash - low;
+    if (Math.abs(d) < .05) break; y += d;
+  }
   if (r.reachError > .05) throw Error(`Нога ${s} не дотягивается до скамьи: ${r.reachError.toFixed(1)} см`);
   return r;
 }
@@ -206,7 +213,7 @@ module.exports = {
       C.kneel(q, 'R', [-1, 44, -24], [0, 0, -1], [0, 1, 0], { toes: 'flat', plantar: 44 });
       let f = C.fk(q);
       palmBest(C, q, 'R', [f.P.ghR[0] + 4, 44, f.P.ghR[2] + 12], [0, 1, 0], fan(C, [0, 1, 0], [.9, 0, 1], 10).filter(v => v[2] > .3), [[-.4, 0, -1], [-.6, .2, -1], [-.2, 0, -1], [-.8, 0, -.6]].map(v => V.unit(v)));
-      C.foot(q, 'L', [22, 0, -27], 0, V.unit([.3, 0, 1]), { forward: V.unit([.22, 0, 1]) });
+      C.foot(q, 'L', [22, 0, -23], 0, V.unit([.3, 0, 1]), { forward: V.unit([.22, 0, 1]) });
       f = C.fk(q);
       const gh = f.P.ghL, lat = C.lat(q, 'L'), back = [0, 0, -1];
       /* плечо назад вдоль корпуса, параллельно полу, чуть в сторону от корпуса */
@@ -630,7 +637,7 @@ module.exports = {
     contacts: [...SEAT_CONTACTS, { body: 'gripL', prop: 'dbL' }, { body: 'gripR', prop: 'dbR' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
-      const { V } = C, e = C.ease(t), q = sitOnAdj(C, C.base(), { lumbar: 2, thoracic: -2, hip: 84, feetZ: -8 });
+      const { V } = C, e = C.ease(t), q = sitOnAdj(C, C.base(), { lumbar: 2, thoracic: -2, hip: 84, feetZ: -23 });
       q.neck = [2, 0, 0];
       for (const s of S) q[s].girdle = [C.lerp(4, 18, e), C.lerp(2, 6, e)];
       const f = C.fk(q), T = C.axes(q, 'thorax');
@@ -653,7 +660,7 @@ module.exports = {
     contacts: [...SEAT_CONTACTS, { body: 'gripL', prop: 'dbL' }, { body: 'gripR', prop: 'dbR' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
-      const { V } = C, e = C.ease(t), q = sitOnAdj(C, C.base(), { lumbar: 2, thoracic: -2, hip: 84, feetZ: -8 });
+      const { V } = C, e = C.ease(t), q = sitOnAdj(C, C.base(), { lumbar: 2, thoracic: -2, hip: 84, feetZ: -23 });
       q.neck = [2, 0, 0];
       for (const s of S) q[s].girdle = [C.lerp(2, 18, e), C.lerp(10, 6, e)];
       const f = C.fk(q), T = C.axes(q, 'thorax');
@@ -677,7 +684,7 @@ module.exports = {
     contacts: [{ body: 'back', prop: 'bench:back' }, { body: 'headBack', prop: 'bench:back' }, { body: 'buttocks', prop: 'bench:seat' }, { body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'dbL' }, { body: 'gripR', prop: 'dbR' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
-      const { V, M } = C, e = C.ease(t), q = sitOnAdj(C, C.base(), { lumbar: -2, thoracic: -2, hip: 62, abd: 3, feetZ: -8 }), bp = C.frame('bench', 'backPad');
+      const { V, M } = C, e = C.ease(t), q = sitOnAdj(C, C.base(), { lumbar: -2, thoracic: -2, hip: 62, abd: 3, feetZ: -27 }), bp = C.frame('bench', 'backPad');
       C.neckTo(q, 'headBack', bp.o, M.M3.col(bp.R, 1), -.5);
       for (const s of S) q[s].girdle = [-2, -8];
       const T = C.axes(q, 'thorax'), recline = Math.atan2(-T.y[2] * 0 + V.dot(T.y, [0, 0, 1]), T.y[1]) * 180 / Math.PI;
@@ -694,7 +701,7 @@ module.exports = {
     contacts: [{ body: 'back', prop: 'bench:back' }, { body: 'headBack', prop: 'bench:back' }, { body: 'buttocks', prop: 'bench:seat' }, { body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'dbL' }, { body: 'gripR', prop: 'dbR' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
-      const { V, M } = C, e = C.ease(t), q = sitOnAdj(C, C.base(), { lumbar: -4, thoracic: -4, hip: 52, feetZ: -10, girdle: [-4, -12] }), bp = C.frame('bench', 'backPad');
+      const { V, M } = C, e = C.ease(t), q = sitOnAdj(C, C.base(), { lumbar: -4, thoracic: -4, hip: 52, feetZ: -30, girdle: [-4, -12] }), bp = C.frame('bench', 'backPad');
       C.neckTo(q, 'headBack', bp.o, M.M3.col(bp.R, 1), -.5);
       const f = C.fk(q), chest = C.chestPoint(q, 40);
       for (const s of S) {
