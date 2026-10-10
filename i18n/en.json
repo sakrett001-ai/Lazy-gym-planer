@@ -2578,5 +2578,14 @@
  "Нужна объёмная графика (WebGL)": "Requires 3D graphics (WebGL)",
  "Загружаем кости…": "Loading bones…",
  "Не удалось загрузить кости. Проверьте связь и включите ещё раз.": "Could not load the bones. Check your connection and turn it on again.",
- "Скелет": "Skeleton"
+ "Скелет": "Skeleton",
+ "Благодарности": "Acknowledgements",
+ "Кости манекена — из открытой библиотеки моделей": "The mannequin's bones come from the open model library",
+ "команды MyoSuite (лицензия Apache 2.0). Она построена на исследовательских моделях OpenSim: ноги и таз —": "by the MyoSuite team (Apache 2.0 licence). It is built on OpenSim research models: legs and pelvis —",
+ "Rajagopal и др., 2016": "Rajagopal et al., 2016",
+ "; рука, лопатка и кисть —": "; arm, shoulder blade and hand —",
+ "Holzbaur и др., 2005": "Holzbaur et al., 2005",
+ "; поясничный отдел —": "; lumbar spine —",
+ "модель поясничного отдела позвоночника": "the lumbar spine model",
+ ". Спасибо авторам за то, что открыли эти данные.": ". Many thanks to the authors for sharing this data openly."
 }
