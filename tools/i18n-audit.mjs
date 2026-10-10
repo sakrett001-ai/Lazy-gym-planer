@@ -47,7 +47,7 @@ const t0 = Date.now(), step = name => { if (process.env.I18N_AUDIT_VERBOSE) cons
 
 /* 1. план: форматы, цели, уровни; разовая тренировка и неделя */
 step('1. план');
-for (const mode of ['single', 'program']) for (const format of ['classic', 'superset', 'circuit', 'static']) for (const goal of ['strength', 'mass', 'cut']) for (const level of ['beg', 'adv']) {
+for (const mode of ['single', 'program']) for (const format of ['classic', 'superset', 'circuit', 'static']) for (const goal of ['strength', 'mass', 'cut', 'gentle']) for (const level of ['beg', 'adv']) {
   await run(`(()=>{Object.assign(S,{view:'plan',mode:'${mode}',format:'${format}',goal:'${goal}',level:'${level}',week:1,day:0});regen();})()`);
   await scan(`plan ${mode}/${format}/${goal}/${level}`, await run('planText()'));
   if (mode === 'program') for (const week of [2, 3, 4]) for (const day of [0, 1, 2]) {
@@ -62,6 +62,17 @@ for (const mode of ['single', 'program', 'custom']) {
   await scan('folded ' + mode);
 }
 await run(`(()=>{S.fold={setup:false,load:false,cards:'compact'};S.mode='single';regen();})()`);
+/* бережный режим: все суставы, замены в своём плане, то, что нечем заменить, пометки в атласе */
+step('бережный режим');
+await run(`(()=>{Object.assign(S,{view:'plan',mode:'single',format:'classic',goal:'gentle',level:'mid',groups:['quads','glutes','hams','calves'],protect:PROTECT.map(p=>p.id)});S.fold.gentle=false;regen();})()`);
+await scan('gentle, every joint protected', await run('planText()'));
+await run(`(()=>{S.protect=['knees'];S.mode='program';regen();})()`);
+await scan('gentle program');
+await run(`(()=>{S.mode='custom';S.goal='mass';S.customs=[{id:'g1',name:'Legs',items:[{id:'squat'},{id:'legext'},{id:'jumpsquat'},{id:'dbbench'}]}];S.custom='g1';ensureCustoms(S);openCustom('g1');S.protect=PROTECT.map(p=>p.id);regen();cpTab='groups';renderPlan();})()`);
+await scan('custom plan with joint swaps and losses', await run('planText()'));
+await run(`(()=>{S.view='atlas';S.atlasM='quads';renderSetup();renderPlan();})()`);
+await scan('atlas with protected joints');
+await run(`(()=>{S.view='plan';S.mode='single';S.goal='mass';S.protect=[];S.customs=[];S.custom=null;ensureCustoms(S);cpTab=null;regen();})()`);
 /* группы мышц и количество упражнений */
 step('группы мышц');
 for (const groups of [['quads', 'glutes', 'hams', 'calves'], ['biceps', 'triceps', 'forearms'], ['abs', 'cardio'], []]) {
