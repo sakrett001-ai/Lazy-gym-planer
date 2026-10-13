@@ -76,6 +76,8 @@ for (const [lang, L] of Object.entries(LANGS)) {
   fs.writeFileSync(path.join(out, 'app.js'), js);
   fs.writeFileSync(path.join(out, 'pwa.js'), pwa.replace(/__SW__/g, up + 'sw.js'));
   fs.writeFileSync(path.join(out, 'manifest.webmanifest'), JSON.stringify(manifest, null, 2));
+  /* Объёмная графика (volume.js, ≈140 КБ в сжатом виде) нужна только в разборе и в тренировке: она грузится после
+     первого экрана и не отнимает у плана ни канал, ни процессор. Пришла — событие gym-volume (12-motion-player.js). */
   fs.writeFileSync(path.join(out, 'index.html'), `<!doctype html>
 <html lang="${L.html}">
 <head>
@@ -93,7 +95,7 @@ ${headMeta(L)}
 </head>
 <body>
 ${body}
-<script src="${up}volume.js?v=${ASSET_VERSION}"></script>
+<script>addEventListener('load',()=>setTimeout(()=>{const s=document.createElement('script');s.src='${up}volume.js?v=${ASSET_VERSION}';s.onload=()=>dispatchEvent(new Event('gym-volume'));document.body.append(s);}));</script>
 <script src="app.js?v=${ASSET_VERSION}"></script>
 <script src="pwa.js?v=${ASSET_VERSION}"></script>
 </body>
