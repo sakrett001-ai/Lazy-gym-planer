@@ -185,8 +185,8 @@ function ohextKey(t, C, prev) {
     /* верхний диск идёт по дуге вокруг локтей: над головой → за затылок */
     const E = [0, gh[1] + 26, head[2] + 2], th = C.lerp(-15.6, 96, Math.pow(e, .8)) * C.D2R, r = e < .5 ? 26 + 2 * Math.sin(Math.PI * e) : C.lerp(26, 20, (e - .5) * 2);
     const P = V.add(E, [0, Math.cos(th), -Math.sin(th)], r), tilt = C.lerp(18, 12, e) * C.D2R;
-    chosen = cup(C, q, P, [0, Math.cos(tilt), Math.sin(tilt)], [0, 0, -1], { w: 4.8, cands: () => cands, prev, lam: 25,
-      prefer: (q, s) => { const el = C.fk(q).P['el' + s]; return 1.2 * Math.max(0, Math.abs(el[0]) - 11) ** 2; } });
+    chosen = cup(C, q, P, [0, Math.cos(tilt), Math.sin(tilt)], [0, 0, -1], { w: 5.8, cands: () => cands, prev, lam: 25,
+      prefer: (q, s) => { const el = C.fk(q).P['el' + s]; return 1.2 * Math.max(0, Math.abs(el[0]) - 12) ** 2; } });
   };
   settle(C, q, { lo: 1, hi: 7, loads: q => [[C.fk(q).P.gripL, 12]], resolve: q => { feet(q); arms(q); } });
   return { q, chosen };
@@ -549,7 +549,7 @@ module.exports = {
       for (const s of S) plant(C, q, s, [M.SIGN[s] * 24.5, 0, -2], { toeOut: 20 });
       for (const s of S) q[s].girdle = [C.lerp(-4, 4, e), C.lerp(8, 12, e)];
       const T = C.axes(q, 'thorax'), f = C.fk(q), sh = V.mix(f.P.ghL, f.P.ghR, .5), ph = C.lerp(-25, 88, e) * C.D2R;
-      const H = V.add(sh, [0, -Math.cos(ph), Math.sin(ph)], 61.3);
+      const H = V.add(sh, [0, -Math.cos(ph), Math.sin(ph)], 60.8);
       for (const s of S) {
         const lat = C.lat(q, s), pole = V.unit(V.add(lat, T.y, -.8));
         C.grip(q, s, V.add(H, lat, 4.4), V.scale(lat, -1), pole);

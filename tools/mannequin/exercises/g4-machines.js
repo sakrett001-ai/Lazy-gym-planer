@@ -760,7 +760,7 @@ module.exports = {
       for (const s of S) {
         q[s].girdle = [C.lerp(18, -6, e), C.lerp(4, -10, e)];
         const lat = C.lat(q, s);
-        C.grip(q, s, [C.M.SIGN[s] * 30, g.y, g.z], V.scale(lat, -1), V.unit(V.add(V.add([0, -1, 0], lat, 1), [0, 0, 1], .2)));
+        C.grip(q, s, [C.M.SIGN[s] * 30, g.y, g.z], V.scale(lat, -1), V.unit(V.add(V.add([0, -1, 0], lat, 0.8), [0, 0, 1], .2)));
       }
       return q;
     }
