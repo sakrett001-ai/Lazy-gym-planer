@@ -4,7 +4,8 @@
    Миниатюра открывает подробный разбор в том же окне; «← Все упражнения» возвращает к витрине на то же место.
    «Увеличить» в карточке плана по-прежнему открывает сразу разбор.
    Миниатюра — неподвижный SVG-кадр того же манекена, что в карточках плана (конечная точка движения), строится,
-   когда подходит к экрану, по одной за кадр; готовые миниатюры переиспользуются при смене фильтра. */
+   когда подходит к экрану, — сколько успеется за ~8 мс кадра; готовые миниатюры переиспользуются при смене фильтра. Рамка — по самой
+   показанной позе (opts.still), а не по всем фазам: так миниатюра в 4–5 раз дешевле. */
 const WORK_KINDS = [
   {id:'all', name:'Всё'}, {id:'free', name:'Свободные веса'}, {id:'mach', name:'Тренажёры и блоки'},
   {id:'band', name:'Резинки'}, {id:'body', name:'Свой вес'}
@@ -55,16 +56,20 @@ function buildThumb(el) {
   let svg = galleryThumbs.get(key);
   if (!svg) {
     const it = previewItem(id);
-    try { svg = buildFigure(it.ex.anim, {primary:it.ex.pri, has:it.has, ratio:1, camera:'angle', t:thumbT(it.ex), label:it.name, muscles:false, stress:false}).svg; }
+    try { svg = buildFigure(it.ex.anim, {primary:it.ex.pri, has:it.has, ratio:1, camera:'angle', t:thumbT(it.ex), label:it.name, muscles:false, stress:false, still:true}).svg; }
     catch (e) { console.error('Миниатюра', id, e); return; }
     galleryThumbs.set(key, svg);
   }
   el.replaceChildren(svg); el.classList.add('ready');
 }
+/* за кадр — сколько успеется за ~8 мс, но не меньше одной миниатюры: на быстром телефоне экран заполняется сразу */
 function pumpThumbs() {
   galleryRaf = 0;
-  const el = galleryQueue.shift(); if (!el) return;
-  if (el.isConnected && !el.classList.contains('ready')) buildThumb(el);
+  const end = performance.now() + 8;
+  do {
+    const el = galleryQueue.shift(); if (!el) return;
+    if (el.isConnected && !el.classList.contains('ready')) buildThumb(el);
+  } while (galleryQueue.length && performance.now() < end);
   if (galleryQueue.length) galleryRaf = requestAnimationFrame(pumpThumbs);
 }
 function renderGallery() {

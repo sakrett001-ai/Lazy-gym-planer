@@ -288,5 +288,9 @@ export function createCatalogScene(first,{coarse=false}={}){
  }
  apply(first,{color:()=> '#a7b3c6'});
  return{scene,cameras,apply,includeBounds,resize,bounds,regionMeshes,parts,body,head,mannequin,skeleton:skeletonLayer,propNodes:()=>propNodes,studio,fitShadow,setShadows,
-  dispose(){const materials=new Set();scene.traverse(o=>{o.geometry?.dispose();if(o.material)for(const m of [].concat(o.material)){materials.add(m);m.map?.dispose();}});for(const m of materials)m.dispose();for(const t of studioTextures)t.dispose();studioTextures=[];}};
+  dispose(){disposeGeometry();disposeMaterials();},disposeGeometry,disposeMaterials};
+ /* геометрия, текстуры и карты теней освобождаются сразу; материалы — отдельно: пока они живы, рендерер держит их
+    собранные программы для следующей фигуры (main.mjs) */
+ function disposeGeometry(){scene.traverse(o=>{o.geometry?.dispose();if(o.isLight&&o.shadow?.map)o.shadow.dispose();if(o.material)for(const m of [].concat(o.material))m.map?.dispose();});for(const t of studioTextures)t.dispose();studioTextures=[];}
+ function disposeMaterials(){const materials=new Set();scene.traverse(o=>{if(o.material)for(const m of [].concat(o.material))materials.add(m);});for(const m of materials)m.dispose();}
 }

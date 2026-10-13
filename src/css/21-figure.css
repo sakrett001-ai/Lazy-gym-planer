@@ -23,7 +23,9 @@ html.workout-open{overflow:hidden}
 .wv-select label{display:grid;gap:4px;flex:1;min-width:0;font-size:12px;color:var(--muted)}
 .wv-select select{min-width:0;max-width:100%;width:100%;height:44px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink);font:500 14px var(--f-body);padding:0 10px}
 .wv-select button:disabled{opacity:.35;cursor:default}
-.wv-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:28px;align-items:start}
+/* запись подхода идёт в разметке первой (на телефоне она сразу под выбором упражнения); на широком экране техника — слева */
+.wv-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);grid-template-areas:"visual record";gap:28px;align-items:start}
+.wv-visual{grid-area:visual}.wv-record{grid-area:record}
 .wv-stage-wrap{position:relative;border:1px solid var(--line);border-radius:18px;background:radial-gradient(ellipse at 45% 38%,var(--surface),var(--illus));overflow:hidden}
 #wv-stage{height:338px;padding:34px 12px 45px;display:grid;place-items:center}#wv-stage svg{width:100%;height:100%}
 #wv-angle{position:absolute;top:13px;left:15px;font-size:12px;color:var(--muted)}
@@ -52,6 +54,6 @@ html.workout-open{overflow:hidden}
 .wv-next-card{text-align:left;padding:20px;border:1px solid var(--line);border-radius:14px;background:var(--surface-2)}.wv-next-card span{font-size:11px;color:var(--muted)}.wv-next-card h3{font-size:18px;margin:5px 0 7px}.wv-next-card p{font-size:13px;margin:0;color:var(--muted)}
 .wv-finish-mark{display:grid;place-items:center;width:62px;height:62px;border-radius:50%;background:var(--good-soft);color:var(--good);font-size:29px;margin:0 auto 22px}
 #wv-summary{text-align:left;border-block:1px solid var(--line);padding:10px 0;margin:24px 0}#wv-summary p{display:flex;justify-content:space-between;gap:15px;font-size:13px;margin:12px 0}#wv-summary strong{white-space:nowrap;color:var(--good)}
-@media(max-width:700px){.workout-view{width:100vw;height:100dvh;max-height:100dvh;margin:0;border-radius:0;border:0}.wv-shell{padding:16px 16px max(20px,env(safe-area-inset-bottom))}.wv-grid{grid-template-columns:1fr;gap:16px}.wv-head button{padding:8px 10px}.wv-select{margin:14px 0}.wv-progress-line{margin-top:15px}#wv-stage{height:246px;padding-top:28px}.wv-cue{min-height:0;font-size:13px}.wv-visual .wv-guide{margin-top:0}#wv-title{font-size:23px}.wv-set-chips{margin:12px 0}.wv-fields{margin-top:15px}.wv-fields input{height:60px;font-size:25px}.wv-rest{margin-top:32px}.wv-record{padding-bottom:8px}.wv-primary{min-height:56px}.wv-target strong{font-size:15px}}
+@media(max-width:700px){.workout-view{width:100vw;height:100dvh;max-height:100dvh;margin:0;border-radius:0;border:0}.wv-shell{padding:16px 16px max(20px,env(safe-area-inset-bottom))}.wv-grid{grid-template-columns:1fr;grid-template-areas:none;gap:16px}.wv-visual,.wv-record{grid-area:auto}.wv-head button{padding:8px 10px}.wv-select{margin:14px 0}.wv-progress-line{margin-top:15px}#wv-stage{height:246px;padding-top:28px}.wv-cue{min-height:0;font-size:13px}.wv-visual .wv-guide{margin-top:0}#wv-title{font-size:23px}.wv-set-chips{margin:12px 0}.wv-fields{margin-top:15px}.wv-fields input{height:60px;font-size:25px}.wv-rest{margin-top:32px}.wv-record{padding-bottom:8px}.wv-primary{min-height:56px}.wv-target strong{font-size:15px}}
 @media(max-width:380px){.wv-shell{padding:12px}.wv-figure-tools button{font-size:11px}.wv-select select{font-size:13px}#wv-stage{height:225px}.wv-target{padding:11px}.wv-target strong{font-size:14px}}
 @media print{#start-workout,[data-workout],.workout-view,.motion-view{display:none!important}}

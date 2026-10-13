@@ -43,9 +43,9 @@ test('camera rebuilds reuse full-motion bounds without losing pose or equipment 
  try{
   let samples=0;const base=r.options(),original=base.data;const counted={...base,data:(...args)=>{samples++;return original(...args);}};
   first=r.create(counted);const firstSamples=samples;first.at(.47,{index:2});first.dispose();
-  samples=0;second=r.create({...counted,camera:'side',t:.47});assert.equal(second.svg.dataset.pose,'0.47');assert(samples<=5,'a camera change must not resample 25 motion poses');assert(firstSamples>=25);
+  samples=0;second=r.create({...counted,camera:'side',t:.47});assert.equal(second.svg.dataset.pose,'0.47');assert(samples<=5,'a camera change must not resample the motion poses');assert(firstSamples>=13,'the first figure fits the frame over 13 motion poses');
   samples=0;const changed={...counted,data:(...args)=>{const d=counted.data(...args);return{...d,props:d.props.filter(p=>p.kind!=='barbell')};}};
-  third=r.create(changed);assert(samples>=25,'changed equipment must receive its own fitted bounds');
+  third=r.create(changed);assert(samples>=13,'changed equipment must receive its own fitted bounds');
  }finally{first?.dispose();second?.dispose();third?.dispose();r.dom.window.close();}
 });
 test('restored WebGL redraws a paused pose and disposal blocks later frames',async()=>{
@@ -54,8 +54,28 @@ test('restored WebGL redraws a paused pose and disposal blocks later frames',asy
   figure=r.create(r.options());figure.at(.61,{index:2});const canvas=figure.svg.querySelector('canvas'),before=r.counters.renders;
   canvas.dispatchEvent(new r.w.Event('webglcontextrestored'));assert(r.counters.renders>before);assert.equal(figure.svg.dataset.pose,'0.61');assert.equal(figure.svg.dataset.phase,'2');
   figure.dispose();const after=r.counters.renders;canvas.dispatchEvent(new r.w.Event('webglcontextrestored'));figure.at(.2,{index:0});figure.dispose();
-  assert.equal(r.counters.renders,after);assert.equal(figure.svg.dataset.pose,'0.61');assert.equal(r.counters.disposals,1);assert.equal(r.counters.losses,1);
+  assert.equal(r.counters.renders,after);assert.equal(figure.svg.dataset.pose,'0.61');
+  /* рендерер закрытой фигуры уходит в запас, а не теряет контекст */
+  assert.equal(r.counters.disposals,0);assert.equal(r.counters.losses,0);
  }finally{figure?.dispose();r.dom.window.close();}
+});
+test('a closed figure lends its renderer to the next one; its materials live until the next first frame; at most three spare renderers',async()=>{
+ const r=await runtime(),figures=[];
+ try{
+  const first=r.create(r.options('squat','above')),scene=r.counters.scene,materials=new Set();
+  scene.traverse(o=>{if(o.material)for(const m of [].concat(o.material))materials.add(m);});
+  let released=0;for(const m of materials)m.addEventListener('dispose',()=>released++);
+  const canvas=first.svg.querySelector('canvas');first.dispose();assert.equal(released,0,'materials of a closed figure keep their programs for the next figure');
+  const next=r.create(r.options('squat','side'));figures.push(next);
+  assert.equal(r.counters.constructors,1,'the next figure reuses the spare renderer');
+  assert.equal(next.svg.querySelector('canvas'),canvas,'the same canvas moves to the next figure');
+  assert.equal(released,materials.size,'after its first frame the old materials are released');
+  for(let i=0;i<4;i++)figures.push(r.create(r.options('bbbench','above')));
+  assert.equal(r.counters.constructors,5);
+  for(const f of figures)f.dispose();
+  assert.equal(r.counters.disposals,2,'two of five renderers are dropped');assert.equal(r.counters.losses,2);
+  const again=r.create(r.options('bbbench','front'));figures.push(again);assert.equal(r.counters.constructors,5,'a spare renderer is reused');
+ }finally{for(const f of figures)f.dispose();r.dom.window.close();}
 });
 test('3D joint-stress marks appear at the loaded joints, show through the body, and can be switched off',async()=>{
  const r=await runtime();let figure;
@@ -116,4 +136,21 @@ test('skeleton mode: bones follow the pose inside a see-through skin, phase musc
   assert.equal(layer.visible,false);assert.equal(torso.material.transparent,false);assert.equal(torso.material.opacity,1);assert.equal(torso.castShadow,true);
   assert(regions.children.some(o=>o.visible),'muscle colours return');
  }finally{figure?.dispose();r.dom.window.close();delete globalThis.Skeleton;}
+});
+
+test('13-pose framing keeps every one of 25 poses in frame (exercises with the largest deviation)',async()=>{
+ /* полная сверка 146 упражнений — 0,4 % кадра наибольший сдвиг (4.24.0); здесь — те, где он наибольший */
+ const THREE=await import('three'),{createCatalogScene}=await import('../src/volume/scene.mjs'),m=require('./biomechanics-audit').loadModel(),{catalogVolumeData}=m.get('({catalogVolumeData})');
+ const fit=(anim,n)=>{const data=t=>catalogVolumeData(anim,t,0,undefined),sc=createCatalogScene(data(0));for(let i=0;i<=n;i++){sc.apply(data(i/n),{color:()=>'#fff',selected:'all',muscles:true,joints:false,stress:true,skeleton:null});sc.includeBounds();}return sc.bounds;};
+ const frame=b=>{const cx=(b.minX+b.maxX)/2,cy=(b.minY+b.maxY)/2;let w=(b.maxX-b.minX)*1.13,h=(b.maxY-b.minY)*1.13;if(w/h<1.15)w=h*1.15;else h=w/1.15;return{l:cx-w/2,r:cx+w/2,t:cy+h/2,b:cy-h/2,s:Math.max(w,h)};};
+ const source=fs.readFileSync(path.join(__dirname,'../src/volume/main.mjs'),'utf8'),steps=+source.match(/FIT_STEPS=(\d+)/)[1];
+ assert(steps>=12,'at least 13 poses');
+ for(const id of ['thruster','bicycle','ohext','nordic','birddog','jumpingjack']){
+  const anim=m.EX.find(e=>e.id===id).anim,all=fit(anim,24),few=fit(anim,steps);
+  for(const cam of Object.keys(all)){
+   const f=frame(few[cam]),b=all[cam];
+   assert(b.minX>=f.l&&b.maxX<=f.r&&b.minY>=f.b&&b.maxY<=f.t,`${id} ${cam}: all 25 poses inside the ${steps+1}-pose frame`);
+   const g=frame(b);assert(Math.max(Math.abs(g.l-f.l),Math.abs(g.r-f.r),Math.abs(g.t-f.t),Math.abs(g.b-f.b))/g.s<.006,`${id} ${cam}: frame shift under 0.6 %`);
+  }
+ }
 });
