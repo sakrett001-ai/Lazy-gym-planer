@@ -124,6 +124,80 @@ test('shoulder-blade muscles from DAS3 shorten in the movements they produce', (
   }
 });
 
+/* Объём (этап М2, tools/muscles/volumes.js): мышца целиком — по МРТ (Riem et al., 2026; мужчины), пересчитанной на рост ×
+   массу манекена; между линиями одной мышцы — как в исходной модели. Сумма объёмов линий мышцы равна МРТ с точностью
+   округления данных (0,1 см³ на линию); у каждой линии — объём, сухожилия короче пути. */
+test('muscle volumes: each MRI muscle is split over its lines, totals equal the MRI volume scaled to the mannequin', () => {
+  const A = require('./muscles/fixtures/anatomy.json'), { GROUPS } = require('./muscles/volumes.js');
+  const k = L.M.B.stature * L.M.B.mass / (A.mri.height * A.mri.mass);
+  assert.equal(Object.keys(A.mri.male).length, 70);
+  for (const [g, re] of GROUPS) for (const side of ['_r', '_l']) {
+    const lines = md.muscles.filter(m => m.name.endsWith(side) && re.test(m.name.replace(/_[rl]$/, '')));
+    assert(lines.length, `${g}: no lines`);
+    const v = lines.reduce((s, m) => s + m.v, 0);
+    assert(Math.abs(v - A.mri.male[g] * k) <= .06 * lines.length + .1, `${g}${side}: ${v.toFixed(1)} vs MRI ${(A.mri.male[g] * k).toFixed(1)} cm³`);
+  }
+  for (const m of md.muscles) {
+    assert(m.v > 0 && m.t0 >= 0 && m.t1 >= 0 && m.t0 + m.t1 < m.l0, `${m.name}: v ${m.v}, tendons ${m.t0} + ${m.t1}, path ${m.l0}`);
+    assert(m.sk && m.sk.length === Muscles.SKIN_U.length, `${m.name}: skin samples`);
+  }
+  /* правая и левая — одного объёма */
+  for (const m of md.muscles.filter(x => x.name.endsWith('_r'))) {
+    const l = md.muscles.find(x => x.name === m.name.replace(/_r$/, '_l'));
+    assert(Math.abs(m.v - l.v) < .15, `${m.name}: ${m.v} vs ${l.v}`);
+  }
+});
+
+/* Исходные модели согласуются с МРТ — независимая проверка данных: у модели ног Rajagopal объёмы взяты из МРТ
+   Handsfield et al. (2014) для человека 170 см, 75 кг (сила = 60 Н/см² · объём / длина волокон); пересчитанные обратно,
+   они совпадают с МРТ Riem et al. в пределах 30 % (медиана — в 10 %). У MoBL-ARMS и DAS3 удельное напряжение не
+   задано явно: отношение F · Lopt к объёму по МРТ у мышц руки и плечевого пояса — одно и то же (35–90 Н/см², медиана
+   50–65), то есть распределение сил по мышцам в моделях согласуется с объёмами. */
+test('source muscle models agree with the MRI volumes (independent check of the data)', () => {
+  const A = require('./muscles/fixtures/anatomy.json'), P = require('./muscles/fixtures/params.json'), { GROUPS, source } = require('./muscles/volumes.js');
+  const ratios = [], sigma = [];
+  for (const [g, re] of GROUPS) {
+    const lines = [...new Set(md.muscles.map(m => m.name.replace(/_[rl]$/, '')).filter(n => re.test(n)))];
+    const src = lines.map(n => [n, source(n)]).filter(([, p]) => p);
+    if (src.length !== lines.length || g === 'Psoas major') continue;
+    const fl = src.reduce((s, [, p]) => s + p[0] * p[1], 0);
+    if (src.every(([n]) => P.rajagopal2016[n + '_r'])) {
+      const r = fl / 60 / (A.mri.male[g] * 170 * 75 / (A.mri.height * A.mri.mass)); ratios.push(r);
+      assert(r > .7 && r < 1.3, `${g}: Rajagopal ${(fl / 60).toFixed(0)} cm³ vs MRI, ratio ${r.toFixed(2)}`);
+    } else {
+      const sg = fl / (A.mri.male[g] * L.M.B.stature * L.M.B.mass / (A.mri.height * A.mri.mass)); sigma.push(sg);
+      assert(sg > 35 && sg < 90, `${g}: F·Lopt / V = ${sg.toFixed(1)} N/cm²`);
+    }
+  }
+  const med = a => a.slice().sort((x, y) => x - y)[a.length >> 1];
+  assert(ratios.length >= 25 && med(ratios) > .9 && med(ratios) < 1.1, `legs: ${ratios.length} muscles, median ${med(ratios).toFixed(2)}`);
+  assert(sigma.length >= 25 && med(sigma) > 50 && med(sigma) < 65, `arm and shoulder girdle: ${sigma.length} muscles, median ${med(sigma).toFixed(1)} N/cm²`);
+});
+
+/* Толщина: сухожилия не растягиваются, объём брюшка постоянен — при укорочении мышца утолщается. Площадь сечения вдоль
+   брюшка (веретено) в сумме даёт объём; у кожи сечение сплющивается с той же площадью. */
+test('muscle thickness: constant belly volume, thicker when shorter, flattened under the skin with the same area', () => {
+  const bic = bound.find(m => m.name === 'BIClong_r');
+  const vol = L0 => { const b = Muscles.body(bic, L0); let v = 0; const n = 2000; for (let i = 0; i < n; i++) { const s = b.t0 + b.lb * (i + .5) / n, r = Muscles.radiusAt(b, s); v += Math.PI * r * r * b.lb / n; } return { v, b }; };
+  for (const f of [.85, 1, 1.15]) {
+    const { v, b } = vol(bic.l0 * f);
+    assert(Math.abs(v - bic.v) / bic.v < .04, `length ×${f}: belly volume ${v.toFixed(1)} vs ${bic.v}`);
+    assert(Math.abs(b.t0 - bic.t0) < 1e-9, 'tendon at the start does not stretch');
+  }
+  const short = Muscles.body(bic, bic.l0 * .85), long = Muscles.body(bic, bic.l0 * 1.15);
+  assert(short.area > long.area * 1.3, `shorter is thicker: ${short.area.toFixed(1)} vs ${long.area.toFixed(1)} cm²`);
+  for (const [r, d] of [[2, 5], [2, 2], [2, .9], [3, -1]]) {
+    const s = Muscles.section(r, { d });
+    assert(Math.abs(s.ao * s.aw - r * r) < 1e-9, `area kept (r ${r}, depth ${d})`);
+    assert(s.ao >= Muscles.FLAT * r - 1e-9 && s.ao <= r + 1e-9, 'not thinner than FLAT·r');
+    assert(s.ao - s.shift <= d - Muscles.SKIN_GAP + 1e-9, `outer edge under the skin with the gap (r ${r}, depth ${d})`);
+  }
+  /* в кадре: подъём штанги на бицепс — к верху движения длинная головка двуглавой короче и толще */
+  const EQ = require('../src/js/09bn-equipment.js'), P = require('../src/js/09bp-poses.js'), rig = EQ.rig(P.bbcurl);
+  const area = t => { const R = rig(t), m = L.Skeleton.frames(R, L.M.bodyData(R), skel.bones), p = Muscles.drawn(bic, m, 1.5); return Muscles.body(bic, p.length).area; };
+  assert(area(1) > area(0) * 1.2, `biceps at the top ${area(1).toFixed(1)} vs bottom ${area(0).toFixed(1)} cm²`);
+});
+
 /* Геометрия на позах каталога (вся проверка — npm run muscles:check): несколько упражнений с крайними положениями
    рук, ног и туловища — путь не глубже 2 см в костях и не выше 2,2 см над кожей (исключения — подмышечные складки). */
 test('muscle paths stay out of bones and under the skin in catalog poses', () => {
@@ -132,6 +206,7 @@ test('muscle paths stay out of bones and under the skin in catalog poses', () =>
   for (const [k, f] of Object.entries(fam)) {
     assert(f.bone <= 2, `${k}: ${f.bone.toFixed(2)} cm inside a bone (${f.boneAt})`);
     assert(f.skin <= (EXCEPT.skin[k] ?? 2.2), `${k}: ${f.skin.toFixed(2)} cm above the skin (${f.skinAt})`);
+    assert(f.body <= (EXCEPT.body[k] ?? 2.6), `${k}: muscle body ${f.body.toFixed(2)} cm above the skin (${f.bodyAt})`);
   }
 });
 

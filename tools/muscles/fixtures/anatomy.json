@@ -1,0 +1,197 @@
+{
+ "mri": {
+  "source": "Riem L., Pinette M., DuCharme O. и др. (19 авторов), Blemker S. S. Big bones mean big muscles: an MRI-based dataset of muscle-bone-body size relationships across 70 human muscles of the upper limb, trunk, and lower limb. J Appl Physiol 140: 1–19, 2026. doi:10.1152/japplphysiol.00772.2025 — таблица 3, мужчины (n = 49; рост 1,80 ± 0,08 м, масса 76,80 ± 11,26 кг): средний объём мышцы одной стороны, мл (МРТ Dixon, сегментация нейросетью с ручной проверкой)",
+  "height": 180,
+  "mass": 76.8,
+  "male": {
+   "Levator scapulae": 53.76,
+   "Supraspinatus": 74.15,
+   "Trapezius": 264.74,
+   "Rhomboid": 86.25,
+   "Serratus anterior": 211.36,
+   "Latissimus dorsi": 496.93,
+   "Subscapularis": 160.51,
+   "Teres major": 32.14,
+   "Infraspinatus and teres minor": 197.86,
+   "Pectoralis minor": 55.84,
+   "Pectoralis major": 424.28,
+   "Deltoid": 493.77,
+   "Triceps brachii": 496.46,
+   "Coracobrachialis": 35.84,
+   "Biceps brachii": 203.63,
+   "Brachialis": 158.67,
+   "Brachioradialis": 82.24,
+   "Extensor carpi radialis": 70.01,
+   "Anconeus": 11.02,
+   "Digit extensors": 48.14,
+   "Extensor carpi ulnaris": 23.1,
+   "Deep forearm extensors": 38.31,
+   "Supinator": 19.55,
+   "Pronator teres": 43.53,
+   "Flexor carpi radialis and palmaris longus": 61.97,
+   "Flexor digitorum superficialis": 78.78,
+   "Flexor carpi ulnaris": 46.06,
+   "Flexor digitorum profundus": 102.67,
+   "Flexor pollicis longus": 19.4,
+   "Pronator quadratus": 9.59,
+   "Erector spinae": 552.13,
+   "Multifidus": 222.84,
+   "Rectus abdominis": 278.53,
+   "External oblique": 202.79,
+   "Quadratus lumborum": 66.97,
+   "Psoas major": 302.45,
+   "Iliacus": 201.4,
+   "Gluteus medius": 377.48,
+   "Gluteus maximus": 1017.08,
+   "Gluteus minimus": 110.24,
+   "Piriformis": 42.89,
+   "Gemelli": 19.81,
+   "Quadratus femoris": 31.34,
+   "Obturator internus": 23.39,
+   "Obturator externus": 51.02,
+   "Pectineus": 70.03,
+   "Tensor fasciae latae": 85.0,
+   "Rectus femoris": 300.16,
+   "Vastus lateralis": 1070.58,
+   "Vastus intermedius": 293.76,
+   "Vastus medialis": 549.26,
+   "Sartorius": 180.24,
+   "Adductor brevis": 110.43,
+   "Adductor magnus": 663.34,
+   "Adductor longus": 191.86,
+   "Gracilis": 117.85,
+   "Semitendinosus": 213.84,
+   "Semimembranosus": 266.87,
+   "Biceps femoris: long head": 225.45,
+   "Biceps femoris: short head": 113.77,
+   "Popliteus": 21.01,
+   "Gastrocnemius: medial head": 266.93,
+   "Gastrocnemius: lateral head": 157.11,
+   "Soleus": 463.35,
+   "Tibialis anterior": 125.28,
+   "Phalangeal extensors": 94.97,
+   "Fibulari": 134.43,
+   "Tibialis posterior": 102.9,
+   "Flexor digitorum longus": 26.34,
+   "Flexor hallucis longus": 77.76
+  }
+ },
+ "ward2009": {
+  "source": "Ward S. R., Eng C. M., Smallwood L. H., Lieber R. L. Are current measurements of lower extremity muscle architecture accurate? Clin Orthop Relat Res 467: 1074–1082, 2009 — таблица 3: длина мышцы и длина волокон, см (21 препарат, рост 168,4 см)",
+  "height": 168.4,
+  "rows": {
+   "psoas": [
+    24.25,
+    11.69
+   ],
+   "iliacus": [
+    20.61,
+    10.66
+   ],
+   "glmax": [
+    26.95,
+    15.69
+   ],
+   "glmed": [
+    19.99,
+    7.33
+   ],
+   "sart": [
+    44.81,
+    40.3
+   ],
+   "recfem": [
+    36.28,
+    7.59
+   ],
+   "vaslat": [
+    27.34,
+    9.94
+   ],
+   "vasint": [
+    41.2,
+    9.93
+   ],
+   "vasmed": [
+    43.9,
+    9.68
+   ],
+   "grac": [
+    28.69,
+    22.78
+   ],
+   "addlong": [
+    21.84,
+    10.82
+   ],
+   "addbrev": [
+    15.39,
+    10.31
+   ],
+   "addmag": [
+    37.9,
+    14.44
+   ],
+   "bflh": [
+    34.73,
+    9.76
+   ],
+   "bfsh": [
+    22.39,
+    11.03
+   ],
+   "semiten": [
+    29.67,
+    19.3
+   ],
+   "semimem": [
+    29.34,
+    6.9
+   ],
+   "tibant": [
+    25.98,
+    6.83
+   ],
+   "ehl": [
+    24.25,
+    7.48
+   ],
+   "edl": [
+    29.0,
+    6.93
+   ],
+   "perlong": [
+    27.08,
+    5.08
+   ],
+   "perbrev": [
+    23.75,
+    4.54
+   ],
+   "gasmed": [
+    26.94,
+    5.1
+   ],
+   "gaslat": [
+    22.35,
+    5.88
+   ],
+   "soleus": [
+    40.54,
+    4.4
+   ],
+   "fhl": [
+    26.88,
+    5.27
+   ],
+   "fdl": [
+    27.33,
+    4.46
+   ],
+   "tibpost": [
+    31.03,
+    3.78
+   ]
+  }
+ }
+}

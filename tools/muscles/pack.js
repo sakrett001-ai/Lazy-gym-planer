@@ -1,10 +1,12 @@
 'use strict';
 /* Упаковка мышц для приложения: qa/muscles/muscles.json (build_muscles.py + das3_import.py) → src/data/muscles.bin.
    node tools/muscles/pack.js [вход.json] [выход.bin]
-   Формат: gzip от JSON {version, source, parts:{ключ: название}, muscles:[{name, side, part, group:[…], el}]}.
+   Формат: gzip от JSON {version, source, parts:{ключ: название}, muscles:[{name, side, part, group:[…], el, v, t0, t1, l0, sk}]}.
    el — как во входном файле (точки и огибающие тела в рамках костей скелета), координаты округлены до 0,1 мм;
    служебные поля (имена сайтов MuJoCo, сила, длины волокон) не берутся. group — группы мышц приложения
-   (MUSCLE_NAMES в 00-engine.js): по ним в разборе подсвечиваются мышцы упражнения; part — анатомическое название. */
+   (MUSCLE_NAMES в 00-engine.js): по ним в разборе подсвечиваются мышцы упражнения; part — анатомическое название.
+   v, t0, t1, l0, sk, x0 — объём брюшка, сухожилия, длина пути для рисования и кожа над брюшком в нейтральной позе,
+   продление пути вдоль кости до начала брюшка (этап М2, volumes.js). */
 const fs = require('node:fs'), path = require('node:path'), zlib = require('node:zlib');
 const root = path.resolve(__dirname, '../..');
 const input = path.resolve(root, process.argv[2] || 'qa/muscles/muscles.json');
@@ -87,6 +89,48 @@ const PARTS = [
   [/^serr_ant/, 'serrant', 'Передняя зубчатая', []],
 ];
 
+/* объём и сухожилия (этап М2, volumes.js): длины путей — в нейтральной позе манекена, по тем же данным, что в приложении */
+function withVolumes(out) {
+  const M = require(path.join(root, 'src/js/09bm-mannequin.js')), Skeleton = require(path.join(root, 'src/js/09bq-skeleton.js'));
+  const Muscles = require(path.join(root, 'src/js/09br-muscles.js')), { volumes } = require('./volumes.js');
+  const skel = Skeleton.decode(zlib.gunzipSync(fs.readFileSync(path.join(root, 'src/data/skeleton.bin'))));
+  const { ORIGIN } = require('./volumes.js');
+  /* продление пути вдоль кости до начала брюшка (volumes.js, ORIGIN): та же радиальная координата, уровень — по анатомии */
+  for (const m of out.muscles) {
+    const y = ORIGIN[m.name.replace(/_[rl]$/, '')], p0 = m.el[0].s.p;
+    if (y !== undefined && y > p0[1] + 1) m.x0 = [p0[0], y, p0[2]];
+  }
+  const R = M.catalogPose(M.neutral()), bound = Muscles.bind(out, skel), paths = Muscles.layoutDrawn(bound, Skeleton.frames(R, M.bodyData(R), skel.bones));
+  const lengths = {}, fmax = {};
+  out.muscles.forEach((m, i) => { lengths[m.name] = paths[i].length; fmax[m.name] = m.fmax; });
+  const vol = volumes(out.muscles.map(m => m.name), fmax, lengths, { stature: M.B.stature, mass: M.B.mass });
+  const r1 = x => Math.round(x * 10) / 10;
+  for (const m of out.muscles) { const v = vol[m.name]; m.v = r1(v.v); m.t0 = r1(v.t0); m.t1 = r1(v.t1); m.l0 = r1(lengths[m.name]); delete m.fmax; }
+  /* кожа над брюшком (Muscles.SKIN_U): глубина пути под кожей d (см), направление к коже o — перпендикуляр к пути,
+     в рамке кости начала (первая половина брюшка) или конца пути (вторая), и радиус кривизны кожи поперёк мышцы ρ (см):
+     по ним мышца у кожи сплющивается и изгибается вдоль неё */
+  const G = require('./geometry.js'), frames = Skeleton.frames(R, M.bodyData(R), skel.bones), sdf = G.skinSDF(R), fine = Muscles.layoutDrawn(bound, frames, .5);
+  const unit = v => { const n = Math.hypot(...v) || 1; return v.map(x => x / n); };
+  out.muscles.forEach((m, i) => {
+    const pts = fine[i].points, cum = [0];
+    for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1] + Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1], pts[k][2] - pts[k - 1][2]));
+    const L = cum.at(-1), lb = L - m.t0 - m.t1, bones = [bound[i].el[0].s.i, bound[i].el.at(-1).s.i];
+    m.sk = Muscles.SKIN_U.map(u => {
+      const s = m.t0 + u * lb; let k = 1; while (k < pts.length - 1 && cum[k] < s) k++;
+      const a = pts[k - 1], b = pts[k], w = cum[k] > cum[k - 1] ? (s - cum[k - 1]) / (cum[k] - cum[k - 1]) : 0;
+      const p = a.map((x, j) => x + (b[j] - x) * w), t = unit(b.map((x, j) => x - a[j])), h = 1.5;   /* шаг 1,5 см — направление к коже сглажено по окрестности (у плеча кожа — стык частей) */
+      const g = unit([0, 1, 2].map(j => { const q = p.slice(), r = p.slice(); q[j] += h; r[j] -= h; return sdf(q) - sdf(r); }));
+      const gt = g[0] * t[0] + g[1] * t[1] + g[2] * t[2], o = unit(g.map((x, j) => x - gt * t[j])), inv = G.inverse(frames, bones[u < .5 ? 0 : 1]);
+      const lo = unit(inv(o).map((x, j) => x - inv([0, 0, 0])[j]));
+      /* радиус кривизны кожи поперёк мышцы (вдоль w = o × t) у ближайшей точки кожи q: f(q ± h·w) ≈ h²/(2ρ) */
+      const d = -sdf(p), q = p.map((x, j) => x + o[j] * d), wv = unit([o[1] * t[2] - o[2] * t[1], o[2] * t[0] - o[0] * t[2], o[0] * t[1] - o[1] * t[0]]), hw = 2;
+      const k2 = (sdf(q.map((x, j) => x + wv[j] * hw)) + sdf(q.map((x, j) => x - wv[j] * hw)) - 2 * sdf(q)) / (hw * hw);
+      const rho = k2 > 1 / 200 ? Math.min(200, Math.max(3, 1 / k2)) : 200;
+      return [r1(d), ...lo.map(x => Math.round(x * 100) / 100), Math.round(rho)];
+    });
+  });
+  return out;
+}
 function pack(src) {
   const r2 = v => v.map(x => Math.round(x * 100) / 100), pt = s => ({ bone: s.bone, p: r2(s.p) });
   const parts = {}, muscles = src.muscles.map(m => {
@@ -101,9 +145,9 @@ function pack(src) {
       o.side = w.side ? pt(w.side) : null;
       return { w: o };
     });
-    return { name: m.name, side: m.side, part, group, el };
+    return { name: m.name, side: m.side, part, group, el, fmax: m.fmax };
   });
-  return { version: 1, source: src.source, parts, muscles };
+  return withVolumes({ version: 2, source: src.source, parts, muscles });
 }
 if (require.main === module) {
   const out = pack(JSON.parse(fs.readFileSync(input, 'utf8')));

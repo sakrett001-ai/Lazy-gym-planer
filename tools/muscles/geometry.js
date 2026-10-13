@@ -150,15 +150,18 @@ function skinSDF(R) {
 }
 /* Наибольший выход пути из кожи, см. Кисти и стопы — вне проверки (у них своя форма, сухожилия пальцев под самой кожей):
    точки дальше запястья и голеностопа (по оси предплечья и голени) пропускаются. */
-function skinOut(sdf, pts, R, step = .5) {
+/* точка кисти или стопы: кисть — дальше запястья по оси кисти (её y смотрит от пальцев к запястью); стопа — ниже
+   голеностопа по оси стопы или впереди него больше чем на 2 см */
+function beyondLimbs(R) {
   const F = R.frames, dot = (p, o, v) => (p[0] - o[0]) * v[0] + (p[1] - o[1]) * v[1] + (p[2] - o[2]) * v[2];
-  /* кисть — дальше запястья по оси кисти (её y смотрит от пальцев к запястью); стопа — ниже голеностопа по оси стопы
-     или впереди него больше чем на 2 см */
-  const beyond = p => ['L', 'R'].some(s => {
+  return p => ['L', 'R'].some(s => {
     const h = F['hand' + s], f = F['foot' + s];
     return (dot(p, h.o, h.y) < -.5 && Math.hypot(p[0] - h.o[0], p[1] - h.o[1], p[2] - h.o[2]) < 25) ||
       ((dot(p, f.o, f.y) < -.5 || dot(p, f.o, f.z) > 2) && Math.hypot(p[0] - f.o[0], p[1] - f.o[1], p[2] - f.o[2]) < 30 && dot(p, f.o, f.y) < 6);
   });
+}
+function skinOut(sdf, pts, R, step = .5) {
+  const beyond = beyondLimbs(R);
   let worst = -Infinity, last = 0;
   const parts = sdf.parts || [sdf];
   for (let i = 1; i < pts.length; i++) {
@@ -173,4 +176,18 @@ function skinOut(sdf, pts, R, step = .5) {
   }
   return worst;
 }
-module.exports = { prepareBones, poseBones, boneRun, insideBone, inverse, skinSDF, skinOut };
+/* Наибольший выход тела мышцы из кожи, см: по вершинам поверхности xyz (плоский массив; Muscles.surface), без кистей
+   и стоп. Возвращает {out, at} — выход и номер вершины. */
+function skinOutPoints(sdf, xyz, R, n = xyz.length / 3) {
+  const beyond = beyondLimbs(R), parts = sdf.parts || [sdf];
+  let worst = -Infinity, at = -1, last = 0;
+  for (let i = 0; i < n; i++) {
+    const p = [xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2]];
+    let d = parts[last](p);
+    if (d <= worst) continue;
+    for (let j = 0; j < parts.length; j++) { if (j === last) continue; const e = parts[j](p); if (e < d) { d = e; last = j; } if (d <= worst) break; }
+    if (d > worst && !beyond(p)) { worst = d; at = i; }
+  }
+  return { out: worst, at };
+}
+module.exports = { prepareBones, poseBones, boneRun, insideBone, inverse, skinSDF, skinOut, skinOutPoints };

@@ -3,10 +3,10 @@ import {createCatalogScene} from '../../../src/volume/scene.mjs';
 /* Контактные листы: одна WebGL-сцена на ячейку, рендер в общий холст */
 function dataFor(rig,t,has){const R=rig(t);return{exerciseId:'lab',pose:R,body:Mannequin.bodyData(R),surfaces:[],values:{},regions:{},props:R.props.filter(p=>GymEquipment.visible(p,has)),torsoRings:[],limbProfiles:{}};}
 window.Lab={
- sheet(specs,entries,{w=380,h=300,cols=4,title='',light=true,has=null,focus=null,span=.6,skeleton=false,muscles=null}={}){
+ sheet(specs,entries,{w=380,h=300,cols=4,title='',light=true,has=null,focus=null,span=.6,skeleton=false,muscles=null,only=null}={}){
   const raw=skeleton||muscles?Skeleton.decode(Uint8Array.from(atob(window.SKELETON_RAW),c=>c.charCodeAt(0))):null,bones=skeleton?raw:null;
   /* мышцы: группы приложения → уровень выделения; цвет выделенных — как у нагрузки в приложении (оранжевый/жёлтый) */
-  const anatomy=muscles?{skeleton:raw,muscles:window.MUSCLES_RAW,level:muscles}:null,heat=v=>v>=1?'#e8562f':'#f2a03d';
+  const anatomy=muscles?{skeleton:raw,muscles:window.MUSCLES_RAW,level:muscles,only:only?new RegExp(only):null}:null,heat=v=>v>=1?'#e8562f':'#f2a03d';
   const hasFn=has==null||has==='all'?()=>true:has==='none'?()=>false:(k=>has.split('+').includes(k));
   const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setSize(w,h);renderer.setPixelRatio(1);
   const head=title?34:0,lab=22,rows=Math.ceil(specs.length/cols),canvas=document.createElement('canvas');canvas.width=cols*w;canvas.height=head+rows*(h+lab);
