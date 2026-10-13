@@ -3,6 +3,7 @@ import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js'
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {createMannequinBody} from './body.mjs';
 import {createSkeletonLayer} from './skeleton.mjs';
+import {createMuscleLayer} from './muscles.mjs';
 import {isNewProp,propKey,createPropNode,updatePropNode} from './props.mjs';
 
 const add=(a,b,k=1)=>a.map((v,i)=>v+b[i]*k),sub=(a,b)=>a.map((v,i)=>v-b[i]),dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),len=a=>Math.hypot(...a);
@@ -112,8 +113,9 @@ export function createCatalogScene(first,{coarse=false}={}){
  const floorGrid=fadingGrid(5,20,0x485b76,[0,-.01,1]);scene.add(floorGrid);
  const mannequin=first.body?createMannequinBody(scene,first,{skin,joint,sole,mesh}):null;
  const parts=mannequin?mannequin.parts:{};let body=mannequin?mannequin.parts.torso.mesh:null,head=mannequin?mannequin.parts.head.mesh:null,nose,neck,dots;
- /* режим «Скелет»: кости внутри, кожа полупрозрачная и не отбрасывает тень на кости; мышцы по фазам скрыты */
- const skeletonLayer=createSkeletonLayer(scene);let ghosted=false;
+ /* режим «Скелет»: кости внутри, кожа полупрозрачная и не отбрасывает тень на кости; мышцы по фазам скрыты.
+    Режим «Анатомия мышц» — то же с линиями мышц (options.anatomy: {skeleton, muscles, level}); кости при этом — по «Скелету» */
+ const skeletonLayer=createSkeletonLayer(scene),muscleLayer=createMuscleLayer(scene);let ghosted=false;
  function ghost(on){
   if(on!==ghosted){ghosted=on;for(const m of [skin,joint,sole]){m.transparent=on;m.opacity=on?.22:1;m.depthWrite=!on;m.needsUpdate=true;}}
   if(mannequin)mannequin.group.traverse(o=>{if(o.isMesh)o.castShadow=!on;});
@@ -194,8 +196,10 @@ export function createCatalogScene(first,{coarse=false}={}){
  function apply(data,nextOptions={}){
   lastData=data;options={...options,...nextOptions};const R=data.pose;
   if(mannequin)mannequin.apply(data,options);
-  const skeletonOn=!!(mannequin&&options.skeleton&&data.body);
-  if(skeletonOn)skeletonLayer.update(options.skeleton,R,data.body);else skeletonLayer.hide();
+  const bonesOn=!!(mannequin&&options.skeleton&&data.body),musclesOn=!!(mannequin&&options.anatomy&&data.body),skeletonOn=bonesOn||musclesOn;
+  const frames=musclesOn?globalThis.Skeleton.frames(R,data.body,options.anatomy.skeleton.bones):null;
+  if(bonesOn)skeletonLayer.update(options.skeleton,R,data.body,frames&&options.anatomy.skeleton===options.skeleton?frames:undefined);else skeletonLayer.hide();
+  if(musclesOn)muscleLayer.update(options.anatomy,frames,options.color);else muscleLayer.hide();
   if(mannequin&&(skeletonOn||ghosted))ghost(skeletonOn);
   if(!mannequin){
   updateGrid(body.geometry,data.torsoRings.length-1,torsoCols,(t,q)=>{
@@ -287,7 +291,7 @@ export function createCatalogScene(first,{coarse=false}={}){
   const cam=key.shadow.camera;cam.left=-r;cam.right=r;cam.top=r;cam.bottom=-r;cam.near=.1;cam.far=8+r*2;cam.updateProjectionMatrix();key.shadow.needsUpdate=true;
  }
  apply(first,{color:()=> '#a7b3c6'});
- return{scene,cameras,apply,includeBounds,resize,bounds,regionMeshes,parts,body,head,mannequin,skeleton:skeletonLayer,propNodes:()=>propNodes,studio,fitShadow,setShadows,
+ return{scene,cameras,apply,includeBounds,resize,bounds,regionMeshes,parts,body,head,mannequin,skeleton:skeletonLayer,muscleLayer,propNodes:()=>propNodes,studio,fitShadow,setShadows,
   dispose(){disposeGeometry();disposeMaterials();},disposeGeometry,disposeMaterials};
  /* геометрия, текстуры и карты теней освобождаются сразу; материалы — отдельно: пока они живы, рендерер держит их
     собранные программы для следующей фигуры (main.mjs) */

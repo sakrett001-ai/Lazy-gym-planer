@@ -21,7 +21,9 @@ def decimate(v,f,target):
     vv,ff=fast_simplification.simplify(v.astype(np.float32),f.astype(np.int32),target_reduction=1-target/len(f))
     return vv.astype(float),ff
 bones=[]
-def add(name,side,seg,v,f,target,**extra):
+XF={}   # кость (имя, сторона) → преобразование «рамка корня цепочки MyoSim (см, оси манекена) → рамка кости»: им же переносятся точки мышц
+def add(name,side,seg,v,f,target,xf=None,**extra):
+    if xf is not None: XF[(name,side)]=xf
     v,f=decimate(np.asarray(v),np.asarray(f),target)
     bones.append(dict(name=name,side=side,seg=seg,v=np.round(v,2).ravel().tolist(),f=np.asarray(f).ravel().tolist(),**extra))
 def mesh(ch,mname):
@@ -56,23 +58,23 @@ def pelvisMap(v):
     d=np.asarray(v)-mid; u=np.clip((d[:,1]-2.)/6.,0,1); w=u*u*(3-2*u)
     return d*np.stack([sx+(SX_CREST-sx)*w,np.full(len(d),S_T),np.full(len(d),S_T)],-1)
 for nm,side in (('r_pelvis','R'),('l_pelvis','L')):
-    v,f=mesh(LEG,nm); add('pelvis_'+side,side,'pelvis',pelvisMap(v),f,900)
-v,f=mesh(TOR,'sacrum_geom_1_sacrum'); add('sacrum','',  'pelvis',pelvisMap(v),f,500)
+    v,f=mesh(LEG,nm); add('pelvis_'+side,side,'pelvis',pelvisMap(v),f,900,xf=pelvisMap)
+v,f=mesh(TOR,'sacrum_geom_1_sacrum'); add('sacrum','',  'pelvis',pelvisMap(v),f,500,xf=pelvisMap)
 def trunkMap(v,w):
     """w — доля смещения грудного блока (0 у крестца, 1 у Th12 и выше)"""
     return thoraxFit((np.asarray(v)-mid)*np.array([S_T,S_T,S_T]),w)
 yS=float(pelvisMap(mesh(TOR,'sacrum_geom_1_sacrum')[0])[:,1].max()); yT12=float(trunkMap(mesh(TOR,'torso_geom_1_thoracic12_s')[0],0)[:,1].mean())
 for i in (5,4,3,2,1):
     v,f=mesh(TOR,f'lumbar{i}_geom_1_lumbar{i}'); yc=float(trunkMap(v,0)[:,1].mean()); w=float(np.clip((yc-yS)/(yT12-yS),0,1))
-    q=trunkMap(v,w); h=float(q[:,1].mean()); add(f'L{i}','','spine',q-np.array([0,h,0]),f,260,h=round(h,2))
+    q=trunkMap(v,w); h=float(q[:,1].mean()); add(f'L{i}','','spine',q-np.array([0,h,0]),f,260,h=round(h,2),xf=lambda p,w=w,h=h:trunkMap(p,w)-np.array([0,h,0]))
 TH0=np.array([0,24.,0])   # начало рамки грудной клетки манекена в рамке таза (нейтральная поза)
 for (b,m,file,Rg,pg) in TOR['meshes']:
     if b!='torso': continue
     v,f=load(file,Rg,pg); q=trunkMap(M(v),1)
     if 'ribcage' in m:
         q=q*np.array([RIB_X,1,1])
-        add('ribcage','','thorax',q-TH0,f,5200)
-    else: add(m.split('_')[-2],'','thorax',q-TH0,f,240)
+        add('ribcage','','thorax',q-TH0,f,5200,xf=lambda p:trunkMap(p,1)*np.array([RIB_X,1,1])-TH0)
+    else: add(m.split('_')[-2],'','thorax',q-TH0,f,240,xf=lambda p:trunkMap(p,1)-TH0)
 
 # ---------- шея и череп (геометрия HAT в рамке туловища Rajagopal: начало в (−10,07; 8,15; 0) см от таза) ----------
 HD=chain('head/assets/myohead_rigid_chain.xml','head/assets/myohead_simple_assets.xml','neck')
@@ -145,9 +147,9 @@ for px in range(-15,16):
         if best is None or cost<best[0]: best=(cost,px,ty,pen)
 SCAP_R=rotXY(best[1],best[2])
 print('лопатка на рёбрах: поворот вокруг поперечной оси',best[1],'°, вокруг вертикали',best[2],'°; заход в рёбра',round(best[3],2),'см')
-scapM=lambda v:tgt+(SCAP_R@(S_T*(Rg_@(np.asarray(v)-gh).T))).T
+scapM=lambda v,tgt=tgt,SCAP_R=SCAP_R,Rg_=Rg_,gh=gh:tgt+(SCAP_R@(S_T*(Rg_@(np.asarray(v)-gh).T))).T
 acT=scapM(ac[None])[0]; Rc=rot_between(ac,acT); kc=np.linalg.norm(acT)/np.linalg.norm(ac); ca=unit(acT)
-Ac=S_T*np.eye(3)+(kc-S_T)*np.outer(ca,ca); clavM=lambda v:(Ac@(Rc@np.asarray(v).T)).T
+Ac=S_T*np.eye(3)+(kc-S_T)*np.outer(ca,ca); clavM=lambda v,Ac=Ac,Rc=Rc:(Ac@(Rc@np.asarray(v).T)).T
 vS,fS=mesh(ARM,'scapula_r'); sv=scapM(vS)
 # плоскость лопатки (наименьший разброс вершин) и нижний угол: для поворота лопатки за рукой (09bq-skeleton.js)
 _,_,Vt=np.linalg.svd(sv-sv.mean(0)); nrm=Vt[2]; ia=sv[sv[:,1].argmin()]
@@ -164,23 +166,23 @@ front=frontP[sel]
 print('ключица',round(np.linalg.norm(acT),1),'см (×%.2f по длине), АКС'%kc,np.round(acT,1),'нижний угол',np.round(ia,1))
 meta=dict(gl=[tgt.round(2).tolist()],ac=[acT.round(2).tolist()],nrm=[nrm.round(4).tolist()],ia=[ia.round(2).tolist()],probe=probe.round(2).tolist(),front=front.round(2).tolist())
 arm=[]
-v,f=mesh(ARM,'clavicle_r'); add('clavicle','R','girdle',clavM(v),f,300,**meta); arm.append(bones[-1])
-add('scapula','R','girdle',sv,fS,1100,**meta); arm.append(bones[-1])
+v,f=mesh(ARM,'clavicle_r'); add('clavicle','R','girdle',clavM(v),f,300,xf=clavM,**meta); arm.append(bones[-1])
+add('scapula','R','girdle',sv,fS,1100,xf=scapM,**meta); arm.append(bones[-1])
 hum=P(ARM,'humerus_r'); el=P(ARM,'ulna_r'); T=long_bone(hum,el,B['ua'],1.0)
-v,f=mesh(ARM,'humerus_r'); add('humerus','R','ua',T(v),f,700); arm.append(bones[-1])
+v,f=mesh(ARM,'humerus_r'); add('humerus','R','ua',T(v),f,700,xf=T); arm.append(bones[-1])
 wr=P(ARM,'lunate_r'); T=long_bone(el,wr,B['fa'],1.0)
-v,f=mesh(ARM,'ulna_r'); add('ulna','R','fa',T(v),f,450); arm.append(bones[-1])
-rh=P(ARM,'radius_r'); v,f=mesh(ARM,'radius_r'); add('radius','R','fa',T(v),f,450,pivot=[T(rh[None])[0].round(2).tolist(),[0,-B['fa'],0]]); arm.append(bones[-1])
+v,f=mesh(ARM,'ulna_r'); add('ulna','R','fa',T(v),f,450,xf=T); arm.append(bones[-1])
+rh=P(ARM,'radius_r'); v,f=mesh(ARM,'radius_r'); add('radius','R','fa',T(v),f,450,xf=T,pivot=[T(rh[None])[0].round(2).tolist(),[0,-B['fa'],0]]); arm.append(bones[-1])
 # кисть: подгонка запястья и пястно-фаланговых суставов к кисти манекена (Умеяма)
 FING=[2.9,1.0,-0.9,-2.8]; names=['2proxph_r','3proxph_r','4proxph_r','5proxph_r']
 src=np.array([wr]+[P(ARM,n) for n in names]); dst=np.array([[0,0,0]]+[[0.2,-9.6,w] for w in FING])
 mu_s,mu_d=src.mean(0),dst.mean(0); X=src-mu_s; Y=dst-mu_d; U,Sv,Vt=np.linalg.svd(Y.T@X); D=np.eye(3); D[2,2]=np.sign(np.linalg.det(U@Vt))
 Rh=U@D@Vt; sh=np.trace(np.diag(Sv)@D)/np.sum(X*X); th=mu_d-sh*Rh@mu_s
-hand=lambda v:(sh*(Rh@np.asarray(v).T)).T+th
+hand=lambda v,sh=sh,Rh=Rh,th=th:(sh*(Rh@np.asarray(v).T)).T+th
 print('кисть: масштаб',round(sh,3),'невязка МЦФ',np.round(np.linalg.norm(hand(src)-dst,axis=1),2))
 carp=['lunate','scaphoid','pisiform','triquetrum','capitate','trapezium','trapezoid','hamate','2mc','3mc','4mc','5mc']
 for c_ in carp:
-    v,f=mesh(ARM,c_+'_r'); add(c_,'R','hand',hand(v),f,110 if 'mc' not in c_ else 180); arm.append(bones[-1])
+    v,f=mesh(ARM,c_+'_r'); add(c_,'R','hand',hand(v),f,110 if 'mc' not in c_ else 180,xf=hand); arm.append(bones[-1])
 # фаланги: канонические координаты — ось от проксимального сустава к дистальному (−Y), тыл — +Z, длина len
 def phal(nm,body,child,tip=False,thumb=False):
     v,f=mesh(ARM,nm); p0=hand(P(ARM,body)[None])[0]
@@ -191,19 +193,19 @@ def phal(nm,body,child,tip=False,thumb=False):
         a0=unit(vh.mean(0)-p0); d=(vh-p0)@a0; p1=p0+a0*d.max()
     a=unit(p1-p0); dors=np.array([-1.,0,0])      # тыл кисти правой руки — −X (ладонь смотрит в +X)
     dz=unit(dors-a*(dors@a)); dx=np.cross(a,dz)   # правая тройка: X' = Y'×Z' при Y' = −a
-    loc=np.stack([(vh-p0)@np.cross(-a,dz),(vh-p0)@(-a),(vh-p0)@dz],-1)
-    return loc,f,float(np.linalg.norm(p1-p0))
+    xf=lambda q,p0=p0,a=a,dz=dz:(lambda w:np.stack([(w-p0)@np.cross(-a,dz),(w-p0)@(-a),(w-p0)@dz],-1))(hand(np.asarray(q)))
+    return xf(v),f,float(np.linalg.norm(p1-p0)),xf
 for k,(mc,pp,mp,dp) in enumerate([('2','2proxph_r','midph2_r','distph2_r'),('3','3proxph_r','midph3_r','distph3_r'),('4','4proxph_r','midph4_r','distph4_r'),('5','5proxph_r','midph5_r','distph5_r')]):
     for j,(nm,body,child) in enumerate([(mc+'proxph_r',pp,mp),(mc+'midph_r',mp,dp),(mc+'distph_r',dp,None)]):
-        loc,f,L=phal(nm,body,child); add(nm[:-2],'R','finger',loc,f,120,finger=k,joint=j,len=round(L,2)); arm.append(bones[-1])
+        loc,f,L,xf=phal(nm,body,child); add(nm[:-2],'R','finger',loc,f,120,finger=k,joint=j,len=round(L,2),xf=xf); arm.append(bones[-1])
 for j,(nm,body,child) in enumerate([('1mc_r','firstmc_r','proximal_thumb_r'),('thumbprox_r','proximal_thumb_r','distal_thumb_r'),('thumbdist_r','distal_thumb_r',None)]):
-    loc,f,L=phal(nm,body,child); add(nm[:-2],'R','thumb',loc,f,140,joint=j,len=round(L,2)); arm.append(bones[-1])
+    loc,f,L,xf=phal(nm,body,child); add(nm[:-2],'R','thumb',loc,f,140,joint=j,len=round(L,2),xf=xf); arm.append(bones[-1])
 for b in arm: bones.append(mirror(b))
 
 # ---------- ноги ----------
 for s,sx_ in (('R','r'),('L','l')):
     hj=P(LEG,f'femur_{sx_}'); kn=P(LEG,f'tibia_{sx_}'); an=P(LEG,f'talus_{sx_}'); mtp=P(LEG,f'toes_{sx_}')
-    T=long_bone(hj,kn,B['th']); v,f=mesh(LEG,f'{sx_}_femur'); add('femur',s,'th',T(v),f,1100)
+    T=long_bone(hj,kn,B['th']); v,f=mesh(LEG,f'{sx_}_femur'); add('femur',s,'th',T(v),f,1100,xf=T)
     # надколенник: положение по углу колена (полиномы связи из модели), в рамке бедра. Стоя середина надколенника —
     # на 0,3 см ниже наружного надмыщелка (ANSUR II: 48,5 и 48,8 см), у модели — на 1,2 см выше: опускаем на 1,5 см
     # при прямом колене; к 60° сгибания поправка сходит на нет (дальше надколенник ведёт блок бедра)
@@ -217,16 +219,17 @@ for s,sx_ in (('R','r'),('L','l')):
         track.append([deg,round(float(np.degrees(ang)),2)]+np.round(T((pb+tr)[None])[0]+[0,PAT_DY*max(0.,1-deg/60),0],2).tolist())
     # вершины надколенника — относительно его начала, в осях бедра (поворот модели вокруг оси z OpenSim = вокруг −X манекена)
     Tl=long_bone(hj,kn,B['th']); loc=Tl(v)-Tl(pb[None])[0]
-    add('patella',s,'th',loc,f,140,track=track)
-    T=long_bone(kn,an,B['sk']); v,f=mesh(LEG,f'{sx_}_tibia'); add('tibia',s,'sk',T(v),f,800)
-    v,f=mesh(LEG,f'{sx_}_fibula'); add('fibula',s,'sk',T(v),f,400)
+    add('patella',s,'th',loc,f,140,track=track,xf=lambda p,Tl=Tl,pb=pb:Tl(p)-Tl(pb[None])[0])
+    T=long_bone(kn,an,B['sk']); v,f=mesh(LEG,f'{sx_}_tibia'); add('tibia',s,'sk',T(v),f,800,xf=T)
+    v,f=mesh(LEG,f'{sx_}_fibula'); add('fibula',s,'sk',T(v),f,400,xf=T)
     # стопа: голеностоп → (0,0,0), плюснефаланговый сустав → B.ball (0; −5,35; 13,5)
-    tgt=np.array([0,-5.35,13.5]); Rf=rot_between(mtp-an,tgt); sf=np.linalg.norm(tgt)/np.linalg.norm(mtp-an); FT=lambda v:(sf*(Rf@(np.asarray(v)-an).T)).T
+    tgt=np.array([0,-5.35,13.5]); Rf=rot_between(mtp-an,tgt); sf=np.linalg.norm(tgt)/np.linalg.norm(mtp-an); FT=lambda v,Rf=Rf,sf=sf,an=an:(sf*(Rf@(np.asarray(v)-an).T)).T
     for nm,t in ((f'{sx_}_talus',300),(f'{sx_}_foot',1500)):
-        v,f=mesh(LEG,nm); add(nm[2:],s,'foot',FT(v),f,t)
-    v,f=mesh(LEG,f'{sx_}_bofoot'); add('toes',s,'toes',FT(v)-tgt,f,1200)
+        v,f=mesh(LEG,nm); add(nm[2:],s,'foot',FT(v),f,t,xf=FT)
+    v,f=mesh(LEG,f'{sx_}_bofoot'); add('toes',s,'toes',FT(v)-tgt,f,1200,xf=lambda p,FT=FT,tgt=tgt:FT(p)-tgt)
     print(s,'стопа: масштаб',round(sf,3),'низ пятки',np.round(FT(mesh(LEG,f'{sx_}_foot')[0]).min(0),2))
 tot=sum(len(b['f'])//3 for b in bones); print('костей',len(bones),'треугольников',tot)
-os.makedirs(os.path.dirname(os.path.abspath(OUT)),exist_ok=True)
-json.dump(dict(bones=bones,source='MyoSim (MyoHub, Apache 2.0): Rajagopal 2016, Holzbaur 2005 (MoBL), lumbar spine model'),open(OUT,'w'))
-print(OUT,round(os.path.getsize(OUT)/1024),'КБ')
+if __name__=='__main__':   # при импорте (tools/muscles/build_muscles.py) нужны только преобразования костей XF
+    os.makedirs(os.path.dirname(os.path.abspath(OUT)),exist_ok=True)
+    json.dump(dict(bones=bones,source='MyoSim (MyoHub, Apache 2.0): Rajagopal 2016, Holzbaur 2005 (MoBL), lumbar spine model'),open(OUT,'w'))
+    print(OUT,round(os.path.getsize(OUT)/1024),'КБ')
