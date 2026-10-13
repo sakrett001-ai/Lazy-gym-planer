@@ -3043,9 +3043,12 @@ function buildSpatialFigure(anim,opts={}){
  /* Рамка кадра (viewBox, пол, след хвата) по 41 положению. Считается один раз на упражнение, ракурс, пропорцию
     и набор видимого инвентаря и запоминается (SPATIAL_FRAMES, между запусками — в localStorage по хэшу сборки).
     opts.frameOnly: только рамка, по частям — figureFrameJob() досчитывает её в простое, пока карточка не на экране. */
- const frameKey=anim.catalogId?[anim.catalogId,camera,opts.ratio||1.15,anim.noGround?1:0,anim.rig3d(0).props.map(q=>GymEquipment.visible(q,opts.has)?1:0).join('')].join('|'):null;
+ /* opts.still — неподвижная миниатюра (витрина атласа): рамка по показанной позе, а не по 41 фазе, и без стрелок
+    векторов. Миниатюра строится в 4–5 раз быстрее; пол — тот же, по всему движению. */
+ const still=!!(opts.still&&anim.catalogId);
+ const frameKey=anim.catalogId?[anim.catalogId,camera,opts.ratio||1.15,anim.noGround?1:0,anim.rig3d(0).props.map(q=>GymEquipment.visible(q,opts.has)?1:0).join(''),...(still?['still'+(opts.t||0)]:[])].join('|'):null;
  let framed=frameKey?spatialFrameGet(frameKey):null,frameNext=0;
- const setVectors=anim.catalogId?catalogVectorGroup(svg,anim,camera):vectorGroup(svg,anim,camera);
+ const setVectors=still?Object.assign(()=>{},{bounds:null,at(){}}):anim.catalogId?catalogVectorGroup(svg,anim,camera):vectorGroup(svg,anim,camera);
  function frameSample(){const{R}=compile(frameNext/40,0,false);tracePts.push(project(R.gripL));frameNext++;}
  function frameFinish(){
   if(setVectors.bounds)allBounds.push(...setVectors.bounds);
@@ -3069,7 +3072,7 @@ function buildSpatialFigure(anim,opts={}){
   return framed;
  }
  if(opts.frameOnly)return{key:frameKey,done:!!framed,step(n=1){if(this.done)return true;for(let k=0;k<n&&frameNext<=40;k++)frameSample();if(frameNext>40){frameFinish();this.done=true;}return this.done;}};
- if(!framed){while(frameNext<=40)frameSample();frameFinish();}
+ if(!framed){if(still)compile(opts.t||0,0,false);else while(frameNext<=40)frameSample();frameFinish();}
  svg.setAttribute('viewBox',framed.viewBox);
  if(!anim.noGround){
   const floorCorners=framed.floor;
@@ -9350,7 +9353,11 @@ function setupMotionViewer() {
   $('#motion-view').addEventListener('close',()=>{disposeMotion(detailMotion);detailMotion=null;closeGallery();document.documentElement.classList.remove('motion-open');});
   /* объёмная графика грузится после первого экрана (build.js): если разбор или тренировка открыты раньше, показывается
      плоская схема, а с приходом объёма та же фаза перерисовывается в нём */
-  window.addEventListener('gym-volume',()=>{if(detailMotion&&!gallery.on)mountDetailCameras();if(workout?.motion&&$('#workout-view').open)mountWorkoutCameras();});
+  window.addEventListener('gym-volume',()=>{
+    if(detailMotion&&!gallery.on)mountDetailCameras();if(workout?.motion&&$('#workout-view').open)mountWorkoutCameras();
+    /* сетка головы (≈55 мс на компьютере) одна на все упражнения: готовится в простое, а не при первом открытии разбора */
+    const idle=window.requestIdleCallback||(f=>setTimeout(f,2000));idle(()=>{try{Mannequin.headMesh();}catch(e){}},{timeout:6000});
+  });
   $('#motion-view').addEventListener('keydown',e=>{if(e.code==='Space'&&!['INPUT','SELECT','BUTTON','TEXTAREA'].includes(e.target.tagName)){e.preventDefault();if(detailMotion){detailMotion.paused=!detailMotion.paused;paintMotion(detailMotion,true);}}});
 }
 
@@ -10373,7 +10380,8 @@ document.addEventListener('keydown', e => {
    Миниатюра открывает подробный разбор в том же окне; «← Все упражнения» возвращает к витрине на то же место.
    «Увеличить» в карточке плана по-прежнему открывает сразу разбор.
    Миниатюра — неподвижный SVG-кадр того же манекена, что в карточках плана (конечная точка движения), строится,
-   когда подходит к экрану, по одной за кадр; готовые миниатюры переиспользуются при смене фильтра. */
+   когда подходит к экрану, — сколько успеется за ~8 мс кадра; готовые миниатюры переиспользуются при смене фильтра. Рамка — по самой
+   показанной позе (opts.still), а не по всем фазам: так миниатюра в 4–5 раз дешевле. */
 const WORK_KINDS = [
   {id:'all', name:'Всё'}, {id:'free', name:'Свободные веса'}, {id:'mach', name:'Тренажёры и блоки'},
   {id:'band', name:'Резинки'}, {id:'body', name:'Свой вес'}
@@ -10424,16 +10432,20 @@ function buildThumb(el) {
   let svg = galleryThumbs.get(key);
   if (!svg) {
     const it = previewItem(id);
-    try { svg = buildFigure(it.ex.anim, {primary:it.ex.pri, has:it.has, ratio:1, camera:'angle', t:thumbT(it.ex), label:it.name, muscles:false, stress:false}).svg; }
+    try { svg = buildFigure(it.ex.anim, {primary:it.ex.pri, has:it.has, ratio:1, camera:'angle', t:thumbT(it.ex), label:it.name, muscles:false, stress:false, still:true}).svg; }
     catch (e) { console.error('Миниатюра', id, e); return; }
     galleryThumbs.set(key, svg);
   }
   el.replaceChildren(svg); el.classList.add('ready');
 }
+/* за кадр — сколько успеется за ~8 мс, но не меньше одной миниатюры: на быстром телефоне экран заполняется сразу */
 function pumpThumbs() {
   galleryRaf = 0;
-  const el = galleryQueue.shift(); if (!el) return;
-  if (el.isConnected && !el.classList.contains('ready')) buildThumb(el);
+  const end = performance.now() + 8;
+  do {
+    const el = galleryQueue.shift(); if (!el) return;
+    if (el.isConnected && !el.classList.contains('ready')) buildThumb(el);
+  } while (galleryQueue.length && performance.now() < end);
   if (galleryQueue.length) galleryRaf = requestAnimationFrame(pumpThumbs);
 }
 function renderGallery() {
@@ -10668,11 +10680,30 @@ function mountDetailCameras(){
  $('#mv-dual').checked=!!motionPrefs.dual;$('#mv-second').hidden=!pair;$('#mv-projections').classList.toggle('is-dual',pair);
  F.extra=null;
  if(pair){
-  const preferred=motionProfile(a)?.pair,other=preferred!==key&&cameras.includes(preferred)?preferred:cameras.find(c=>c!==key);F.extra=make(other);$('#mv-second-stage').replaceChildren(F.extra.svg);
+  const other=pairCamera(a,key);F.extra=make(other);$('#mv-second-stage').replaceChildren(F.extra.svg);
   $('#mv-second-label').textContent=CAMERA3[other].label;$('#mv-second-hint').textContent=a.cameraHints?.[other]||'';
  }else $('#mv-second-stage').replaceChildren();
  configureMusclePanel('mv',F.it);configureStressPanel('mv',F);applySkeleton(F);paintMotion(F,true);
 }
+/* второй ракурс пары: из профиля мышц упражнения, иначе первый другой */
+function pairCamera(a,key){const cameras=a.catalogCameras||a.cameras||[],preferred=motionProfile(a)?.pair;return preferred!==key&&cameras.includes(preferred)?preferred:cameras.find(c=>c!==key);}
+/* Смена ракурса в разборе: объёмная фигура переключает камеру сама — без новой сцены и пересчёта позы (≈0,2 с на
+   компьютере, втрое дольше на слабом телефоне). Плоская запасная схема и смена числа видов пересобирают окно. */
+function switchDetailCamera(){
+ const F=detailMotion,a=F.it.ex.anim,key=motionCamera(F.it.ex),pair=(a.catalogCameras||a.cameras||[]).length>1&&!!motionPrefs.dual,other=pair?pairCamera(a,key):null;
+ if(!F.f?.setCamera||(pair?!F.extra?.setCamera:!!F.extra)||!F.f.setCamera(key)||(pair&&!F.extra.setCamera(other)))return mountDetailCameras();
+ pressCamera('#mv-cameras',key);
+ $('#mv-view').textContent=CAMERA3[key]?.label||F.it.ex.viewNote||(a.view==='front'?'Вид спереди':'Вид сбоку');
+ $('#mv-camera-hint').textContent=a.cameraHints?.[key]||'';
+ if(pair){$('#mv-second-label').textContent=CAMERA3[other].label;$('#mv-second-hint').textContent=a.cameraHints?.[other]||'';}
+}
+function switchWorkoutCamera(){
+ const F=workout.motion,ex=F.it.ex,key=motionCamera(ex);
+ if(!F.f?.setCamera||!F.f.setCamera(key))return mountWorkoutCameras();
+ pressCamera('#wv-cameras',key);$('#wv-angle').textContent=CAMERA3[key]?.label||(ex.anim.view==='front'?'Вид спереди':'Вид сбоку');
+}
+/* кнопки ракурсов не перерисовываются — фокус остаётся на нажатой */
+function pressCamera(sel,key){for(const b of $(sel).querySelectorAll('[data-motion-camera]'))b.setAttribute('aria-pressed',String(b.dataset.motionCamera===key));}
 function mountWorkoutCameras(){
  if(!workout?.motion)return;
  const F=workout.motion,ex=F.it.ex,key=motionCamera(ex),m=motionFrame(F);
@@ -10681,8 +10712,8 @@ function mountWorkoutCameras(){
  $('#wv-angle').textContent=CAMERA3[key]?.label||(ex.anim.view==='front'?'Вид спереди':'Вид сбоку');configureMusclePanel('wv',F.it);configureStressPanel('wv',F);paintWorkoutMotion();
 }
 function setupMotionCameras(){
- $('#mv-cameras').addEventListener('click',e=>{const b=e.target.closest('[data-motion-camera]');if(b&&detailMotion&&rememberCamera(detailMotion.it.ex,b.dataset.motionCamera))mountDetailCameras();});
- $('#wv-cameras').addEventListener('click',e=>{const b=e.target.closest('[data-motion-camera]');if(b&&workout?.motion&&rememberCamera(workout.motion.it.ex,b.dataset.motionCamera))mountWorkoutCameras();});
+ $('#mv-cameras').addEventListener('click',e=>{const b=e.target.closest('[data-motion-camera]');if(b&&detailMotion&&rememberCamera(detailMotion.it.ex,b.dataset.motionCamera))switchDetailCamera();});
+ $('#wv-cameras').addEventListener('click',e=>{const b=e.target.closest('[data-motion-camera]');if(b&&workout?.motion&&rememberCamera(workout.motion.it.ex,b.dataset.motionCamera))switchWorkoutCamera();});
  $('#mv-dual').addEventListener('change',e=>{motionPrefs.dual=e.target.checked;saveMotionPrefs();mountDetailCameras();});
 }
 
@@ -11147,4 +11178,4 @@ renderPlan();
 prefetchStressIds();
 logInit();
 
-window.PODHOD_VERSION='4.23.1';window.PODHOD_BUILD='4.23.1-fbf862c2490f';window.PODHOD_LANG='ru';
+window.PODHOD_VERSION='4.24.0';window.PODHOD_BUILD='4.24.0-81daf5449ecc';window.PODHOD_LANG='ru';
