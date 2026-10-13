@@ -133,3 +133,65 @@ test('босая стопа: размеры по Winter и ANSUR II, свод, �
     assert.ok(-g * sh.toes[0].pts[0][0] > 2, 'большой палец медиально');
   }
 });
+
+test('шарниры поясницы — на уровнях L5/S1 и L2/L3, оси через позвоночник, нейтральная поза не меняется', () => {
+  /* Высота и глубина — центры межпозвонковых суставов модели поясничного отдела MyoSim (MyoBack; Christophy et al.,
+     2012), перенесённые на манекен теми же преобразованиями, что кости (tools/muscles): L5/S1 — 15,2 см над
+     тазобедренными и 4,4 см кзади от оси корпуса, L2/L3 — 24,6 и 3,1 см. Точка оси при сгибании, наклоне и повороте
+     остаётся на месте; грудная клетка в нейтральной позе — на 24 см, как раньше (по ней посажены рёбра и кожа). */
+  assert.equal(M.B.lumbar[1], 15); assert.equal(M.B.lumbar[1] + M.B.thoracic[1], 24);
+  assert.deepEqual(M.B.lumbarPivot, [0, 0, -4.4]); assert.deepEqual(M.B.thoracicPivot, [0, 0, -3.1]);
+  assert.deepEqual(M.TORSO_JOINTS, [15, 24]);
+  const q0 = M.neutral(), F0 = M.fk(q0).F;
+  const axisL = F => V.add(F.pelvis.o, M3.v(F.pelvis.R, V.add(M.B.lumbar, M.B.lumbarPivot)));
+  const axisT = F => V.add(F.lumbar.o, M3.v(F.lumbar.R, V.add(M.B.thoracic, M.B.thoracicPivot)));
+  nearV(F0.thorax.o, V.add(F0.pelvis.o, [0, M.B.lumbar[1] + M.B.thoracic[1], 0]), 1e-9, 'нейтральная поза: грудная клетка на месте');
+  for (const a of [[40, 0, 0], [-20, 0, 0], [0, 20, 0], [0, 0, 25]]) {
+    const q = M.neutral(); q.lumbar = a; q.thoracic = a;
+    nearV(axisL(M.fk(q).F), axisL(F0), 1e-9, `ось поясничного шарнира неподвижна (${a})`);
+    const r = M.neutral(); r.thoracic = a;
+    nearV(axisT(M.fk(r).F), axisT(F0), 1e-9, `ось грудопоясничного шарнира неподвижна (${a})`);
+  }
+  /* наклон вперёд: начало рамки грудной клетки (ось корпуса) лежит на 3,1 см впереди оси шарнира и при сгибании
+     опускается по дуге вокруг неё (при оси в центре корпуса оно оставалось на месте) */
+  const q = M.neutral(); q.thoracic = [30, 0, 0];
+  const F = M.fk(q).F, d = V.dist(F.thorax.o, axisT(F)), d0 = V.dist(F0.thorax.o, axisT(F0));
+  near(d, d0, 1e-9, 'расстояние от оси до начала рамки сохраняется');
+  near(F.thorax.o[1] - F0.thorax.o[1], -3.1 * Math.sin(30 * Math.PI / 180), 1e-6, 'начало рамки опускается');
+});
+
+test('позвонки L5–L1 делят поворот грудного шарнира по уровням, как MyoSim', () => {
+  /* связи суставов поясницы MyoBack (myotorso_assets.xml): доли уровней L4/L5…L1/L2 от поворота выше L5/S1 —
+     сгибание 0,185 : 0,204 : 0,231 : 0,255, наклон 0,1811 : 0,2453 : 0,2501 : 0,188, поворот 0,03778 : 0,03778 : 0,03111 : 0,02889 */
+  const cum = r => { const s = r.reduce((a, b) => a + b), out = []; let acc = 0; for (const x of r.slice(0, 3)) out.push((acc += x) / s); return out; };
+  const want = [cum([.185, .204, .231, .255]), cum([.1811, .2453, .2501, .188]), cum([.03778, .03778, .03111, .02889])];
+  M.VERT_SHARE.forEach((row, i) => row.forEach((v, k) => near(v, want[k][i], .002, `доля у позвонка ${['L4', 'L3', 'L2'][i]}, ось ${k}`)));
+  const R0 = M.catalogPose(M.neutral());
+  for (const h of [16.39, 20.02, 23.28, 26.15, 29.17]) nearV(M.vertebraFrame(R0, h).c, M.spineFrame(R0, h).c, 1e-9, `нейтральная поза: позвонок на ${h}`);
+  const q = M.neutral(); q.lumbar = [10, 0, 0]; q.thoracic = [40, 0, 0];
+  const R = M.catalogPose(q), T = R.frames.thorax, L = R.frames.lumbar;
+  const ang = (a, b) => Math.acos(Math.max(-1, Math.min(1, V.dot(a, b)))) * 180 / Math.PI;
+  near(ang(M.vertebraFrame(R, 16.39).y, L.y), 0, 1e-6, 'L5 — с поясничной рамкой');
+  near(ang(M.vertebraFrame(R, 23.28).y, L.y), 40 * M.VERT_SHARE[1][0], 1e-6, 'L3 — доля сгибания');
+  nearV(M.vertebraFrame(R, 29.17).c, V.add(T.o, T.y, 29.17 - 24), 1e-9, 'L1 — с грудной рамкой');
+});
+
+test('кожа корпуса в глубоком скручивании и повороте не складывается, расстояние до кожи совпадает с сеткой', () => {
+  /* самые глубокие позы каталога: скручивания на блоке (поясница 36°, грудной шарнир 34°) и «велосипед» (поворот 32°) */
+  const crunch = M.neutral(); crunch.lumbar = [36, 0, 0]; crunch.thoracic = [34, 0, 0];
+  const twist = M.neutral(); twist.lumbar = [10, 0, 6]; twist.thoracic = [27, 0, 32];
+  for (const [name, q] of [['скручивание', crunch], ['поворот', twist]]) {
+    const R = M.catalogPose(q), cache = M.torsoCache(R);
+    let step = Infinity, sdf = 0;
+    for (const side of ['L', 'R']) for (let a = 0; a <= Math.PI + 1e-9; a += Math.PI / 16) {
+      let prev = null;
+      for (let h = -1; h <= 36; h += .25) {
+        const p = M.torsoPoint(R, h, side, a), f = M.torsoFrame(R, h), k = f.front ? M.frontK(a) : 0, y = V.unit(V.mix(f.y, (f.front || f).y, k));
+        if (prev) step = Math.min(step, V.dot(V.sub(p, prev), y) / .25);
+        sdf = Math.max(sdf, Math.abs(M.torsoSDF(R, p, cache))); prev = p;
+      }
+    }
+    assert.ok(step > .15, `${name}: кожа сжата до ${step.toFixed(2)} (складка)`);
+    assert.ok(sdf < .7, `${name}: расстояние до кожи у точки кожи ${sdf.toFixed(2)} см`);
+  }
+});

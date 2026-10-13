@@ -310,7 +310,7 @@ module.exports = {
         }
         return q;
       };
-      const elbowOf = q => { const f = C.fk(q); return V.add(V.add(f.P.ghL, [0, -1, 0], 27), [-1, 0, 0], 6); };
+      const elbowOf = q => { const f = C.fk(q); return V.add(V.add(f.P.ghL, [0, -1, 0], 27), [-1, 0, 0], 7.5); };
       const along = q => { const f = C.fk(q), a = f.P.hipL, b = f.P.knL, ab = V.sub(b, a); return V.dot(V.sub(elbowOf(q), a), ab) / V.dot(ab, ab); };
       const lean = C.solve1D(l => along(seat(l)) - .8, 15, 60);
       const q = seat(lean);
