@@ -6761,7 +6761,7 @@ const Muscles = (() => {
     const bone = k => { const i = idx.get(k[0] + '|' + k[1]); if (i === undefined) throw Error('muscles: no bone ' + k.join(' ')); return i; };
     const pt = s => ({ i: bone(s.bone), p: s.p });
     return md.muscles.map(mu => ({
-      name: mu.name, side: mu.side, fmax: mu.fmax, L0: mu.L0, LT: mu.LT, group: mu.group, part: mu.part,
+      name: mu.name, side: mu.side, group: mu.group, part: mu.part, v: mu.v, t0: mu.t0, t1: mu.t1, l0: mu.l0, sk: mu.sk, x0: mu.x0,
       el: mu.el.map(e => e.s ? { s: pt(e.s) } : { w: { t: e.w.t, i: bone(e.w.bone), c: e.w.c, a: e.w.a, r: e.w.r, B: e.w.B, side: e.w.side ? pt(e.w.side) : null } })
     }));
   }
@@ -6797,6 +6797,156 @@ const Muscles = (() => {
     });
   }
   function layout(bound, m, step = Infinity) { return bound.map(mu => path(place(mu, m), step)); }
+  /* путь для рисования тела мышцы: у мышц с широким мясистым началом вдоль кости — продлён до начала брюшка x0
+     (точка в рамке первой кости пути, tools/muscles/volumes.js, ORIGIN); длина и сухожилия (body) — по нему же */
+  function drawn(mu, m, step = Infinity) {
+    const p = path(place(mu, m), step);
+    if (!mu.x0) return p;
+    const a = apply(m, mu.el[0].s.i, mu.x0);
+    return { length: p.length + dist3(a, p.points[0]), points: [a, ...p.points] };
+  }
+  function layoutDrawn(bound, m, step = Infinity) { return bound.map(mu => drawn(mu, m, step)); }
+
+  /* ---------- толщина (этап М2) ----------
+     У мышцы — объём брюшка v (см³), длины сухожилий в начале и в конце пути t0, t1 и длина пути l0 в нейтральной позе
+     (см; tools/muscles/volumes.js).
+     Сухожилия не растягиваются: брюшко — остальная длина пути L, его средняя площадь сечения — v / длина брюшка, так что
+     при укорочении мышца утолщается, при растяжении — истончается (объём мышцы постоянен). Вдоль брюшка сечение —
+     веретено: площадь ∝ sin^SPINDLE(πu), u — доля длины брюшка; наибольшая — в 1/SPINDLE_I ≈ 1,2 раза больше средней.
+     Если путь короче сухожилий и 40 % брюшка нейтральной позы (крайнее растяжение суставов в модели не бывает, но
+     укорочение — бывает), сухожилия укорачиваются вместе с брюшком. Сухожилие — четверть радиуса брюшка, 1,2–5 мм. */
+  const SKIN_U = [.1, .3, .5, .7, .9];   /* доли брюшка, где записана кожа над ним (sk) */
+  const SPINDLE = .6, SPINDLE_I = (() => { let s = 0; const n = 400; for (let i = 0; i < n; i++) s += Math.pow(Math.sin(Math.PI * (i + .5) / n), SPINDLE); return s / n; })();
+  function body(mu, L) {
+    let t0 = mu.t0, t1 = mu.t1, lb = L - t0 - t1;
+    const min = .4 * Math.max(.5, mu.l0 - t0 - t1);
+    if (lb < min) { const k = Math.max(0, (L - min) / Math.max(1e-6, t0 + t1)); t0 *= k; t1 *= k; lb = Math.max(1e-3, L - t0 - t1); }
+    const area = mu.v / lb, rt = Math.min(.5, Math.max(.12, .25 * Math.sqrt(area / Math.PI)));
+    return { t0, lb, area, rt, L };
+  }
+  /* кожа над брюшком в точке s пути: глубина d (см) и направление к коже o (каталог, единичный) — по записям sk
+     (нейтральная поза), линейно между ними. Направление записано в рамке кости: у первой половины брюшка — кости начала
+     пути, у второй — конца; m — матрицы костей кадра (Skeleton.frames) */
+  function skinAt(mu, b, s, m) {
+    const sk = mu.sk; if (!sk) return null;
+    const u = (s - b.t0) / b.lb, n = SKIN_U.length;
+    let k = 0; while (k < n - 2 && u > SKIN_U[k + 1]) k++;
+    const w = Math.max(0, Math.min(1, (u - SKIN_U[k]) / (SKIN_U[k + 1] - SKIN_U[k]))), A = sk[k], C = sk[k + 1];
+    /* направления двух соседних записей — линейной частью матриц их костей; без промежуточных массивов (кадр — сотни колец) */
+    const ia = (SKIN_U[k] < .5 ? mu.el[0].s.i : mu.el[mu.el.length - 1].s.i) * 12, ic = (SKIN_U[k + 1] < .5 ? mu.el[0].s.i : mu.el[mu.el.length - 1].s.i) * 12;
+    const ax = m[ia] * A[1] + m[ia + 1] * A[2] + m[ia + 2] * A[3], ay = m[ia + 4] * A[1] + m[ia + 5] * A[2] + m[ia + 6] * A[3], az = m[ia + 8] * A[1] + m[ia + 9] * A[2] + m[ia + 10] * A[3];
+    const cx = m[ic] * C[1] + m[ic + 1] * C[2] + m[ic + 2] * C[3], cy = m[ic + 4] * C[1] + m[ic + 5] * C[2] + m[ic + 6] * C[3], cz = m[ic + 8] * C[1] + m[ic + 9] * C[2] + m[ic + 10] * C[3];
+    let ox = ax + (cx - ax) * w, oy = ay + (cy - ay) * w, oz = az + (cz - az) * w; const ol = Math.sqrt(ox * ox + oy * oy + oz * oz) || 1;
+    SK.o[0] = ox / ol; SK.o[1] = oy / ol; SK.o[2] = oz / ol;
+    SK.d = A[0] + (C[0] - A[0]) * w; SK.rho = (A[4] || 200) + ((C[4] || 200) - (A[4] || 200)) * w;
+    return SK;
+  }
+  /* результат skinAt — один объект на модуль (перезаписывается при каждом вызове) */
+  const SK = { d: 0, o: [0, 0, 0], rho: 200 };
+  /* Сечение у кожи: круг радиуса r, если до кожи (за вычетом подкожного слоя SKIN_GAP) хватает места; иначе мышца
+     сплющивается вдоль кожи — эллипс с полуосями ao (к коже) и aw (вдоль кожи), площадь та же (ao · aw = r²), но не
+     тоньше FLAT · r: остаток — сдвигом центра вглубь (shift, см). Так широкие поверхностные мышцы (широкая бедра,
+     дельтовидная, большая ягодичная) лежат пластом под кожей, а не выпирают из неё. */
+  const SKIN_GAP = .4, FLAT = .4;
+  function section(r, sk) {
+    if (!sk) { SEC1.ao = SEC1.aw = r; SEC1.shift = 0; return SEC1; }
+    const room = sk.d - SKIN_GAP, ao = Math.min(r, Math.max(FLAT * r, room));
+    SEC1.ao = ao; SEC1.aw = r * r / ao; SEC1.shift = Math.max(0, ao - room);
+    return SEC1;
+  }
+  const SEC1 = { ao: 0, aw: 0, shift: 0 };
+  /* ---------- поверхность тела мышцы ----------
+     Кольца по SIDES вершин через равные доли длины пути для рисования (drawn); число колец — по длине пути в нейтральной
+     позе (ringCount), так что сетка всех мышц не меняет топологию от кадра к кадру. Сечение — section(); его ось
+     переносится от середины мышцы к концам без закрутки (проекция на плоскость следующего кольца) и понемногу (STEER)
+     подтягивается к направлению на кожу — иначе сплющенная мышца перекручивалась. Ось — прямая, а не направление: цель
+     берётся тем знаком, что ближе к текущей (путь над гребнем кожи — у шеи, над лопаткой — меняет сторону, к которой ближе
+     кожа). Сдвиг вглубь — по настоящему направлению от кожи; сечение изгибается вдоль кожи по её кривизне (ρ из sk).
+     Здесь Math.sqrt вместо Math.hypot: hypot в V8 в разы медленнее, а кадр — около 40 тысяч вершин.
+     Кожа — нейтральной позы, в рамках костей: глубину по позе пробовали (Mannequin.skinDistance в трёх точках брюшка) —
+     выход из кожи у плеча не уменьшился (кожа там уходит вбок, а сечение сплющивается к ней), а кадр дорожал на 10 мс.
+     Координаты — каталога (см, Y вниз). */
+  const RING = 2.5, SIDES = 8, MAX_RINGS = 40, STEER = .25;
+  const COS = Array.from({ length: SIDES }, (_, j) => Math.cos(2 * Math.PI * j / SIDES)), SIN = Array.from({ length: SIDES }, (_, j) => Math.sin(2 * Math.PI * j / SIDES));
+  const ringCount = mu => Math.max(6, Math.min(MAX_RINGS, Math.ceil((mu.l0 || 10) / RING) + 1));
+  const RB = new Float64Array(MAX_RINGS * 9);
+  /* курсор по ломаной: точка на длине s (s не убывает между вызовами) — в out[o..o+2] */
+  function cursor(pts, cum) {
+    let a = 1;
+    return (s, out, o) => {
+      while (a < pts.length - 1 && cum[a] < s) a++;
+      const A = pts[a - 1], B = pts[a], d = cum[a] - cum[a - 1], u = d > 0 ? Math.min(1, Math.max(0, (s - cum[a - 1]) / d)) : 0;
+      out[o] = A[0] + (B[0] - A[0]) * u; out[o + 1] = A[1] + (B[1] - A[1]) * u; out[o + 2] = A[2] + (B[2] - A[2]) * u;
+    };
+  }
+  const T3 = new Float64Array(9);
+  /* вершины и нормали тела мышцы mu по пути для рисования p (drawn) в кадре с матрицами костей m: в pos/nor с вершины v0 */
+  function surface(mu, p, m, pos, nor, v0 = 0) {
+    const pts = p.points, L = p.length, b = body(mu, L), n = ringCount(mu);
+    const cum = new Float64Array(pts.length); for (let a = 1; a < pts.length; a++) cum[a] = cum[a - 1] + dist3(pts[a], pts[a - 1]);
+    const scale = cum[pts.length - 1] > 1e-9 ? L / cum[pts.length - 1] : 1;
+    const atP = cursor(pts, cum), atA = cursor(pts, cum), atB = cursor(pts, cum);
+    for (let r = 0; r < n; r++) {
+      const s = L * r / (n - 1), q = r * 9;
+      atP(s / scale, RB, q);
+      /* касательная — по точкам ±RING/2 (сглажена на изломах ломаной) */
+      atA(Math.max(0, s - RING * .5) / scale, T3, 0); atB(Math.min(L, s + RING * .5) / scale, T3, 3);
+      let tx = T3[3] - T3[0], ty = T3[4] - T3[1], tz = T3[5] - T3[2], tl = Math.sqrt(tx * tx + ty * ty + tz * tz);
+      if (tl < 1e-9) { const k = Math.min(pts.length - 1, 1); tx = pts[k][0] - pts[0][0]; ty = pts[k][1] - pts[0][1]; tz = pts[k][2] - pts[0][2]; tl = Math.sqrt(tx * tx + ty * ty + tz * tz) || 1; }
+      RB[q + 3] = tx / tl; RB[q + 4] = ty / tl; RB[q + 5] = tz / tl;
+      const sk = skinAt(mu, b, s, m), sec = section(radiusAt(b, s), sk);
+      /* в ячейках кольца: 0–2 центр, 3–5 касательная, 6–8 направление на кожу; сечение — отдельно */
+      if (sk) { RB[q + 6] = sk.o[0]; RB[q + 7] = sk.o[1]; RB[q + 8] = sk.o[2]; } else RB[q + 6] = RB[q + 7] = RB[q + 8] = 0;
+      SEC[r * 3] = sec.ao; SEC[r * 3 + 1] = sec.aw; SEC[r * 3 + 2] = sec.shift;
+      /* расстояние от центра сечения до центра кривизны кожи: сечение изгибается вдоль кожи (у круглого бедра и плеча
+         плоская пластина выходила бы краями из кожи) */
+      BEND[r] = sk ? Math.max(.5, sk.rho - sk.d - sec.shift) : 1e6;
+    }
+    const mid = n >> 1;
+    let ox = 0, oy = 0, oz = 0;
+    for (const dir of [1, -1]) for (let r = mid; r >= 0 && r < n; r += dir) {
+      const q = r * 9, tx = RB[q + 3], ty = RB[q + 4], tz = RB[q + 5], gx0 = RB[q + 6], gy0 = RB[q + 7], gz0 = RB[q + 8];
+      if (r === mid) { ox = gx0; oy = gy0; oz = gz0; if (ox * ox + oy * oy + oz * oz < 1e-8) { ox = ty; oy = tz; oz = tx; } }
+      else {
+        ox = OW[(r - dir) * 3]; oy = OW[(r - dir) * 3 + 1]; oz = OW[(r - dir) * 3 + 2];
+        const gd = gx0 * tx + gy0 * ty + gz0 * tz; let gx = gx0 - gd * tx, gy = gy0 - gd * ty, gz = gz0 - gd * tz; const gl = Math.sqrt(gx * gx + gy * gy + gz * gz);
+        if (gl > 1e-4) { const sg = (gx * ox + gy * oy + gz * oz) < 0 ? -1 / gl : 1 / gl; ox += (gx * sg - ox) * STEER; oy += (gy * sg - oy) * STEER; oz += (gz * sg - oz) * STEER; }
+      }
+      const od = ox * tx + oy * ty + oz * tz; ox -= od * tx; oy -= od * ty; oz -= od * tz;
+      let ol = Math.sqrt(ox * ox + oy * oy + oz * oz);
+      if (ol < 1e-6) { /* любой перпендикуляр к касательной */ if (Math.abs(tx) < .9) { ox = 0; oy = tz; oz = -ty; } else { ox = -tz; oy = 0; oz = tx; } ol = Math.sqrt(ox * ox + oy * oy + oz * oz); }
+      ox /= ol; oy /= ol; oz /= ol;
+      OW[r * 3] = ox; OW[r * 3 + 1] = oy; OW[r * 3 + 2] = oz;
+      if (dir === -1 && r === mid) continue;
+      /* w = o × t: в каталоге (Y вниз) это левая тройка; в сцене (Y вверх) кольцо идёт от o к w против часовой снаружи */
+      let wx = oy * tz - oz * ty, wy = oz * tx - ox * tz, wz = ox * ty - oy * tx; const wl = Math.sqrt(wx * wx + wy * wy + wz * wz) || 1; wx /= wl; wy /= wl; wz /= wl;
+      const gd = gx0 * tx + gy0 * ty + gz0 * tz, gx = gx0 - gd * tx, gy = gy0 - gd * ty, gz = gz0 - gd * tz, sh = SEC[r * 3 + 2] / (Math.sqrt(gx * gx + gy * gy + gz * gz) || 1);
+      const cx = RB[q] - gx * sh, cy = RB[q + 1] - gy * sh, cz = RB[q + 2] - gz * sh, ao = SEC[r * 3], aw = SEC[r * 3 + 1];
+      /* центр кривизны — вглубь по оси сечения на rc; вершина эллипса (co, si) — на окружности радиуса rc + co под углом si / rc */
+      const rc = BEND[r], kx = cx - ox * rc, ky = cy - oy * rc, kz = cz - oz * rc;
+      for (let j = 0; j < SIDES; j++) {
+        const v = (v0 + r * SIDES + j) * 3, co = COS[j] * ao, si = SIN[j] * aw, th = Math.max(-BEND_MAX, Math.min(BEND_MAX, si / rc)), t2 = th * th;
+        /* малые углы — рядом Тейлора (ошибка < 10⁻⁵ при |θ| < 0,3): у большинства колец кожа почти плоская */
+        const ct = t2 < .09 ? 1 - t2 * (.5 - t2 / 24) : Math.cos(th), st = t2 < .09 ? th * (1 - t2 * (1 / 6 - t2 / 120)) : Math.sin(th);
+        const rr = rc + co, ux = ox * ct + wx * st, uy = oy * ct + wy * st, uz = oz * ct + wz * st;
+        pos[v] = kx + ux * rr; pos[v + 1] = ky + uy * rr; pos[v + 2] = kz + uz * rr;
+        if (nor) {
+          /* нормаль эллипса (cos/ao, sin/aw) в осях (o, w), повёрнутая на тот же угол */
+          const a1 = COS[j] / ao, a2 = SIN[j] / aw, n1 = a1 * ct - a2 * st, n2 = a1 * st + a2 * ct;
+          const nx = ox * n1 + wx * n2, ny = oy * n1 + wy * n2, nz = oz * n1 + wz * n2, nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+          nor[v] = nx / nl; nor[v + 1] = ny / nl; nor[v + 2] = nz / nl;
+        }
+      }
+    }
+    return n;
+  }
+  const SEC = new Float64Array(MAX_RINGS * 3), OW = new Float64Array(MAX_RINGS * 3), BEND = new Float64Array(MAX_RINGS), BEND_MAX = 1.3;
+  /* радиус сечения на расстоянии s от начала пути (см) */
+  function radiusAt(b, s) {
+    const u = (s - b.t0) / b.lb;
+    if (u <= 0 || u >= 1) return b.rt;
+    return Math.max(b.rt, Math.sqrt(b.area * Math.pow(Math.sin(Math.PI * u), SPINDLE) / SPINDLE_I / Math.PI));
+  }
 
   /* ---------- данные ----------
      src/data/muscles.bin (tools/muscles/pack.js): gzip от JSON. Грузится при первом включении режима «Анатомия мышц»;
@@ -6822,7 +6972,7 @@ const Muscles = (() => {
     pending = bytes.then(gunzip).then(decode).then(d => (data = d)).catch(e => { pending = null; throw e; });
     return pending;
   }
-  return { path, wrap, bind, place, layout, load, decode, get data() { return data; }, set data(d) { data = d; } };
+  return { path, wrap, bind, place, layout, drawn, layoutDrawn, body, radiusAt, skinAt, section, surface, ringCount, SIDES, SKIN_U, SKIN_GAP, FLAT, SPINDLE, SPINDLE_I, load, decode, get data() { return data; }, set data(d) { data = d; } };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = Muscles;
 if (typeof window !== 'undefined') window.Muscles = Muscles;
@@ -9641,9 +9791,9 @@ function applySkeleton(F=detailMotion){
     for(const f of list)f.setSkeleton?.(d);say(SKELETON_CREDIT);
   },()=>{box.removeAttribute('aria-busy');box.checked=false;motionPrefs.skeleton=false;saveMotionPrefs();say('Could not load the bones. Check your connection and turn it on again.');});
 }
-/* Режим «Анатомия мышц»: линии мышц на костях внутри полупрозрачной кожи, мышцы упражнения выделены цветом. Данные мышц
-   (≈20 КБ) и костей грузятся при первом включении; кости при этом показываются только вместе со «Скелетом». */
-const ANATOMY_CREDIT='Muscles are lines of action from open models: MyoSim (Apache 2.0; legs — Rajagopal et al., 2016; arm — Holzbaur et al., 2005; lower back — MyoBack, Walia et al., 2025) and DAS3 (Apache 2.0; shoulder-blade muscles — Chadwick et al., 2014). The exercise\'s muscles are coloured: brighter and thicker — primary, paler — secondary. A line shows the muscle\'s path from origin to insertion, not its thickness.';
+/* Режим «Анатомия мышц»: мышцы объёмом (толщина — по объёму на МРТ) на костях внутри полупрозрачной кожи, мышцы упражнения
+   выделены цветом. Данные мышц (≈38 КБ) и костей грузятся при первом включении; кости при этом показываются только вместе со «Скелетом». */
+const ANATOMY_CREDIT='Muscles from open models: paths — MyoSim (Apache 2.0; legs — Rajagopal et al., 2016; arm — Holzbaur et al., 2005; lower back — MyoBack, Walia et al., 2025) and DAS3 (Apache 2.0; shoulder-blade muscles — Chadwick et al., 2014); volume — from MRI of 49 men (Riem et al., 2026), scaled to the figure\'s height and weight. A shortening muscle gets thicker: its volume stays the same. The exercise\'s muscles are coloured: primary — brighter, secondary — paler.';
 function anatomyLevel(ex){const level={};ex.pri.forEach(m=>level[m]=1);ex.sec.forEach(m=>{if(!level[m])level[m]=.38;});return level;}
 function applyAnatomy(F=detailMotion){
   const box=$('#mv-anatomy'),note=$('#mv-anatomy-note');if(!box)return;
@@ -11536,4 +11686,4 @@ logInit();
 plural = (n, a, b, c) => n === 1 ? a : c;
 DEC = '.';
 
-window.PODHOD_VERSION='4.26.0';window.PODHOD_BUILD='4.26.0-fd4f22489b54';window.PODHOD_LANG='en';
+window.PODHOD_VERSION='4.27.0';window.PODHOD_BUILD='4.27.0-b4182881c87b';window.PODHOD_LANG='en';

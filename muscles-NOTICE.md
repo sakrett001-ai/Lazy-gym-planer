@@ -1,7 +1,8 @@
 # Мышцы манекена: MyoSim и DAS3
 
 `src/data/muscles.bin` — производные данные: пути мышц (точки начала, промежуточные точки, прикрепления и огибающие
-тела), пересчитанные в рамки костей скелета манекена Lazy Gym Planner (`tools/muscles/`).
+тела), пересчитанные в рамки костей скелета манекена Lazy Gym Planner, и объёмы мышц с длинами сухожилий
+(`tools/muscles/`).
 
 ## MyoSim — ноги, таз, туловище, рука
 
@@ -27,3 +28,24 @@ and arm dynamics. IEEE Transactions on Biomedical Engineering, 2014, 61(7): 1947
 (у DAS3 начала на остистых отростках лежат в 3–4,4 см позади позвонков её же сетки), поставлены на поверхность кости;
 начало верхних пучков трапециевидной и поднимающей лопатку отнесены к черепу и шейному отделу по анатомии.
 Эллипсоид огибается приближённо — как единичная сфера в своих осях.
+
+## Объём мышц
+
+Объём каждой мышцы — из опубликованной таблицы МРТ (средние у 49 мужчин), пересчитанный на рост и массу манекена:
+Riem L., Pinette M., DuCharme O. и др., Blemker S. S. Big bones mean big muscles: an MRI-based dataset of
+muscle-bone-body size relationships across 70 human muscles of the upper limb, trunk, and lower limb. Journal of Applied
+Physiology, 2026, 140: 1–19. doi:10.1152/japplphysiol.00772.2025 (таблица 3).
+
+Доли длины мышц ног — по препаратам: Ward S. R., Eng C. M., Smallwood L. H., Lieber R. L. Are current measurements of
+lower extremity muscle architecture accurate? Clinical Orthopaedics and Related Research, 2009, 467: 1074–1082.
+doi:10.1007/s11999-008-0594-8 (таблица 3).
+
+Деление объёма между пучками одной мышцы — по числовым параметрам исходных моделей OpenSim (сила, длина волокон;
+файлы моделей не входят ни в репозиторий, ни в сборку, параметры — `tools/muscles/fixtures/params.json`):
+- ноги — Rajagopal и др., 2016 (выше), файл Models/Rajagopal/Rajagopal2016.osim из opensim-org/opensim-models,
+  коммит d9b05d4 (исходное распространение — https://simtk.org/projects/full_body);
+- рука — MoBL-ARMS: Holzbaur и др., 2005; Saul K. R., Hu X., Goehler C. M. и др. Benchmarking of dynamic simulation
+  predictions in two software platforms using an upper limb musculoskeletal model. Computer Methods in Biomechanics and
+  Biomedical Engineering, 2015, 18(13): 1445–1458. doi:10.1080/10255842.2014.916698 — копия MoBL_ARMS_J.osim из
+  stanfordnmbl/osim-rl (коммит 610b95c, лицензия MIT);
+- плечевой пояс — DAS3 (выше).
