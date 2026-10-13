@@ -303,6 +303,9 @@ function setupMotionViewer() {
   for(const prefix of ['mv','wv'])$('#'+prefix+'-region').addEventListener('change',e=>selectMuscleRegion(prefix,e.target.value));
   $('#motion-view').addEventListener('cancel',e=>{e.preventDefault();closeMotion();});
   $('#motion-view').addEventListener('close',()=>{disposeMotion(detailMotion);detailMotion=null;closeGallery();document.documentElement.classList.remove('motion-open');});
+  /* объёмная графика грузится после первого экрана (build.js): если разбор или тренировка открыты раньше, показывается
+     плоская схема, а с приходом объёма та же фаза перерисовывается в нём */
+  window.addEventListener('gym-volume',()=>{if(detailMotion&&!gallery.on)mountDetailCameras();if(workout?.motion&&$('#workout-view').open)mountWorkoutCameras();});
   $('#motion-view').addEventListener('keydown',e=>{if(e.code==='Space'&&!['INPUT','SELECT','BUTTON','TEXTAREA'].includes(e.target.tagName)){e.preventDefault();if(detailMotion){detailMotion.paused=!detailMotion.paused;paintMotion(detailMotion,true);}}});
 }
 

@@ -11,10 +11,19 @@ for(const lang of ['ru','en']){
  for(const node of d.querySelectorAll('script[src],link[rel=stylesheet],link[rel=manifest],link[rel=icon],link[rel=apple-touch-icon]'))assert(cached.has(new URL(node.getAttribute('src')||node.getAttribute('href'),base).href),'Offline shell misses a rendered asset');
  w.requestAnimationFrame=()=>0;w.cancelAnimationFrame=()=>{};w.HTMLElement.prototype.scrollIntoView=function(){};
  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'));};
- w.eval(fs.readFileSync(path.join(root,'dist/volume.js'),'utf8'));
+ /* объёмная графика не задерживает первый экран: её подгружает встроенный загрузчик после load, из кеша оболочки */
+ assert(!d.querySelector('script[src*="volume.js"]'),'3D engine must not block the first screen');
+ const volumeSrc=[...d.querySelectorAll('script:not([src])')].map(s=>s.textContent).join('\n').match(/s\.src='([^']*volume\.js[^']*)'/)?.[1];
+ assert(volumeSrc&&cached.has(new URL(volumeSrc,base).href),'3D engine loader points to a cached asset');
  w.eval(fs.readFileSync(path.join(dir,'app.js'),'utf8')+'\nwindow.qaCatalog={EX,openMotionItem,previewItem,closeMotion,motionPrefs,getMotion:()=>detailMotion,startWorkout,closeWorkout,getWorkout:()=>workout};');
  const q=w.qaCatalog;assert.equal(q.EX.length,146);assert.equal(d.querySelectorAll('#mv-exercise option').length,146);
  console.log('  Application booted');
+ /* разбор открыт раньше, чем пришёл объём: плоская схема, затем объём в той же фазе */
+ q.openMotionItem(q.previewItem('bbbench'));assert(!d.querySelector('#mv-stage .volume-figure')&&d.querySelector('#mv-stage svg path'),'flat figure before the 3D engine arrives');
+ const early=d.getElementById('mv-progress');early.value='300';early.dispatchEvent(new w.Event('input'));const earlyClock=q.getMotion().clock;
+ w.eval(fs.readFileSync(path.join(root,'dist/volume.js'),'utf8'));w.dispatchEvent(new w.Event('gym-volume'));
+ assert(d.querySelector('#mv-stage .volume-figure svg path'),'3D engine replaces the flat figure');assert.equal(q.getMotion().clock,earlyClock);q.closeMotion();
+ console.log('  3D engine arrived after the first screen');
  q.openMotionItem(q.previewItem('bbbench'));assert(d.querySelector('#mv-stage .volume-figure svg path'));assert.equal(d.querySelector('#mv-stage .volume-figure').dataset.camera,'above');
  const slider=d.getElementById('mv-progress');slider.value='470';slider.dispatchEvent(new w.Event('input'));const clock=q.getMotion().clock,pose=d.querySelector('#mv-stage .volume-figure').dataset.pose;
  d.querySelector('#mv-cameras [data-motion-camera=side]').click();assert.equal(q.getMotion().clock,clock);assert.equal(d.querySelector('#mv-stage .volume-figure').dataset.pose,pose);
