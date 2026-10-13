@@ -319,9 +319,12 @@ function buildSpatialFigure(anim,opts={}){
  /* Рамка кадра (viewBox, пол, след хвата) по 41 положению. Считается один раз на упражнение, ракурс, пропорцию
     и набор видимого инвентаря и запоминается (SPATIAL_FRAMES, между запусками — в localStorage по хэшу сборки).
     opts.frameOnly: только рамка, по частям — figureFrameJob() досчитывает её в простое, пока карточка не на экране. */
- const frameKey=anim.catalogId?[anim.catalogId,camera,opts.ratio||1.15,anim.noGround?1:0,anim.rig3d(0).props.map(q=>GymEquipment.visible(q,opts.has)?1:0).join('')].join('|'):null;
+ /* opts.still — неподвижная миниатюра (витрина атласа): рамка по показанной позе, а не по 41 фазе, и без стрелок
+    векторов. Миниатюра строится в 4–5 раз быстрее; пол — тот же, по всему движению. */
+ const still=!!(opts.still&&anim.catalogId);
+ const frameKey=anim.catalogId?[anim.catalogId,camera,opts.ratio||1.15,anim.noGround?1:0,anim.rig3d(0).props.map(q=>GymEquipment.visible(q,opts.has)?1:0).join(''),...(still?['still'+(opts.t||0)]:[])].join('|'):null;
  let framed=frameKey?spatialFrameGet(frameKey):null,frameNext=0;
- const setVectors=anim.catalogId?catalogVectorGroup(svg,anim,camera):vectorGroup(svg,anim,camera);
+ const setVectors=still?Object.assign(()=>{},{bounds:null,at(){}}):anim.catalogId?catalogVectorGroup(svg,anim,camera):vectorGroup(svg,anim,camera);
  function frameSample(){const{R}=compile(frameNext/40,0,false);tracePts.push(project(R.gripL));frameNext++;}
  function frameFinish(){
   if(setVectors.bounds)allBounds.push(...setVectors.bounds);
@@ -345,7 +348,7 @@ function buildSpatialFigure(anim,opts={}){
   return framed;
  }
  if(opts.frameOnly)return{key:frameKey,done:!!framed,step(n=1){if(this.done)return true;for(let k=0;k<n&&frameNext<=40;k++)frameSample();if(frameNext>40){frameFinish();this.done=true;}return this.done;}};
- if(!framed){while(frameNext<=40)frameSample();frameFinish();}
+ if(!framed){if(still)compile(opts.t||0,0,false);else while(frameNext<=40)frameSample();frameFinish();}
  svg.setAttribute('viewBox',framed.viewBox);
  if(!anim.noGround){
   const floorCorners=framed.floor;

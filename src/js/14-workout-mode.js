@@ -171,11 +171,30 @@ function mountDetailCameras(){
  $('#mv-dual').checked=!!motionPrefs.dual;$('#mv-second').hidden=!pair;$('#mv-projections').classList.toggle('is-dual',pair);
  F.extra=null;
  if(pair){
-  const preferred=motionProfile(a)?.pair,other=preferred!==key&&cameras.includes(preferred)?preferred:cameras.find(c=>c!==key);F.extra=make(other);$('#mv-second-stage').replaceChildren(F.extra.svg);
+  const other=pairCamera(a,key);F.extra=make(other);$('#mv-second-stage').replaceChildren(F.extra.svg);
   $('#mv-second-label').textContent=CAMERA3[other].label;$('#mv-second-hint').textContent=a.cameraHints?.[other]||'';
  }else $('#mv-second-stage').replaceChildren();
  configureMusclePanel('mv',F.it);configureStressPanel('mv',F);applySkeleton(F);paintMotion(F,true);
 }
+/* второй ракурс пары: из профиля мышц упражнения, иначе первый другой */
+function pairCamera(a,key){const cameras=a.catalogCameras||a.cameras||[],preferred=motionProfile(a)?.pair;return preferred!==key&&cameras.includes(preferred)?preferred:cameras.find(c=>c!==key);}
+/* Смена ракурса в разборе: объёмная фигура переключает камеру сама — без новой сцены и пересчёта позы (≈0,2 с на
+   компьютере, втрое дольше на слабом телефоне). Плоская запасная схема и смена числа видов пересобирают окно. */
+function switchDetailCamera(){
+ const F=detailMotion,a=F.it.ex.anim,key=motionCamera(F.it.ex),pair=(a.catalogCameras||a.cameras||[]).length>1&&!!motionPrefs.dual,other=pair?pairCamera(a,key):null;
+ if(!F.f?.setCamera||(pair?!F.extra?.setCamera:!!F.extra)||!F.f.setCamera(key)||(pair&&!F.extra.setCamera(other)))return mountDetailCameras();
+ pressCamera('#mv-cameras',key);
+ $('#mv-view').textContent=CAMERA3[key]?.label||F.it.ex.viewNote||(a.view==='front'?'Вид спереди':'Вид сбоку');
+ $('#mv-camera-hint').textContent=a.cameraHints?.[key]||'';
+ if(pair){$('#mv-second-label').textContent=CAMERA3[other].label;$('#mv-second-hint').textContent=a.cameraHints?.[other]||'';}
+}
+function switchWorkoutCamera(){
+ const F=workout.motion,ex=F.it.ex,key=motionCamera(ex);
+ if(!F.f?.setCamera||!F.f.setCamera(key))return mountWorkoutCameras();
+ pressCamera('#wv-cameras',key);$('#wv-angle').textContent=CAMERA3[key]?.label||(ex.anim.view==='front'?'Вид спереди':'Вид сбоку');
+}
+/* кнопки ракурсов не перерисовываются — фокус остаётся на нажатой */
+function pressCamera(sel,key){for(const b of $(sel).querySelectorAll('[data-motion-camera]'))b.setAttribute('aria-pressed',String(b.dataset.motionCamera===key));}
 function mountWorkoutCameras(){
  if(!workout?.motion)return;
  const F=workout.motion,ex=F.it.ex,key=motionCamera(ex),m=motionFrame(F);
@@ -184,7 +203,7 @@ function mountWorkoutCameras(){
  $('#wv-angle').textContent=CAMERA3[key]?.label||(ex.anim.view==='front'?'Вид спереди':'Вид сбоку');configureMusclePanel('wv',F.it);configureStressPanel('wv',F);paintWorkoutMotion();
 }
 function setupMotionCameras(){
- $('#mv-cameras').addEventListener('click',e=>{const b=e.target.closest('[data-motion-camera]');if(b&&detailMotion&&rememberCamera(detailMotion.it.ex,b.dataset.motionCamera))mountDetailCameras();});
- $('#wv-cameras').addEventListener('click',e=>{const b=e.target.closest('[data-motion-camera]');if(b&&workout?.motion&&rememberCamera(workout.motion.it.ex,b.dataset.motionCamera))mountWorkoutCameras();});
+ $('#mv-cameras').addEventListener('click',e=>{const b=e.target.closest('[data-motion-camera]');if(b&&detailMotion&&rememberCamera(detailMotion.it.ex,b.dataset.motionCamera))switchDetailCamera();});
+ $('#wv-cameras').addEventListener('click',e=>{const b=e.target.closest('[data-motion-camera]');if(b&&workout?.motion&&rememberCamera(workout.motion.it.ex,b.dataset.motionCamera))switchWorkoutCamera();});
  $('#mv-dual').addEventListener('change',e=>{motionPrefs.dual=e.target.checked;saveMotionPrefs();mountDetailCameras();});
 }
