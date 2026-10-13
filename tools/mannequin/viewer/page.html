@@ -97,14 +97,18 @@ details ul{margin:6px 0 0;padding-left:18px;font-size:12px;color:var(--muted)}
     <input id="phase" type="range" min="0" max="1000" value="0" aria-label="Фаза движения">
     <span class="tval" id="tval">t=0.00</span>
     <label><input id="joints" type="checkbox"> центры суставов</label>
+    <label><input id="bones" type="checkbox"> кости</label>
+    <label><input id="musc" type="checkbox"> мышцы</label>
     <span class="nav"><button id="prev" type="button" aria-label="Предыдущее упражнение">←</button><button id="next" type="button" aria-label="Следующее упражнение">→</button></span>
    </div>
    <div class="vars" id="vars"></div>
    <p class="phase" id="phaseText"></p>
+   <p class="phase" id="muscleInfo" hidden></p>
   </section>
   <aside class="side">
    <div class="panel"><h2>Проверка позы</h2><div id="issues"></div></div>
    <div class="panel"><h2>Углы в кадре</h2><table id="angles"></table></div>
+   <div class="panel" id="musclePanel" hidden><h2>Мышцы</h2><div id="muscleCheck"></div></div>
    <div class="panel"><h2>Было в 4.2.1</h2><div id="before"></div></div>
   </aside>
  </div>
@@ -119,6 +123,9 @@ const X=MannequinViewer,T=X.THREE,$=id=>document.getElementById(id),css=n=>getCo
 const canvas=$('cv'),renderer=new T.WebGLRenderer({canvas,antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
 const camera=new T.PerspectiveCamera(30,4/3,.05,60),controls=new X.OrbitControls(camera,canvas);controls.enableDamping=true;controls.dampingFactor=.12;
 let view=null,rig=null,cur=null,t=0,clock=0,playing=!matchMedia('(prefers-reduced-motion: reduce)').matches,joints=false,camKey='angle',center=new T.Vector3(),radius=2;
+/* кости и мышцы (режимы «Скелет» и «Анатомия мышц» приложения); мышцы упражнения — цветом нагрузки: основные ярче */
+const SKEL=Skeleton.decode(Uint8Array.from(atob(SKELETON_RAW),c=>c.charCodeAt(0)));let bonesOn=false,muscOn=false,level={};
+const heat=v=>v>=1?'#ea6a0e':'#f5b82e',opts=()=>({muscles:false,joints,color:muscOn?heat:()=>'#a7b3c6',skeleton:bonesOn?SKEL:null,anatomy:muscOn?{skeleton:SKEL,muscles:MUSCLES_RAW,level}:null});
 const CAMS=[['angle','Под углом',40,-22],['side','Сбоку',90,0],['front','Спереди',0,0],['back','Сзади',180,0],['above','Сверху',35,-55]];
 const sevPill=r=>{const e=r.issues.filter(i=>i.severity==='error').length,w=r.issues.length-e;return e?`<span class="pill bad">${e} ошиб.</span>`:w?`<span class="pill warn">${w} предупр.</span>`:'<span class="pill ok">чисто</span>';};
 const OPT={kb:'гиря',db:'гантели',bb:'штанга',incline:'наклонная скамья'};let filter='all',query='',has=new Set();
@@ -143,6 +150,9 @@ function select(id,keepVars){
  for(const b of $('list').querySelectorAll('button[data-id]')){const on=b.dataset.id===id;b.setAttribute('aria-pressed',String(on));if(on)b.scrollIntoView({block:'nearest'});}
  $('issues').innerHTML=cur.issues.length?`<ul class="issues">${cur.issues.map(i=>`<li><span class="pill ${i.severity==='error'?'bad':'warn'}">${i.severity==='error'?'ошибка':'предупр.'}</span><span>${i.detail}${i.depth!=null?` · ${i.depth} ${i.unit||'см'}`:''} · t=${i.t}</span></li>`).join('')}</ul>`:'<p class="empty">Нарушений нет ни в одном из 41 кадра.</p>';
  const pl=(n,a,b,c)=>{const m=n%10,h=n%100;return m===1&&h!==11?a:m>=2&&m<=4&&(h<12||h>14)?b:c;};const b=cur.before;$('before').innerHTML=`<p class="before">${b.errors.length?`<b>${b.errors.length}</b> ${pl(b.errors.length,'грубая ошибка','грубые ошибки','грубых ошибок')}`:'Грубых ошибок не было'}${b.warns?`, ${b.warns} ${pl(b.warns,'предупреждение','предупреждения','предупреждений')}`:''}.</p>`+(b.errors.length?`<details><summary>Что было не так</summary><ul>${b.errors.map(e=>`<li>${e}</li>`).join('')}</ul></details>`:'');
+ level={};for(const m of cur.pri||[])level[m]=1;for(const m of cur.sec||[])if(!level[m])level[m]=.38;
+ const mc=cur.muscleCheck;$('musclePanel').hidden=!mc;const cm=v=>v.toFixed(1).replace('.',',');
+ if(mc)$('muscleCheck').innerHTML=`<p class="before">Глубже всего в кости — ${cm(mc.bone)} см${mc.bone>.05?` (${mc.boneAt})`:''}; допуск 2 см.<br>Выше всего над кожей — ${mc.skin>0?`${cm(mc.skin)} см (${mc.skinAt})`:'нигде'}; допуск 2,2 см, у подмышечных складок — 3–4 см.</p><p class="empty">Проверка по позам t = 0; 0,5; 1. Нажмите на линию мышцы — появится её название.</p>`;
  const [c0,c1]=cur.cues||[];$('phaseText').textContent=cur.loop?`Цикл: t=0 и t=1 — одна и та же точка. ${c0||''}`:cur.eccFirst?`t=0 — исходное положение, t=1 — нижняя точка. ${c1||''}`:`t=0 — исходное положение, t=1 — конечная точка. ${c0||''}`;
  try{localStorage.setItem('mv.ex',id);}catch(e){}
 }
@@ -160,7 +170,7 @@ function frame(now){
  const dt=Math.min(.1,(now-prev)/1000);prev=now;
  if(playing&&!cur.hold){clock=(clock+dt/4)%1;if(cur.loop)t=clock;else{const q=clock<.5?clock*2:2-clock*2;t=.5-.5*Math.cos(Math.PI*q);}$('phase').value=String(Math.round(t*1000));}
  $('tval').textContent='t='+t.toFixed(2);
- const d=dataFor(t);view.apply(d,{muscles:false,joints,color:()=>'#a7b3c6'});controls.update();renderer.render(view.scene,camera);
+ const d=dataFor(t);view.apply(d,opts());controls.update();renderer.render(view.scene,camera);
  if(now-lastAngles>150){drawAngles(d.pose);lastAngles=now;}
  requestAnimationFrame(frame);
 }
@@ -174,6 +184,16 @@ $('cams').addEventListener('click',e=>{const b=e.target.closest('button[data-cam
 $('play').addEventListener('click',()=>{playing=!playing;$('play').textContent=playing?'Пауза':'Пуск';$('play').setAttribute('aria-pressed',String(playing));});
 $('phase').addEventListener('input',e=>{playing=false;$('play').textContent='Пуск';$('play').setAttribute('aria-pressed','false');t=+e.target.value/1000;clock=cur.loop?t:t/2;});
 $('joints').addEventListener('change',e=>{joints=e.target.checked;});
+$('bones').addEventListener('change',e=>{bonesOn=e.target.checked;});
+$('musc').addEventListener('change',e=>{muscOn=e.target.checked;$('muscleInfo').hidden=!muscOn;$('muscleInfo').textContent=muscOn?'Нажмите на линию мышцы — появится её название.':'';});
+/* название мышцы под курсором: нажатие без поворота сцены */
+let down=null;canvas.addEventListener('pointerdown',e=>{down=[e.clientX,e.clientY];});
+canvas.addEventListener('pointerup',e=>{
+ if(!muscOn||!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>4)return;
+ const r=canvas.getBoundingClientRect(),ray=new T.Raycaster();ray.setFromCamera(new T.Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1),camera);
+ const i=view.muscleLayer.pick(ray),mu=MUSCLES_RAW.muscles[i];
+ $('muscleInfo').textContent=mu?`${MUSCLES_RAW.parts[mu.part]} (${mu.side==='L'?'левая':'правая'}) — ${mu.name}${mu.group.length?'; группа в приложении: '+mu.group.join(', '):''}`:'Мимо мышцы — нажмите точнее на линию.';
+});
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',theme);new MutationObserver(theme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 let first=REVIEW[0].id;try{const s=localStorage.getItem('mv.ex');if(s&&CATALOG_POSES[s])first=s;}catch(e){}
 $('play').textContent=playing?'Пауза':'Пуск';

@@ -131,6 +131,19 @@ await page.close();
   });
   check(got !== 'disabled' && got.on.calls.at(-1) === 102 && /MyoSim/.test(got.on.note) && got.on.pref === true, '«Скелет» загружает 102 кости и показывает авторов моделей');
   check(got !== 'disabled' && got.off === 0 && got.pref === false && got.hidden, 'повторное нажатие выключает скелет');
+  /* «Анатомия мышц»: так же недоступна без объёмной графики; у объёмной фигуры грузит мышцы и кости, выделяет мышцы
+     упражнения (уровни групп), под переключателем — авторы моделей; повторное нажатие выключает */
+  check(await g.evaluate(() => $('#mv-anatomy').disabled && !$('#mv-anatomy').checked), 'без объёмной графики «Анатомия мышц» недоступна');
+  const anat = await g.evaluate(async () => {
+    const calls = []; const f = detailMotion.f; f.setAnatomy = d => calls.push(d ? { muscles: d.muscles.muscles.length, bones: d.skeleton.bones.length, level: d.level } : null);
+    applyAnatomy(); const box = $('#mv-anatomy'); if (box.disabled) return 'disabled';
+    box.click(); for (let i = 0; i < 50 && !calls.some(c => c); i++) await new Promise(r => setTimeout(r, 50));
+    const on = { last: calls.at(-1), note: $('#mv-anatomy-note').textContent, pref: motionPrefs.anatomy, pri: detailMotion.it.ex.pri };
+    box.click(); return { on, off: calls.at(-1), pref: motionPrefs.anatomy, hidden: $('#mv-anatomy-note').hidden };
+  });
+  check(anat !== 'disabled' && anat.on.last?.muscles === 462 && anat.on.last.bones === 102 && anat.on.pri.every(m => anat.on.last.level[m] === 1) && /DAS3/.test(anat.on.note) && anat.on.pref === true,
+    '«Анатомия мышц» загружает 462 мышцы на 102 костях, выделяет основные мышцы упражнения и называет модели');
+  check(anat !== 'disabled' && anat.off === null && anat.pref === false && anat.hidden, 'повторное нажатие выключает мышцы');
   await g.close();
 }
 
@@ -143,4 +156,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, витрина атласа и режим «Скелет» работают на телефоне и компьютере.');
+console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, витрина атласа, режимы «Скелет» и «Анатомия мышц» работают на телефоне и компьютере.');

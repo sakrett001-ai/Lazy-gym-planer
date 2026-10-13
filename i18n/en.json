@@ -2587,5 +2587,12 @@
  "Holzbaur и др., 2005": "Holzbaur et al., 2005",
  "; поясничный отдел —": "; lumbar spine —",
  "модель поясничного отдела позвоночника": "the lumbar spine model",
- ". Спасибо авторам за то, что открыли эти данные.": ". Many thanks to the authors for sharing this data openly."
+ ". Спасибо авторам за то, что открыли эти данные.": ". Many thanks to the authors for sharing this data openly.",
+ "Анатомия мышц": "Muscle anatomy",
+ "Загружаем мышцы…": "Loading muscles…",
+ "Не удалось загрузить мышцы. Проверьте связь и включите ещё раз.": "Could not load the muscles. Check your connection and turn it on again.",
+ "Мышцы — линии действия по открытым моделям: MyoSim (Apache 2.0; ноги — Rajagopal и др., 2016; рука — Holzbaur и др., 2005; поясница — MyoBack, Walia и др., 2025) и DAS3 (Apache 2.0; мышцы лопатки — Chadwick и др., 2014). Цветом — мышцы упражнения: ярче и толще — основные, бледнее — вспомогательные. Линия показывает путь мышцы от начала до прикрепления, а не её толщину.": "Muscles are lines of action from open models: MyoSim (Apache 2.0; legs — Rajagopal et al., 2016; arm — Holzbaur et al., 2005; lower back — MyoBack, Walia et al., 2025) and DAS3 (Apache 2.0; shoulder-blade muscles — Chadwick et al., 2014). The exercise's muscles are coloured: brighter and thicker — primary, paler — secondary. A line shows the muscle's path from origin to insertion, not its thickness.",
+ "Мышцы (режим «Анатомия мышц») — пути из тех же моделей MyoSim; мышцы лопатки — из модели плеча": "Muscles (the “Muscle anatomy” mode) — paths from the same MyoSim models; shoulder-blade muscles — from the shoulder model",
+ "Chadwick и др., 2014": "Chadwick et al., 2014",
+ "; лицензия Apache 2.0).": "; Apache 2.0 licence)."
 }

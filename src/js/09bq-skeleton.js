@@ -47,6 +47,11 @@ const Skeleton = (() => {
 
   /* ---------- раскладка ---------- */
   const signedAngle = (a, b, axis) => Math.atan2(V.dot(V.cross(a, b), axis), V.dot(a, b));
+  /* Угол поворота сустава в рамке сегмента. Кадры позы — в координатах каталога, где ось Y смотрит вниз (зеркало):
+     векторное произведение в них меняет знак, и угол, измеренный по рамкам каталога, обратен углу в рамке сегмента.
+     До 4.25.0 этого не учитывали: лучевая кость при пронации крутилась в сторону супинации, а надколенник не ехал
+     за сгибанием колена (угол выходил отрицательным и упирался в 0°). */
+  const jointAngle = (a, b, axis) => -signedAngle(a, b, axis);
   function rotAxis(k, a) { /* матрица поворота вокруг единичной оси k (столбцы) */
     const c = Math.cos(a), s = Math.sin(a), t = 1 - c, [x, y, z] = k;
     return [[t * x * x + c, t * x * y - s * z, t * x * z + s * y], [t * x * y + s * z, t * y * y + c, t * y * z - s * x], [t * x * z - s * y, t * y * z + s * x, t * z * z + c]];
@@ -169,10 +174,10 @@ const Skeleton = (() => {
         else A = mul(C, { lin: rotBetween(b.ac[0], apply(rot, b.ac[0])), t: [0, 0, 0] }); /* ключица — от грудино-ключичного к сдвинутому акромиону */
       }
       else if (b.name === 'radius') {
-        const fa = F['fa' + s], fd = F['fd' + s], phi = signedAngle(fa.z, fd.z, fa.y), [rh, w] = b.pivot;
+        const fa = F['fa' + s], fd = F['fd' + s], phi = jointAngle(fa.z, fd.z, fa.y), [rh, w] = b.pivot;
         A = mul(frameAff(fa), about(rotAxis(V.unit(V.sub(rh, w)), phi), w));
       } else if (b.name === 'patella') {
-        const th = F['th' + s], sk = F['sk' + s], k = signedAngle(th.y, sk.y, th.x) * 180 / Math.PI, tr = b.track;
+        const th = F['th' + s], sk = F['sk' + s], k = jointAngle(th.y, sk.y, th.x) * 180 / Math.PI, tr = b.track;
         const i0 = Math.max(0, Math.min(tr.length - 2, Math.floor(k / 10))), u = Math.max(0, Math.min(1, (k - tr[i0][0]) / 10)), row = tr[i0].map((x, j) => x + (tr[i0 + 1][j] - x) * u);
         A = mul(frameAff(th), { lin: rotAxis([1, 0, 0], -row[1] * Math.PI / 180), t: row.slice(2, 5) });
       } else if (b.seg === 'finger' || b.seg === 'thumb') {

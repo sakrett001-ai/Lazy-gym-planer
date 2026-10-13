@@ -1,6 +1,6 @@
 {
   "name": "lazy-gym-planer",
-  "version": "4.24.0",
+  "version": "4.25.0",
   "private": true,
   "description": "Lazy Gym Planner — планировщик тренировок",
   "scripts": {
@@ -13,7 +13,7 @@
     "test": "node --test tools/*.test.js",
     "i18n:audit": "node tools/i18n-audit.mjs",
     "ui:check": "node tools/ui-check.mjs",
-    "check": "npm test && node tools/mannequin/check.js --quiet && npm run skeleton:fit && npm run audit && npm run audit:catalog && npm run audit:render && npm run build && node --check dist/app.js && node --check dist/en/app.js && node tools/check-catalog-bundle.js && node tools/i18n-audit.mjs && node tools/ui-check.mjs",
+    "check": "npm test && node tools/mannequin/check.js --quiet && npm run skeleton:fit && npm run muscles:check && npm run audit && npm run audit:catalog && npm run audit:render && npm run build && node --check dist/app.js && node --check dist/en/app.js && node tools/check-catalog-bundle.js && node tools/i18n-audit.mjs && node tools/ui-check.mjs",
     "serve": "node build.js && npx --yes serve dist -l 8080",
     "deploy": "sh deploy.sh",
     "i18n": "node i18n/extract.js en",
@@ -22,8 +22,10 @@
     "mannequin:bake": "node tools/mannequin/author.js",
     "mannequin:check": "node tools/mannequin/check.js",
     "skeleton:fit": "node tools/skeleton/fit.js all 0,0.5,1 --max 1.5",
+    "muscles:check": "node tools/muscles/check.js all 0,0.5,1 --max-bone 2 --max-skin 2.2",
+    "muscles:compare": "node tools/muscles/compare.js",
     "mannequin:sheet": "node tools/mannequin/sheet.mjs",
-    "mannequin:review": "node tools/mannequin/check.js --quiet --json qa/check-all.json; node tools/mannequin/viewer/build.mjs qa/mannequin-review.html --report qa/check-all.json"
+    "mannequin:review": "node tools/mannequin/check.js --quiet --json qa/check-all.json; node tools/muscles/check.js all 0,0.5,1 --json qa/muscles/check-all.json; node tools/mannequin/viewer/build.mjs qa/mannequin-review.html --report qa/check-all.json --muscles qa/muscles/check-all.json"
   },
   "dependencies": {
     "acorn": "^8.19.0",

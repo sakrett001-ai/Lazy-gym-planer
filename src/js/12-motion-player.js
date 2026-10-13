@@ -1,7 +1,7 @@
 /* ---------- Проигрыватель движений: карточки и увеличенный разбор ---------- */
 let figs = [], rafId = 0, io = null;
 const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-const motionPrefs = (() => {try {return Object.assign({speed:.5,joints:true,trace:false,vectors:true,muscles:true,skeleton:false},JSON.parse(localStorage.getItem('podhod.motion.v2') || '{}'));}catch(e){return {speed:.5,joints:true,trace:false,vectors:true,muscles:true,skeleton:false};}})();
+const motionPrefs = (() => {try {return Object.assign({speed:.5,joints:true,trace:false,vectors:true,muscles:true,skeleton:false,anatomy:false},JSON.parse(localStorage.getItem('podhod.motion.v2') || '{}'));}catch(e){return {speed:.5,joints:true,trace:false,vectors:true,muscles:true,skeleton:false,anatomy:false};}})();
 if (![.25,.5,1].includes(+motionPrefs.speed)) motionPrefs.speed = .5;
 if(typeof motionPrefs.muscles!=='boolean')motionPrefs.muscles=true;
 if(typeof motionPrefs.stress!=='boolean')motionPrefs.stress=true;
@@ -256,6 +256,23 @@ function applySkeleton(F=detailMotion){
     for(const f of list)f.setSkeleton?.(d);say(SKELETON_CREDIT);
   },()=>{box.removeAttribute('aria-busy');box.checked=false;motionPrefs.skeleton=false;saveMotionPrefs();say('Не удалось загрузить кости. Проверьте связь и включите ещё раз.');});
 }
+/* Режим «Анатомия мышц»: линии мышц на костях внутри полупрозрачной кожи, мышцы упражнения выделены цветом. Данные мышц
+   (≈20 КБ) и костей грузятся при первом включении; кости при этом показываются только вместе со «Скелетом». */
+const ANATOMY_CREDIT='Мышцы — линии действия по открытым моделям: MyoSim (Apache 2.0; ноги — Rajagopal и др., 2016; рука — Holzbaur и др., 2005; поясница — MyoBack, Walia и др., 2025) и DAS3 (Apache 2.0; мышцы лопатки — Chadwick и др., 2014). Цветом — мышцы упражнения: ярче и толще — основные, бледнее — вспомогательные. Линия показывает путь мышцы от начала до прикрепления, а не её толщину.';
+function anatomyLevel(ex){const level={};ex.pri.forEach(m=>level[m]=1);ex.sec.forEach(m=>{if(!level[m])level[m]=.38;});return level;}
+function applyAnatomy(F=detailMotion){
+  const box=$('#mv-anatomy'),note=$('#mv-anatomy-note');if(!box)return;
+  const list=F?[F.f,F.extra].filter(Boolean):[],able=list.some(f=>typeof f.setAnatomy==='function');
+  box.disabled=!able;box.closest('label').title=able?'':'Нужна объёмная графика (WebGL)';box.checked=able&&!!motionPrefs.anatomy;
+  const say=text=>{note.textContent=text;note.hidden=!text;};
+  if(!box.checked){for(const f of list)f.setAnatomy?.(null);say('');return;}
+  const put=()=>{const level=anatomyLevel(F.it.ex);for(const f of list)f.setAnatomy?.({skeleton:Skeleton.data,muscles:Muscles.data,level});say(ANATOMY_CREDIT);};
+  if(Skeleton.data&&Muscles.data){put();return;}
+  box.setAttribute('aria-busy','true');say('Загружаем мышцы…');
+  Promise.all([Skeleton.load(),Muscles.load()]).then(()=>{
+    box.removeAttribute('aria-busy');if(detailMotion!==F||!motionPrefs.anatomy)return;put();
+  },()=>{box.removeAttribute('aria-busy');box.checked=false;motionPrefs.anatomy=false;saveMotionPrefs();say('Не удалось загрузить мышцы. Проверьте связь и включите ещё раз.');});
+}
 function openMotion(idx) {
   const F=figs.find(f=>+f.btn.dataset.fig===Number(idx));
   openMotionItem(F?F.it:previewItem(EX[0].id),F?F.clock:0);
@@ -298,6 +315,7 @@ function setupMotionViewer() {
   $('#mv-trace').addEventListener('change',e=>{motionPrefs.trace=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean))f.setTrace(e.target.checked);saveMotionPrefs();});
   $('#mv-muscle-toggle').addEventListener('change',e=>changeMusclePreference(e.target.checked));
   $('#mv-skeleton').addEventListener('change',e=>{motionPrefs.skeleton=e.target.checked;saveMotionPrefs();applySkeleton();});
+  $('#mv-anatomy').addEventListener('change',e=>{motionPrefs.anatomy=e.target.checked;saveMotionPrefs();applyAnatomy();});
   $('#wv-muscle-toggle').addEventListener('change',e=>changeMusclePreference(e.target.checked));
   for(const prefix of ['mv','wv'])$('#'+prefix+'-stress-toggle').addEventListener('change',e=>changeStressPreference(e.target.checked));
   for(const prefix of ['mv','wv'])$('#'+prefix+'-region').addEventListener('change',e=>selectMuscleRegion(prefix,e.target.value));

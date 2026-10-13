@@ -17,9 +17,9 @@ export function createSkeletonLayer(parent){
   });
   source=data;
  }
- function update(data,pose,body){
+ /* A — матрицы костей кадра (Skeleton.frames), если уже посчитаны (их же берёт слой мышц) */
+ function update(data,pose,body,A=globalThis.Skeleton.frames(pose,body,data.bones)){
   if(source!==data)build(data);
-  const A=globalThis.Skeleton.frames(pose,body,data.bones);
   meshes.forEach((m,i)=>{
    const o=i*12,a=k=>A[o+k];
    m.matrix.set(a(0)/100,a(1)/100,a(2)/100,a(3)/100, -a(4)/100,-a(5)/100,-a(6)/100,(FLOOR-a(7))/100, a(8)/100,a(9)/100,a(10)/100,a(11)/100, 0,0,0,1);
