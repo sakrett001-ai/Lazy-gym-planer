@@ -25,8 +25,8 @@ Lazy Gym Planner — PWA-планировщик тренировок с атла
 | `src/js/09bp-poses.js` | **Генерируется** `npm run mannequin:bake`. Руками не править. |
 | `src/js/09bq-skeleton.js`, `src/volume/skeleton.mjs` | Скелет: раскладка костей по рамкам манекена и слой костей в сцене (режим «Скелет»). |
 | `src/data/skeleton.bin`, `tools/skeleton/` | Кости MyoSim (Apache 2.0, `third_party/myosim`). **Генерируется**: `build_bones.py` → `pack.js`; руками не править. |
-| `src/js/09br-muscles.js`, `src/volume/muscles.mjs` | Мышцы: расчёт путей (порт огибания MuJoCo) и слой линий мышц в сцене (режим «Анатомия мышц»). |
-| `src/data/muscles.bin`, `tools/muscles/` | Пути мышц MyoSim и DAS3 (Apache 2.0, `third_party/das3`). **Генерируется**: `build_muscles.py` → `das3_import.py` → `pack.js`; руками не править. Проверки — `tools/muscles.test.js`, `npm run muscles:check`; расхождения — `tools/muscles/README.md`. |
+| `src/js/09br-muscles.js`, `src/volume/muscles.mjs` | Мышцы: расчёт путей (порт огибания MuJoCo), тело мышцы (объём по МРТ, утолщение при укорочении) и слой мышц в сцене (режим «Анатомия мышц»). |
+| `src/data/muscles.bin`, `tools/muscles/` | Пути мышц MyoSim и DAS3 (Apache 2.0, `third_party/das3`). **Генерируется**: `build_muscles.py` → `das3_import.py` → `pack.js` (объём — `volumes.js`, источники — `fixtures/`); руками не править. Проверки — `tools/muscles.test.js`, `npm run muscles:check`; расхождения — `tools/muscles/README.md`. |
 | `tools/biomech/validator2.js` | Валидатор биомеханики и столкновений. |
 | `src/js/09f-joint-stress.js` | Красные метки пиковой нагрузки на суставы: правила по углам манекена (`Mannequin.jointAngles`, общий расчёт с валидатором), пороги и источники. |
 | `docs/mannequin-authoring.md` | Подробное руководство по авторингу: координаты, помощники, приёмы. |
