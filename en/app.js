@@ -6507,7 +6507,6 @@ function catalogTorsoPoint(R,h,angle,extra=0){
  const[w,a,b]=catalogSection(h),n=R.chestN||R.n,x=R.x||V3.unit(V3.cross(R.n,R.u)),s=Math.cos(angle);
  return V3.add(V3.add(catalogCenter(R,h),x,w*Math.sin(angle)),n,(s>=0?a:b)*s+extra*s);
 }
-function catalogSource(ex){const a={...ex.anim,catalogId:ex.id};delete a.catalogRig;delete a.catalogProfile;prepAnim(a);return a;}
 function catalogLegacyPose(a,t){return solvePose(a,poseAt(a,t),a._C);}
 function catalogPlanarRig(ex,source){
  return t=>{
@@ -6764,9 +6763,13 @@ function catalogEquipmentRig(rig,id,source){
   return R;
  };
 }
-const CATALOG_SOURCES=new Map();
+/* Исходные плоские описания движений. Подготовка (prepAnim — 33 решения позы) нужна только старым ригам и сверке
+   каталога (tools/catalog-audit.js), а упражнения на манекене её не используют: копия описания снимается при запуске,
+   как раньше, а подготовка — при первом обращении. Запуск на слабом телефоне короче на ≈0,2 с. */
+const CATALOG_SOURCES={raw:new Map(),ready:new Map(),
+ get(id){let s=this.ready.get(id);if(!s&&this.raw.has(id)){s=this.raw.get(id);prepAnim(s);this.ready.set(id,s);}return s;}};
 for(const ex of EX){
- const source=catalogSource(ex);CATALOG_SOURCES.set(ex.id,source);
+ const raw={...ex.anim,catalogId:ex.id};delete raw.catalogRig;delete raw.catalogProfile;CATALOG_SOURCES.raw.set(ex.id,raw);
  /* Упражнения на манекене: запечённые ключи поз (tools/mannequin) и параметрический инвентарь */
  if(typeof CATALOG_POSES!=='undefined'&&CATALOG_POSES[ex.id]){
   const rig=GymEquipment.rig(CATALOG_POSES[ex.id]);
@@ -6774,6 +6777,7 @@ for(const ex of EX){
   if(CATALOG_POSES[ex.id].loop)ex.anim.loop=true;
   continue;
  }
+ const source=CATALOG_SOURCES.get(ex.id);
  let rig=source.rig3d||catalogPlanarRig(ex,source);
  if(['ytw','reversesnow'].includes(ex.id))rig=catalogProneRig(source);
  if(['widepush','archer'].includes(ex.id))rig=catalogWidePushRig(CATALOG_SOURCES.get('pushup'),ex.id==='archer');
@@ -9344,6 +9348,9 @@ function setupMotionViewer() {
   for(const prefix of ['mv','wv'])$('#'+prefix+'-region').addEventListener('change',e=>selectMuscleRegion(prefix,e.target.value));
   $('#motion-view').addEventListener('cancel',e=>{e.preventDefault();closeMotion();});
   $('#motion-view').addEventListener('close',()=>{disposeMotion(detailMotion);detailMotion=null;closeGallery();document.documentElement.classList.remove('motion-open');});
+  /* объёмная графика грузится после первого экрана (build.js): если разбор или тренировка открыты раньше, показывается
+     плоская схема, а с приходом объёма та же фаза перерисовывается в нём */
+  window.addEventListener('gym-volume',()=>{if(detailMotion&&!gallery.on)mountDetailCameras();if(workout?.motion&&$('#workout-view').open)mountWorkoutCameras();});
   $('#motion-view').addEventListener('keydown',e=>{if(e.code==='Space'&&!['INPUT','SELECT','BUTTON','TEXTAREA'].includes(e.target.tagName)){e.preventDefault();if(detailMotion){detailMotion.paused=!detailMotion.paused;paintMotion(detailMotion,true);}}});
 }
 
@@ -11143,4 +11150,4 @@ logInit();
 plural = (n, a, b, c) => n === 1 ? a : c;
 DEC = '.';
 
-window.PODHOD_VERSION='4.23.0';window.PODHOD_BUILD='4.23.0-75d2308deb8f';window.PODHOD_LANG='en';
+window.PODHOD_VERSION='4.23.1';window.PODHOD_BUILD='4.23.1-fbf862c2490f';window.PODHOD_LANG='en';
