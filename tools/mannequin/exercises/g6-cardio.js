@@ -53,7 +53,7 @@ function hipYFor(C, s, ball, o, k, rootXZ = [0, 0], tiltX = 0) {
 }
 
 /* ---------- Упор лёжа (скалолаз, бёрпи) ---------- */
-const MAT = 1, PLANK = { theta: 20, handX: 18.5, handZ: 0, heel: 62, kneeExt: 4 };
+const MAT = 1, PLANK = { theta: 20, handX: 19.5, handZ: 0, heel: 62, kneeExt: 4 };
 /* корпус в упоре: ось тела под углом theta к полу, плечи над кистями */
 function plankBody(C, theta = PLANK.theta) {
   const { V } = C, q = C.base(), a = theta * D2R;

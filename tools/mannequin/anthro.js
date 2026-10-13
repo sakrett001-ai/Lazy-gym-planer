@@ -120,7 +120,7 @@ function measure() {
   const scap = N.bone('scapula', 'L'), xMax = Math.max(...scap.map(p => p[0]));
   const acromion = maxBy(scap.filter(p => p[0] > xMax - 2), p => H(p));
   m.acromialheight = H(acromion);
-  m.biacromialbreadth = 2 * xMax;
+  m.biacromialbreadth = 2 * (xMax + .5); note.biacromialbreadth = 'кость + 0,5 см мягких тканей над акромионом (ANSUR меряет по коже)';
   const cerv = N.bone('cervical'), cervLow = Math.min(...cerv.map(H));
   m.cervicaleheight = H(minBy(cerv.filter(p => H(p) < cervLow + 3), p => p[2]));
   const rib = N.bone('ribcage'), ribZ = rib.reduce((s, p) => s + p[2], 0) / rib.length;
@@ -154,8 +154,9 @@ function measure() {
   m.buttockcircumference = perimeter(butt); m.buttockdepth = extent(butt, 1);
   /* ширина бёдер стоя — наибольшая между гребнями таза и промежностью */
   { let best = 0; for (const h of range(m.crotchheight, m.iliocristaleheight, 30)) best = Math.max(best, extent(slice(h, [N.sdf.torso, N.sdf.thigh('L'), N.sdf.thigh('R')]), 0)); m.hipbreadth = best; }
-  /* плечи: уровень наибольшей ширины по дельтам */
-  { let best = { b: 0 }; for (const h of range(m.acromialheight - 16, m.acromialheight, 32)) { const s = slice(h, [N.sdf.torso, N.sdf.arm('L'), N.sdf.arm('R')], [0, 0], 50); const b = extent(s, 0); if (b > best.b) best = { b, h, s }; }
+  /* плечи: уровень наибольшей ширины по дельтам. Выступ дельтовидных мышц — в верхней трети плеча, до 12 см ниже
+     акромиона; ниже уже плечо (руки у манекена висят с разведением ≈7°, и самая широкая точка ушла бы к локтям) */
+  { let best = { b: 0 }; for (const h of range(m.acromialheight - 12, m.acromialheight, 24)) { const s = slice(h, [N.sdf.torso, N.sdf.arm('L'), N.sdf.arm('R')], [0, 0], 50); const b = extent(s, 0); if (b > best.b) best = { b, h, s }; }
     m.bideltoidbreadth = best.b; m.shouldercircumference = perimeter(best.s); note.shouldercircumference = `на высоте ${best.h.toFixed(1)}`; }
 
   /* шея: самое узкое кольцо свободной части и основание */

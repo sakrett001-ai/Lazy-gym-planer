@@ -266,7 +266,7 @@ function pushPose(C, L, e) {
 }
 const PUSH = once(() => pushLayout({ x: 29, ahead: 12.7, out: 13.3, elTop: 12, pole0: [.39, -.02, 1.13], pole1: [.54, .57, 1.13], g0: [-6.5, 3.2], g1: [9.3, -13] }));
 /* Узкий хват: ладони на ширине плеч (уже — пронация предплечья за пределом при прижатых локтях), пальцы внутрь */
-const DIAMOND = once(() => pushLayout({ x: 15.5, ahead: 12, out: -35, elTop: 10.8, low: 5, pole0: [1.22, .94, 1.32], pole1: [.38, 1.97, 1.5], g0: [-8.2, 6.3], g1: [0, -15] }));
+const DIAMOND = once(() => pushLayout({ x: 16.5, ahead: 12, out: -35, elTop: 10.8, low: 5, pole0: [1.22, .94, 1.32], pole1: [.38, 1.97, 1.5], g0: [-8.2, 6.3], g1: [0, -15] }));
 const KNEEPUSH = once(() => pushLayout({ base: 'knees', kneeZ: -22, x: 26, ahead: 14.7, out: 4.7, low: 5.5, elTop: 8.6, pole0: [.28, 1.24, 1.43], pole1: [.12, 1.21, .51], g0: [-.8, 9.9], g1: [10, -3.7] }));
 const WIDEPUSH = once(() => pushLayout({ x: 40, ahead: 18, out: 25, low: 4.2, elTop: 10.9, pole0: [.81, -.22, 1.1], pole1: [.16, 1.32, 1.42], g0: [-9.4, 6.2], g1: [3.8, -15] }));
 /* «Лучник»: работает правая рука (ладонь неподвижна, локоть вдоль корпуса), левая выпрямляется и ладонь скользит в сторону;
@@ -337,7 +337,7 @@ const PLANKUP = once(() => {
   const body = (th, roll = 0, yaw = 0) => { const q = proneOnToes(C, { theta: th, yaw, ...base }); q.thoracic[2] = roll * .78; q.lumbar[2] = roll * .22; return q; };
   const thF = plankTheta(C, base), qF = body(thF);
   const fore = {}; for (const s of S) { const t = C.M.clone(qF); fore[s] = forearmOnMat(C, t, s, { lift: .8 }); }
-  const top = pushLayout({ x: 23.5, ahead: 15, out: 9, elTop: 11, feet, pole0: [.39, -.02, 1.13], pole1: [.39, -.02, 1.13], g0: [-6.5, 3.2], g1: [-6.5, 3.2] });
+  const top = pushLayout({ x: 24.5, ahead: 15, out: 9, elTop: 11, feet, pole0: [.39, -.02, 1.13], pole1: [.39, -.02, 1.13], g0: [-6.5, 3.2], g1: [-6.5, 3.2] });
   const palmW = s => palmWrist(C, s, top.palms[s], top.fingers(s), [0, 1, 0]);
   /* невязка опоры стороны s в состоянии F/P */
   const res = (q, s, st) => { const gh = C.fk(q).P['gh' + s]; return st === 'F' ? V.dist(gh, fore[s].E) - C.M.B.ua : V.dist(gh, palmW(s)) - armSpan(C, 12); };

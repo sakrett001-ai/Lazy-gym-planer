@@ -81,7 +81,7 @@ const B={
  hipHalf:8.8,                                    // центры тазобедренных суставов ±8,8 см
  lumbar:[0,10,0],thoracic:[0,14,0],              // поясничный и грудопоясничный «шарниры» по оси корпуса
  c7:[0,37.2,-4],headJoint:[0,9.5,3.5],headCenter:[0,2.9,2],
- sc:[2,28.5,4],ghRel:[16,-3.1,-4],               // грудино-ключичный шарнир и центр плечевого сустава от него
+ sc:[2,28.5,4],ghRel:[17,-3.1,-4],               // грудино-ключичный шарнир и центр плечевого сустава от него
  head:[7.65,11.4,10.3],                          // габарит головы от её центра: ширина, высота (до макушки), глубина; форма — HEAD_PARTS
  grip:[2.6,-8.0,0],knuckle:[0,-9.8,0],           // центр хвата: 8 см дистальнее и 2,6 см ладоннее запястья
  palm:{width:8.4,thick:3.0,len:10.2},finger:8.6,
@@ -113,7 +113,7 @@ const sePow=(v,n)=>n===2?v:Math.sign(v)*Math.pow(Math.abs(v),2/n);
 /* Профили конечностей: [t, спереди, сзади, латерально, медиально], см. Обхваты — по ANSUR II: бедро под ягодичной складкой
    60, над коленом 39,6, голень 38, над лодыжками 22,4, запястье 17,3; ширина бёдер стоя 33,6 (латерально у таза ≤ 7,8). */
 const LIMBS={
- ua:[[0,5.4,5.6,6.0,4.8],[.15,5.3,5.6,5.8,4.6],[.45,5.3,5.2,5.2,4.6],[.8,4.3,4.4,4.3,4.0],[1,3.7,4.0,4.0,3.9]],
+ ua:[[0,5.4,5.6,5.6,4.8],[.15,5.4,5.7,5.4,4.6],[.45,5.4,5.4,4.9,4.6],[.8,4.3,4.4,4.3,4.0],[1,3.7,4.0,4.0,3.9]],
  fa:[[0,4.0,4.2,4.6,4.3],[.2,4.6,4.3,5.0,4.6],[.55,3.6,3.4,3.9,3.6],[.85,2.7,2.5,3.2,3.0],[1,2.4,2.4,3.1,2.9]],
  th:[[0,10.2,10.2,7.8,8.6],[.12,11.4,10.6,8.0,8.8],[.4,9.4,8.8,7.8,8.2],[.75,7.2,6.8,6.6,6.8],[.92,6.3,6.2,6.1,6.3],[1,6.0,5.8,5.7,5.8]],
  sk:[[0,5.2,5.0,5.2,5.4],[.1,4.3,6.2,5.5,5.9],[.3,4.0,7.5,6.1,6.6],[.6,3.3,5.6,4.5,4.6],[.85,3.0,4.3,3.4,3.4],[1,2.9,3.6,3.7,3.5]]
@@ -145,11 +145,17 @@ const HEAD_PARTS=[
  {c:[0,-3.8,9.6],r:[1.6,0.85,1.0],k:1}                    // крылья носа
 ];
 const HEAD_EAR={c:[7.9,-1.2,-1.7],r:[.7,3.15,1.8],rot:[-15,-48,0]};
-const CAPS={sh:6.0,el:3.9,wr:2.7,kn:5.3,an:2.6};
+const CAPS={sh:5.3,el:3.9,wr:2.7,kn:5.3,an:2.6};
 /* центр «шапки» плеча (дельтовидная) от центра плечевого сустава: вдоль плеча (−вниз) и наружу. Центр — на уровне
    сустава, верх шапки — на 6 см выше: под ним акромион и конец ключицы (ANSUR II: акромион на 3,5 см выше центра
    сустава, кожа над ним тонкая); ширина по дельтам — 49,4 (ANSUR II 49,7) */
-const SH_CAP=[0,.7];
+const SH_CAP=[0,.6];
+/* «шапка» над акромионом: задний край акромиона и ость лопатки лежат прямо под кожей верха плеча (между трапецией
+   и дельтой). Центр — от центра плечевого сустава в рамке плечевого пояса: внутрь, вверх, назад; радиус */
+const AC_CAP={off:[-2.2,2.6,-2.2],r:3.6};
+/* «шапка» колена — вперёд от центра сустава (по биссектрисе передних осей бедра и голени): надколенник лежит
+   перед мыщелками бедра под тонкой кожей и при сгибании скользит по ним */
+const KN_CAP_Z=.9;
 /* Массы (доля от общей) и центры масс сегментов: de Leva 1996, мужчины */
 const MASS={head:.0694,upperTrunk:.1596,midTrunk:.1633,lowerTrunk:.1117,ua:.0271,fa:.0162,hand:.0061,th:.1416,sk:.0433,foot:.0137};
 /* Пределы, градусы: [мин, макс]. Положительные направления — в описании DOF ниже. */
@@ -404,10 +410,24 @@ function torsoPointIn(R,h,side,ang,extra,f,[w,a,b,n=2,nf=2]){
  /* надплечья следуют за поднятием и протракцией плечевого пояса */
  if(h>38.8&&R.girdle&&R.frames.thorax){
   /* основание шеи следует за лопаткой лишь частично (до 60 % у верхнего сечения): трапеция растягивается плавно, без складок */
-  const k=smooth((h-38.8)/15)*(1-.4*smooth((h-53.8)/6))*Math.pow(Math.max(0,s),2),gh=R.girdle[side],rest=V.add(V.add(V.add(R.frames.thorax.o,R.frames.thorax.y,25.4),R.frames.thorax.x,SIGN[side]*18),R.frames.thorax.z,0);
-  p=V.add(p,V.sub(gh,rest),k*.85);
+  p=V.add(p,girdleShift(R,h,side,s));
  }
  return p;
+}
+/* сдвиг кожи надплечий за плечевым поясом: доля k от смещения центра плечевого сустава из нейтрального положения;
+   s — «боковитость» точки сечения (0 спереди и сзади, 1 сбоку, после суперэллипса) */
+function girdleShift(R,h,side,s){
+ const k=smooth((h-38.8)/15)*(1-.4*smooth((h-53.8)/6))*Math.pow(Math.max(0,s),2),T=R.frames.thorax;
+ const rest=V.add(V.add(V.add(T.o,T.y,B.sc[1]+B.ghRel[1]),T.x,SIGN[side]*(B.sc[0]+B.ghRel[0])),T.z,B.sc[2]+B.ghRel[2]);
+ return V.scale(V.sub(R.girdle[side],rest),k*.85);
+}
+/* Знаковое расстояние до шеи — по тому же профилю NECK и той же оси, что сетка (neckPoint); основание шеи —
+   внутри корпуса, поэтому переход к надплечьям здесь не нужен: его закрывает кожа корпуса. */
+function neckSDF(R,p){
+ const n=R.frames.neck,h=R.frames.head,lo=V.add(V.add(n.o,n.y,-1),n.z,2.5),hi=V.add(h.o,h.y,1.5),ab=V.sub(hi,lo),L=V.len(ab);
+ const u=V.dot(V.sub(p,lo),ab)/(L*L),t=clamp(u,0,1),c=V.mix(lo,hi,t),z=V.unit(V.mix(n.z,h.z,t)),x=V.unit(V.mix(n.x,h.x,t)),[rf,rb,rl]=profileAt(NECK,t);
+ const d=V.sub(p,c),lz=V.dot(d,z),lx=V.dot(d,x),rho=Math.hypot(lz,lx),radial=rho-(rho<1e-9?rl:ellipseRadius(lz,lx,rf,rb,rl,rl)),axial=Math.max(-u,u-1)*L;
+ return axial>0?(radial>0?Math.hypot(radial,axial):axial):Math.max(radial,axial);
 }
 const LIMB_DEF={ua:['ua','sh','el'],fa:['fa','el','wr'],th:['th','hip','kn'],sk:['sk','kn','an']};
 /* Рамка сечения конечности: спереди (front) и латерально (lat). Для предплечья спереди — ладонная сторона,
@@ -490,10 +510,17 @@ function limbSDF(R,kind,side,p){
  return axial>0?(radial>0?Math.hypot(radial,axial):axial):radial;
 }
 const TORSO_SAMPLES=[];for(let h=TORSO[0][0];h<=TORSO.at(-1)[0]+1e-9;h+=1)TORSO_SAMPLES.push(h);
+/* ближайшее по оси сечение корпуса; hint — номер сечения, рядом с которым искать (±4), иначе — среди всех */
+function nearestSection(frames,p,hint){
+ let best=null;const i0=hint==null?0:Math.max(0,hint-4),i1=hint==null?frames.length-1:Math.min(frames.length-1,hint+4);
+ for(let i=i0;i<=i1;i++){const s=frames[i],off=V.sub(p,s.f.c),along=V.dot(off,s.f.y);if(!best||Math.abs(along)<Math.abs(best.along))best={s,off,along,i};}
+ return best;
+}
 function torsoSDF(R,p,cache){
  const frames=cache||TORSO_SAMPLES.map(h=>({h,f:spineFrame(R,h)}));
- let best=null;
- for(const s of frames){const off=V.sub(p,s.f.c),along=V.dot(off,s.f.y);if(!best||Math.abs(along)<Math.abs(best.along))best={s,along,off};}
+ /* надплечья сдвинуты за плечевым поясом (как сетка кожи): расстояние считаем от точки, сдвинутой обратно */
+ if(R.girdle&&R.frames.thorax){const h0=nearestSection(frames,p).i;let q=p;for(let it=0;it<10;it++){const d=torsoShiftAt(R,q,frames,h0);if(!it&&!(d[0]||d[1]||d[2]))break;const n=V.mix(q,V.sub(p,d),.6);if(V.dist(n,q)<.01){q=n;break;}q=n;}p=q;}
+ const best=nearestSection(frames,p);
  const{s,off,along}=best,lz=V.dot(off,s.f.z),lx=V.dot(off,s.f.x),rho=Math.hypot(lz,lx),hp=s.h+along;
  /* ниже тазобедренных — скошенный низ: сечение берётся с «номинальной» высоты, торец — на высоте lo·(1 + K·w) */
  const k=hp<0?1+SEAT_K*seatW(rho<1e-9?0:lz/rho):1,[w,a,b,n,nf]=sectionAt(hp<0?hp/k:s.h);
@@ -501,6 +528,13 @@ function torsoSDF(R,p,cache){
  /* торец корпуса (низ таза, основание шеи): внутри — до ближайшей поверхности, снаружи — до кромки */
  const lo=TORSO[0][0]*k,hi=TORSO.at(-1)[0],axial=Math.max(lo-hp,hp-hi);
  return axial>0?(radial>0?Math.hypot(radial,axial):axial):Math.max(radial,axial);
+}
+/* сдвиг кожи корпуса в точке p (по ближайшему сечению): нужен знаковому расстоянию, чтобы проверки видели ту же кожу */
+function torsoShiftAt(R,p,frames,hint){
+ const best=nearestSection(frames,p,hint),hp=best.s.h+best.along;if(hp<=38.8)return[0,0,0];
+ /* «боковитость» точки поверхности сечения — её боковое смещение в долях полуширины (как в torsoPointIn) */
+ const lx=V.dot(V.sub(p,best.s.f.c),best.s.f.x),[w]=sectionAt(Math.min(hp,TORSO.at(-1)[0]));
+ return girdleShift(R,hp,lx>=0?'L':'R',Math.min(1,Math.abs(lx)/w));
 }
 function torsoCache(R){return TORSO_SAMPLES.map(h=>({h,f:spineFrame(R,h)}));}
 /* ---------- Голова: знаковое расстояние и сетка ---------- */
@@ -704,7 +738,9 @@ function bodyData(R){
 
  for(const s of SIDES){
   const ua=fr['ua'+s],g=SIGN[s];
-  caps.push({key:'sh'+s,c:V.add(V.add(R['sh'+s],ua.y,SH_CAP[0]),ua.x,g*SH_CAP[1]),r:CAPS.sh},{key:'el'+s,c:R['el'+s],r:CAPS.el},{key:'wr'+s,c:R['wr'+s],r:CAPS.wr},{key:'kn'+s,c:V.add(R['kn'+s],fr['sk'+s].z,.4),r:CAPS.kn},{key:'an'+s,c:R['an'+s],r:CAPS.an});
+  const cl=fr['cl'+s],o=AC_CAP.off;
+  caps.push({key:'ac'+s,c:V.add(V.add(V.add(R['sh'+s],cl.x,g*o[0]),cl.y,o[1]),cl.z,o[2]),r:AC_CAP.r});
+  caps.push({key:'sh'+s,c:V.add(V.add(R['sh'+s],ua.y,SH_CAP[0]),ua.x,g*SH_CAP[1]),r:CAPS.sh},{key:'el'+s,c:R['el'+s],r:CAPS.el},{key:'wr'+s,c:R['wr'+s],r:CAPS.wr},{key:'kn'+s,c:V.add(R['kn'+s],V.unit(V.add(fr['th'+s].z,fr['sk'+s].z)),KN_CAP_Z),r:CAPS.kn},{key:'an'+s,c:R['an'+s],r:CAPS.an});
  }
  const hands={},feet={};
  for(const s of SIDES){const mode=R.hands?.[s]||'relaxed',r=R.gripRadius?.[s]??1.4;hands[s]={frame:fr['hand'+s],mode,r,key:mode+':'+s+':'+r.toFixed(2),shape:handShape(mode,s,r)};const sh=footShape(s),fo=fr['foot'+s],to=fr['toes'+s];feet[s]={rear:fo,toes:to,shape:sh,rows:sh.rear.map((row,i)=>row.map((p,j)=>footPointWorld(fo,to,{part:'rear',p,w:sh.rearW[i][j]})))};}
@@ -761,10 +797,10 @@ function centerOfMass(R,extra=[]){
  const M=parts.reduce((s,[,w])=>s+w,0);return{c:parts.reduce((acc,[p,w])=>V.add(acc,p,w/M),[0,0,0]),mass:M};
 }
 
-return{V,M3,Q,B,TORSO,TORSO_H,TORSO_JOINTS,LIMBS,NECK,CAPS,SH_CAP,MASS,LIMITS,SIDES,SIGN,FLOOR,D2R,R2D,clamp,
+return{V,M3,Q,B,TORSO,TORSO_H,TORSO_JOINTS,LIMBS,NECK,CAPS,SH_CAP,AC_CAP,MASS,LIMITS,SIDES,SIGN,FLOOR,D2R,R2D,clamp,
  neutral,clone,pack,unpack,PACK,PACK_SIZE,fk,solePoints,twoBone,solveArm,solveArmWrist,setArmFromPoints,footFrame,heelFrame,solveLeg,rootRot,rootFromAxes,
  swing,swingTwist,eulerXZY,eulerYZX,spineRot,makeTrack,monotone,toCat,dirCat,catalogPose,
- profileAt,sectionAt,spineFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,
+ profileAt,sectionAt,spineFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,neckSDF,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,
  headLocalSDF,headLocal,headWorld,headMesh,headSamples,HEAD_PARTS,HEAD_EAR,HEAD_EARS,ellipseRadius,centerOfMass,LIMB_DEF,
  handShape,footShape,footPoints,footPointWorld,footBlendW,FOOT_SECTIONS,TOES,malleoli,bodyData,jointAngles};
 })();

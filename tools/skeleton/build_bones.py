@@ -32,7 +32,7 @@ def P(ch,b): return M(ch['bodies'][b][1]*100)
 def mirror(b):
     v=np.array(b['v']).reshape(-1,3); v[:,0]*=-1; f=np.array(b['f']).reshape(-1,3)[:,::-1]
     o=dict(b,side='L',v=np.round(v,2).ravel().tolist(),f=f.ravel().tolist())
-    for k in ('pivot','mcp'):
+    for k in ('pivot','mcp','gl','ac','nrm','ia','probe','front'):
         if k in o: o[k]=[[-p[0],p[1],p[2]] for p in o[k]]
     if 'frame' in o: o['frame']={k:[-v_[0],v_[1],v_[2]] if k!='len' else v_ for k,v_ in o['frame'].items()}
     return o
@@ -49,7 +49,12 @@ def thoraxFit(q,w):
     a=np.radians(TH_PITCH*w); c,s_=np.cos(a),np.sin(a); d=np.asarray(q)-PIV
     y=d[:,1]*c-d[:,2]*s_; z=d[:,1]*s_+d[:,2]*c
     return np.stack([d[:,0],y,z],-1)+PIV+np.array([0,TH_DY*w,TH_DZ*w])
-def pelvisMap(v): return (np.asarray(v)-mid)*np.array([sx,S_T,S_T])
+# Таз: по ширине ×sx у тазобедренных суставов (центры ±8,8 см), к крыльям подвздошных костей — ×1,0: у модели Rajagopal
+# таз узкий в суставах, а гребни при общем ×1,14 давали межгребневую ширину 30 см при 27 у людей (ANSUR II).
+SX_CREST=CFG.get('sx_crest',1.0)
+def pelvisMap(v):
+    d=np.asarray(v)-mid; u=np.clip((d[:,1]-2.)/6.,0,1); w=u*u*(3-2*u)
+    return d*np.stack([sx+(SX_CREST-sx)*w,np.full(len(d),S_T),np.full(len(d),S_T)],-1)
 for nm,side in (('r_pelvis','R'),('l_pelvis','L')):
     v,f=mesh(LEG,nm); add('pelvis_'+side,side,'pelvis',pelvisMap(v),f,900)
 v,f=mesh(TOR,'sacrum_geom_1_sacrum'); add('sacrum','',  'pelvis',pelvisMap(v),f,500)
@@ -94,17 +99,73 @@ def endpoint(v,top):
 c0,c1=endpoint(vc,False),endpoint(vc,True); Rn=rot_between(c1-c0,skb-t1top); sn=np.linalg.norm(skb-t1top)/np.linalg.norm(c1-c0)
 print('шея: Th1',np.round(t1top,1),'основание черепа',np.round(skb,1),'масштаб',round(sn,3))
 add('cervical','','neck',(sn*(Rn@(vc-c0).T)).T+t1top-neckO,fc,1300)
+# Нижняя челюсть модели приоткрыта и подбородок отодвинут назад (кость подбородка на ≈3,5 см глубже кожи при обычных
+# 1,2 см): закрываем рот поворотом на JAW_ROT° вокруг оси через мыщелки (верхне-задние точки ветвей).
+# Тело челюсти MyoSim и после этого коротко для лица ANSUR (подбородок кости на 2,3 см глубже кожи): удлиняем
+# челюсть вперёд от мыщелков в JAW_Z раза — мыщелки остаются в суставах, подбородок выходит на ≈0,8 см.
+JAW_ROT=CFG.get('jaw_rot',8.0); JAW_Z=CFG.get('jaw_z',1.1)
+def jawP(v):
+    p=skullP(v); top=p[p[:,1]>p[:,1].max()-1.5]; cond=top[top[:,2]<np.percentile(top[:,2],30)].mean(0)
+    a=np.radians(JAW_ROT); d=p-cond; y=d[:,1]*np.cos(a)+d[:,2]*np.sin(a); z=-d[:,1]*np.sin(a)+d[:,2]*np.cos(a)
+    return np.stack([d[:,0],y,z*JAW_Z],-1)+cond
 for nm,v,f,t in (('skull',vs,fs,2600),('jaw',vj,fj,900)):
-    add(nm,'','head',skullP(v)-headO,f,t)
+    add(nm,'','head',(jawP(v) if nm=='jaw' else skullP(v))-headO,f,t)
 
 # ---------- правая рука (левая — зеркально) ----------
 ARM=chain('arm/assets/myoarm_r_chain.xml','arm/assets/myoarm_r_assets.xml','clavicle_r')
-# центр плечевого сустава от грудино-ключичного — B.ghRel (правая сторона)
-gh=P(ARM,'scapphant_r'); tgt=np.array([-16,-3.1,-4.]); Rg_=rot_between(gh,tgt); sg=np.linalg.norm(tgt)/np.linalg.norm(gh)
-girdle=lambda v:(sg*(Rg_@np.asarray(v).T)).T
+# центр плечевого сустава от грудино-ключичного — B.ghRel (правая сторона). Лопатка — в натуральную величину (×S_T),
+# суставной впадиной на центре плечевого сустава манекена (головка плечевой кости в ней); ключица — от грудино-ключичного
+# сустава к акромиально-ключичному этой лопатки (растянута по длине). Поворот — тот, что совмещает направления
+# «грудино-ключичный → плечевой сустав» модели и манекена.
+gh=P(ARM,'scapphant_r'); ac=P(ARM,'clavphant_r'); tgt=np.array([-17.0,-3.1,-4.]); Rg_=rot_between(gh,tgt)
+# Лопатка на рёбрах: так поставленная, лопатка MoBL уходит телом на 1,5–2 см в грудную клетку манекена (у живого
+# человека между рёбрами и лопаткой — подлопаточная и передняя зубчатая мышцы). Поворачиваем её вокруг центра
+# плечевого сустава — вокруг вертикали и поперечной оси — на наименьшие углы, при которых передняя поверхность лежит
+# не ближе SCAP_GAP см к оболочке рёбер; ключица потом идёт к новому положению акромиона.
+SCAP_GAP=CFG.get('scap_gap',0.8); SC_R=np.array([-2.,28.5,4.])        # грудино-ключичный сустав справа — как B.sc
+def ribShell():
+    r=np.array([b for b in bones if b['name']=='ribcage'][0]['v']).reshape(-1,3)-SC_R   # рёбра в рамке ключицы
+    zc=r[:,2].mean(); a=np.degrees(np.arctan2(r[:,0]+2.,r[:,2]-zc)); rad=np.hypot(r[:,0]+2.,r[:,2]-zc); sh={}
+    for y,ab,rr in zip(np.round(r[:,1]).astype(int),np.round(a/5).astype(int),rad): sh[(y,ab)]=max(sh.get((y,ab),0),rr)
+    return zc,sh
+RIB_ZC,RIB_SH=ribShell()
+def ribPen(v):
+    a=np.degrees(np.arctan2(v[:,0]+2.,v[:,2]-RIB_ZC)); rad=np.hypot(v[:,0]+2.,v[:,2]-RIB_ZC); out=0.
+    for y,ab,rr in zip(np.round(v[:,1]).astype(int),np.round(a/5).astype(int),rad):
+        s_=max(RIB_SH.get((y,ab+k),0) for k in (-1,0,1))
+        if s_: out=max(out,s_+SCAP_GAP-rr)
+    return out
+def rotXY(px,ty):
+    a,b=np.radians(px),np.radians(ty); X=np.array([[1,0,0],[0,np.cos(a),-np.sin(a)],[0,np.sin(a),np.cos(a)]]); Y=np.array([[np.cos(b),0,np.sin(b)],[0,1,0],[-np.sin(b),0,np.cos(b)]]); return Y@X
+v0=S_T*(Rg_@(mesh(ARM,'scapula_r')[0]-gh).T).T
+best=None
+for px in range(-15,16):
+    for ty in range(-20,21):
+        q=tgt+(rotXY(px,ty)@v0.T).T; pen=ribPen(q[::3]); cost=(pen>.05)*100+pen*10+abs(px)+abs(ty)
+        if best is None or cost<best[0]: best=(cost,px,ty,pen)
+SCAP_R=rotXY(best[1],best[2])
+print('лопатка на рёбрах: поворот вокруг поперечной оси',best[1],'°, вокруг вертикали',best[2],'°; заход в рёбра',round(best[3],2),'см')
+scapM=lambda v:tgt+(SCAP_R@(S_T*(Rg_@(np.asarray(v)-gh).T))).T
+acT=scapM(ac[None])[0]; Rc=rot_between(ac,acT); kc=np.linalg.norm(acT)/np.linalg.norm(ac); ca=unit(acT)
+Ac=S_T*np.eye(3)+(kc-S_T)*np.outer(ca,ca); clavM=lambda v:(Ac@(Rc@np.asarray(v).T)).T
+vS,fS=mesh(ARM,'scapula_r'); sv=scapM(vS)
+# плоскость лопатки (наименьший разброс вершин) и нижний угол: для поворота лопатки за рукой (09bq-skeleton.js)
+_,_,Vt=np.linalg.svd(sv-sv.mean(0)); nrm=Vt[2]; ia=sv[sv[:,1].argmin()]
+# пробные точки задней поверхности лопатки (8 шт.): по ним лопатка держится под кожей при протракции
+rng=np.random.default_rng(1); back=sv[sv[:,2]<np.percentile(sv[:,2],40)]; probe=back[rng.choice(len(back),8,replace=False)]
+# пробные точки передней (рёберной) поверхности тела лопатки: по ним лопатка не заходит в рёбра. Передняя — та
+# половина вершин тела (без акромиона и клюва), что ближе к рёбрам вдоль нормали плоскости лопатки; 16 точек
+# равномерно по площади (выбор самых удалённых друг от друга)
+_,_,Vt0=np.linalg.svd(sv-sv.mean(0)); n0=Vt0[2]*(1 if Vt0[2][2]>0 else -1)          # нормаль — вперёд (к рёбрам)
+body_=sv[(sv[:,1]<tgt[1]-1)&(np.abs(sv[:,0]-tgt[0])>3)]; dd=(body_-body_.mean(0))@n0; frontP=body_[dd>np.percentile(dd,55)]
+sel=[int(np.argmax(frontP[:,1]))]
+while len(sel)<16: dist=np.min(np.linalg.norm(frontP[:,None,:]-frontP[sel][None,:,:],axis=2),axis=1); sel.append(int(np.argmax(dist)))
+front=frontP[sel]
+print('ключица',round(np.linalg.norm(acT),1),'см (×%.2f по длине), АКС'%kc,np.round(acT,1),'нижний угол',np.round(ia,1))
+meta=dict(gl=[tgt.round(2).tolist()],ac=[acT.round(2).tolist()],nrm=[nrm.round(4).tolist()],ia=[ia.round(2).tolist()],probe=probe.round(2).tolist(),front=front.round(2).tolist())
 arm=[]
-for nm,t in (('clavicle_r',300),('scapula_r',1100)):
-    v,f=mesh(ARM,nm); add(nm[:-2],'R','girdle',girdle(v),f,t); arm.append(bones[-1])
+v,f=mesh(ARM,'clavicle_r'); add('clavicle','R','girdle',clavM(v),f,300,**meta); arm.append(bones[-1])
+add('scapula','R','girdle',sv,fS,1100,**meta); arm.append(bones[-1])
 hum=P(ARM,'humerus_r'); el=P(ARM,'ulna_r'); T=long_bone(hum,el,B['ua'],1.0)
 v,f=mesh(ARM,'humerus_r'); add('humerus','R','ua',T(v),f,700); arm.append(bones[-1])
 wr=P(ARM,'lunate_r'); T=long_bone(el,wr,B['fa'],1.0)
@@ -143,14 +204,17 @@ for b in arm: bones.append(mirror(b))
 for s,sx_ in (('R','r'),('L','l')):
     hj=P(LEG,f'femur_{sx_}'); kn=P(LEG,f'tibia_{sx_}'); an=P(LEG,f'talus_{sx_}'); mtp=P(LEG,f'toes_{sx_}')
     T=long_bone(hj,kn,B['th']); v,f=mesh(LEG,f'{sx_}_femur'); add('femur',s,'th',T(v),f,1100)
-    # надколенник: положение по углу колена (полиномы связи из модели), в рамке бедра
+    # надколенник: положение по углу колена (полиномы связи из модели), в рамке бедра. Стоя середина надколенника —
+    # на 0,3 см ниже наружного надмыщелка (ANSUR II: 48,5 и 48,8 см), у модели — на 1,2 см выше: опускаем на 1,5 см
+    # при прямом колене; к 60° сгибания поправка сходит на нет (дальше надколенник ведёт блок бедра)
+    PAT_DY=CFG.get('pat_dy',-1.5)
     v,f=mesh(LEG,f'{sx_}_patella'); pb=P(LEG,f'patella_{sx_}')
     tx=[0.0524192,-0.0150188,-0.0340522,0.0133393,-0.000879151]; ty=[-0.0108281,-0.0487847,0.00927644,0.0131673,-0.00349673]; rz=[0.010506,0.0247615,-1.31647,0.716337,-0.138302]
     pol=lambda c,t:sum(ci*t**i for i,ci in enumerate(c))
     track=[]
     for deg in range(0,151,10):
         t=np.radians(deg); ang=pol(rz,t); tr=M(np.array([pol(tx,t),pol(ty,t),0])*100)
-        track.append([deg,round(float(np.degrees(ang)),2)]+np.round(T((pb+tr)[None])[0],2).tolist())
+        track.append([deg,round(float(np.degrees(ang)),2)]+np.round(T((pb+tr)[None])[0]+[0,PAT_DY*max(0.,1-deg/60),0],2).tolist())
     # вершины надколенника — относительно его начала, в осях бедра (поворот модели вокруг оси z OpenSim = вокруг −X манекена)
     Tl=long_bone(hj,kn,B['th']); loc=Tl(v)-Tl(pb[None])[0]
     add('patella',s,'th',loc,f,140,track=track)
