@@ -920,7 +920,7 @@ module.exports = {
       for (const s of S) q[s].girdle = [0, 10];
       const T = C.axes(q, 'thorax');
       const wr = { L: V.add(V.add(V.add(T.o, T.x, -7), T.y, 16.2), T.z, 15.5), R: V.add(V.add(V.add(T.o, T.x, 7), T.y, 10), T.z, 22.5) };
-      for (const s of S) C.armTo(q, s, wr[s], V.unit(V.add(V.scale(T.y, -1), T.x, M.SIGN[s] * 1.1)), { pron: 60, mode: 'relaxed' });
+      for (const s of S) C.armTo(q, s, wr[s], V.unit(V.add(V.scale(T.y, -1), T.x, M.SIGN[s] * 1.3)), { pron: 60, mode: 'relaxed' });
       return q;
     }
   },

@@ -79,7 +79,13 @@ const B={
  stature:174.5,mass:78,
  ua:28.3,fa:27.0,th:40.7,sk:41.8,               // плечо, предплечье, бедро, голень — между центрами суставов
  hipHalf:8.8,                                    // центры тазобедренных суставов ±8,8 см
- lumbar:[0,10,0],thoracic:[0,14,0],              // поясничный и грудопоясничный «шарниры» по оси корпуса
+ /* Поясница — два шарнира на уровнях L5/S1 и L2/L3 (начала рамок и стыки кожи — на оси корпуса), оси поворота —
+    через позвоночник: глубина и высота центров межпозвонковых суставов модели поясничного отдела MyoSim
+    (MyoBack; по модели Christophy et al., 2012), перенесённых на манекен теми же преобразованиями, что кости
+    (tools/muscles): L5/S1 — 15,2 см над тазобедренными и 4,4 см кзади, L2/L3 — 24,6 и 3,1 см. До 4.26.0 шарниры
+    стояли на 10 и 24 см по центру корпуса: таз «гнулся» ниже крестца, и мышцы спины работали неверно. */
+ lumbar:[0,15,0],thoracic:[0,9,0],
+ lumbarPivot:[0,0,-4.4],thoracicPivot:[0,0,-3.1],  // ось поворота шарнира — от начала рамки (см. fk)
  c7:[0,37.2,-4],headJoint:[0,9.5,3.5],headCenter:[0,2.9,2],
  sc:[2,28.5,4],ghRel:[17,-3.1,-4],               // грудино-ключичный шарнир и центр плечевого сустава от него
  head:[7.65,11.4,10.3],                          // габарит головы от её центра: ширина, высота (до макушки), глубина; форма — HEAD_PARTS
@@ -103,7 +109,27 @@ B.hipHeight=B.sk+B.th+B.ankle;                   // 89,5 см от пола до
 const TORSO=[[-5.3,12.5,4.5,8.5,2,2],[-2.4,15.8,7.8,14.2,3.2,2.6],[0,16.4,8.8,13.0,3.0,2.4],[6,16.2,10.4,10.8,2.4,2.2],[12,15.6,11.4,10.2,2.6,2.6],
  [18,14.9,11.2,10.0,2.8,2.8],[24,14.4,11.0,10.4,3,3],[31,14.6,12.0,11.0,3.4,3.0],[38.8,15.2,13.0,12.0,4.4,3.2],[47.2,15.8,11.4,11.6,3.6,2.6],
  [52.8,15.4,7.8,10.5,2.8,2],[56.8,11.6,5.6,9.0,2.5,2],[59.8,8.2,5.4,8.0,2.2,2]];
-const TORSO_JOINTS=[10,24];
+const TORSO_JOINTS=[15,24];
+/* Кожа корпуса у шарниров поясницы гнётся плавно: [шарнир, высота шарнира, скругление ниже и выше, доля разгона e].
+   Сзади и с боков (TORSO_BLEND) кожа лежит на костях: таз подходит к коже до 12 см (гребень подвздошной кости, крестец),
+   рёбра — с 27–28 см, остистые отростки L5–L1 — 15–29 см. Поэтому скругление у поясничного шарнира — 6–17 см, у грудного —
+   17–28 см (позвонки L4–L1 поворачиваются на этом же отрезке, см. vertebraFrame). Спереди (TORSO_BLEND_FRONT) — мягкая
+   брюшная стенка от лобка до мечевидного отростка: скругление 0–16 и 16–32 см, иначе в глубоком скручивании живот
+   складывается внутрь (сжатие кожи спереди — доля поворота на 1 см × расстояние до оси шарнира, ≈15 см, должно быть
+   меньше 1). FRONT_W — переход по углу сечения (рад от передней линии): до 0,6 — передняя схема, с 1,3 — боковая
+   (передне-верхняя ость таза и рёбра — с 60° и 30° соответственно, у рёбер — только выше 28 см). */
+const TORSO_BLEND=[[1,15,9,2,.3],[2,24,7,4,.3]];
+const TORSO_BLEND_FRONT=[[1,15,15,1,.2],[2,24,8,8,.2]];
+const FRONT_W=[.6,1.3],FRONT_H=[0,32];
+/* доля поворота шарнира в скруглении: скорость поворота растёт линейно на краях (доля e длины) и постоянна в середине —
+   у краёв кожа не ломается (при w = u на конце скругления получался излом, заметный при повороте корпуса) */
+const ramp=(u,e)=>{if(e<=0)return u;const r=1/(1-e);return u<e?r*u*u/(2*e):u>1-e?1-r*(1-u)*(1-u)/(2*e):r*(e/2+u-e);};
+/* Позвонки L4–L1 между шарнирами: поворот грудного шарнира делится по уровням L4/L5, L3/L4, L2/L3, L1/L2 так же, как
+   в MyoSim (связи суставов поясницы MyoBack: сгибание 0,185 : 0,204 : 0,231 : 0,255; наклон 0,181 : 0,245 : 0,250 : 0,188;
+   поворот 0,038 : 0,038 : 0,031 : 0,029) — по каждой оси отдельно; L5 — с поясничной рамкой, L1 — с грудной.
+   VERT_LEVELS — высоты суставов над тазобедренными (MyoSim в рамке таза манекена), VERT_SHARE — накопленные доли
+   [сгибание, наклон, поворот] у позвонков L4, L3, L2. */
+const VERT_LEVELS=[18.12,21.17,24.55,27.39],VERT_SHARE=[[.211,.209,.279],[.444,.493,.557],[.709,.783,.786]];
 /* Низ таза скошен: спереди и посередине (промежность) — на 5,3 см ниже тазобедренных суставов (ANSUR II: промежность
    84,2 при вертеле 89,5), сзади (седалищные бугры с мягкими тканями — опора сидя) — на 9 см. Ниже h = 0 сечение
    опускается вдоль оси на долю K·w(θ): w = ((1 − cos θ)/2)^2,5, θ — направление от оси (0 — вперёд, π — назад). */
@@ -191,13 +217,15 @@ function unpack(a,hands){const q=neutral();let i=0;for(const[p,n]of PACK){setPat
 
 /* ---------- Прямая кинематика ---------- */
 const child=(F,off,R)=>({o:V.add(F.o,M3.v(F.R,off)),R:R?M3.mul(F.R,R):F.R});
+/* шарнир, ось которого проходит не через начало рамки: поворот R вокруг точки off + piv рамки родителя */
+const pivoted=(F,off,piv,R)=>({o:V.add(F.o,M3.v(F.R,V.add(off,V.sub(piv,M3.v(R,piv))))),R:M3.mul(F.R,R)});
 const at=(F,p)=>V.add(F.o,M3.v(F.R,p));
 const spineRot=a=>M3.mul(M3.rx(a[0]),M3.mul(M3.rz(a[1]),M3.ry(a[2])));
 function fk(q){
  const F={},P={};
  F.pelvis={o:[...q.root.p],R:Q.toM3(q.root.q)};
- F.lumbar=child(F.pelvis,B.lumbar,spineRot(q.lumbar));
- F.thorax=child(F.lumbar,B.thoracic,spineRot(q.thoracic));
+ F.lumbar=pivoted(F.pelvis,B.lumbar,B.lumbarPivot,spineRot(q.lumbar));
+ F.thorax=pivoted(F.lumbar,B.thoracic,B.thoracicPivot,spineRot(q.thoracic));
  const half=q.neck.map(v=>v/2);
  F.neck=child(F.thorax,B.c7,spineRot(half));F.head=child(F.neck,B.headJoint,spineRot(half));
  P.head=at(F.head,B.headCenter);
@@ -381,31 +409,65 @@ function profileAt(prof,t){
  return prof.at(-1).slice(1);
 }
 const sectionAt=h=>profileAt(TORSO,h);
-/* Ось корпуса: таз до 10 см, поясница 10–24, грудная клетка выше; скругление у шарниров (см. ниже) */
-function spineFrame(R,h){
- const fr=R.frames,segs=[[fr.pelvis,0],[fr.lumbar,10],[fr.thorax,24]];
+/* Ось корпуса: таз до 15 см (L5/S1), поясница 15–24, грудная клетка выше; скругление у шарниров (см. ниже).
+   zones — схема скругления: боковая (по умолчанию) или передняя (TORSO_BLEND_FRONT) */
+function spineFrame(R,h,zones=TORSO_BLEND){
+ const fr=R.frames,segs=[[fr.pelvis,0],[fr.lumbar,15],[fr.thorax,24]];
  const pointOn=(i,hh)=>{const[f,h0]=segs[i];return V.add(f.o,f.y,hh-h0);};
  const axesOf=i=>{const f=segs[i][0];return{x:f.x,y:f.y,z:f.z};};
- let seg=h<10?0:h<24?1:2;
- /* скругление у шарниров: у поясничного ±3 см; у грудного — в основном ниже шарнира (−4,5…+1 см), чтобы рёберная дуга
-    (h ≥ 25) оставалась жёсткой с грудной клеткой, как рёбра скелета, и не прорезала кожу при скручивании */
- for(const[j,hj,lo,hi]of [[1,10,3,3],[2,24,4.5,1]]){
+ let seg=h<15?0:h<24?1:2;
+ /* Внутри скругления (TORSO_BLEND) сечение повёрнуто на долю ramp(u) поворота шарнира вокруг его оси (B.lumbarPivot,
+    B.thoracicPivot — у позвоночника): кожа идёт дугой вокруг той же оси, что и кости, спина растягивается, живот сжимается. */
+ for(const[j,hj,lo,hi,e=0]of zones){
   if(h>hj-lo&&h<hj+hi){
-   const u=(h-hj+lo)/(lo+hi),P0=pointOn(j-1,hj-lo),P1=pointOn(j,hj),P2=pointOn(j,hj+hi);
-   const c=[0,1,2].map(k=>(1-u)*(1-u)*P0[k]+2*u*(1-u)*P1[k]+u*u*P2[k]);
-   const a=axesOf(j-1),b=axesOf(j),w=smooth(u),mixU=(p,q)=>V.unit(V.mix(p,q,w));
-   const y=mixU(a.y,b.y),z=V.unit(V.perp(mixU(a.z,b.z),y)),x=V.unit(V.perp(V.perp(mixU(a.x,b.x),y),z));
-   return{c,x,y,z};
+   const u=(h-hj+lo)/(lo+hi),A=segs[j-1][0];
+   return turnAbout(A,segs[j-1][1],j,hingeTurn(A,segs[j][0],ramp(u,e)),h);
   }
  }
  const ax=axesOf(seg);return{c:pointOn(seg,h),...ax};
 }
+/* доля w поворота шарнира (рамка Bf в рамке родителя A) — матрица в рамке A; ось и угол считаются один раз на позу
+   (сечений кожи, мышечных зон и позвонков в кадре — сотни) */
+const HINGE=new WeakMap();
+function hingeTurn(A,Bf,w){
+ let c=HINGE.get(Bf);
+ if(!c||c.A!==A){let q=Q.fromM3(M3.cols(localOf(A,Bf.x),localOf(A,Bf.y),localOf(A,Bf.z)));if(q[0]<0)q=q.map(v=>-v);
+  const half=Math.acos(clamp(q[0],-1,1)),s=Math.sin(half);c={A,half,axis:s<1e-9?[1,0,0]:[q[1]/s,q[2]/s,q[3]/s]};HINGE.set(Bf,c);}
+ const a=c.half*w,sn=Math.sin(a);return Q.toM3([Math.cos(a),c.axis[0]*sn,c.axis[1]*sn,c.axis[2]*sn]);
+}
+/* координаты направления v в рамке A и обратно */
+const localOf=(A,v)=>[V.dot(v,A.x),V.dot(v,A.y),V.dot(v,A.z)],worldOf=(A,l)=>V.add(V.add(V.scale(A.x,l[0]),A.y,l[1]),A.z,l[2]);
+/* сечение на высоте h в рамке A (начало — на высоте h0), повёрнутое на Qw вокруг оси шарнира j (1 — поясничный, 2 — грудной) */
+function turnAbout(A,h0,j,Qw,h){
+ const piv=j===1?[0,B.lumbar[1]+B.lumbarPivot[1],B.lumbarPivot[2]]:[0,B.thoracic[1]+B.thoracicPivot[1],B.thoracicPivot[2]];
+ const P=V.add(A.o,worldOf(A,piv)),c=V.add(P,worldOf(A,M3.v(Qw,[-piv[0],h-h0-piv[1],-piv[2]])));
+ return{c,x:worldOf(A,M3.col(Qw,0)),y:worldOf(A,M3.col(Qw,1)),z:worldOf(A,M3.col(Qw,2))};
+}
+/* рамка сечения кожи: боковая схема и, в зоне передней схемы, её рамка (front) — точки спереди берутся из неё */
+function torsoFrame(R,h){
+ const f=spineFrame(R,h);
+ if(h>FRONT_H[0]&&h<FRONT_H[1])f.front=spineFrame(R,h,TORSO_BLEND_FRONT);
+ return f;
+}
+/* доля передней схемы по углу сечения ang (0 — передняя линия, π — спина) */
+const frontK=ang=>1-smooth((ang-FRONT_W[0])/(FRONT_W[1]-FRONT_W[0]));
+/* Рамка позвонка на высоте h (L5…L1): см. VERT_LEVELS. Позвонки — твёрдые тела, кожа над ними — по своей схеме (spineFrame). */
+function vertebraFrame(R,h){
+ const fr=R.frames,k=VERT_LEVELS.findIndex(l=>h<l);
+ if(h<B.lumbar[1])return spineFrame(R,h);
+ if(k===0){const A=fr.lumbar;return{c:V.add(A.o,A.y,h-B.lumbar[1]),x:A.x,y:A.y,z:A.z};}
+ if(k<0){const T=fr.thorax,h0=B.lumbar[1]+B.thoracic[1];return{c:V.add(T.o,T.y,h-h0),x:T.x,y:T.y,z:T.z};}
+ const A=fr.lumbar,T=fr.thorax,a=eulerXZY(M3.cols(localOf(A,T.x),localOf(A,T.y),localOf(A,T.z))),sh=VERT_SHARE[k-1];
+ return turnAbout(A,B.lumbar[1],2,spineRot(a.map((v,i)=>v*sh[i])),h);
+}
 /* Точка поверхности корпуса: side — 'L'/'R', ang ∈ [0, π] от передней линии через бок к спине */
-function torsoPoint(R,h,side,ang,extra=0){return torsoPointIn(R,h,side,ang,extra,spineFrame(R,h),sectionAt(h));}
+function torsoPoint(R,h,side,ang,extra=0){return torsoPointIn(R,h,side,ang,extra,torsoFrame(R,h),sectionAt(h));}
 /* то же по готовой рамке сечения: сетка тела считает рамку и профиль один раз на ряд, а не на каждую точку */
 function torsoPointIn(R,h,side,ang,extra,f,[w,a,b,n=2,nf=2]){
- const c0=Math.cos(ang),s0=Math.sin(ang),k=c0<0?n:nf,c=sePow(c0,k),s=sePow(s0,k),lat=V.scale(f.x,SIGN[side]); /* f.x — левая сторона тела */
- let p=V.add(V.add(f.c,f.z,((c0>=0?a:b)+extra)*c),lat,(w+extra)*s);
+ const c0=Math.cos(ang),s0=Math.sin(ang),k=c0<0?n:nf,c=sePow(c0,k),s=sePow(s0,k),dz=((c0>=0?a:b)+extra)*c,dx=(w+extra)*s*SIGN[side]; /* f.x — левая сторона тела */
+ let p=V.add(V.add(f.c,f.z,dz),f.x,dx);
+ const kf=f.front?frontK(ang):0;
+ if(kf>0){const g=f.front;p=V.mix(p,V.add(V.add(g.c,g.z,dz),g.x,dx),kf);}
  if(h<0){const d=V.sub(p,f.c),rho=V.len(d);p=V.add(p,f.y,h*SEAT_K*seatW(rho<1e-9?0:V.dot(d,f.z)/rho));}
  /* надплечья следуют за поднятием и протракцией плечевого пояса */
  if(h>38.8&&R.girdle&&R.frames.thorax){
@@ -444,7 +506,13 @@ function limbPoint(R,kind,side,t,ang,extra=0){
  const[,a,b]=LIMB_DEF[kind];return limbPointIn(V.mix(R[a+side],R[b+side],t),limbAxes(R,kind,side,t),profileAt(LIMBS[kind],t),ang,extra);
 }
 /* ряд точек на одном сечении: рамка, оси и профиль считаются один раз (сетки тела и мышечных зон) */
-function torsoRow(R,h,side){const f=spineFrame(R,h),sec=sectionAt(h);return(ang,extra=0)=>torsoPointIn(R,h,side,ang,extra,f,sec);}
+/* рамки сечений кадра по высоте: ряды левой и правой стороны мышечных зон — на одних и тех же высотах */
+const ROWS=new WeakMap();
+function torsoRow(R,h,side){
+ let m=ROWS.get(R.frames);if(!m)ROWS.set(R.frames,m=new Map());
+ let f=m.get(h);if(!f)m.set(h,f=torsoFrame(R,h));
+ const sec=sectionAt(h);return(ang,extra=0)=>torsoPointIn(R,h,side,ang,extra,f,sec);
+}
 function limbRow(R,kind,side,t){const[,a,b]=LIMB_DEF[kind],center=V.mix(R[a+side],R[b+side],t),ax=limbAxes(R,kind,side,t),prof=profileAt(LIMBS[kind],t);return(ang,extra=0)=>limbPointIn(center,ax,prof,ang,extra);}
 /* то же по готовому сечению (центр, оси, профиль) — для сетки, где сечение общее для ряда точек */
 function limbPointIn(center,ax,[rf,rb,rl,rm],ang,extra=0){
@@ -471,7 +539,7 @@ const TORSO_H=[];for(let h=TORSO[0][0];h<=TORSO.at(-1)[0]+1e-9;h+=2.5)TORSO_H.pu
 /* Полная сетка тела для сцены: точки в координатах каталога */
 function surface(R,{cols=TORSO_COLS,limbRows=10,limbCols=16}={}){
  /* рамка и профиль сечения считаются один раз на ряд — точки те же, что у torsoPoint/limbPoint/neckPoint */
- const torso=TORSO_H.map(h=>{const f=spineFrame(R,h),sec=sectionAt(h);return Array.from({length:cols},(_,c)=>{const a=c/cols*2*Math.PI,side=a<=Math.PI?'L':'R',ang=a<=Math.PI?a:2*Math.PI-a;return torsoPointIn(R,h,side,ang,0,f,sec);});});
+ const torso=TORSO_H.map(h=>{const f=torsoFrame(R,h),sec=sectionAt(h);return Array.from({length:cols},(_,c)=>{const a=c/cols*2*Math.PI,side=a<=Math.PI?'L':'R',ang=a<=Math.PI?a:2*Math.PI-a;return torsoPointIn(R,h,side,ang,0,f,sec);});});
  const limbs={};
  for(const s of SIDES)for(const k of Object.keys(LIMB_DEF)){
   const[,a,b]=LIMB_DEF[k],A=R[a+s],Bp=R[b+s];
@@ -485,7 +553,7 @@ function surface(R,{cols=TORSO_COLS,limbRows=10,limbCols=16}={}){
 /* Точки для рамки кадра SVG-фигуры: все ряды туловища и каждый третий ряд конечностей (с последним) — ровно те точки
    surface(), по которым считается рамка, без шеи, кистей и стоп; совпадают с surface() до бита. */
 function boundsSurface(R,{cols=TORSO_COLS,limbRows=10,limbCols=16,limbStep=3}={}){
- const torso=TORSO_H.map(h=>{const f=spineFrame(R,h),sec=sectionAt(h);return Array.from({length:cols},(_,c)=>{const a=c/cols*2*Math.PI,side=a<=Math.PI?'L':'R',ang=a<=Math.PI?a:2*Math.PI-a;return torsoPointIn(R,h,side,ang,0,f,sec);});});
+ const torso=TORSO_H.map(h=>{const f=torsoFrame(R,h),sec=sectionAt(h);return Array.from({length:cols},(_,c)=>{const a=c/cols*2*Math.PI,side=a<=Math.PI?'L':'R',ang=a<=Math.PI?a:2*Math.PI-a;return torsoPointIn(R,h,side,ang,0,f,sec);});});
  const rows=[];for(let r=0;r<=limbRows;r++)if(r%limbStep===0||r===limbRows)rows.push(r);
  const limbs={};
  for(const s of SIDES)for(const k of Object.keys(LIMB_DEF)){
@@ -510,18 +578,29 @@ function limbSDF(R,kind,side,p){
  return axial>0?(radial>0?Math.hypot(radial,axial):axial):radial;
 }
 const TORSO_SAMPLES=[];for(let h=TORSO[0][0];h<=TORSO.at(-1)[0]+1e-9;h+=1)TORSO_SAMPLES.push(h);
-/* ближайшее по оси сечение корпуса; hint — номер сечения, рядом с которым искать (±4), иначе — среди всех */
-function nearestSection(frames,p,hint){
- let best=null;const i0=hint==null?0:Math.max(0,hint-4),i1=hint==null?frames.length-1:Math.min(frames.length-1,hint+4);
- for(let i=i0;i<=i1;i++){const s=frames[i],off=V.sub(p,s.f.c),along=V.dot(off,s.f.y);if(!best||Math.abs(along)<Math.abs(best.along))best={s,off,along,i};}
+/* рамка сечения кожи с долей k передней схемы скругления: точки кожи с той же долей лежат на сечении этой рамки
+   (torsoPointIn смешивает точки двух рамок линейно — значит, и сами рамки) */
+const mixFrame=(f,k)=>!f.front||k<=0?f:{c:V.mix(f.c,f.front.c,k),x:V.mix(f.x,f.front.x,k),y:V.unit(V.mix(f.y,f.front.y,k)),z:V.mix(f.z,f.front.z,k)};
+/* ближайшее по оси сечение корпуса; hint — номер сечения, рядом с которым искать (±span), иначе — среди всех;
+   k — доля передней схемы (mixFrame) */
+function nearestSection(frames,p,hint,k=0,span=4){
+ let best=null;const i0=hint==null?0:Math.max(0,hint-span),i1=hint==null?frames.length-1:Math.min(frames.length-1,hint+span);
+ for(let i=i0;i<=i1;i++){const s=frames[i],f=mixFrame(s.f,k),off=V.sub(p,f.c),along=V.dot(off,f.y);if(!best||Math.abs(along)<Math.abs(best.along))best={s,f,off,along,i};}
  return best;
 }
 function torsoSDF(R,p,cache){
- const frames=cache||TORSO_SAMPLES.map(h=>({h,f:spineFrame(R,h)}));
+ const frames=cache||torsoCache(R);
  /* надплечья сдвинуты за плечевым поясом (как сетка кожи): расстояние считаем от точки, сдвинутой обратно */
- if(R.girdle&&R.frames.thorax){const h0=nearestSection(frames,p).i;let q=p;for(let it=0;it<10;it++){const d=torsoShiftAt(R,q,frames,h0);if(!it&&!(d[0]||d[1]||d[2]))break;const n=V.mix(q,V.sub(p,d),.6);if(V.dist(n,q)<.01){q=n;break;}q=n;}p=q;}
- const best=nearestSection(frames,p);
- const{s,off,along}=best,lz=V.dot(off,s.f.z),lx=V.dot(off,s.f.x),rho=Math.hypot(lz,lx),hp=s.h+along;
+ const h0=nearestSection(frames,p).i;
+ if(R.girdle&&R.frames.thorax){let q=p;for(let it=0;it<10;it++){const d=torsoShiftAt(R,q,frames,h0);if(!it&&!(d[0]||d[1]||d[2]))break;const n=V.mix(q,V.sub(p,d),.6);if(V.dist(n,q)<.01){q=n;break;}q=n;}p=q;}
+ /* живот спереди — по передней схеме скругления: доля k — по углу точки на сечении, сечение — смешанная рамка */
+ let kf=0,best=nearestSection(frames,p);
+ if(frames.front??=frames.some(e=>e.f.front))for(let it=0;it<3;it++){
+  const f=best.f,lx=V.dot(best.off,f.x),lz=V.dot(best.off,f.z),[w,a,b]=sectionAt(best.s.h);
+  const k1=best.s.f.front?frontK(Math.atan2(Math.abs(lx)/w,lz/(lz>=0?a:b))):0;if(Math.abs(k1-kf)<.01&&it)break;
+  kf=k1;best=nearestSection(frames,p,best.i,kf,8);
+ }
+ const{s,f,off,along}=best,lz=V.dot(off,f.z),lx=V.dot(off,f.x),rho=Math.hypot(lz,lx),hp=s.h+along;
  /* ниже тазобедренных — скошенный низ: сечение берётся с «номинальной» высоты, торец — на высоте lo·(1 + K·w) */
  const k=hp<0?1+SEAT_K*seatW(rho<1e-9?0:lz/rho):1,[w,a,b,n,nf]=sectionAt(hp<0?hp/k:s.h);
  const r=rho<1e-9?Math.min(w,a,b):ellipseRadius(lz,lx,a,b,w,w,n,nf),radial=rho-r;
@@ -536,7 +615,7 @@ function torsoShiftAt(R,p,frames,hint){
  const lx=V.dot(V.sub(p,best.s.f.c),best.s.f.x),[w]=sectionAt(Math.min(hp,TORSO.at(-1)[0]));
  return girdleShift(R,hp,lx>=0?'L':'R',Math.min(1,Math.abs(lx)/w));
 }
-function torsoCache(R){return TORSO_SAMPLES.map(h=>({h,f:spineFrame(R,h)}));}
+function torsoCache(R){return TORSO_SAMPLES.map(h=>({h,f:torsoFrame(R,h)}));}
 /* ---------- Голова: знаковое расстояние и сетка ---------- */
 const rotXYZ=([ax=0,ay=0,az=0]=[])=>{const a=ax*D2R,b=ay*D2R,c=az*D2R,ca=Math.cos(a),sa=Math.sin(a),cb=Math.cos(b),sb=Math.sin(b),cc=Math.cos(c),sc=Math.sin(c);
  /* столбцы — локальные оси эллипсоида в рамке головы: Rz·Ry·Rx */
@@ -797,10 +876,10 @@ function centerOfMass(R,extra=[]){
  const M=parts.reduce((s,[,w])=>s+w,0);return{c:parts.reduce((acc,[p,w])=>V.add(acc,p,w/M),[0,0,0]),mass:M};
 }
 
-return{V,M3,Q,B,TORSO,TORSO_H,TORSO_JOINTS,LIMBS,NECK,CAPS,SH_CAP,AC_CAP,MASS,LIMITS,SIDES,SIGN,FLOOR,D2R,R2D,clamp,
+return{V,M3,Q,B,TORSO,TORSO_H,TORSO_JOINTS,TORSO_BLEND,TORSO_BLEND_FRONT,FRONT_W,FRONT_H,VERT_LEVELS,VERT_SHARE,LIMBS,NECK,CAPS,SH_CAP,AC_CAP,MASS,LIMITS,SIDES,SIGN,FLOOR,D2R,R2D,clamp,
  neutral,clone,pack,unpack,PACK,PACK_SIZE,fk,solePoints,twoBone,solveArm,solveArmWrist,setArmFromPoints,footFrame,heelFrame,solveLeg,rootRot,rootFromAxes,
  swing,swingTwist,eulerXZY,eulerYZX,spineRot,makeTrack,monotone,toCat,dirCat,catalogPose,
- profileAt,sectionAt,spineFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,neckSDF,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,
+ profileAt,sectionAt,spineFrame,torsoFrame,frontK,vertebraFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,neckSDF,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,
  headLocalSDF,headLocal,headWorld,headMesh,headSamples,HEAD_PARTS,HEAD_EAR,HEAD_EARS,ellipseRadius,centerOfMass,LIMB_DEF,
  handShape,footShape,footPoints,footPointWorld,footBlendW,FOOT_SECTIONS,TOES,malleoli,bodyData,jointAngles};
 })();

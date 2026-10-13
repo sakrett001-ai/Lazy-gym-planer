@@ -3,8 +3,8 @@
    сегментов манекена (tools/skeleton). Данные — src/data/skeleton.bin (gzip): грузятся при первом включении режима
    «Скелет»; в офлайн-файле встроены (window.SKELETON_BIN, base64).
    Каждая кость — жёсткое тело своего сегмента (иногда с масштабом): frames() даёт для кадра аффинные матрицы 3×4
-   «локальные см → каталог (см, Y вниз)». Особые случаи: позвонки — по рамке позвоночника на своей высоте (как кожа
-   корпуса); ключица и лопатка — по рамке плечевого пояса, лопатка поворачивается за рукой и скользит по рёбрам (scapulaRot); лучевая кость — поворот с пронацией вокруг оси
+   «локальные см → каталог (см, Y вниз)». Особые случаи: позвонки L5–L1 — по рамке позвонка на своей высоте
+   (Mannequin.vertebraFrame: поворот поясницы делится по уровням, как в MyoSim); ключица и лопатка — по рамке плечевого пояса, лопатка поворачивается за рукой и скользит по рёбрам (scapulaRot); лучевая кость — поворот с пронацией вокруг оси
    «головка лучевой — запястье»; надколенник — по углу колена (полиномы связи модели Rajagopal); фаланги — по линиям
    пальцев текущего хвата. */
 const Skeleton = (() => {
@@ -166,7 +166,7 @@ const Skeleton = (() => {
     let tc = null; const ctx = { cache: () => tc || (tc = M.torsoCache(R)), rib: bones._rib === undefined ? (bones._rib = ribShell(bones)) : bones._rib };
     bones.forEach((b, i) => {
       const s = b.side, g = SIGN[s] || 1; let A;
-      if (b.seg === 'spine') A = frameAff(M.spineFrame(R, b.h));
+      if (b.seg === 'spine') A = frameAff(M.vertebraFrame(R, b.h));
       else if (b.seg === 'girdle') {
         const C = frameAff(F['cl' + s]), key = 'st' + s, rot = key in cache ? cache[key] : (cache[key] = b.gl ? scapulaRot(R, s, b, ctx) : null);
         if (!rot) A = C;
