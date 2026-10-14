@@ -34,7 +34,8 @@ test('drawn points follow the wrapping surface and sum to the path length', () =
 /* ---------- данные приложения: src/data/muscles.bin ---------- */
 const L = require('./muscles/sweeplib.js');
 const skel = L.skeleton(), md = L.muscles(), bound = Muscles.bind(md, skel);
-const GROUPS = new Set(['chest', 'delt_f', 'delt_s', 'delt_r', 'biceps', 'triceps', 'forearms', 'abs', 'obliques', 'traps', 'midback', 'lats', 'lowback', 'glutes', 'quads', 'hams', 'calves']);
+const GROUPS = new Set(['chest', 'delt_f', 'delt_s', 'delt_r', 'biceps', 'triceps', 'forearms', 'abs', 'obliques', 'traps', 'midback', 'lats', 'lowback', 'glutes', 'quads', 'hams', 'calves',
+  'adductors', 'hipflex', 'serratus', 'cuff']);
 const pose = (set = {}) => {
   const q = L.M.neutral(); for (const s of ['L', 'R']) { q[s].shoulder = [0, 0, 0]; q[s].elbow = 0; }
   for (const [k, v] of Object.entries(set)) { const p = k.split('.'); let o = q; for (let i = 0; i < p.length - 1; i++) o = o[p[i]]; o[p.at(-1)] = v; }

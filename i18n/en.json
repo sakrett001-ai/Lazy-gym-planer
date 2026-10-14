@@ -15,7 +15,6 @@
  "Ягодичные": "Glutes",
  "Квадрицепс": "Quads",
  "Бицепс бедра": "Hamstrings",
- "Икроножные": "Calves",
  "Карта мышц": "Muscle map",
  "спереди": "front",
  "сзади": "back",
@@ -2611,5 +2610,17 @@
  "Мышцы (вид «Анатомия») — пути из тех же моделей MyoSim; мышцы лопатки — из модели плеча": "Muscles (the “Anatomy” view) — paths from the same MyoSim models; shoulder-blade muscles — from the shoulder model",
  "), пересчитана на рост и вес фигуры; доли сухожилий ног — по препаратам (": "), rescaled to the figure’s height and weight; leg tendon proportions — from cadaver specimens (",
  "). Укорачиваясь, мышца утолщается: её объём не меняется.": "). As a muscle shortens it thickens: its volume stays the same.",
- "На объёмной фигуре можно выделить мышечную область и сменить ракурс. Глубокие части перечислены в пояснениях.": "Highlight a muscle region on the volumetric figure or change the view. Deeper parts are listed in the explanations."
+ "На объёмной фигуре можно выделить мышечную область и сменить ракурс. Глубокие части перечислены в пояснениях.": "Highlight a muscle region on the volumetric figure or change the view. Deeper parts are listed in the explanations.",
+ "Приводящие бедра": "Hip adductors",
+ "Сгибатели бедра": "Hip flexors",
+ "Передняя зубчатая": "Serratus anterior",
+ "Вращательная манжета": "Rotator cuff",
+ "Приводящие мышцы бедра · общий профиль": "Hip adductors · shared group profile",
+ "Подвздошно-поясничная · глубже": "Iliopsoas · deeper",
+ "Вращательная манжета · глубже": "Rotator cuff · deeper",
+ "Сводят ноги. Большая приводящая ещё и разгибает бедро: в глубоком приседе и выпаде она работает вместе с ягодичными.": "Bring the legs together. Adductor magnus also extends the hip: in a deep squat and a lunge it works together with the glutes.",
+ "Поднимают бедро к корпусу — подвздошно-поясничная мышца, прямая мышца бедра, портняжная. Главные мышцы подъёмов ног и коленей.": "Lift the thigh towards the trunk — iliopsoas, rectus femoris, sartorius. The main movers in leg and knee raises.",
+ "Прижимает лопатку к рёбрам, выводит её вперёд и поворачивает вверх. Работает в отжиманиях и жимах над головой.": "Holds the shoulder blade against the ribs, moves it forward and rotates it upward. Works in push-ups and overhead presses.",
+ "Четыре глубокие мышцы вокруг плечевого сустава: держат головку плеча во впадине и вращают руку. Работают в разведениях назад, «Y-T-W» и тягах сверху.": "Four deep muscles around the shoulder joint: they keep the head of the humerus in its socket and rotate the arm. They work in reverse flyes, Y-T-W raises and overhead pulls.",
+ "<p class=\"f-note\">Эта мышца работает в помощь основным и отдельной тренировки не требует: она включается в упражнениях ниже.</p>": "<p class=\"f-note\">This muscle assists the main movers and needs no separate workout: it works in the exercises below.</p>"
 }

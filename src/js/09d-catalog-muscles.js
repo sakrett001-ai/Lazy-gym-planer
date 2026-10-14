@@ -13,7 +13,9 @@ const MUSCLE_REGIONS={
  traps:[['trap_upper','Верхняя область трапециевидной','teaching'],['trap_mid','Средняя область трапециевидной','teaching']],
  lats:[['lats','Широчайшие · общий профиль','group']],midback:[['midback','Межлопаточная область · общий профиль','group']],
  lowback:[['lowback','Разгибатели спины · общий профиль','group']],abs:[['abs','Прямая мышца живота','anatomical']],
- obliques:[['obliques','Косые мышцы живота · общий профиль','group']],forearms:[['forearms','Мышцы предплечья · общий профиль','group']]
+ obliques:[['obliques','Косые мышцы живота · общий профиль','group']],forearms:[['forearms','Мышцы предплечья · общий профиль','group']],
+ adductors:[['adductors','Приводящие мышцы бедра · общий профиль','group']],hipflex:[['hipflex','Подвздошно-поясничная · глубже','deep']],
+ serratus:[['serratus','Передняя зубчатая','anatomical']],cuff:[['cuff','Вращательная манжета · глубже','deep']]
 };
 const REGION_META=Object.fromEntries(Object.entries(MUSCLE_REGIONS).flatMap(([parent,rows])=>rows.map(([id,label,kind])=>[id,{id,parent,label,kind,visible:kind!=='deep'}])));
 const REGION_ANATOMY_SOURCES=[['Анатомия мышц плечевого пояса — OpenStax','https://openstax.org/books/anatomy-and-physiology-2e/pages/11-5-muscles-of-the-pectoral-girdle-and-upper-limbs'],['Анатомия мышц ног — OpenStax','https://openstax.org/books/anatomy-and-physiology-2e/pages/11-6-appendicular-muscles-of-the-pelvic-girdle-and-lower-limbs']];
@@ -25,7 +27,7 @@ const PULL_CHEST=new Set(['latpull','latpullv','latpulluh','assistpull','pullup'
 const LOWER_CHEST=new Set(['declinebb','dip','assistdip']);
 const CATALOG_LATERALITY={dbrow:{upper:'L'},cablelat:{upper:'R'},concentration:{upper:'L'},kickback:{upper:'L'},archer:{upper:'R'},bulgarian:{lower:'L'},stepup:{lower:'L'},lunge:{lower:'L'},revlunge:{lower:'L'},sidelunge:{lower:'R'},pistolbox:{lower:'L'},sllift:{lower:'L'},glutebridge1:{lower:'L'},glutekick:{lower:'L'},cablekickback:{lower:'L'},calf1:{lower:'L'}};
 function catalogSideValues(profile,values){
- const sides={L:{...values},R:{...values}},lower=new Set(['quads','hams','calves','glutes']);
+ const sides={L:{...values},R:{...values}},lower=new Set(['quads','hams','calves','glutes','adductors','hipflex']);
  for(const[part,active]of Object.entries(profile.laterality||{}))for(const[id,r]of Object.entries(profile.regions)){
   const applies=part==='lower'?lower.has(r.parent):!lower.has(r.parent)&&!['abs','obliques','lowback','traps'].includes(r.parent);
   if(applies)sides[active==='L'?'R':'L'][id]=.28;
@@ -34,7 +36,7 @@ function catalogSideValues(profile,values){
 for(const ex of EX){
  const base=ex.anim.muscleProfile,hold=ex.anim.hold,cyclic=ex.g==='cardio'||!!ex.kind,muscles=base?JSON.parse(JSON.stringify(base.muscles)):{};
  for(const[id,role]of [...ex.pri.map(id=>[id,'primary']),...ex.sec.filter(id=>!ex.pri.includes(id)).map(id=>[id,'support'])])if(!muscles[id]){
-  const stabilizer=['abs','obliques','lowback','forearms'].includes(id)&&role!=='primary';
+  const stabilizer=['abs','obliques','lowback','forearms','cuff'].includes(id)&&role!=='primary';
   const start=role==='primary'?.42:.30,end=role==='primary'?.62:.44;
   const c=hold?[.58,.58,.58]:stabilizer?[.34,.37,.34]:[start,role==='primary'?.83:.60,end];
   muscles[id]={role:stabilizer?'stabilizer':role,concentric:c,eccentric:hold?[...c]:stabilizer?[...c]:[start,role==='primary'?.62:.46,end]};
@@ -107,11 +109,13 @@ function catalogMuscleSurfaces(R,profile,{coarse=false}={}){
    Корпус: h — высота вдоль оси корпуса от середины тазобедренных суставов, угол от передней линии к боку и спине.
    Конечности: t — доля сегмента, угол от передней поверхности к латеральной. Дельты лежат на «шапке» плеча. */
 const MANNEQUIN_TORSO_PATCHES=[['pec_clavicular',43,51.8,.06,1.12],['pec_sternal',34,43,.06,1.22],['pec_costal',29,34,.08,1.02],['abs',3,29,.04,.5],['obliques',3,28,.56,1.36],
- ['lats',13,40.2,1.52,2.62],['midback',33,51.8,2.62,3.1],['lowback',3,24,2.7,3.1],['glute_max',-5.3,4,1.72,3.1],['glute_lateral',-3.5,7,1.16,1.7],['trap_upper',50.8,59.8,2.05,3.1],['trap_mid',40.2,50.8,2.3,2.68]];
+ ['lats',13,40.2,1.52,2.62],['serratus',28,39,1.24,1.5],['midback',33,51.8,2.62,3.1],['lowback',3,24,2.7,3.1],['glute_max',-5.3,4,1.72,3.1],['glute_lateral',-3.5,7,1.16,1.7],['trap_upper',50.8,59.8,2.05,3.1],['trap_mid',40.2,50.8,2.3,2.68]];
 const MANNEQUIN_LIMB_PATCHES={
  ua:[['bi_long',.33,.84,.05,.8],['bi_short',.33,.84,-.8,-.05],['tri_long',.3,.86,2.5,3.9],['tri_lateral',.3,.85,1.7,2.45]],
  fa:[['forearms',.12,.76,-1.25,1.25]],
- th:[['quad_rectus',.15,.8,-.44,.44],['quad_lateral',.12,.82,.48,1.48],['quad_medial',.44,.91,-1.38,-.48],['ham_lateral',.16,.82,1.67,2.71],['ham_medial',.18,.84,2.77,4.45]],
+ th:[['quad_rectus',.15,.8,-.44,.44],['quad_lateral',.12,.82,.48,1.48],['quad_medial',.44,.91,-1.38,-.48],['ham_lateral',.16,.82,1.67,2.71],['ham_medial',.18,.84,2.77,4.45],
+  /* приводящие: внутренняя поверхность бедра — широко вверху (длинная, короткая, большая приводящие), узко ниже, до колена (тонкая, большая) */
+  ['adductors',.04,.42,-1.8,-.5],['adductors',.42,.86,-1.8,-1.42]],
  sk:[['calf_lateral',.1,.56,2.05,3.12],['calf_medial',.1,.56,3.16,4.22]]
 };
 const MANNEQUIN_DELTS=[['delt_f',-.75,.75],['delt_s',.8,1.75],['delt_r',1.8,2.75]];

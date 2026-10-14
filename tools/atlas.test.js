@@ -7,7 +7,7 @@ const { loadModel } = require('./biomechanics-audit');
 function app() {
   const m = loadModel({ fullApp: true });
   m.get('renderSetup=()=>{}; logRefresh=()=>{}; LOG.mode="local";');
-  return m.get('({S,EX,EXI,MUSCLE_NAMES,MUSCLE_GROUP,MUSCLE_INFO,ATLAS_ORDER,available,effEquip,atlasFor,atlasCounts,atlasMapSvg,atlasCamera,setFocus,buildPlan,buildProgram,ensurePlaces,PLACE_DEFAULTS})');
+  return m.get('({S,EX,EXI,MUSCLE_NAMES,MUSCLE_GROUP,MUSCLE_INFO,ATLAS_ORDER,ATLAS_SUPPORT,available,effEquip,atlasFor,atlasCounts,atlasMapSvg,atlasCamera,setFocus,buildPlan,buildProgram,ensurePlaces,PLACE_DEFAULTS})');
 }
 const HOME = ['db', 'band', 'abwheel'];
 const places = a => { a.S.places = a.PLACE_DEFAULTS.map(p => ({ ...p, equip: p.equip.slice() })); };
@@ -16,11 +16,18 @@ test('every muscle has a description, a place on the map and exercises in the gy
   const a = app(), E = a.effEquip(a.PLACE_DEFAULTS[0].equip);
   assert.deepEqual([...a.ATLAS_ORDER].sort(), Object.keys(a.MUSCLE_NAMES).sort(), 'the atlas lists all muscles once');
   const svg = a.atlasMapSvg('chest', a.atlasCounts(E));
+  /* мышцы-помощники (передняя зубчатая, вращательная манжета) редко бывают главной целью: у них — упражнения, где они
+     работают в помощь, и нет кнопки тренировки с акцентом */
   for (const m of a.ATLAS_ORDER) {
     assert(a.MUSCLE_INFO[m] && a.MUSCLE_INFO[m].length > 30, m + ' explains what it does');
     assert(svg.includes(`data-atlas-m="${m}"`), m + ' can be tapped on the map');
-    assert(a.atlasFor(m, E).pri.length >= 2, m + ' has exercises where it is the main target');
+    const A = a.atlasFor(m, E);
+    if (a.ATLAS_SUPPORT.has(m)) assert(A.pri.length + A.sec.length >= 4, m + ' is shown in the exercises it supports');
+    /* приводящие: в каталоге одно упражнение прицельно на них (сведение ног в тренажёре), но работают они в 14 приседаниях
+       и выпадах — достаточно одного целевого при широком участии */
+    else assert(A.pri.length >= 2 || (A.pri.length >= 1 && A.pri.length + A.sec.length >= 6), m + ' has exercises where it is the main target');
   }
+  assert.deepEqual([...a.ATLAS_SUPPORT].sort(), ['cuff', 'serratus']);
   assert.match(svg, /class="am-m on"[^>]*data-atlas-m="chest"/, 'the chosen muscle is highlighted');
 });
 test('the list uses only the current place, main work first, isolation before compound', () => {

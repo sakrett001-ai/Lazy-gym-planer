@@ -26,7 +26,7 @@ export function muscleTint(mu,level,look,color){
  const groups=mu.group||[];if(!groups.length)return MUSCLE_REST;
  const key=g=>{const r=PART_REGION[mu.part];return r&&look?.regions?.[r]?.parent===g?r:g;};
  const sel=look?.selected&&look.selected!=='all'?look.selected:null;
- if(sel&&!groups.some(g=>key(g)===sel))return MUSCLE_REST;
+ if(sel&&!groups.some(g=>key(g)===sel||g===sel))return MUSCLE_REST;
  if(look?.phases&&look.values){
   /* значения стороны мышцы; у части без своей области (плечевая, трапециевидная снизу, малая грудная) — наибольшее из
      областей её группы на этой стороне: в упражнении на одну сторону и они на нерабочей стороне в покое */

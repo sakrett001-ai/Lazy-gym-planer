@@ -16,7 +16,7 @@ function checkRegions(view,data){
   const center=new THREE.Vector3();for(let j=0;j<3;j++)center.add(new THREE.Vector3().fromBufferAttribute(attr,i*6+j).applyMatrix4(region.matrixWorld).multiplyScalar(1/3));
   /* манекен: голень — 'sk', участок приподнят над кожей на 2,5 мм; сетка кожи — многоугольник, допуск шире на прогиб хорды */
   const mq=!!view.mannequin,shin=mq?'sk':'sh',lift=mq?.0125:.0115,tol=mq?.0016:.0008;
-  const parent=face.parent,kind=['quads','hams'].includes(parent)?'th':parent==='calves'?shin:parent==='forearms'?'fa':['biceps','triceps','delt_f','delt_s','delt_r'].includes(parent)?'ua':null,target=kind?view.parts[kind+face.side].mesh:view.body,n=normalWorld(face.normal);
+  const parent=face.parent,kind=['quads','hams','adductors'].includes(parent)?'th':parent==='calves'?shin:parent==='forearms'?'fa':['biceps','triceps','delt_f','delt_s','delt_r'].includes(parent)?'ua':null,target=kind?view.parts[kind+face.side].mesh:view.body,n=normalWorld(face.normal);
   /* у манекена дельтовидная лежит на «шапке» плечевого сустава */
   const targets=mq&&parent.startsWith('delt')?[target,view.parts['cap-sh'+face.side].mesh]:[target];
   ray.set(center.clone().addScaledVector(n,.01),n.clone().negate());const hit=ray.intersectObjects(targets,false)[0];
