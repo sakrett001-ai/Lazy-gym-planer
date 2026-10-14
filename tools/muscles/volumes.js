@@ -22,7 +22,7 @@ const A = require('./fixtures/anatomy.json'), P = require('./fixtures/params.jso
 /* мышцы набора МРТ → линии манекена (имя без стороны) */
 const GROUPS = [
   ['Levator scapulae', /^lev_scap_\d$/], ['Supraspinatus', /^SUPSP$/], ['Trapezius', /^trap_(scap_?\d+|clav_\d)$/],
-  ['Rhomboid', /^rhomboid_\d$/], ['Serratus anterior', /^serr_ant_?\d+$/], ['Latissimus dorsi', /^LAT[123]$/],
+  ['Rhomboid', /^rhomboid_\d$/], ['Serratus anterior', /^serr_ant_?\d+$/], ['Latissimus dorsi', /^LAT[1-6]$/],
   ['Subscapularis', /^SUBSC$/], ['Teres major', /^TMAJ$/], ['Infraspinatus and teres minor', /^(INFSP|TMIN)$/],
   ['Pectoralis minor', /^pect_min_\d$/], ['Pectoralis major', /^PECM[123]$/], ['Deltoid', /^DELT[123]$/],
   ['Triceps brachii', /^TRI(long|lat|med)$/], ['Coracobrachialis', /^CORB$/], ['Biceps brachii', /^BIC(long|short)$/],
@@ -45,6 +45,10 @@ const GROUPS = [
 /* мышцы пальцев: MyoSim (2–5 — указательный…мизинец) → MoBL-ARMS (I, M, R, L) */
 const DIGIT = { 2: 'I', 3: 'M', 4: 'R', 5: 'L' };
 function source(base) {
+  /* широчайшая: три пучка MoBL-ARMS (T7, T10, T12) и три достроенных по анатомии (L3, гребень подвздошной кости;
+     lat_anatomy.js) — объём делится как между шестью пучками DAS3 (lat_dorsi_1…6: T8, T10, T12, L3, два наружных) */
+  const lat = base.match(/^LAT([1-6])$/);
+  if (lat) return P.das3['lat_dorsi_' + lat[1]];
   if (P.rajagopal2016[base + '_r']) return P.rajagopal2016[base + '_r'];
   const d = base.match(/^(FDS|FDP|EDC)(\d)$/);
   if (d) return P.mobl[d[1] + DIGIT[d[2]]];
@@ -59,7 +63,7 @@ const BELLY = [
   [/^bflh$/, 'bflh', .35], [/^bfsh$/, 'bfsh', .1], [/^semiten$/, 'semiten', .25], [/^semimem$/, 'semimem', .45],
   [/^(tibant|ehl|edl|perlong|perbrev|fhl|fdl|tibpost|soleus)$/, null, .05], [/^gas(med|lat)$/, null, .1],
   /* плечо: путь — от плечевой кости (сухожилие прикрепления — в начале) */
-  [/^(DELT\d|PECM\d)$/, .85, .9], [/^(SUPSP|INFSP|SUBSC|TMIN|TMAJ)$/, .8, .9], [/^LAT\d$/, .75, .6], [/^CORB$/, .8, .3],
+  [/^(DELT\d|PECM\d)$/, .85, .9], [/^(SUPSP|INFSP|SUBSC|TMIN|TMAJ)$/, .8, .9], [/^LAT[456]$/, .7, .4], [/^LAT\d$/, .75, .6], [/^CORB$/, .8, .3],
   [/^TRIlong$/, .75, .25], [/^TRI(lat|med)$/, .8, .1], [/^(ANC|SUP|PQ)$/, .95, .5], [/^BIClong$/, .55, .6], [/^BICshort$/, .6, .4],
   [/^BRA$/, .9, .1], [/^BRD$/, .65, .05], [/^PT$/, .85, .1],
   /* предплечье: брюшко — в верхней части, длинные сухожилия к кисти и пальцам */

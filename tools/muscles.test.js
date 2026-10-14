@@ -43,7 +43,7 @@ const pose = (set = {}) => {
 const lengths = set => { const { m } = pose(set); return new Map(Muscles.layout(bound, m).map((p, i) => [bound[i].name, p.length])); };
 
 test('muscle data: every muscle sits on existing bones, has an anatomical name and app groups, both sides', () => {
-  assert.equal(md.muscles.length, 462);
+  assert.equal(md.muscles.length, 468);   /* 4.32.0: +6 — поясничный и подвздошные пучки широчайшей (lat_anatomy.js) */
   for (const mu of md.muscles) {
     assert(md.parts[mu.part], `${mu.name}: part ${mu.part}`);
     for (const g of mu.group) assert(GROUPS.has(g), `${mu.name}: unknown group ${g}`);
@@ -166,7 +166,9 @@ test('source muscle models agree with the MRI volumes (independent check of the 
       assert(r > .7 && r < 1.3, `${g}: Rajagopal ${(fl / 60).toFixed(0)} cm³ vs MRI, ratio ${r.toFixed(2)}`);
     } else {
       const sg = fl / (A.mri.male[g] * L.M.B.stature * L.M.B.mass / (A.mri.height * A.mri.mass)); sigma.push(sg);
-      assert(sg > 35 && sg < 90, `${g}: F·Lopt / V = ${sg.toFixed(1)} N/cm²`);
+      /* нижняя граница 34: широчайшая с 4.32.0 делится по шести пучкам DAS3 (MoBL-ARMS — три пучка без таза), у DAS3 она
+         34,8 Н/см² (README, «Объём»); у остальных мышц руки и пояса — от 35 */
+      assert(sg > 34 && sg < 90, `${g}: F·Lopt / V = ${sg.toFixed(1)} N/cm²`);
     }
   }
   const med = a => a.slice().sort((x, y) => x - y)[a.length >> 1];
