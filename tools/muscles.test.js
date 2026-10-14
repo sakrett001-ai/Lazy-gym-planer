@@ -44,9 +44,10 @@ const pose = (set = {}) => {
 const lengths = set => { const { m } = pose(set); return new Map(Muscles.layout(bound, m).map((p, i) => [bound[i].name, p.length])); };
 
 test('muscle data: every muscle sits on existing bones, has an anatomical name and app groups, both sides', () => {
-  assert.equal(md.muscles.length, 518);   /* 4.32.0: +6 — поясничный и подвздошные пучки широчайшей; 4.34.0: +4 — верхние зубцы наружной косой;
+  assert.equal(md.muscles.length, 530);   /* 4.32.0: +6 — поясничный и подвздошные пучки широчайшей; 4.34.0: +4 — верхние зубцы наружной косой;
                                               4.35.0: +42 — мышцы шеи, остистая (anatomy.js), гребенчатая (gait2392_import.py);
-                                              4.36.0: +4 — задняя часть дельтовидной веером (anatomy.js, раздел 5) */
+                                              4.36.0: +4 — задняя часть дельтовидной веером (anatomy.js, раздел 5);
+                                              4.37.0: +12 — большая грудная и подостная веером (раздел 6) */
   for (const mu of md.muscles) {
     assert(md.parts[mu.part], `${mu.name}: part ${mu.part}`);
     for (const g of mu.group) assert(GROUPS.has(g), `${mu.name}: unknown group ${g}`);
@@ -189,6 +190,15 @@ test('muscle volumes: each MRI muscle is split over its lines, totals equal the 
      сухожилие у плеча (в конце); пучки EO2–EO4 идут от рёбер — апоневроз у белой линии (в конце) */
   for (const n of ['DELT3_r', 'DELT3med_r', 'DELT3lat_r', 'EO2_r', 'EO3_r', 'EO4_r']) {
     const m = md.muscles.find(x => x.name === n); assert(m.t1 > 3 * m.t0, `${n}: tendon at the start (${m.t0}) instead of the end (${m.t1})`);
+  }
+  /* веер (4.37.0, volumes.js, FAN): линия, добавленная к линии модели, кончается там же, где она (у плеча), и объём
+     части делится между её линиями поровну */
+  const { FAN } = require('./muscles/volumes.js');
+  for (const [n, p] of Object.entries(FAN)) for (const s of ['_r', '_l']) {
+    const a = md.muscles.find(m => m.name === n + s), b = md.muscles.find(m => m.name === p + s);
+    assert(a && b, `${n}${s}: no line`);
+    assert.deepEqual(a.el[0], b.el[0], `${n}${s}: must end at the same insertion as ${p}`);
+    assert(Math.abs(a.v - b.v) <= .1, `${n}${s}: volume ${a.v} vs ${b.v}`);
   }
   /* остистая — 7,3 % выпрямителя (Delp и др., 2001: поперечник × длина волокон) */
   assert(Math.abs(SPINALIS - .073) < .002, `spinalis share ${SPINALIS}`);

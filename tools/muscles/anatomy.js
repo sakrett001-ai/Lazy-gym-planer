@@ -68,7 +68,7 @@ const pair = (name, par, el) => [
 ];
 
 const md = JSON.parse(fs.readFileSync(IN, 'utf8'));
-md.muscles = md.muscles.filter(mu => !/^(LAT[456]|EO[78]|SCM\d|SPLcap\d|SPLcerv\d|SCAL(ant|med|post)\d|SPIN\d|DELT3(med|lat))_[rl]$/.test(mu.name));
+md.muscles = md.muscles.filter(mu => !/^(LAT[456]|EO[78]|SCM\d|SPLcap\d|SPLcerv\d|SCAL(ant|med|post)\d|SPIN\d|DELT3(med|lat)|PECM(1b|2a|2c|3b)|INFSP(sup|inf))_[rl]$/.test(mu.name));
 
 /* ---------- 1. широчайшая ---------- */
 /* вершина остистого отростка L3 — самая задняя точка позвонка (каталог: Z вперёд) */
@@ -285,6 +285,49 @@ const extreme = (pts, f) => pts.reduce((a, q) => (f(q) > f(a) ? q : a));
       md.muscles.push({ name: `${name}_${s}`, side: s.toUpperCase(), fmax: src.fmax, L0: src.L0, LT: src.LT, src: 'анатомия (anatomy.js)', el: path });
     }
     console.log(`  ${name}: ость лопатки w ${w}, начало ${o.map(x => x.toFixed(1)).join(' ')}, точек пути ${keepVia ? 'как у DELT3' : 'без заднего угла акромиона'}`);
+  }
+}
+
+/* ---------- 6. широкие мышцы веером: большая грудная и подостная (4.37.0) ---------- */
+/* В MoBL-ARMS большая грудная — три линии (ключичная часть — от ключицы на 0,4 её длины, грудинная — от грудины на
+   высоте T5, рёберная — от хряща ребра на высоте T8–T9), подостная — одна (от середины подостной ямки). На рисунке это
+   три веретена и одно вместо пластов: у грудной видны рёбра между частями, начало вдоль грудины не покрыто. По
+   анатомии (Gray's Anatomy): ключичная часть — от передней поверхности внутренней половины ключицы, грудинно-рёберная —
+   от передней поверхности грудины (рукоятка и тело) и хрящей рёбер 1–6, брюшная — от апоневроза наружной косой; подостная
+   — от медиальных двух третей подостной ямки. Добавлены линии с началом в других местах той же площадки; путь к плечу —
+   как у линии MoBL-ARMS своей части (те же точки у плеча и огибающие тела: волокна сходятся к сухожилию). Объём части
+   делится между её линиями поровну — равные полосы начала (volumes.js, FAN). */
+{
+  const rc = bone('ribcage'), cl = bone('clavicle', 'R'), sc = bone('scapula', 'R');
+  const sternum = parts(rc).sort((a, b) => b.length - a.length)[0].map(i => rc.w[i]);
+  const notch = extreme(sternum.filter(q => Math.abs(q[0] - midX) < 1.5), q => -q[1]);
+  /* передняя поверхность грудной клетки (грудина, хрящи) в точке (dx от середины вправо, высота y): проекция с точки спереди */
+  const front = (dx, y) => surface(rc, [midX - dx, y, notch[2] + 6]);
+  /* передняя поверхность ключицы на доле длины f от внутреннего конца */
+  const clMed = extreme(cl.w, q => q[0]), clLat = extreme(cl.w, q => -q[0]);
+  const clavFront = f => { const x = clMed[0] + f * (clLat[0] - clMed[0]); return surface(cl, add(extreme(cl.w.filter(q => Math.abs(q[0] - x) < .6), q => q[2]), [0, 0, 1])); };
+  /* подостная ямка: задняя поверхность лопатки в точке (h, w) — доли высоты и ширины, как в аудите прикреплений */
+  const v = sc.w, lmin = Math.min(...v.map(q => midX - q[0])), lmax = Math.max(...v.map(q => midX - q[0])), [top, bot] = [Math.min(...v.map(q => q[1])), Math.max(...v.map(q => q[1]))];
+  const fossa = (h, w) => { const c = v.filter(q => Math.abs(((midX - q[0]) - lmin) / (lmax - lmin) - w) < .05 && Math.abs((q[1] - top) / (bot - top) - h) < .05); return surface(sc, add(extreme(c, q => -q[2]), [0, 0, -1])); };
+  const FAN = [
+    ['PECM1b', 'PECM1', cl, clavFront(.15), 'ключица, 0,15 длины'],
+    ['PECM2a', 'PECM2', rc, front(1.8, notch[1] + 1.5), 'рукоятка грудины'],
+    ['PECM2c', 'PECM2', rc, front(2.2, notch[1] + 9), 'тело грудины, ниже начала MoBL'],
+    ['PECM3b', 'PECM3', rc, front(6, notch[1] + 16.5), 'хрящ 6-го ребра и апоневроз наружной косой'],
+    ['INFSPsup', 'INFSP', sc, fossa(.32, .3), 'подостная ямка под остью'],
+    ['INFSPinf', 'INFSP', sc, fossa(.72, .3), 'подостная ямка у нижнего угла'],
+  ];
+  for (const [name, parent, B, o, where] of FAN) {
+    const s3 = at3(B, o, 'origin');
+    for (const s of ['r', 'l']) {
+      const src = md.muscles.find(mu => mu.name === `${parent}_${s}`), el = JSON.parse(JSON.stringify(src.el));
+      /* у этих линий MoBL-ARMS путь идёт от плеча: начало мышцы — последняя точка */
+      const k = el.length - 1; if (!el[k].s || el[k].s.bone[0] !== B.b.name) throw Error(`${parent}: начало не на ${B.b.name}`);
+      const origin = s === 'r' ? s3 : { ...s3, bone: [s3.bone[0], s3.bone[1] === 'R' ? 'L' : s3.bone[1]], p: [-s3.p[0], s3.p[1], s3.p[2]] };
+      el[k] = { s: { ...origin, site: `${name}-origin_${s}` } };
+      md.muscles.push({ name: `${name}_${s}`, side: s.toUpperCase(), fmax: src.fmax, L0: src.L0, LT: src.LT, src: 'анатомия (anatomy.js)', el });
+    }
+    console.log(`  ${name} (как ${parent}): ${where}, начало ${o.map(x => x.toFixed(1)).join(' ')}`);
   }
 }
 
