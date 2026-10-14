@@ -119,6 +119,9 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .e-cat h3 { font:500 12px/1.2 var(--f-body); color:var(--faint); }
 .e-toggle { justify-self:start; border:0; background:transparent; padding:2px 0; font-size:13.5px; font-weight:600; color:var(--accent); }
 .e-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+/* «Оборудование места 34 из 34»: подпись переносится по словам, счётчик — целиком (в узкой колонке — строкой ниже) */
+.e-head .lbl { display:block; flex:1 1 auto; min-width:0; text-wrap:wrap; }
+.e-head .lbl em { display:inline-block; white-space:nowrap; }
 .e-toggle-top { flex:none; min-height:32px; padding:4px 0 4px 8px; }
 .e-sum { margin:0; font-size:13px; color:var(--muted); }
 /* места тренировок */
@@ -193,7 +196,7 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .views button small:empty { display:none; }
 .views button.on { background:var(--ink); color:var(--surface); }
 .views button.on small { color:inherit; opacity:.7; }
-@media (max-width:520px) { .tag { order:3; flex-basis:100%; } }
+/* телефон (до 600 px): шапка в две строки, подпись скрыта — 33-phone.css */
 
 /* ---------- запись подходов ---------- */
 .c-log { display:grid; gap:8px; border-top:1px solid var(--line); padding-top:12px; min-width:0; }
@@ -563,7 +566,9 @@ html.motion-open{overflow:hidden}
 .motion-view{width:min(1080px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 32px);padding:0;border:1px solid var(--line);border-radius:22px;background:var(--surface);color:var(--ink);box-shadow:0 25px 100px #0005;overflow:auto}
 .motion-view::backdrop{background:#08121bcc;backdrop-filter:blur(4px)}
 .mv-shell{padding:24px}
-.mv-head{display:flex;gap:16px;justify-content:space-between;align-items:start}
+.mv-head{display:flex;gap:10px;justify-content:space-between;align-items:start}
+.mv-head-t{flex:1 1 auto;min-width:0;margin-right:6px}
+.mv-mode-gallery #mv-back{display:none}
 .mv-eyebrow{margin:0 0 7px;color:var(--accent);font:600 11px/1.2 var(--f-body);letter-spacing:.1em}
 .mv-head h2{font:400 clamp(21px,3vw,29px)/1.15 var(--f-display);max-width:750px}
 .mv-head button,.mv-select>button{border:1px solid var(--line);border-radius:10px;background:var(--surface-2);padding:8px 12px;min-height:44px;flex-shrink:0}
@@ -1115,3 +1120,67 @@ details.rule p { margin:6px 0 0; }
 .mv-skeleton-note { margin:6px 0 0; font-size:12px; line-height:1.4; color:var(--muted); max-width:62ch; }
 .mv-toggles label:has(input:disabled) { opacity:.55; }
 .mv-toggles input[aria-busy="true"] { cursor:progress; }
+
+/* Удобство на телефоне (разбор 4.23.1, пункты У2, У3, В2): первый экран — план, в разборе — сразу сцена,
+   подписи карточки — не поверх рисунка. На компьютере ничего не меняется. */
+
+/* ---------- У2. Шапка в две строки: логотип и «Атлас движений», под ними разделы и язык; подпись скрыта ---------- */
+@media (max-width:599px) {
+  .top { flex-wrap:wrap; align-items:center; gap:10px 8px; padding-block:0 12px; }
+  .logo { order:1; flex:1 1 auto; min-width:0; font-size:clamp(16px, 5.2vw, 22px); white-space:nowrap; }
+  .top .atlas-button { order:2; margin-left:0; min-height:40px; }
+  /* разделы не помещаются рядом с логотипом и уходят во вторую строку, язык — справа от них */
+  .views { order:3; flex:1 1 calc(100% - 60px); min-width:0; }
+  .views button { flex:1 1 0; justify-content:center; padding:7px 6px; min-height:36px; }
+  .lang { order:4; padding:9px 10px; }
+  .tag { display:none; }
+}
+
+/* ---------- В2. Карточка плана: ракурс и «↗» — полосой под рисунком (она часть кнопки разбора), фаза — строкой над
+   «Паузой»: подписи не закрывают рисунок, а длинная фаза («Исходное положение») не переносится и не двигает карточку ---------- */
+@media (max-width:699px) {
+  .c-top .motion-tile .illus { display:grid; grid-template-columns:minmax(0, 1fr) auto; aspect-ratio:auto; }
+  .c-top .motion-tile .illus::before { content:''; grid-area:1 / 1 / 2 / 3; aspect-ratio:1; }
+  .c-top .motion-tile .illus > .fig { position:absolute; inset:0 0 auto 0; width:100%; height:auto; aspect-ratio:1; }
+  .c-top .motion-tile .illus-v, .c-top .motion-tile .illus-zoom { position:static; grid-row:2; display:flex; align-items:center; border-radius:0; border-top:1px solid var(--line); background:var(--surface); }
+  .c-top .motion-tile .illus-v { grid-column:1; padding:4px 0 4px 6px; font:500 10px/1.25 var(--f-body); letter-spacing:0; text-align:left; text-wrap:balance; color:var(--muted); }
+  .c-top .motion-tile .illus-zoom { grid-column:2; justify-content:center; min-width:24px; padding:4px 6px 4px 4px; font-size:0; }
+  .c-top .motion-tile .illus-zoom::after { content:'\2197'; font-size:12px; line-height:1; }
+  .c-top .motion-bar { flex-wrap:wrap; row-gap:3px; }
+  .c-top .motion-caption { flex:1 1 100%; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .c-top .motion-bar button { flex:1 1 100%; min-height:34px; }
+}
+
+/* ---------- У3. Разбор: под заголовком сразу сцена, ракурсы — одной строкой под ней; выбор упражнения и избранное —
+   после управления движением. «← Все упражнения» — в шапке рядом с «Закрыть» ---------- */
+@media (max-width:700px) {
+  .mv-shell { padding:12px 16px 24px; }
+  .mv-head { display:grid; grid-template-columns:auto minmax(0, 1fr) auto; grid-template-areas:"back . close" "title title title"; align-items:center; gap:10px 8px; }
+  .mv-mode-gallery .mv-head { grid-template-areas:"title title close"; }
+  .mv-head-t { grid-area:title; margin:0; }
+  .mv-head #mv-back { grid-area:back; }
+  .mv-head #mv-close { grid-area:close; }
+  .mv-head button { min-height:40px; }
+  .mv-eyebrow { margin-bottom:4px; font-size:10px; }
+  .mv-head h2 { font-size:21px; }
+  #mv-detail { display:flex; flex-direction:column; gap:16px; margin-top:12px; }
+  #mv-detail .mv-grid { display:contents; }
+  .mv-demo { order:1; display:flex; flex-direction:column; }
+  .mv-select { order:2; margin:0; }
+  .mv-tools { order:3; }
+  .mv-instruction { order:4; }
+  #mv-projections { order:-1; }
+  /* сцена выше, чем шире: кадр «Сверху под углом» по высоте, и манекен в нём крупнее */
+  #mv-stage { height:clamp(300px, 54vh, 480px); height:clamp(300px, 54svh, 480px); }
+  .mv-demo:has(#mv-camera-controls:not([hidden])) #mv-projections:not(.is-dual) #mv-view { display:none; }
+  .mv-demo:has(#mv-camera-controls:not([hidden])) #mv-projections:not(.is-dual) #mv-stage { padding-top:8px; }
+  .mv-demo:has(#mv-camera-controls:not([hidden])) #mv-projections:not(.is-dual) #mv-stage:has(.volume-figure) { padding-top:0; }
+  #mv-camera-controls { margin:10px 0 0; gap:2px 10px; }
+  #mv-cameras { flex:1 1 100%; min-width:0; flex-wrap:nowrap; gap:1px; overflow-x:auto; padding:3px; border-radius:11px; background:var(--surface-2); scrollbar-width:none; }
+  #mv-cameras::-webkit-scrollbar { display:none; }
+  #mv-cameras button { flex:1 0 auto; min-height:36px; padding:6px 5px; border:0; border-radius:8px; background:transparent; white-space:nowrap; font-size:12px; }
+  #mv-cameras button[aria-pressed="true"] { background:var(--accent); color:var(--accent-ink); }
+  #mv-camera-controls > label { min-height:36px; margin-left:auto; }
+}
+/* узкий телефон: пять ракурсов помещаются в строку и на 360 px (уже — строка прокручивается) */
+@media (max-width:380px) { #mv-cameras button { font-size:11px; } }

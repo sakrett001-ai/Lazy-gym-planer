@@ -133,6 +133,9 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .e-cat h3 { font:500 12px/1.2 var(--f-body); color:var(--faint); }
 .e-toggle { justify-self:start; border:0; background:transparent; padding:2px 0; font-size:13.5px; font-weight:600; color:var(--accent); }
 .e-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+/* «Оборудование места 34 из 34»: подпись переносится по словам, счётчик — целиком (в узкой колонке — строкой ниже) */
+.e-head .lbl { display:block; flex:1 1 auto; min-width:0; text-wrap:wrap; }
+.e-head .lbl em { display:inline-block; white-space:nowrap; }
 .e-toggle-top { flex:none; min-height:32px; padding:4px 0 4px 8px; }
 .e-sum { margin:0; font-size:13px; color:var(--muted); }
 /* места тренировок */
@@ -207,7 +210,7 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .views button small:empty { display:none; }
 .views button.on { background:var(--ink); color:var(--surface); }
 .views button.on small { color:inherit; opacity:.7; }
-@media (max-width:520px) { .tag { order:3; flex-basis:100%; } }
+/* телефон (до 600 px): шапка в две строки, подпись скрыта — 33-phone.css */
 
 /* ---------- запись подходов ---------- */
 .c-log { display:grid; gap:8px; border-top:1px solid var(--line); padding-top:12px; min-width:0; }
@@ -577,7 +580,9 @@ html.motion-open{overflow:hidden}
 .motion-view{width:min(1080px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 32px);padding:0;border:1px solid var(--line);border-radius:22px;background:var(--surface);color:var(--ink);box-shadow:0 25px 100px #0005;overflow:auto}
 .motion-view::backdrop{background:#08121bcc;backdrop-filter:blur(4px)}
 .mv-shell{padding:24px}
-.mv-head{display:flex;gap:16px;justify-content:space-between;align-items:start}
+.mv-head{display:flex;gap:10px;justify-content:space-between;align-items:start}
+.mv-head-t{flex:1 1 auto;min-width:0;margin-right:6px}
+.mv-mode-gallery #mv-back{display:none}
 .mv-eyebrow{margin:0 0 7px;color:var(--accent);font:600 11px/1.2 var(--f-body);letter-spacing:.1em}
 .mv-head h2{font:400 clamp(21px,3vw,29px)/1.15 var(--f-display);max-width:750px}
 .mv-head button,.mv-select>button{border:1px solid var(--line);border-radius:10px;background:var(--surface-2);padding:8px 12px;min-height:44px;flex-shrink:0}
@@ -1130,6 +1135,70 @@ details.rule p { margin:6px 0 0; }
 .mv-toggles label:has(input:disabled) { opacity:.55; }
 .mv-toggles input[aria-busy="true"] { cursor:progress; }
 
+/* Удобство на телефоне (разбор 4.23.1, пункты У2, У3, В2): первый экран — план, в разборе — сразу сцена,
+   подписи карточки — не поверх рисунка. На компьютере ничего не меняется. */
+
+/* ---------- У2. Шапка в две строки: логотип и «Атлас движений», под ними разделы и язык; подпись скрыта ---------- */
+@media (max-width:599px) {
+  .top { flex-wrap:wrap; align-items:center; gap:10px 8px; padding-block:0 12px; }
+  .logo { order:1; flex:1 1 auto; min-width:0; font-size:clamp(16px, 5.2vw, 22px); white-space:nowrap; }
+  .top .atlas-button { order:2; margin-left:0; min-height:40px; }
+  /* разделы не помещаются рядом с логотипом и уходят во вторую строку, язык — справа от них */
+  .views { order:3; flex:1 1 calc(100% - 60px); min-width:0; }
+  .views button { flex:1 1 0; justify-content:center; padding:7px 6px; min-height:36px; }
+  .lang { order:4; padding:9px 10px; }
+  .tag { display:none; }
+}
+
+/* ---------- В2. Карточка плана: ракурс и «↗» — полосой под рисунком (она часть кнопки разбора), фаза — строкой над
+   «Паузой»: подписи не закрывают рисунок, а длинная фаза («Исходное положение») не переносится и не двигает карточку ---------- */
+@media (max-width:699px) {
+  .c-top .motion-tile .illus { display:grid; grid-template-columns:minmax(0, 1fr) auto; aspect-ratio:auto; }
+  .c-top .motion-tile .illus::before { content:''; grid-area:1 / 1 / 2 / 3; aspect-ratio:1; }
+  .c-top .motion-tile .illus > .fig { position:absolute; inset:0 0 auto 0; width:100%; height:auto; aspect-ratio:1; }
+  .c-top .motion-tile .illus-v, .c-top .motion-tile .illus-zoom { position:static; grid-row:2; display:flex; align-items:center; border-radius:0; border-top:1px solid var(--line); background:var(--surface); }
+  .c-top .motion-tile .illus-v { grid-column:1; padding:4px 0 4px 6px; font:500 10px/1.25 var(--f-body); letter-spacing:0; text-align:left; text-wrap:balance; color:var(--muted); }
+  .c-top .motion-tile .illus-zoom { grid-column:2; justify-content:center; min-width:24px; padding:4px 6px 4px 4px; font-size:0; }
+  .c-top .motion-tile .illus-zoom::after { content:'\2197'; font-size:12px; line-height:1; }
+  .c-top .motion-bar { flex-wrap:wrap; row-gap:3px; }
+  .c-top .motion-caption { flex:1 1 100%; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .c-top .motion-bar button { flex:1 1 100%; min-height:34px; }
+}
+
+/* ---------- У3. Разбор: под заголовком сразу сцена, ракурсы — одной строкой под ней; выбор упражнения и избранное —
+   после управления движением. «← Все упражнения» — в шапке рядом с «Закрыть» ---------- */
+@media (max-width:700px) {
+  .mv-shell { padding:12px 16px 24px; }
+  .mv-head { display:grid; grid-template-columns:auto minmax(0, 1fr) auto; grid-template-areas:"back . close" "title title title"; align-items:center; gap:10px 8px; }
+  .mv-mode-gallery .mv-head { grid-template-areas:"title title close"; }
+  .mv-head-t { grid-area:title; margin:0; }
+  .mv-head #mv-back { grid-area:back; }
+  .mv-head #mv-close { grid-area:close; }
+  .mv-head button { min-height:40px; }
+  .mv-eyebrow { margin-bottom:4px; font-size:10px; }
+  .mv-head h2 { font-size:21px; }
+  #mv-detail { display:flex; flex-direction:column; gap:16px; margin-top:12px; }
+  #mv-detail .mv-grid { display:contents; }
+  .mv-demo { order:1; display:flex; flex-direction:column; }
+  .mv-select { order:2; margin:0; }
+  .mv-tools { order:3; }
+  .mv-instruction { order:4; }
+  #mv-projections { order:-1; }
+  /* сцена выше, чем шире: кадр «Сверху под углом» по высоте, и манекен в нём крупнее */
+  #mv-stage { height:clamp(300px, 54vh, 480px); height:clamp(300px, 54svh, 480px); }
+  .mv-demo:has(#mv-camera-controls:not([hidden])) #mv-projections:not(.is-dual) #mv-view { display:none; }
+  .mv-demo:has(#mv-camera-controls:not([hidden])) #mv-projections:not(.is-dual) #mv-stage { padding-top:8px; }
+  .mv-demo:has(#mv-camera-controls:not([hidden])) #mv-projections:not(.is-dual) #mv-stage:has(.volume-figure) { padding-top:0; }
+  #mv-camera-controls { margin:10px 0 0; gap:2px 10px; }
+  #mv-cameras { flex:1 1 100%; min-width:0; flex-wrap:nowrap; gap:1px; overflow-x:auto; padding:3px; border-radius:11px; background:var(--surface-2); scrollbar-width:none; }
+  #mv-cameras::-webkit-scrollbar { display:none; }
+  #mv-cameras button { flex:1 0 auto; min-height:36px; padding:6px 5px; border:0; border-radius:8px; background:transparent; white-space:nowrap; font-size:12px; }
+  #mv-cameras button[aria-pressed="true"] { background:var(--accent); color:var(--accent-ink); }
+  #mv-camera-controls > label { min-height:36px; margin-left:auto; }
+}
+/* узкий телефон: пять ракурсов помещаются в строку и на 360 px (уже — строка прокручивается) */
+@media (max-width:380px) { #mv-cameras button { font-size:11px; } }
+
 </style>
 </head>
 <body>
@@ -1183,7 +1252,7 @@ details.rule p { margin:6px 0 0; }
      <form id="wv-form" novalidate><div class="wv-fields"><label id="wv-weight-label" for="wv-kg"><span id="wv-weight-caption">Вес, кг</span><input id="wv-kg" type="text" inputmode="decimal" autocomplete="off" aria-describedby="wv-input-hint"></label><label for="wv-reps"><span id="wv-rep-caption">Повторы</span><input id="wv-reps" type="text" inputmode="numeric" autocomplete="off" required aria-describedby="wv-input-hint wv-error"></label></div><p id="wv-input-hint" class="wv-muted">Укажите фактический результат подхода.</p><p id="wv-error" role="alert"></p><button id="wv-done" class="wv-primary" type="submit">Подход выполнен</button></form>
      <p id="wv-save-status" class="wv-muted" role="status"></p><details class="wv-guide"><summary>Подсказка по нагрузке</summary><p id="wv-suggestion"></p></details>
     </section>
-    <section class="wv-visual" aria-label="Техника упражнения"><div id="wv-cameras" class="motion-cameras" role="group" aria-label="Ракурс движения" hidden></div><div class="wv-stage-wrap"><span id="wv-angle"></span><div id="wv-stage"></div><div class="wv-figure-tools"><button type="button" id="wv-motion" aria-pressed="true">Пауза</button><button type="button" id="wv-technique">Разобрать технику ↗</button></div></div><div class="muscle-tools"><label><input type="checkbox" id="wv-muscle-toggle" aria-describedby="wv-muscle-availability"> Мышцы по фазам</label><label><input type="checkbox" id="wv-stress-toggle" checked> Нагрузка на суставы</label></div><p id="wv-muscle-availability" class="muscle-availability" hidden>Мышечный профиль для этого упражнения пока отсутствует.</p><p id="wv-cue" class="wv-cue"></p>
+    <section class="wv-visual" aria-label="Техника упражнения"><div id="wv-cameras" class="motion-cameras" role="group" aria-label="Ракурс движения" hidden></div><div class="wv-stage-wrap"><span id="wv-angle"></span><div id="wv-stage"></div><div class="wv-figure-tools"><button type="button" id="wv-motion" aria-pressed="true">Пауза</button><button type="button" id="wv-technique">Разобрать технику ↗</button></div></div><div class="muscle-tools"><label><input type="checkbox" id="wv-muscle-toggle" aria-describedby="wv-muscle-availability"> Мышцы по фазам</label><label><input type="checkbox" id="wv-stress-toggle" checked aria-describedby="wv-stress-none"> Нагрузка на суставы</label></div><p id="wv-muscle-availability" class="muscle-availability" hidden>Мышечный профиль для этого упражнения пока отсутствует.</p><p id="wv-stress-none" class="muscle-availability" hidden>В этом упражнении меток нагрузки на суставы нет.</p><p id="wv-cue" class="wv-cue"></p>
      <section id="wv-stress-panel" class="stress-panel" aria-label="Нагрузка на суставы" hidden><h3>Нагрузка на суставы</h3><p class="stress-explanation">Красная метка на манекене — момент пиковой нагрузки на сустав, связки или сухожилие. Это напоминание держать технику, а не запрет.</p><ul id="wv-stress-list" class="stress-list"></ul></section>
      <section id="wv-muscle-panel" class="muscle-panel" aria-label="Участие мышц по фазам" hidden><h3>Мышцы по фазам</h3><div class="muscle-scale" aria-hidden="true"><span>Нейтрально</span><span class="muscle-scale-gradient"></span><span>Сильнее</span></div><p class="muscle-explanation">Учебная схема: цвет показывает примерное участие мышцы, а не измеренную силу или ЭМГ. Кривые условные. Части мышцы работают совместно; для большинства частей используется общий профиль группы.</p><label class="muscle-region-select">Выделить область<select id="wv-region" aria-label="Выделить мышечную область"><option value="all">Все области</option></select></label><p id="wv-muscle-note" class="muscle-phase-note"></p><ul id="wv-muscle-list" class="muscle-list"></ul><p class="muscle-explanation">Скрытые поверхности видны в другом ракурсе.</p></section>
      <details class="wv-guide"><summary>Как начать и что контролировать</summary><p id="wv-setup"></p><p id="wv-control"></p><p id="wv-breath"></p></details></section>
@@ -1196,10 +1265,10 @@ details.rule p { margin:6px 0 0; }
 
 <dialog id="motion-view" class="motion-view" aria-labelledby="mv-title">
  <div class="mv-shell">
-  <header class="mv-head"><div><p class="mv-eyebrow">LAZY GYM PLANNER · АТЛАС ДВИЖЕНИЙ · 4.38.0</p><h2 id="mv-title">Разбор упражнения</h2></div><button type="button" id="mv-close" aria-label="Закрыть разбор">Закрыть ×</button></header>
+  <header class="mv-head"><div class="mv-head-t"><p class="mv-eyebrow">LAZY GYM PLANNER · АТЛАС ДВИЖЕНИЙ · 4.39.0</p><h2 id="mv-title">Разбор упражнения</h2></div><button type="button" id="mv-back" class="mv-back">← Все упражнения</button><button type="button" id="mv-close" aria-label="Закрыть разбор">Закрыть ×</button></header>
   <section id="mv-gallery" class="mv-gallery" aria-label="Все упражнения" hidden></section>
   <div id="mv-detail">
-  <div class="mv-select"><button type="button" id="mv-back" class="mv-back">← Все упражнения</button><button type="button" data-mv-nav="-1" aria-label="Предыдущее упражнение">←</button><label for="mv-exercise">Упражнение<select id="mv-exercise"></select></label><button type="button" data-mv-nav="1" aria-label="Следующее упражнение">→</button></div>
+  <div class="mv-select"><button type="button" data-mv-nav="-1" aria-label="Предыдущее упражнение">←</button><label for="mv-exercise">Упражнение<select id="mv-exercise"></select></label><button type="button" data-mv-nav="1" aria-label="Следующее упражнение">→</button></div>
   <div class="mv-tools" id="mv-tools"></div>
   <div class="mv-grid">
    <section class="mv-demo" aria-label="Демонстрация движения">
@@ -1210,14 +1279,15 @@ details.rule p { margin:6px 0 0; }
     <div class="mv-controls"><button type="button" data-mv-step="-.05" aria-label="Назад на пять процентов повторения">−5%</button><button type="button" id="mv-play" class="mv-primary" aria-pressed="false">Воспроизвести</button><button type="button" data-mv-step=".05" aria-label="Вперёд на пять процентов повторения">+5%</button><label for="mv-speed">Скорость<select id="mv-speed"><option value="0.25">¼×</option><option value="0.5">½×</option><option value="1">1×</option></select></label></div>
     <div class="mv-poses" aria-label="Положения движения"><button type="button" data-mv-pose="start">Старт</button><button type="button" data-mv-pose="middle">Середина</button><button type="button" data-mv-pose="end">Конечная точка</button><button type="button" data-mv-pose="return">Возврат</button></div>
     <div class="mv-figure-row"><span id="mv-figure-label" class="mv-figure-label">Фигура</span><div id="mv-figure" class="motion-cameras" role="group" aria-labelledby="mv-figure-label" aria-describedby="mv-figure-note"><button type="button" data-mv-figure="anatomy" aria-pressed="true">Анатомия</button><button type="button" data-mv-figure="skeleton" aria-pressed="false">Скелет</button><button type="button" data-mv-figure="mannequin" aria-pressed="false">Манекен</button></div></div>
-    <div class="mv-toggles"><label><input type="checkbox" id="mv-joints" checked> Суставы</label><label><input type="checkbox" id="mv-trace"> Траектория кисти</label><label><input type="checkbox" id="mv-vectors"> Векторы движения</label><label><input type="checkbox" id="mv-muscle-toggle" aria-describedby="mv-muscle-availability"> Мышцы по фазам</label><label><input type="checkbox" id="mv-stress-toggle" checked> Нагрузка на суставы</label></div>
+    <div class="mv-toggles"><label><input type="checkbox" id="mv-joints" checked> Суставы</label><label><input type="checkbox" id="mv-trace"> Траектория кисти</label><label><input type="checkbox" id="mv-vectors"> Векторы движения</label><label><input type="checkbox" id="mv-muscle-toggle" aria-describedby="mv-muscle-availability"> Мышцы по фазам</label><label><input type="checkbox" id="mv-stress-toggle" checked aria-describedby="mv-stress-none"> Нагрузка на суставы</label></div>
+    <p id="mv-stress-none" class="muscle-availability" hidden>В этом упражнении меток нагрузки на суставы нет.</p>
     <p id="mv-figure-note" class="mv-skeleton-note" hidden></p>
     <section id="mv-stress-panel" class="stress-panel" aria-label="Нагрузка на суставы" hidden><h3>Нагрузка на суставы</h3><p class="stress-explanation">Красная метка на манекене — момент пиковой нагрузки на сустав, связки или сухожилие. Это напоминание держать технику, а не запрет.</p><ul id="mv-stress-list" class="stress-list"></ul></section>
     <p id="mv-muscle-availability" class="muscle-availability" hidden>Мышечный профиль для этого упражнения пока отсутствует.</p>
     <section id="mv-muscle-panel" class="muscle-panel" aria-label="Участие мышц по фазам" hidden><h3>Мышцы по фазам</h3><div class="muscle-scale" aria-hidden="true"><span>Нейтрально</span><span class="muscle-scale-gradient"></span><span>Сильнее</span></div><p class="muscle-explanation">Учебная схема: цвет показывает примерное участие мышцы, а не измеренную силу или ЭМГ. Кривые условные. Части мышцы работают совместно; для большинства частей используется общий профиль группы.</p><label class="muscle-region-select">Выделить область<select id="mv-region" aria-label="Выделить мышечную область"><option value="all">Все области</option></select></label><p id="mv-muscle-note" class="muscle-phase-note"></p><ul id="mv-muscle-list" class="muscle-list"></ul><p class="muscle-explanation">Скрытые поверхности видны в другом ракурсе.</p></section>
     <p id="mv-tempo" class="mv-small"></p>
    </section>
-   <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Работающие мышцы</h3><p class="mv-muscle-label">Основные</p><p id="mv-primary"></p><p class="mv-muscle-label">Вспомогательные</p><p id="mv-secondary"></p></div></div><p class="mv-small">На объёмной фигуре можно выделить мышечную область и сменить ракурс. Глубокие части перечислены в пояснениях.</p><h3>Как выполнять</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Ошибки и дыхание</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>О демонстрациях</summary><p>Схемы помогают разобрать последовательность движения. Амплитуда зависит от упражнения и особенностей человека; схематичный силуэт не задаёт обязательные углы суставов.</p><div id="mv-sources"></div><h4 class="mv-thanks-title">Благодарности</h4><p class="mv-small mv-thanks">Кости манекена — из открытой библиотеки моделей <a href="https://github.com/MyoHub/myo_sim" target="_blank" rel="noopener noreferrer">MyoSim</a> команды MyoSuite (лицензия Apache 2.0). Она построена на исследовательских моделях OpenSim: ноги и таз — <a href="https://doi.org/10.1109/TBME.2016.2586891" target="_blank" rel="noopener noreferrer">Rajagopal и др., 2016</a>; рука, лопатка и кисть — <a href="https://doi.org/10.1007/s10439-005-3320-7" target="_blank" rel="noopener noreferrer">Holzbaur и др., 2005</a>; поясничный отдел — <a href="https://simtk.org/projects/lumbarspine" target="_blank" rel="noopener noreferrer">модель поясничного отдела позвоночника</a>. Спасибо авторам за то, что открыли эти данные.</p><p class="mv-small mv-thanks">Мышцы (вид «Анатомия») — пути из тех же моделей MyoSim; мышцы лопатки — из модели плеча <a href="https://github.com/dasproject/DAS3" target="_blank" rel="noopener noreferrer">DAS3</a> (<a href="https://doi.org/10.1109/TBME.2014.2309727" target="_blank" rel="noopener noreferrer">Chadwick и др., 2014</a>; лицензия Apache 2.0); гребенчатая — из модели ноги <a href="https://github.com/opensim-org/opensim-models" target="_blank" rel="noopener noreferrer">Gait2392</a> (<a href="https://doi.org/10.1109/10.102791" target="_blank" rel="noopener noreferrer">Delp и др., 1990</a>; лицензия CC BY 3.0); мышцы шеи и недостающие части мышц — по описаниям прикреплений в анатомических атласах. Толщина мышц — по их объёмам на МРТ 49 мужчин (<a href="https://doi.org/10.1152/japplphysiol.00772.2025" target="_blank" rel="noopener noreferrer">Riem и др., 2026</a>), мышц шеи — по МРТ (<a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC3648672/" target="_blank" rel="noopener noreferrer">Zheng и др., 2013</a>), пересчитана на рост и вес фигуры; доли сухожилий ног — по препаратам (<a href="https://doi.org/10.1007/s11999-008-0594-8" target="_blank" rel="noopener noreferrer">Ward и др., 2009</a>). Укорачиваясь, мышца утолщается: её объём не меняется.</p><p class="mv-small">Версия демонстраций 4.38.0</p></details></aside>
+   <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Работающие мышцы</h3><p class="mv-muscle-label">Основные</p><p id="mv-primary"></p><p class="mv-muscle-label">Вспомогательные</p><p id="mv-secondary"></p></div></div><p class="mv-small">На объёмной фигуре можно выделить мышечную область и сменить ракурс. Глубокие части перечислены в пояснениях.</p><h3>Как выполнять</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Ошибки и дыхание</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>О демонстрациях</summary><p>Схемы помогают разобрать последовательность движения. Амплитуда зависит от упражнения и особенностей человека; схематичный силуэт не задаёт обязательные углы суставов.</p><div id="mv-sources"></div><h4 class="mv-thanks-title">Благодарности</h4><p class="mv-small mv-thanks">Кости манекена — из открытой библиотеки моделей <a href="https://github.com/MyoHub/myo_sim" target="_blank" rel="noopener noreferrer">MyoSim</a> команды MyoSuite (лицензия Apache 2.0). Она построена на исследовательских моделях OpenSim: ноги и таз — <a href="https://doi.org/10.1109/TBME.2016.2586891" target="_blank" rel="noopener noreferrer">Rajagopal и др., 2016</a>; рука, лопатка и кисть — <a href="https://doi.org/10.1007/s10439-005-3320-7" target="_blank" rel="noopener noreferrer">Holzbaur и др., 2005</a>; поясничный отдел — <a href="https://simtk.org/projects/lumbarspine" target="_blank" rel="noopener noreferrer">модель поясничного отдела позвоночника</a>. Спасибо авторам за то, что открыли эти данные.</p><p class="mv-small mv-thanks">Мышцы (вид «Анатомия») — пути из тех же моделей MyoSim; мышцы лопатки — из модели плеча <a href="https://github.com/dasproject/DAS3" target="_blank" rel="noopener noreferrer">DAS3</a> (<a href="https://doi.org/10.1109/TBME.2014.2309727" target="_blank" rel="noopener noreferrer">Chadwick и др., 2014</a>; лицензия Apache 2.0); гребенчатая — из модели ноги <a href="https://github.com/opensim-org/opensim-models" target="_blank" rel="noopener noreferrer">Gait2392</a> (<a href="https://doi.org/10.1109/10.102791" target="_blank" rel="noopener noreferrer">Delp и др., 1990</a>; лицензия CC BY 3.0); мышцы шеи и недостающие части мышц — по описаниям прикреплений в анатомических атласах. Толщина мышц — по их объёмам на МРТ 49 мужчин (<a href="https://doi.org/10.1152/japplphysiol.00772.2025" target="_blank" rel="noopener noreferrer">Riem и др., 2026</a>), мышц шеи — по МРТ (<a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC3648672/" target="_blank" rel="noopener noreferrer">Zheng и др., 2013</a>), пересчитана на рост и вес фигуры; доли сухожилий ног — по препаратам (<a href="https://doi.org/10.1007/s11999-008-0594-8" target="_blank" rel="noopener noreferrer">Ward и др., 2009</a>). Укорачиваясь, мышца утолщается: её объём не меняется.</p><p class="mv-small">Версия демонстраций 4.39.0</p></details></aside>
   </div>
   </div>
  </div>
@@ -14410,6 +14480,15 @@ function ensureFold(s) {
   return s.fold;
 }
 ensureFold(S);
+/* После первого плана параметры на телефоне и планшете свёрнуты: при каждом следующем запуске на первом экране —
+   план, а не два с половиной экрана параметров (выбранное видно строкой, нажатие ведёт к полю). Самый первый
+   запуск — план ещё не показывался — открывается с раскрытыми параметрами. На компьютере параметры в боковой колонке. */
+const PLAN_SEEN = 'podhod.planSeen.v1';
+(() => {
+  let seen = false;
+  try { seen = !!(localStorage.getItem(PLAN_SEEN) || localStorage.getItem(STORE)); localStorage.setItem(PLAN_SEEN, '1'); } catch (e) {}
+  if (seen && typeof matchMedia === 'function' && matchMedia('(max-width:959px)').matches) S.fold.setup = true;
+})();
 const FOLD_GROUPS = ['mus', 'log'];
 const cardFold = new Map(); /* «группа:упражнение» → раскрыт ли блок в этой карточке, если человек менял его сам */
 function cardOpen(g, id) { const k = g + ':' + id; return cardFold.has(k) ? cardFold.get(k) : ensureFold(S).cards === 'full'; }
@@ -14816,6 +14895,8 @@ function configureStressPanel(prefix,F){
  const panel=$('#'+prefix+'-stress-panel');if(!panel||!F)return;
  const rules=jointStress(F.it.ex).rules,toggle=$('#'+prefix+'-stress-toggle'),track=$('#'+prefix+'-stress-track');
  if(toggle){toggle.checked=!!motionPrefs.stress;toggle.disabled=!rules.length;}
+ /* без пиковых нагрузок переключатель серый — подпись объясняет почему */
+ const none=$('#'+prefix+'-stress-none');if(none)none.hidden=!!rules.length;
  panel.hidden=!rules.length||!motionPrefs.stress;
  $('#'+prefix+'-stress-list').innerHTML=rules.map(r=>`<li data-stress-row="${r.id}"><span class="stress-dot" aria-hidden="true"></span><span><b>${esc(r.zone)}.</b> ${esc(r.what)} <em>${esc(r.tip)}</em></span></li>`).join('');
  if(track){const g=motionPrefs.stress?stressTrack(F):'';track.hidden=!g;track.style.background=g;}
@@ -15654,22 +15735,28 @@ function statusHtml() {
 function journalDays() { const s = new Set(); for (const ss of Object.values(LOG.data)) for (const x of ss) if (x.s.some(Boolean)) s.add(x.d); return s.size; }
 
 /* ---------- экран «Журнал» ---------- */
-function heatmap() {
+function heatmap(today = new Date()) {
   const byDay = {};
   for (const ss of Object.values(LOG.data)) for (const x of ss) { const n = x.s.filter(Boolean).length; if (n) byDay[x.d] = (byDay[x.d] || 0) + n; }
   const W = 12, cell = 15, gap = 3, LX = 22, TY = 16;
-  const now = new Date(); now.setHours(12, 0, 0, 0);
+  const now = new Date(today); now.setHours(12, 0, 0, 0);
   const dow = (now.getDay() + 6) % 7;
   const start = new Date(now); start.setDate(now.getDate() - dow - (W - 1) * 7);
-  let cells = '', months = '', lastM = -1;
+  let cells = '', lastM = -1;
+  const marks = [];
   for (let w = 0; w < W; w++) for (let d = 0; d < 7; d++) {
     const dt = new Date(start); dt.setDate(start.getDate() + w * 7 + d);
     if (dt > now) continue;
     const k = dayKey(dt), n = byDay[k] || 0;
     const lv = n === 0 ? 0 : n < 10 ? 1 : n < 20 ? 2 : 3;
     cells += `<rect class="hm hm${lv}" x="${LX + w * (cell + gap)}" y="${TY + d * (cell + gap)}" width="${cell}" height="${cell}" rx="3" data-tip="${fmtDay(k, true)}: ${n ? n + ' ' + plural(n, 'подход', 'подхода', 'подходов') : 'без тренировки'}"/>`;
-    if (d === 0 && dt.getMonth() !== lastM) { lastM = dt.getMonth(); months += `<text class="hm-l" x="${LX + w * (cell + gap)}" y="10">${MONTHS[lastM]}</text>`; }
+    if (d === 0 && dt.getMonth() !== lastM) { lastM = dt.getMonth(); marks.push([w, lastM]); }
   }
+  /* подпись месяца — над его первой неделей; хвост прошлого месяца в первой колонке подписывается, только если до
+     следующей подписи не меньше двух колонок (иначе подписи наезжают: «июлавг») */
+  const months = marks.filter(([w], i) => i + 1 >= marks.length || marks[i + 1][0] - w >= 2)
+    .map(([w, m]) => w < W - 1 ? `<text class="hm-l" x="${LX + w * (cell + gap)}" y="10">${MONTHS[m]}</text>`
+      : `<text class="hm-l" x="${LX + W * (cell + gap) - gap}" y="10" text-anchor="end">${MONTHS[m]}</text>`).join(''); /* в последней колонке — по правому краю, не обрезается */
   const days = ['Пн', '', 'Ср', '', 'Пт', '', ''].map((t, i) => t ? `<text class="hm-l" x="0" y="${TY + i * (cell + gap) + 11}">${t}</text>` : '').join('');
   const w = LX + W * (cell + gap), h = TY + 7 * (cell + gap);
   return `<svg class="heat" viewBox="0 0 ${w} ${h}" role="img" aria-label="Тренировочные дни за 12 недель">${months}${days}${cells}</svg>
@@ -16960,7 +17047,7 @@ renderPlan();
 prefetchStressIds();
 logInit();
 
-window.PODHOD_VERSION='4.38.0';window.PODHOD_BUILD='4.38.0-c9dbe87f9ad7';window.PODHOD_LANG='ru';
+window.PODHOD_VERSION='4.39.0';window.PODHOD_BUILD='4.39.0-4e97dc9448e9';window.PODHOD_LANG='ru';
 
 </script>
 

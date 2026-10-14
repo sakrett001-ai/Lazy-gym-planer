@@ -9335,6 +9335,15 @@ function ensureFold(s) {
   return s.fold;
 }
 ensureFold(S);
+/* После первого плана параметры на телефоне и планшете свёрнуты: при каждом следующем запуске на первом экране —
+   план, а не два с половиной экрана параметров (выбранное видно строкой, нажатие ведёт к полю). Самый первый
+   запуск — план ещё не показывался — открывается с раскрытыми параметрами. На компьютере параметры в боковой колонке. */
+const PLAN_SEEN = 'podhod.planSeen.v1';
+(() => {
+  let seen = false;
+  try { seen = !!(localStorage.getItem(PLAN_SEEN) || localStorage.getItem(STORE)); localStorage.setItem(PLAN_SEEN, '1'); } catch (e) {}
+  if (seen && typeof matchMedia === 'function' && matchMedia('(max-width:959px)').matches) S.fold.setup = true;
+})();
 const FOLD_GROUPS = ['mus', 'log'];
 const cardFold = new Map(); /* «группа:упражнение» → раскрыт ли блок в этой карточке, если человек менял его сам */
 function cardOpen(g, id) { const k = g + ':' + id; return cardFold.has(k) ? cardFold.get(k) : ensureFold(S).cards === 'full'; }
@@ -9741,6 +9750,8 @@ function configureStressPanel(prefix,F){
  const panel=$('#'+prefix+'-stress-panel');if(!panel||!F)return;
  const rules=jointStress(F.it.ex).rules,toggle=$('#'+prefix+'-stress-toggle'),track=$('#'+prefix+'-stress-track');
  if(toggle){toggle.checked=!!motionPrefs.stress;toggle.disabled=!rules.length;}
+ /* без пиковых нагрузок переключатель серый — подпись объясняет почему */
+ const none=$('#'+prefix+'-stress-none');if(none)none.hidden=!!rules.length;
  panel.hidden=!rules.length||!motionPrefs.stress;
  $('#'+prefix+'-stress-list').innerHTML=rules.map(r=>`<li data-stress-row="${r.id}"><span class="stress-dot" aria-hidden="true"></span><span><b>${esc(r.zone)}.</b> ${esc(r.what)} <em>${esc(r.tip)}</em></span></li>`).join('');
  if(track){const g=motionPrefs.stress?stressTrack(F):'';track.hidden=!g;track.style.background=g;}
@@ -10579,22 +10590,28 @@ function statusHtml() {
 function journalDays() { const s = new Set(); for (const ss of Object.values(LOG.data)) for (const x of ss) if (x.s.some(Boolean)) s.add(x.d); return s.size; }
 
 /* ---------- экран «Журнал» ---------- */
-function heatmap() {
+function heatmap(today = new Date()) {
   const byDay = {};
   for (const ss of Object.values(LOG.data)) for (const x of ss) { const n = x.s.filter(Boolean).length; if (n) byDay[x.d] = (byDay[x.d] || 0) + n; }
   const W = 12, cell = 15, gap = 3, LX = 22, TY = 16;
-  const now = new Date(); now.setHours(12, 0, 0, 0);
+  const now = new Date(today); now.setHours(12, 0, 0, 0);
   const dow = (now.getDay() + 6) % 7;
   const start = new Date(now); start.setDate(now.getDate() - dow - (W - 1) * 7);
-  let cells = '', months = '', lastM = -1;
+  let cells = '', lastM = -1;
+  const marks = [];
   for (let w = 0; w < W; w++) for (let d = 0; d < 7; d++) {
     const dt = new Date(start); dt.setDate(start.getDate() + w * 7 + d);
     if (dt > now) continue;
     const k = dayKey(dt), n = byDay[k] || 0;
     const lv = n === 0 ? 0 : n < 10 ? 1 : n < 20 ? 2 : 3;
     cells += `<rect class="hm hm${lv}" x="${LX + w * (cell + gap)}" y="${TY + d * (cell + gap)}" width="${cell}" height="${cell}" rx="3" data-tip="${fmtDay(k, true)}: ${n ? n + ' ' + plural(n, 'подход', 'подхода', 'подходов') : 'без тренировки'}"/>`;
-    if (d === 0 && dt.getMonth() !== lastM) { lastM = dt.getMonth(); months += `<text class="hm-l" x="${LX + w * (cell + gap)}" y="10">${MONTHS[lastM]}</text>`; }
+    if (d === 0 && dt.getMonth() !== lastM) { lastM = dt.getMonth(); marks.push([w, lastM]); }
   }
+  /* подпись месяца — над его первой неделей; хвост прошлого месяца в первой колонке подписывается, только если до
+     следующей подписи не меньше двух колонок (иначе подписи наезжают: «июлавг») */
+  const months = marks.filter(([w], i) => i + 1 >= marks.length || marks[i + 1][0] - w >= 2)
+    .map(([w, m]) => w < W - 1 ? `<text class="hm-l" x="${LX + w * (cell + gap)}" y="10">${MONTHS[m]}</text>`
+      : `<text class="hm-l" x="${LX + W * (cell + gap) - gap}" y="10" text-anchor="end">${MONTHS[m]}</text>`).join(''); /* в последней колонке — по правому краю, не обрезается */
   const days = ['Пн', '', 'Ср', '', 'Пт', '', ''].map((t, i) => t ? `<text class="hm-l" x="0" y="${TY + i * (cell + gap) + 11}">${t}</text>` : '').join('');
   const w = LX + W * (cell + gap), h = TY + 7 * (cell + gap);
   return `<svg class="heat" viewBox="0 0 ${w} ${h}" role="img" aria-label="Тренировочные дни за 12 недель">${months}${days}${cells}</svg>
@@ -11885,4 +11902,4 @@ renderPlan();
 prefetchStressIds();
 logInit();
 
-window.PODHOD_VERSION='4.38.0';window.PODHOD_BUILD='4.38.0-c9dbe87f9ad7';window.PODHOD_LANG='ru';
+window.PODHOD_VERSION='4.39.0';window.PODHOD_BUILD='4.39.0-4e97dc9448e9';window.PODHOD_LANG='ru';
