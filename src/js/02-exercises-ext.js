@@ -61,7 +61,7 @@ EX.push(
   A:{hip:[118, 126], torso:-90, arm:{ik:[70, 72], b:'down'}, leg:{ik:[160, 180], b:'up', f:90}},
   B:{hip:[118, 126], torso:-90, arm:{ik:[82, 112], b:'down'}, leg:{ik:[160, 180], b:'up', f:90}},
   props:[...benchFlat(30, 150, 136), PLATE(16)]}},
-{id:'pullover', name:'Пуловер с гантелью', eq:[['db'], ['bench']], g:'chest', pri:['chest', 'lats'], sec:['triceps'], type:'i', lvl:1,
+{id:'pullover', name:'Пуловер с гантелью', eq:[['db'], ['bench']], g:'chest', pri:['chest'], sec:['lats', 'triceps'], type:'i', lvl:1,
  tech:['Лягте на скамью и держите гантель обеими руками за верхний диск над грудью, локти слегка согнуты.',
    'Опускайте гантель по дуге за голову до растяжения груди и широчайших.',
    'Верните гантель по той же дуге над грудью, не сгибая локти сильнее.'],
@@ -83,7 +83,7 @@ EX.push(
   props:benchFlat(0, 44, 139)}},
 
 /* ===== СПИНА ===== */
-{id:'invrow', name:'Австралийские подтягивания', eq:[['smith', 'pullup']], g:'back', pri:['midback', 'lats'], sec:['biceps', 'delt_r'], type:'c', lvl:1,
+{id:'invrow', name:'Австралийские подтягивания', eq:[['smith', 'pullup']], g:'back', pri:['midback', 'lats'], sec:['biceps', 'delt_r', 'lowback'], type:'c', lvl:1,
  tech:['Установите гриф или низкую перекладину на уровне пояса. Возьмитесь хватом сверху чуть шире плеч и лягте под ней, пятки на полу.',
    'Тело — прямая линия, ягодицы и пресс напряжены.',
    'Подтяните грудь к перекладине, сводя лопатки и ведя локти назад.',
@@ -114,7 +114,7 @@ EX.push(
   props:[{k:'plate', tf:[53, -10], r:17, layer:'mid'}]}},
 
 /* ===== ПЛЕЧИ ===== */
-{id:'arnold', name:'Жим Арнольда', eq:[['db'], ['incline', 'bench']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps'], type:'c', lvl:2,
+{id:'arnold', name:'Жим Арнольда', eq:[['db'], ['incline', 'bench']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'traps'], type:'c', lvl:2,
  tech:['Сядьте на скамью со спинкой. Гантели у верхней части груди, ладони к себе, локти перед корпусом.',
    'Начиная жим, разводите локти в стороны и разворачивайте кисти ладонями вперёд.',
    'Выжмите гантели над головой. Опустите их, выполняя движение в обратном порядке.'],
@@ -124,7 +124,7 @@ EX.push(
   keys:[frontSeat({arm:{p:[[4, 19], [5, -7]]}}), frontSeat({arm:{p:[[26, 6], [27, -20]]}}), frontSeat({arm:{p:[[14, -24], [8, -52]]}})],
   props:[{k:'rect', x:80, y:58, w:40, h:74, rx:5}, {k:'rect', x:74, y:130, w:52, h:9}, {k:'line', pts:[[100, 139], [100, GROUND]], w:5},
    {k:'db', at:'gripR', o:'h', layer:'front'}, {k:'db', at:'gripL', o:'h', layer:'front'}]}},
-{id:'cablelat', name:'Отведение руки на нижнем блоке', eq:[['cable']], g:'shoulders', pri:['delt_s'], sec:['traps'], type:'i', lvl:1, uni:true,
+{id:'cablelat', name:'Отведение руки на нижнем блоке', eq:[['cable']], g:'shoulders', pri:['delt_s'], sec:['traps', 'delt_f'], type:'i', lvl:1, uni:true,
  tech:['Встаньте боком к блоку, рукоять в дальней от тренажёра руке, второй рукой держитесь за стойку.',
    'Отведите руку в сторону до уровня плеча, локоть слегка согнут.',
    'Медленно верните руку, сохраняя натяжение троса. Затем смените сторону.'],
@@ -217,7 +217,7 @@ EX.push(
   A:{hip:[118, 126], torso:-112, head:0, arm:{ra:[155, 25]}, leg:{a:[58, 150], fr:-90}},
   B:{hip:[118, 126], torso:-58, head:16, arm:{ra:[155, 25]}, leg:{a:[58, 150], fr:-90}},
   props:declineBench([118, 126], -112, [58, 150])}},
-{id:'captainraise', name:'Подъём коленей в упоре на локтях', eq:[['captain']], g:'abs', pri:['abs'], sec:['obliques'], type:'i', lvl:1,
+{id:'captainraise', name:'Подъём коленей в упоре на локтях', eq:[['captain']], g:'abs', pri:['abs', 'obliques'], sec:[], type:'i', lvl:1,
  tech:['Встаньте в стойку для пресса: спина прижата к спинке, предплечья на упорах, ноги свисают.',
    'Поднимите колени к груди, слегка подкручивая таз вперёд.',
    'Медленно опустите ноги, не раскачиваясь.'],
@@ -229,7 +229,7 @@ EX.push(
   B:{hip:[100, 92], torso:-6, arm:{a:[180, 90], hA:90}, leg:{a:[84, 174], fr:-60}},
   props:[{k:'line', pts:[[83, 30], [83, GROUND]], w:5}, {k:'line', pts:[[70, GROUND], [120, GROUND]], w:4},
    {k:'rect', x:80, y:36, w:9, h:78, rx:4}, {k:'rect', x:96, y:73, w:36, h:6, rx:3}, {k:'line', pts:[[83, 76], [96, 76]], w:4}, {k:'circle', c:[134, 70], r:3.5}]}},
-{id:'hangknee', name:'Подъём коленей в висе', eq:[['pullup']], g:'abs', pri:['abs'], sec:['obliques', 'forearms'], type:'i', lvl:2,
+{id:'hangknee', name:'Подъём коленей в висе', eq:[['pullup']], g:'abs', pri:['abs', 'obliques'], sec:['forearms', 'lats'], type:'i', lvl:2,
  tech:['Вис на перекладине хватом сверху, лопатки опущены.',
    'Подтяните колени к груди, подкручивая таз.',
    'Медленно опустите ноги без раскачки.'],

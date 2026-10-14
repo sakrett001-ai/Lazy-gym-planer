@@ -18,7 +18,10 @@ const MUSCLE_REGIONS={
 const REGION_META=Object.fromEntries(Object.entries(MUSCLE_REGIONS).flatMap(([parent,rows])=>rows.map(([id,label,kind])=>[id,{id,parent,label,kind,visible:kind!=='deep'}])));
 const REGION_ANATOMY_SOURCES=[['Анатомия мышц плечевого пояса — OpenStax','https://openstax.org/books/anatomy-and-physiology-2e/pages/11-5-muscles-of-the-pectoral-girdle-and-upper-limbs'],['Анатомия мышц ног — OpenStax','https://openstax.org/books/anatomy-and-physiology-2e/pages/11-6-appendicular-muscles-of-the-pelvic-girdle-and-lower-limbs']];
 function motionProfile(anim){return anim.catalogProfile||anim.muscleProfile;}
-const INCLINE_CHEST=new Set(['dbincline','smithincline','inclinebb','declinepush','cablelowfly']);
+/* ключичная часть большой грудной сгибает плечо — ярче в наклонных жимах и подъёме перед собой; в тягах сверху
+   (плечо разгибается и приводится) работают грудинно-рёберные части, ключичная почти молчит */
+const INCLINE_CHEST=new Set(['dbincline','smithincline','inclinebb','declinepush','cablelowfly','frontraise']);
+const PULL_CHEST=new Set(['latpull','latpullv','latpulluh','assistpull','pullup','chinup','pullover']);
 const LOWER_CHEST=new Set(['declinebb','dip','assistdip']);
 const CATALOG_LATERALITY={dbrow:{upper:'L'},cablelat:{upper:'R'},concentration:{upper:'L'},kickback:{upper:'L'},archer:{upper:'R'},bulgarian:{lower:'L'},stepup:{lower:'L'},lunge:{lower:'L'},revlunge:{lower:'L'},sidelunge:{lower:'R'},pistolbox:{lower:'L'},sllift:{lower:'L'},glutebridge1:{lower:'L'},glutekick:{lower:'L'},cablekickback:{lower:'L'},calf1:{lower:'L'}};
 function catalogSideValues(profile,values){
@@ -39,7 +42,7 @@ for(const ex of EX){
  const regions={};
  for(const[parent,m]of Object.entries(muscles))for(const[id,label,kind]of MUSCLE_REGIONS[parent]){
   let factor=1;
-  if(parent==='chest')factor=INCLINE_CHEST.has(ex.id)?{pec_clavicular:1,pec_sternal:.80,pec_costal:.68}[id]:LOWER_CHEST.has(ex.id)?{pec_clavicular:.70,pec_sternal:.90,pec_costal:1}[id]:{pec_clavicular:.80,pec_sternal:1,pec_costal:.88}[id];
+  if(parent==='chest')factor=INCLINE_CHEST.has(ex.id)?{pec_clavicular:1,pec_sternal:.80,pec_costal:.68}[id]:LOWER_CHEST.has(ex.id)?{pec_clavicular:.70,pec_sternal:.90,pec_costal:1}[id]:PULL_CHEST.has(ex.id)?{pec_clavicular:.35,pec_sternal:.90,pec_costal:1}[id]:{pec_clavicular:.80,pec_sternal:1,pec_costal:.88}[id];
   regions[id]={parent,label,kind,role:m.role,factor,visible:kind!=='deep',profileBasis:parent==='chest'?'illustrative-regional':'shared-group'};
  }
  const names=ex.pri.map(id=>MUSCLE_NAMES[id]).join(', ');
