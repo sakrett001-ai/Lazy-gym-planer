@@ -373,7 +373,7 @@ const Muscles = (() => {
   }
 
   /* ---------- данные ----------
-     src/data/muscles.bin (tools/muscles/pack.js): gzip от JSON. Грузится при первом включении режима «Анатомия мышц»;
+     src/data/muscles.bin (tools/muscles/pack.js): gzip от JSON. Грузится заранее, в простое после первого экрана, или при первом открытии вида «Анатомия»;
      в офлайн-файле встроен (window.MUSCLES_BIN, base64). */
   let data = null, pending = null;
   const decode = u8 => JSON.parse(new TextDecoder().decode(u8));

@@ -111,7 +111,7 @@ test('studio light: semantic colours bypass tone mapping, the body casts but nev
   view.setShadows(false);assert.equal(renderer.shadowMap.enabled,false,'slow graphics: shadows switch off');
  }finally{view.dispose();}
 });
-test('skeleton mode: bones follow the pose inside a see-through skin, phase muscle colours hide, switching off restores the body',async()=>{
+test('skeleton mode: bones follow the pose inside a see-through silhouette, phase muscle colours hide, switching off restores the body',async()=>{
  const r=await runtime();let figure;
  const zlib=require('node:zlib'),Skeleton=require('../src/js/09bq-skeleton.js');
  globalThis.Skeleton=Skeleton;
@@ -124,7 +124,14 @@ test('skeleton mode: bones follow the pose inside a see-through skin, phase musc
   figure.setSkeleton(data);
   assert.equal(figure.svg.dataset.skeleton,'on');
   assert.equal(layer.visible,true);assert.equal(layer.children.length,data.bones.length);
-  assert.equal(torso.material.transparent,true);assert(torso.material.opacity<.4,'skin is see-through');assert.equal(torso.material.depthWrite,false);
+  /* силуэт: цветной проход рисует один ближний слой кожи (прозрачная середина, плотнее к контуру), невидимый двойник
+     сетки пишет глубину кожи раньше него и после костей */
+  const twin=torso.getObjectByName('ghost-depth');
+  assert.equal(torso.material.name,'ghost-skin');assert.equal(torso.material.transparent,true);assert.equal(torso.material.depthWrite,false);
+  assert(twin?.visible&&twin.material.colorWrite===false&&twin.material.depthWrite===true&&twin.material.transparent&&twin.geometry===torso.geometry,'depth twin of the skin');
+  assert(twin.renderOrder<torso.renderOrder,'skin depth is written before the silhouette colour');
+  let skinMeshes=0;s.getObjectByName('mannequin').traverse(o=>{if(o.isMesh&&!o.userData.ghostTwin){skinMeshes++;assert.equal(o.material.name,'ghost-skin',o.name);assert.equal(o.getObjectByName('ghost-depth')?.visible,true,o.name);}});
+  assert(skinMeshes>20,'every part of the mannequin turns into the silhouette');
   assert.equal(torso.castShadow,false,'the skin does not shadow the bones');
   assert(regions.children.every(o=>!o.visible),'phase muscle colours hide while the skeleton is on');
   /* бедренная кость: начало рамки — тазобедренный сустав позы */
@@ -134,8 +141,59 @@ test('skeleton mode: bones follow the pose inside a see-through skin, phase musc
   for(const m of layer.children)assert(m.matrix.elements.every(Number.isFinite),'finite matrix: '+m.name);
   figure.setSkeleton(null);
   assert.equal(layer.visible,false);assert.equal(torso.material.transparent,false);assert.equal(torso.material.opacity,1);assert.equal(torso.castShadow,true);
+  assert.notEqual(torso.material.name,'ghost-skin');assert.equal(torso.getObjectByName('ghost-depth').visible,false,'the depth twin hides with the silhouette');
   assert(regions.children.some(o=>o.visible),'muscle colours return');
  }finally{figure?.dispose();r.dom.window.close();delete globalThis.Skeleton;}
+});
+
+test('anatomy colours follow the phase profile: heads take their region, a one-sided exercise its side, a selected region keeps colour only on its muscles',async()=>{
+ const r=await runtime();let figure;
+ const zlib=require('node:zlib'),Skeleton=require('../src/js/09bq-skeleton.js'),Muscles=require('../src/js/09br-muscles.js');
+ globalThis.Skeleton=Skeleton;globalThis.Muscles=Muscles;
+ const read=f=>zlib.gunzipSync(fs.readFileSync(path.join(__dirname,'../src/data/'+f)));
+ const bones=Skeleton.decode(read('skeleton.bin')),muscles=Muscles.decode(read('muscles.bin'));
+ const {muscleTint,PART_REGION,MUSCLE_REST}=await import('../src/volume/muscles.mjs'),THREE=await import('three');
+ const {muscleColor,catalogVolumeData}=r.model.get('({muscleColor,catalogVolumeData})'),REGIONS=r.model.get('MUSCLE_REGIONS');
+ const by=name=>{const m=muscles.muscles.find(x=>x.name===name);assert(m,name);return m;};
+ try{
+  /* каждая головка ведёт в настоящую область своей группы */
+  const parts=new Map(muscles.muscles.map(m=>[m.part,m.group||[]]));
+  for(const[part,region]of Object.entries(PART_REGION)){
+   const parent=Object.entries(REGIONS).find(([,rows])=>rows.some(([id])=>id===region))?.[0];
+   assert(parts.has(part)&&parent&&parts.get(part).includes(parent),part+' → '+region);
+  }
+  const ex=id=>r.model.EX.find(e=>e.id===id).anim,look=(d,extra={})=>({values:d.values,sideValues:d.sideValues,regions:d.regions,phases:true,...extra});
+  const inc=catalogVolumeData(ex('dbincline'),.5,0),L=look(inc),tint=(name,l,level=null)=>muscleTint(by(name),level,l,muscleColor);
+  /* наклонный жим: ключичная часть — своя, более яркая область; мышцы вне упражнения и без группы — в покое */
+  assert(inc.values.pec_clavicular>inc.values.pec_costal);
+  assert.equal(tint('PECM1_r',L),muscleColor(inc.values.pec_clavicular));assert.equal(tint('PECM3_r',L),muscleColor(inc.values.pec_costal));
+  assert.equal(tint('glmax1_r',L),MUSCLE_REST);assert.equal(tint('SUPSP_r',L),MUSCLE_REST);
+  /* цвет идёт за фазой */
+  assert.notEqual(tint('PECM1_r',look(catalogVolumeData(ex('dbincline'),.05,0))),tint('PECM1_r',L));
+  /* тяга гантели одной рукой работает левой стороной: у правой широчайшей — значение покоя профиля */
+  const row=catalogVolumeData(ex('dbrow'),.5,0),RL=look(row);
+  assert.equal(tint('LAT1_l',RL),muscleColor(row.values.lats));assert.equal(tint('LAT1_r',RL),muscleColor(.28));assert.notEqual(row.values.lats,.28);
+  /* плечевая мышца (группа бицепса без своей области) — тоже по сторонам */
+  assert.equal(tint('BRA_l',RL),muscleColor(row.values.biceps));assert.equal(tint('BRA_r',RL),muscleColor(.28));
+  /* в упражнении на обе стороны та же часть берёт значение группы */
+  assert.equal(tint('BRA_r',look(catalogVolumeData(ex('dbcurl'),.5,0))),muscleColor(catalogVolumeData(ex('dbcurl'),.5,0).values.biceps));
+  /* выбранная область: цвет только у её мышц */
+  const S=look(inc,{selected:'pec_clavicular'});
+  assert.equal(tint('PECM1_l',S),muscleColor(inc.values.pec_clavicular));assert.equal(tint('PECM2_l',S),MUSCLE_REST);assert.equal(tint('TRIlong_l',S),MUSCLE_REST);
+  /* без «Мышц по фазам»: основные — полным цветом, вспомогательные — бледнее */
+  const level={chest:1,triceps:.38},off={phases:false};
+  assert.equal(tint('PECM2_l',off,level),muscleColor(1));assert.equal(tint('TRIlat_l',off,level),muscleColor(.55));assert.equal(tint('glmax1_l',off,level),MUSCLE_REST);
+  /* в сцене: поверхности областей манекена не считаются и скрыты, цвета мышц меняются по фазе, выбор области гасит прочие */
+  figure=r.create({...r.options('dbincline','angle'),muscles:true});figure.setLayers(bones,{skeleton:bones,muscles,level:{chest:1}});
+  const s=r.counters.scene,body=s.getObjectByName('muscle-bodies'),colors=()=>Float32Array.from(body.geometry.attributes.color.array);
+  assert(s.getObjectByName('regions').children.every(o=>!o.visible),'phase regions of the mannequin hide');
+  assert.equal(s.getObjectByName('muscles').visible,true);assert.equal(s.getObjectByName('skeleton').visible,true);
+  figure.at(.05,{index:0});const a=colors();figure.at(.5,{index:0});const b=colors();
+  assert(a.some((v,i)=>v!==b[i]),'phase changes muscle colours');
+  const rest=new THREE.Color(MUSCLE_REST),lit=c=>{let n=0;for(let i=0;i<c.length;i+=3)if(Math.abs(c[i]-rest.r)+Math.abs(c[i+1]-rest.g)+Math.abs(c[i+2]-rest.b)>1e-4)n++;return n;};
+  figure.setRegion('pec_clavicular');const c=colors();assert(lit(c)>0&&lit(c)<lit(b)/3,'a selected region keeps colour only on its muscles');
+  figure.setLayers(null,null);assert.equal(s.getObjectByName('muscles').visible,false);assert(s.getObjectByName('regions').children.some(o=>o.visible),'mannequin regions return');
+ }finally{figure?.dispose();r.dom.window.close();delete globalThis.Skeleton;delete globalThis.Muscles;}
 });
 
 test('13-pose framing keeps every one of 25 poses in frame (exercises with the largest deviation)',async()=>{

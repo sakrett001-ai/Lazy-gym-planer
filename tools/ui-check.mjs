@@ -119,31 +119,27 @@ await page.close();
   await g.evaluate(() => { S.place = 'gym'; ensurePlaces(S); regen(); });
   await g.evaluate(() => openMotion(0)); await g.waitForTimeout(100);
   check(await shown(g, '#mv-detail') && !(await shown(g, '#mv-gallery')), '«Увеличить» в карточке плана открывает сразу разбор');
-  /* режим «Скелет»: у плоской схемы без объёмной графики переключатель недоступен; у объёмной фигуры кости
-     грузятся (в офлайн-файле — встроенные данные) и передаются фигуре, под переключателем — авторы моделей */
-  check(await g.evaluate(() => $('#mv-skeleton').disabled && !$('#mv-skeleton').checked), 'без объёмной графики «Скелет» недоступен');
-  const got = await g.evaluate(async () => {
-    const calls = []; const f = detailMotion.f; f.setSkeleton = d => calls.push(d ? d.bones.length : 0);
-    applySkeleton(); const box = $('#mv-skeleton'); if (box.disabled) return 'disabled';
-    box.click(); for (let i = 0; i < 50 && !calls.some(n => n > 0); i++) await new Promise(r => setTimeout(r, 50));
-    const on = { calls: calls.slice(), note: $('#mv-skeleton-note').textContent, pref: motionPrefs.skeleton };
-    box.click(); return { on, off: calls.at(-1), pref: motionPrefs.skeleton, hidden: $('#mv-skeleton-note').hidden };
+  /* вид фигуры: по умолчанию «Анатомия» (кости и мышцы в почти невидимом силуэте). Без объёмной графики доступен только
+     манекен. У объёмной фигуры анатомия грузит кости и мышцы и передаёт их одним вызовом, «Скелет» — только кости,
+     «Манекен» — ничего; выбор запоминается, подпись короткая (источники — в «О демонстрациях») */
+  check(await g.evaluate(() => motionPrefs.view === 'anatomy' && $('[data-mv-figure="anatomy"]').disabled && $('[data-mv-figure="skeleton"]').disabled
+    && $('[data-mv-figure="mannequin"]').getAttribute('aria-pressed') === 'true' && $('#mv-figure-note').hidden), 'без объёмной графики — только манекен');
+  const fig = await g.evaluate(async () => {
+    const calls = []; const f = detailMotion.f; f.setLayers = (b, a) => calls.push({ bones: b ? b.bones.length : 0, muscles: a ? a.muscles.muscles.length : 0, level: a?.level || null });
+    applyFigureView(); for (let i = 0; i < 60 && !calls.some(c => c.muscles); i++) await new Promise(r => setTimeout(r, 50));
+    const pressed = () => [...document.querySelectorAll('[data-mv-figure]')].filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.dataset.mvFigure).join();
+    const anat = { last: calls.at(-1), note: $('#mv-figure-note').textContent, pressed: pressed(), pri: detailMotion.it.ex.pri, busy: $('#mv-figure').hasAttribute('aria-busy') };
+    $('[data-mv-figure="skeleton"]').click(); const skel = { last: calls.at(-1), note: $('#mv-figure-note').textContent, pressed: pressed(), pref: motionPrefs.view };
+    $('[data-mv-figure="mannequin"]').click(); const man = { last: calls.at(-1), hidden: $('#mv-figure-note').hidden, pressed: pressed(), pref: motionPrefs.view, saved: JSON.parse(localStorage.getItem('podhod.motion.v2')).view };
+    $('[data-mv-figure="anatomy"]').click();
+    return { anat, skel, man, back: { last: calls.at(-1), pref: motionPrefs.view }, thanks: $('#mv-detail').textContent };
   });
-  check(got !== 'disabled' && got.on.calls.at(-1) === 102 && /MyoSim/.test(got.on.note) && got.on.pref === true, '«Скелет» загружает 102 кости и показывает авторов моделей');
-  check(got !== 'disabled' && got.off === 0 && got.pref === false && got.hidden, 'повторное нажатие выключает скелет');
-  /* «Анатомия мышц»: так же недоступна без объёмной графики; у объёмной фигуры грузит мышцы и кости, выделяет мышцы
-     упражнения (уровни групп), под переключателем — авторы моделей; повторное нажатие выключает */
-  check(await g.evaluate(() => $('#mv-anatomy').disabled && !$('#mv-anatomy').checked), 'без объёмной графики «Анатомия мышц» недоступна');
-  const anat = await g.evaluate(async () => {
-    const calls = []; const f = detailMotion.f; f.setAnatomy = d => calls.push(d ? { muscles: d.muscles.muscles.length, bones: d.skeleton.bones.length, level: d.level } : null);
-    applyAnatomy(); const box = $('#mv-anatomy'); if (box.disabled) return 'disabled';
-    box.click(); for (let i = 0; i < 50 && !calls.some(c => c); i++) await new Promise(r => setTimeout(r, 50));
-    const on = { last: calls.at(-1), note: $('#mv-anatomy-note').textContent, pref: motionPrefs.anatomy, pri: detailMotion.it.ex.pri };
-    box.click(); return { on, off: calls.at(-1), pref: motionPrefs.anatomy, hidden: $('#mv-anatomy-note').hidden };
-  });
-  check(anat !== 'disabled' && anat.on.last?.muscles === 462 && anat.on.last.bones === 102 && anat.on.pri.every(m => anat.on.last.level[m] === 1) && /DAS3/.test(anat.on.note) && anat.on.pref === true,
-    '«Анатомия мышц» загружает 462 мышцы на 102 костях, выделяет основные мышцы упражнения и называет модели');
-  check(anat !== 'disabled' && anat.off === null && anat.pref === false && anat.hidden, 'повторное нажатие выключает мышцы');
+  check(fig.anat.last?.bones === 102 && fig.anat.last.muscles === 462 && fig.anat.pri.every(m => fig.anat.last.level[m] === 1) && fig.anat.pressed === 'anatomy' && !fig.anat.busy && /О демонстрациях/.test(fig.anat.note) && fig.anat.note.length < 260,
+    '«Анатомия» по умолчанию: 462 мышцы на 102 костях, основные мышцы выделены, короткая подпись');
+  check(fig.skel.last?.bones === 102 && fig.skel.last.muscles === 0 && fig.skel.pressed === 'skeleton' && fig.skel.pref === 'skeleton' && /MyoSim/.test(fig.skel.note), '«Скелет» — только кости');
+  check(fig.man.last?.bones === 0 && fig.man.last.muscles === 0 && fig.man.hidden && fig.man.pressed === 'mannequin' && fig.man.saved === 'mannequin', '«Манекен» убирает кости и мышцы, выбор запоминается');
+  check(fig.back.last?.muscles === 462 && fig.back.pref === 'anatomy', 'возврат к «Анатомии»');
+  check(/Укорачиваясь, мышца утолщается/.test(fig.thanks) && /DAS3/.test(fig.thanks), 'источники костей и мышц — в «О демонстрациях»');
   await g.close();
 }
 
@@ -177,6 +173,9 @@ await page.close();
   await o.click('#t-sound'); await o.click('#t-skip'); r = await st(); check(r.end === 0 && r.queued === 0, '«Готово» снимает сигнал');
   /* векторы движения по умолчанию выключены; «включено» прежних версий выключается один раз */
   check(await o.evaluate(() => motionPrefs.vectors === false && !$('#mv-vectors').checked), 'векторы движения по умолчанию выключены');
+  /* прежние флажки «Скелет»/«Анатомия мышц» один раз заменяются видом «Анатомия» */
+  await o.evaluate(() => localStorage.setItem('podhod.motion.v2', JSON.stringify({ speed: 1, skeleton: true, anatomy: false, vectorsV: 2 }))); await o.reload(); await o.waitForTimeout(400);
+  check(await o.evaluate(() => motionPrefs.view === 'anatomy' && motionPrefs.viewV === 1 && !('skeleton' in motionPrefs) && +motionPrefs.speed === 1), 'настройки прежних версий переходят на вид «Анатомия», скорость сохраняется');
   await o.close();
 }
 
@@ -189,4 +188,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, витрина атласа, режимы «Скелет» и «Анатомия мышц» работают на телефоне и компьютере.');
+console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, витрина атласа, виды фигуры «Анатомия», «Скелет» и «Манекен» работают на телефоне и компьютере.');

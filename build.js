@@ -33,9 +33,9 @@ const jsSrc = list(path.join(SRC, 'js'), '.js').map(read).join('\n');
 const bodySrc = read(path.join(SRC, 'body.html'));
 const pwaSrc = read(path.join(SRC, 'pwa.js')).replace(/__VERSION__/g, VERSION);
 const manifestSrc = JSON.parse(read(path.join(SRC, 'manifest.webmanifest')));
-/* кости манекена (режим «Скелет»): PWA грузит файл по требованию, офлайн-файлы — со встроенными данными (base64) */
+/* кости манекена (виды «Анатомия» и «Скелет» разбора): PWA грузит файл по требованию, офлайн-файлы — со встроенными данными (base64) */
 const skeletonBin = fs.readFileSync(path.join(SRC, 'data', 'skeleton.bin')), skeletonB64 = skeletonBin.toString('base64');
-/* пути мышц (режим «Анатомия мышц») — так же: файл по требованию, в офлайн-файлах встроены */
+/* пути мышц (вид «Анатомия») — так же: файл по требованию, в офлайн-файлах встроены */
 const musclesBin = fs.readFileSync(path.join(SRC, 'data', 'muscles.bin')), musclesB64 = musclesBin.toString('base64');
 const ASSET_VERSION = VERSION + '-' + require('node:crypto').createHash('sha256').update([volumeSrc,cssSrc,jsSrc,bodySrc,pwaSrc,JSON.stringify(manifestSrc),read(path.join(SRC,'sw.js')),read(path.join(__dirname,'i18n/en.json')),skeletonB64,musclesB64].join('\n')).digest('hex').slice(0,12);
 const reset = `:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}`;

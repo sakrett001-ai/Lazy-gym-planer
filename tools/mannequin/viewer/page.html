@@ -123,7 +123,7 @@ const X=MannequinViewer,T=X.THREE,$=id=>document.getElementById(id),css=n=>getCo
 const canvas=$('cv'),renderer=new T.WebGLRenderer({canvas,antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
 const camera=new T.PerspectiveCamera(30,4/3,.05,60),controls=new X.OrbitControls(camera,canvas);controls.enableDamping=true;controls.dampingFactor=.12;
 let view=null,rig=null,cur=null,t=0,clock=0,playing=!matchMedia('(prefers-reduced-motion: reduce)').matches,joints=false,camKey='angle',center=new T.Vector3(),radius=2;
-/* кости и мышцы (режимы «Скелет» и «Анатомия мышц» приложения); мышцы упражнения — цветом нагрузки: основные ярче */
+/* кости и мышцы (виды «Скелет» и «Анатомия» приложения); мышцы упражнения — цветом нагрузки: основные ярче */
 const SKEL=Skeleton.decode(Uint8Array.from(atob(SKELETON_RAW),c=>c.charCodeAt(0)));let bonesOn=false,muscOn=false,level={};
 const heat=v=>v>=1?'#ea6a0e':'#f5b82e',opts=()=>({muscles:false,joints,color:muscOn?heat:()=>'#a7b3c6',skeleton:bonesOn?SKEL:null,anatomy:muscOn?{skeleton:SKEL,muscles:MUSCLES_RAW,level}:null});
 const CAMS=[['angle','Под углом',40,-22],['side','Сбоку',90,0],['front','Спереди',0,0],['back','Сзади',180,0],['above','Сверху',35,-55]];
