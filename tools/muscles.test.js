@@ -44,7 +44,8 @@ const pose = (set = {}) => {
 const lengths = set => { const { m } = pose(set); return new Map(Muscles.layout(bound, m).map((p, i) => [bound[i].name, p.length])); };
 
 test('muscle data: every muscle sits on existing bones, has an anatomical name and app groups, both sides', () => {
-  assert.equal(md.muscles.length, 472);   /* 4.32.0: +6 — поясничный и подвздошные пучки широчайшей; 4.34.0: +4 — верхние зубцы наружной косой (anatomy.js) */
+  assert.equal(md.muscles.length, 514);   /* 4.32.0: +6 — поясничный и подвздошные пучки широчайшей; 4.34.0: +4 — верхние зубцы наружной косой;
+                                              4.35.0: +42 — мышцы шеи, остистая (anatomy.js), гребенчатая (gait2392_import.py) */
   for (const mu of md.muscles) {
     assert(md.parts[mu.part], `${mu.name}: part ${mu.part}`);
     for (const g of mu.group) assert(GROUPS.has(g), `${mu.name}: unknown group ${g}`);
@@ -131,6 +132,33 @@ test('shoulder-blade muscles from DAS3 shorten in the movements they produce', (
   }
 });
 
+/* Мышцы шеи (4.35.0, anatomy.js): эталона длины нет — проверяется функция (Neumann D. A., 2017, гл. 10):
+   грудино-ключично-сосцевидная сгибает шею, наклоняет её в свою сторону и поворачивает голову в противоположную;
+   ременные разгибают, наклоняют и поворачивают в свою сторону; передняя и средняя лестничные сгибают, все лестничные
+   наклоняют в свою сторону. Шарнир шеи манекена стоит сзади, у C7 (на 4 см позади оси корпуса — как шарниры поясницы
+   до 4.26.0): ременная мышца шеи, идущая к поперечным отросткам C1–C3, проходит перед ним, поэтому её разгибание не
+   проверяется (tools/muscles/README.md, «Известные расхождения»). Гребенчатая сгибает и приводит бедро; остистая
+   разгибает грудной отдел — у манекена он жёсткий до L2/L3, ход есть только у пучка от L2. */
+test('neck muscles, pectineus and spinalis shorten in the movements they produce', () => {
+  const base = lengths(), d = set => { const l = lengths(set); return n => l.get(n) - base.get(n); };
+  const all = re => [...base.keys()].filter(n => re.test(n));
+  const cases = [
+    ['neck flexion', { neck: [40, 0, 0] }, [/^SCM\d_r$/, /^SCAL(ant|med)\d_r$/], [/^SPLcap\d_r$/]],
+    ['neck extension', { neck: [-40, 0, 0] }, [/^SPLcap\d_r$/], [/^SCM\d_r$/, /^SCAL(ant|med)\d_r$/]],
+    ['neck bend right', { neck: [0, 30, 0] }, [/^SCM\d_r$/, /^SPL(cap|cerv)\d_r$/, /^SCAL(ant|med|post)\d_r$/], [/^SCM\d_l$/, /^SCAL(ant|med|post)\d_l$/]],
+    ['head turn left', { neck: [0, 0, 50] }, [/^SCM\d_r$/, /^SPL(cap|cerv)\d_l$/], [/^SCM\d_l$/, /^SPLcap\d_r$/]],
+    ['hip flexion', { 'R.hip': [40, 0, 0] }, [/^pect_r$/], []],
+    ['hip adduction', { 'R.hip': [0, -15, 0] }, [/^pect_r$/], []],
+    ['trunk extension', { thoracic: [-20, 0, 0] }, [/^SPIN1_[rl]$/], []],
+    ['trunk flexion', { thoracic: [30, 0, 0] }, [], [/^SPIN1_[rl]$/]],
+  ];
+  for (const [label, set, shorten, lengthen] of cases) {
+    const dl = d(set);
+    for (const re of shorten) { assert(all(re).length, `${label}: ${re}`); for (const n of all(re)) assert(dl(n) < -.2, `${label}: ${n} should shorten, changes by ${dl(n).toFixed(2)} cm`); }
+    for (const re of lengthen) { assert(all(re).length, `${label}: ${re}`); for (const n of all(re)) assert(dl(n) > .2, `${label}: ${n} should lengthen, changes by ${dl(n).toFixed(2)} cm`); }
+  }
+});
+
 /* Объём (этап М2, tools/muscles/volumes.js): мышца целиком — по МРТ (Riem et al., 2026; мужчины), пересчитанной на рост ×
    массу манекена; между линиями одной мышцы — как в исходной модели. Сумма объёмов линий мышцы равна МРТ с точностью
    округления данных (0,1 см³ на линию); у каждой линии — объём, сухожилия короче пути. */
@@ -144,6 +172,17 @@ test('muscle volumes: each MRI muscle is split over its lines, totals equal the 
     const v = lines.reduce((s, m) => s + m.v, 0);
     assert(Math.abs(v - A.mri.male[g] * k) <= .06 * lines.length + .1, `${g}${side}: ${v.toFixed(1)} vs MRI ${(A.mri.male[g] * k).toFixed(1)} cm³`);
   }
+  /* мышцы шеи (4.35.0) — по МРТ Zheng и др. (2013): доля от общего объёма мышц шеи, сумма двух сторон пополам */
+  const { NECK, SPINALIS } = require('./muscles/volumes.js'), kn = L.M.B.stature * L.M.B.mass / (A.neck.height * A.neck.mass);
+  for (const [g, re] of NECK) for (const side of ['_r', '_l']) {
+    const lines = md.muscles.filter(m => m.name.endsWith(side) && re.test(m.name.replace(/_[rl]$/, '')));
+    const v = lines.reduce((s, m) => s + m.v, 0), V = A.neck.percent[g] / 100 * A.neck.total / 2 * kn;
+    assert(lines.length && Math.abs(v - V) <= .06 * lines.length + .1, `${g}${side}: ${v.toFixed(1)} vs MRI ${V.toFixed(1)} cm³`);
+  }
+  /* остистая — 7,3 % выпрямителя (Delp и др., 2001: поперечник × длина волокон) */
+  assert(Math.abs(SPINALIS - .073) < .002, `spinalis share ${SPINALIS}`);
+  const es = md.muscles.filter(m => m.name.endsWith('_r') && /^(IL_|LTpT_|LTpL_|SPIN\d_)/.test(m.name)), sp = es.filter(m => /^SPIN/.test(m.name));
+  assert(Math.abs(sp.reduce((s, m) => s + m.v, 0) / es.reduce((s, m) => s + m.v, 0) - SPINALIS) < .005, 'spinalis volume share');
   for (const m of md.muscles) {
     assert(m.v > 0 && m.t0 >= 0 && m.t1 >= 0 && m.t0 + m.t1 < m.l0, `${m.name}: v ${m.v}, tendons ${m.t0} + ${m.t1}, path ${m.l0}`);
     assert(m.sk && m.sk.length === Muscles.SKIN_U.length, `${m.name}: skin samples`);

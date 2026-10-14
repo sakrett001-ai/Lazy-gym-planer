@@ -32,7 +32,14 @@
      концы ниже рёберной дуги, где хрящей нет). Кость — L3, как у EO1–EO4 (тело-посредник брюшной стенки MyoSim).
    Путь — от апоневроза к ребру (как у EO1: сухожилие в начале пути). Сила — как у соседнего пучка EO1 (ребро 7):
    данных о силе верхних зубцов в моделях нет; объём наружной косой (МРТ) делится между восемью пучками (volumes.js).
-   Левая сторона — зеркально. */
+   Левая сторона — зеркально.
+
+   3. Мышцы шеи (4.35.0) — грудино-ключично-сосцевидная, ременные головы и шеи, лестничные: в открытых моделях, которые
+   используются здесь, их нет. Построены по описаниям прикреплений (Gray's Anatomy, 1918) на ориентирах, найденных на
+   костях манекена (подробности — у раздела 3 ниже и в README). Объём — МРТ Zheng и др. (2013), части — Borst (2009).
+
+   4. Остистая мышца груди (4.35.0) — четыре вложенных пучка вдоль остистых отростков T2–L2; объём — доля выпрямителя
+   позвоночника по Delp и др. (2001). */
 const fs = require('node:fs'), path = require('node:path'), zlib = require('node:zlib');
 const root = path.resolve(__dirname, '../..');
 const M = require(path.join(root, 'src/js/09bm-mannequin.js'));
@@ -61,7 +68,7 @@ const pair = (name, par, el) => [
 ];
 
 const md = JSON.parse(fs.readFileSync(IN, 'utf8'));
-md.muscles = md.muscles.filter(mu => !/^(LAT[456]|EO[78])_[rl]$/.test(mu.name));
+md.muscles = md.muscles.filter(mu => !/^(LAT[456]|EO[78]|SCM\d|SPLcap\d|SPLcerv\d|SCAL(ant|med|post)\d|SPIN\d)_[rl]$/.test(mu.name));
 
 /* ---------- 1. широчайшая ---------- */
 /* вершина остистого отростка L3 — самая задняя точка позвонка (каталог: Z вперёд) */
@@ -139,5 +146,120 @@ console.log('широчайшая: пучков', md.muscles.filter(mu => /^LAT\
     console.log(`${name}: ребро ${r}, угол ${a.toFixed(1)}° (вершин ${outer.length}), начало ${o.map(v => v.toFixed(1)).join(' ')} → апоневроз ${f.map(v => v.toFixed(1)).join(' ')}`);
   }
 }
+
+/* ---------- общее для разделов 3–4: части сеток, точки на поверхности кости ---------- */
+function parts(B) {
+  const n = B.w.length, par = Array.from({ length: n }, (_, i) => i);
+  const find = x => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; };
+  for (let i = 0; i < B.b.idx.length; i += 3) for (const [a, c] of [[B.b.idx[i], B.b.idx[i + 1]], [B.b.idx[i + 1], B.b.idx[i + 2]]]) { const ra = find(a), rb = find(c); if (ra !== rb) par[ra] = rb; }
+  const comp = new Map(); for (let i = 0; i < n; i++) { const r = find(i); (comp.get(r) || comp.set(r, []).get(r)).push(i); }
+  return [...comp.values()];
+}
+const sub = (a, b) => a.map((v, k) => v - b[k]), add = (a, b) => a.map((v, k) => v + b[k]), mul = (a, s) => a.map(v => v * s);
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], dist = (a, b) => Math.hypot(...sub(a, b));
+/* ближайшая к p точка треугольника abc (Эриксон, «Real-Time Collision Detection», 5.1.5) */
+function onTri(p, a, b, c) {
+  const ab = sub(b, a), ac = sub(c, a), ap = sub(p, a), d1 = dot(ab, ap), d2 = dot(ac, ap);
+  if (d1 <= 0 && d2 <= 0) return a;
+  const bp = sub(p, b), d3 = dot(ab, bp), d4 = dot(ac, bp); if (d3 >= 0 && d4 <= d3) return b;
+  const vc = d1 * d4 - d3 * d2; if (vc <= 0 && d1 >= 0 && d3 <= 0) return add(a, mul(ab, d1 / (d1 - d3)));
+  const cp = sub(p, c), d5 = dot(ab, cp), d6 = dot(ac, cp); if (d6 >= 0 && d5 <= d6) return c;
+  const vb = d5 * d2 - d1 * d6; if (vb <= 0 && d2 >= 0 && d6 <= 0) return add(a, mul(ac, d2 / (d2 - d6)));
+  const va = d3 * d6 - d5 * d4; if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) return add(b, mul(sub(c, b), (d4 - d3) / ((d4 - d3) + (d5 - d6))));
+  const den = 1 / (va + vb + vc); return add(a, add(mul(ab, vb * den), mul(ac, vc * den)));
+}
+/* точка на поверхности кости, ближайшая к p (мир) */
+function surface(B, p) {
+  let best = Infinity, q = p;
+  for (let f = 0; f < B.b.idx.length; f += 3) { const r = onTri(p, B.w[B.b.idx[f]], B.w[B.b.idx[f + 1]], B.w[B.b.idx[f + 2]]), d = dist(p, r); if (d < best) { best = d; q = r; } }
+  return q;
+}
+/* точка пути: кость и координаты в её рамке */
+const at3 = (B, p, site) => ({ bone: [B.b.name, B.b.side || ''], p: round(toLocal(B.i, p)), site });
+const extreme = (pts, f) => pts.reduce((a, q) => (f(q) > f(a) ? q : a));
+
+/* ---------- 3. мышцы шеи: грудино-ключично-сосцевидная, ременные, лестничные ---------- */
+{
+  /* ориентиры (каталог: X влево, Y вниз, Z вперёд; правая сторона — X меньше середины) */
+  const cerv = bone('cervical'), skull = bone('skull'), rc = bone('ribcage'), cl = bone('clavicle', 'R');
+  const C = parts(cerv).sort((a, b) => b.length - a.length).slice(0, 7).map(c => c.map(i => cerv.w[i])).sort((a, b) => mean(a)[1] - mean(b)[1]);
+  if (C.length !== 7) throw Error('шейных позвонков: ' + C.length);
+  /* поперечный отросток: самые наружные точки позвонка (в пределах 0,8 см от края); передний бугорок — передняя из них,
+     задний — задняя (у C7 переднего бугорка нет: передний и задний — одна наружная часть) */
+  const tub = C.map(p => { const R = p.filter(q => q[0] < midX - 1), lat = Math.max(...R.map(q => midX - q[0])), L = R.filter(q => midX - q[0] > lat - .8);
+    return { ant: extreme(L, q => q[2]), post: extreme(L, q => -q[2]), tip: extreme(p, q => -q[2]) }; });
+  const T = n => extreme(bone('thoracic' + n).w, q => -q[2]);                                  // вершина остистого отростка
+  const eop = (() => { const s = md.muscles.find(mu => mu.name === 'trap_clav_1_r').el[0].s; return at(index(s.bone[0], s.bone[1] || ''), s.p); })();
+  const mastoid = extreme(skull.w.filter(q => { const l = midX - q[0]; return l > 4 && l < 6.5 && q[2] > -3 && q[2] < 1.5; }), q => q[1]);
+  const onSkull = p => surface(skull, p);
+  /* верхняя выйная линия — от наружного затылочного выступа к основанию сосцевидного отростка (на 2 см выше вершины) */
+  const snl = t => onSkull(add(eop, mul(sub(add(mastoid, [0, -2, 0]), eop), t)));
+  /* выйная связка — от наружного затылочного выступа к вершине остистого отростка C7, на высоте вершины уровня L (0 — C1) */
+  const nuchal = L => { const i = Math.min(Math.floor(L), 5), y = tub[i].tip[1] + (L - i) * (tub[i + 1].tip[1] - tub[i].tip[1]), t = (y - eop[1]) / (tub[6].tip[1] - eop[1]); return add(eop, mul(sub(tub[6].tip, eop), t)); };
+  /* рукоятка грудины: вырезка — верхняя точка грудины у середины; начало грудинной головки — передняя поверхность ниже и сбоку */
+  const sternum = parts(rc).sort((a, b) => b.length - a.length)[0].map(i => rc.w[i]);
+  const notch = extreme(sternum.filter(q => Math.abs(q[0] - midX) < 1.5), q => -q[1]);
+  const manubrium = (dx, dy) => extreme(sternum.filter(q => Math.abs(q[0] - (midX - dx)) < .7 && Math.abs(q[1] - (notch[1] + dy)) < .7), q => q[2]);
+  /* ключица: внутренний конец — ближайшая к середине точка; f — доля длины к наружному концу; верхняя поверхность */
+  const clMed = extreme(cl.w, q => q[0]), clLat = extreme(cl.w, q => -q[0]);
+  const clav = f => { const x = clMed[0] + f * (clLat[0] - clMed[0]); return extreme(cl.w.filter(q => Math.abs(q[0] - x) < .6), q => -q[1]); };
+  /* рёбра 1–2 справа: срез по глубине (доля f от заднего конца к переднему) */
+  const ribs = parts(rc).filter(c => c.length < 200).map(c => c.map(i => rc.w[i])).filter(p => mean(p)[0] < midX).sort((a, b) => mean(a)[1] - mean(b)[1]);
+  const slice = (r, f) => { const p = ribs[r - 1], z0 = Math.min(...p.map(q => q[2])), z1 = Math.max(...p.map(q => q[2])); return p.filter(q => Math.abs(q[2] - (z0 + f * (z1 - z0))) < .5); };
+  /* лестничный бугорок 1-го ребра — внутренний край верхней поверхности у перехода к переднему отделу; за бороздой
+     подключичной артерии — верхняя поверхность ребра; 2-е ребро — наружная поверхность */
+  const scaleneTub = (() => { const s = slice(1, .8), xs = s.map(q => q[0]), xm = (Math.min(...xs) + Math.max(...xs)) / 2; return extreme(s.filter(q => q[0] >= xm), q => -q[1]); })();
+  const rib1Top = f => extreme(slice(1, f), q => -q[1]), rib2Out = f => extreme(slice(2, f), q => -q[0]);
+  console.log('шея: сосцевидный отросток', mastoid.map(v => v.toFixed(1)).join(' '), '; яремная вырезка', notch.map(v => v.toFixed(1)).join(' '));
+
+  const LINES = [
+    /* грудино-ключично-сосцевидная (Gray's: грудинная головка — передняя поверхность рукоятки грудины, ключичная — верхняя
+       поверхность внутренней трети ключицы → наружная поверхность сосцевидного отростка и наружная половина верхней выйной
+       линии); четыре части — как четыре элемента у Borst (2009): грудинно-затылочная, грудинно-сосцевидная, две ключично-сосцевидные */
+    ['SCM1', [[rc, manubrium(1.3, 1.2)], [skull, snl(.6)]]],
+    ['SCM2', [[rc, manubrium(1.6, 1.8)], [skull, onSkull(add(mastoid, [-.5, -1, 0]))]]],
+    ['SCM3', [[cl, clav(.15)], [skull, onSkull(add(mastoid, [-.5, -.5, .5]))]]],
+    ['SCM4', [[cl, clav(.3)], [skull, onSkull(add(mastoid, [-.5, -1.5, -.3]))]]],
+    /* ременная мышца головы (Gray's: нижняя половина выйной связки, остистые отростки C7–T3 → сосцевидный отросток и
+       затылочная кость под наружной третью верхней выйной линии): верхние пучки — к затылку, нижние — к сосцевидному */
+    ['SPLcap1', [[cerv, nuchal(3)], [skull, onSkull(add(snl(.72), [0, 1, 0]))]]],
+    ['SPLcap2', [[cerv, nuchal(5.5)], [skull, onSkull(add(snl(.86), [0, 1, 0]))]]],
+    ['SPLcap3', [[bone('thoracic2'), T(2)], [skull, onSkull(add(mastoid, [0, -2, -1]))]]],
+    /* ременная мышца шеи (Gray's: остистые отростки T3–T6 → задние бугорки поперечных отростков C1–C3) */
+    ['SPLcerv1', [[bone('thoracic3'), T(3)], [cerv, tub[0].post]]],
+    ['SPLcerv2', [[bone('thoracic5'), T(5)], [cerv, tub[2].post]]],
+    /* лестничные (Gray's): передняя — передние бугорки C3–C6 → лестничный бугорок 1-го ребра; средняя — задние бугорки
+       C2–C7 → верхняя поверхность 1-го ребра за бороздой подключичной артерии; задняя — задние бугорки C4–C6 →
+       наружная поверхность 2-го ребра */
+    ['SCALant1', [[cerv, tub[3].ant], [rc, scaleneTub]]],
+    ['SCALant2', [[cerv, tub[5].ant], [rc, scaleneTub]]],
+    ['SCALmed1', [[cerv, tub[1].post], [rc, rib1Top(.5)]]],
+    ['SCALmed2', [[cerv, tub[3].post], [rc, rib1Top(.56)]]],
+    ['SCALmed3', [[cerv, tub[5].post], [rc, rib1Top(.62)]]],
+    ['SCALpost1', [[cerv, tub[3].post], [rc, rib2Out(.28)]]],
+    ['SCALpost2', [[cerv, tub[5].post], [rc, rib2Out(.36)]]],
+  ];
+  for (const [name, pts] of LINES) {
+    md.muscles.push(...pair(name, { fmax: 0, L0: 0, LT: 0 }, pts.map(([B, p], k) => at3(B, p, 'P' + (k + 1)))));
+    console.log(`  ${name}: ${pts.map(([B, p]) => B.b.name + ' ' + p.map(v => v.toFixed(1)).join(' ')).join(' → ')}`);
+  }
+}
+
+/* ---------- 4. остистая мышца груди ---------- */
+/* Gray's: от остистых отростков T11–L2 к остистым отросткам верхних грудных позвонков (T1–T8). Четыре пучка, вложенные
+   друг в друга: L2 → T2, L1 → T4, T12 → T6, T11 → T8. Мышца лежит вплотную к остистым отросткам: точки — сбоку от
+   вершины (0,7 см кнаружи, 0,7 см вглубь), на каждом промежуточном позвонке — промежуточная точка той же кости, путь
+   повторяет изгиб позвоночника. */
+{
+  const vb = n => (n <= 12 ? bone('thoracic' + n) : bone('L' + (n - 12)));
+  const beside = n => { const B = vb(n), t = extreme(B.w, q => -q[2]); return [B, add(t, [-.7, 0, .7])]; };
+  const SP = [['SPIN1', 14, 2], ['SPIN2', 13, 4], ['SPIN3', 12, 6], ['SPIN4', 11, 8]];
+  for (const [name, lo, hi] of SP) {
+    const pts = []; for (let n = lo; n >= hi; n--) pts.push(beside(n));
+    md.muscles.push(...pair(name, { fmax: 0, L0: 0, LT: 0 }, pts.map(([B, p], k) => at3(B, p, k === 0 ? 'origin' : k === pts.length - 1 ? 'insertion' : 'via' + k))));
+    console.log(`  ${name}: ${lo > 12 ? 'L' + (lo - 12) : 'T' + lo} → T${hi}, точек ${pts.length}`);
+  }
+}
+
 fs.writeFileSync(OUT, JSON.stringify(md));
 console.log('→', path.relative(root, OUT));

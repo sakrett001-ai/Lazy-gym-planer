@@ -1,4 +1,4 @@
-# Мышцы манекена: MyoSim и DAS3
+# Мышцы манекена: MyoSim, DAS3 и Gait2392
 
 `src/data/muscles.bin` — производные данные: пути мышц (точки начала, промежуточные точки, прикрепления и огибающие
 тела), пересчитанные в рамки костей скелета манекена Lazy Gym Planner, и объёмы мышц с длинами сухожилий
@@ -25,9 +25,26 @@ and arm dynamics. IEEE Transactions on Biomedical Engineering, 2014, 61(7): 1947
 
 Изменения: кости DAS3 совмещены с костями манекена по поверхности (ICP: грудная клетка — аффинно, остальные — подобием),
 точки прикрепления перенесены этими преобразованиями; точки, оказавшиеся дальше 1 см от поверхности своей кости
-(у DAS3 начала на остистых отростках лежат в 3–4,4 см позади позвонков её же сетки), поставлены на поверхность кости;
-начало верхних пучков трапециевидной и поднимающей лопатку отнесены к черепу и шейному отделу по анатомии.
+поставлены на поверхность кости. Начала на позвоночнике (трапециевидная, ромбовидные, поднимающая лопатку) с версии
+4.34.0 переносятся по уровню позвонка: выйная связка, вершины остистых отростков, поперечные отростки; по анатомии
+(Gray's Anatomy) трапециевидная продлена до T12, ромбовидные посажены на C7–T5, поднимающая лопатку — на C1 и C4.
 Эллипсоид огибается приближённо — как единичная сфера в своих осях.
+
+## Gait2392 — гребенчатая мышца
+
+Модель нижней конечности **Gait2392** (Models/Gait2392_Simbody из https://github.com/opensim-org/opensim-models,
+коммит d9b05d4): Delp S. L., Loan J. P., Hoy M. G., Zajac F. E., Topp E. L., Rosen J. M. An interactive graphics-based
+model of the lower extremity to study orthopaedic surgical procedures. IEEE Transactions on Biomedical Engineering, 1990,
+37: 757–767; модель — D. G. Thelen, A. Seth, F. C. Anderson, S. L. Delp. Лицензия Creative Commons Attribution 3.0
+(https://creativecommons.org/licenses/by/3.0/). Взята одна мышца — гребенчатая (pect_r; левая — зеркально).
+Изменения: таз и бедро Gait2392 совмещены с костями манекена по поверхности (ICP, подобие; невязка 2–3 мм), точки пути
+перенесены этим преобразованием; объём — по МРТ (ниже).
+
+## Части мышц по анатомии
+
+Части, которых нет в исходных моделях, построены на костях манекена по описаниям прикреплений (Gray's Anatomy):
+поясничная и подвздошные части широчайшей (4.32.0), верхние зубцы наружной косой (4.34.0), грудино-ключично-
+сосцевидная, ременные мышцы головы и шеи, лестничные, остистая мышца груди (4.35.0) — `tools/muscles/anatomy.js`.
 
 ## Объём мышц
 
@@ -39,6 +56,14 @@ Physiology, 2026, 140: 1–19. doi:10.1152/japplphysiol.00772.2025 (таблиц
 Доли длины мышц ног — по препаратам: Ward S. R., Eng C. M., Smallwood L. H., Lieber R. L. Are current measurements of
 lower extremity muscle architecture accurate? Clinical Orthopaedics and Related Research, 2009, 467: 1074–1082.
 doi:10.1007/s11999-008-0594-8 (таблица 3).
+
+Мышцы шеи (в наборе выше их нет) — МРТ мужчин: Zheng L., Siegmund G., Ozyigit G., Vasavada A. Sex-specific prediction
+of neck muscle volumes. Journal of Biomechanics, 2013, 46(5): 899–904 (PMC3648672), таблицы 1–3; между частями мышцы —
+по массам у Borst J. Muscle parameters for musculoskeletal modelling of the human neck. MSc thesis, TU Delft, 2009
+(опубликовано: Borst J., Forbes P. A., Happee R., Veeger D. Clinical Biomechanics, 2011). Доля остистой мышцы в объёме
+выпрямителя позвоночника — по поперечнику и длине волокон: Delp S. L., Suryanarayanan S., Murray W. M., Uhlir J.,
+Triolo R. J. Architecture of the rectus abdominis, quadratus lumborum, and erector spinae. Journal of Biomechanics, 2001,
+34: 371–375.
 
 Деление объёма между пучками одной мышцы — по числовым параметрам исходных моделей OpenSim (сила, длина волокон;
 файлы моделей не входят ни в репозиторий, ни в сборку, параметры — `tools/muscles/fixtures/params.json`):

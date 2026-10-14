@@ -193,5 +193,75 @@
     3.78
    ]
   }
+ },
+ "neck": {
+  "source": "Zheng L., Siegmund G., Ozyigit G., Vasavada A. Sex-specific prediction of neck muscle volumes. J Biomech 46(5): 899–904, 2013 (PMC3648672) — таблицы 1–3, мужчины: рост 174,8 см, масса 75,2 кг (n = 8); общий объём мышц шеи 813,9 см³ — сумма правой и левой сторон (рис. 4–5: «sum of left and right»); доля каждой мышцы, % (n = 7). МРТ от затылка до T2: грудино-ключично-сосцевидная прослежена до грудины, мышцы задней поверхности обрезаны на уровне T2 (у ременных часть ниже T2 не измерена)",
+  "height": 174.8,
+  "mass": 75.2,
+  "total": 813.9,
+  "percent": {
+   "Sternocleidomastoid": 14.0,
+   "Splenius": 9.9,
+   "Scalenus": 6.3
+  }
+ },
+ "borst2009": {
+  "source": "Borst J. Muscle parameters for musculoskeletal modelling of the human neck. MSc thesis, Delft University of Technology, 2009 — приложение C: масса элементов мышц, г (препарат: мужчина 86 лет, рост 1,71 м, левая сторона; опубликовано: Borst J., Forbes P. A., Happee R., Veeger D. Clinical Biomechanics, 2011). Используются только доли: как объём мышцы делится между её частями",
+  "mass": {
+   "sternocleidomastoid": [
+    10.023,
+    18.96,
+    4.753,
+    5.025
+   ],
+   "splenius_capitis": [
+    1.195,
+    2.119,
+    3.997,
+    3.997,
+    3.997,
+    5.874,
+    5.874
+   ],
+   "splenius_cervicis": [
+    5.332,
+    5.332
+   ],
+   "scalenus_anterior": [
+    0.994,
+    0.994,
+    1.988
+   ],
+   "scalenus_medius": [
+    1.675,
+    1.675,
+    1.675,
+    1.675,
+    1.675,
+    1.675,
+    1.675
+   ],
+   "scalenus_posterior": [
+    2.75,
+    2.75
+   ]
+  }
+ },
+ "delp2001": {
+  "source": "Delp S. L., Suryanarayanan S., Murray W. M., Uhlir J., Triolo R. J. Architecture of the rectus abdominis, quadratus lumborum, and erector spinae. J Biomech 34: 371–375, 2001 — по сводной таблице ISSLS Textbook of the Lumbar Spine, раздел 2, гл. 9, табл. 9-1: физиологический поперечник, см², и длина волокон, см",
+  "erector": {
+   "spinalis thoracis": [
+    1.6,
+    5.2
+   ],
+   "longissimus thoracis": [
+    5.9,
+    9.6
+   ],
+   "iliocostalis lumborum": [
+    4.1,
+    12.0
+   ]
+  }
  }
 }
