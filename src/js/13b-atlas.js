@@ -2,11 +2,11 @@
    Обратный путь к упражнениям: сначала мышца, потом движения. Список берётся из инвентаря текущего места;
    то, что требует другого инвентаря, показано отдельно с подсказкой, где оно есть. */
 const ATLAS_GROUPS = [
-  ['Грудь и плечи', ['chest', 'delt_f', 'delt_s', 'delt_r']],
+  ['Грудь и плечи', ['chest', 'delt_f', 'delt_s', 'delt_r', 'serratus', 'cuff']],
   ['Руки', ['biceps', 'triceps', 'forearms']],
   ['Спина', ['lats', 'midback', 'traps', 'lowback']],
   ['Корпус', ['abs', 'obliques']],
-  ['Ноги', ['glutes', 'quads', 'hams', 'calves']]
+  ['Ноги', ['glutes', 'quads', 'adductors', 'hipflex', 'hams', 'calves']]
 ];
 const ATLAS_ORDER = ATLAS_GROUPS.flatMap(g => g[1]);
 /* что делает мышца — коротко, чтобы было понятно, зачем её тренировать */
@@ -27,10 +27,17 @@ const MUSCLE_INFO = {
   glutes:'Разгибают бедро — выводят из приседа и толкают таз вперёд. Средняя ягодичная удерживает таз и колено на одной линии.',
   quads:'Разгибают колено. Прямая мышца бедра ещё и поднимает бедро вперёд.',
   hams:'Сгибают колено и разгибают бедро. Работают в наклонах от таза и сгибаниях ног.',
-  calves:'Поднимают на носки. Икроножная сильнее включается с прямым коленом, камбаловидная — с согнутым.'
+  calves:'Поднимают на носки. Икроножная сильнее включается с прямым коленом, камбаловидная — с согнутым.',
+  adductors:'Сводят ноги. Большая приводящая ещё и разгибает бедро: в глубоком приседе и выпаде она работает вместе с ягодичными.',
+  hipflex:'Поднимают бедро к корпусу — подвздошно-поясничная мышца, прямая мышца бедра, портняжная. Главные мышцы подъёмов ног и коленей.',
+  serratus:'Прижимает лопатку к рёбрам, выводит её вперёд и поворачивает вверх. Работает в отжиманиях и жимах над головой.',
+  cuff:'Четыре глубокие мышцы вокруг плечевого сустава: держат головку плеча во впадине и вращают руку. Работают в разведениях назад, «Y-T-W» и тягах сверху.'
 };
+/* мышцы-помощники: упражнений, где они главная цель, почти нет — в атласе они показаны по упражнениям, в которых работают
+   в помощь, а тренировка с акцентом на них не предлагается */
+const ATLAS_SUPPORT = new Set(['serratus', 'cuff']);
 /* мышцы задней поверхности: камера для превью ищет их со спины */
-const ATLAS_BACK = new Set(['delt_r', 'triceps', 'traps', 'midback', 'lats', 'lowback', 'glutes', 'hams', 'calves']);
+const ATLAS_BACK = new Set(['delt_r', 'triceps', 'traps', 'midback', 'lats', 'lowback', 'glutes', 'hams', 'calves', 'cuff']);
 let atlasEx = null, atlasCam = null;
 /* ракурсы превью: «спереди» и «сзади» — три четверти, так видно и мышцу, и движение */
 const ATLAS_CAMS = {angle:'Спереди', rear:'Со спины', side:'Сбоку', above:'Сверху'};
@@ -94,7 +101,7 @@ const ATLAS_SPLIT = {
   delt_r:[['delt_r', [[67, 36], [73, 36.8], [76, 46], [76.5, 55.5], [72, 48]]], ['delt_s', [[73, 36.8], [75, 37], [81, 43], [82, 53], [78, 58], [76.5, 55.5], [76, 46]]]]
 };
 function atlasMapSvg(sel, counts) {
-  const neutral = new Set(['head', 'neck', 'hand', 'pelvis', 'adduct', 'knee', 'foot', 'flank']);
+  const neutral = new Set(['head', 'neck', 'hand', 'pelvis', 'knee', 'foot', 'flank']);
   const view = (shapes, dx, label) => {
     const by = new Map(), base = [];
     for (const [m, kind, d] of shapes) {
@@ -156,8 +163,8 @@ function renderAtlas() {
       <p class="at-desc">${esc(MUSCLE_INFO[m])}</p>
       <div class="at-where"><span class="at-wl">Упражнений на эту мышцу</span><div class="places at-places" role="group" aria-label="Где тренируетесь">${S.places.map(p => { const n = here(p); return `<button type="button" class="place${p.id === S.place ? ' on' : ''}" data-place="${p.id}" aria-pressed="${p.id === S.place}"><b>${esc(p.name)}</b><small>${n}</small></button>`; }).join('')}</div></div>
       <div class="at-acts">
-        <button type="button" class="btn" data-atlas-focus="${m}">Тренировка с акцентом на эту мышцу →</button>
-        ${S.focus === m ? '<span class="at-focus-on">Акцент уже выбран</span>' : ''}
+        ${ATLAS_SUPPORT.has(m) ? '<p class="f-note">Эта мышца работает в помощь основным и отдельной тренировки не требует: она включается в упражнениях ниже.</p>' : `<button type="button" class="btn" data-atlas-focus="${m}">Тренировка с акцентом на эту мышцу →</button>
+        ${S.focus === m ? '<span class="at-focus-on">Акцент уже выбран</span>' : ''}`}
       </div>`;
   if (first) {
     const it = previewItem(atlasEx);
@@ -169,7 +176,7 @@ function renderAtlas() {
       <div class="at-keep" id="at-keep">${atlasKeepHtml(atlasEx)}</div>
       <p class="at-hint">Оранжевым выделена выбранная мышца: чем ярче цвет, тем сильнее она работает в этот момент повторения.</p>`;
     if (A.pri.length) html += `<h3 class="at-h">Основная нагрузка <small>${A.pri.length}</small></h3>${atlasList(A.pri, m, atlasEx, 8)}`;
-    else html += `<p class="warn-inline">Здесь нет упражнений, где ${esc(lower)} — основная цель. Ниже — те, где она помогает, и что нужно для остальных.</p>`;
+    else if (!ATLAS_SUPPORT.has(m)) html += `<p class="warn-inline">Здесь нет упражнений, где ${esc(lower)} — основная цель. Ниже — те, где она помогает, и что нужно для остальных.</p>`;
     if (A.sec.length) html += `<h3 class="at-h">Помогает <small>${A.sec.length}</small></h3>${atlasList(A.sec, m, atlasEx, 5)}`;
   } else {
     html += `<div class="empty"><h2>Здесь нечем нагрузить эту мышцу</h2><p>В месте «${esc(place.name)}» нет подходящего инвентаря. Ниже — что для этого нужно.</p></div>`;
