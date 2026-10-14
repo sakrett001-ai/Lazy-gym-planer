@@ -366,22 +366,28 @@ function statusHtml() {
 function journalDays() { const s = new Set(); for (const ss of Object.values(LOG.data)) for (const x of ss) if (x.s.some(Boolean)) s.add(x.d); return s.size; }
 
 /* ---------- экран «Журнал» ---------- */
-function heatmap() {
+function heatmap(today = new Date()) {
   const byDay = {};
   for (const ss of Object.values(LOG.data)) for (const x of ss) { const n = x.s.filter(Boolean).length; if (n) byDay[x.d] = (byDay[x.d] || 0) + n; }
   const W = 12, cell = 15, gap = 3, LX = 22, TY = 16;
-  const now = new Date(); now.setHours(12, 0, 0, 0);
+  const now = new Date(today); now.setHours(12, 0, 0, 0);
   const dow = (now.getDay() + 6) % 7;
   const start = new Date(now); start.setDate(now.getDate() - dow - (W - 1) * 7);
-  let cells = '', months = '', lastM = -1;
+  let cells = '', lastM = -1;
+  const marks = [];
   for (let w = 0; w < W; w++) for (let d = 0; d < 7; d++) {
     const dt = new Date(start); dt.setDate(start.getDate() + w * 7 + d);
     if (dt > now) continue;
     const k = dayKey(dt), n = byDay[k] || 0;
     const lv = n === 0 ? 0 : n < 10 ? 1 : n < 20 ? 2 : 3;
     cells += `<rect class="hm hm${lv}" x="${LX + w * (cell + gap)}" y="${TY + d * (cell + gap)}" width="${cell}" height="${cell}" rx="3" data-tip="${fmtDay(k, true)}: ${n ? n + ' ' + plural(n, 'подход', 'подхода', 'подходов') : 'без тренировки'}"/>`;
-    if (d === 0 && dt.getMonth() !== lastM) { lastM = dt.getMonth(); months += `<text class="hm-l" x="${LX + w * (cell + gap)}" y="10">${MONTHS[lastM]}</text>`; }
+    if (d === 0 && dt.getMonth() !== lastM) { lastM = dt.getMonth(); marks.push([w, lastM]); }
   }
+  /* подпись месяца — над его первой неделей; хвост прошлого месяца в первой колонке подписывается, только если до
+     следующей подписи не меньше двух колонок (иначе подписи наезжают: «июлавг») */
+  const months = marks.filter(([w], i) => i + 1 >= marks.length || marks[i + 1][0] - w >= 2)
+    .map(([w, m]) => w < W - 1 ? `<text class="hm-l" x="${LX + w * (cell + gap)}" y="10">${MONTHS[m]}</text>`
+      : `<text class="hm-l" x="${LX + W * (cell + gap) - gap}" y="10" text-anchor="end">${MONTHS[m]}</text>`).join(''); /* в последней колонке — по правому краю, не обрезается */
   const days = ['Пн', '', 'Ср', '', 'Пт', '', ''].map((t, i) => t ? `<text class="hm-l" x="0" y="${TY + i * (cell + gap) + 11}">${t}</text>` : '').join('');
   const w = LX + W * (cell + gap), h = TY + 7 * (cell + gap);
   return `<svg class="heat" viewBox="0 0 ${w} ${h}" role="img" aria-label="Тренировочные дни за 12 недель">${months}${days}${cells}</svg>

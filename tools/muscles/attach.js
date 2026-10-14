@@ -12,6 +12,7 @@ const fs = require('node:fs'), path = require('node:path'), zlib = require('node
 const root = path.resolve(__dirname, '../..');
 const M = require(path.join(root, 'src/js/09bm-mannequin.js'));
 const Skeleton = require(path.join(root, 'src/js/09bq-skeleton.js')), Muscles = require(path.join(root, 'src/js/09br-muscles.js'));
+const G = require('./geometry.js');
 
 const skel = Skeleton.decode(zlib.gunzipSync(fs.readFileSync(path.join(root, 'src/data/skeleton.bin'))));
 const md = Muscles.decode(zlib.gunzipSync(fs.readFileSync(path.join(root, 'src/data/muscles.bin'))));
@@ -167,10 +168,112 @@ function audit(ref) {
     if (e.spread) { const n = new Set(sel.map(x => x.p.map(v => Math.round(v)).join(','))).size; if (n < e.spread) fail.push(`${n} разных точек из ${sel.length}, нужно не меньше ${e.spread}`); }
     results.push({ id, tag, ok: !fail.length, fail, src: c.src });
   }
+  /* пласты (межрёберные) — свои проверки */
+  const sh = sheetAudit(ref); results.push(...sh.results);
   /* у каждого конца каждой мышцы должен быть эталон */
-  const orphan = [...new Set(E.filter(x => !used.has(x.muscle + ':' + x.j)).map(x => `${x.part} (${x.bone})`))];
+  const orphan = [...new Set(E.filter(x => !used.has(x.muscle + ':' + x.j)).map(x => `${x.part} (${x.bone})`)), ...sh.orphan];
   const known = ref.known || {}, failing = new Set(results.filter(r => !r.ok).map(r => r.id));
   return { results, orphan, unknown: results.filter(r => !r.ok && !known[r.id]), fixed: Object.keys(known).filter(k => !failing.has(k)), known };
+}
+/* ---------- пласты: межрёберные мышцы (4.40.0, intercostals.js) ----------
+   Пласт промежутка k — между рёбрами k и k+1 своей стороны. Проверки (эталон — раздел sheets в fixtures/attachments.json),
+   всё в рамке грудной клетки (локальные см: X — влево, Y — вверх, Z — вперёд; пласты в данных — в ней же):
+   · border — край пласта лежит на своём ребре и на своём крае ребра: у каждой точки верхнего края (a) ближайшая часть
+     сетки — ребро k (или хрящ — часть грудины), и ребро над точкой (вершины ребра в 1,5 см — по большей части выше
+     по направлению от нижнего края к верхнему); у нижнего края (b) — ребро k+1 и ребро под точкой. Середина пласта
+     между краями — не внутри рёбер и хрящей (пласт лежит в щели, а не на ребре);
+   · end — задний или передний конец у ориентира: бугорок или угол ребра k либо k+1, рёберно-хрящевое соединение
+     (ориентиры — intercostals.js, landmarks), конец свободного ребра; «gap» — пласт доходит до места, где промежуток
+     закрывается (грудина или сошедшиеся хрящи): в 1 см впереди переднего конца — уже кость или хрящ;
+   · spaces — все промежутки 1–11 с обеих сторон; сторона — все вершины по свою сторону средней линии (не дальше 1 см). */
+const IC = require('./intercostals.js');
+const RC = IC.ribcage(skel), RLM = IC.landmarks(skel, RC), SHEET_DATA = md.sheets || [];
+const RTRI = (() => {
+  const b = RC.b, tris = [], cells = new Map(), C = 2, key = (i, j, k) => (i * 1024 + j) * 1024 + k;
+  for (let f = 0; f < b.idx.length; f += 3) tris.push([b.idx[f], b.idx[f + 1], b.idx[f + 2]]);
+  tris.forEach((t, n) => {
+    const p = t.map(i => RC.P[i]), lo = [0, 1, 2].map(k => Math.floor(Math.min(p[0][k], p[1][k], p[2][k]) / C) + 300), hi = [0, 1, 2].map(k => Math.floor(Math.max(p[0][k], p[1][k], p[2][k]) / C) + 300);
+    for (let i = lo[0]; i <= hi[0]; i++) for (let j = lo[1]; j <= hi[1]; j++) for (let k = lo[2]; k <= hi[2]; k++) { const h = key(i, j, k); (cells.get(h) || cells.set(h, []).get(h)).push(n); }
+  });
+  /* ближайший треугольник сетки грудной клетки к точке p (в пределах 4 см): {tri, d} */
+  const tri = (p, [a, b2, c]) => { const sub = (u, v) => [u[0] - v[0], u[1] - v[1], u[2] - v[2]], dot = (u, v) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+    const ab = sub(b2, a), ac = sub(c, a), ap = sub(p, a), d1 = dot(ab, ap), d2 = dot(ac, ap), at = q => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
+    if (d1 <= 0 && d2 <= 0) return at(a); const bp = sub(p, b2), d3 = dot(ab, bp), d4 = dot(ac, bp); if (d3 >= 0 && d4 <= d3) return at(b2);
+    const vc = d1 * d4 - d3 * d2; if (vc <= 0 && d1 >= 0 && d3 <= 0) { const v = d1 / (d1 - d3); return at([a[0] + ab[0] * v, a[1] + ab[1] * v, a[2] + ab[2] * v]); }
+    const cp = sub(p, c), d5 = dot(ab, cp), d6 = dot(ac, cp); if (d6 >= 0 && d5 <= d6) return at(c);
+    const vb = d5 * d2 - d1 * d6; if (vb <= 0 && d2 >= 0 && d6 <= 0) { const w = d2 / (d2 - d6); return at([a[0] + ac[0] * w, a[1] + ac[1] * w, a[2] + ac[2] * w]); }
+    const va = d3 * d6 - d5 * d4; if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) { const w = (d4 - d3) / ((d4 - d3) + (d5 - d6)); return at([b2[0] + (c[0] - b2[0]) * w, b2[1] + (c[1] - b2[1]) * w, b2[2] + (c[2] - b2[2]) * w]); }
+    const den = 1 / (va + vb + vc), v = vb * den, w = vc * den; return at([a[0] + ab[0] * v + ac[0] * w, a[1] + ab[1] * v + ac[1] * w, a[2] + ab[2] * v + ac[2] * w]); };
+  /* keep(v) — только треугольники, чья первая вершина подходит (например, своя часть сетки) */
+  return (p, keep = null) => {
+    const c = p.map(v => Math.floor(v / C) + 300); let best = { tri: -1, d: Infinity };
+    for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) for (let k = -2; k <= 2; k++) for (const n of cells.get(key(c[0] + i, c[1] + j, c[2] + k)) || []) { if (keep && !keep(tris[n][0])) continue; const d = tri(p, tris[n].map(v => RC.P[v])); if (d < best.d) best = { tri: n, d }; }
+    best.v = best.tri >= 0 ? tris[best.tri][0] : -1;
+    return best;
+  };
+})();
+const RIBCAGE_PB = G.prepareBones({ bones: [RC.b] })[0], NEAR = .35;
+/* точка в кости — глубже 0,5 мм: у самой поверхности грубой сетки чётность пересечений лучей неустойчива (луч поперёк
+   пласта там, где край ребра косой, идёт вдоль поверхности ребра в 0,1–0,3 мм от неё) */
+const inBone = q => G.insideBone(RIBCAGE_PB, q) && RIBCAGE_PB.near(q) > .05;
+const subv = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dotv = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const unitv = v => { const l = Math.hypot(...v) || 1; return v.map(x => x / l); };
+/* часть грудной клетки у точки: номер ребра стороны s или 0 (грудина с хрящами) */
+const partAt = (s, p) => { const n = RTRI(p); return n.v < 0 ? -1 : RC.label[s][n.v]; };
+function sheetAudit(ref, SHEETS = SHEET_DATA) {
+  const results = [];
+  for (const c of ref.sheets || []) {
+    const parts = new Set(c.parts), list = SHEETS.filter(sh => parts.has(sh.part) && (!c.spaces || (sh.space >= c.spaces[0] && sh.space <= c.spaces[1])));
+    const fail = [], id = 'sheet:' + c.parts.join('+') + ':' + c.check + (c.spaces ? ':' + c.spaces.join('-') : '') + (c.at ? ':' + c.at : '') + (c.end ? ':' + c.end : '');
+    const tag = `${c.parts.join('+')}: ${c.note || c.check}`;
+    if (!list.length) fail.push('нет пластов');
+    if (c.check === 'spaces') {
+      for (const p of c.parts) for (const s of ['R', 'L']) { const have = new Set(SHEETS.filter(sh => sh.part === p && sh.side === s).map(sh => sh.space)); const miss = []; for (let k = c.spaces[0]; k <= c.spaces[1]; k++) if (!have.has(k)) miss.push(k); if (miss.length) fail.push(`${p} ${s}: нет промежутков ${miss.join(', ')}`); }
+      for (const sh of list) { const g = sh.side === 'R' ? -1 : 1; if ([...sh.a, ...sh.b].some(q => g * q[0] < -1)) fail.push(sh.name + ' за средней линией'); }
+    }
+    for (const sh of list) {
+      const s = sh.side, k = sh.space, n = sh.a.length, bad = [];
+      if (c.check === 'border') {
+        for (let i = 0; i < n; i++) {
+          const a = sh.a[i], b = sh.b[i];
+          for (const [p, rib, sign, tagE] of [[a, k, 1, 'верх'], [b, k + 1, -1, 'низ']]) {
+            const part = partAt(s, p);
+            if (part !== rib && part !== 0) { bad.push(`${tagE}: ${i} у ребра ${part}`); continue; }
+            /* край пласта — у края своего ребра (хряща), обращённого к промежутку: сам край — в ребре или не дальше NEAR от
+               его поверхности, а на трети ширины пласта от края (не дальше 4 мм) по пласту к другому его краю — уже щель, не
+               кость. Пласт, прикреплённый к противоположному краю ребра, здесь попал бы в само ребро. NEAR = 3,5 мм: сетка
+               рёбер грубая (сечение ребра — 6 вершин, грани отходят от скруглённой кости на 1–2 мм), края пласта сглажены по
+               азимуту (±2°), а край внутреннего слоя лежит у внутренней губы ребра */
+            const u = subv(a, b), w = unitv(u), step = Math.min(.4, Math.hypot(...u) / 3);
+            const own = RTRI(p, v => RC.label[s][v] === part), qo = [0, 1, 2].map(j => p[j] - sign * step * w[j]);
+            if (own.d > NEAR && !G.insideBone(RIBCAGE_PB, p)) bad.push(`${tagE}: ${i} — в ${own.d.toFixed(2)} см от своего ребра`);
+            if (inBone(qo)) bad.push(`${tagE}: ${i} — ${sign > 0 ? 'не нижний' : 'не верхний'} край ребра: в ${(step * 10).toFixed(0)} мм к промежутку — кость`);
+          }
+          const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
+          if (inBone(mid)) bad.push(`середина ${i} внутри ребра`);
+        }
+      } else if (c.check === 'end') {
+        const i = c.end === 'back' ? 0 : n - 1, j = c.end === 'back' ? Math.min(1, n - 1) : Math.max(0, n - 2);
+        const mid = [(sh.a[i][0] + sh.b[i][0]) / 2, (sh.a[i][1] + sh.b[i][1]) / 2, (sh.a[i][2] + sh.b[i][2]) / 2];
+        if (c.at === 'gap') {
+          /* в 1 см впереди конца — уже кость или хрящ (промежуток закрылся) */
+          const dir = unitv(subv(mid, [(sh.a[j][0] + sh.b[j][0]) / 2, (sh.a[j][1] + sh.b[j][1]) / 2, (sh.a[j][2] + sh.b[j][2]) / 2])), q = [mid[0] + dir[0], mid[1] + dir[1], mid[2] + dir[2]];
+          const d = RTRI(q).d; if (d > c.tol && !G.insideBone(RIBCAGE_PB, q)) bad.push(`промежуток впереди открыт (до кости ${d.toFixed(1)} см)`);
+        } else {
+          /* ориентир ребра k или k+1 (конец свободного ребра — только k+1); расстояние — от ближайшей из точек конца пласта
+             (верхний край, середина, нижний край) */
+          const marks = c.at === 'tip' ? [RLM[s][k].ccj] : [RLM[s][k - 1], RLM[s][k]].map(L => L[c.at === 'costochondral' ? 'ccj' : c.at]);
+          const d = Math.min(...marks.flatMap(q => [sh.a[i], mid, sh.b[i]].map(p => Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]))));
+          if (d > c.tol) bad.push(`в ${d.toFixed(1)} см от ориентира`);
+        }
+      }
+      if (bad.length) fail.push(`${sh.name}: ${bad.slice(0, 3).join('; ')}${bad.length > 3 ? ` (+${bad.length - 3})` : ''}`);
+    }
+    results.push({ id, tag, ok: !fail.length, fail, src: c.src });
+  }
+  /* у каждой части пластов должны быть проверки краёв и концов */
+  const orphan = [...new Set(SHEETS.map(sh => sh.part))].filter(p => !['border', 'end', 'spaces'].every(k => (ref.sheets || []).some(c => c.check === k && c.parts.includes(p)))).map(p => p + ' (пласт)');
+  return { results, orphan };
 }
 /* Сторона: правая мышца (_r) лежит справа от средней линии, левая — слева; ни одна точка пути (нейтральная поза) не
    заходит за середину дальше 1 см. Так в 4.34.0 нашлись ошибки исходной модели: перепутанные правая и левая прямая
@@ -180,7 +283,7 @@ function sides(list = bound, pts = paths) {
   list.forEach((mu, i) => { const s = mu.side === 'R' ? -1 : mu.side === 'L' ? 1 : 0; if (s && pts[i].points.some(p => (p[0] - midX) * s < -1)) bad.push(mu.name); });
   return bad;
 }
-module.exports = { table, describe, level, VERT, vertIndex, BONES, bound, paths, R, frames, ends, audit, sides, midX };
+module.exports = { table, describe, level, VERT, vertIndex, BONES, bound, paths, R, frames, ends, audit, sides, midX, sheetAudit, SHEETS: SHEET_DATA };
 if (require.main === module) {
   if (process.argv.includes('--audit')) {
     const ref = require('./fixtures/attachments.json'), a = audit(ref);

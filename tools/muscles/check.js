@@ -5,6 +5,8 @@
    Для каждой мышцы и каждой позы: наибольшая глубина пути внутри чужой или своей кости (см, по ближайшему треугольнику;
    1,5 см у начала и прикрепления не считаются — там мышца лежит на кости) и наибольший выход за кожу (см; кисти и
    стопы — вне проверки, у них своя форма) — у линии пути и у тела мышцы (вершины Muscles.surface, этап М2).
+   Межрёберные мышцы (4.40.0) — пласты (sheets): тело пласта — вершины Muscles.sheetMesh — не выше кожи (--max-body) и
+   не глубже --max-bone в чужих костях (своя кость, грудная клетка, — не в счёт).
    Печатает худшие семейства мышц и упражнения.
    С --max-bone / --max-skin / --max-body — проверка для npm run check: код выхода 1 при превышении (кроме известных исключений,
    см. EXCEPT ниже). */
@@ -20,6 +22,33 @@ const args = process.argv.slice(2), flag = k => { const i = args.indexOf(k); ret
 const skel = Skeleton.decode(zlib.gunzipSync(fs.readFileSync(path.join(root, 'src/data/skeleton.bin'))));
 const md = Muscles.decode(zlib.gunzipSync(fs.readFileSync(path.join(root, 'src/data/muscles.bin'))));
 const bound = Muscles.bind(md, skel), pbs = G.prepareBones(skel), SURF = new Float64Array(64 * 16 * 3);
+/* Пласты (межрёберные, формат 3): жёсткие, в рамке своей кости — вершины сетки (Muscles.sheetMesh) считаются один раз.
+   В кадре проверяется выход тела пласта из кожи и глубина в чужих костях (своя кость — грудная клетка — не в счёт: края
+   пласта нарочно заходят под рёбра на 1,5 мм) */
+const SHEETS = (md.sheets || []).map(sh => {
+  const i = skel.bones.findIndex(b => b.name === sh.bone[0] && (b.side || '') === (sh.bone[1] || '')), m = Muscles.sheetMesh(sh);
+  return { sh, i, pos: m.pos, n: m.n };
+});
+/* Пласт лежит на уровне рёбер — строже, чем трубки: тело пласта не выходит из кожи вовсе (во всех позах каталога —
+   глубже 3,7 мм под кожей) и не глубже 0,8 см в чужих костях. Единственная чужая кость рядом — ключица: в нейтральной
+   стойке и в части поз (тяга лёжа на столе, «Y-T-W» лёжа) она ложится на рёбра 1–3 спереди — сами рёбра у манекена заходят
+   в неё до 0,46 см, пласт в щели между ними — до 0,66 см; там он закрыт ключицей и не виден. */
+const SHEET_LIMIT = { body: 0, bone: .8 }, SHEET_PARTS = new Set(SHEETS.map(S => S.sh.part));
+function sheetCheck(S, m, pose, sdf, R) {
+  const o = S.i * 12, w = new Float64Array(S.n * 3);
+  for (let v = 0; v < S.n; v++) for (let r = 0; r < 3; r++) w[v * 3 + r] = m[o + r * 4] * S.pos[v * 3] + m[o + r * 4 + 1] * S.pos[v * 3 + 1] + m[o + r * 4 + 2] * S.pos[v * 3 + 2] + m[o + r * 4 + 3];
+  const out = G.skinOutPoints(sdf, w, R, S.n);
+  let depth = 0, deepAt = '';
+  for (let v = 0; v < S.n; v++) {
+    const p = [w[v * 3], w[v * 3 + 1], w[v * 3 + 2]];
+    for (let bi = 0; bi < pbs.length; bi++) {
+      if (bi === S.i) continue;
+      const b = pose[bi]; if (p[0] < b.lo[0] || p[0] > b.hi[0] || p[1] < b.lo[1] || p[1] > b.hi[1] || p[2] < b.lo[2] || p[2] > b.hi[2]) continue;
+      const q = b.inv(p); if (G.insideBone(pbs[bi], q)) { const d = pbs[bi].near(q); if (d > depth) { depth = d; deepAt = pbs[bi].name + (pbs[bi].side || ''); } }
+    }
+  }
+  return { out: out.out, depth, deepAt };
+}
 
 /* Известные исключения (tools/muscles/README.md, «Кожа»). С 4.28.0 кожа поднимается над складками подмышки
    (Mannequin.FOLDS): линии всех мышц — в допуске. Подъём ограничен замерами стоящей фигуры (ANSUR II: ширина груди
@@ -31,6 +60,22 @@ const bound = Muscles.bind(md, skel), pbs = G.prepareBones(skel), SURF = new Flo
    разведении — до 3,2 см. */
 const EXCEPT = { skin: {}, body: { lat: 3.9, pecm2: 3.5, rectabd: 3.2, delt3: 3.2 } };
 
+/* только пласты (быстро — для тестов): по каждому пласту худший выход из кожи и глубина в чужих костях по позам */
+function sheetRun(ids, ts, sheets = SHEETS) {
+  const out = {};
+  for (const id of ids) {
+    const rig = EQ.rig(POSES[id]);
+    for (const t of ts) {
+      const R = rig(t), m = Skeleton.frames(R, M.bodyData(R), skel.bones), sdf = G.skinSDF(R), pose = G.poseBones(pbs, m);
+      for (const S of sheets) {
+        const c = sheetCheck(S, m, pose, sdf, R), o = out[S.sh.name] || (out[S.sh.name] = { skin: -Infinity, skinAt: '', bone: 0, boneAt: '' });
+        if (c.out > o.skin) { o.skin = c.out; o.skinAt = `${id} t=${t}`; }
+        if (c.depth > o.bone) { o.bone = c.depth; o.boneAt = `${id} t=${t} в ${c.deepAt}`; }
+      }
+    }
+  }
+  return out;
+}
 function run(ids, ts) {
   const list = (ids || Object.keys(POSES)).filter(k => !k.startsWith('_') && POSES[k]);
   const fam = {}, byEx = {};
@@ -52,6 +97,15 @@ function run(ids, ts) {
         if (b.depth > e.bone) { e.bone = b.depth; e.boneAt = `${mu.name} t=${t} в ${b.deepAt}`; }
         if (s > e.skin) { e.skin = s; e.skinAt = `${mu.name} t=${t}`; }
       });
+      for (const S of SHEETS) {
+        const c = sheetCheck(S, m, pose, sdf, R), sh = S.sh;
+        const f = fam[sh.part] || (fam[sh.part] = { bone: 0, boneAt: '', skin: -Infinity, skinAt: '', body: -Infinity, bodyAt: '', n: 0 });
+        if (c.depth > f.bone) { f.bone = c.depth; f.boneAt = `${id} t=${t} ${sh.name} в ${c.deepAt}`; }
+        if (c.out > f.body) { f.body = c.out; f.bodyAt = `${id} t=${t} ${sh.name}`; }
+        const e = byEx[id];
+        if (c.out > e.body) { e.body = c.out; e.bodyAt = `${sh.name} t=${t}`; }
+        if (c.depth > e.bone) { e.bone = c.depth; e.boneAt = `${sh.name} t=${t} в ${c.deepAt}`; }
+      }
     }
   }
   return { fam, byEx, n: list.length };
@@ -78,7 +132,7 @@ async function runParallel(ids, ts, threads = Math.max(1, Math.min(4, os.cpus().
     const w = new Worker(__filename, { workerData: { ids: c, ts } }); w.once('message', ok); w.once('error', fail);
   }))));
 }
-module.exports = { run, runParallel, EXCEPT };
+module.exports = { run, runParallel, sheetRun, EXCEPT, SHEETS, SHEET_LIMIT };
 
 if (!isMainThread) parentPort.postMessage(run(workerData.ids, workerData.ts));
 else if (require.main === module) (async () => {
@@ -94,10 +148,11 @@ else if (require.main === module) (async () => {
   const bad = [];
   for (const [k, f] of rows) {
     if (maxBone != null && f.bone > maxBone) bad.push(`${k}: в кости на ${f.bone.toFixed(1)} см (${f.boneAt})`);
-    const lim = EXCEPT.skin[k] ?? maxSkin, limBody = EXCEPT.body[k] ?? maxBody;
+    const sheet = SHEET_PARTS.has(k), lim = EXCEPT.skin[k] ?? maxSkin, limBody = sheet && maxBody != null ? Math.min(maxBody, SHEET_LIMIT.body) : EXCEPT.body[k] ?? maxBody;
+    if (sheet && maxBone != null && f.bone > SHEET_LIMIT.bone) bad.push(`${k}: пласт в чужой кости на ${f.bone.toFixed(2)} см (${f.boneAt})`);
     if (lim != null && f.skin > lim) bad.push(`${k}: над кожей на ${f.skin.toFixed(1)} см (${f.skinAt})`);
     if (limBody != null && f.body > limBody) bad.push(`${k}: тело над кожей на ${f.body.toFixed(1)} см (${f.bodyAt})`);
   }
   if (bad.length) { console.error('\nМышцы вне допусков:\n' + bad.join('\n')); process.exit(1); }
-  if (maxBone != null || maxSkin != null) console.log(`Мышцы в допусках: путь в кости не глубже ${maxBone} см и над кожей не выше ${maxSkin} см, тело мышцы над кожей не выше ${maxBody} см (исключения — EXCEPT).`);
+  if (maxBone != null || maxSkin != null) console.log(`Мышцы в допусках: путь в кости не глубже ${maxBone} см и над кожей не выше ${maxSkin} см, тело мышцы над кожей не выше ${maxBody} см (исключения — EXCEPT); пласты (межрёберные) — под кожей, в чужих костях не глубже ${SHEET_LIMIT.bone} см.`);
 })();

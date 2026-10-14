@@ -108,6 +108,9 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .e-cat h3 { font:500 12px/1.2 var(--f-body); color:var(--faint); }
 .e-toggle { justify-self:start; border:0; background:transparent; padding:2px 0; font-size:13.5px; font-weight:600; color:var(--accent); }
 .e-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+/* «Оборудование места 34 из 34»: подпись переносится по словам, счётчик — целиком (в узкой колонке — строкой ниже) */
+.e-head .lbl { display:block; flex:1 1 auto; min-width:0; text-wrap:wrap; }
+.e-head .lbl em { display:inline-block; white-space:nowrap; }
 .e-toggle-top { flex:none; min-height:32px; padding:4px 0 4px 8px; }
 .e-sum { margin:0; font-size:13px; color:var(--muted); }
 /* места тренировок */
@@ -182,7 +185,7 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .views button small:empty { display:none; }
 .views button.on { background:var(--ink); color:var(--surface); }
 .views button.on small { color:inherit; opacity:.7; }
-@media (max-width:520px) { .tag { order:3; flex-basis:100%; } }
+/* телефон (до 600 px): шапка в две строки, подпись скрыта — 33-phone.css */
 
 /* ---------- запись подходов ---------- */
 .c-log { display:grid; gap:8px; border-top:1px solid var(--line); padding-top:12px; min-width:0; }
