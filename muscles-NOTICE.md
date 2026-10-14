@@ -74,3 +74,9 @@ Triolo R. J. Architecture of the rectus abdominis, quadratus lumborum, and erect
   Biomedical Engineering, 2015, 18(13): 1445–1458. doi:10.1080/10255842.2014.916698 — копия MoBL_ARMS_J.osim из
   stanfordnmbl/osim-rl (коммит 610b95c, лицензия MIT);
 - плечевой пояс — DAS3 (выше).
+
+Где модели расходятся с измерениями нескольких препаратов, доли частей — по препаратам (с 4.36.0): дельтовидная —
+Gómez M., Casado A., de Diego M., Pastor J. F., Potau J. M. American Journal of Primatology, 2022, 84(7): e23390.
+doi:10.1002/ajp.23390; двуглавая плеча — Murray W. M., Buchanan T. S., Delp S. L. The isometric functional capacity of
+muscles that cross the elbow. Journal of Biomechanics, 2000, 33: 943–952. Задняя часть дельтовидной построена тремя
+линиями вдоль ости лопатки (путь к плечу — как в MoBL-ARMS).

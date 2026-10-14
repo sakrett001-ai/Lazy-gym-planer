@@ -11882,4 +11882,4 @@ logInit();
 plural = (n, a, b, c) => n === 1 ? a : c;
 DEC = '.';
 
-window.PODHOD_VERSION='4.35.0';window.PODHOD_BUILD='4.35.0-5cbe91c47d6f';window.PODHOD_LANG='en';
+window.PODHOD_VERSION='4.36.0';window.PODHOD_BUILD='4.36.0-e73dfc95aff2';window.PODHOD_LANG='en';
