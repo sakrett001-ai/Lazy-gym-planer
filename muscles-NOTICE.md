@@ -46,6 +46,14 @@ model of the lower extremity to study orthopaedic surgical procedures. IEEE Tran
 поясничная и подвздошные части широчайшей (4.32.0), верхние зубцы наружной косой (4.34.0), грудино-ключично-
 сосцевидная, ременные мышцы головы и шеи, лестничные, остистая мышца груди (4.35.0) — `tools/muscles/anatomy.js`.
 
+Межрёберные мышцы (4.40.0) — пласты между рёбрами сетки грудной клетки скелета (MyoSim, выше), по описанию Gray's Anatomy
+(1918, с. 403) — `tools/muscles/intercostals.js`; чужих моделей и сеток не берётся. Толщина — по опубликованным
+измерениям: УЗИ 12 здоровых мужчин — Yoshida R., Tomita K., Kawamura K., Nozaki T. и др. Measurement of intercostal
+muscle thickness with ultrasound imaging during maximal breathing. Journal of Physical Therapy Science, 2019, 31(4):
+340–343. doi:10.1589/jpts.31.340 (таблица 2); деление между наружным и внутренним слоями — по массам у препаратов:
+Wilson T. A., Legrand A., Gevenois P. A., De Troyer A. Respiratory effects of the external and internal intercostal
+muscles in humans. Journal of Physiology, 2001, 530(Pt 2): 319–330. doi:10.1111/j.1469-7793.2001.0319l.x (PMC2278403).
+
 ## Объём мышц
 
 Объём каждой мышцы — из опубликованной таблицы МРТ (средние у 49 мужчин), пересчитанный на рост и массу манекена:
