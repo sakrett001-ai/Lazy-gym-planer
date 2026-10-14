@@ -168,7 +168,9 @@ const Skeleton = (() => {
       const s = b.side, g = SIGN[s] || 1; let A;
       if (b.seg === 'spine') A = frameAff(M.vertebraFrame(R, b.h));
       else if (b.seg === 'girdle') {
-        const C = frameAff(F['cl' + s]), key = 'st' + s, rot = key in cache ? cache[key] : (cache[key] = b.gl ? scapulaRot(R, s, b, ctx) : null);
+        /* лопатка держится под кожей без складок подмышки (Mannequin.FOLDS): складки поднимают кожу над мышцами, а не над
+           лопаткой, и поза скелета от них не зависит */
+        const C = frameAff(F['cl' + s]), key = 'st' + s, rot = key in cache ? cache[key] : (cache[key] = b.gl ? (M.noFolds ? M.noFolds(() => scapulaRot(R, s, b, ctx)) : scapulaRot(R, s, b, ctx)) : null);
         if (!rot) A = C;
         else if (b.name === 'scapula') A = mul(C, rot);
         else A = mul(C, { lin: rotBetween(b.ac[0], apply(rot, b.ac[0])), t: [0, 0, 0] }); /* ключица — от грудино-ключичного к сдвинутому акромиону */
