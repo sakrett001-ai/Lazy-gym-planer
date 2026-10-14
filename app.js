@@ -11879,4 +11879,4 @@ renderPlan();
 prefetchStressIds();
 logInit();
 
-window.PODHOD_VERSION='4.36.0';window.PODHOD_BUILD='4.36.0-e73dfc95aff2';window.PODHOD_LANG='ru';
+window.PODHOD_VERSION='4.37.0';window.PODHOD_BUILD='4.37.0-a19d5223e6a5';window.PODHOD_LANG='ru';
