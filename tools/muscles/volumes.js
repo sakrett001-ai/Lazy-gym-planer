@@ -23,8 +23,8 @@ const A = require('./fixtures/anatomy.json'), P = require('./fixtures/params.jso
 const GROUPS = [
   ['Levator scapulae', /^lev_scap_\d$/], ['Supraspinatus', /^SUPSP$/], ['Trapezius', /^trap_(scap_?\d+|clav_\d)$/],
   ['Rhomboid', /^rhomboid_\d$/], ['Serratus anterior', /^serr_ant_?\d+$/], ['Latissimus dorsi', /^LAT[1-6]$/],
-  ['Subscapularis', /^SUBSC$/], ['Teres major', /^TMAJ$/], ['Infraspinatus and teres minor', /^(INFSP|TMIN)$/],
-  ['Pectoralis minor', /^pect_min_\d$/], ['Pectoralis major', /^PECM[123]$/], ['Deltoid', /^DELT([123]|3med|3lat)$/],
+  ['Subscapularis', /^SUBSC$/], ['Teres major', /^TMAJ$/], ['Infraspinatus and teres minor', /^(INFSP(sup|inf)?|TMIN)$/],
+  ['Pectoralis minor', /^pect_min_\d$/], ['Pectoralis major', /^PECM([123]|1b|2a|2c|3b)$/], ['Deltoid', /^DELT([123]|3med|3lat)$/],
   ['Triceps brachii', /^TRI(long|lat|med)$/], ['Coracobrachialis', /^CORB$/], ['Biceps brachii', /^BIC(long|short)$/],
   ['Brachialis', /^BRA$/], ['Brachioradialis', /^BRD$/], ['Extensor carpi radialis', /^ECR[LB]$/], ['Anconeus', /^ANC$/],
   ['Digit extensors', /^(EDC\d|EDM)$/], ['Extensor carpi ulnaris', /^ECU$/], ['Deep forearm extensors', /^(EIP|EPL|EPB|APL)$/],
@@ -63,6 +63,9 @@ const SPINALIS = (() => { const e = A.delp2001.erector, w = Object.values(e).map
    (Gómez и др., 2022, 6 препаратов; DAS3 по препарату Klein Breteler — 33 %), длинная головка двуглавой — 59 % вместо
    51 % (Murray и др., 2000; DAS3 — 44 %). Для них веса частей — из fixtures/anatomy.json (parts), а не F · Lopt модели.
    Остальные многочастные мышцы сверены и оставлены по моделям (README, «Объём»). */
+/* Веер (4.37.0, anatomy.js, раздел 6): линии, добавленные к линии модели по той же площадке начала, — с весом своей
+   линии-основы; вес части делится между её линиями поровну (равные полосы начала). */
+const FAN = { PECM1b: 'PECM1', PECM2a: 'PECM2', PECM2c: 'PECM2', PECM3b: 'PECM3', INFSPsup: 'INFSP', INFSPinf: 'INFSP' };
 const PART_SHARE = Object.fromEntries(Object.entries(A.parts).filter(([k]) => k !== 'about').map(([g, v]) => [g, v.share]));
 /* мышцы пальцев: MyoSim (2–5 — указательный…мизинец) → MoBL-ARMS (I, M, R, L) */
 const DIGIT = { 2: 'I', 3: 'M', 4: 'R', 5: 'L' };
@@ -89,7 +92,7 @@ const BELLY = [
   [/^bflh$/, 'bflh', .35], [/^bfsh$/, 'bfsh', .1], [/^semiten$/, 'semiten', .25], [/^semimem$/, 'semimem', .45],
   [/^(tibant|ehl|edl|perlong|perbrev|fhl|fdl|tibpost|soleus)$/, null, .05], [/^gas(med|lat)$/, null, .1],
   /* плечо: путь — от плечевой кости (сухожилие прикрепления — в начале) */
-  [/^(DELT\d|DELT3(med|lat)|PECM\d)$/, .85, .9, /^humerus/], [/^(SUPSP|INFSP|SUBSC|TMIN|TMAJ)$/, .8, .9, /^humerus/], [/^LAT[456]$/, .7, .4], [/^LAT\d$/, .75, .6], [/^CORB$/, .8, .3],
+  [/^(DELT\d|DELT3(med|lat)|PECM\d[abc]?)$/, .85, .9, /^humerus/], [/^(SUPSP|INFSP(sup|inf)?|SUBSC|TMIN|TMAJ)$/, .8, .9, /^humerus/], [/^LAT[456]$/, .7, .4], [/^LAT\d$/, .75, .6], [/^CORB$/, .8, .3],
   [/^TRIlong$/, .75, .25], [/^TRI(lat|med)$/, .8, .1], [/^(ANC|SUP|PQ)$/, .95, .5], [/^BIClong$/, .55, .6], [/^BICshort$/, .6, .4],
   [/^BRA$/, .9, .1], [/^BRD$/, .65, .05], [/^PT$/, .85, .1],
   /* предплечье: брюшко — в верхней части, длинные сухожилия к кисти и пальцам */
@@ -141,6 +144,8 @@ function volumes(names, fmax, lengths, { stature, mass }, ends = {}) {
     return { b: Math.min(B_MAX, Math.max(B_MIN, b)), s };
   };
   const weight = n => {
+    const parent = FAN[base(n)] || (Object.values(FAN).includes(base(n)) ? base(n) : null);
+    if (parent) { const s = source(parent), side = n.slice(-2), k = names.filter(x => x.endsWith(side) && (base(x) === parent || FAN[base(x)] === parent)).length; return s[0] * s[1] / k; }
     const src = source(base(n)), { b } = belly(n);
     return src ? src[0] * src[1] : fmax[n] * lengths[n] * b;   /* F·Lopt; у поясницы — F · мясистая длина */
   };
@@ -195,4 +200,4 @@ function volumes(names, fmax, lengths, { stature, mass }, ends = {}) {
   }
   return out;
 }
-module.exports = { volumes, GROUPS, NECK, SPINALIS, PART_SHARE, BELLY, ORIGIN, source };
+module.exports = { volumes, GROUPS, NECK, SPINALIS, PART_SHARE, FAN, BELLY, ORIGIN, source };
