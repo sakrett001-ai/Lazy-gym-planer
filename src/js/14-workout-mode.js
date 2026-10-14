@@ -44,7 +44,7 @@ function startWorkout(id){
   const its=[...new Map(queue.map(x=>[x.it.ex.id,x.it])).values()];
   $('#wv-exercise').innerHTML=its.map(it=>`<option value="${it.ex.id}">${esc(it.label+'. '+it.name)}</option>`).join('');
   if(first<0&&!id)workoutFinish();
-  else if(workout.restUntil&&workout.next>=0&&workout.next<queue.length)workoutShowRest();
+  else if(workout.restUntil&&workout.next>=0&&workout.next<queue.length){RestAlarm.unlock();RestAlarm.arm(workout.restUntil);workoutShowRest();}
   else workoutShow(workout.index);
   clearInterval(workoutTimer);workoutTimer=setInterval(workoutTick,250);workoutTick();saveWorkout();$('#wv-close').focus();scheduleMotionLoop();
 }
@@ -55,7 +55,7 @@ function closeWorkout(){
 }
 function workoutShow(index){
   if(!workout)return;
-  workout.index=Math.max(0,Math.min(workout.queue.length-1,index));workout.restUntil=0;workout.next=-1;
+  workout.index=Math.max(0,Math.min(workout.queue.length-1,index));workout.restUntil=0;workout.next=-1;RestAlarm.cancel();
   const s=workout.queue[workout.index],it=s.it,ex=it.ex,stored=workoutValue(s),lt=loadType(ex),sg=suggest(it);
   const prev=sg.prev?.s[s.k]||sg.prev?.s.filter(Boolean).slice(-1)[0];
   $('#wv-active').hidden=false;$('#wv-rest').hidden=true;$('#wv-finish').hidden=true;
@@ -99,18 +99,18 @@ function commitWorkout(e){
   if(already){workoutShow(workout.index);$('#wv-save-status').textContent='Изменения сохранены.';return;}
   const next=workoutFirstOpen(workout.queue,workout.index);
   if(next<0){workoutFinish();return;}
-  if(step.rest>0){workout.next=next;workout.restTotal=step.rest;workout.restUntil=Date.now()+step.rest*1000;workoutShowRest();}
+  if(step.rest>0){workout.next=next;workout.restTotal=step.rest;workout.restUntil=Date.now()+step.rest*1000;RestAlarm.unlock();RestAlarm.arm(workout.restUntil);workoutShowRest();}
   else workoutShow(next);
   saveWorkout();
 }
 function workoutShowRest(){
-  $('#wv-active').hidden=true;$('#wv-rest').hidden=false;$('#wv-finish').hidden=true;
+  $('#wv-active').hidden=true;$('#wv-rest').hidden=false;$('#wv-finish').hidden=true;RestAlarm.paintButton($('#wv-sound'));
   const next=workout.queue[workout.next];
   $('#wv-next-name').textContent=next.it.name;$('#wv-next-detail').textContent=`${next.phase} · подход ${next.k+1} из ${next.n} · ${next.it.rx.reps}${next.it.ex.kind?'':' повторов'}`;
   $('#wv-rest-note').textContent='Результат сохранён. Переходите дальше, когда будете готовы.';workoutTick();$('#wv-continue').focus();
 }
 function workoutFinish(){
-  workout.restUntil=0;workout.next=-1;$('#wv-active').hidden=true;$('#wv-rest').hidden=true;$('#wv-finish').hidden=false;
+  workout.restUntil=0;workout.next=-1;RestAlarm.cancel();$('#wv-active').hidden=true;$('#wv-rest').hidden=true;$('#wv-finish').hidden=false;
   const n=workout.queue.filter(workoutValue).length,its=[...new Map(workout.queue.map(s=>[s.it.ex.id,s.it])).values()];
   $('#wv-finish-text').textContent=`Выполнено ${n} ${plural(n,'подход','подхода','подходов')} в ${its.length} ${plural(its.length,'упражнении','упражнениях','упражнениях')}.`;
   $('#wv-summary').innerHTML=its.map(it=>`<p><span>${esc(it.name)}</span><strong>${workout.queue.filter(s=>s.it.ex.id===it.ex.id&&workoutValue(s)).length} ✓</strong></p>`).join('');saveWorkout();workoutTick();
@@ -119,7 +119,7 @@ function workoutTick(){
   if(!workout)return;
   const n=workout.queue.filter(workoutValue).length;$('#wv-progress').max=workout.queue.length;$('#wv-progress').value=n;$('#wv-progress-label').textContent=`${n} из ${workout.queue.length} подходов`;
   const elapsed=Math.max(0,Math.floor((Date.now()-workout.started)/60000));$('#wv-elapsed').textContent=elapsed?`${elapsed} мин с начала`:'';
-  if(!$('#wv-rest').hidden){const left=Math.max(0,Math.ceil((workout.restUntil-Date.now())/1000));$('#wv-rest-time').textContent=`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;$('#wv-rest-heading').textContent=left?'Отдых':'Можно продолжать';}
+  if(!$('#wv-rest').hidden){const left=Math.max(0,Math.ceil((workout.restUntil-Date.now())/1000));if(!left)RestAlarm.due();$('#wv-rest-time').textContent=`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;$('#wv-rest-heading').textContent=left?'Отдых':'Можно продолжать';}
 }
 function setupWorkout(){
   $('#wv-form').addEventListener('submit',commitWorkout);
@@ -136,7 +136,7 @@ function setupWorkout(){
     if(t.id==='wv-review'){workoutShow(0);return;}
     if(t.id==='wv-undo'){workoutShow(workout.last);return;}
     if(t.id==='wv-continue'){workoutShow(workout.next);return;}
-    if(t.dataset.wvRest){workout.restUntil=Math.max(Date.now(),workout.restUntil+Number(t.dataset.wvRest)*1000);saveWorkout();workoutTick();return;}
+    if(t.dataset.wvRest){workout.restUntil=Math.max(Date.now(),workout.restUntil+Number(t.dataset.wvRest)*1000);RestAlarm.arm(workout.restUntil);saveWorkout();workoutTick();return;}
     if(t.id==='wv-motion'){const m=workout.motion;m.paused=!m.paused;t.textContent=m.paused?'Воспроизвести':'Пауза';t.setAttribute('aria-pressed',String(!m.paused));return;}
     if(t.id==='wv-technique'){workoutCapture();if(workout.motion)openMotionItem(workout.motion.it,workout.motion.clock);}
   });

@@ -2597,5 +2597,15 @@
  "; лицензия Apache 2.0). Толщина мышц — по их объёмам на МРТ 49 мужчин (": "; Apache 2.0 licence). Muscle thickness follows their MRI volumes in 49 men (",
  "Riem и др., 2026": "Riem et al., 2026",
  "), доли сухожилий ног — по препаратам (": "), leg tendon proportions — from cadaver specimens (",
- "Ward и др., 2009": "Ward et al., 2009"
+ "Ward и др., 2009": "Ward et al., 2009",
+ "Звук в конце отдыха": "Sound at the end of rest",
+ "Звук в конце отдыха включён": "Sound at the end of rest is on",
+ "Звук в конце отдыха выключен": "Sound at the end of rest is off",
+ "Пару выше": "Move the pair up",
+ "Упражнение выше": "Move the exercise up",
+ "Пару ниже": "Move the pair down",
+ "Упражнение ниже": "Move the exercise down",
+ "\" aria-haspopup=\"dialog\" aria-controls=\"workout-view\">Начать тренировку →</button>\n    <span class=\"c-act-r\">": "\" aria-haspopup=\"dialog\" aria-controls=\"workout-view\">Start workout →</button>\n    <span class=\"c-act-r\">",
+ "<span class=\"c-move\" role=\"group\" aria-label=\"Порядок в тренировке\"><button type=\"button\" class=\"btn-ghost\" data-move=\"": "<span class=\"c-move\" role=\"group\" aria-label=\"Order in the workout\"><button type=\"button\" class=\"btn-ghost\" data-move=\"",
+ "<span>Заменить</span></button></span>\n  </div>": "<span>Swap</span></button></span>\n  </div>"
 }

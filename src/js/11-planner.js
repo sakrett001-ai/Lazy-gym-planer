@@ -94,7 +94,9 @@ function loadSettings() {
 function saveSettings() { try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {} }
 
 const S = loadSettings();
-let swaps = {};
+/* замены и порядок упражнений (кнопки «Заменить» и ↑ ↓) хранятся с настройками: после перезапуска приложения
+   план тот же; любая смена параметров собирает план заново и сбрасывает их (regen) */
+let swaps = S.swaps && typeof S.swaps === 'object' && !Array.isArray(S.swaps) ? S.swaps : (S.swaps = {});
 let eqOpen = false;
 let placeDel = false;
 let done = {};
@@ -269,6 +271,14 @@ function prescribe(ex, week, E) {
   return S.format === 'static' && staticOk(ex) ? staticRx(rx, ex, week, E) : rx;
 }
 
+/* Порядок, заданный человеком кнопками ↑ ↓ (swaps.__order): список номеров упражнений (slot). Кого в списке нет
+   (новое после замены или подбора), остаются на своих местах по правилам после упорядоченных. */
+function byOrder(units, order, slotOf) {
+  if (!Array.isArray(order) || !order.length) return units;
+  const pos = new Map(order.map((s, i) => [s, i])), rank = u => { const r = slotOf(u).map(s => pos.get(s)).filter(v => v !== undefined); return r.length ? Math.min(...r) : Infinity; };
+  return units.map((u, i) => [u, rank(u), i]).sort((a, b) => a[1] - b[1] || a[2] - b[2]).map(x => x[0]);
+}
+
 /* ---------- сборка одной тренировки ---------- */
 function buildPlan(ctx = {}) {
   /* свой план: упражнения и порядок задал человек; мышцы — только подсказка для подбора */
@@ -313,13 +323,13 @@ function buildPlan(ctx = {}) {
   const bySlot = new Map(items.map(it => [it.ex, it]));
   let blocks = [], minutes = 0, totalSets = 0;
   if (S.format === 'classic' || S.format === 'static') {
-    const ord = (custom ? picked : orderClassic(picked)).map(ex => bySlot.get(ex));
+    const ord = byOrder((custom ? picked : orderClassic(picked)).map(ex => bySlot.get(ex)), custom ? null : ctx.order, it => [it.slot]);
     ord.forEach((it, i) => { it.label = String(i + 1); });
     blocks = [{kind:'list', items:ord}];
     for (const it of ord) { minutes += it.rx.static ? staticSeconds(it.rx) : it.rx.sets * (it.rx.work + it.rx.rest) + 60; totalSets += it.rx.sets; }
   } else if (S.format === 'superset') {
     /* в своём плане пары — соседние упражнения по порядку человека */
-    const pairs = custom ? picked.reduce((a, ex, i) => (i % 2 ? a[a.length - 1].push(ex) : a.push([ex]), a), []) : pairSupersets(picked);
+    const pairs = custom ? picked.reduce((a, ex, i) => (i % 2 ? a[a.length - 1].push(ex) : a.push([ex]), a), []) : byOrder(pairSupersets(picked), ctx.order, pr => pr.map(ex => bySlot.get(ex).slot));
     pairs.forEach((pr, pi) => {
       const L = String.fromCharCode(65 + pi);
       const its = pr.map((ex, j) => { const it = bySlot.get(ex); it.label = pr.length > 1 ? L + (j + 1) : L; return it; });
@@ -331,7 +341,7 @@ function buildPlan(ctx = {}) {
       totalSets += sets * its.length;
     });
   } else {
-    const ord = (custom ? picked : orderCircuit(picked)).map(ex => bySlot.get(ex));
+    const ord = byOrder((custom ? picked : orderCircuit(picked)).map(ex => bySlot.get(ex)), custom ? null : ctx.order, it => [it.slot]);
     const c = G.circ;
     let rounds = c.rounds + (S.level === 'beg' ? -1 : S.level === 'adv' ? 1 : 0);
     if (week && week.deload) rounds -= 1;
@@ -376,7 +386,7 @@ function buildProgram() {
     seen[tid] = (seen[tid] || 0) + 1;
     /* день «всё тело» включает мышцу акцента, даже если по шаблону её группы в этот день нет */
     const fg = S.focus && MUSCLE_GROUP[S.focus], g = DAY_T[tid].name === 'Всё тело' && fg && !DAY_T[tid].g.includes(fg) ? DAY_T[tid].g.concat(fg) : DAY_T[tid].g;
-    const p = buildPlan({groups:g, count:S.count, seed:S.seed * 131 + i * 977 + 13, avoid:new Set(avoid), week, swaps:swaps['d' + i] || {}});
+    const p = buildPlan({groups:g, count:S.count, seed:S.seed * 131 + i * 977 + 13, avoid:new Set(avoid), week, swaps:swaps['d' + i] || {}, order:swaps.__order?.['d' + i]});
     if (p.items) p.items.forEach(it => avoid.add(it.ex.id));
     return {tid, i, wd:SCHEDULE[days][i], plan:p};
   });
@@ -566,7 +576,7 @@ function cardHtml(it, idx) {
   <div class="c-prog">${progressionHint(it)}</div>
   <div class="c-act">
     <button type="button" class="btn-ghost" data-workout="${ex.id}" aria-haspopup="dialog" aria-controls="workout-view">Начать тренировку →</button>
-    <button type="button" class="btn-ghost" data-swap="${it.slot}">${ICON.swap}<span>Заменить</span></button>
+    <span class="c-act-r">${S.mode === 'custom' ? '' : moveButtons(it)}<button type="button" class="btn-ghost" data-swap="${it.slot}">${ICON.swap}<span>Заменить</span></button></span>
   </div>
   ${S.mode === 'custom' ? customToolsHtml(it) : ''}
   <details class="tech">
@@ -580,7 +590,25 @@ function cardHtml(it, idx) {
 </li>`;
 }
 
+/* единицы порядка плана: упражнение (классика, круг) или пара суперсета — их и двигают кнопки ↑ ↓ */
+function planUnits(p) { return p.blocks.flatMap(b => b.kind === 'pair' ? [b.items.map(it => it.slot)] : b.items.map(it => [it.slot])); }
+let MOVE_UNITS = [];
+function moveButtons(it) {
+  const n = MOVE_UNITS.length, i = MOVE_UNITS.findIndex(u => u.includes(it.slot));
+  if (n < 2 || i < 0) return '';
+  const pair = MOVE_UNITS[i].length > 1, up = pair ? 'Пару выше' : 'Упражнение выше', down = pair ? 'Пару ниже' : 'Упражнение ниже';
+  return `<span class="c-move" role="group" aria-label="Порядок в тренировке"><button type="button" class="btn-ghost" data-move="${it.slot}" data-d="-1" aria-label="${up}" title="${up}"${i === 0 ? ' disabled' : ''}>↑</button><button type="button" class="btn-ghost" data-move="${it.slot}" data-d="1" aria-label="${down}" title="${down}"${i === n - 1 ? ' disabled' : ''}>↓</button></span>`;
+}
+/* сдвиг упражнения (или пары) на одно место: новый порядок — в swaps.__order того же ключа, что и замены */
+function movePlanItem(slot, d) {
+  const units = planUnits(plan), i = units.findIndex(u => u.includes(slot)), j = i + d;
+  if (i < 0 || j < 0 || j >= units.length) return false;
+  [units[i], units[j]] = [units[j], units[i]];
+  swaps.__order = swaps.__order || {}; swaps.__order[swapKey()] = units.flat();
+  return true;
+}
 function blocksHtml(p) {
+  MOVE_UNITS = S.mode === 'custom' ? [] : planUnits(p);
   let html = `<p class="phase"><b>Разминка, 8–10 мин.</b> Лёгкое кардио до тёплого пота, суставная гимнастика, затем 1–2 разминочных подхода с лёгким весом в первом упражнении.</p>`;
   html += cardsViewHtml();
   if (S.format === 'static') html += `<p class="phase phase-static"><b>Статодинамика.</b> Вес — около половины от 1ПМ. Медленно: 3 с вниз и 3 с вверх, без пауз; не выпрямляйтесь до конца и не расслабляйтесь внизу — мышца всё время напряжена. К концу подхода (30–40 с) — сильное жжение, но не отказ. Три подхода с отдыхом 30 с — одна серия.</p>`;
@@ -643,7 +671,7 @@ function renderPlan() {
   if (S.view === 'atlas') { prog = null; plan = null; return renderAtlas(); }
   if (S.mode === 'program') return renderProgram();
   prog = null;
-  plan = buildPlan({swaps:swaps.s || {}});
+  plan = buildPlan({swaps:swaps.s || {}, order:swaps.__order?.s});
   const root = $('#plan');
   if (plan.empty === 'groups') {
     root.innerHTML = `<div class="empty"><h2>Выберите мышцы</h2><p>Отметьте хотя бы одну группу мышц в параметрах — план соберётся сразу.</p></div>`;

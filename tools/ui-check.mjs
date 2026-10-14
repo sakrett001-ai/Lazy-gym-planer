@@ -147,6 +147,39 @@ await page.close();
   await g.close();
 }
 
+/* порядок упражнений: ↑ ↓ на карточке переставляют упражнение (в суперсетах — пару), порядок переживает перезапуск
+   приложения и сбрасывается сменой параметров; в своём плане — свои кнопки */
+{
+  const o = await open(390), ids = () => o.evaluate(() => [...document.querySelectorAll('.card')].map(c => c.dataset.ex).join());
+  const a = await ids();
+  await o.click('.card:nth-child(1) [data-move][data-d="1"]'); await o.waitForTimeout(100);
+  const b = await ids(), A = a.split(','), B = b.split(',');
+  check(A[0] === B[1] && A[1] === B[0] && A.slice(2).join() === B.slice(2).join() && await o.evaluate(() => plan.blocks[0].items.map(it => it.label).join() === '1,2,3,4,5'),
+    '↓ на первой карточке меняет местами первое и второе упражнения, номера пересчитаны');
+  check(await o.evaluate(() => document.querySelector('.card [data-move][data-d="-1"]').disabled && [...document.querySelectorAll('.card')].at(-1).querySelector('[data-move][data-d="1"]').disabled), 'у крайних карточек лишняя стрелка выключена');
+  await o.reload(); await o.waitForTimeout(400);
+  check(await ids() === b, 'порядок сохраняется после перезапуска приложения');
+  await o.evaluate(() => { S.count = 6; regen(); S.count = 5; regen(); });
+  check(await ids() === a, 'смена параметров собирает план заново — порядок по правилам');
+  await o.evaluate(() => { S.format = 'superset'; regen(); });
+  const pairs = () => o.evaluate(() => plan.blocks.map(b => b.items.map(it => it.ex.id).join('+')).join(' '));
+  const p1 = (await pairs()).split(' '); await o.click('.block .card [data-move][data-d="1"]'); await o.waitForTimeout(100);
+  const p2 = (await pairs()).split(' ');
+  check(p2[0] === p1[1] && p2[1] === p1[0], 'в суперсетах ↑ ↓ переставляют пару целиком');
+  await o.evaluate(() => { Object.assign(S, { mode: 'custom', format: 'classic' }); regen(); });
+  check(await o.evaluate(() => !document.querySelector('[data-move]')), 'в своём плане — только свои кнопки порядка');
+  /* таймер отдыха: сигнал ставится на конец отдыха, ±15 переносит, «Готово» снимает; звук выключается и это запоминается */
+  await o.evaluate(() => { Object.assign(S, { mode: 'single' }); regen(); startRest(60, 'Отдых'); });
+  const st = () => o.evaluate(() => RestAlarm.state());
+  let r = await st(); check(r.end > Date.now() + 55e3 && (r.audio === null || r.queued > 0), 'в конце отдыха запланирован сигнал');
+  await o.click('#t-plus'); r = await st(); check(r.end > Date.now() + 70e3, '+15 переносит сигнал');
+  await o.click('#t-sound'); check(await o.evaluate(() => !RestAlarm.on && localStorage.getItem('podhod.restSound') === 'off' && RestAlarm.state().queued === 0 && $('#t-sound').getAttribute('aria-pressed') === 'false'), 'кнопка выключает звук и запоминает выбор');
+  await o.click('#t-sound'); await o.click('#t-skip'); r = await st(); check(r.end === 0 && r.queued === 0, '«Готово» снимает сигнал');
+  /* векторы движения по умолчанию выключены; «включено» прежних версий выключается один раз */
+  check(await o.evaluate(() => motionPrefs.vectors === false && !$('#mv-vectors').checked), 'векторы движения по умолчанию выключены');
+  await o.close();
+}
+
 /* компьютер: параметры в боковой колонке не сворачиваются */
 const desk = await open(1280);
 await desk.evaluate(() => { S.fold.setup = true; regen(); });
@@ -156,4 +189,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, витрина атласа, режимы «Скелет» и «Анатомия мышц» работают на телефоне и компьютере.');
+console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, витрина атласа, режимы «Скелет» и «Анатомия мышц» работают на телефоне и компьютере.');

@@ -39,7 +39,7 @@ document.addEventListener('click', e => {
   const target = EXI[t.dataset.prog]; if (!target) return;
   const E = plan.E; if (!available(target, E)) { t.textContent = 'нет оборудования'; return; }
   if (plan.items.some(x => x.ex.id === target.id)) { t.textContent = 'уже в плане'; return; }
-  const k = swapKey(); swaps[k] = swaps[k] || {}; swaps[k][it.slot] = target.id; done = {}; renderPlan();
+  const k = swapKey(); swaps[k] = swaps[k] || {}; swaps[k][it.slot] = target.id; done = {}; saveSettings(); renderPlan();
   const c2 = document.querySelector(`.card[data-slot="${it.slot}"]`); if (c2) { c2.classList.add('flash'); c2.scrollIntoView({block:'nearest'}); }
 });
 
