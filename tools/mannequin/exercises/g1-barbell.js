@@ -303,9 +303,11 @@ const SMITH_PLATES = [[20, 3.4]];  /* «десятки» Ø40: диски про
 const SSQ_ST = { ax: 15, az: 14, out: 12, kneeOut: 0 };
 const SSQ = memo(t => {
   const C = ctx([]), e = t;
-  /* стопы на 14 см впереди грифа: корпус прямее, пятки на полу, колени по носкам */
+  /* стопы на 14 см впереди грифа: корпус прямее, пятки на полу, колени по носкам.
+     Локти чуть дальше назад (0,95 вместо 0,9): с формой груди 4.39.0 гриф на трапециевидной лёг на 1,5 мм дальше назад,
+     и наружная ротация плеча вышла за предел на 0,1–0,2°; теперь 94,8° (предел 95°), отведение кисти 21,7° (22°) */
   const th = 30 * Math.pow(e, .6), hy = e < 1e-6 ? null : C.lerp(89, 53.5, Math.pow(e, 1.1));
-  return backBarPose(C, { theta: th, hy: hy ?? 94, knee: hy == null ? 4 : null, spine: [6 * e, 2 * e, -8 * e], st: SSQ_ST, half: 49, girdle: [12, -20], barZ: 0 });
+  return backBarPose(C, { theta: th, hy: hy ?? 94, knee: hy == null ? 4 : null, spine: [6 * e, 2 * e, -8 * e], st: SSQ_ST, half: 49, girdle: [12, -20], barZ: 0, elbowBack: .95 });
 });
 
 /* ---------- Лёжа на горизонтальной скамье ---------- */
@@ -703,10 +705,13 @@ module.exports = {
       for (const s of S) q[s].girdle = [-4, C.lerp(-8, -14, e)];
       const pole = lat => V.unit(V.add(V.add([0, -1, 0], lat, 1.1), [0, 0, -1], .5));
       /* верх: руки выпрямлены над низом груди */
+      /* пока рука не дотягивается, запястье стоит на полной длине руки — к расстоянию прибавляется недостача (reachError),
+         иначе высота сходится по 0,1 см за шаг: с грудью глубже на 0,5 см (4.39.0) шести шагов не хватало */
       let topY = L.y + 40;
       for (let i = 0; i < 6; i++) {
-        const qq = C.M.clone(q); for (const s of S) { const lat = C.lat(qq, s); C.grip(qq, s, V.add([0, topY, L.z], lat, half), V.scale(lat, -1), pole(lat), { wristExt: 10, allowShort: true }); }
-        const f = C.fk(qq); topY += armLen(C, 8) - (V.dist(f.P.ghL, f.P.wrL) + V.dist(f.P.ghR, f.P.wrR)) / 2;
+        const qq = C.M.clone(q); let short = 0;
+        for (const s of S) { const lat = C.lat(qq, s); short += Math.max(0, C.grip(qq, s, V.add([0, topY, L.z], lat, half), V.scale(lat, -1), pole(lat), { wristExt: 10, allowShort: true }).reachError) / 2; }
+        const f = C.fk(qq); topY += armLen(C, 8) - (V.dist(f.P.ghL, f.P.wrL) + V.dist(f.P.ghR, f.P.wrR)) / 2 - short;
       }
       const bar = [0, C.lerp(topY, L.y, e), L.z];
       for (const s of S) { const lat = C.lat(q, s); C.grip(q, s, V.add(bar, lat, half), V.scale(lat, -1), pole(lat), { wristExt: 10 }); }

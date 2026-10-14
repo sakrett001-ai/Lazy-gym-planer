@@ -114,6 +114,50 @@ test('поверхность тела замкнута и симметрична
   const mid = V.mix(R.shL, R.elL, .5); assert.ok(M.limbSDF(R, 'ua', 'L', mid) < -3, 'ось плеча внутри руки');
 });
 
+test('сечение груди — скруглённый прямоугольник по ANSUR II: глубина и обхват в средней половине людей, ширина не больше 30', () => {
+  /* 4.39.0: на уровне сосков (128,2 см, ANSUR II chestheight) — горизонтальное сечение кожи корпуса стоя со складками,
+     как в tools/mannequin/anthro.js; ANSUR II (мужчины 170–180 см, 72–84 кг): ширина 27,4–29,1, глубина 23,3–25,2,
+     обхват 99,2–104,3. Ширина 28,3 недостижима, пока тела широчайшей — трубки (комментарий к TORSO) */
+  const R = M.catalogPose(M.neutral()), cache = M.torsoCache(R), y = M.FLOOR - 128.2, zc = M.spineFrame(R, 30).c[2], pts = [];
+  for (let i = 0; i < 360; i++) {
+    const a = i / 360 * 2 * Math.PI, at = r => [Math.cos(a) * r, y, zc + Math.sin(a) * r];
+    let lo = 0, hi = 30; for (let k = 0; k < 30; k++) { const m = (lo + hi) / 2; if (M.torsoSDF(R, at(m), cache) < 0) lo = m; else hi = m; }
+    const p = at(lo); pts.push([p[0], p[2]]);
+  }
+  const ext = k => Math.max(...pts.map(p => p[k])) - Math.min(...pts.map(p => p[k]));
+  const s = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]), cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]), lo = [], up = [];
+  for (const p of s) { while (lo.length > 1 && cr(lo.at(-2), lo.at(-1), p) <= 0) lo.pop(); lo.push(p); }
+  for (const p of s.reverse()) { while (up.length > 1 && cr(up.at(-2), up.at(-1), p) <= 0) up.pop(); up.push(p); }
+  const h = lo.slice(0, -1).concat(up.slice(0, -1)); let per = 0; for (let i = 0; i < h.length; i++) per += Math.hypot(h[i][0] - h[(i + 1) % h.length][0], h[i][1] - h[(i + 1) % h.length][1]);
+  assert.ok(ext(0) <= 30, `ширина груди ${ext(0).toFixed(1)}`);
+  assert.ok(ext(1) >= 23.3 && ext(1) <= 25.2, `глубина груди ${ext(1).toFixed(1)}`);
+  assert.ok(per >= 99.2 && per <= 104.3, `обхват груди ${per.toFixed(1)}`);
+});
+
+test('сетка корпуса: столбцы по «смешанному» углу — на плоских гранях не реже 3,5 см, хорда не больше 1 мм', () => {
+  /* colAngle: при n = 2 — прежний угол; монотонна; концы [0, π] на месте */
+  assert.equal(M.colAngle(.7, [14, 11, 10, 2, 2]), .7);
+  const sec = M.sectionAt(38.8); let prev = -1;
+  for (let i = 0; i <= 64; i++) { const a = M.colAngle(i / 64 * Math.PI, sec); assert.ok(a > prev, 'монотонно'); prev = a; }
+  near(M.colAngle(0, sec), 0, 1e-12, 'передняя линия'); near(M.colAngle(Math.PI, sec), Math.PI, 1e-12, 'задняя линия');
+  /* стоя без складок: шаг между соседними точками ряда и наибольшее отклонение кожи между ними от отрезка (хорда) */
+  M.noFolds(() => {
+    const R = M.catalogPose(M.neutral()), S = M.surface(R), n = M.TORSO_COLS;
+    let step = 0, sag = 0;
+    S.torsoHeights.forEach((hh, i) => {
+      if (hh < 20 || hh > 50) return;
+      const row = S.torso[i], sc = M.sectionAt(hh), at = phi => M.torsoPoint(R, hh, 'L', M.colAngle(phi, sc));
+      for (let j = 0; j < n / 2; j++) {
+        const p = row[j], q = row[j + 1], d = V.sub(q, p), L = V.len(d); step = Math.max(step, L);
+        for (let k = 1; k < 8; k++) { const m = at((j + k / 8) / n * 2 * Math.PI), w = V.sub(m, p); sag = Math.max(sag, V.len(V.perp(w, V.scale(d, 1 / L)))); }
+      }
+    });
+    assert.equal(S.torso[0].length, n);
+    assert.ok(step < 3.5, `шаг сетки ${step.toFixed(2)} см`);
+    assert.ok(sag < .1, `хорда сетки ${(sag * 10).toFixed(2)} мм`);
+  });
+});
+
 test('босая стопа: размеры по Winter и ANSUR II, свод, подушечки пальцев на плоскости подошвы, точки для проверок', () => {
   for (const s of ['L', 'R']) {
     const g = M.SIGN[s], sh = M.footShape(s), pts = sh.rear.flat();
@@ -250,8 +294,9 @@ test('подгонка складок (tools/mannequin/folds-fit.js) счита�
   const F = require('./mannequin/folds-fit.js'), NR = M.catalogPose(M.neutral());
   const q = M.neutral(); q.L.shoulder = [20, 120, 0]; q.R.shoulder = [-10, 60, 0]; const R = M.catalogPose(q);
   const L0 = Object.fromEntries(Object.entries(M.FOLDS).map(([k, f]) => [k, F.axes(f, NR.frames.thorax, NR.frames.uaL, 'L', 0).L]));
+  /* оси складок обеих сторон: подъём — наибольший по всем (широкая складка заходит за среднюю линию) */
+  const set = ['L', 'R'].flatMap(s => Object.entries(M.FOLDS).map(([k, f]) => F.axes(f, R.frames.thorax, R.frames['ua' + s], s, L0[k])));
   for (const s of ['L', 'R']) {
-    const set = Object.entries(M.FOLDS).map(([k, f]) => F.axes(f, R.frames.thorax, R.frames['ua' + s], s, L0[k]));
     for (let i = 0; i < 300; i++) {
       const p = V.add(R['sh' + s], [rnd() * 36 - 18, rnd() * 36 - 6, rnd() * 30 - 15]);
       near(F.lift(set, p), M.foldLift(R, p), 1e-9, 'подъём');
