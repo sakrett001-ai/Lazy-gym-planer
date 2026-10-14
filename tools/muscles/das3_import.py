@@ -156,6 +156,35 @@ SNAP = 1.0      # точка прикрепления дальше 1 см от �
 # лопатку — от поперечных отростков C1–C4 (Gray's Anatomy, 42-е изд., 2020, гл. «Плечевой пояс»).
 REGION = {('trap_clav_1', 0): 'skull', ('lev_scap_1', 0): 'cervical', ('lev_scap_2', 0): 'cervical'}
 
+# ---------- начала на позвоночнике — по анатомическим ориентирам (аудит прикреплений, 4.34.0) ----------
+# Начала трапециевидной, ромбовидных и поднимающей лопатку у DAS3 лежат в мягких тканях в 3–4,4 см позади позвонков
+# её сетки; при посадке на ближайшую кость четыре верхних пучка трапециевидной и верхний пучок ромбовидных сходились
+# в одну точку — вершину остистого отростка C7, а оба пучка поднимающей лопатку — у C1. Поэтому эти начала ставятся не
+# на ближайшую поверхность, а по уровню позвонка: уровень начала у DAS3 — по высоте вершин остистых отростков её
+# собственного позвоночника (непрерывный: T7.6 — между T7 и T8), затем поправка по анатомии (SPINE_FIX), затем точка
+# на нашем скелете того же уровня:
+#   · шея (до C7) — задний край выйной связки: прямая от наружного затылочного выступа (начало trap_clav_1 на черепе)
+#     к вершине остистого отростка C7, на высоте вершины остистого отростка своего уровня; кость — шейный отдел;
+#   · ниже C7 — надостистая связка: между вершинами остистых отростков соседних позвонков; кость — ближайший позвонок;
+#   · поперечный отросток (поднимающая лопатку) — самая наружная точка своего шейного позвонка.
+# Уровни: 0 — C1 … 6 — C7, 7 — T1 … 18 — T12. Источники: Gray's Anatomy, 42-е изд., 2020 (трапециевидная — затылочная
+# кость, выйная связка, остистые отростки C7–T12; поднимающая лопатку — поперечные отростки C1–C4); OpenStax Anatomy
+# and Physiology 2e, 11.5 (ромбовидная малая — C7–T1, большая — T2–T5).
+LEVELS = [f'C{i}' for i in range(1, 8)] + [f'T{i}' for i in range(1, 13)]
+LV = {n: i for i, n in enumerate(LEVELS)}
+SPINE_FIX = {
+    # трапециевидная: у препарата DAS3 (Klein Breteler и др., 1999) нижний пучок начинается на T9, по анатомии — до
+    # T12. Шейная часть остаётся на своих уровнях, грудная растягивается пропорционально (порядок и относительные
+    # промежутки пучков препарата сохраняются), нижний пучок — на T12
+    'trap': 'stretch',
+    # ромбовидные: у препарата C6–T2; малая (rhomboid_1 — прикрепление у основания ости лопатки) — от C7–T1, середина
+    # её начала; большая (rhomboid_2…5 — край лопатки ниже ости) — от T2…T5, по пучку на позвонок
+    'rhomboid_1': LV['C7'] + .5, 'rhomboid_2': LV['T2'], 'rhomboid_3': LV['T3'], 'rhomboid_4': LV['T4'], 'rhomboid_5': LV['T5'],
+    # поднимающая лопатку: у DAS3 оба пучка у C1, по анатомии — поперечные отростки C1–C4. Верхний у DAS3 пучок
+    # (lev_scap_1; прикрепляется ниже по краю лопатки — мышца перекручена) — C1, второй — C4
+    'lev_scap_1': ('tp', LV['C1']), 'lev_scap_2': ('tp', LV['C4']),
+}
+
 
 def main():
     pose, meshes, muscles, ell = parse()
@@ -230,13 +259,54 @@ def main():
         if dist > SNAP: x, snap = q_s, dist
         T = np.array(ours[key]['T']); q = T[:, :3] @ x + T[:, 3]
         bone = [key[:-1], 'R'] if key.endswith('R') and key[:-1] in ('scapula', 'clavicle') else [key, '']
-        return bone, q, snap, dist
+        return bone, q, snap, dist, x
+
+    # ---------- начала на позвоночнике (SPINE_FIX) ----------
+    # DAS3: вершина остистого отростка — самая задняя точка позвонка; уровень точки — по высоте между вершинами
+    tip_d = np.array([sv[big[23 - i]][np.argmin(sv[big[23 - i], 2])] for i in range(len(LEVELS))])   # big — снизу L5 … C1
+    def das3_level(p):
+        H = tip_d[:, 1]
+        if p[1] >= H[0]: return 0.0
+        for i in range(len(H) - 1):
+            if H[i] >= p[1] >= H[i + 1]: return i + (H[i] - p[1]) / (H[i] - H[i + 1])
+        return float(len(H) - 1)
+    # наш скелет (рамка грудной клетки, Y вверх, Z вперёд): позвонки шейного отдела — компоненты связности его сетки
+    cv, cf = ov['cervical'], of['cervical']; clab = components(len(cv), cf)
+    cverts = sorted([np.where(clab == c)[0] for c in range(clab.max() + 1)], key=len)[-7:]
+    cverts = sorted(cverts, key=lambda c: -cv[c, 1].mean())                                     # сверху вниз: C1 … C7
+    tip_o = np.array([cv[c][np.argmin(cv[c][:, 2])] for c in cverts] + [ov[f'thoracic{i}'][np.argmin(ov[f'thoracic{i}'][:, 2])] for i in range(1, 13)])
+    tp_o = np.array([cv[c][np.argmin(cv[c][:, 0])] for c in cverts])                            # правая сторона: X влево
+    eop = place('thorax', [p for mu in muscles if mu['name'] == 'trap_clav_1' for _, p in mu['pts'][:1]][0], 'skull')[4]
+    def in_frame(key, x):
+        T = np.array(ours[key]['T']); return [key, ''], T[:, :3] @ x + T[:, 3]
+    def spine_point(L):
+        """точка начала на нашем скелете на уровне L (см. SPINE_FIX)"""
+        if L <= LV['C7']:
+            i = min(int(L), LV['C7'] - 1); y = tip_o[i, 1] + (L - i) * (tip_o[i + 1, 1] - tip_o[i, 1])
+            t = (y - eop[1]) / (tip_o[LV['C7'], 1] - eop[1]); return in_frame('cervical', eop + t * (tip_o[LV['C7']] - eop))
+        i = min(int(L), len(LEVELS) - 2); x = tip_o[i] + (L - i) * (tip_o[i + 1] - tip_o[i]); n = int(L + .5)
+        return in_frame('cervical' if n <= LV['C7'] else f'thoracic{n - LV["C7"]}', x)
+    low = max(das3_level(mu['pts'][0][1]) for mu in muscles if mu['name'].startswith('trap_scap'))
+    def fixed(name, p):
+        rule = SPINE_FIX.get('trap' if name.startswith('trap_') and name != 'trap_clav_1' else name)
+        if rule is None: return None
+        L0 = das3_level(p)
+        if rule == 'stretch': L, how = (L0 if L0 <= LV['C7'] else LV['C7'] + (L0 - LV['C7']) * (LV['T12'] - LV['C7']) / (low - LV['C7'])), 'spine'
+        elif isinstance(rule, tuple): L, how = rule[1], 'tp'
+        else: L, how = rule, 'spine'
+        bone, q = in_frame('cervical', tp_o[int(L)]) if how == 'tp' else spine_point(L)
+        name_lv = lambda v: LEVELS[int(v)] + ('' if v == int(v) else f'.{round((v - int(v)) * 100):02d}')
+        print(f'  {name}: DAS3 {name_lv(L0)} → {name_lv(L)}{" (поперечный отросток)" if how == "tp" else ""}')
+        return bone, q
     out, worst = [], []
+    print('начала на позвоночнике (уровень DAS3 → по анатомии):')
     for mu in muscles:
         el = []
         for k, (body, p) in enumerate(mu['pts']):
-            bone, q, snap, dist = place(body, p, REGION.get((mu['name'], k)))
-            worst.append((dist, mu['name'], k, bone[0]))
+            bone, q, snap, dist, _ = place(body, p, REGION.get((mu['name'], k)))
+            fx = fixed(mu['name'], p) if k == 0 and body == 'thorax' else None
+            if fx: bone, q, snap = fx[0], fx[1], 0.0
+            else: worst.append((dist, mu['name'], k, bone[0]))
             el.append({'s': {'bone': bone, 'p': np.round(q, 3).tolist(), 'site': f"{mu['name']}-P{k + 1}", **({'snap': round(snap, 2)} if snap else {})}})
         if mu['wrap']:
             assert mu['wrap'] == ['serr_ant'] and len(el) == 2

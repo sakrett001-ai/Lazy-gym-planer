@@ -25,10 +25,13 @@ function sweepPose(sw, a) {
   if (sw.key === 'sh_abd' || sw.key === 'sh_flex') q.R.girdle = [.1 * a, -.1 * a];
   return q;
 }
-/* мышца манекена для имени MyoSim: правая рука у нас с «_r» */
+/* мышца манекена для имени MyoSim: правая рука у нас с «_r». У трёх мышц туловища в MyoSim точки не на своей стороне
+   (build_muscles.py, SIDE_FIX; у нас отражены): сравнивается мышца, лежащая на той же стороне тела — rect_abd_r MyoSim
+   (лежит слева) с нашей левой и наоборот, LTpT_T12_l MyoSim (копия правой) — с нашей правой */
+const PHYSICAL = { rect_abd_r: 'rect_abd_l', rect_abd_l: 'rect_abd_r', LTpT_T12_l: 'LTpT_T12_r' };
 function ourIndex(bound) {
   const at = new Map(bound.map((m, i) => [m.name, i]));
-  return n => at.has(n) ? at.get(n) : at.get(n + '_r');
+  return n => { n = PHYSICAL[n] || n; return at.has(n) ? at.get(n) : at.get(n + '_r'); };
 }
 /* все развороты: для каждой мышцы эталона — ход длины у MyoSim (a) и у манекена (b), см */
 function compareAll(ref = reference(), skel = skeleton(), md = muscles()) {

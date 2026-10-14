@@ -13,6 +13,13 @@ test('every muscle end matches its anatomical attachment (or a listed known disc
   assert.deepEqual(a.fixed, [], 'расхождение исправлено — уберите его из known');
 });
 
+test('every muscle lies on its own side of the body', () => {
+  assert.deepEqual(A.sides(), [], 'мышцы не на своей стороне (правая слева или левая справа)');
+  /* проверка ловит отражённую мышцу: прямая живота, перенесённая через середину */
+  const k = A.bound.findIndex(m => m.name === 'rect_abd_r'), p = A.paths[k].points.map(q => [2 * A.midX - q[0], q[1], q[2]]);
+  assert.deepEqual(A.sides([A.bound[k]], [{ points: p }]), ['rect_abd_r']);
+});
+
 test('known discrepancies are explained, missing muscles are really missing', () => {
   for (const [k, why] of Object.entries(ref.known)) assert(why.length > 40, 'нужно объяснение: ' + k);
   const parts = new Set(A.bound.map(m => m.part));

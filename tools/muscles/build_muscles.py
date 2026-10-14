@@ -138,10 +138,44 @@ def main():
         if mu['name'] in ARM_NAMES:
             mu['name'] += '_r'
     muscles += left
+    side_fix(muscles)
     os.makedirs(os.path.dirname(os.path.abspath(OUT)), exist_ok=True)
     json.dump({'source': 'MyoSim (MyoHub, Apache 2.0): Rajagopal 2016 (ноги), Holzbaur 2005 MoBL (рука), модель поясничного отдела (туловище)',
                'muscles': muscles}, open(OUT, 'w'), ensure_ascii=False)
     print('мышц', len(muscles), '(пропущено', len(skipped), ': внутренние мышцы кисти и левая рука модели)', OUT)
+
+
+# Стороны (аудит 4.34.0). В модели туловища MyoSim (myotorso_chain.xml, коммит 93b0ca8) у трёх мышц точки пути не на своей
+# стороне: у прямой живота rect_abd_r и rect_abd_l они перепутаны (правая лежит слева, левая справа), у LTpT_T12_l
+# (длиннейшая, грудной пучок от T12) — копия правой (те же координаты, без зеркала): левого пучка в модели нет, оба
+# лежат справа. Мышца не на своей стороне отражается через среднюю линию (x → −x): у прямой живота так меняются местами
+# правая и левая, у LTpT_T12_l получается недостающий левый пучок. Сторона — по
+# точкам на костях туловища (их рамки — по средней линии; X — влево): у правой мышцы ни одной точки левее середины
+# больше чем на 1 см, у левой — правее. Список сверяется: новая ошибка в модели остановит сборку.
+SIDE_FIX = {'rect_abd_r', 'rect_abd_l', 'LTpT_T12_l'}
+
+
+def side_fix(muscles):
+    by = {mu['name']: mu for mu in muscles}
+    sgn = {'R': -1, 'L': 1}
+    def wrong(mu):
+        pts = [e['s'] for e in mu['el'] if 's' in e and e['s']['bone'][1] == '']
+        return mu['side'] in sgn and any(s['p'][0] * sgn[mu['side']] < -1 for s in pts)
+    bad = {mu['name'] for mu in muscles if wrong(mu)}
+    assert bad == SIDE_FIX, ('мышцы не на своей стороне', sorted(bad))
+    def mirror(s):
+        b, sd = s['bone']; flip = {'R': 'L', 'L': 'R'}
+        b = b[:-1] + flip[b[-1]] if b[-2:] in ('_R', '_L') else b
+        return {**s, 'bone': [b, flip.get(sd, sd)], 'p': [-s['p'][0], s['p'][1], s['p'][2]]}
+    for n in sorted(bad):
+        el = []
+        for e in by[n]['el']:
+            if 's' in e: el.append({'s': {**mirror(e['s']), 'site': e['s']['site'] + '(зеркально)'}})
+            else:
+                w = e['w']; el.append({'w': {**w, 'bone': mirror({'bone': w['bone'], 'p': w['c']})['bone'], 'c': [-w['c'][0], w['c'][1], w['c'][2]],
+                                             'a': [-w['a'][0], w['a'][1], w['a'][2]], 'side': mirror(w['side']) if w['side'] else None}})
+        by[n]['el'] = el
+    print('стороны исправлены (отражены через среднюю линию):', ', '.join(sorted(bad)))
 
 
 ARM_NAMES = ['DELT1', 'DELT2', 'DELT3', 'SUPSP', 'INFSP', 'SUBSC', 'TMIN', 'TMAJ', 'PECM1', 'PECM2', 'PECM3', 'LAT1', 'LAT2', 'LAT3',

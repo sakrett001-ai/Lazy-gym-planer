@@ -24,12 +24,23 @@ skel.bones.forEach((b, i) => { const v = []; for (let k = 0; k < b.pos.length; k
 const mean = v => [0, 1, 2].map(k => v.reduce((s, p) => s + p[k], 0) / v.length);
 const ext = (v, k) => [Math.min(...v.map(p => p[k])), Math.max(...v.map(p => p[k]))];
 
-/* позвонки сверху вниз: высоты центров (Y вниз), шея — C1…C7 между основанием черепа и T1 */
+/* позвонки сверху вниз: высоты центров (Y вниз). Шейный отдел — одна кость, но позвонки в её сетке — отдельные
+   компоненты связности: семь самых крупных (мелкие — диски), сверху вниз — C1…C7 (до 4.34.0 шея делилась по высоте
+   на семь равных частей — C7 выходил на 1,6 см ниже настоящего) */
+function cervicalY() {
+  const b = skel.bones.find(x => x.name === 'cervical'), n = b.pos.length / 3, par = Array.from({ length: n }, (_, i) => i);
+  const find = x => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; };
+  for (let i = 0; i < b.idx.length; i += 3) for (const [a, c] of [[b.idx[i], b.idx[i + 1]], [b.idx[i + 1], b.idx[i + 2]]]) { const ra = find(a), rc = find(c); if (ra !== rc) par[ra] = rc; }
+  const comp = new Map(); for (let i = 0; i < n; i++) { const r = find(i); (comp.get(r) || comp.set(r, []).get(r)).push(i); }
+  const ys = [...comp.values()].sort((a, c) => c.length - a.length).slice(0, 7).map(c => mean(c.map(i => BONES.cervical.v[i]))[1]).sort((a, c) => a - c);
+  if (ys.length !== 7) throw new Error('шейный отдел: позвонков ' + ys.length);
+  return ys;
+}
 const VERT = [];
 {
   const c = k => mean(BONES[k].v);
-  const skullY = ext(BONES.skull.v, 1)[1], cerv = BONES.cervical.v, [cTop, cBot] = ext(cerv, 1);
-  for (let n = 1; n <= 7; n++) VERT.push({ name: 'C' + n, y: cTop + (cBot - cTop) * (n - .5) / 7 });
+  const skullY = ext(BONES.skull.v, 1)[1];
+  cervicalY().forEach((y, i) => VERT.push({ name: 'C' + (i + 1), y }));
   for (let n = 1; n <= 12; n++) VERT.push({ name: 'T' + n, y: c('thoracic' + n)[1] });
   for (let n = 1; n <= 5; n++) VERT.push({ name: 'L' + n, y: c('L' + n)[1] });
   VERT.push({ name: 'S1', y: ext(BONES.sacrum.v, 1)[0] + 3 }, { name: 'S5', y: ext(BONES.sacrum.v, 1)[1] - 2 });
@@ -161,14 +172,24 @@ function audit(ref) {
   const known = ref.known || {}, failing = new Set(results.filter(r => !r.ok).map(r => r.id));
   return { results, orphan, unknown: results.filter(r => !r.ok && !known[r.id]), fixed: Object.keys(known).filter(k => !failing.has(k)), known };
 }
-module.exports = { table, describe, level, VERT, vertIndex, BONES, bound, paths, R, frames, ends, audit };
+/* Сторона: правая мышца (_r) лежит справа от средней линии, левая — слева; ни одна точка пути (нейтральная поза) не
+   заходит за середину дальше 1 см. Так в 4.34.0 нашлись ошибки исходной модели: перепутанные правая и левая прямая
+   живота и левый пучок длиннейшей LTpT_T12, лежавший справа (исправлены при сборке — build_muscles.py, SIDE_FIX). */
+function sides(list = bound, pts = paths) {
+  const bad = [];
+  list.forEach((mu, i) => { const s = mu.side === 'R' ? -1 : mu.side === 'L' ? 1 : 0; if (s && pts[i].points.some(p => (p[0] - midX) * s < -1)) bad.push(mu.name); });
+  return bad;
+}
+module.exports = { table, describe, level, VERT, vertIndex, BONES, bound, paths, R, frames, ends, audit, sides, midX };
 if (require.main === module) {
   if (process.argv.includes('--audit')) {
     const ref = require('./fixtures/attachments.json'), a = audit(ref);
     for (const r of a.results) console.log(`${r.ok ? '✓' : a.known[r.id] ? '◐' : '✗'} ${r.tag}${r.ok ? '' : ' — ' + r.fail.join('; ')}`);
     if (a.orphan.length) console.log('Без эталона: ' + a.orphan.join(', '));
+    const wrong = sides();
+    console.log(wrong.length ? '✗ не на своей стороне: ' + wrong.join(', ') : '✓ все мышцы на своей стороне');
     console.log(`Проверок ${a.results.length}: в норме ${a.results.filter(r => r.ok).length}, известных расхождений ${a.results.filter(r => !r.ok && a.known[r.id]).length}, новых ${a.unknown.length}`);
-    process.exit(a.unknown.length || a.orphan.length || a.fixed.length ? 1 : 0);
+    process.exit(a.unknown.length || a.orphan.length || a.fixed.length || wrong.length ? 1 : 0);
   }
   const t = table();
   if (process.argv.includes('--json')) process.stdout.write(JSON.stringify(t));

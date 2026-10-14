@@ -46,7 +46,7 @@ const GROUPS = [
 const DIGIT = { 2: 'I', 3: 'M', 4: 'R', 5: 'L' };
 function source(base) {
   /* широчайшая: три пучка MoBL-ARMS (T7, T10, T12) и три достроенных по анатомии (L3, гребень подвздошной кости;
-     lat_anatomy.js) — объём делится как между шестью пучками DAS3 (lat_dorsi_1…6: T8, T10, T12, L3, два наружных) */
+     anatomy.js) — объём делится как между шестью пучками DAS3 (lat_dorsi_1…6: T8, T10, T12, L3, два наружных) */
   const lat = base.match(/^LAT([1-6])$/);
   if (lat) return P.das3['lat_dorsi_' + lat[1]];
   if (P.rajagopal2016[base + '_r']) return P.rajagopal2016[base + '_r'];
@@ -132,9 +132,10 @@ function volumes(names, fmax, lengths, { stature, mass }) {
       }
       lines.forEach(n => assigned.add(n));
     }
-    /* внутренняя косая — по наружной */
-    const eo = mine.filter(n => /^EO\d$/.test(base(n))), io = mine.filter(n => /^IO\d$/.test(base(n)));
-    const wEO = eo.reduce((s, n) => s + weight(n), 0), vEO = eo.reduce((s, n) => s + out[n].v, 0);
+    /* внутренняя косая — по наружной: по отношению весов линий модели поясницы (EO1–EO6, рёбра 7–11). Верхние зубцы
+       наружной (EO7, EO8 — рёбра 5–6, anatomy.js) достроены по анатомии, у внутренней таких нет — в отношение не входят */
+    const eo = mine.filter(n => /^EO[1-6]$/.test(base(n))), io = mine.filter(n => /^IO\d$/.test(base(n)));
+    const wEO = eo.reduce((s, n) => s + weight(n), 0), vEO = mine.filter(n => /^EO\d$/.test(base(n))).reduce((s, n) => s + out[n].v, 0);
     for (const n of io) { out[n] = { v: vEO * weight(n) / wEO, group: 'Internal oblique (по наружной)' }; assigned.add(n); }
   }
   const missing = names.filter(n => !assigned.has(n));

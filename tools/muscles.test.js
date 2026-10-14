@@ -44,7 +44,7 @@ const pose = (set = {}) => {
 const lengths = set => { const { m } = pose(set); return new Map(Muscles.layout(bound, m).map((p, i) => [bound[i].name, p.length])); };
 
 test('muscle data: every muscle sits on existing bones, has an anatomical name and app groups, both sides', () => {
-  assert.equal(md.muscles.length, 468);   /* 4.32.0: +6 — поясничный и подвздошные пучки широчайшей (lat_anatomy.js) */
+  assert.equal(md.muscles.length, 472);   /* 4.32.0: +6 — поясничный и подвздошные пучки широчайшей; 4.34.0: +4 — верхние зубцы наружной косой (anatomy.js) */
   for (const mu of md.muscles) {
     assert(md.parts[mu.part], `${mu.name}: part ${mu.part}`);
     for (const g of mu.group) assert(GROUPS.has(g), `${mu.name}: unknown group ${g}`);
@@ -106,13 +106,19 @@ test('after the transfer every limb muscle lengthens and shortens like in MyoSim
    поднимают — верхняя часть трапециевидной, поднимающая лопатку, ромбовидные; опускают — нижняя часть трапециевидной и
    малая грудная; протракция — передняя зубчатая и малая грудная; ретракция — средняя часть трапециевидной и ромбовидные;
    рука вверх (лопатка поворачивается суставной впадиной вверх) — верхняя и нижняя части трапециевидной и нижние зубцы
-   передней зубчатой укорачиваются, а ромбовидные, поднимающая лопатку и малая грудная (поворачивают вниз) удлиняются. */
+   передней зубчатой укорачиваются, а ромбовидные, поднимающая лопатку и малая грудная (поворачивают вниз) удлиняются.
+   Подъём лопатки у манекена идёт с поворотом суставной впадиной вверх (нижний угол уходит наружу на 2–2,6 см), поэтому
+   нижние пучки большой ромбовидной (с 4.34.0 — от T4–T5 к краю лопатки у нижнего угла; поворачивают вниз) в нём не
+   укорачиваются — при подъёме проверяются малая и верхние пучки большой, а ромбовидные в целом (tools/muscles/README.md). */
 test('shoulder-blade muscles from DAS3 shorten in the movements they produce', () => {
   const base = lengths(), d = set => { const l = lengths(set); return n => l.get(n) - base.get(n); };
   const all = re => [...base.keys()].filter(n => re.test(n) && n.endsWith('_r'));
   const upper = /^(trap_clav_\d|trap_scap_[1-5])_r$/, middle = /^trap_scap_[6-8]_r$/, lower = /^trap_scap(_9|10|11)_r$/;
+  const rhomb = all(/^rhomboid/), up = d({ 'R.girdle': [25, 0] }), sum = rhomb.reduce((s, n) => s + up(n), 0);
+  assert.equal(rhomb.length, 5);
+  assert(sum < -2, `elevation: rhomboids as a whole should shorten, change by ${sum.toFixed(2)} cm`);
   const cases = [
-    ['elevation', { 'R.girdle': [25, 0] }, [upper, /^lev_scap/, /^rhomboid/], [lower, /^pect_min/]],
+    ['elevation', { 'R.girdle': [25, 0] }, [upper, /^lev_scap/, /^rhomboid_[1-3]_r$/], [lower, /^pect_min/]],
     ['depression', { 'R.girdle': [-10, 0] }, [lower, /^pect_min/], [upper, /^lev_scap/]],
     ['protraction', { 'R.girdle': [0, 25] }, [/^serr_ant/, /^pect_min/], [middle, /^rhomboid/]],
     ['retraction', { 'R.girdle': [0, -20] }, [middle, /^rhomboid/], [/^serr_ant/, /^pect_min/]],
