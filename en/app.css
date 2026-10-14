@@ -528,6 +528,15 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .b-list li { grid-template-columns:86px minmax(0, 1fr) auto; }
 @media (max-width:640px) { .b-head { grid-template-columns:1fr; } .b-form .b-date { grid-column:span 2; } }
 .eq-mat { fill:var(--pad); opacity:.28; }
+/* звук в конце отдыха (12b-rest-alarm.js): выключенный — приглушён */
+[data-rest-sound] { min-width:44px; }
+[data-rest-sound][aria-pressed="false"] { opacity:.55; }
+/* порядок упражнений в плане: ↑ ↓ перед «Заменить» */
+.c-act .c-act-r { margin-left:auto; display:inline-flex; align-items:center; gap:6px; }
+.c-act .c-act-r [data-swap] { margin-left:0; }
+.c-move { display:inline-flex; gap:4px; }
+.c-move button { min-width:40px; min-height:40px; padding:0 10px; font-size:17px; justify-content:center; }
+.c-move button[disabled] { opacity:.35; cursor:default; }
 
 /* Демонстрации 2.0 */
 .top .atlas-button{margin-left:auto;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 13px;font-size:13px;font-weight:600;min-height:42px}
