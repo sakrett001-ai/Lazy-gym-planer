@@ -153,11 +153,14 @@ function kickLayout({ lean, tower, footR, root, kneeR }) {
 const GK_TOWER = { type: 'g3Tower', id: 'col', h: 20, at: [4, 0, 96], yaw: 180 };
 const KB_TOWER = { type: 'g3Tower', id: 'col', h: 20, at: [4, 0, 88], yaw: 180 };
 /* ---------- Сведение ноги на нижнем блоке: колонна слева (+X), блок у пола; работает левая нога (ближняя к колонне),
-   левая рука держится за ручку на стойке, стоя на правой ноге. Ручки стоек — в 17 см позади колеса блока
-   (колесо на поворотном кронштейне каретки), поэтому колонна стоит так, чтобы рука доставала ручку чуть согнутой
-   в локте, а колесо было сбоку от голеностопа: трос в начале — около 12 см от карабина до колеса. ---------- */
-const AD_TOWER = { type: 'g3Tower', id: 'col', h: 20, at: [88, 0, -6], yaw: -90 };
-const AD_FOOT = [-3, 0, 6];
+   стоя на правой ноге, левая рука на ручке стойки. Ручки стоек — в 17 см позади колеса блока (колесо на поворотном
+   кронштейне каретки) и в 27 см от него вперёд или назад, поэтому при прямом корпусе и руке на ручке голеностоп
+   оказывается в 20–25 см от колеса. Чтобы встать дальше от блока (трос натянут в отведении и тянет вбок, почти
+   горизонтально у пола), человек, как в зале, наклоняется к колонне: опорная нога прямая и наклонена на AD_LEAN°
+   вокруг стопы, таз — на AD_PELVIS°, корпус догоняет боковым сгибанием; держится почти прямой рукой, рука принимает
+   часть веса. Колонна ставится по досягаемости руки (локоть AD_ELBOW°), блок — чуть позади голеностопа. ---------- */
+const AD_FOOT = [-12, 0, 5];
+const AD_LEAN = 7, AD_PELVIS = 4, AD_ELBOW = 8, AD_HANDLE_Z = 18;
 /* нога: отведение/приведение abd (в плоскости таза, наружу +), сгибание flex, сгибание колена knee — голеностоп по ним */
 function adductLeg(C, q, s, { abd, flex, knee, dorsi }) {
   const { V, M } = C, f = C.fk(q), P = C.axes(q, 'pelvis'), hip = f.P['hip' + s], g = M.SIGN[s];
@@ -169,23 +172,24 @@ function adductLeg(C, q, s, { abd, flex, knee, dorsi }) {
   return q;
 }
 const AD = once(() => {
-  const C = ctx([AD_TOWER]), { V } = C, q = C.base(), hike = 2 * C.D2R;
-  /* таз чуть приподнят слева (опорная правая нога в лёгком приведении — средняя ягодичная держит таз), корпус над тазом
-     слегка наклонён к колонне */
-  C.root(q, [-3, 88.9, 0], V.unit([-Math.sin(hike), Math.cos(hike), 0]), [0, 0, 1]);
-  q.lumbar = [-2, -6, 0]; q.thoracic = [0, -4, 0]; q.neck = [0, 6, 0];
-  /* опорная нога почти прямая (колено 4°): высота таза — по длине ноги до голеностопа над опорой */
-  const opts = { forward: V.unit([-.12, 0, 1]) }, A = C.M.footFrame(AD_FOOT, 0, opts).o, k = 4 * C.D2R;
-  const Leff = Math.sqrt(C.M.B.th ** 2 + C.M.B.sk ** 2 + 2 * C.M.B.th * C.M.B.sk * Math.cos(k));
-  const put = qq => {
-    const h = C.fk(qq).P.hipR, dx = h[0] - A[0], dz = h[2] - A[2];
-    qq.root.p[1] += A[1] + Math.sqrt(Leff ** 2 - dx * dx - dz * dz) - h[1];
-    C.foot(qq, 'R', AD_FOOT, 0, V.unit([-.15, 0, 1]), opts);
-  };
-  /* центр масс над опорной стопой, чуть ближе к колонне: рука на стойке страхует */
-  C.balanceOver(q, [AD_FOOT[0] + 3, 0, AD_FOOT[2] - 6], { resolve: put });
-  return { q };
+  const C = ctx([]), { V, M } = C, q = C.base(), a = AD_LEAN * C.D2R, p = AD_PELVIS * C.D2R;
+  /* таз наклонён меньше опорной ноги (опорное бедро в лёгком отведении — левый тазобедренный не опускается к полу),
+     корпус догоняет наклон боковым сгибанием */
+  C.root(q, [0, 88.9, 0], [Math.sin(p), Math.cos(p), 0], [0, 0, 1]);
+  q.lumbar = [-2, -4, 0]; q.thoracic = [0, -3, 0]; q.neck = [0, AD_LEAN + 3, 0];
+  /* опорная нога почти прямая (колено 4°) и наклонена к колонне: тазобедренный сустав — над голеностопом по линии наклона */
+  const opts = { forward: V.unit([-.12, 0, 1]) }, A = M.footFrame(AD_FOOT, 0, opts).o, k = 4 * C.D2R;
+  const Leff = Math.sqrt(M.B.th ** 2 + M.B.sk ** 2 + 2 * M.B.th * M.B.sk * Math.cos(k));
+  C.rootAtHip(q, 'R', V.add(A, [Math.sin(a), Math.cos(a), 0], Leff));
+  C.foot(q, 'R', AD_FOOT, 0, V.unit([-.15, 0, 1]), opts);
+  /* колонна: ручка на высоте плеча и на AD_HANDLE_Z см впереди него, на расстоянии почти прямой руки */
+  const gh = C.fk(q).P.ghL, el = AD_ELBOW * C.D2R, ua = M.B.ua, fa = M.B.fa + 8;
+  const reach = Math.sqrt(ua * ua + fa * fa + 2 * ua * fa * Math.cos(el)), hy = Math.round(gh[1]), hz = gh[2] + AD_HANDLE_Z;
+  const hx = gh[0] + Math.sqrt(reach * reach - (hy - gh[1]) ** 2 - AD_HANDLE_Z ** 2);
+  const tower = { type: 'g3Tower', id: 'col', h: 20, at: rp([hx + 10, 0, hz - 27]), yaw: -90 };
+  return { q, tower, handle: [hx, hy, hz] };
 });
+const AD_TOWER = () => AD().tower;
 /* ---------- Вращение плеча наружу на блоке и с эспандером: работает правая рука, блок или крепление ленты слева (+X)
    на высоте кисти. Плечо вдоль корпуса, отведено настолько, чтобы между локтем и боком лёг валик (полотенце Ø6,5 см,
    BIND.g3towelRoll), локоть согнут под 90°, хват нейтральный (большой палец вверх). Предплечье вращается вокруг оси
@@ -651,17 +655,17 @@ module.exports = {
 
   /* Сведение ноги на нижнем блоке: работает левая нога (манжета на голеностопе), колонна слева, левая рука на ручке стойки,
      опорная правая нога прямая. t=0 — нога отведена к блоку, колено мягкое, стопа над полом; t=1 — нога сведена через
-     среднюю линию и чуть за неё, проходит перед опорной стопой (бедро слегка согнуто). */
+     среднюю линию и чуть за неё, проходит перед опорной стопой. Тело наклонено к колонне, левый тазобедренный ниже
+     правого, поэтому под тазом нога проходит над полом за счёт сгибания бедра (до 25° к концу) и колена (не больше 15°). */
   cableadduct: {
     keys: [0, .2, .4, .6, .8, 1],
-    equipment: [AD_TOWER, cable(AD_TOWER, '', { id: 'cab', attach: 'ankle', foot: 'L', wrap: [0, -1, 0], rest: 20 })],
+    equipment: [AD_TOWER(), cable(AD_TOWER(), '', { id: 'cab', attach: 'ankle', foot: 'L', wrap: [0, -1, 0], rest: 30 })],
     contacts: [{ body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'col:grabL' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
-      const { V } = C, e = C.ease(t), q = C.M.clone(AD().q);
-      adductLeg(C, q, 'L', { abd: C.lerp(22, -11, e), flex: C.lerp(3, 19, e), knee: C.lerp(5, 10, e) + 12 * Math.sin(Math.PI * e), dorsi: C.lerp(0, 4, e) });
-      const gp = C.point('col', 'grabL');
-      C.grip(q, 'L', [gp[0], 136, gp[2]], [0, 1, 0], V.unit([.1, -1, -.5]));
+      const { V } = C, e = C.ease(t), L = AD(), q = C.M.clone(L.q);
+      adductLeg(C, q, 'L', { abd: C.lerp(24, -11, e), flex: 3 + 25 * Math.sqrt(e), knee: C.lerp(5, 10, e) + 8 * Math.sin(Math.PI * e), dorsi: C.lerp(0, 4, e) });
+      C.grip(q, 'L', L.handle, [0, 1, 0], V.unit([.1, -1, -.5]));
       return q;
     }
   },
