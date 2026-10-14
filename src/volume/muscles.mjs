@@ -43,10 +43,43 @@ export function muscleTint(mu,level,look,color){
 /* последний расчёт вершин (на все сцены): данные мышц, матрицы костей кадра и вершины */
 const LAST={muscles:null,only:null,frames:null,pos:null,nor:null};
 const sameFrames=(a,b)=>{if(!a||!b||a.length!==b.length)return false;for(let i=0;i<a.length;i++)if(a[i]!==b[i])return false;return true;};
+const FLOOR=186;
+/* Пласты (межрёберные мышцы, данные формата 3 — sheets; Muscles.sheetMesh): жёсткие, каждый — в рамке своей кости.
+   Сетки всех пластов одной кости сливаются в одну (один вызов отрисовки; у межрёберных — грудная клетка, 44 пласта,
+   ≈ 4 тыс. вершин) и строятся один раз; в кадре меняется только матрица кости — как у слоя костей (skeleton.mjs).
+   В группы приложения межрёберные не входят — цвет покоя, как у мышц шеи. */
+function sheetGroups(md,skel,only){
+ const M=globalThis.Muscles,by=new Map();
+ (md.sheets||[]).forEach((sh,i)=>{
+  if(only&&!only.test(sh.name))return;
+  const bi=skel.bones.findIndex(b=>b.name===sh.bone[0]&&(b.side||'')===(sh.bone[1]||''));if(bi<0)throw Error('muscles: no bone '+sh.bone.join(' '));
+  if(!by.has(bi))by.set(bi,[]);by.get(bi).push([i,M.sheetMesh(sh)]);
+ });
+ return [...by].map(([bone,list])=>{
+  const nv=list.reduce((s,[,m])=>s+m.n,0),pos=new Float32Array(nv*3),nor=new Float32Array(nv*3),idx=[],owner=[];let v0=0;
+  for(const[i,m]of list){pos.set(m.pos,v0*3);nor.set(m.nor,v0*3);for(const k of m.idx)idx.push(k+v0);for(let f=0;f<m.idx.length/3;f++)owner.push(i);v0+=m.n;}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('normal',new THREE.BufferAttribute(nor,3));
+  g.setIndex(nv>65535?new THREE.Uint32BufferAttribute(idx,1):new THREE.Uint16BufferAttribute(idx,1));
+  return{bone,geo:g,owner};
+ });
+}
 export function createMuscleLayer(parent){
  const group=new THREE.Group();group.name='muscles';group.visible=false;parent.add(group);
  /* геометрия — при первом включении: сцена строится и для миниатюр атласа, где мышц нет */
  let mesh=null,geo=null,material=null,bound=null,key=null,tint=null,start=null,owner=null,SIDES=0;
+ let sheets=[],sheetKey=null,sheetMaterial=null;
+ function buildSheets(anatomy,only){
+  for(const s of sheets){group.remove(s.mesh);s.geo.dispose();}
+  if(!sheetMaterial)sheetMaterial=new THREE.MeshStandardMaterial({color:MUSCLE_REST,roughness:.55,metalness:0});
+  sheets=sheetGroups(anatomy.muscles,anatomy.skeleton,only).map(s=>{
+   const m=new THREE.Mesh(s.geo,sheetMaterial);m.name='muscle-sheets';m.matrixAutoUpdate=false;m.frustumCulled=false;m.castShadow=false;m.receiveShadow=false;group.add(m);return{...s,mesh:m};
+  });
+ }
+ /* матрица кости кадра (каталог, см, Y вниз) → сцена (м, Y вверх), как у слоя костей */
+ function placeSheets(frames){
+  for(const s of sheets){const o=s.bone*12,a=k=>frames[o+k];
+   s.mesh.matrix.set(a(0)/100,a(1)/100,a(2)/100,a(3)/100, -a(4)/100,-a(5)/100,-a(6)/100,(FLOOR-a(7))/100, a(8)/100,a(9)/100,a(10)/100,a(11)/100, 0,0,0,1);s.mesh.matrixWorldNeedsUpdate=true;}
+ }
  const c=new THREE.Color();
  function build(){
   const M=globalThis.Muscles;SIDES=M.SIDES;
@@ -80,6 +113,10 @@ export function createMuscleLayer(parent){
   if(key!==k||bound?.skel!==anatomy.skeleton){bound=M.bind(k,anatomy.skeleton);bound.skel=anatomy.skeleton;key=k;build();}
   paint(anatomy.level,look,color);
   const pos=geo.attributes.position.array,nor=geo.attributes.normal.array,only=anatomy.only||null;
+  /* пласты: сетка — при смене данных или фильтра, в кадре — только матрицы костей */
+  const sk=[k,anatomy.skeleton,only?only.source:''];
+  if(!sheetKey||sheetKey.some((v,i)=>v!==sk[i])){buildSheets(anatomy,only);sheetKey=sk;}
+  placeSheets(frames);
   /* второй вид разбора показывает ту же позу: вершины берутся из прошлого расчёта, если кости кадра те же */
   if(LAST.muscles===k&&!only&&!LAST.only&&LAST.pos?.length===pos.length&&sameFrames(LAST.frames,frames)){pos.set(LAST.pos);nor.set(LAST.nor);finish();return;}
   const paths=M.layoutDrawn(bound,frames,ARC_STEP);
@@ -96,11 +133,19 @@ export function createMuscleLayer(parent){
  }
  function finish(){geo.attributes.position.needsUpdate=true;geo.attributes.normal.needsUpdate=true;geo.boundingSphere=null;geo.boundingBox=null;group.visible=true;}
  function hide(){group.visible=false;}
- function dispose(){if(mesh)group.remove(mesh);geo?.dispose();material?.dispose();mesh=geo=material=null;bound=null;key=null;}
+ function dispose(){if(mesh)group.remove(mesh);geo?.dispose();material?.dispose();mesh=geo=material=null;bound=null;key=null;
+  for(const s of sheets){group.remove(s.mesh);s.geo.dispose();}sheets=[];sheetKey=null;sheetMaterial?.dispose();sheetMaterial=null;}
  /* мышца под лучом (просмотрщик для ревью): номер в данных мышц или −1 */
  function pick(raycaster){
   if(!group.visible||!mesh)return -1;geo.computeBoundingSphere();const hit=raycaster.intersectObject(mesh,false)[0];
   return hit?owner[hit.faceIndex]:-1;
  }
- return{group,update,hide,dispose,pick,get mesh(){return mesh;}};
+ /* мышца или пласт под лучом — ближайшее: {muscle: номер в muscles} или {sheet: номер в sheets}, иначе null */
+ function pickAny(raycaster){
+  if(!group.visible||!mesh)return null;geo.computeBoundingSphere();let best=null;
+  const h=raycaster.intersectObject(mesh,false)[0];if(h)best={muscle:owner[h.faceIndex],distance:h.distance};
+  for(const s of sheets){s.geo.boundingSphere||s.geo.computeBoundingSphere();const q=raycaster.intersectObject(s.mesh,false)[0];if(q&&(!best||q.distance<best.distance))best={sheet:s.owner[q.faceIndex],distance:q.distance};}
+  return best;
+ }
+ return{group,update,hide,dispose,pick,pickAny,get mesh(){return mesh;},get sheets(){return sheets.map(s=>s.mesh);}};
 }
