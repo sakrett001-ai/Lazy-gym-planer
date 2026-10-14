@@ -7005,7 +7005,7 @@ const Muscles = (() => {
   }
 
   /* ---------- данные ----------
-     src/data/muscles.bin (tools/muscles/pack.js): gzip от JSON. Грузится при первом включении режима «Анатомия мышц»;
+     src/data/muscles.bin (tools/muscles/pack.js): gzip от JSON. Грузится заранее, в простое после первого экрана, или при первом открытии вида «Анатомия»;
      в офлайн-файле встроен (window.MUSCLES_BIN, base64). */
   let data = null, pending = null;
   const decode = u8 => JSON.parse(new TextDecoder().decode(u8));
@@ -7560,9 +7560,10 @@ function mannequinMuscleSurfaces(R,profile,{coarse=false}={}){
 function catalogFigureAnim(anim){
  return {...anim,noGround:anim.catalogBasis==='mannequin'?false:anim.noGround,rig3d:anim.catalogRig,muscleProfile:anim.catalogProfile,camera:'above',cameras:anim.catalogCameras,sample:t=>({spatialT:t}),catalogRig:null};
 }
-function catalogVolumeData(anim,t,index,has,coarse=false){
+/* lean — для вида «Анатомия»/«Скелет»: области манекена скрыты, их поверхности не нужны */
+function catalogVolumeData(anim,t,index,has,coarse=false,lean=false){
  const R=anim.catalogRig(t),state=muscleFrame(anim,t,index),profile=motionProfile(anim);
- if(R.frames)return{exerciseId:anim.catalogId,pose:R,body:Mannequin.bodyData(R),stress:jointStressPoints(anim,R,t,index),surfaces:mannequinMuscleSurfaces(R,profile,{coarse}),values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>GymEquipment.visible(s,has)),torsoRings:[],limbProfiles:{}};
+ if(R.frames)return{exerciseId:anim.catalogId,pose:R,body:Mannequin.bodyData(R),stress:jointStressPoints(anim,R,t,index),surfaces:lean?[]:mannequinMuscleSurfaces(R,profile,{coarse}),values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>GymEquipment.visible(s,has)),torsoRings:[],limbProfiles:{}};
  return{exerciseId:anim.catalogId,pose:R,surfaces:catalogMuscleSurfaces(R,profile,{coarse}),values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>!s.optional||!has||has(s.optional)),torsoRings:CATALOG_RINGS,limbProfiles:CATALOG_LIMB_PROFILES};
 }
 
@@ -7592,7 +7593,7 @@ function catalogVectorGroup(svg,anim,camera){
 }
 function createMotionFigure(anim,opts){
  if(!window.GymVolume||!anim.catalogRig)return buildFigure(anim,opts);
- let f=window.GymVolume.create({...opts,data:(t,index,coarse)=>catalogVolumeData(anim,t,index,opts.has,coarse),color:muscleColor,joints:motionPrefs.joints,stress:opts.stress??motionPrefs.stress,
+ let f=window.GymVolume.create({...opts,data:(t,index,coarse,lean)=>catalogVolumeData(anim,t,index,opts.has,coarse,lean),color:muscleColor,joints:motionPrefs.joints,stress:opts.stress??motionPrefs.stress,
   trace:Array.from({length:41},(_,i)=>anim.catalogRig(i/40).gripL),vectors:catalogVectors(anim),vectorFrame:catalogVectorFrame});
  if(!f){
   f=buildFigure(anim,opts);const svg=f.svg,root=document.createElement('div');root.className='volume-figure';root.setAttribute('role','img');root.setAttribute('aria-label',opts.label);root.dataset.renderer='svg';root.dataset.camera=opts.camera||'above';root.append(svg);f.svg=root;
@@ -9620,13 +9621,16 @@ document.addEventListener('click', e => {
 /* ---------- Проигрыватель движений: карточки и увеличенный разбор ---------- */
 let figs = [], rafId = 0, io = null;
 const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-const motionPrefs = (() => {try {return Object.assign({speed:.5,joints:true,trace:false,vectors:false,muscles:true,skeleton:false,anatomy:false},JSON.parse(localStorage.getItem('podhod.motion.v2') || '{}'));}catch(e){return {speed:.5,joints:true,trace:false,vectors:false,muscles:true,skeleton:false,anatomy:false};}})();
+const motionPrefs = (() => {try {return Object.assign({speed:.5,joints:true,trace:false,vectors:false,muscles:true,view:'anatomy'},JSON.parse(localStorage.getItem('podhod.motion.v2') || '{}'));}catch(e){return {speed:.5,joints:true,trace:false,vectors:false,muscles:true,view:'anatomy'};}})();
 /* с 4.29.0 векторы движения по умолчанию выключены (мешали разглядывать технику); сохранённое «включено» прежних версий
    было значением по умолчанию — выключаем один раз, дальше выбор человека запоминается как раньше */
 if (motionPrefs.vectorsV !== 2) { motionPrefs.vectors = false; motionPrefs.vectorsV = 2; try { localStorage.setItem('podhod.motion.v2', JSON.stringify(motionPrefs)); } catch (e) {} }
 if (![.25,.5,1].includes(+motionPrefs.speed)) motionPrefs.speed = .5;
 if(typeof motionPrefs.muscles!=='boolean')motionPrefs.muscles=true;
 if(typeof motionPrefs.stress!=='boolean')motionPrefs.stress=true;
+/* с 4.30.0 основной вид разбора — «Анатомия» (кости и мышцы в почти невидимом силуэте); прежние флажки «Скелет» и
+   «Анатомия мышц» заменены выбором вида — один раз ставим анатомию, дальше выбор человека запоминается */
+if (motionPrefs.viewV !== 1) { motionPrefs.view = 'anatomy'; motionPrefs.viewV = 1; delete motionPrefs.skeleton; delete motionPrefs.anatomy; try { localStorage.setItem('podhod.motion.v2', JSON.stringify(motionPrefs)); } catch (e) {} }
 let detailMotion = null, detailReturn = null, lastMotionNow = null;
 function saveMotionPrefs() {try {localStorage.setItem('podhod.motion.v2',JSON.stringify(motionPrefs));}catch(e){}}
 function motionDurations(it) {
@@ -9737,7 +9741,7 @@ function changeMusclePreference(show){
   for(const f of [F.f,F.extra].filter(Boolean))f.setMuscles?.(motionPrefs.muscles);
   const note=F.btn?.closest('.motion-tile').querySelector('.muscle-tile-note');if(note)note.hidden=!motionPrefs.muscles;
  }
- if(detailMotion){configureMusclePanel('mv',detailMotion.it);paintMotion(detailMotion,true);}
+ if(detailMotion){configureMusclePanel('mv',detailMotion.it);paintMotion(detailMotion,true);const note=$('#mv-figure-note'),text=figureNote(figureView(),detailMotion);if(!note.hidden&&!$('#mv-figure').hasAttribute('aria-busy')&&text)note.textContent=text;}
  if(workout?.motion){configureMusclePanel('wv',workout.motion.it);paintWorkoutMotion();}
 }
 function scheduleMotionLoop() {
@@ -9745,7 +9749,10 @@ function scheduleMotionLoop() {
   const loop = now => {
     const dt = lastMotionNow===null ? 0 : Math.min(80,now-lastMotionNow); lastMotionNow=now;
     if (!document.hidden) {
-      if (detailMotion) {if (!detailMotion.paused) {detailMotion.clock+=dt*Number(motionPrefs.speed);paintMotion(detailMotion,true);}}
+      /* кости и мышцы считаются заново в каждом кадре (≈8 мс на компьютере, на телефоне втрое дольше): «Анатомия» и
+         «Скелет» рисуются через кадр, как карточки, — часы идут каждый кадр, движение не замедляется */
+      if (detailMotion) {if (!detailMotion.paused) {detailMotion.clock+=dt*Number(motionPrefs.speed);detailMotion.since=(detailMotion.since||0)+dt;
+        if(figureView()==='mannequin'||detailMotion.since>=CARD_FRAME_MS){detailMotion.since=0;paintMotion(detailMotion,true);}}}
       else if(gallery.on){/* витрина атласа закрывает план: карточки за ней не анимируются */}
       else if(workout && $('#workout-view').open){const F=workout.motion;if(F && !F.paused && !$('#wv-active').hidden){F.clock+=dt;paintWorkoutMotion();}}
       else for (const F of figs) if (F.f && F.vis && !F.paused && F.active!==false) {
@@ -9862,38 +9869,42 @@ function selectMotion(it, clock=0) {
   $('#mv-sources').innerHTML=src.length?`<p class="mv-muscle-label">More on technique</p>${src.join('')}`:'';
   mountDetailCameras();
 }
-/* Режим «Скелет» в подробном разборе: кости внутри полупрозрачной кожи. Данные костей (≈220 КБ) грузятся при первом
-   включении и дальше переиспользуются; без объёмной графики переключатель недоступен. */
-const SKELETON_CREDIT='Bones are based on the open MyoSim models (Apache 2.0): legs and pelvis — Rajagopal et al., 2016; arm — Holzbaur et al., 2005. While the skeleton is on, the phase muscle colours are hidden.';
-function applySkeleton(F=detailMotion){
-  const box=$('#mv-skeleton'),note=$('#mv-skeleton-note');if(!box)return;
-  const list=F?[F.f,F.extra].filter(Boolean):[],able=list.some(f=>typeof f.setSkeleton==='function');
-  box.disabled=!able;box.closest('label').title=able?'':'Requires 3D graphics (WebGL)';box.checked=able&&!!motionPrefs.skeleton;
-  const say=text=>{note.textContent=text;note.hidden=!text;};
-  if(!box.checked){for(const f of list)f.setSkeleton?.(null);say('');return;}
-  if(Skeleton.data){for(const f of list)f.setSkeleton(Skeleton.data);say(SKELETON_CREDIT);return;}
-  box.setAttribute('aria-busy','true');say('Loading bones…');
-  Skeleton.load().then(d=>{
-    box.removeAttribute('aria-busy');if(detailMotion!==F||!motionPrefs.skeleton)return;
-    for(const f of list)f.setSkeleton?.(d);say(SKELETON_CREDIT);
-  },()=>{box.removeAttribute('aria-busy');box.checked=false;motionPrefs.skeleton=false;saveMotionPrefs();say('Could not load the bones. Check your connection and turn it on again.');});
-}
-/* Режим «Анатомия мышц»: мышцы объёмом (толщина — по объёму на МРТ) на костях внутри полупрозрачной кожи, мышцы упражнения
-   выделены цветом. Данные мышц (≈38 КБ) и костей грузятся при первом включении; кости при этом показываются только вместе со «Скелетом». */
-const ANATOMY_CREDIT='Muscles from open models: paths — MyoSim (Apache 2.0; legs — Rajagopal et al., 2016; arm — Holzbaur et al., 2005; lower back — MyoBack, Walia et al., 2025) and DAS3 (Apache 2.0; shoulder-blade muscles — Chadwick et al., 2014); volume — from MRI of 49 men (Riem et al., 2026), scaled to the figure\'s height and weight. A shortening muscle gets thicker: its volume stays the same. The exercise\'s muscles are coloured: primary — brighter, secondary — paler.';
+/* Вид фигуры в подробном разборе (с 4.30.0 по умолчанию — «Анатомия»):
+   · «Анатомия» — кости и мышцы объёмом (толщина — по объёму на МРТ) внутри почти невидимого силуэта кожи; цвет мышц —
+     как у областей манекена: с «Мышцами по фазам» — участие в текущей фазе, без них — основные и вспомогательные;
+   · «Скелет» — только кости в том же силуэте;
+   · «Манекен» — прежний манекен с подсветкой мышечных областей.
+   Кости (≈220 КБ) и мышцы (≈38 КБ) грузятся один раз — заранее, в простое после первого экрана (setupMotionViewer), или
+   при первом открытии разбора; пока они грузятся, показан манекен. Без объёмной графики доступен только манекен. */
+const FIGURE_VIEWS=['anatomy','skeleton','mannequin'];
+const figureView=()=>FIGURE_VIEWS.includes(motionPrefs.view)?motionPrefs.view:'anatomy';
 function anatomyLevel(ex){const level={};ex.pri.forEach(m=>level[m]=1);ex.sec.forEach(m=>{if(!level[m])level[m]=.38;});return level;}
-function applyAnatomy(F=detailMotion){
-  const box=$('#mv-anatomy'),note=$('#mv-anatomy-note');if(!box)return;
-  const list=F?[F.f,F.extra].filter(Boolean):[],able=list.some(f=>typeof f.setAnatomy==='function');
-  box.disabled=!able;box.closest('label').title=able?'':'Requires 3D graphics (WebGL)';box.checked=able&&!!motionPrefs.anatomy;
+function figureNote(view,F){
+  if(view==='skeleton')return 'Bones follow the open MyoSim models; sources are under “About the demonstrations”. Muscles are hidden in this view.';
+  if(view!=='anatomy')return '';
+  return 'Bones and muscles follow open models, muscle thickness follows MRI; sources are under “About the demonstrations”. '+(motionPrefs.muscles&&F&&motionProfile(F.it.ex.anim)
+    ?'A muscle’s colour shows how much it works in this phase: the more orange, the stronger.':'Coloured muscles work in the exercise: primary ones brighter, assisting ones paler.');
+}
+function applyFigureView(F=detailMotion){
+  const group=$('#mv-figure'),note=$('#mv-figure-note');if(!group)return;
+  const list=F?[F.f,F.extra].filter(Boolean):[],able=list.length>0&&list.every(f=>typeof f.setLayers==='function');
+  const view=able?figureView():'mannequin';
+  for(const b of group.querySelectorAll('[data-mv-figure]')){const off=!able&&b.dataset.mvFigure!=='mannequin';b.disabled=off;b.title=off?'Requires 3D graphics (WebGL)':'';b.setAttribute('aria-pressed',String(b.dataset.mvFigure===view));}
   const say=text=>{note.textContent=text;note.hidden=!text;};
-  if(!box.checked){for(const f of list)f.setAnatomy?.(null);say('');return;}
-  const put=()=>{const level=anatomyLevel(F.it.ex);for(const f of list)f.setAnatomy?.({skeleton:Skeleton.data,muscles:Muscles.data,level});say(ANATOMY_CREDIT);};
-  if(Skeleton.data&&Muscles.data){put();return;}
-  box.setAttribute('aria-busy','true');say('Loading muscles…');
-  Promise.all([Skeleton.load(),Muscles.load()]).then(()=>{
-    box.removeAttribute('aria-busy');if(detailMotion!==F||!motionPrefs.anatomy)return;put();
-  },()=>{box.removeAttribute('aria-busy');box.checked=false;motionPrefs.anatomy=false;saveMotionPrefs();say('Could not load the muscles. Check your connection and turn it on again.');});
+  if(view==='mannequin'){for(const f of list)f.setLayers?.(null,null);say('');return;}
+  const put=()=>{for(const f of list)f.setLayers(Skeleton.data,view==='anatomy'?{skeleton:Skeleton.data,muscles:Muscles.data,level:anatomyLevel(F.it.ex)}:null);say(figureNote(view,F));};
+  const need=view==='anatomy'?[Skeleton,Muscles]:[Skeleton];
+  if(need.every(x=>x.data)){put();return;}
+  for(const f of list)f.setLayers(null,null);
+  group.setAttribute('aria-busy','true');say(view==='anatomy'?'Loading bones and muscles…':'Loading bones…');
+  Promise.all(need.map(x=>x.load())).then(()=>{
+    group.removeAttribute('aria-busy');if(detailMotion!==F||figureView()!==view)return;put();
+  },()=>{
+    /* выбор не сбрасывается: при следующем открытии разбора загрузка повторится */
+    group.removeAttribute('aria-busy');if(detailMotion!==F||figureView()!==view)return;
+    for(const b of group.querySelectorAll('[data-mv-figure]'))b.setAttribute('aria-pressed',String(b.dataset.mvFigure==='mannequin'));
+    say('Could not load the bones and muscles, so the mannequin is shown. Check the connection and choose the view again.');
+  });
 }
 function openMotion(idx) {
   const F=figs.find(f=>+f.btn.dataset.fig===Number(idx));
@@ -9923,6 +9934,7 @@ function setupMotionViewer() {
     if(t.id==='motion-atlas'){openGallery();return;}
     if(t.id==='mv-close'){closeMotion();return;}
     if(!detailMotion)return;
+    if(t.dataset.mvFigure){if(t.dataset.mvFigure!==figureView()||t.getAttribute('aria-pressed')!=='true'){motionPrefs.view=t.dataset.mvFigure;saveMotionPrefs();applyFigureView();}return;}
     if(t.id==='mv-play'){detailMotion.paused=!detailMotion.paused;paintMotion(detailMotion,true);}
     if(t.dataset.mvStep){const m=motionFrame(detailMotion);detailMotion.paused=true;detailMotion.clock=Math.max(0,Math.min(m.total-1,(m.progress+Number(t.dataset.mvStep))*m.total));paintMotion(detailMotion,true);}
     if(t.dataset.mvPose){const d=detailMotion.durations;detailMotion.paused=true;detailMotion.clock=({start:0,middle:d[0]*.5,end:d[0]+d[1]*.5,return:d[0]+d[1]+d[2]*.5})[t.dataset.mvPose];paintMotion(detailMotion,true);}
@@ -9936,8 +9948,6 @@ function setupMotionViewer() {
   $('#mv-vectors').addEventListener('change',e=>{motionPrefs.vectors=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean))f.setVectors(e.target.checked);saveMotionPrefs();});
   $('#mv-trace').addEventListener('change',e=>{motionPrefs.trace=e.target.checked;if(detailMotion)for(const f of [detailMotion.f,detailMotion.extra].filter(Boolean))f.setTrace(e.target.checked);saveMotionPrefs();});
   $('#mv-muscle-toggle').addEventListener('change',e=>changeMusclePreference(e.target.checked));
-  $('#mv-skeleton').addEventListener('change',e=>{motionPrefs.skeleton=e.target.checked;saveMotionPrefs();applySkeleton();});
-  $('#mv-anatomy').addEventListener('change',e=>{motionPrefs.anatomy=e.target.checked;saveMotionPrefs();applyAnatomy();});
   $('#wv-muscle-toggle').addEventListener('change',e=>changeMusclePreference(e.target.checked));
   for(const prefix of ['mv','wv'])$('#'+prefix+'-stress-toggle').addEventListener('change',e=>changeStressPreference(e.target.checked));
   for(const prefix of ['mv','wv'])$('#'+prefix+'-region').addEventListener('change',e=>selectMuscleRegion(prefix,e.target.value));
@@ -9949,6 +9959,8 @@ function setupMotionViewer() {
     if(detailMotion&&!gallery.on)mountDetailCameras();if(workout?.motion&&$('#workout-view').open)mountWorkoutCameras();
     /* сетка головы (≈55 мс на компьютере) одна на все упражнения: готовится в простое, а не при первом открытии разбора */
     const idle=window.requestIdleCallback||(f=>setTimeout(f,2000));idle(()=>{try{Mannequin.headMesh();}catch(e){}},{timeout:6000});
+    /* кости и мышцы для вида «Анатомия» — тоже заранее: первое открытие разбора сразу показывает анатомию */
+    if(figureView()!=='mannequin')idle(()=>{Skeleton.load().catch(()=>{});if(figureView()==='anatomy')Muscles.load().catch(()=>{});},{timeout:8000});
   });
   $('#motion-view').addEventListener('keydown',e=>{if(e.code==='Space'&&!['INPUT','SELECT','BUTTON','TEXTAREA'].includes(e.target.tagName)){e.preventDefault();if(detailMotion){detailMotion.paused=!detailMotion.paused;paintMotion(detailMotion,true);}}});
 }
@@ -11349,7 +11361,7 @@ function mountDetailCameras(){
   const other=pairCamera(a,key);F.extra=make(other);$('#mv-second-stage').replaceChildren(F.extra.svg);
   $('#mv-second-label').textContent=CAMERA3[other].label;$('#mv-second-hint').textContent=a.cameraHints?.[other]||'';
  }else $('#mv-second-stage').replaceChildren();
- configureMusclePanel('mv',F.it);configureStressPanel('mv',F);applySkeleton(F);applyAnatomy(F);paintMotion(F,true);
+ configureMusclePanel('mv',F.it);configureStressPanel('mv',F);applyFigureView(F);paintMotion(F,true);
 }
 /* второй ракурс пары: из профиля мышц упражнения, иначе первый другой */
 function pairCamera(a,key){const cameras=a.catalogCameras||a.cameras||[],preferred=motionProfile(a)?.pair;return preferred!==key&&cameras.includes(preferred)?preferred:cameras.find(c=>c!==key);}
@@ -11847,4 +11859,4 @@ logInit();
 plural = (n, a, b, c) => n === 1 ? a : c;
 DEC = '.';
 
-window.PODHOD_VERSION='4.29.0';window.PODHOD_BUILD='4.29.0-08941e7f443b';window.PODHOD_LANG='en';
+window.PODHOD_VERSION='4.30.0';window.PODHOD_BUILD='4.30.0-2ee9325b7884';window.PODHOD_LANG='en';
