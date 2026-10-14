@@ -175,7 +175,7 @@ function audit(ref) {
   const known = ref.known || {}, failing = new Set(results.filter(r => !r.ok).map(r => r.id));
   return { results, orphan, unknown: results.filter(r => !r.ok && !known[r.id]), fixed: Object.keys(known).filter(k => !failing.has(k)), known };
 }
-/* ---------- пласты: межрёберные мышцы (4.39.0, intercostals.js) ----------
+/* ---------- пласты: межрёберные мышцы (4.40.0, intercostals.js) ----------
    Пласт промежутка k — между рёбрами k и k+1 своей стороны. Проверки (эталон — раздел sheets в fixtures/attachments.json),
    всё в рамке грудной клетки (локальные см: X — влево, Y — вверх, Z — вперёд; пласты в данных — в ней же):
    · border — край пласта лежит на своём ребре и на своём крае ребра: у каждой точки верхнего края (a) ближайшая часть

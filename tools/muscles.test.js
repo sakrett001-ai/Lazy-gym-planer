@@ -48,7 +48,7 @@ test('muscle data: every muscle sits on existing bones, has an anatomical name a
                                               4.35.0: +42 — мышцы шеи, остистая (anatomy.js), гребенчатая (gait2392_import.py);
                                               4.36.0: +4 — задняя часть дельтовидной веером (anatomy.js, раздел 5);
                                               4.37.0: +12 — большая грудная и подостная веером (раздел 6);
-                                              4.39.0: + межрёберные — не трубки, а 44 пласта (md.sheets, раздел 7), число мышц-трубок прежнее */
+                                              4.40.0: + межрёберные — не трубки, а 44 пласта (md.sheets, раздел 7), число мышц-трубок прежнее */
   for (const mu of md.muscles) {
     assert(md.parts[mu.part], `${mu.name}: part ${mu.part}`);
     for (const g of mu.group) assert(GROUPS.has(g), `${mu.name}: unknown group ${g}`);
@@ -284,7 +284,7 @@ test('muscle paths stay out of bones and under the skin in catalog poses', () =>
   }
 });
 
-/* ---------- межрёберные мышцы — пласты (4.39.0, tools/muscles/intercostals.js; данные формата 3 — sheets) ---------- */
+/* ---------- межрёберные мышцы — пласты (4.40.0, tools/muscles/intercostals.js; данные формата 3 — sheets) ---------- */
 const IC = require('./muscles/intercostals.js'), RCAGE = IC.ribcage(skel);
 const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 /* часть сетки грудной клетки у точки (рамка грудной клетки): номер ребра стороны s или 0 — грудина с хрящами */
@@ -294,7 +294,7 @@ const radial = p => Math.hypot(p[0], p[2] - RCAGE.zc);
 
 test('intercostal sheets: 11 spaces × 2 layers × 2 sides, anatomical names, no app group, closed mesh facing outward', () => {
   assert.equal(md.version, 3);
-  assert.equal(md.sheets.length, 44);   /* 4.39.0: + межрёберные — 11 промежутков × наружные и внутренние × 2 стороны */
+  assert.equal(md.sheets.length, 44);   /* 4.40.0: + межрёберные — 11 промежутков × наружные и внутренние × 2 стороны */
   assert.equal(md.parts.icext, 'Наружные межрёберные'); assert.equal(md.parts.icint, 'Внутренние межрёберные');
   const names = new Set(md.sheets.map(s => s.name));
   for (const s of ['r', 'l']) for (let k = 1; k <= 11; k++) for (const l of ['e', 'i']) assert(names.has(`IC${l}${k}_${s}`), `нет IC${l}${k}_${s}`);

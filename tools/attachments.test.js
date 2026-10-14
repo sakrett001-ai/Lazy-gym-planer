@@ -24,11 +24,11 @@ test('known discrepancies are explained, missing muscles are really missing', ()
   for (const [k, why] of Object.entries(ref.known)) assert(why.length > 40, 'нужно объяснение: ' + k);
   const parts = new Set([...A.bound.map(m => m.part), ...A.SHEETS.map(s => s.part)]);
   for (const k of Object.keys(ref.missing.list)) assert(!parts.has(k), k + ' уже есть в данных — уберите из missing');
-  /* межрёберные (4.39.0) — уже не в списке отсутствующих: их проверяет раздел sheets эталона */
+  /* межрёберные (4.40.0) — уже не в списке отсутствующих: их проверяет раздел sheets эталона */
   assert(!('intercostals' in ref.missing.list), 'межрёберные есть в данных — уберите из missing');
 });
 
-/* Межрёберные мышцы (4.39.0) — пласты: 11 промежутков, наружные и внутренние, с каждой стороны; все проверки эталона
+/* Межрёберные мышцы (4.40.0) — пласты: 11 промежутков, наружные и внутренние, с каждой стороны; все проверки эталона
    (края на своих рёбрах, концы у ориентиров, стороны) — в норме, в том числе в общем аудите выше */
 test('intercostal sheets: every space on both sides, edges on their own ribs, ends at the anatomical landmarks', () => {
   assert.equal(A.SHEETS.length, 44);

@@ -2,7 +2,7 @@
 /* Упаковка мышц для приложения: qa/muscles/muscles.json (build_muscles.py + das3_import.py) → src/data/muscles.bin.
    node tools/muscles/pack.js [вход.json] [выход.bin]
    Формат: gzip от JSON {version, source, parts:{ключ: название}, muscles:[{name, side, part, group:[…], el, v, t0, t1, l0, sk}],
-   sheets:[{name, side, part, group, bone, space, a, b, t}]}. Формат 3 (4.39.0) — с пластами sheets (межрёберные мышцы:
+   sheets:[{name, side, part, group, bone, space, a, b, t}]}. Формат 3 (4.40.0) — с пластами sheets (межрёберные мышцы:
    края наружной поверхности a, b в рамке кости bone и толщина t, см; сетку строит Muscles.sheetMesh); читатели формата 2
    поле sheets пропускают.
    el — как во входном файле (точки и огибающие тела в рамках костей скелета), координаты округлены до 0,1 мм;
@@ -96,7 +96,7 @@ const PARTS = [
   [/^SCALant\d$/, 'scalant', 'Передняя лестничная', []], [/^SCALmed\d$/, 'scalmed', 'Средняя лестничная', []],
   [/^SCALpost\d$/, 'scalpost', 'Задняя лестничная', []],
   [/^serr_ant/, 'serrant', 'Передняя зубчатая', ['serratus']],
-  /* межрёберные (4.39.0, anatomy.js, раздел 7; intercostals.js) — пласты (sheets), без группы приложения, как мышцы шеи */
+  /* межрёберные (4.40.0, anatomy.js, раздел 7; intercostals.js) — пласты (sheets), без группы приложения, как мышцы шеи */
   [/^ICe\d+$/, 'icext', 'Наружные межрёберные', []], [/^ICi\d+$/, 'icint', 'Внутренние межрёберные', []],
 ];
 
