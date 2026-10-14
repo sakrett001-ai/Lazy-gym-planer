@@ -432,6 +432,119 @@ function legBent(C, q, s, thigh, knee, pole, { dorsi = -10 } = {}) {
 const YTW = { lift: 10, low: -4, wOut: .9 }, SNOW = { lift: -7 }, BIRD = { shift: 3 }, ROLLOUT = { phi1: 69, hip1: 8 };
 const HOLLOW_LEG = 14, DEADBUG_LEG = 10, BIKE = { hipOut: 32, hipIn: 110 };
 const SUP_MAT = [{ type: 'mat', id: 'mat', len: 190, width: 70, at: [0, 0, 5] }];
+/* ---------- Копенгагенская планка ----------
+   Боковая планка на правом предплечье (правый бок к коврику, живот смотрит в +X, голова к +Z), верхняя (левая) нога лежит
+   на горизонтальной скамье, поставленной поперёк тела (длинная ось — по X, верх подушки 44 см): длинный рычаг — внутренней
+   стороной голеностопа и стопы, короткий — внутренней стороной колена и голени (колено согнуто, голень вдоль скамьи).
+   Повторение: t=0 — таз опущен примерно на половину высоты, нижняя (правая) нога стопой на коврике без нагрузки;
+   t=1 — тело прямой линией от плеч до опоры на скамье, нижняя нога подтянута снизу к балке рамы скамьи.
+   Опора верхней ноги и локоть неподвижны. Корпус и таз — одно целое (боковой наклон поясницы не больше 4° в нижней
+   точке): при опускании таза расстояние от плеча до опоры на скамье уменьшается, и плечо чуть уходит от вертикали над
+   локтем — плечо поворачивается вокруг локтя. Рамка скамьи (TYPES.flatBench): подушка 6 см, под ней продольная балка
+   7,5 × 7,5 см — её нижняя грань на 30,5 см от пола. */
+const CPH = { padTop: 44, beamLow: 30.5, press: .6, drop: { long: 12, short: 13 } };
+const CPH_ELBOW = [0, MAT + ELBOW_H, 0];
+/* корпус и таз боком: theta — наклон оси тела (таз → голова) к полу, lat — боковой наклон поясницы и груди к полу */
+function cphTrunk(C, theta, lat = 0) {
+  const q = C.base(), a = theta * C.D2R;
+  C.root(q, [0, 40, 0], [0, Math.sin(a), Math.cos(a)], [1, 0, 0]);
+  q.lumbar = [0, lat, 0]; q.thoracic = [0, lat * .5, 0]; q.neck = [0, -lat * .5, 0];
+  q.R.girdle = [-6, 2]; q.L.girdle = [6, 0];
+  return q;
+}
+/* нижняя точка верхней ноги у опоры: длинный рычаг — стопа, лодыжки и нижняя пятая часть голени; короткий — колено и голень */
+function cphLow(C, q, lever) {
+  const { M } = C, R = M.catalogPose(q), Y = p => M.FLOOR - p[1];
+  let m = Infinity;
+  const ts = lever === 'long' ? [.8, .85, .9, .95, 1] : [0, .05, .1, .2, .4, .6, .8, .9];
+  for (const t of ts) for (let i = 0; i < 24; i++) m = Math.min(m, Y(M.limbPoint(R, 'sk', 'L', t, i / 24 * 2 * Math.PI)));
+  if (lever === 'long') { m = Math.min(m, lowestFoot(C, q, 'L')); for (const p of M.malleoli(R, 'L')) m = Math.min(m, Y(p)); }
+  else for (const t of [.85, .9, .95, 1]) for (let i = 0; i < 24; i++) m = Math.min(m, Y(M.limbPoint(R, 'th', 'L', t, i / 24 * 2 * Math.PI)));
+  return m;
+}
+/* верхняя нога: длинный рычаг — прямая (колено 3°) вдоль тела, голеностоп в точке A; короткий — бедро вдоль тела до колена K,
+   голень назад (−X) вдоль подушки с наклоном 3° к стопе */
+const CPH_KNEE = 3;
+function cphTopLeg(C, q, lever, at) {
+  const { V, M } = C;
+  if (lever === 'long') { C.legTo(q, 'L', at, [1, 0, 0], { dorsi: 0 }); return; }
+  const e = 3 * C.D2R, ankle = V.add(at, [-Math.cos(e), -Math.sin(e), 0], M.B.sk), hip = C.fk(q).P.hipL;
+  C.legTo(q, 'L', ankle, V.unit(V.sub(at, V.mix(hip, ankle, .5))), { dorsi: -20 });
+}
+/* верхняя точка нижней ноги под балкой скамьи (бедро, колено, голень в пределах ширины балки по Z) */
+function cphUnderBeam(C, q, bz) {
+  const { M } = C, R = M.catalogPose(q);
+  let m = -Infinity;
+  for (const k of ['th', 'sk']) for (let t = 0; t <= 1.001; t += .05) for (let i = 0; i < 24; i++) {
+    const p = M.limbPoint(R, k, 'R', t, i / 24 * 2 * Math.PI); if (Math.abs(p[2] - bz) < 4.5) m = Math.max(m, M.FLOOR - p[1]);
+  }
+  return m;
+}
+/* нижняя (правая) нога: прямая (колено 4°), отведение psi в рамке таза (+ — к полу, − — к скамье) */
+function cphBottomLeg(C, q, psi) {
+  const { V, M } = C, P = C.axes(q, 'pelvis'), hip = C.fk(q).P.hipR, a = psi * C.D2R, k = 4 * C.D2R;
+  const L = Math.sqrt(M.B.th ** 2 + M.B.sk ** 2 + 2 * M.B.th * M.B.sk * Math.cos(k));
+  const d = V.unit(V.add(V.scale(P.y, -Math.cos(a)), P.x, -Math.sin(a)));
+  C.legTo(q, 'R', V.add(hip, d, L), P.z, { dorsi: 0 });
+}
+/* правое предплечье на коврике: локоть в CPH_ELBOW, предплечье вперёд и к голове на 25°, кулак */
+function cphForearm(C, q) {
+  const { V, M } = C, f = C.fk(q), E = CPH_ELBOW, a = 25 * C.D2R, dy = WRIST_H - ELBOW_H, h = Math.sqrt(M.B.fa ** 2 - dy * dy);
+  const W = V.add(E, [Math.cos(a) * h, dy, Math.sin(a) * h]);
+  C.armTo(q, 'R', W, V.unit(V.sub(E, V.mix(f.P.ghR, W, .5))), { pron: 10, wrist: [0, 0], mode: 'fist' });
+}
+/* левая кисть на боку таза (ладонь на гребне подвздошной кости, пальцы вперёд и к стопам) */
+function cphHandOnHip(C, q) {
+  const { V } = C, P = C.axes(q, 'pelvis'), pt = C.chestPoint(q, 7, Math.PI * .45);
+  C.palm(q, 'L', V.add(pt, P.x, .4), V.unit(V.add(P.z, P.y, -.9)), P.x, V.unit(V.add([-1, 0, 0], P.x, .6)));
+}
+/* раскладка: верхнее положение — тело прямое, плечо над локтем; по нему — точка опоры на скамье и положение скамьи */
+function cphLayout(lever) {
+  const C = ctx([]), { V, M } = C, G = V.add(CPH_ELBOW, [0, M.B.ua, 0]);
+  const Lk = Math.sqrt(M.B.th ** 2 + M.B.sk ** 2 + 2 * M.B.th * M.B.sk * Math.cos(CPH_KNEE * C.D2R));
+  const top = th => {
+    const q = cphTrunk(C, th), f = C.fk(q); q.root.p = V.add(q.root.p, V.sub(G, f.P.ghR));
+    const f2 = C.fk(q), down = V.scale(C.axes(q, 'pelvis').y, -1), at = V.add(f2.P.hipL, down, lever === 'long' ? Lk : M.B.th);
+    cphTopLeg(C, q, lever, at); return { q, at };
+  };
+  const theta = C.solve1D(th => cphLow(C, top(th).q, lever) - (CPH.padTop - CPH.press), -20, 40);
+  const T = top(theta), A = T.at, f = C.fk(T.q);
+  /* скамья: длинный рычаг — балка в 8 см выше голеностопа (по голени), подушка под стопой по всей длине стопы;
+     короткий — балка под коленом, подушка от колена назад вдоль голени до лодыжек, стопа свисает за край */
+  const bench = lever === 'long' ? { type: 'flatBench', id: 'bench', at: rp([A[0] + 8, 0, A[2] + 8]), yaw: 90 }
+    : { type: 'flatBench', id: 'bench', at: rp([A[0] + 22, 0, A[2]]), yaw: 90 };
+  return { lever, theta, A, bench, hipTop: f.P.hipL };
+}
+const rp = p => p.map(v => Math.round(v * 10) / 10);
+/* поза фазы: drop — опускание таза (0 — верх, 1 — низ), psi — отведение нижней ноги */
+function cphPose(C, L, drop, psi) {
+  const { V, M } = C, A = L.A, d = CPH.drop[L.lever] * drop * C.D2R, v = V.sub(L.hipTop, A);
+  /* тазобедренный сустав верхней ноги поворачивается вокруг опоры на скамье (ось X) вниз на угол d */
+  const H = V.add(A, [v[0], v[1] * Math.cos(d) - v[2] * Math.sin(d), v[1] * Math.sin(d) + v[2] * Math.cos(d)]);
+  const lat = 4 * drop;
+  const body = th => { const q = cphTrunk(C, th, lat), f = C.fk(q); q.root.p = V.add(q.root.p, V.sub(H, f.P.hipL)); return q; };
+  /* наклон корпуса: плечо на длине плеча от неподвижного локтя и выше него */
+  const gap = th => V.dist(C.fk(body(th)).P.ghR, CPH_ELBOW) - M.B.ua;
+  let a = null;
+  for (let th = L.theta - 8; th < L.theta + 70; th += .5) { const g1 = gap(th), g2 = gap(th + .5); if (g1 * g2 <= 0 && C.fk(body(th)).P.ghR[1] > CPH_ELBOW[1] + 15) { a = [th, th + .5]; break; } }
+  if (!a) throw Error('cphPose: плечо не встаёт над локтем');
+  const q = body(C.solve1D(gap, a[0], a[1]));
+  cphForearm(C, q);
+  cphTopLeg(C, q, L.lever, A);
+  cphBottomLeg(C, q, psi);
+  cphHandOnHip(C, q);
+  return q;
+}
+/* раскладки двух рычагов: отведение нижней ноги в нижней точке (стопа на коврике) и в верхней (голень или колено у балки) */
+function cphFull(lever) {
+  const L = cphLayout(lever), C = ctx([L.bench]);
+  L.psiTop = C.solve1D(p => cphUnderBeam(C, cphPose(C, L, 0, p), L.bench.at[2]) - (CPH.beamLow - .2), -25, 15);
+  L.psiLow = C.solve1D(p => lowestFoot(C, cphPose(C, L, 1, p), 'R') - (MAT - .3), -25, 40);
+  return L;
+}
+const CPH_LONG = once(() => cphFull('long')), CPH_SHORT = once(() => cphFull('short'));
+const cphMat = L => ({ type: 'mat', id: 'mat', len: 200, width: 70, at: [7, 0, Math.round(L.A[2] / 2)] });
+
 module.exports = {
   /* Скручивания: лёжа на спине, колени согнуты, стопы на коврике, кисти за головой, локти в стороны (голову не тянуть).
      t=0 — лопатки на коврике, t=1 — лопатки оторваны сгибанием грудного отдела, поясница прижата. */
@@ -808,5 +921,24 @@ module.exports = {
     equipment: [{ type: 'mat', id: 'mat', len: 200, width: 140, at: [8, 0, 8] }],
     contacts: PUSH_CONTACTS,
     pose(t, C) { return pushPose(C, ARCHER(), 1 - C.ease(t)); }
+  },
+
+  /* Копенгагенская планка, длинный рычаг (работает левая, верхняя нога; опора — внутренняя сторона голеностопа и стопы
+     на скамье). Рабочая фаза — подъём: t=0 — таз опущен, нижняя стопа касается коврика без нагрузки; t=1 — тело прямое
+     от плеч до стоп, нижняя голень подтянута к балке скамьи. */
+  copenhagen: {
+    keys: [0, .2, .4, .6, .8, 1],
+    equipment: [cphMat(CPH_LONG()), CPH_LONG().bench],
+    contacts: [{ body: 'faR', prop: 'mat' }, { body: 'footL', prop: 'bench:pad' }, { body: 'footR', prop: 'mat', when: [0, .05] }, { body: 'shinR', prop: 'bench:beam', when: [.95, 1] }],
+    pose(t, C) { const L = CPH_LONG(), e = C.ease(t); return cphPose(C, L, 1 - e, C.lerp(L.psiLow, L.psiTop, e)); }
+  },
+
+  /* Копенгагенская планка с опорой коленом (короткий рычаг): верхняя нога согнута, внутренняя сторона колена и голени
+     на скамье, голень вдоль подушки. Фазы — как у длинного рычага; нижняя нога в верхней точке — коленом у балки. */
+  copenhagenknee: {
+    keys: [0, .2, .4, .6, .8, 1],
+    equipment: [cphMat(CPH_SHORT()), CPH_SHORT().bench],
+    contacts: [{ body: 'faR', prop: 'mat' }, { body: 'kneeL', prop: 'bench:pad' }, { body: 'footR', prop: 'mat', when: [0, .05] }, { body: 'kneeR', prop: 'bench:beam', when: [.95, 1] }],
+    pose(t, C) { const L = CPH_SHORT(), e = C.ease(t); return cphPose(C, L, 1 - e, C.lerp(L.psiLow, L.psiTop, e)); }
   }
 };

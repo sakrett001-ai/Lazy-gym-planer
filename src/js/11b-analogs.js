@@ -5,7 +5,7 @@ const PATTERN_NAMES = {squat:'присед', hinge:'наклон от таза',
   fly:'сведение рук', pullover:'пуловер', vpull:'вертикальная тяга', hrow:'горизонтальная тяга', vpush:'жим вверх', raise:'подъём рук',
   rear:'задняя дельта и лопатки', curl:'сгибание рук', ext:'разгибание рук', lunge:'выпад', bridge:'ягодичный мост', flex:'скручивание',
   hold:'удержание корпуса', side:'боковой наклон', calf:'подъём на носки', grip:'хват', jump:'прыжки', burpee:'бёрпи', climb:'скалолаз',
-  adduct:'сведение ног', run:'бег', ride:'вращение педалей', row:'гребля', kneeext:'разгибание колена', kneeflex:'сгибание колена', shrug:'шраги'};
+  adduct:'сведение ног', extrot:'вращение плеча наружу', run:'бег', ride:'вращение педалей', row:'гребля', kneeext:'разгибание колена', kneeflex:'сгибание колена', shrug:'шраги'};
 /* движения, которым не нашлось места в общей таблице */
 [['kneeext', 'legext'], ['kneeflex', 'legcurl nordic'], ['shrug', 'shrug'], ['raise', 'frontraise']].forEach(([p, ids]) => ids.split(' ').forEach(id => PATTERN[id] = p));
 

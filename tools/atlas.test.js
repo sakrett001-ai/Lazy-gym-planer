@@ -16,18 +16,17 @@ test('every muscle has a description, a place on the map and exercises in the gy
   const a = app(), E = a.effEquip(a.PLACE_DEFAULTS[0].equip);
   assert.deepEqual([...a.ATLAS_ORDER].sort(), Object.keys(a.MUSCLE_NAMES).sort(), 'the atlas lists all muscles once');
   const svg = a.atlasMapSvg('chest', a.atlasCounts(E));
-  /* мышцы-помощники (передняя зубчатая, вращательная манжета) редко бывают главной целью: у них — упражнения, где они
-     работают в помощь, и нет кнопки тренировки с акцентом */
+  /* мышца-помощник (передняя зубчатая) редко бывает главной целью: у неё — упражнения, где она работает в помощь,
+     и нет кнопки тренировки с акцентом; у вращательной манжеты с вращением плеча наружу — своя тренировка с акцентом */
   for (const m of a.ATLAS_ORDER) {
     assert(a.MUSCLE_INFO[m] && a.MUSCLE_INFO[m].length > 30, m + ' explains what it does');
     assert(svg.includes(`data-atlas-m="${m}"`), m + ' can be tapped on the map');
     const A = a.atlasFor(m, E);
     if (a.ATLAS_SUPPORT.has(m)) assert(A.pri.length + A.sec.length >= 4, m + ' is shown in the exercises it supports');
-    /* приводящие: в каталоге одно упражнение прицельно на них (сведение ног в тренажёре), но работают они в 14 приседаниях
-       и выпадах — достаточно одного целевого при широком участии */
+    /* приводящие: прицельно — сведение ног в тренажёре и на блоке, копенгагенская планка; помогают в 14 приседаниях и выпадах */
     else assert(A.pri.length >= 2 || (A.pri.length >= 1 && A.pri.length + A.sec.length >= 6), m + ' has exercises where it is the main target');
   }
-  assert.deepEqual([...a.ATLAS_SUPPORT].sort(), ['cuff', 'serratus']);
+  assert.deepEqual([...a.ATLAS_SUPPORT].sort(), ['serratus']);
   assert.match(svg, /class="am-m on"[^>]*data-atlas-m="chest"/, 'the chosen muscle is highlighted');
 });
 test('the list uses only the current place, main work first, isolation before compound', () => {
@@ -62,6 +61,22 @@ test('a focus from the atlas puts the muscle into a third of the workout', () =>
     assert(n >= 2, `seed ${seed}: ${n} biceps exercises`);
   }
   a.setFocus(null); assert.equal(a.S.focus, null);
+});
+test('adductors and the rotator cuff: targeted exercises in the atlas and in a workout with the accent', () => {
+  const a = app(); places(a);
+  const gym = a.effEquip(a.PLACE_DEFAULTS[0].equip), home = a.effEquip(a.PLACE_DEFAULTS[1].equip);
+  const pri = (m, E) => a.atlasFor(m, E).pri.map(r => r.ex.id);
+  for (const id of ['adduction', 'cableadduct', 'copenhagen', 'copenhagenknee']) assert(pri('adductors', gym).includes(id), id + ' targets the adductors');
+  for (const id of ['cableextrot', 'bandextrot']) assert(pri('cuff', gym).includes(id), id + ' targets the rotator cuff');
+  assert(pri('cuff', home).includes('bandextrot'), 'the band version works at home');
+  for (const [m, groups] of [['adductors', ['quads', 'hams', 'glutes']], ['cuff', ['chest', 'back', 'shoulders']]]) for (const level of ['mid', 'beg']) for (const seed of [3, 7, 19]) {
+    a.S.place = 'gym'; a.ensurePlaces(a.S);
+    Object.assign(a.S, { mode: 'single', goal: 'mass', level, count: 6, groups: groups.slice(), format: 'classic', focus: null, seed, protect: [] });
+    a.setFocus(m);
+    const n = a.buildPlan().items.filter(it => it.ex.pri.includes(m)).length;
+    assert(n >= 2, `${m}, ${level}, seed ${seed}: ${n} targeted exercises`);
+  }
+  a.setFocus(null);
 });
 test('in a weekly programme the focus works on days that train its group and on every full-body day', () => {
   const a = app(); places(a); a.S.place = 'gym'; a.ensurePlaces(a.S);

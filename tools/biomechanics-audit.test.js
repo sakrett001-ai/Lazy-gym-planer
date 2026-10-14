@@ -18,10 +18,12 @@ function chestRow(mutate) {
 }
 test('all poses and cameras satisfy declared geometry and contact constraints', () => {
   const r = auditModel(model);
-  assert.equal(r.stats.exercises,146);
-  assert.equal(r.stats.poses,146*101);
+  /* 151: +5 прицельных на приводящие и манжету (cableadduct, copenhagen, copenhagenknee, cableextrot, bandextrot) */
+  assert.equal(r.stats.exercises,151);
+  assert.equal(r.stats.poses,151*101);
   assert.equal(r.stats.cameraPoses,29*101);
-  assert.equal(r.stats.muscleProfiles,3);
+  /* три исходных профиля ригов и пять профилей прицельных упражнений на приводящие и манжету (09b-muscle-profiles.js) */
+  assert.equal(r.stats.muscleProfiles,8);
   assert.equal(r.stats.musclePoses,3*101);
   assert.deepEqual(r.failures,[]);
   assert(r.warnings.some(f => f.exercise === 'invrow' && f.rule.startsWith('projected-elbow')));

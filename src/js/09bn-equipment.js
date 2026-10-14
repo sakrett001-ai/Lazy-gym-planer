@@ -239,14 +239,25 @@ BIND.sled=(e,R)=>{
   delete q.name;return q;
  });
 };
+/* Манжета на голеностоп (как у типовых манжет для блока): неопреновая лента шириной 7,5 см над лодыжками —
+   от 3 до 10,5 см над осью голеностопного сустава, облегает голень; на стороне блока пришито стальное D-кольцо
+   (перемычка 4 см вдоль голени, выступ 2,6 см), за него цепляется карабин троса длиной 6 см.
+   Возвращает центр манжеты на оси голени, направление к блоку, точки D-кольца и конец карабина (clip). */
+const CUFF={lo:3,hi:10.5,ring:.6,dLen:4,dOut:2.6,hook:6};
+function ankleCuff(R,s,pulley){
+ const f=R.frames['sk'+s],mid=(CUFF.lo+CUFF.hi)/2,t=1-mid/M.B.sk,c0=V.add(R['an'+s],f.y,mid),ax=M.limbAxes(R,'sk',s,t);
+ const d=V.perp(V.sub(pulley,c0),f.y),ang=V.len(d)>1e-6?Math.atan2(V.dot(d,ax.lat),V.dot(d,ax.front)):0;
+ const base=M.limbPoint(R,'sk',s,t,ang,2*CUFF.ring),n=V.unit(V.perp(V.sub(base,c0),f.y)),apex=V.add(base,n,CUFF.dOut);
+ return{c0,t,ang,axis:f.y,base,n,apex,clip:V.add(apex,V.unit(V.sub(pulley,apex)),CUFF.hook),...CUFF};
+}
 /* Трос от блока к рукояти. attach: D (рукоять на кисть), rope (канат, две ветви), bar (прямая рукоять),
    V (V-образная рукоять), ankle (манжета на голеностоп). Колесо блока поворачивается к тросу. */
 BIND.cable=(e,R)=>{
  const id=e.id||'cable',pulley=toCat(e.from),hands=e.hands||['L','R'],out=[],wr=e.wheelR||4.5;
  let clip,grips=hands.map(s=>R['grip'+s]);
  const towards=(p,k)=>V.add(p,V.unit(V.sub(pulley,p)),k);
- if(e.attach==='ankle'){const s=e.foot||'L',f=R.frames['sk'+s],an=V.add(R['an'+s],f.y,6);clip=towards(an,7);
-  out.push({kind:'cyl',c:an,axis:V.scale(f.y,-1),r:5.2,len:5,tone:'rubber',role:'strap',id:id+':strap',mount:'body'});}
+ if(e.attach==='ankle'){const s=e.foot||'L',K=ankleCuff(R,s,pulley);clip=K.clip;
+  out.push({kind:'cyl',c:K.c0,axis:V.scale(K.axis,-1),r:V.dist(K.base,K.c0)-K.ring,len:K.hi-K.lo,tone:'rubber',role:'strap',id:id+':strap',mount:'body'});}
  else if(e.attach==='rope'){
   const mid=V.mix(grips[0],grips[1]??grips[0],.5);clip=towards(mid,e.clip??13);
   hands.forEach((s,i)=>{const g=grips[i],dir=V.unit(V.sub(g,clip));out.push({kind:'cable',pts:[clip,V.add(g,dir,4)],r:1.3,tone:'rope',role:'grip',id:id+':rope'+s,mount:id+':line'});out.push({kind:'sphere',c:V.add(g,dir,5.5),r:2.1,tone:'rubber',role:'frame',id:id+':knob'+s,mount:id+':rope'+s});});
@@ -350,6 +361,6 @@ function rig(entry){
   return R;
  };
 }
-return{TYPES,BIND,Builder,build,anchors,rig,PLATES,padFrame,barbellPart,dumbbellPart,bodyPoint,ortho,visible};
+return{TYPES,BIND,Builder,build,anchors,rig,PLATES,padFrame,barbellPart,dumbbellPart,bodyPoint,ortho,visible,ankleCuff};
 })(typeof Mannequin!=='undefined'?Mannequin:require('./09bm-mannequin.js'));
 if(typeof module!=='undefined'&&module.exports){module.exports=GymEquipment;const fs=require('fs'),path=require('path');for(const f of fs.readdirSync(__dirname).filter(f=>/^09bo.*\.js$/.test(f)).sort()){try{require(path.join(__dirname,f));}catch(e){console.error('Инвентарь '+f+': '+e.message);}}}

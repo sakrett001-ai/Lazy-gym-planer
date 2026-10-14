@@ -152,6 +152,84 @@ function kickLayout({ lean, tower, footR, root, kneeR }) {
 }
 const GK_TOWER = { type: 'g3Tower', id: 'col', h: 20, at: [4, 0, 96], yaw: 180 };
 const KB_TOWER = { type: 'g3Tower', id: 'col', h: 20, at: [4, 0, 88], yaw: 180 };
+/* ---------- Сведение ноги на нижнем блоке: колонна слева (+X), блок у пола; работает левая нога (ближняя к колонне),
+   левая рука держится за ручку на стойке, стоя на правой ноге. Ручки стоек — в 17 см позади колеса блока
+   (колесо на поворотном кронштейне каретки), поэтому колонна стоит так, чтобы рука доставала ручку чуть согнутой
+   в локте, а колесо было сбоку от голеностопа: трос в начале — около 12 см от карабина до колеса. ---------- */
+const AD_TOWER = { type: 'g3Tower', id: 'col', h: 20, at: [88, 0, -6], yaw: -90 };
+const AD_FOOT = [-3, 0, 6];
+/* нога: отведение/приведение abd (в плоскости таза, наружу +), сгибание flex, сгибание колена knee — голеностоп по ним */
+function adductLeg(C, q, s, { abd, flex, knee, dorsi }) {
+  const { V, M } = C, f = C.fk(q), P = C.axes(q, 'pelvis'), hip = f.P['hip' + s], g = M.SIGN[s];
+  const a = abd * C.D2R, b = flex * C.D2R, k = knee * C.D2R, Leff = Math.sqrt(M.B.th ** 2 + M.B.sk ** 2 + 2 * M.B.th * M.B.sk * Math.cos(k));
+  /* направление голени: вниз, отведение в сторону g·x, сгибание вперёд z (в рамке таза) */
+  const down = V.scale(P.y, -1), d = V.unit(V.add(V.add(V.scale(down, Math.cos(a) * Math.cos(b)), P.x, g * Math.sin(a)), P.z, Math.cos(a) * Math.sin(b)));
+  const pole = V.unit(V.add(P.z, P.x, g * Math.sin(a) * .3));
+  C.legTo(q, s, V.add(hip, d, Leff), pole, { dorsi });
+  return q;
+}
+const AD = once(() => {
+  const C = ctx([AD_TOWER]), { V } = C, q = C.base(), hike = 2 * C.D2R;
+  /* таз чуть приподнят слева (опорная правая нога в лёгком приведении — средняя ягодичная держит таз), корпус над тазом
+     слегка наклонён к колонне */
+  C.root(q, [-3, 88.9, 0], V.unit([-Math.sin(hike), Math.cos(hike), 0]), [0, 0, 1]);
+  q.lumbar = [-2, -6, 0]; q.thoracic = [0, -4, 0]; q.neck = [0, 6, 0];
+  /* опорная нога почти прямая (колено 4°): высота таза — по длине ноги до голеностопа над опорой */
+  const opts = { forward: V.unit([-.12, 0, 1]) }, A = C.M.footFrame(AD_FOOT, 0, opts).o, k = 4 * C.D2R;
+  const Leff = Math.sqrt(C.M.B.th ** 2 + C.M.B.sk ** 2 + 2 * C.M.B.th * C.M.B.sk * Math.cos(k));
+  const put = qq => {
+    const h = C.fk(qq).P.hipR, dx = h[0] - A[0], dz = h[2] - A[2];
+    qq.root.p[1] += A[1] + Math.sqrt(Leff ** 2 - dx * dx - dz * dz) - h[1];
+    C.foot(qq, 'R', AD_FOOT, 0, V.unit([-.15, 0, 1]), opts);
+  };
+  /* центр масс над опорной стопой, чуть ближе к колонне: рука на стойке страхует */
+  C.balanceOver(q, [AD_FOOT[0] + 3, 0, AD_FOOT[2] - 6], { resolve: put });
+  return { q };
+});
+/* ---------- Вращение плеча наружу на блоке и с эспандером: работает правая рука, блок или крепление ленты слева (+X)
+   на высоте кисти. Плечо вдоль корпуса, отведено настолько, чтобы между локтем и боком лёг валик (полотенце Ø6,5 см,
+   BIND.g3towelRoll), локоть согнут под 90°, хват нейтральный (большой палец вверх). Предплечье вращается вокруг оси
+   плеча: у живота оно горизонтально, при развороте наружу кисть поднимается на 5–10 см — плечо отведено на ширину валика. ---------- */
+const ER_TOWER = { type: 'g3Tower', id: 'col', h: 110, at: [78, 0, 32], yaw: -90 };
+const ER_FEET = { L: [11, 12, 7], R: [-11, 12, -7] };
+const ER_TOWEL = { type: 'g3towelRoll', id: 'towel', side: 'R' };
+/* лента в притворе двери слева (дверь — в плоскости x ≈ 60, сторона замка ближе к пользователю), крепление на высоте кисти */
+const ER_DOOR = { type: 'g3Door', id: 'door', anchor: 'side', h: 112, at: [61, 0, 69.5], yaw: 90 };
+const ER_BASE = () => {
+  const C = ctx([]), q = C.base();
+  stand(C, q, { root: [0, 88.5, 0], lean: 1, feet: ER_FEET });
+  q.lumbar = [-2, 0, 0]; q.neck = [2, 0, 0];
+  balance(C, q, ER_FEET);
+  return { C, q };
+};
+/* Рука: плечо вниз вдоль корпуса с отведением abd и сгибанием flex (град, в рамке грудной клетки), локоть 90°;
+   rot — поворот предплечья наружу от направления «вперёд» вокруг оси плеча (−: кисть к животу, +: кисть наружу).
+   Центр хвата подбирается так, чтобы локоть встал на место (C.hold ставит кисть продолжением предплечья). */
+function rotArm(C, q, s, rot, { abd, flex = 4, pron = 0 }) {
+  const { V } = C, f = C.fk(q), T = C.axes(q, 'thorax'), lat = C.lat(q, s), gh = f.P['gh' + s], down = V.scale(T.y, -1);
+  const a = abd * C.D2R, b = flex * C.D2R, r = rot * C.D2R;
+  const ua = V.unit(V.add(V.add(V.scale(down, Math.cos(a) * Math.cos(b)), lat, Math.sin(a)), T.z, Math.sin(b)));
+  const el = V.add(gh, ua, C.M.B.ua), F = V.unit(V.perp(T.z, ua)), L = V.unit(V.perp(lat, ua));
+  const fore = V.unit(V.add(V.scale(F, Math.cos(r)), L, Math.sin(r))), palm = V.unit(V.add(V.scale(L, -Math.cos(r)), F, Math.sin(r)));
+  const pole = V.unit(V.add(V.scale(fore, -1), down, .6));
+  let g = gripFrom(C, el, fore, palm);
+  for (let i = 0; i < 6; i++) { C.hold(q, s, g, pole, { pron }); const d = V.sub(el, C.fk(q).P['el' + s]); if (V.len(d) < .1) break; g = V.add(g, d); }
+  return { el, fore, palm };
+}
+/* отведение плеча, при котором валик между локтем и боком поджат на 0,5 см */
+const ER = once(() => {
+  const { C, q } = ER_BASE(), { V, M } = C;
+  const squeeze = abd => {
+    const qq = C.M.clone(q); rotArm(C, qq, 'R', 0, { abd });
+    const R = M.catalogPose(qq), [p] = EQ.BIND.g3towelRoll(ER_TOWEL, R), ax = V.unit(p.axis);
+    let u = V.perp([1, 0, 0], ax); if (V.len(u) < .1) u = V.perp([0, 1, 0], ax); u = V.unit(u); const w = V.cross(ax, u);
+    let m = Infinity;
+    for (let i = -4; i <= 4; i++) for (let j = 0; j < 16; j++) { const a = j / 16 * 2 * Math.PI, pt = V.add(V.add(V.add(p.c, ax, i * p.len / 8), u, p.r * Math.cos(a)), w, p.r * Math.sin(a)); m = Math.min(m, M.torsoSDF(R, pt)); }
+    return m + .5;
+  };
+  return { q, abd: C.solve1D(a => -squeeze(a), 2, 30) };
+});
+
 /* ---------- Разгибание рук с канатом из-за головы: спиной к блоку, блок выше головы ---------- */
 const OH_TOWER = { type: 'g3Tower', id: 'col', h: 186, at: [0, 0, -118], yaw: 0 };
 const OH_FEET = { L: [12, 40, 6], R: [-12, -22, -6, 18] };
@@ -567,6 +645,52 @@ module.exports = {
       const th = [0, -Math.cos(a), Math.sin(a)], an = V.add(V.add(hip, th, C.M.B.th), [0, -Math.cos(a - k), Math.sin(a - k)], C.M.B.sk);
       C.legTo(q, 'L', V.add(an, [1.5, 0, 0], 1), V.unit([.05, -.2, 1]), { dorsi: C.lerp(6, -6, e) });
       for (const s of S) { const gp = C.point('col', s === 'L' ? 'grabR' : 'grabL'); C.grip(q, s, [gp[0], 128, gp[2]], [0, 1, 0], V.unit(V.add([0, -1, 0], C.lat(q, s), .8))); }
+      return q;
+    }
+  },
+
+  /* Сведение ноги на нижнем блоке: работает левая нога (манжета на голеностопе), колонна слева, левая рука на ручке стойки,
+     опорная правая нога прямая. t=0 — нога отведена к блоку, колено мягкое, стопа над полом; t=1 — нога сведена через
+     среднюю линию и чуть за неё, проходит перед опорной стопой (бедро слегка согнуто). */
+  cableadduct: {
+    keys: [0, .2, .4, .6, .8, 1],
+    equipment: [AD_TOWER, cable(AD_TOWER, '', { id: 'cab', attach: 'ankle', foot: 'L', wrap: [0, -1, 0], rest: 20 })],
+    contacts: [{ body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'col:grabL' }],
+    gripRadius: { L: 1.6, R: 1.6 },
+    pose(t, C) {
+      const { V } = C, e = C.ease(t), q = C.M.clone(AD().q);
+      adductLeg(C, q, 'L', { abd: C.lerp(22, -11, e), flex: C.lerp(3, 19, e), knee: C.lerp(5, 10, e) + 12 * Math.sin(Math.PI * e), dorsi: C.lerp(0, 4, e) });
+      const gp = C.point('col', 'grabL');
+      C.grip(q, 'L', [gp[0], 136, gp[2]], [0, 1, 0], V.unit([.1, -1, -.5]));
+      return q;
+    }
+  },
+
+  /* Вращение плеча наружу на блоке: колонна слева, блок на высоте кисти, D-рукоять в правой руке нейтральным хватом,
+     валик между локтем и боком. t=0 — предплечье у живота (повёрнуто внутрь на 45°); t=1 — развёрнуто наружу на 50°
+     от направления вперёд. Локоть неподвижен у бока, кисть — продолжение предплечья, корпус не поворачивается. */
+  cableextrot: {
+    keys: [0, .2, .4, .6, .8, 1],
+    equipment: [ER_TOWER, ER_TOWEL, cable(ER_TOWER, '', { id: 'cab', attach: 'D', hands: ['R'], rest: 45 })],
+    contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripR', prop: 'cab' }, { body: 'uaR', prop: 'towel' }],
+    gripRadius: { L: 1.6, R: 1.6 },
+    pose(t, C) {
+      const e = C.ease(t), L = ER(), q = C.M.clone(L.q);
+      rotArm(C, q, 'R', C.lerp(-45, 50, e), { abd: L.abd });
+      return q;
+    }
+  },
+
+  /* Вращение плеча наружу с эспандером: лента закреплена в притворе двери слева на высоте кисти, рукоять в правой руке,
+     валик между локтем и боком; движение — как на блоке (t=0 — предплечье у живота, t=1 — развёрнуто наружу на 50°). */
+  bandextrot: {
+    keys: [0, .2, .4, .6, .8, 1],
+    equipment: [ER_DOOR, ER_TOWEL, { type: 'g3band', id: 'band', from: rp(EQ.anchors([ER_DOOR]).door.anchor), mountTo: 'door:ring', hands: ['R'], r: .7 }],
+    contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripR', prop: 'band:handleR' }, { body: 'uaR', prop: 'towel' }],
+    gripRadius: { L: 1.6, R: 1.6 },
+    pose(t, C) {
+      const e = C.ease(t), L = ER(), q = C.M.clone(L.q);
+      rotArm(C, q, 'R', C.lerp(-45, 50, e), { abd: L.abd });
       return q;
     }
   },

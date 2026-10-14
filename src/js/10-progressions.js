@@ -11,7 +11,8 @@ const PROGRESSIONS = [
   ['deadbug', 'birddog', 'plank', 'plankup', 'hollow'],
   ['crunch', 'bicycle', 'lyinglegraise', 'hangknee', 'legraise'],
   ['chairdip', 'benchdip', 'dip'],
-  ['hang', 'chinup', 'pullup']
+  ['hang', 'chinup', 'pullup'],
+  ['copenhagenknee', 'copenhagen']
 ];
 const PROG_NEXT = {}, PROG_PREV = {}, PROG_CHAIN = {};
 PROGRESSIONS.forEach((chain, ci) => chain.forEach(id => { PROG_CHAIN[id] = ci; }));
