@@ -450,7 +450,9 @@ const SCS_L = once(() => {
   /* наклон — по верху плеч от |x| = 9 до 19,5 см (наружный край упора над дельтовидной), высота — в середине упора (|x| = 12,5) */
   const y9 = shoulderTopAt(C, q, 9, 56.8), yOut = shoulderTopAt(C, q, 19.5);
   const th = Math.atan2(y9 - yOut, 10.5), yc = y9 + (yOut - y9) * 3.5 / 10.5 - gh[1];
-  return { dz: gh[2] - SCS.zr, padZ: yc - 1.0, th };
+  /* упоры вдавливаются в верх плеч на 0,8 см (до 4.41.0 — на 1 см), как у гакк-машины: с валиком трапециевидной 4.41.0
+     внутренний край упора уходил в кожу на 3,9 см при допуске мягкой опоры 4 см */
+  return { dz: gh[2] - SCS.zr, padZ: yc - .8, th };
 });
 
 /* ================= Гакк-машина ================= */
@@ -480,7 +482,9 @@ const HK_SLED = once(() => {
   const R = C.M.catalogPose(q);
   const topAt = (x0, hMax) => { let best = null; for (let h = 36; h <= hMax; h += .5) for (let a = 0; a < 2 * Math.PI; a += Math.PI / 32) for (const s of S) { const p = C.M.torsoPoint(R, h, s, a), l = loc([p[0], C.M.FLOOR - p[1], p[2]]); if (Math.abs(Math.abs(l[0]) - x0) < 1.5 && (!best || l[2] > best[2])) best = l; } return best; };
   const t9 = topAt(9, 56.8), t16 = topAt(16, 53.8), th = Math.atan2(t9[2] - t16[2], 7), top = (t9[2] + t16[2]) / 2, ySh = (t9[1] + t16[1]) / 2;
-  const gh = loc(V.mix(f.P.ghL, f.P.ghR, .5)), yb = L.yBack, zs = top - 1.0, parts = [];
+  /* упоры вдавливаются в верх плеч на 0,8 см (до 4.41.0 — на 1 см): с валиком трапециевидной и складками подмышки 4.41.0
+     внутренний край упора у основания шеи уходил в кожу на 4,0 см (предупреждение валидатора, допуск мягкой опоры 4 см) */
+  const gh = loc(V.mix(f.P.ghL, f.P.ghR, .5)), yb = L.yBack, zs = top - .8, parts = [];
   parts.push({ name: 'back', kind: 'obox', c: [0, yb + 3.5, (zs - 18 - 16) / 2], size: [32, 7, zs - 18 + 16], tone: 'pad', role: 'support', mount: 'plate', round: 1.8 });
   parts.push({ name: 'plate', kind: 'obox', c: [0, yb + 8, (zs - 18 - 16) / 2], size: [26, 2, zs - 18 + 12], mount: 'frame' });
   parts.push({ name: 'frame', kind: 'beam', a: [0, yb + 10, -12], b: [0, yb + 10, zs + 10], w: 8, h: 4, up: [0, 1, 0], mount: 'strutLo' });
@@ -545,7 +549,9 @@ module.exports = {
       q.lumbar = [C.lerp(2, 16, e), 0, 0]; q.thoracic = [C.lerp(4, 30, e), 0, 0]; q.neck = [C.lerp(8, 18, e), 0, 0];
       for (const s of S) q[s].girdle = [0, 10];
       const T = C.axes(q, 'thorax');
-      const wr = { L: V.add(V.add(V.add(T.o, T.x, -7), T.y, 16.2), T.z, 15.5), R: V.add(V.add(V.add(T.o, T.x, 7), T.y, 10), T.z, 22.5) };
+      /* запястья — на 0,6 см дальше от груди, чем до 4.41.0: грудь над пупком стала на 0,5 см глубже, и предплечье
+         входило в неё на 1,8 см (предупреждение валидатора о самопересечении) */
+      const wr = { L: V.add(V.add(V.add(T.o, T.x, -7), T.y, 16.2), T.z, 16.1), R: V.add(V.add(V.add(T.o, T.x, 7), T.y, 10), T.z, 23.1) };
       for (const s of S) C.armTo(q, s, wr[s], V.unit(V.add(V.scale(T.y, -1), T.x, M.SIGN[s] * 1.1)), { pron: 60, mode: 'relaxed' });
       return q;
     }
@@ -919,7 +925,9 @@ module.exports = {
       /* руки скрещены на груди: кисти у противоположных плеч, правое предплечье поверх левого */
       for (const s of S) q[s].girdle = [0, 10];
       const T = C.axes(q, 'thorax');
-      const wr = { L: V.add(V.add(V.add(T.o, T.x, -7), T.y, 16.2), T.z, 15.5), R: V.add(V.add(V.add(T.o, T.x, 7), T.y, 10), T.z, 22.5) };
+      /* запястья — на 0,6 см дальше от груди, чем до 4.41.0: грудь над пупком стала на 0,5 см глубже, и предплечье
+         входило в неё на 1,8 см (предупреждение валидатора о самопересечении) */
+      const wr = { L: V.add(V.add(V.add(T.o, T.x, -7), T.y, 16.2), T.z, 16.1), R: V.add(V.add(V.add(T.o, T.x, 7), T.y, 10), T.z, 23.1) };
       for (const s of S) C.armTo(q, s, wr[s], V.unit(V.add(V.scale(T.y, -1), T.x, M.SIGN[s] * 1.3)), { pron: 60, mode: 'relaxed' });
       return q;
     }

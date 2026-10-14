@@ -407,7 +407,7 @@ test('left and right intercostal sheets are mirror images', () => {
 /* Пласт — жёсткий, в рамке грудной клетки; кожа же вокруг груди меняется с позой (складки подмышки, наклоны). Во всех позах
    проверки (вся проверка — npm run muscles:check) — рука над головой (жим стоя, подтягивания, вис, «звёздочка») и
    скручивания (велосипед, дровосек, боковая планка, скручивания): пласт под кожей и почти не заходит в чужие кости (ключица
-   ложится на рёбра 1–3 спереди — README). Отрицательная проверка: пласт, вынесенный на 4 см наружу, ловится. */
+   ложится на рёбра 1–3 спереди — README). Отрицательная проверка: пласт, вынесенный наружу на 4 и 5 см, ловится. */
 test('intercostal sheets stay under the skin and out of other bones with the arm overhead and in twists', () => {
   const C = require('./muscles/check.js');
   const r = C.sheetRun(['ohp', 'pullup', 'hang', 'jumpingjack', 'bicycle', 'cablewood', 'sideplank', 'crunch'], [0, .25, .5, .75, 1]);
@@ -416,9 +416,14 @@ test('intercostal sheets stay under the skin and out of other bones with the arm
     assert(o.skin <= C.SHEET_LIMIT.body, `${n}: над кожей на ${o.skin.toFixed(2)} см (${o.skinAt})`);
     assert(o.bone <= C.SHEET_LIMIT.bone, `${n}: в кости на ${o.bone.toFixed(2)} см (${o.boneAt})`);
   }
-  const S = C.SHEETS.find(x => x.sh.name === 'ICe6_r'), N = Muscles.sheetNormals(S.sh), out = { ...S, pos: S.pos.slice() };
-  for (let v = 0; v < out.n; v++) { const i = Math.min(N.length - 1, (v < 4 * N.length ? v % (2 * N.length) : 0) >> 1); for (let j = 0; j < 3; j++) out.pos[v * 3 + j] += 4 * N[i][j]; }
-  assert(C.sheetRun(['ohp'], [0], [out]).ICe6_r.skin > 1, 'пласт снаружи кожи не найден');
+  /* С формой груди 4.41.0 мягкие ткани над 6-м межреберьем толще: не меньше 3,0 см (было 2,2). У людей толщина грудной
+     стенки от кожи до плевры в 4–5-м межреберье по передней подмышечной линии — 3,4 см (2,8–4,0), по средней — 4,0 см (КТ,
+     метаанализ: Laan D. V. et al., Injury 47: 797–804, 2016), вместе с межрёберными мышцами и рёбрами. Поэтому пласт,
+     вынесенный на 4 см, выходит из кожи на 0,7 см — проверка его ловит (допуск SHEET_LIMIT.body — 0); на 5 см — больше 1 см. */
+  const S = C.SHEETS.find(x => x.sh.name === 'ICe6_r'), N = Muscles.sheetNormals(S.sh);
+  const moved = D => { const out = { ...S, pos: S.pos.slice() }; for (let v = 0; v < out.n; v++) { const i = Math.min(N.length - 1, (v < 4 * N.length ? v % (2 * N.length) : 0) >> 1); for (let j = 0; j < 3; j++) out.pos[v * 3 + j] += D * N[i][j]; } return C.sheetRun(['ohp'], [0], [out]).ICe6_r.skin; };
+  assert(moved(4) > C.SHEET_LIMIT.body, 'пласт, вынесенный на 4 см, проверка не ловит');
+  assert(moved(5) > 1, 'пласт снаружи кожи не найден');
 });
 
 /* проверки ловят порчу данных: перенесённое прикрепление меняет направление хода, точка в кости — глубину */
