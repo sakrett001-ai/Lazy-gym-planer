@@ -115,7 +115,7 @@ test('поверхность тела замкнута и симметрична
 });
 
 test('сечение груди — скруглённый прямоугольник по ANSUR II: глубина и обхват в средней половине людей, ширина не больше 30', () => {
-  /* 4.39.0: на уровне сосков (128,2 см, ANSUR II chestheight) — горизонтальное сечение кожи корпуса стоя со складками,
+  /* 4.41.0: на уровне сосков (128,2 см, ANSUR II chestheight) — горизонтальное сечение кожи корпуса стоя со складками,
      как в tools/mannequin/anthro.js; ANSUR II (мужчины 170–180 см, 72–84 кг): ширина 27,4–29,1, глубина 23,3–25,2,
      обхват 99,2–104,3. Ширина 28,3 недостижима, пока тела широчайшей — трубки (комментарий к TORSO) */
   const R = M.catalogPose(M.neutral()), cache = M.torsoCache(R), y = M.FLOOR - 128.2, zc = M.spineFrame(R, 30).c[2], pts = [];
@@ -156,6 +156,28 @@ test('сетка корпуса: столбцы по «смешанному» у
     assert.ok(step < 3.5, `шаг сетки ${step.toFixed(2)} см`);
     assert.ok(sag < .1, `хорда сетки ${(sag * 10).toFixed(2)} мм`);
   });
+});
+
+test('сетка корпуса по постоянным столбцов (ringConsts) — те же точки, что torsoPointIn, до бита; TORSO заморожен', () => {
+  /* постоянные столбцов считаются один раз на модуль: они не устаревают, пока форма корпуса не меняется — TORSO заморожен */
+  assert.ok(Object.isFrozen(M.TORSO) && M.TORSO.every(r => Object.isFrozen(r)), 'TORSO заморожен');
+  /* наклон и поворот (передняя схема скругления), поднятая и выдвинутая лопатка (сдвиг надплечий), рука над головой и в
+     сторону (складки), низ таза (скошенный торец) — все ветви torsoPointIn */
+  const q = M.neutral(); q.lumbar = [20, 6, 4]; q.thoracic = [15, -4, 6];
+  q.L.shoulder = [10, 150, 0]; q.L.girdle = [25, -10]; q.R.shoulder = [-30, 70, 20]; q.R.girdle = [-5, 15];
+  const same = (a, b) => a.length === b.length && a.every((v, k) => v === b[k]), n = M.TORSO_COLS;
+  for (const R of [M.catalogPose(M.neutral()), M.catalogPose(q)]) for (const off of [false, true]) {
+    const run = f => off ? M.noFolds(f) : f(), S = run(() => M.surface(R)), B = run(() => M.boundsSurface(R));
+    S.torsoHeights.forEach((h, i) => {
+      const f = M.torsoFrame(R, h), sec = M.sectionAt(h);
+      for (let c = 0; c < n; c++) {
+        const a = c / n * 2 * Math.PI, side = a <= Math.PI ? 'L' : 'R';
+        const p = run(() => M.torsoPointIn(R, h, side, M.colAngle(a <= Math.PI ? a : 2 * Math.PI - a, sec), 0, f, sec));
+        assert.ok(same(S.torso[i][c], p), `сетка h ${h}, столбец ${c}${off ? ' без складок' : ''}`);
+        assert.ok(same(B.torso[i][c], p), `рамка кадра h ${h}, столбец ${c}`);
+      }
+    });
+  }
 });
 
 test('босая стопа: размеры по Winter и ANSUR II, свод, подушечки пальцев на плоскости подошвы, точки для проверок', () => {
