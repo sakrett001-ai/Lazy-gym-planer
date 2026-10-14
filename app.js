@@ -627,7 +627,9 @@ const MAP_FRONT = [
   ['obliques', 'p', [[59, 68], [66, 66], [69, 80], [68, 96], [63, 106], [59, 103]]],
   ['pelvis', 'p', [[50, 113], [58, 113], [64, 108], [69, 104], [70, 112], [62, 116], [52, 121], [50, 122]]],
   ['quads', 'p', [[54, 120], [63, 116], [70, 115], [72, 128], [70, 146], [66, 157], [59, 157], [55, 146], [53, 132]]],
-  ['adduct', 'p', [[51, 124], [53, 122], [54, 140], [56, 150], [52, 146]]],
+  ['adductors', 'p', [[51, 124], [53, 122], [54, 140], [56, 150], [52, 146]]],
+  ['hipflex', 'p', [[57, 114], [63, 110], [66, 114], [60, 120], [56, 119]]],
+  ['serratus', 'p', [[70, 57], [73, 60], [73, 67], [70, 72], [67, 67]]],
   ['knee', 'e', [62, 161, 4.5, 4]],
   ['calves', 'p', [[57, 166], [65, 165], [67, 176], [64, 194], [59, 194], [57, 180]]],
   ['foot', 'p', [[58, 196], [64, 196], [68, 203], [57, 203]]]
@@ -638,6 +640,7 @@ const MAP_BACK = [
   ['traps', 'p', [[50, 27], [55, 30], [66, 36], [60, 41], [54, 54], [50, 60]]],
   ['delt_r', 'p', [[67, 36], [75, 37], [81, 43], [82, 53], [78, 58], [72, 48]]],
   ['midback', 'p', [[51, 61], [55, 55], [61, 42], [69, 44], [71, 52], [63, 59], [53, 66]]],
+  ['cuff', 'p', [[62, 45], [68, 45.5], [70.5, 51], [66, 55], [61.5, 50]]],
   ['lats', 'p', [[53, 68], [64, 61], [72, 54], [74, 62], [71, 77], [63, 90], [55, 94]]],
   ['lowback', 'p', [[51, 70], [52, 70], [56, 93], [57, 107], [51, 110]]],
   ['triceps', 'p', [[74, 58], [80, 60], [84, 68], [84, 81], [80, 87], [76, 80], [73, 68]]],
@@ -652,7 +655,11 @@ const MAP_BACK = [
 ];
 const MUSCLE_NAMES = {chest:'Грудные', delt_f:'Передняя дельта', delt_s:'Средняя дельта', delt_r:'Задняя дельта', biceps:'Бицепс', triceps:'Трицепс',
   forearms:'Предплечья', abs:'Прямая мышца живота', obliques:'Косые мышцы живота', traps:'Трапеции', midback:'Ромбовидные и середина спины',
-  lats:'Широчайшие', lowback:'Разгибатели спины', glutes:'Ягодичные', quads:'Квадрицепс', hams:'Бицепс бедра', calves:'Икроножные'};
+  lats:'Широчайшие', lowback:'Разгибатели спины', glutes:'Ягодичные', quads:'Квадрицепс', hams:'Бицепс бедра', calves:'Икры',
+  /* с 4.33.0 (аудит анатомии): мышцы, без которых состав упражнений был неверен или неполон — приводящие (сведение ног,
+     приседания, выпады), сгибатели бедра (подъёмы ног), передняя зубчатая (отжимания, жимы над головой), вращательная
+     манжета (разведения назад, «Y-T-W», тяги сверху); «Икры» — икроножная и камбаловидная вместе */
+  adductors:'Приводящие бедра', hipflex:'Сгибатели бедра', serratus:'Передняя зубчатая', cuff:'Вращательная манжета'};
 
 function mirrorShape(kind, d) {
   if (kind === 'p') return d.map(([x, y]) => [100 - x, y]);
@@ -672,7 +679,7 @@ function muscleMapSvg(level, opts = {}) {
     if (m === 'delt_r') return Math.max(level.delt_r || 0, (level.delt_s || 0) * 0.8);
     return level[m] || 0;
   };
-  const neutral = new Set(['head', 'neck', 'hand', 'pelvis', 'adduct', 'knee', 'foot', 'flank']);
+  const neutral = new Set(['head', 'neck', 'hand', 'pelvis', 'knee', 'foot', 'flank']);
   const view = (shapes, dx, label) => {
     let s = `<g transform="translate(${dx},0)">`;
     for (const [m, kind, d] of shapes) {
@@ -728,7 +735,9 @@ const GROUP_PRESETS = [
 ];
 const MUSCLE_GROUP = {chest:'chest', delt_f:'shoulders', delt_s:'shoulders', delt_r:'shoulders', biceps:'biceps', triceps:'triceps',
   forearms:'forearms', abs:'abs', obliques:'abs', traps:'back', midback:'back', lats:'back', lowback:'back', glutes:'glutes',
-  quads:'quads', hams:'hams', calves:'calves'};
+  quads:'quads', hams:'hams', calves:'calves',
+  /* новые мышцы — к группам, в которых их тренируют: сведение ног — среди упражнений на бёдра, подъёмы ног — в прессе */
+  adductors:'quads', hipflex:'abs', serratus:'chest', cuff:'shoulders'};
 
 /* ---------- помощники для поз ---------- */
 const legsAt = (x, y = 180, b = 'fwd', f = 90) => ({legN:{ik:[x, y], b, f}, legF:{ik:[x, y], b, f}});
@@ -758,7 +767,7 @@ const PLATE = (r = 16, extra = {}) => Object.assign({k:'plate', at:'grips', r, l
 /* ---------- упражнения ---------- */
 const EX = [
 /* ===== ГРУДЬ ===== */
-{id:'pushup', name:'Отжимания от пола', eq:[], g:'chest', pri:['chest'], sec:['triceps', 'delt_f', 'abs', 'obliques'], type:'c', lvl:1,
+{id:'pushup', name:'Отжимания от пола', eq:[], g:'chest', pri:['chest'], sec:['triceps', 'delt_f', 'abs', 'obliques', 'serratus'], type:'c', lvl:1,
  tech:['Ладони чуть шире плеч, пальцы направлены вперёд. Тело — прямая линия от пяток до макушки, ягодицы и пресс напряжены.',
    'Опускайтесь, сгибая локти под углом 30–45° к корпусу, пока грудь не окажется в 2–3 см от пола.',
    'Выжмите себя вверх, отталкивая пол, до полного выпрямления рук; плечи не проваливаются.'],
@@ -767,7 +776,7 @@ const EX = [
  anim:{view:'side',
   A:plankA([10, 171], 70.4, {arm:{ik:[139, 181], b:'back', hA:90}}),
   B:plankA([10, 171], 85.4, {arm:{ik:[139, 181], b:'back', hA:90}})}},
-{id:'diamond', name:'Отжимания узким хватом', eq:[], g:'triceps', pri:['triceps', 'chest'], sec:['delt_f', 'abs'], type:'c', lvl:1,
+{id:'diamond', name:'Отжимания узким хватом', eq:[], g:'triceps', pri:['triceps', 'chest'], sec:['delt_f', 'abs', 'serratus'], type:'c', lvl:1,
  tech:['Ладони под грудью, большие и указательные пальцы почти касаются друг друга.',
    'Тело прямое, пресс и ягодицы напряжены.',
    'Опускайтесь, ведя локти назад вдоль корпуса, пока грудь не приблизится к кистям.',
@@ -777,7 +786,7 @@ const EX = [
  anim:{view:'side',
   A:plankA([10, 171], 70.4, {arm:{ik:[131, 181], b:'back', hA:90}}),
   B:plankA([10, 171], 84, {arm:{ik:[131, 181], b:'back', hA:90}})}},
-{id:'dip', name:'Отжимания на брусьях', eq:[['dipbars']], g:'chest', pri:['chest', 'triceps'], sec:['delt_f'], type:'c', lvl:2,
+{id:'dip', name:'Отжимания на брусьях', eq:[['dipbars']], g:'chest', pri:['chest', 'triceps'], sec:['delt_f', 'serratus'], type:'c', lvl:2,
  tech:['Упритесь в брусья на прямых руках, плечи опущены, лопатки сведены.',
    'Наклоните корпус вперёд на 20–30°, ноги слегка согнуты и скрещены.',
    'Опускайтесь до угла в локтях около 90°, локти идут назад.',
@@ -870,7 +879,7 @@ const EX = [
    {k:'seg', a:'elR', b:'wrR', w:12, cls:'eq-pad-s', layer:'mid'}, {k:'seg', a:'elL', b:'wrL', w:12, cls:'eq-pad-s', layer:'mid'}]}},
 
 /* ===== СПИНА ===== */
-{id:'pullup', name:'Подтягивания', eq:[['pullup']], g:'back', pri:['lats'], sec:['biceps', 'midback', 'forearms', 'chest', 'delt_r'], type:'c', lvl:2,
+{id:'pullup', name:'Подтягивания', eq:[['pullup']], g:'back', pri:['lats'], sec:['biceps', 'midback', 'forearms', 'chest', 'delt_r', 'cuff'], type:'c', lvl:2,
  tech:['Хват сверху чуть шире плеч, вис на прямых руках, лопатки опущены.',
    'Начните движение с опускания лопаток, затем тяните локти вниз к рёбрам.',
    'Поднимайтесь, пока подбородок не окажется над перекладиной.',
@@ -904,7 +913,7 @@ const EX = [
   A:{hip:[70, 100], torso:70, armF:{ik:[122, 136], b:'back', hA:90}, armN:{ik:[121, 132], b:'up', hA:180}, legF:{a:[180, 270], f:230}, legN:{ik:[86, 180], b:'fwd', f:90}},
   B:{hip:[70, 100], torso:70, armF:{ik:[122, 136], b:'back', hA:90}, armN:{tf:[16, 13], b:'up', hA:180}, legF:{a:[180, 270], f:230}, legN:{ik:[86, 180], b:'fwd', f:90}},
   props:[...benchFlat(18, 140, 138), {k:'db', at:'gripN', o:'perp', layer:'front'}]}},
-{id:'latpull', name:'Тяга верхнего блока', eq:[['cable']], g:'back', pri:['lats'], sec:['biceps', 'midback', 'chest', 'delt_r', 'forearms'], type:'c', lvl:1,
+{id:'latpull', name:'Тяга верхнего блока', eq:[['cable']], g:'back', pri:['lats'], sec:['biceps', 'midback', 'chest', 'delt_r', 'forearms', 'cuff'], type:'c', lvl:1,
  tech:['Сядьте и зафиксируйте бёдра под валиками. Хват сверху шире плеч.',
    'Слегка отклонитесь назад на 10–15°, грудь вперёд.',
    'Тяните рукоять к верхней части груди, сводя лопатки и опуская локти вниз.',
@@ -917,7 +926,7 @@ const EX = [
   props:[{k:'rect', x:74, y:130, w:52, h:9}, {k:'line', pts:[[100, 139], [100, GROUND]], w:5}, {k:'rect', x:68, y:133, w:64, h:6, rx:3, cls:'eq-pad'},
    {k:'barcable', from:[100, -6], layer:'back'}, {k:'fbar', ext:14, layer:'front'}]}},
 /* хваты верхнего блока: та же тяга, другая рукоять; объёмные позы — tools/mannequin/exercises/g3-cable.js */
-{id:'latpullv', name:'Тяга верхнего блока V-рукоятью', eq:[['cable']], g:'back', pri:['lats'], sec:['biceps', 'midback', 'chest', 'delt_r', 'forearms'], type:'c', lvl:1,
+{id:'latpullv', name:'Тяга верхнего блока V-рукоятью', eq:[['cable']], g:'back', pri:['lats'], sec:['biceps', 'midback', 'chest', 'delt_r', 'forearms', 'cuff'], type:'c', lvl:1,
  tech:['Сядьте и зафиксируйте бёдра под валиками. Возьмитесь за V-рукоять: ладони смотрят друг на друга.',
    'Слегка отклонитесь назад на 10–15°, грудь вперёд.',
    'Тяните рукоять к верхней части груди; локти идут вниз вдоль корпуса и чуть назад.',
@@ -930,7 +939,7 @@ const EX = [
   B:frontSeat({arm:{p:[[7, 25], [-12, 6]]}}),
   props:[{k:'rect', x:74, y:130, w:52, h:9}, {k:'line', pts:[[100, 139], [100, GROUND]], w:5}, {k:'rect', x:68, y:133, w:64, h:6, rx:3, cls:'eq-pad'},
    {k:'barcable', from:[100, -6], layer:'back'}, {k:'fbar', ext:2, layer:'front'}]}},
-{id:'latpulluh', name:'Тяга верхнего блока обратным хватом', eq:[['cable']], g:'back', pri:['lats'], sec:['biceps', 'midback', 'chest', 'delt_r', 'forearms'], type:'c', lvl:1,
+{id:'latpulluh', name:'Тяга верхнего блока обратным хватом', eq:[['cable']], g:'back', pri:['lats'], sec:['biceps', 'midback', 'chest', 'delt_r', 'forearms', 'cuff'], type:'c', lvl:1,
  tech:['Сядьте и зафиксируйте бёдра под валиками. Возьмите рукоять снизу, ладонями к себе, примерно на ширине плеч.',
    'Слегка отклонитесь назад на 10–15°, грудь вперёд.',
    'Тяните рукоять к верхней части груди; локти идут вниз вдоль корпуса.',
@@ -1012,7 +1021,7 @@ const EX = [
   props:[{k:'band', from:'toeN', at:'gripN', layer:'front'}]}},
 
 /* ===== ПЛЕЧИ ===== */
-{id:'dbpress', name:'Жим гантелей сидя', eq:[['db'], ['incline', 'bench']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'traps'], type:'c', lvl:1,
+{id:'dbpress', name:'Жим гантелей сидя', eq:[['db'], ['incline', 'bench']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'traps', 'serratus'], type:'c', lvl:1,
  tech:['Спинка скамьи вертикальна. Гантели у плеч, локти под гантелями, ладони вперёд.',
    'Прижмите спину к спинке, пресс напряжён.',
    'Выжмите гантели вверх по дуге, сводя их над головой.',
@@ -1024,7 +1033,7 @@ const EX = [
   B:frontSeat({arm:{p:[[14, -24], [8, -52]]}}),
   props:[{k:'rect', x:80, y:58, w:40, h:74, rx:5}, {k:'rect', x:74, y:130, w:52, h:9}, {k:'line', pts:[[100, 139], [100, GROUND]], w:5},
    {k:'db', at:'gripR', o:'h', layer:'front'}, {k:'db', at:'gripL', o:'h', layer:'front'}]}},
-{id:'ohp', name:'Жим штанги стоя', eq:[['bb']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'abs', 'traps'], type:'c', lvl:2,
+{id:'ohp', name:'Жим штанги стоя', eq:[['bb']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'abs', 'traps', 'serratus'], type:'c', lvl:2,
  tech:['Хват чуть шире плеч, гриф лежит на передних дельтах у ключиц, локти немного впереди грифа.',
    'Ноги на ширине таза, ягодицы и пресс напряжены.',
    'Выжмите гриф вертикально вверх, отводя голову назад, а затем верните её под гриф.',
@@ -1059,7 +1068,7 @@ const EX = [
  err:['Рывок корпусом', 'Подъём выше плеч с прогибом в спине'],
  breath:'Выдох при подъёме, вдох при опускании.',
  anim:{view:'side', A:stand({arm:{a:[176, 174]}}), B:stand({arm:{a:[88, 84]}}), props:DB_SIDES('end')}},
-{id:'facepull', name:'Тяга каната к лицу', eq:[['cable']], g:'shoulders', pri:['delt_r', 'midback'], sec:['traps'], type:'i', lvl:1,
+{id:'facepull', name:'Тяга каната к лицу', eq:[['cable']], g:'shoulders', pri:['delt_r', 'midback'], sec:['traps', 'cuff'], type:'i', lvl:1,
  tech:['Установите блок на уровне лба, возьмите канат хватом сверху, отступите на шаг.',
    'Тяните канат к лицу, разводя его концы и уводя локти высоко в стороны.',
    'В конечной точке кисти у ушей, лопатки сведены.',
@@ -1128,7 +1137,7 @@ const EX = [
  breath:'Выдох при сгибании, вдох при опускании.',
  anim:{view:'side', A:stand({arm:{a:[178, 176]}}), B:stand({arm:{a:[174, 28]}}),
   props:[{k:'band', from:'anN', foff:[4, 3], at:'gripN', layer:'front'}]}},
-{id:'chinup', name:'Подтягивания обратным хватом', eq:[['pullup']], g:'biceps', pri:['biceps', 'lats'], sec:['forearms', 'midback', 'chest', 'delt_r'], type:'c', lvl:2,
+{id:'chinup', name:'Подтягивания обратным хватом', eq:[['pullup']], g:'biceps', pri:['biceps', 'lats'], sec:['forearms', 'midback', 'chest', 'delt_r', 'cuff'], type:'c', lvl:2,
  tech:['Хват снизу на ширине плеч, вис на прямых руках.',
    'Тяните локти вниз к бокам, поднимая грудь к перекладине.',
    'Подбородок над перекладиной, затем медленное опускание до прямых рук.'],
@@ -1259,7 +1268,7 @@ const EX = [
  anim:{view:'front', rot:true,
   A:{c:[100, 97], rot:69, pivot:[100, 182], armR:{p:[[28, 11], [32, 13]]}, armL:{p:[[29, 3], [56, 4]]}, leg:{p:[[-4, 43], [-7, 85]], fd:[4, 4]}},
   B:{c:[100, 97], rot:68, pivot:[100, 182], armR:{p:[[28, 11], [32, 13]]}, armL:{p:[[10, 22], [2, 38]]}, leg:{p:[[-4, 43], [-7, 85]], fd:[4, 4]}}}},
-{id:'legraise', name:'Подъём ног в висе', eq:[['pullup']], g:'abs', pri:['abs'], sec:['obliques', 'forearms', 'quads', 'lats'], type:'i', lvl:3,
+{id:'legraise', name:'Подъём ног в висе', eq:[['pullup']], g:'abs', pri:['abs', 'hipflex'], sec:['obliques', 'forearms', 'quads', 'lats'], type:'i', lvl:3,
  tech:['Вис на перекладине, лопатки опущены, корпус неподвижен.',
    'Поднимите прямые или согнутые ноги до горизонтали или выше, подкручивая таз.',
    'Медленно опустите без раскачки.'],
@@ -1269,7 +1278,7 @@ const EX = [
   A:{hip:hipFromSh([100, 83], 0), torso:0, arm:{ik:[100, 26], b:'fwd'}, leg:{a:[180, 180], fr:-40}},
   B:{hip:hipFromSh([100, 83], -12), torso:-12, arm:{ik:[100, 26], b:'fwd'}, leg:{a:[82, 82], fr:-40}},
   props:[{k:'circle', c:[100, 24], r:4.5}, {k:'line', pts:[[70, 24], [130, 24]], w:2, cls:'eq-rail'}]}},
-{id:'lyinglegraise', name:'Подъём ног лёжа', eq:[], g:'abs', pri:['abs'], sec:['obliques', 'quads'], type:'i', lvl:1,
+{id:'lyinglegraise', name:'Подъём ног лёжа', eq:[], g:'abs', pri:['abs', 'hipflex'], sec:['obliques', 'quads'], type:'i', lvl:1,
  tech:['Лёжа на спине, руки вдоль тела, поясница прижата к полу.',
    'Поднимите прямые ноги до вертикали, в верхней точке слегка оторвите таз.',
    'Опускайте ноги медленно, не касаясь пятками пола.'],
@@ -1321,7 +1330,7 @@ const EX = [
   A:Object.assign({hip:[72, 108], torso:62, arm:{ik:[86, 130], b:'down'}}, legsAt(98)),
   B:Object.assign({hip:[92, 97], torso:-3, arm:{ik:[145, 52], b:'down'}}, legsAt(98)),
   props:[{k:'kb', at:'gripN', layer:'front'}]}},
-{id:'bulgarian', name:'Болгарские выпады', eq:[['bench']], opt:['db'], g:'glutes', pri:['quads', 'glutes'], sec:['hams'], type:'c', lvl:2, uni:true,
+{id:'bulgarian', name:'Болгарские выпады', eq:[['bench']], opt:['db'], g:'glutes', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:2, uni:true,
  tech:['Встаньте спиной к скамье, подъём стопы задней ноги лежит на скамье, передняя нога — в шаге впереди.',
    'Опускайтесь вертикально вниз, пока бедро передней ноги не станет параллельно полу.',
    'Колено передней ноги направлено по носку.',
@@ -1332,7 +1341,7 @@ const EX = [
   A:{hip:[90, 100], torso:4, arm:{a:[180, 180]}, legN:{ik:[124, 180], b:'fwd', f:90}, legF:{ik:[36, 134], b:'fwd', f:250}},
   B:{hip:[84, 139], torso:12, arm:{a:[180, 180]}, legN:{ik:[124, 180], b:'fwd', f:90}, legF:{ik:[36, 134], b:'fwd', f:250}},
   props:[...benchFlat(10, 56, 140), ...DB_SIDES('perp', 'db')]}},
-{id:'stepup', name:'Зашагивания на скамью', eq:[['bench']], opt:['db'], g:'quads', pri:['quads', 'glutes'], sec:['hams'], type:'c', lvl:1, uni:true,
+{id:'stepup', name:'Зашагивания на скамью', eq:[['bench']], opt:['db'], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:1, uni:true,
  tech:['Поставьте стопу на скамью или устойчивую платформу высотой не выше колена.',
    'Перенесите вес на эту ногу и поднимитесь, полностью её выпрямив.',
    'Опуститесь подконтрольно той же ногой.'],
@@ -1355,7 +1364,7 @@ const EX = [
   props:[{k:'plate', at:'grips', r:16, layer:'mid', if:'bb'}, ...DB_SIDES('end', 'db')]}},
 
 /* ===== КВАДРИЦЕПС ===== */
-{id:'squat', name:'Приседания со штангой', eq:[['bb']], g:'quads', pri:['quads', 'glutes'], sec:['lowback', 'hams', 'abs'], type:'c', lvl:2,
+{id:'squat', name:'Приседания со штангой', eq:[['bb']], g:'quads', pri:['quads', 'glutes'], sec:['lowback', 'hams', 'abs', 'adductors'], type:'c', lvl:2,
  tech:['Штанга на трапециях, стопы чуть шире плеч, носки немного развёрнуты.',
    'Вдох, напряжение пресса. Опускайтесь, одновременно сгибая колени и отводя таз назад.',
    'Колени идут по направлению носков, спина нейтральная.',
@@ -1367,7 +1376,7 @@ const EX = [
   A:Object.assign({hip:[92, 97], torso:2, arm:{tf:[51, -6], b:'down'}}, legsAt(98)),
   B:Object.assign({hip:[70, 146], torso:44, arm:{tf:[51, -6], b:'down'}}, legsAt(98)),
   props:[{k:'plate', tf:[53, -10], r:17, layer:'mid'}]}},
-{id:'goblet', name:'Гоблет-приседания', nameV:{kb:'Гоблет-приседания с гирей'}, eq:[['db', 'kb']], g:'quads', pri:['quads', 'glutes'], sec:['abs', 'lowback', 'hams'], type:'c', lvl:1,
+{id:'goblet', name:'Гоблет-приседания', nameV:{kb:'Гоблет-приседания с гирей'}, eq:[['db', 'kb']], g:'quads', pri:['quads', 'glutes'], sec:['abs', 'lowback', 'hams', 'adductors'], type:'c', lvl:1,
  tech:['Держите гантель вертикально у груди (или гирю за рожки), локти направлены вниз.',
    'Стопы чуть шире плеч. Приседайте, опуская таз между коленями; корпус вертикальный.',
    'Опуститесь как можно ниже с прямой спиной и поднимитесь.'],
@@ -1377,14 +1386,14 @@ const EX = [
   A:Object.assign({hip:[92, 97], torso:0, arm:{tf:[40, 17], b:'down'}}, legsAt(98)),
   B:Object.assign({hip:[72, 148], torso:24, arm:{tf:[40, 17], b:'down'}}, legsAt(98)),
   props:[{k:'db', at:'grips', o:'v', len:20, off:[0, 6], layer:'front', if:'db'}, {k:'kb', at:'grips', down:true, dist:9, layer:'front', if:'kb'}]}},
-{id:'airsquat', name:'Приседания с собственным весом', eq:[], g:'quads', pri:['quads', 'glutes'], sec:['hams'], type:'c', lvl:1,
+{id:'airsquat', name:'Приседания с собственным весом', eq:[], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:1,
  tech:['Стопы на ширине плеч, руки можно вытянуть вперёд для баланса.',
    'Отведите таз и опуститесь до параллели бедра с полом; колени по носкам, пятки на полу.',
    'Поднимитесь до полного выпрямления.'],
  err:['Колени внутрь', 'Отрыв пяток', 'Округление спины'],
  breath:'Вдох вниз, выдох вверх.',
  anim:{view:'side', A:stand({arm:{a:[180, 180]}}), B:Object.assign({hip:[70, 146], torso:38, arm:{a:[88, 88]}}, legsAt(98))}},
-{id:'lunge', name:'Сплит-приседания', eq:[], opt:['db'], g:'quads', pri:['quads', 'glutes'], sec:['hams'], type:'c', lvl:1, uni:true,
+{id:'lunge', name:'Сплит-приседания', eq:[], opt:['db'], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:1, uni:true,
  tech:['Поставьте ноги в длинный шаг, корпус вертикальный.',
    'Опускайтесь вертикально вниз, пока заднее колено почти не коснётся пола.',
    'Переднее колено над стопой, не уходит далеко за носок. Поднимитесь.'],
@@ -1394,7 +1403,7 @@ const EX = [
   A:{hip:[92, 103], torso:0, arm:{a:[180, 180]}, legN:{ik:[126, 180], b:'fwd', f:90}, legF:{ik:[56, 172], b:'fwd', f:155}},
   B:{hip:[90, 141], torso:4, arm:{a:[180, 180]}, legN:{ik:[126, 180], b:'fwd', f:90}, legF:{ik:[56, 172], b:'fwd', f:155}},
   props:DB_SIDES('perp', 'db')}},
-{id:'legpress', name:'Жим ногами', eq:[['legpress']], g:'quads', pri:['quads', 'glutes'], sec:['hams'], type:'c', lvl:1,
+{id:'legpress', name:'Жим ногами', eq:[['legpress']], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:1,
  tech:['Сядьте и прижмите поясницу к спинке. Стопы на платформе на ширине плеч.',
    'Снимите упоры и опускайте платформу, сгибая колени до угла около 90°.',
    'Выжмите платформу, не выпрямляя колени до щелчка.'],
@@ -1407,7 +1416,7 @@ const EX = [
    {k:'line', pts:[[104, GROUND], [164, 126]], w:4}, {k:'line', pts:[[52, 164], [52, GROUND]], w:4}, {k:'line', pts:[[40, 164], [92, 164]], w:5},
    {k:'platform', at:'anN', ang:45, layer:'front'}]}},
 /* тот же жим ногами со стопами выше и ниже на платформе; объёмные позы — tools/mannequin/exercises/g4-machines.js */
-{id:'legpresshigh', name:'Жим ногами с высокой постановкой стоп', eq:[['legpress']], g:'quads', pri:['glutes', 'quads'], sec:['hams'], type:'c', lvl:1,
+{id:'legpresshigh', name:'Жим ногами с высокой постановкой стоп', eq:[['legpress']], g:'quads', pri:['glutes', 'quads'], sec:['hams', 'adductors'], type:'c', lvl:1,
  tech:['Сядьте и прижмите поясницу к спинке. Стопы — в верхней части платформы на ширине плеч, носки недалеко от края.',
    'Снимите упоры и опускайте платформу, пока таз прижат к сиденью, — обычно до угла в коленях около 80°.',
    'Выжмите платформу через всю стопу, не выпрямляя колени до щелчка.'],
@@ -1420,7 +1429,7 @@ const EX = [
   props:[{k:'line', pts:[add([68, 150], dir(-62), -8).map((v, i) => v + [6, 10][i]), add([68, 150], dir(-62), 60).map((v, i) => v + [6, 10][i])], w:8, cls:'eq-pad-s'},
    {k:'line', pts:[[104, GROUND], [164, 126]], w:4}, {k:'line', pts:[[52, 164], [52, GROUND]], w:4}, {k:'line', pts:[[40, 164], [92, 164]], w:5},
    {k:'platform', at:'anN', ang:45, layer:'front'}]}},
-{id:'legpresslow', name:'Жим ногами с низкой постановкой стоп', eq:[['legpress']], g:'quads', pri:['quads'], sec:['glutes'], type:'c', lvl:1,
+{id:'legpresslow', name:'Жим ногами с низкой постановкой стоп', eq:[['legpress']], g:'quads', pri:['quads'], sec:['glutes', 'adductors'], type:'c', lvl:1,
  tech:['Сядьте и прижмите поясницу к спинке. Стопы — в нижней части платформы на ширине плеч, пятки у края, но целиком на платформе.',
    'Снимите упоры и опускайте платформу, пока пятки прижаты, — обычно до угла в коленях около 95°.',
    'Выжмите платформу, не выпрямляя колени до щелчка.'],
@@ -1445,7 +1454,7 @@ const EX = [
   props:[{k:'rect', x:56, y:137, w:68, h:8}, {k:'line', pts:[add([78, 128], dir(-12), 4).map((v, i) => v + [-12, 0][i]), add([78, 128], dir(-12), 58).map((v, i) => v + [-12, 0][i])], w:8, cls:'eq-pad-s'},
    {k:'line', pts:[[90, 145], [90, GROUND]], w:5}, {k:'line', pts:[[60, GROUND], [130, GROUND]], w:4},
    {k:'roller', leg:'N', side:-90, pivot:[123, 128], layer:'front'}]}},
-{id:'smithsquat', name:'Приседания в машине Смита', eq:[['smith']], g:'quads', pri:['quads', 'glutes'], sec:['hams'], type:'c', lvl:1,
+{id:'smithsquat', name:'Приседания в машине Смита', eq:[['smith']], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:1,
  tech:['Гриф на трапециях, стопы немного впереди грифа на ширине плеч.',
    'Снимите гриф поворотом кистей и опускайтесь до параллели бедра с полом; колени по носкам.',
    'Поднимитесь, не отрывая пяток.'],
@@ -1554,7 +1563,7 @@ EX.push(
   A:{hip:[118, 126], torso:-90, arm:{ik:[70, 72], b:'down'}, leg:{ik:[160, 180], b:'up', f:90}},
   B:{hip:[118, 126], torso:-90, arm:{ik:[82, 112], b:'down'}, leg:{ik:[160, 180], b:'up', f:90}},
   props:[...benchFlat(30, 150, 136), PLATE(16)]}},
-{id:'pullover', name:'Пуловер с гантелью', eq:[['db'], ['bench']], g:'chest', pri:['chest'], sec:['lats', 'triceps'], type:'i', lvl:1,
+{id:'pullover', name:'Пуловер с гантелью', eq:[['db'], ['bench']], g:'chest', pri:['chest'], sec:['lats', 'triceps', 'serratus'], type:'i', lvl:1,
  tech:['Лягте на скамью и держите гантель обеими руками за верхний диск над грудью, локти слегка согнуты.',
    'Опускайте гантель по дуге за голову до растяжения груди и широчайших.',
    'Верните гантель по той же дуге над грудью, не сгибая локти сильнее.'],
@@ -1564,7 +1573,7 @@ EX.push(
   A:{hip:[118, 126], torso:-90, arm:{a:[-4, -6]}, leg:{ik:[160, 180], b:'up', f:90}},
   B:{hip:[118, 126], torso:-90, arm:{a:[-98, -104]}, leg:{ik:[160, 180], b:'up', f:90}},
   props:[...benchFlat(30, 150, 136), {k:'db', at:'grips', o:'along', len:20, layer:'front'}]}},
-{id:'declinepush', name:'Отжимания с ногами на скамье', eq:[['bench']], g:'chest', pri:['chest', 'delt_f'], sec:['triceps', 'abs'], type:'c', lvl:2,
+{id:'declinepush', name:'Отжимания с ногами на скамье', eq:[['bench']], g:'chest', pri:['chest', 'delt_f'], sec:['triceps', 'abs', 'serratus'], type:'c', lvl:2,
  tech:['Поставьте носки на скамью, ладони на пол чуть шире плеч. Тело — прямая линия.',
    'Опускайтесь, пока грудь почти не коснётся пола; локти под 30–45° к корпусу.',
    'Выжмите себя вверх, не прогибаясь в пояснице.'],
@@ -1607,7 +1616,7 @@ EX.push(
   props:[{k:'plate', tf:[53, -10], r:17, layer:'mid'}]}},
 
 /* ===== ПЛЕЧИ ===== */
-{id:'arnold', name:'Жим Арнольда', eq:[['db'], ['incline', 'bench']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'traps'], type:'c', lvl:2,
+{id:'arnold', name:'Жим Арнольда', eq:[['db'], ['incline', 'bench']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'traps', 'serratus'], type:'c', lvl:2,
  tech:['Сядьте на скамью со спинкой. Гантели у верхней части груди, ладони к себе, локти перед корпусом.',
    'Начиная жим, разводите локти в стороны и разворачивайте кисти ладонями вперёд.',
    'Выжмите гантели над головой. Опустите их, выполняя движение в обратном порядке.'],
@@ -1627,7 +1636,7 @@ EX.push(
   A:frontStand({armR:{p:[[-1, 28], [-8, 54]]}, armL:{p:[[26, 18], [48, 32]]}}),
   B:frontStand({armR:{p:[[29, 2], [55, 6]]}, armL:{p:[[26, 18], [48, 32]]}}),
   props:[{k:'line', pts:[[28, 30], [28, GROUND]], w:5}, {k:'cable', from:[34, 180], at:'gripR', handle:true, layer:'front'}]}},
-{id:'reversefly', name:'Обратные разведения в «бабочке»', eq:[['pecdeck']], g:'shoulders', pri:['delt_r', 'midback'], sec:['traps'], type:'i', lvl:1,
+{id:'reversefly', name:'Обратные разведения в «бабочке»', eq:[['pecdeck']], g:'shoulders', pri:['delt_r', 'midback'], sec:['traps', 'cuff'], type:'i', lvl:1,
  tech:['Сядьте лицом к спинке тренажёра, грудь прижата к упору, рукояти на уровне плеч.',
    'Разведите почти прямые руки назад в стороны, сводя лопатки.',
    'Задержитесь на секунду и плавно верните руки.'],
@@ -1639,7 +1648,7 @@ EX.push(
   B:frontSeat({arm:{p:[[28, 2], [54, 4]]}}),
   props:[{k:'line', pts:[[100, 26], [100, GROUND]], w:5}, {k:'line', pts:[[56, 26], [144, 26]], w:5}, {k:'rect', x:72, y:130, w:56, h:9},
    {k:'db', at:'gripR', o:'v', len:14, layer:'front'}, {k:'db', at:'gripL', o:'v', len:14, layer:'front'}]}},
-{id:'bandfacepull', name:'Тяга эспандера к лицу', eq:[['band']], g:'shoulders', pri:['delt_r', 'midback'], sec:['traps'], type:'i', lvl:1,
+{id:'bandfacepull', name:'Тяга эспандера к лицу', eq:[['band']], g:'shoulders', pri:['delt_r', 'midback'], sec:['traps', 'cuff'], type:'i', lvl:1,
  tech:['Закрепите ленту на уровне лба — на дверном якоре или стойке. Возьмите концы хватом сверху и отступите до натяжения.',
    'Тяните ленту к лицу, разводя руки и уводя локти высоко в стороны.',
    'Задержитесь, сведя лопатки, и медленно вернитесь.'],
@@ -1699,7 +1708,7 @@ EX.push(
   props:[...benchFlat(18, 140, 138), {k:'db', at:'gripN', o:'perp', layer:'front'}]}},
 
 /* ===== ПРЕСС ===== */
-{id:'declinecrunch', name:'Скручивания на скамье для пресса', eq:[['abbench', 'decline']], g:'abs', pri:['abs'], sec:['obliques'], type:'i', lvl:1,
+{id:'declinecrunch', name:'Скручивания на скамье для пресса', eq:[['abbench', 'decline']], g:'abs', pri:['abs'], sec:['obliques', 'hipflex'], type:'i', lvl:1,
  tech:['Зафиксируйте ноги под валиками, лягте на наклонную скамью, руки скрещены на груди.',
    'Скручивайтесь, отрывая лопатки и приближая рёбра к тазу, примерно до 45° к скамье.',
    'Медленно опуститесь, не ложась лопатками на скамью, чтобы сохранить напряжение.'],
@@ -1710,7 +1719,7 @@ EX.push(
   A:{hip:[118, 126], torso:-112, head:0, arm:{ra:[155, 25]}, leg:{a:[58, 150], fr:-90}},
   B:{hip:[118, 126], torso:-58, head:16, arm:{ra:[155, 25]}, leg:{a:[58, 150], fr:-90}},
   props:declineBench([118, 126], -112, [58, 150])}},
-{id:'captainraise', name:'Подъём коленей в упоре на локтях', eq:[['captain']], g:'abs', pri:['abs', 'obliques'], sec:[], type:'i', lvl:1,
+{id:'captainraise', name:'Подъём коленей в упоре на локтях', eq:[['captain']], g:'abs', pri:['abs', 'obliques', 'hipflex'], sec:[], type:'i', lvl:1,
  tech:['Встаньте в стойку для пресса: спина прижата к спинке, предплечья на упорах, ноги свисают.',
    'Поднимите колени к груди, слегка подкручивая таз вперёд.',
    'Медленно опустите ноги, не раскачиваясь.'],
@@ -1722,7 +1731,7 @@ EX.push(
   B:{hip:[100, 92], torso:-6, arm:{a:[180, 90], hA:90}, leg:{a:[84, 174], fr:-60}},
   props:[{k:'line', pts:[[83, 30], [83, GROUND]], w:5}, {k:'line', pts:[[70, GROUND], [120, GROUND]], w:4},
    {k:'rect', x:80, y:36, w:9, h:78, rx:4}, {k:'rect', x:96, y:73, w:36, h:6, rx:3}, {k:'line', pts:[[83, 76], [96, 76]], w:4}, {k:'circle', c:[134, 70], r:3.5}]}},
-{id:'hangknee', name:'Подъём коленей в висе', eq:[['pullup']], g:'abs', pri:['abs', 'obliques'], sec:['forearms', 'lats'], type:'i', lvl:2,
+{id:'hangknee', name:'Подъём коленей в висе', eq:[['pullup']], g:'abs', pri:['abs', 'obliques', 'hipflex'], sec:['forearms', 'lats'], type:'i', lvl:2,
  tech:['Вис на перекладине хватом сверху, лопатки опущены.',
    'Подтяните колени к груди, подкручивая таз.',
    'Медленно опустите ноги без раскачки.'],
@@ -1788,7 +1797,7 @@ EX.push(
    {hip:[92, 97], torso:0, arm:{ik:[95, 99], b:'back', hA:180}, legN:{ik:[98, 180], b:'fwd', f:90}, legF:{ik:[98, 180], b:'fwd', f:90}},
    {hip:[78, 146], torso:62, arm:{ik:[126, 180], b:'back', hA:90}, legN:{ik:[98, 180], b:'fwd', f:90}, legF:{ik:[98, 180], b:'fwd', f:90}},
    {hip:PLANK_TOP.hip, torso:70.4, arm:{ik:[139, 180], b:'back', hA:90}, legN:{ik:[10, 171], b:'fwd', f:160}, legF:{ik:[10, 171], b:'fwd', f:160}}]}},
-{id:'mountain', name:'Скалолаз', eq:[], g:'cardio', pri:['abs', 'quads'], sec:['delt_f', 'chest'], type:'c', lvl:1, kind:'time',
+{id:'mountain', name:'Скалолаз', eq:[], g:'cardio', pri:['abs', 'quads'], sec:['delt_f', 'chest', 'hipflex'], type:'c', lvl:1, kind:'time',
  tech:['Примите упор лёжа на прямых руках, ладони под плечами.',
    'Поочерёдно и быстро подтягивайте колени к груди, удерживая таз на уровне плеч.',
    'Дышите ритмично, не поднимайте таз вверх.'],
@@ -1922,7 +1931,7 @@ for (const ex of EX) {
 const leanBack = (theta, ankle, grip) => { const t = theta * D2R, sh = [ankle[0] - 137 * Math.sin(t), ankle[1] - 137 * Math.cos(t)]; return {hip:add(sh, dir(-theta), -FL.torso), torso:-theta, arm:{ik:grip, b:'down'}, leg:{a:[180 - theta, 180 - theta], f:90}}; };
 EX.push(
 /* --- отжимания: лестница сложности --- */
-{id:'wallpush', name:'Отжимания от стены', eq:[], g:'chest', pri:['chest'], sec:['triceps', 'delt_f'], type:'c', lvl:1,
+{id:'wallpush', name:'Отжимания от стены', eq:[], g:'chest', pri:['chest'], sec:['triceps', 'delt_f', 'serratus'], type:'c', lvl:1,
  tech:['Встаньте в шаге от стены, ладони на стене на уровне груди, чуть шире плеч.', 'Сгибайте локти, приближая грудь к стене; тело прямое, пятки на полу.', 'Оттолкнитесь до прямых рук.'],
  err:['Прогиб в пояснице', 'Локти разведены под 90°', 'Слишком близко к стене — нет нагрузки'],
  breath:'Вдох к стене, выдох от стены.',
@@ -1930,7 +1939,7 @@ EX.push(
   A:{hip:[84, 100], torso:12, arm:{a:[96, 94], hA:0}, leg:{ik:[70, 180], b:'fwd', f:90}},
   B:{hip:[94, 98], torso:22, arm:{a:[120, 48], hA:0}, leg:{ik:[70, 180], b:'fwd', f:90}},
   props:[{k:'line', pts:[[132, 0], [132, GROUND]], w:6, cls:'eq-rail'}]}},
-{id:'inclinepush', name:'Отжимания с рук на возвышении', eq:[['bench']], g:'chest', pri:['chest'], sec:['triceps', 'delt_f'], type:'c', lvl:1,
+{id:'inclinepush', name:'Отжимания с рук на возвышении', eq:[['bench']], g:'chest', pri:['chest'], sec:['triceps', 'delt_f', 'serratus'], type:'c', lvl:1,
  tech:['Ладони на скамье или устойчивом возвышении чуть шире плеч, тело прямое от пяток до макушки.', 'Опускайте грудь к краю скамьи, локти под 45° к корпусу.', 'Выжмите себя до прямых рук.'],
  err:['Провисание таза', 'Голова тянется вниз раньше груди', 'Неполная амплитуда'],
  breath:'Вдох вниз, выдох вверх.',
@@ -1938,14 +1947,14 @@ EX.push(
   A:plankA([10, 171], 58, {arm:{ik:[128, 136], b:'back', hA:90}}),
   B:plankA([10, 171], 66, {arm:{ik:[128, 136], b:'back', hA:90}}),
   props:benchFlat(104, 160, 139)}},
-{id:'kneepush', name:'Отжимания с колен', eq:[], g:'chest', pri:['chest'], sec:['triceps', 'delt_f'], type:'c', lvl:1,
+{id:'kneepush', name:'Отжимания с колен', eq:[], g:'chest', pri:['chest'], sec:['triceps', 'delt_f', 'serratus'], type:'c', lvl:1,
  tech:['Упор на ладони и колени, голени можно скрестить. От колен до макушки — прямая линия, таз не «сидит» назад.', 'Опускайте грудь к полу, локти под 45° к корпусу.', 'Выжмите себя вверх до прямых рук.'],
  err:['Таз отставлен назад — работают только руки', 'Прогиб в пояснице', 'Локти в стороны'],
  breath:'Вдох вниз, выдох вверх.',
  anim:{view:'side',
   A:{hip:hipFromSh([126, 124], 54), torso:54, arm:{ik:[139, 181], b:'back', hA:90}, leg:{a:[234, 270], f:250}},
   B:{hip:hipFromSh([141, 157], 76), torso:76, arm:{ik:[139, 181], b:'back', hA:90}, leg:{a:[256, 270], f:250}}}},
-{id:'widepush', name:'Отжимания широким хватом', eq:[], g:'chest', pri:['chest'], sec:['delt_f', 'triceps', 'abs'], type:'c', lvl:2,
+{id:'widepush', name:'Отжимания широким хватом', eq:[], g:'chest', pri:['chest'], sec:['delt_f', 'triceps', 'abs', 'serratus'], type:'c', lvl:2,
  tech:['Ладони в полтора раза шире плеч, пальцы слегка наружу. Тело прямое.', 'Опускайтесь, пока грудь не окажется в 3–5 см от пола; локти уходят в стороны, но не выше плеч.', 'Выжмите себя вверх, сводя грудные.'],
  err:['Локти выше плеч — нагрузка на плечевые суставы', 'Провисание таза'],
  breath:'Вдох вниз, выдох вверх.',
@@ -1953,7 +1962,7 @@ EX.push(
   A:{c:[100, 100], arm:{p:[[30, 18], [34, 46]]}, leg:{p:[[4, 42], [5, 84]], fd:[2, 4]}},
   B:{c:[100, 100], arm:{p:[[34, 4], [36, 12]]}, leg:{p:[[4, 42], [5, 84]], fd:[2, 4]}},
   props:[{k:'rect', x:46, y:0, w:108, h:190, rx:14, cls:'eq-mat', layer:'back'}], viewNote:'вид сверху'}},
-{id:'archer', name:'Отжимания «лучник»', eq:[], g:'chest', pri:['chest', 'triceps'], sec:['delt_f', 'abs', 'obliques'], type:'c', lvl:3, uni:true,
+{id:'archer', name:'Отжимания «лучник»', eq:[], g:'chest', pri:['chest', 'triceps'], sec:['delt_f', 'abs', 'obliques', 'serratus'], type:'c', lvl:3, uni:true,
  tech:['Ладони широко. Опускайтесь к одной руке, вторая выпрямляется в сторону и скользит по полу.', 'Грудь к рабочей ладони, локоть вдоль корпуса.', 'Выжмите себя в центр и повторите на другую сторону.'],
  err:['Разворот корпуса', 'Опорная рука не вертикальна', 'Таз провисает'],
  breath:'Вдох вниз, выдох вверх.',
@@ -1978,7 +1987,7 @@ EX.push(
  anim:{view:'side',
   A:{hip:[100, 176], torso:92, head:-24, arm:{a:[94, 94], hA:94}, leg:{a:[270, 270], fr:-90}},
   B:{hip:[100, 173], torso:80, head:-22, arm:{a:[66, 66], hA:66}, leg:{a:[256, 256], fr:-90}}}},
-{id:'ytw', name:'Разведения лёжа «Y-T-W»', eq:[], g:'back', pri:['midback', 'delt_r'], sec:['traps', 'lowback', 'delt_s'], type:'i', lvl:1,
+{id:'ytw', name:'Разведения лёжа «Y-T-W»', eq:[], g:'back', pri:['midback', 'delt_r', 'cuff'], sec:['traps', 'lowback', 'delt_s'], type:'i', lvl:1,
  tech:['Лягте на живот, лоб на полотенце. Поднимите прямые руки вперёд-в стороны буквой Y, большие пальцы вверх.', 'Опустите, затем поднимите руки точно в стороны (T), затем согните локти под 90° и поднимите (W).', 'Три положения — одно повторение. Лопатки сводите в каждом.'],
  err:['Подъём корпуса вместо рук', 'Плечи поднимаются к ушам', 'Рывки'],
  breath:'Выдох на подъёме рук, вдох при опускании.',
@@ -2019,7 +2028,7 @@ EX.push(
   A:{hip:[84, 138], torso:0, arm:{a:[180, 180]}, leg:{ik:[128, 180], b:'fwd', f:90}},
   B:{hip:[84, 137], torso:0, arm:{a:[180, 180]}, leg:{ik:[128, 180], b:'fwd', f:90}},
   props:[{k:'line', pts:[[72, 0], [72, GROUND]], w:6, cls:'eq-rail'}]}},
-{id:'revlunge', name:'Обратные выпады', eq:[], opt:['db'], g:'quads', pri:['quads', 'glutes'], sec:['hams'], type:'c', lvl:1, uni:true,
+{id:'revlunge', name:'Обратные выпады', eq:[], opt:['db'], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:1, uni:true,
  tech:['Стоя, сделайте шаг назад и опуститесь, пока заднее колено почти не коснётся пола.', 'Переднее колено над стопой, корпус вертикален.', 'Оттолкнитесь передней ногой и вернитесь в стойку. Чередуйте ноги.'],
  err:['Короткий шаг', 'Наклон корпуса вперёд', 'Колено внутрь'],
  breath:'Вдох на шаге назад, выдох на возврате.',
@@ -2028,14 +2037,14 @@ EX.push(
    {hip:[92, 118], torso:4, arm:{a:[180, 180]}, legN:{ik:[100, 180], b:'fwd', f:90}, legF:{ik:[56, 178], b:'fwd', f:150}},
    {hip:[90, 141], torso:4, arm:{a:[180, 180]}, legN:{ik:[100, 180], b:'fwd', f:90}, legF:{ik:[56, 172], b:'fwd', f:155}}],
   props:DB_SIDES('perp', 'db')}},
-{id:'sidelunge', name:'Боковые выпады', eq:[], g:'quads', pri:['quads', 'glutes'], sec:['hams'], type:'c', lvl:1, uni:true,
+{id:'sidelunge', name:'Боковые выпады', eq:[], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:1, uni:true,
  tech:['Стопы широко, носки вперёд.', 'Сгибайте одну ногу, отводя таз назад и в сторону; вторая нога прямая, стопа на полу целиком.', 'Оттолкнитесь и вернитесь в центр, затем в другую сторону.'],
  err:['Колено заваливается внутрь', 'Отрыв стопы прямой ноги', 'Округление спины'],
  breath:'Вдох при опускании, выдох при возврате.',
  anim:{view:'front',
   A:{c:[100, 97], arm:{p:[[2, 29], [3, 56]]}, leg:{p:[[22, 38], [30, 80]], fd:[6, 3]}},
   B:{c:[122, 128], armR:{p:[[-6, 24], [-18, 36]]}, armL:{p:[[-6, 24], [-18, 36]]}, legR:{p:[[8, 22], [10, 50]], fd:[6, 3]}, legL:{p:[[52, 24], [62, 50]], fd:[8, 3]}}}},
-{id:'pistolbox', name:'Приседания на одной ноге на скамью', eq:[['bench']], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'abs'], type:'c', lvl:2, uni:true,
+{id:'pistolbox', name:'Приседания на одной ноге на скамью', eq:[['bench']], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'abs', 'adductors'], type:'c', lvl:2, uni:true,
  tech:['Встаньте спиной к скамье на одной ноге, вторую вытяните вперёд, руки перед собой.', 'Медленно опускайтесь до касания скамьи, колено опорной ноги по носку.', 'Встаньте без отталкивания от скамьи. Чем ниже скамья, тем тяжелее.'],
  err:['Падение на скамью', 'Колено внутрь', 'Отрыв пятки'],
  breath:'Вдох вниз, выдох вверх.',
@@ -2091,7 +2100,7 @@ EX.push(
  anim:{view:'side',
   A:{hip:[70, 128], torso:90, head:-10, arm:{ik:[120, 181], b:'back', hA:90}, leg:{a:[180, 270], f:200}},
   B:{hip:[70, 128], torso:90, head:-10, armN:{a:[90, 90], hA:90}, armF:{ik:[120, 181], b:'back', hA:90}, legN:{a:[270, 270], fr:-90}, legF:{a:[180, 270], f:200}}}},
-{id:'hollow', name:'Удержание «лодочки» на спине', eq:[], g:'abs', pri:['abs'], sec:['obliques'], type:'i', lvl:2, kind:'time',
+{id:'hollow', name:'Удержание «лодочки» на спине', eq:[], g:'abs', pri:['abs'], sec:['obliques', 'hipflex'], type:'i', lvl:2, kind:'time',
  tech:['Лёжа на спине, прижмите поясницу к полу, руки вдоль тела или вверх.', 'Оторвите лопатки и прямые ноги от пола на 15–20 см; тело в форме пологой дуги.', 'Удерживайте положение. Чем ниже ноги и дальше руки, тем тяжелее.'],
  err:['Прогиб в пояснице', 'Подбородок к груди слишком сильно', 'Задержка дыхания'],
  breath:'Ровное дыхание, без задержек.',
@@ -2219,7 +2228,7 @@ EX.push(
   A:{hip:[80, 112], torso:52, arm:{ik:[122, 160], b:'back', hA:90}, leg:{ik:[90, 180], b:'fwd', f:90}},
   B:{hip:[80, 112], torso:52, arm:{ik:[114, 116], b:'back', hA:90}, leg:{ik:[90, 180], b:'fwd', f:90}},
   props:[{k:'circle', c:[40, 180], r:5, cls:'eq-steel-f'}, {k:'seg', a:'gripN', b:'gripN', aoff:[0, 0], boff:[-82, 20], w:4, layer:'back'}, {k:'plate', at:'gripN', off:[-6, 8], r:11, layer:'mid'}]}},
-{id:'assistpull', name:'Подтягивания в гравитроне', eq:[['gravitron']], assist:true, g:'back', pri:['lats'], sec:['biceps', 'midback', 'chest', 'delt_r', 'forearms'], type:'c', lvl:1,
+{id:'assistpull', name:'Подтягивания в гравитроне', eq:[['gravitron']], assist:true, g:'back', pri:['lats'], sec:['biceps', 'midback', 'chest', 'delt_r', 'forearms', 'cuff'], type:'c', lvl:1,
  tech:['Выставьте противовес: чем он больше, тем легче. Встаньте коленями на платформу, хват чуть шире плеч.',
    'Подтянитесь, ведя локти вниз, пока подбородок не окажется над рукоятями.',
    'Опуститесь медленно до прямых рук, не роняя платформу.'],
@@ -2248,7 +2257,7 @@ EX.push(
    ...DB_SIDES('perp')]}},
 
 /* ===== ПЛЕЧИ ===== */
-{id:'shoulderpressm', name:'Жим сидя в тренажёре', eq:[['shoulderpress']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'traps'], type:'c', lvl:1,
+{id:'shoulderpressm', name:'Жим сидя в тренажёре', eq:[['shoulderpress']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'traps', 'serratus'], type:'c', lvl:1,
  tech:['Сиденье так, чтобы рукояти были на уровне плеч или чуть ниже. Спина у спинки, стопы на полу.',
    'Выжмите рукояти вверх, не выпрямляя локти до щелчка.',
    'Опустите под контролем до уровня ушей, не ударяя весом о стек.'],
@@ -2260,7 +2269,7 @@ EX.push(
   props:[{k:'rect', x:80, y:58, w:40, h:74, rx:5}, {k:'rect', x:74, y:130, w:52, h:9}, {k:'line', pts:[[100, 139], [100, GROUND]], w:5},
    {k:'line', pts:[[36, 10], [36, GROUND]], w:4}, {k:'line', pts:[[164, 10], [164, GROUND]], w:4},
    {k:'seg', a:'gripL', b:'gripL', aoff:[0, 0], boff:[-16, 0], w:4, layer:'front'}, {k:'seg', a:'gripR', b:'gripR', aoff:[0, 0], boff:[16, 0], w:4, layer:'front'}]}},
-{id:'smithohp', name:'Жим сидя в машине Смита', eq:[['smith'], ['incline']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'traps'], type:'c', lvl:1,
+{id:'smithohp', name:'Жим сидя в машине Смита', eq:[['smith'], ['incline']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'traps', 'serratus'], type:'c', lvl:1,
  tech:['Скамья со спинкой под 80–90° под грифом так, чтобы гриф опускался перед лицом к ключицам.',
    'Снимите гриф поворотом кистей и выжмите вверх до почти прямых рук.',
    'Опустите до уровня подбородка под контролем.'],
@@ -2273,7 +2282,7 @@ EX.push(
    {k:'line', pts:[[28, 0], [28, GROUND]], w:3, cls:'eq-rail'}, {k:'line', pts:[[172, 0], [172, GROUND]], w:3, cls:'eq-rail'}, {k:'fbar', ext:40, plates:true, layer:'front'}]}},
 
 /* ===== ТРИЦЕПС ===== */
-{id:'assistdip', name:'Отжимания на брусьях в гравитроне', eq:[['gravitron']], assist:true, g:'triceps', pri:['triceps', 'chest'], sec:['delt_f'], type:'c', lvl:1,
+{id:'assistdip', name:'Отжимания на брусьях в гравитроне', eq:[['gravitron']], assist:true, g:'triceps', pri:['triceps', 'chest'], sec:['delt_f', 'serratus'], type:'c', lvl:1,
  tech:['Выставьте противовес, встаньте коленями на платформу, возьмитесь за нижние рукояти, корпус прямой.',
    'Опуститесь, сгибая локти назад до угла 90°.',
    'Выжмите себя вверх, не разводя локти в стороны.'],
@@ -2338,7 +2347,7 @@ EX.push(
   B:frontSeat({arm:{p:[[14, 16], [16, 36]]}, leg:{p:[[30, 20], [34, 54]]}}),
   props:[{k:'rect', x:80, y:60, w:40, h:72, rx:5}, {k:'rect', x:74, y:130, w:52, h:9}, {k:'line', pts:[[100, 139], [100, GROUND]], w:5},
    {k:'line', pts:[[62, 150], [62, 176]], w:6, cls:'eq-pad'}, {k:'line', pts:[[138, 150], [138, 176]], w:6, cls:'eq-pad'}]}},
-{id:'adduction', name:'Сведение ног в тренажёре', eq:[['abductor']], g:'quads', pri:['quads'], sec:['glutes'], type:'i', lvl:1,
+{id:'adduction', name:'Сведение ног в тренажёре', eq:[['abductor']], g:'quads', pri:['adductors'], sec:[], type:'i', lvl:1,
  tech:['Сядьте, упоры с внутренней стороны коленей, ноги разведены до растяжения приводящих мышц.',
    'Сведите колени вместе за счёт внутренней поверхности бедра, задержитесь.',
    'Разведите медленно до исходного растяжения.'],
@@ -2351,7 +2360,7 @@ EX.push(
    {k:'line', pts:[[88, 150], [88, 176]], w:6, cls:'eq-pad'}, {k:'line', pts:[[112, 150], [112, 176]], w:6, cls:'eq-pad'}]}},
 
 /* ===== КВАДРИЦЕПС ===== */
-{id:'hacksquat', name:'Приседания в гакк-машине', eq:[['hack']], g:'quads', pri:['quads'], sec:['glutes', 'hams'], type:'c', lvl:2,
+{id:'hacksquat', name:'Приседания в гакк-машине', eq:[['hack']], g:'quads', pri:['quads'], sec:['glutes', 'hams', 'adductors'], type:'c', lvl:2,
  tech:['Спина и таз прижаты к салазкам, плечи под упорами, стопы на платформе на ширине плеч, чуть впереди.',
    'Снимите стопоры и опускайтесь, сгибая колени до угла 90° или глубже, если таз не отрывается.',
    'Выжмите вверх через всю стопу, не блокируя колени.'],
@@ -7433,7 +7442,9 @@ const MUSCLE_REGIONS={
  traps:[['trap_upper','Верхняя область трапециевидной','teaching'],['trap_mid','Средняя область трапециевидной','teaching']],
  lats:[['lats','Широчайшие · общий профиль','group']],midback:[['midback','Межлопаточная область · общий профиль','group']],
  lowback:[['lowback','Разгибатели спины · общий профиль','group']],abs:[['abs','Прямая мышца живота','anatomical']],
- obliques:[['obliques','Косые мышцы живота · общий профиль','group']],forearms:[['forearms','Мышцы предплечья · общий профиль','group']]
+ obliques:[['obliques','Косые мышцы живота · общий профиль','group']],forearms:[['forearms','Мышцы предплечья · общий профиль','group']],
+ adductors:[['adductors','Приводящие мышцы бедра · общий профиль','group']],hipflex:[['hipflex','Подвздошно-поясничная · глубже','deep']],
+ serratus:[['serratus','Передняя зубчатая','anatomical']],cuff:[['cuff','Вращательная манжета · глубже','deep']]
 };
 const REGION_META=Object.fromEntries(Object.entries(MUSCLE_REGIONS).flatMap(([parent,rows])=>rows.map(([id,label,kind])=>[id,{id,parent,label,kind,visible:kind!=='deep'}])));
 const REGION_ANATOMY_SOURCES=[['Анатомия мышц плечевого пояса — OpenStax','https://openstax.org/books/anatomy-and-physiology-2e/pages/11-5-muscles-of-the-pectoral-girdle-and-upper-limbs'],['Анатомия мышц ног — OpenStax','https://openstax.org/books/anatomy-and-physiology-2e/pages/11-6-appendicular-muscles-of-the-pelvic-girdle-and-lower-limbs']];
@@ -7445,7 +7456,7 @@ const PULL_CHEST=new Set(['latpull','latpullv','latpulluh','assistpull','pullup'
 const LOWER_CHEST=new Set(['declinebb','dip','assistdip']);
 const CATALOG_LATERALITY={dbrow:{upper:'L'},cablelat:{upper:'R'},concentration:{upper:'L'},kickback:{upper:'L'},archer:{upper:'R'},bulgarian:{lower:'L'},stepup:{lower:'L'},lunge:{lower:'L'},revlunge:{lower:'L'},sidelunge:{lower:'R'},pistolbox:{lower:'L'},sllift:{lower:'L'},glutebridge1:{lower:'L'},glutekick:{lower:'L'},cablekickback:{lower:'L'},calf1:{lower:'L'}};
 function catalogSideValues(profile,values){
- const sides={L:{...values},R:{...values}},lower=new Set(['quads','hams','calves','glutes']);
+ const sides={L:{...values},R:{...values}},lower=new Set(['quads','hams','calves','glutes','adductors','hipflex']);
  for(const[part,active]of Object.entries(profile.laterality||{}))for(const[id,r]of Object.entries(profile.regions)){
   const applies=part==='lower'?lower.has(r.parent):!lower.has(r.parent)&&!['abs','obliques','lowback','traps'].includes(r.parent);
   if(applies)sides[active==='L'?'R':'L'][id]=.28;
@@ -7454,7 +7465,7 @@ function catalogSideValues(profile,values){
 for(const ex of EX){
  const base=ex.anim.muscleProfile,hold=ex.anim.hold,cyclic=ex.g==='cardio'||!!ex.kind,muscles=base?JSON.parse(JSON.stringify(base.muscles)):{};
  for(const[id,role]of [...ex.pri.map(id=>[id,'primary']),...ex.sec.filter(id=>!ex.pri.includes(id)).map(id=>[id,'support'])])if(!muscles[id]){
-  const stabilizer=['abs','obliques','lowback','forearms'].includes(id)&&role!=='primary';
+  const stabilizer=['abs','obliques','lowback','forearms','cuff'].includes(id)&&role!=='primary';
   const start=role==='primary'?.42:.30,end=role==='primary'?.62:.44;
   const c=hold?[.58,.58,.58]:stabilizer?[.34,.37,.34]:[start,role==='primary'?.83:.60,end];
   muscles[id]={role:stabilizer?'stabilizer':role,concentric:c,eccentric:hold?[...c]:stabilizer?[...c]:[start,role==='primary'?.62:.46,end]};
@@ -7527,11 +7538,13 @@ function catalogMuscleSurfaces(R,profile,{coarse=false}={}){
    Корпус: h — высота вдоль оси корпуса от середины тазобедренных суставов, угол от передней линии к боку и спине.
    Конечности: t — доля сегмента, угол от передней поверхности к латеральной. Дельты лежат на «шапке» плеча. */
 const MANNEQUIN_TORSO_PATCHES=[['pec_clavicular',43,51.8,.06,1.12],['pec_sternal',34,43,.06,1.22],['pec_costal',29,34,.08,1.02],['abs',3,29,.04,.5],['obliques',3,28,.56,1.36],
- ['lats',13,40.2,1.52,2.62],['midback',33,51.8,2.62,3.1],['lowback',3,24,2.7,3.1],['glute_max',-5.3,4,1.72,3.1],['glute_lateral',-3.5,7,1.16,1.7],['trap_upper',50.8,59.8,2.05,3.1],['trap_mid',40.2,50.8,2.3,2.68]];
+ ['lats',13,40.2,1.52,2.62],['serratus',28,39,1.24,1.5],['midback',33,51.8,2.62,3.1],['lowback',3,24,2.7,3.1],['glute_max',-5.3,4,1.72,3.1],['glute_lateral',-3.5,7,1.16,1.7],['trap_upper',50.8,59.8,2.05,3.1],['trap_mid',40.2,50.8,2.3,2.68]];
 const MANNEQUIN_LIMB_PATCHES={
  ua:[['bi_long',.33,.84,.05,.8],['bi_short',.33,.84,-.8,-.05],['tri_long',.3,.86,2.5,3.9],['tri_lateral',.3,.85,1.7,2.45]],
  fa:[['forearms',.12,.76,-1.25,1.25]],
- th:[['quad_rectus',.15,.8,-.44,.44],['quad_lateral',.12,.82,.48,1.48],['quad_medial',.44,.91,-1.38,-.48],['ham_lateral',.16,.82,1.67,2.71],['ham_medial',.18,.84,2.77,4.45]],
+ th:[['quad_rectus',.15,.8,-.44,.44],['quad_lateral',.12,.82,.48,1.48],['quad_medial',.44,.91,-1.38,-.48],['ham_lateral',.16,.82,1.67,2.71],['ham_medial',.18,.84,2.77,4.45],
+  /* приводящие: внутренняя поверхность бедра — широко вверху (длинная, короткая, большая приводящие), узко ниже, до колена (тонкая, большая) */
+  ['adductors',.04,.42,-1.8,-.5],['adductors',.42,.86,-1.8,-1.42]],
  sk:[['calf_lateral',.1,.56,2.05,3.12],['calf_medial',.1,.56,3.16,4.22]]
 };
 const MANNEQUIN_DELTS=[['delt_f',-.75,.75],['delt_s',.8,1.75],['delt_r',1.8,2.75]];
@@ -10826,11 +10839,11 @@ document.addEventListener('keydown', e => {
    Обратный путь к упражнениям: сначала мышца, потом движения. Список берётся из инвентаря текущего места;
    то, что требует другого инвентаря, показано отдельно с подсказкой, где оно есть. */
 const ATLAS_GROUPS = [
-  ['Грудь и плечи', ['chest', 'delt_f', 'delt_s', 'delt_r']],
+  ['Грудь и плечи', ['chest', 'delt_f', 'delt_s', 'delt_r', 'serratus', 'cuff']],
   ['Руки', ['biceps', 'triceps', 'forearms']],
   ['Спина', ['lats', 'midback', 'traps', 'lowback']],
   ['Корпус', ['abs', 'obliques']],
-  ['Ноги', ['glutes', 'quads', 'hams', 'calves']]
+  ['Ноги', ['glutes', 'quads', 'adductors', 'hipflex', 'hams', 'calves']]
 ];
 const ATLAS_ORDER = ATLAS_GROUPS.flatMap(g => g[1]);
 /* что делает мышца — коротко, чтобы было понятно, зачем её тренировать */
@@ -10851,10 +10864,17 @@ const MUSCLE_INFO = {
   glutes:'Разгибают бедро — выводят из приседа и толкают таз вперёд. Средняя ягодичная удерживает таз и колено на одной линии.',
   quads:'Разгибают колено. Прямая мышца бедра ещё и поднимает бедро вперёд.',
   hams:'Сгибают колено и разгибают бедро. Работают в наклонах от таза и сгибаниях ног.',
-  calves:'Поднимают на носки. Икроножная сильнее включается с прямым коленом, камбаловидная — с согнутым.'
+  calves:'Поднимают на носки. Икроножная сильнее включается с прямым коленом, камбаловидная — с согнутым.',
+  adductors:'Сводят ноги. Большая приводящая ещё и разгибает бедро: в глубоком приседе и выпаде она работает вместе с ягодичными.',
+  hipflex:'Поднимают бедро к корпусу — подвздошно-поясничная мышца, прямая мышца бедра, портняжная. Главные мышцы подъёмов ног и коленей.',
+  serratus:'Прижимает лопатку к рёбрам, выводит её вперёд и поворачивает вверх. Работает в отжиманиях и жимах над головой.',
+  cuff:'Четыре глубокие мышцы вокруг плечевого сустава: держат головку плеча во впадине и вращают руку. Работают в разведениях назад, «Y-T-W» и тягах сверху.'
 };
+/* мышцы-помощники: упражнений, где они главная цель, почти нет — в атласе они показаны по упражнениям, в которых работают
+   в помощь, а тренировка с акцентом на них не предлагается */
+const ATLAS_SUPPORT = new Set(['serratus', 'cuff']);
 /* мышцы задней поверхности: камера для превью ищет их со спины */
-const ATLAS_BACK = new Set(['delt_r', 'triceps', 'traps', 'midback', 'lats', 'lowback', 'glutes', 'hams', 'calves']);
+const ATLAS_BACK = new Set(['delt_r', 'triceps', 'traps', 'midback', 'lats', 'lowback', 'glutes', 'hams', 'calves', 'cuff']);
 let atlasEx = null, atlasCam = null;
 /* ракурсы превью: «спереди» и «сзади» — три четверти, так видно и мышцу, и движение */
 const ATLAS_CAMS = {angle:'Спереди', rear:'Со спины', side:'Сбоку', above:'Сверху'};
@@ -10918,7 +10938,7 @@ const ATLAS_SPLIT = {
   delt_r:[['delt_r', [[67, 36], [73, 36.8], [76, 46], [76.5, 55.5], [72, 48]]], ['delt_s', [[73, 36.8], [75, 37], [81, 43], [82, 53], [78, 58], [76.5, 55.5], [76, 46]]]]
 };
 function atlasMapSvg(sel, counts) {
-  const neutral = new Set(['head', 'neck', 'hand', 'pelvis', 'adduct', 'knee', 'foot', 'flank']);
+  const neutral = new Set(['head', 'neck', 'hand', 'pelvis', 'knee', 'foot', 'flank']);
   const view = (shapes, dx, label) => {
     const by = new Map(), base = [];
     for (const [m, kind, d] of shapes) {
@@ -10980,8 +11000,8 @@ function renderAtlas() {
       <p class="at-desc">${esc(MUSCLE_INFO[m])}</p>
       <div class="at-where"><span class="at-wl">Упражнений на эту мышцу</span><div class="places at-places" role="group" aria-label="Где тренируетесь">${S.places.map(p => { const n = here(p); return `<button type="button" class="place${p.id === S.place ? ' on' : ''}" data-place="${p.id}" aria-pressed="${p.id === S.place}"><b>${esc(p.name)}</b><small>${n}</small></button>`; }).join('')}</div></div>
       <div class="at-acts">
-        <button type="button" class="btn" data-atlas-focus="${m}">Тренировка с акцентом на эту мышцу →</button>
-        ${S.focus === m ? '<span class="at-focus-on">Акцент уже выбран</span>' : ''}
+        ${ATLAS_SUPPORT.has(m) ? '<p class="f-note">Эта мышца работает в помощь основным и отдельной тренировки не требует: она включается в упражнениях ниже.</p>' : `<button type="button" class="btn" data-atlas-focus="${m}">Тренировка с акцентом на эту мышцу →</button>
+        ${S.focus === m ? '<span class="at-focus-on">Акцент уже выбран</span>' : ''}`}
       </div>`;
   if (first) {
     const it = previewItem(atlasEx);
@@ -10993,7 +11013,7 @@ function renderAtlas() {
       <div class="at-keep" id="at-keep">${atlasKeepHtml(atlasEx)}</div>
       <p class="at-hint">Оранжевым выделена выбранная мышца: чем ярче цвет, тем сильнее она работает в этот момент повторения.</p>`;
     if (A.pri.length) html += `<h3 class="at-h">Основная нагрузка <small>${A.pri.length}</small></h3>${atlasList(A.pri, m, atlasEx, 8)}`;
-    else html += `<p class="warn-inline">Здесь нет упражнений, где ${esc(lower)} — основная цель. Ниже — те, где она помогает, и что нужно для остальных.</p>`;
+    else if (!ATLAS_SUPPORT.has(m)) html += `<p class="warn-inline">Здесь нет упражнений, где ${esc(lower)} — основная цель. Ниже — те, где она помогает, и что нужно для остальных.</p>`;
     if (A.sec.length) html += `<h3 class="at-h">Помогает <small>${A.sec.length}</small></h3>${atlasList(A.sec, m, atlasEx, 5)}`;
   } else {
     html += `<div class="empty"><h2>Здесь нечем нагрузить эту мышцу</h2><p>В месте «${esc(place.name)}» нет подходящего инвентаря. Ниже — что для этого нужно.</p></div>`;
@@ -11859,4 +11879,4 @@ renderPlan();
 prefetchStressIds();
 logInit();
 
-window.PODHOD_VERSION='4.32.0';window.PODHOD_BUILD='4.32.0-83a551fbe585';window.PODHOD_LANG='ru';
+window.PODHOD_VERSION='4.33.0';window.PODHOD_BUILD='4.33.0-e7fca4ad3c1f';window.PODHOD_LANG='ru';
