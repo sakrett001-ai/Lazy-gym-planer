@@ -174,7 +174,7 @@ function mountDetailCameras(){
   const other=pairCamera(a,key);F.extra=make(other);$('#mv-second-stage').replaceChildren(F.extra.svg);
   $('#mv-second-label').textContent=CAMERA3[other].label;$('#mv-second-hint').textContent=a.cameraHints?.[other]||'';
  }else $('#mv-second-stage').replaceChildren();
- configureMusclePanel('mv',F.it);configureStressPanel('mv',F);applySkeleton(F);applyAnatomy(F);paintMotion(F,true);
+ configureMusclePanel('mv',F.it);configureStressPanel('mv',F);applyFigureView(F);paintMotion(F,true);
 }
 /* второй ракурс пары: из профиля мышц упражнения, иначе первый другой */
 function pairCamera(a,key){const cameras=a.catalogCameras||a.cameras||[],preferred=motionProfile(a)?.pair;return preferred!==key&&cameras.includes(preferred)?preferred:cameras.find(c=>c!==key);}

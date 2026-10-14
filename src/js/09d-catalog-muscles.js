@@ -140,8 +140,9 @@ function mannequinMuscleSurfaces(R,profile,{coarse=false}={}){
 function catalogFigureAnim(anim){
  return {...anim,noGround:anim.catalogBasis==='mannequin'?false:anim.noGround,rig3d:anim.catalogRig,muscleProfile:anim.catalogProfile,camera:'above',cameras:anim.catalogCameras,sample:t=>({spatialT:t}),catalogRig:null};
 }
-function catalogVolumeData(anim,t,index,has,coarse=false){
+/* lean — для вида «Анатомия»/«Скелет»: области манекена скрыты, их поверхности не нужны */
+function catalogVolumeData(anim,t,index,has,coarse=false,lean=false){
  const R=anim.catalogRig(t),state=muscleFrame(anim,t,index),profile=motionProfile(anim);
- if(R.frames)return{exerciseId:anim.catalogId,pose:R,body:Mannequin.bodyData(R),stress:jointStressPoints(anim,R,t,index),surfaces:mannequinMuscleSurfaces(R,profile,{coarse}),values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>GymEquipment.visible(s,has)),torsoRings:[],limbProfiles:{}};
+ if(R.frames)return{exerciseId:anim.catalogId,pose:R,body:Mannequin.bodyData(R),stress:jointStressPoints(anim,R,t,index),surfaces:lean?[]:mannequinMuscleSurfaces(R,profile,{coarse}),values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>GymEquipment.visible(s,has)),torsoRings:[],limbProfiles:{}};
  return{exerciseId:anim.catalogId,pose:R,surfaces:catalogMuscleSurfaces(R,profile,{coarse}),values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>!s.optional||!has||has(s.optional)),torsoRings:CATALOG_RINGS,limbProfiles:CATALOG_LIMB_PROFILES};
 }

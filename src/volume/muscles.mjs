@@ -1,20 +1,52 @@
 import * as THREE from 'three';
 
-/* Слой мышц объёмной сцены (режим «Анатомия мышц»). Мышца — тело вдоль линии действия: путь от начала через
+/* Слой мышц объёмной сцены (вид «Анатомия» подробного разбора). Мышца — тело вдоль линии действия: путь от начала через
    промежуточные точки к прикреплению, огибающий кости (src/js/09br-muscles.js). Толщина — по объёму брюшка и длинам
    сухожилий (этап М2): при укорочении мышца утолщается; у кожи сечение сплющивается вдоль неё. Вершины тела считает
    Muscles.surface (каталог, см) — те же, что проверяет tools/muscles/check.js; здесь они переводятся в сцену (м, Y вверх).
    Все мышцы — одна сетка трубок постоянной топологии: кадр обновляет координаты, нормали и (при смене упражнения) цвета.
-   Мышцы упражнения выделены цветом: основные — цветом нагрузки, вспомогательные — бледнее. */
+   Цвет (look из сцены): с «Мышцами по фазам» — участие мышцы в текущей фазе по учебному профилю упражнения (как
+   у областей манекена: головка берёт свою область профиля, у упражнений на одну сторону — своя сторона), без них —
+   основные мышцы цветом нагрузки, вспомогательные бледнее. Выбранная область оставляет цвет только своим мышцам. */
 const ARC_STEP=1.5;   /* шаг дуг огибания, см */
 export const MUSCLE_REST='#b98c86';
+/* часть мышцы → учебная область профиля (src/js/09d-catalog-muscles.js, MUSCLE_REGIONS); прочие берут значение группы */
+export const PART_REGION={pecm1:'pec_clavicular',pecm2:'pec_sternal',pecm3:'pec_costal',trilong:'tri_long',trilat:'tri_lateral',trimed:'tri_medial',
+ biclong:'bi_long',bicshort:'bi_short',recfem:'quad_rectus',vaslat:'quad_lateral',vasmed:'quad_medial',vasint:'quad_deep',bflh:'ham_lateral',bfsh:'ham_lateral',
+ semimem:'ham_medial',semiten:'ham_medial',gasmed:'calf_medial',gaslat:'calf_lateral',soleus:'soleus',glmax:'glute_max',glmed:'glute_lateral',glmin:'glute_lateral',
+ trapsup:'trap_upper',trapmid:'trap_mid'};
+const REGION_PARENTS=new WeakMap();
+function regionsOf(regions){
+ if(!regions)return new Map();let m=REGION_PARENTS.get(regions);if(m)return m;m=new Map();
+ for(const[id,r]of Object.entries(regions)){if(!m.has(r.parent))m.set(r.parent,[]);m.get(r.parent).push(id);}
+ REGION_PARENTS.set(regions,m);return m;
+}
+/* цвет мышцы mu: level — уровни групп упражнения (1 — основные), look — {values, sideValues, regions, phases, selected} */
+export function muscleTint(mu,level,look,color){
+ const groups=mu.group||[];if(!groups.length)return MUSCLE_REST;
+ const key=g=>{const r=PART_REGION[mu.part];return r&&look?.regions?.[r]?.parent===g?r:g;};
+ const sel=look?.selected&&look.selected!=='all'?look.selected:null;
+ if(sel&&!groups.some(g=>key(g)===sel))return MUSCLE_REST;
+ if(look?.phases&&look.values){
+  /* значения стороны мышцы; у части без своей области (плечевая, трапециевидная снизу, малая грудная) — наибольшее из
+     областей её группы на этой стороне: в упражнении на одну сторону и они на нерабочей стороне в покое */
+  const side=look.sideValues?.[mu.side]||look.values,byParent=regionsOf(look.regions);let v=0,any=false;
+  for(const g of groups){
+   if(look.values[g]===undefined)continue;any=true;const k=key(g);
+   const own=k!==g||look.regions?.[g]?side[k]:undefined,rest=own===undefined?(byParent.get(g)||[]).map(id=>side[id]).filter(Number.isFinite):[];
+   v=Math.max(v,own??(rest.length?Math.max(...rest):side[g]??look.values[g]));
+  }
+  return any?color(v):MUSCLE_REST;
+ }
+ const v=Math.max(0,...groups.map(g=>level?.[g]||0));return v>=1?color(1):v>0?color(.55):MUSCLE_REST;
+}
 /* последний расчёт вершин (на все сцены): данные мышц, матрицы костей кадра и вершины */
 const LAST={muscles:null,only:null,frames:null,pos:null,nor:null};
 const sameFrames=(a,b)=>{if(!a||!b||a.length!==b.length)return false;for(let i=0;i<a.length;i++)if(a[i]!==b[i])return false;return true;};
 export function createMuscleLayer(parent){
  const group=new THREE.Group();group.name='muscles';group.visible=false;parent.add(group);
  /* геометрия — при первом включении: сцена строится и для миниатюр атласа, где мышц нет */
- let mesh=null,geo=null,material=null,bound=null,key=null,colored=null,start=null,owner=null,SIDES=0;
+ let mesh=null,geo=null,material=null,bound=null,key=null,tint=null,start=null,owner=null,SIDES=0;
  const c=new THREE.Color();
  function build(){
   const M=globalThis.Muscles;SIDES=M.SIDES;
@@ -32,20 +64,21 @@ export function createMuscleLayer(parent){
   if(!material)material=new THREE.MeshStandardMaterial({roughness:.55,metalness:0,vertexColors:true});
   if(mesh){group.remove(mesh);}
   mesh=new THREE.Mesh(geo,material);mesh.name='muscle-bodies';mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=false;group.add(mesh);
+  tint=new Array(bound.length).fill(null);
  }
- /* цвет мышцы: уровень её групп в упражнении (1 — основные, 0.38 — вспомогательные) */
- function paint(level,color){
-  const col=geo.attributes.color.array;
+ /* перекрашиваются только мышцы, чей цвет сменился (по фазам цвет меняется плавно, кадр за кадром — немногие) */
+ function paint(level,look,color){
+  const col=geo.attributes.color.array;let changed=false;
   bound.forEach((mu,i)=>{
-   const v=Math.max(0,...(mu.group||[]).map(g=>level?.[g]||0));c.set(v>=1?color(1):v>0?color(.55):MUSCLE_REST);
+   const hex=muscleTint(mu,level,look,color);if(tint[i]===hex)return;tint[i]=hex;changed=true;c.set(hex);
    for(let k=start[i]*SIDES;k<start[i+1]*SIDES;k++){col[k*3]=c.r;col[k*3+1]=c.g;col[k*3+2]=c.b;}
   });
-  geo.attributes.color.needsUpdate=true;
+  if(changed)geo.attributes.color.needsUpdate=true;
  }
- function update(anatomy,frames,color){
+ function update(anatomy,frames,color,look=null){
   const M=globalThis.Muscles,k=anatomy.muscles;
-  if(key!==k||bound?.skel!==anatomy.skeleton){bound=M.bind(k,anatomy.skeleton);bound.skel=anatomy.skeleton;key=k;build();colored=null;}
-  if(colored!==anatomy.level||bound.color!==color){paint(anatomy.level,color);colored=anatomy.level;bound.color=color;}
+  if(key!==k||bound?.skel!==anatomy.skeleton){bound=M.bind(k,anatomy.skeleton);bound.skel=anatomy.skeleton;key=k;build();}
+  paint(anatomy.level,look,color);
   const pos=geo.attributes.position.array,nor=geo.attributes.normal.array,only=anatomy.only||null;
   /* второй вид разбора показывает ту же позу: вершины берутся из прошлого расчёта, если кости кадра те же */
   if(LAST.muscles===k&&!only&&!LAST.only&&LAST.pos?.length===pos.length&&sameFrames(LAST.frames,frames)){pos.set(LAST.pos);nor.set(LAST.nor);finish();return;}

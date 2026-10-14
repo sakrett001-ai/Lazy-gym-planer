@@ -36,6 +36,21 @@ export const STUDIO={
  exposure:.93,                               /* на 7 % тише: сверху освещённые мышцы не выцветают */
  muscleGlow:.28                              /* собственное свечение мышц: держит цвет в тени, не пересвечивает на свету */
 };
+/* Силуэт кожи поверх костей и мышц: непрозрачность середины (кожа смотрит на зрителя) и контура (кожа идёт вдоль
+   взгляда), крутизна перехода и цвет. Контур держит форму тела, середина не заслоняет цвет мышц. */
+export const GHOST={core:.03,rim:.62,power:2.2,color:'#cfdbec',order:4};
+function ghostMaterial(){
+ const m=new THREE.MeshStandardMaterial({color:GHOST.color,roughness:.7,metalness:0,transparent:true,depthWrite:false,side:THREE.DoubleSide});
+ const f=v=>v.toFixed(4);
+ m.onBeforeCompile=s=>{
+  s.fragmentShader=s.fragmentShader.replace('#include <opaque_fragment>',`
+   vec3 ghostView=isOrthographic?vec3(0.,0.,1.):normalize(vViewPosition);
+   float ghostRim=pow(1.-clamp(abs(dot(normalize(normal),ghostView)),0.,1.),${f(GHOST.power)});
+   gl_FragColor=vec4(outgoingLight,${f(GHOST.core)}+${f(GHOST.rim-GHOST.core)}*ghostRim);`);
+ };
+ m.name='ghost-skin';m.customProgramCacheKey=()=>'ghost-skin';
+ return m;
+}
 /* радиальная растяжка пола без DOM: светлое пятно под сценой, к краям — в цвет фона */
 function radialTexture(inner,outer,size=128){
  const a=new THREE.Color(inner),b=new THREE.Color(outer),data=new Uint8Array(size*size*4),c=new THREE.Color();
@@ -113,12 +128,25 @@ export function createCatalogScene(first,{coarse=false}={}){
  const floorGrid=fadingGrid(5,20,0x485b76,[0,-.01,1]);scene.add(floorGrid);
  const mannequin=first.body?createMannequinBody(scene,first,{skin,joint,sole,mesh}):null;
  const parts=mannequin?mannequin.parts:{};let body=mannequin?mannequin.parts.torso.mesh:null,head=mannequin?mannequin.parts.head.mesh:null,nose,neck,dots;
- /* режим «Скелет»: кости внутри, кожа полупрозрачная и не отбрасывает тень на кости; мышцы по фазам скрыты.
-    Режим «Анатомия мышц» — то же с линиями мышц (options.anatomy: {skeleton, muscles, level}); кости при этом — по «Скелету» */
+ /* вид «Скелет» (options.skeleton): кости внутри почти невидимого силуэта кожи, области манекена скрыты. Вид «Анатомия» —
+    то же с мышцами (options.anatomy: {skeleton, muscles, level}); кости при этом — по options.skeleton */
  const skeletonLayer=createSkeletonLayer(scene),muscleLayer=createMuscleLayer(scene);let ghosted=false;
+ /* Кожа в режимах «Анатомия» и «Скелет» — почти невидимый силуэт: виден один ближний к зрителю слой кожи, середина
+    почти прозрачна, к контуру плотнее (как у стекла). Иначе части манекена (корпус, конечности, шаровые «крышки»
+    суставов) просвечивают друг через друга пятнами. Два прохода: невидимый двойник каждой сетки пишет глубину кожи
+    уже после костей и мышц (прозрачные рисуются после непрозрачных), затем цветной проход рисует только этот слой.
+    Кисти пересобираются при смене хвата — двойники заводятся заново в каждом кадре. */
+ const ghostSkin=ghostMaterial(),ghostDepth=new THREE.MeshBasicMaterial({name:'ghost-depth',colorWrite:false,depthWrite:true,transparent:true,side:THREE.DoubleSide});
  function ghost(on){
-  if(on!==ghosted){ghosted=on;for(const m of [skin,joint,sole]){m.transparent=on;m.opacity=on?.22:1;m.depthWrite=!on;m.needsUpdate=true;}}
-  if(mannequin)mannequin.group.traverse(o=>{if(o.isMesh)o.castShadow=!on;});
+  ghosted=on;
+  const list=[];mannequin.group.traverse(o=>{if(o.isMesh&&!o.userData.ghostTwin)list.push(o);});
+  for(const o of list){
+   if(!o.userData.skin)o.userData.skin=o.material;
+   o.material=on?ghostSkin:o.userData.skin;o.castShadow=!on;o.renderOrder=on?GHOST.order+1:0;
+   let twin=o.userData.twin;
+   if(on&&!twin){twin=new THREE.Mesh(o.geometry,ghostDepth);twin.name='ghost-depth';twin.userData.ghostTwin=true;twin.castShadow=twin.receiveShadow=false;twin.renderOrder=GHOST.order;o.add(twin);o.userData.twin=twin;}
+   if(twin){twin.visible=on;twin.geometry=o.geometry;twin.frustumCulled=o.frustumCulled;}
+  }
  }
  if(!mannequin){
  body=mesh(scene,grid(first.torsoRings.length-1,torsoCols),skin,'torso');
@@ -199,8 +227,9 @@ export function createCatalogScene(first,{coarse=false}={}){
   const bonesOn=!!(mannequin&&options.skeleton&&data.body),musclesOn=!!(mannequin&&options.anatomy&&data.body),skeletonOn=bonesOn||musclesOn;
   const frames=musclesOn?globalThis.Skeleton.frames(R,data.body,options.anatomy.skeleton.bones):null;
   if(bonesOn)skeletonLayer.update(options.skeleton,R,data.body,frames&&options.anatomy.skeleton===options.skeleton?frames:undefined);else skeletonLayer.hide();
-  if(musclesOn)muscleLayer.update(options.anatomy,frames,options.color);else muscleLayer.hide();
+  if(musclesOn)muscleLayer.update(options.anatomy,frames,options.color,{values:data.values,sideValues:data.sideValues,regions:data.regions,phases:options.muscles!==false,selected:options.selected});else muscleLayer.hide();
   if(mannequin&&(skeletonOn||ghosted))ghost(skeletonOn);
+  if(skeletonOn||!data.surfaces.length)for(const o of regionMeshes.values())o.visible=false;
   if(!mannequin){
   updateGrid(body.geometry,data.torsoRings.length-1,torsoCols,(t,q)=>{
    const i=Math.min(data.torsoRings.length-2,Math.floor(t*(data.torsoRings.length-1))),f=t*(data.torsoRings.length-1)-i,a=data.torsoRings[i],b=data.torsoRings[i+1],h=a[0]+(b[0]-a[0])*f,w=a[1]+(b[1]-a[1])*f,ant=a[2]+(b[2]-a[2])*f,post=a[3]+(b[3]-a[3])*f,angle=q*Math.PI*2,s=Math.cos(angle);
@@ -296,5 +325,5 @@ export function createCatalogScene(first,{coarse=false}={}){
  /* геометрия, текстуры и карты теней освобождаются сразу; материалы — отдельно: пока они живы, рендерер держит их
     собранные программы для следующей фигуры (main.mjs) */
  function disposeGeometry(){scene.traverse(o=>{o.geometry?.dispose();if(o.isLight&&o.shadow?.map)o.shadow.dispose();if(o.material)for(const m of [].concat(o.material))m.map?.dispose();});for(const t of studioTextures)t.dispose();studioTextures=[];}
- function disposeMaterials(){const materials=new Set();scene.traverse(o=>{if(o.material)for(const m of [].concat(o.material))materials.add(m);});for(const m of materials)m.dispose();}
+ function disposeMaterials(){const materials=new Set([ghostSkin,ghostDepth]);scene.traverse(o=>{if(o.material)for(const m of [].concat(o.material))materials.add(m);});for(const m of materials)m.dispose();}
 }

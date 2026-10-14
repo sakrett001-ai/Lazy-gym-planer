@@ -55,11 +55,12 @@ export function createVolumeFigure(options){
  const slot=takeRenderer();
  if(!slot){rendererUnavailable=true;return null;}root.dataset.renderer='webgl';
  const{renderer,canvas}=slot,releasePrevious=slot.release;slot.release=null;
- const data=(t,index)=>options.data(t,index,false),initial=data(0,0);
+ /* lean — кадр для костей и мышц: области манекена тогда скрыты, их поверхности не считаются */
+ const data=(t,index,lean=false)=>options.data(t,index,false,lean),initial=data(0,0);
  const scene=createCatalogScene(initial),cameras=scene.cameras;root.append(renderer.domElement);let disposed=false,lastT=options.t||0,lastIndex=0,camera=options.camera||'above',selected='all',muscles=options.muscles!==false,joints=!!options.joints,stress=options.stress!==false,skeleton=null,anatomy=null;
  if(!cameras[camera])throw Error('Unknown volume camera '+camera);
  let updateVectors=()=>{};
- const apply=(t,index)=>{const d=data(t,index);scene.apply(d,{color:options.color,selected,muscles,joints,stress,skeleton,anatomy});updateVectors(t,index,d.pose);};
+ const apply=(t,index)=>{const d=data(t,index,!!(skeleton||anatomy));scene.apply(d,{color:options.color,selected,muscles,joints,stress,skeleton,anatomy});updateVectors(t,index,d.pose);};
  const trace=new THREE.Line(new THREE.BufferGeometry().setFromPoints(options.trace.map(p=>new THREE.Vector3(...world(p)))),new THREE.LineBasicMaterial({color:'#b4c3d9',transparent:true,opacity:.7}));trace.visible=false;scene.scene.add(trace);
  const vectors=new THREE.Group();vectors.name='movement-vectors';vectors.visible=false;scene.scene.add(vectors);
  for(const v of options.vectors){const a=new THREE.Vector3(...world(v.a)),b=new THREE.Vector3(...world(v.b)),d=b.clone().sub(a);vectors.add(new THREE.ArrowHelper(d.clone().normalize(),a,d.length(),/^(sh|hip)$/.test(v.key)?0x77a9d3:0xe97155,.075,.035));}
@@ -94,12 +95,14 @@ export function createVolumeFigure(options){
  const setSkeleton=data=>{skeleton=data||null;root.dataset.skeleton=skeleton?'on':'off';at(lastT,{index:lastIndex});};
  /* мышцы: {skeleton, muscles (Muscles.load()), level: {группа: 0..1}} или null — выключить */
  const setAnatomy=data=>{anatomy=data||null;root.dataset.anatomy=anatomy?'on':'off';at(lastT,{index:lastIndex});};
+ /* вид фигуры одним кадром: кости и мышцы (или null) */
+ const setLayers=(bones,body)=>{skeleton=bones||null;anatomy=body||null;root.dataset.skeleton=skeleton?'on':'off';root.dataset.anatomy=anatomy?'on':'off';at(lastT,{index:lastIndex});};
  at(lastT,{index:lastIndex});
  /* первый кадр нарисован: материалы прежней фигуры на этом рендерере больше не держат программы */
  try{releasePrevious?.();}catch(e){}
  /* смена ракурса без новой сцены: рамки всех камер уже посчитаны, поза та же */
  const setCamera=key=>{if(disposed||!cameras[key])return false;camera=key;root.dataset.camera=key;draw();return true;};
- return{svg:root,at,get camera(){return camera;},setCamera,setMuscles,setRegion,setJoints,setStress,setSkeleton,setAnatomy,setTrace(show){trace.visible=!!show;draw();},setVectors(show){vectors.visible=!!show;draw();},
+ return{svg:root,at,get camera(){return camera;},setCamera,setMuscles,setRegion,setJoints,setStress,setSkeleton,setAnatomy,setLayers,setTrace(show){trace.visible=!!show;draw();},setVectors(show){vectors.visible=!!show;draw();},
   dispose(){if(disposed)return;disposed=true;canvas.removeEventListener('webglcontextrestored',restore);observer?.disconnect();scene.disposeGeometry();slot.release=scene.disposeMaterials;spareRenderer(slot);}};
 }
 window.GymVolume={create:createVolumeFigure};
