@@ -68,7 +68,7 @@ const pair = (name, par, el) => [
 ];
 
 const md = JSON.parse(fs.readFileSync(IN, 'utf8'));
-md.muscles = md.muscles.filter(mu => !/^(LAT[456]|EO[78]|SCM\d|SPLcap\d|SPLcerv\d|SCAL(ant|med|post)\d|SPIN\d)_[rl]$/.test(mu.name));
+md.muscles = md.muscles.filter(mu => !/^(LAT[456]|EO[78]|SCM\d|SPLcap\d|SPLcerv\d|SCAL(ant|med|post)\d|SPIN\d|DELT3(med|lat))_[rl]$/.test(mu.name));
 
 /* ---------- 1. широчайшая ---------- */
 /* вершина остистого отростка L3 — самая задняя точка позвонка (каталог: Z вперёд) */
@@ -258,6 +258,33 @@ const extreme = (pts, f) => pts.reduce((a, q) => (f(q) > f(a) ? q : a));
     const pts = []; for (let n = lo; n >= hi; n--) pts.push(beside(n));
     md.muscles.push(...pair(name, { fmax: 0, L0: 0, LT: 0 }, pts.map(([B, p], k) => at3(B, p, k === 0 ? 'origin' : k === pts.length - 1 ? 'insertion' : 'via' + k))));
     console.log(`  ${name}: ${lo > 12 ? 'L' + (lo - 12) : 'T' + lo} → T${hi}, точек ${pts.length}`);
+  }
+}
+
+/* ---------- 5. задняя часть дельтовидной — веером вдоль ости лопатки (4.36.0) ---------- */
+/* В MoBL-ARMS задняя часть дельтовидной — одна линия от ости лопатки (у её наружной трети). С 4.36.0 её объём — по
+   препаратам (29 % дельтовидной, volumes.js, PART_SHARE), и одной трубкой такой объём выходит из кожи при руке над
+   головой до 4,6 см: у человека задняя часть — широкий пласт от нижней губы ости лопатки (Gray's Anatomy) к
+   дельтовидной бугристости. Добавлены ещё две линии с началом на ости ближе к середине (DELT3med) и у заднего угла
+   акромиона (DELT3lat); путь к плечу — как у DELT3 (те же огибающие тела MoBL-ARMS). Объём делится между тремя линиями
+   как между тремя задними элементами DAS3 (delt_scap_1…3, препарат Klein Breteler: 36 / 22 / 41 %). */
+{
+  const sc = bone('scapula', 'R'), D3 = s => md.muscles.find(mu => mu.name === 'DELT3_' + s);
+  const v = sc.w, lmin = Math.min(...v.map(q => midX - q[0])), lmax = Math.max(...v.map(q => midX - q[0])), [top, bot] = [Math.min(...v.map(q => q[1])), Math.max(...v.map(q => q[1]))];
+  const wOf = q => ((midX - q[0]) - lmin) / (lmax - lmin), hOf = q => (q[1] - top) / (bot - top);
+  /* нижняя губа ости: самая задняя точка лопатки на доле ширины w (в верхней трети высоты), на 0,6 см ниже — на поверхность */
+  const spine = w => { const c = v.filter(q => Math.abs(wOf(q) - w) < .04 && hOf(q) < .35), crest = extreme(c, q => -q[2]); return surface(sc, add(crest, [0, .6, -.3])); };
+  for (const [name, w, keepVia] of [['DELT3med', .3, false], ['DELT3lat', .8, true]]) {
+    const o = spine(w), s3 = at3(sc, o, 'origin');
+    for (const s of ['r', 'l']) {
+      const src = D3(s), el = JSON.parse(JSON.stringify(src.el));
+      const origin = s === 'r' ? s3 : { ...s3, bone: ['scapula', 'L'], p: [-s3.p[0], s3.p[1], s3.p[2]] };
+      el[0] = { s: { ...origin, site: `${name}-origin_${s}` } };
+      /* ближе к середине ости волокна идут к плечу вниз-наружу по подостной, не через задний угол акромиона: без его точки */
+      const path = keepVia ? el : el.filter((e, k) => !(e.s && k > 0 && e.s.bone[0] === 'scapula') && !(e.w && e.w.bone[0] === 'scapula'));
+      md.muscles.push({ name: `${name}_${s}`, side: s.toUpperCase(), fmax: src.fmax, L0: src.L0, LT: src.LT, src: 'анатомия (anatomy.js)', el: path });
+    }
+    console.log(`  ${name}: ость лопатки w ${w}, начало ${o.map(x => x.toFixed(1)).join(' ')}, точек пути ${keepVia ? 'как у DELT3' : 'без заднего угла акромиона'}`);
   }
 }
 

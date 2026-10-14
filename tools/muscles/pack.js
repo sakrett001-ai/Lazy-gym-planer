@@ -16,7 +16,7 @@ const output = path.resolve(root, process.argv[3] || 'src/data/muscles.bin');
 const PARTS = [
   [/^DELT1$/, 'delt1', 'Дельтовидная, передняя часть', ['delt_f']],
   [/^DELT2$/, 'delt2', 'Дельтовидная, средняя часть', ['delt_s']],
-  [/^DELT3$/, 'delt3', 'Дельтовидная, задняя часть', ['delt_r']],
+  [/^DELT3(med|lat)?$/, 'delt3', 'Дельтовидная, задняя часть', ['delt_r']],
   [/^SUPSP$/, 'supsp', 'Надостная', ['cuff']], [/^INFSP$/, 'infsp', 'Подостная', ['cuff']], [/^SUBSC$/, 'subsc', 'Подлопаточная', ['cuff']],
   [/^TMIN$/, 'tmin', 'Малая круглая', ['cuff']], [/^TMAJ$/, 'tmaj', 'Большая круглая', ['lats']],
   [/^PECM1$/, 'pecm1', 'Большая грудная, ключичная часть', ['chest']],
@@ -109,7 +109,9 @@ function withVolumes(out) {
   const R = M.catalogPose(M.neutral()), bound = Muscles.bind(out, skel), paths = Muscles.layoutDrawn(bound, Skeleton.frames(R, M.bodyData(R), skel.bones));
   const lengths = {}, fmax = {};
   out.muscles.forEach((m, i) => { lengths[m.name] = paths[i].length; fmax[m.name] = m.fmax; });
-  const vol = volumes(out.muscles.map(m => m.name), fmax, lengths, { stature: M.B.stature, mass: M.B.mass });
+  /* кости концов пути — чтобы сухожилие рисовалось у своей кости при любом порядке точек (volumes.js, BELLY: at) */
+  const ends = Object.fromEntries(out.muscles.map(m => { const ss = m.el.filter(e => e.s).map(e => e.s.bone[0]); return [m.name, [ss[0], ss.at(-1)]]; }));
+  const vol = volumes(out.muscles.map(m => m.name), fmax, lengths, { stature: M.B.stature, mass: M.B.mass }, ends);
   const r1 = x => Math.round(x * 10) / 10;
   for (const m of out.muscles) { const v = vol[m.name]; m.v = r1(v.v); m.t0 = r1(v.t0); m.t1 = r1(v.t1); m.l0 = r1(lengths[m.name]); delete m.fmax; }
   /* кожа над брюшком (Muscles.SKIN_U): глубина пути под кожей d (см), направление к коже o — перпендикуляр к пути,

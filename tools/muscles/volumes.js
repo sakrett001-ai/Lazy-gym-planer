@@ -24,7 +24,7 @@ const GROUPS = [
   ['Levator scapulae', /^lev_scap_\d$/], ['Supraspinatus', /^SUPSP$/], ['Trapezius', /^trap_(scap_?\d+|clav_\d)$/],
   ['Rhomboid', /^rhomboid_\d$/], ['Serratus anterior', /^serr_ant_?\d+$/], ['Latissimus dorsi', /^LAT[1-6]$/],
   ['Subscapularis', /^SUBSC$/], ['Teres major', /^TMAJ$/], ['Infraspinatus and teres minor', /^(INFSP|TMIN)$/],
-  ['Pectoralis minor', /^pect_min_\d$/], ['Pectoralis major', /^PECM[123]$/], ['Deltoid', /^DELT[123]$/],
+  ['Pectoralis minor', /^pect_min_\d$/], ['Pectoralis major', /^PECM[123]$/], ['Deltoid', /^DELT([123]|3med|3lat)$/],
   ['Triceps brachii', /^TRI(long|lat|med)$/], ['Coracobrachialis', /^CORB$/], ['Biceps brachii', /^BIC(long|short)$/],
   ['Brachialis', /^BRA$/], ['Brachioradialis', /^BRD$/], ['Extensor carpi radialis', /^ECR[LB]$/], ['Anconeus', /^ANC$/],
   ['Digit extensors', /^(EDC\d|EDM)$/], ['Extensor carpi ulnaris', /^ECU$/], ['Deep forearm extensors', /^(EIP|EPL|EPB|APL)$/],
@@ -58,6 +58,12 @@ const NECK = [
    поперечник × длина волокон у Delp и др. (2001) — остистая 1,6 см² × 5,2 см против длиннейшей 5,9 × 9,6 и
    подвздошно-рёберной 4,1 × 12,0, ≈ 7,3 %. Между пучками остистой — по длине пути. */
 const SPINALIS = (() => { const e = A.delp2001.erector, w = Object.values(e).map(([a, l]) => a * l); return w[0] / w.reduce((s, x) => s + x, 0); })();
+/* Деление между частями по препаратам (4.36.0, аудит точности): у дельтовидной и двуглавой плеча доли частей в
+   MoBL-ARMS расходятся с измерениями нескольких препаратов — задняя часть дельтовидной там 10 % объёма вместо 29 %
+   (Gómez и др., 2022, 6 препаратов; DAS3 по препарату Klein Breteler — 33 %), длинная головка двуглавой — 59 % вместо
+   51 % (Murray и др., 2000; DAS3 — 44 %). Для них веса частей — из fixtures/anatomy.json (parts), а не F · Lopt модели.
+   Остальные многочастные мышцы сверены и оставлены по моделям (README, «Объём»). */
+const PART_SHARE = Object.fromEntries(Object.entries(A.parts).filter(([k]) => k !== 'about').map(([g, v]) => [g, v.share]));
 /* мышцы пальцев: MyoSim (2–5 — указательный…мизинец) → MoBL-ARMS (I, M, R, L) */
 const DIGIT = { 2: 'I', 3: 'M', 4: 'R', 5: 'L' };
 function source(base) {
@@ -70,7 +76,11 @@ function source(base) {
   if (d) return P.mobl[d[1] + DIGIT[d[2]]];
   return P.mobl[base] || P.das3[base] || null;
 }
-/* брюшко: [шаблон, b — доля пути (или ключ Ward 2009), s — доля сухожилий в начале пути] */
+/* брюшко: [шаблон, b — доля пути (или ключ Ward 2009), s — доля сухожилий в начале пути, at — кость, у которой
+   основное сухожилие]. Порядок точек пути в моделях разный (у задней части дельтовидной путь идёт от лопатки, у
+   передней — от плеча; у наружной косой — то от рёбер, то от белой линии): если задан at и путь начинается не у этой
+   кости, а кончается у неё, доля s отсчитывается с другого конца (4.36.0 — раньше сухожилие задней дельты рисовалось
+   у ости лопатки, апоневроз пучков EO2–EO4 — у рёбер). */
 const BELLY = [
   /* ноги: путь — от начала (таз, бедро, голень) к прикреплению */
   [/^psoas$/, .75, 0], [/^iliacus$/, 'iliacus', 0], [/^glmax\d$/, 'glmax', .1], [/^glmed\d$/, 'glmed', .1], [/^glmin\d$/, .85, .1],
@@ -79,7 +89,7 @@ const BELLY = [
   [/^bflh$/, 'bflh', .35], [/^bfsh$/, 'bfsh', .1], [/^semiten$/, 'semiten', .25], [/^semimem$/, 'semimem', .45],
   [/^(tibant|ehl|edl|perlong|perbrev|fhl|fdl|tibpost|soleus)$/, null, .05], [/^gas(med|lat)$/, null, .1],
   /* плечо: путь — от плечевой кости (сухожилие прикрепления — в начале) */
-  [/^(DELT\d|PECM\d)$/, .85, .9], [/^(SUPSP|INFSP|SUBSC|TMIN|TMAJ)$/, .8, .9], [/^LAT[456]$/, .7, .4], [/^LAT\d$/, .75, .6], [/^CORB$/, .8, .3],
+  [/^(DELT\d|DELT3(med|lat)|PECM\d)$/, .85, .9, /^humerus/], [/^(SUPSP|INFSP|SUBSC|TMIN|TMAJ)$/, .8, .9, /^humerus/], [/^LAT[456]$/, .7, .4], [/^LAT\d$/, .75, .6], [/^CORB$/, .8, .3],
   [/^TRIlong$/, .75, .25], [/^TRI(lat|med)$/, .8, .1], [/^(ANC|SUP|PQ)$/, .95, .5], [/^BIClong$/, .55, .6], [/^BICshort$/, .6, .4],
   [/^BRA$/, .9, .1], [/^BRD$/, .65, .05], [/^PT$/, .85, .1],
   /* предплечье: брюшко — в верхней части, длинные сухожилия к кисти и пальцам */
@@ -90,7 +100,10 @@ const BELLY = [
   /* туловище: грудные пучки подвздошно-рёберной и длиннейшей — короткие брюшки на рёбрах и длинные хвостовые
      сухожилия (апоневроз выпрямителя), поясничные — мясистые; у косых — апоневроз спереди (начало пути) */
   [/^Ps_/, .95, .5], [/^rect_abd$/, .95, .5], [/^IL_R/, .45, .9], [/^IL_L/, .9, .5], [/^LTpT_/, .35, .9], [/^LTpL_/, .9, .5],
-  [/^QL_/, .9, .5], [/^MF_/, .85, .5], [/^(EO|IO)\d$/, .7, .9],
+  [/^QL_/, .9, .5], [/^MF_/, .85, .5],
+  /* косые: апоневроз — у белой линии (тело-посредник брюшной стенки — L3); пучки от рёбер к гребню подвздошной кости
+     (задние наружной, верхние внутренней) — мясистые */
+  [/^(EO[56]|IO[456])$/, .9, .5], [/^(EO|IO)\d$/, .7, .9, /^L3$/],
   /* 4.35.0 (anatomy.js, gait2392_import.py; оценки по анатомии, Gray's): остистая — короткие волокна и длинные сухожилия
      с обеих сторон; грудино-ключично-сосцевидная — сухожилие грудинной головки у грудины (начало пути); ременные и
      лестничные — мясистые; гребенчатая — мясистое начало, короткое плоское сухожилие у бедра */
@@ -116,13 +129,14 @@ const B_MIN = .3, B_MAX = .92;
 const base = n => n.replace(/_[rl]$/, '');
 
 /* stature, mass — рост и масса манекена; lengths — длины путей в нейтральной позе (см) по имени линии */
-function volumes(names, fmax, lengths, { stature, mass }) {
+function volumes(names, fmax, lengths, { stature, mass }, ends = {}) {
   const k = stature * mass / (A.mri.height * A.mri.mass), kw = stature / A.ward2009.height, out = {};
   const belly = n => {
     const b0 = base(n), row = BELLY.find(([re]) => re.test(b0));
     if (!row) throw Error('нет правила брюшка: ' + n);
-    let [, b, s] = row;
+    let [, b, s, at] = row;
     if (b === null) b = WARD_OF[b0];
+    const e = ends[n]; if (at && e && !at.test(e[0]) && at.test(e[1])) s = 1 - s;
     if (typeof b === 'string') b = A.ward2009.rows[b][0] * kw / lengths[n];
     return { b: Math.min(B_MAX, Math.max(B_MIN, b)), s };
   };
@@ -138,7 +152,7 @@ function volumes(names, fmax, lengths, { stature, mass }) {
       const lines = mine.filter(n => re.test(base(n)));
       if (!lines.length) throw Error('группа МРТ без линий: ' + g);
       const V = A.mri.male[g] * k;
-      let parts = lines.map(n => [n, weight(n)]);
+      let parts = lines.map(n => [n, PART_SHARE[g] ? PART_SHARE[g][base(n)] : weight(n)]);
       if (g === 'Psoas major') {
         /* общая часть (psoas) и пучки от позвонков (Ps_*): объём — по длинам, пучки между собой — по весам */
         const low = parts.filter(([n]) => base(n) === 'psoas'), up = parts.filter(([n]) => base(n) !== 'psoas');
@@ -181,4 +195,4 @@ function volumes(names, fmax, lengths, { stature, mass }) {
   }
   return out;
 }
-module.exports = { volumes, GROUPS, NECK, SPINALIS, BELLY, ORIGIN, source };
+module.exports = { volumes, GROUPS, NECK, SPINALIS, PART_SHARE, BELLY, ORIGIN, source };
