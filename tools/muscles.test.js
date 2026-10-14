@@ -44,8 +44,9 @@ const pose = (set = {}) => {
 const lengths = set => { const { m } = pose(set); return new Map(Muscles.layout(bound, m).map((p, i) => [bound[i].name, p.length])); };
 
 test('muscle data: every muscle sits on existing bones, has an anatomical name and app groups, both sides', () => {
-  assert.equal(md.muscles.length, 514);   /* 4.32.0: +6 — поясничный и подвздошные пучки широчайшей; 4.34.0: +4 — верхние зубцы наружной косой;
-                                              4.35.0: +42 — мышцы шеи, остистая (anatomy.js), гребенчатая (gait2392_import.py) */
+  assert.equal(md.muscles.length, 518);   /* 4.32.0: +6 — поясничный и подвздошные пучки широчайшей; 4.34.0: +4 — верхние зубцы наружной косой;
+                                              4.35.0: +42 — мышцы шеи, остистая (anatomy.js), гребенчатая (gait2392_import.py);
+                                              4.36.0: +4 — задняя часть дельтовидной веером (anatomy.js, раздел 5) */
   for (const mu of md.muscles) {
     assert(md.parts[mu.part], `${mu.name}: part ${mu.part}`);
     for (const g of mu.group) assert(GROUPS.has(g), `${mu.name}: unknown group ${g}`);
@@ -178,6 +179,16 @@ test('muscle volumes: each MRI muscle is split over its lines, totals equal the 
     const lines = md.muscles.filter(m => m.name.endsWith(side) && re.test(m.name.replace(/_[rl]$/, '')));
     const v = lines.reduce((s, m) => s + m.v, 0), V = A.neck.percent[g] / 100 * A.neck.total / 2 * kn;
     assert(lines.length && Math.abs(v - V) <= .06 * lines.length + .1, `${g}${side}: ${v.toFixed(1)} vs MRI ${V.toFixed(1)} cm³`);
+  }
+  /* доли частей по препаратам (4.36.0, volumes.js, PART_SHARE): задняя часть дельтовидной — 29,1 % (Gómez и др., 2022),
+     длинная головка двуглавой — 51 % (Murray и др., 2000) */
+  const share = (all, part) => { const a = md.muscles.filter(m => m.name.endsWith('_r') && all.test(m.name)), b = a.filter(m => part.test(m.name)); return b.reduce((s, m) => s + m.v, 0) / a.reduce((s, m) => s + m.v, 0); };
+  assert(Math.abs(share(/^DELT/, /^DELT3/) - .291) < .005, `posterior deltoid ${share(/^DELT/, /^DELT3/)}`);
+  assert(Math.abs(share(/^BIC/, /^BIClong/) - .512) < .005, `biceps long head ${share(/^BIC/, /^BIClong/)}`);
+  /* сухожилие — у своей кости при любом порядке точек пути (BELLY, at): путь задней части дельтовидной идёт от лопатки —
+     сухожилие у плеча (в конце); пучки EO2–EO4 идут от рёбер — апоневроз у белой линии (в конце) */
+  for (const n of ['DELT3_r', 'DELT3med_r', 'DELT3lat_r', 'EO2_r', 'EO3_r', 'EO4_r']) {
+    const m = md.muscles.find(x => x.name === n); assert(m.t1 > 3 * m.t0, `${n}: tendon at the start (${m.t0}) instead of the end (${m.t1})`);
   }
   /* остистая — 7,3 % выпрямителя (Delp и др., 2001: поперечник × длина волокон) */
   assert(Math.abs(SPINALIS - .073) < .002, `spinalis share ${SPINALIS}`);
