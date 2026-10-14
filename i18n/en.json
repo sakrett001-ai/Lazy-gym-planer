@@ -2613,6 +2613,10 @@
  "Манекен": "Mannequin",
  "Мышцы (вид «Анатомия») — пути из тех же моделей MyoSim; мышцы лопатки — из модели плеча": "Muscles (the “Anatomy” view) — paths from the same MyoSim models; shoulder-blade muscles — from the shoulder model",
  "), пересчитана на рост и вес фигуры; доли сухожилий ног — по препаратам (": "), rescaled to the figure’s height and weight; leg tendon proportions — from cadaver specimens (",
+ "); межрёберные мышцы — пластом между рёбрами, их толщина — по УЗИ (": "); intercostal muscles — as a sheet between the ribs, their thickness from ultrasound (",
+ "Yoshida и др., 2019": "Yoshida et al., 2019",
+ ") и массам слоёв у препаратов (": ") and the layer masses in cadaver specimens (",
+ "Wilson и др., 2001": "Wilson et al., 2001",
  "). Укорачиваясь, мышца утолщается: её объём не меняется.": "). As a muscle shortens it thickens: its volume stays the same.",
  "На объёмной фигуре можно выделить мышечную область и сменить ракурс. Глубокие части перечислены в пояснениях.": "Highlight a muscle region on the volumetric figure or change the view. Deeper parts are listed in the explanations.",
  "Приводящие бедра": "Hip adductors",
@@ -2626,5 +2630,6 @@
  "Поднимают бедро к корпусу — подвздошно-поясничная мышца, прямая мышца бедра, портняжная. Главные мышцы подъёмов ног и коленей.": "Lift the thigh towards the trunk — iliopsoas, rectus femoris, sartorius. The main movers in leg and knee raises.",
  "Прижимает лопатку к рёбрам, выводит её вперёд и поворачивает вверх. Работает в отжиманиях и жимах над головой.": "Holds the shoulder blade against the ribs, moves it forward and rotates it upward. Works in push-ups and overhead presses.",
  "Четыре глубокие мышцы вокруг плечевого сустава: держат головку плеча во впадине и вращают руку. Работают в разведениях назад, «Y-T-W» и тягах сверху.": "Four deep muscles around the shoulder joint: they keep the head of the humerus in its socket and rotate the arm. They work in reverse flyes, Y-T-W raises and overhead pulls.",
- "<p class=\"f-note\">Эта мышца работает в помощь основным и отдельной тренировки не требует: она включается в упражнениях ниже.</p>": "<p class=\"f-note\">This muscle assists the main movers and needs no separate workout: it works in the exercises below.</p>"
+ "<p class=\"f-note\">Эта мышца работает в помощь основным и отдельной тренировки не требует: она включается в упражнениях ниже.</p>": "<p class=\"f-note\">This muscle assists the main movers and needs no separate workout: it works in the exercises below.</p>",
+ "В этом упражнении меток нагрузки на суставы нет.": "This exercise has no joint-load marks."
 }

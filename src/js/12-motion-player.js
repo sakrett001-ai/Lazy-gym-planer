@@ -99,6 +99,8 @@ function configureStressPanel(prefix,F){
  const panel=$('#'+prefix+'-stress-panel');if(!panel||!F)return;
  const rules=jointStress(F.it.ex).rules,toggle=$('#'+prefix+'-stress-toggle'),track=$('#'+prefix+'-stress-track');
  if(toggle){toggle.checked=!!motionPrefs.stress;toggle.disabled=!rules.length;}
+ /* без пиковых нагрузок переключатель серый — подпись объясняет почему */
+ const none=$('#'+prefix+'-stress-none');if(none)none.hidden=!!rules.length;
  panel.hidden=!rules.length||!motionPrefs.stress;
  $('#'+prefix+'-stress-list').innerHTML=rules.map(r=>`<li data-stress-row="${r.id}"><span class="stress-dot" aria-hidden="true"></span><span><b>${esc(r.zone)}.</b> ${esc(r.what)} <em>${esc(r.tip)}</em></span></li>`).join('');
  if(track){const g=motionPrefs.stress?stressTrack(F):'';track.hidden=!g;track.style.background=g;}

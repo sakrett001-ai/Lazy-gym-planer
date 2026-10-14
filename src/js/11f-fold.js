@@ -12,6 +12,15 @@ function ensureFold(s) {
   return s.fold;
 }
 ensureFold(S);
+/* После первого плана параметры на телефоне и планшете свёрнуты: при каждом следующем запуске на первом экране —
+   план, а не два с половиной экрана параметров (выбранное видно строкой, нажатие ведёт к полю). Самый первый
+   запуск — план ещё не показывался — открывается с раскрытыми параметрами. На компьютере параметры в боковой колонке. */
+const PLAN_SEEN = 'podhod.planSeen.v1';
+(() => {
+  let seen = false;
+  try { seen = !!(localStorage.getItem(PLAN_SEEN) || localStorage.getItem(STORE)); localStorage.setItem(PLAN_SEEN, '1'); } catch (e) {}
+  if (seen && typeof matchMedia === 'function' && matchMedia('(max-width:959px)').matches) S.fold.setup = true;
+})();
 const FOLD_GROUPS = ['mus', 'log'];
 const cardFold = new Map(); /* «группа:упражнение» → раскрыт ли блок в этой карточке, если человек менял его сам */
 function cardOpen(g, id) { const k = g + ':' + id; return cardFold.has(k) ? cardFold.get(k) : ensureFold(S).cards === 'full'; }

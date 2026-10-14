@@ -39,7 +39,11 @@
    костях манекена (подробности — у раздела 3 ниже и в README). Объём — МРТ Zheng и др. (2013), части — Borst (2009).
 
    4. Остистая мышца груди (4.35.0) — четыре вложенных пучка вдоль остистых отростков T2–L2; объём — доля выпрямителя
-   позвоночника по Delp и др. (2001). */
+   позвоночника по Delp и др. (2001).
+
+   5–6. Задняя часть дельтовидной, большая грудная и подостная — веером (4.36.0–4.37.0).
+
+   7. Межрёберные мышцы (4.40.0) — не трубки, а пласты между рёбрами (md.sheets; intercostals.js). */
 const fs = require('node:fs'), path = require('node:path'), zlib = require('node:zlib');
 const root = path.resolve(__dirname, '../..');
 const M = require(path.join(root, 'src/js/09bm-mannequin.js'));
@@ -329,6 +333,17 @@ const extreme = (pts, f) => pts.reduce((a, q) => (f(q) > f(a) ? q : a));
     }
     console.log(`  ${name} (как ${parent}): ${where}, начало ${o.map(x => x.toFixed(1)).join(' ')}`);
   }
+}
+
+/* ---------- 7. межрёберные мышцы — пласты между рёбрами (4.40.0) ---------- */
+/* Волокна межрёберных — длиной в одно межреберье, мышца — пласт 2–5 мм на весь промежуток: трубкой вдоль линии
+   действия её не нарисовать. Пласты строит intercostals.js (там же — анатомия, способ и источники толщины): наружные и
+   внутренние, по 11 промежутков с каждой стороны, в рамке грудной клетки. */
+{
+  const IC = require('./intercostals.js').build(skel);
+  md.sheets = IC.sheets.map(s => ({ name: s.name, side: s.side, bone: ['ribcage', ''], space: s.space, a: s.a, b: s.b, t: s.t }));
+  for (const l of IC.log) console.log('  межрёберные ' + l);
+  console.log(`  межрёберные: пластов ${md.sheets.length} (толщина: спереди ${(IC.T.ant * 10).toFixed(2)} мм, сбоку ${(IC.T.lat * 10).toFixed(2)}, сзади ${(IC.T.post * 10).toFixed(2)}; наружные сбоку — ${(IC.T.fExt * 100).toFixed(0)} %)`);
 }
 
 fs.writeFileSync(OUT, JSON.stringify(md));
