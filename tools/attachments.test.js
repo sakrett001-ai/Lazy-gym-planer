@@ -19,10 +19,12 @@ test('known discrepancies are explained, missing muscles are really missing', ()
   for (const k of Object.keys(ref.missing.list)) assert(!parts.has(k), k + ' уже есть в данных — уберите из missing');
 });
 
-test('the audit catches a wrong attachment: a lat that stops at T12 fails, one reaching the iliac crest passes', () => {
-  /* сам эталон проверяет то, что должен: подмена конца ломает проверку */
-  const lat = ref.checks.find(c => c.parts.join() === 'lat' && c.end.bone === 'spine');
-  const r = A.audit({ checks: [lat], known: {} }).results[0];
-  assert.equal(r.ok, false);
-  assert.match(r.fail.join(), /S1/);
+test('the audit catches a wrong attachment: a missing end and an end in the wrong place fail', () => {
+  /* сам аудит проверяет то, что должен: у большой круглой нет конца на тазе, широчайшая не крепится к середине таза */
+  const [missing, moved] = A.audit({ checks: [
+    { parts: ['tmaj'], end: { bone: 'pelvis', h: [0, .15] } },
+    { parts: ['lat'], end: { bone: 'pelvis', h: [.5, .6] } },
+  ], known: {} }).results;
+  assert.equal(missing.ok, false); assert.match(missing.fail.join(), /нет конца у tmaj/);
+  assert.equal(moved.ok, false); assert.match(moved.fail.join(), /LAT[56]_r h=/);
 });
