@@ -55,6 +55,7 @@ const PARTS = [
   [/^IL_/, 'il', 'Подвздошно-рёберная', ['lowback']],
   [/^LTpT_/, 'ltpt', 'Длиннейшая, грудная часть', ['lowback']],
   [/^LTpL_/, 'ltpl', 'Длиннейшая, поясничная часть', ['lowback']],
+  [/^SPIN\d$/, 'spinalis', 'Остистая', ['lowback']],
   [/^MF_/, 'mf', 'Многораздельные', ['lowback']],
   [/^QL_/, 'ql', 'Квадратная поясницы', ['lowback']],
   [/^(Ps_|psoas$)/, 'psoas', 'Большая поясничная', ['hipflex']],
@@ -71,7 +72,7 @@ const PARTS = [
   [/^bfsh$/, 'bfsh', 'Двуглавая бедра, короткая головка', ['hams']],
   [/^semimem$/, 'semimem', 'Полуперепончатая', ['hams']], [/^semiten$/, 'semiten', 'Полусухожильная', ['hams']],
   [/^addbrev$/, 'addbrev', 'Короткая приводящая', ['adductors']], [/^addlong$/, 'addlong', 'Длинная приводящая', ['adductors']],
-  [/^addmag/, 'addmag', 'Большая приводящая', ['adductors']], [/^grac$/, 'grac', 'Тонкая', ['adductors']], [/^sart$/, 'sart', 'Портняжная', ['hipflex']],
+  [/^addmag/, 'addmag', 'Большая приводящая', ['adductors']], [/^pect$/, 'pectineus', 'Гребенчатая', ['adductors', 'hipflex']], [/^grac$/, 'grac', 'Тонкая', ['adductors']], [/^sart$/, 'sart', 'Портняжная', ['hipflex']],
   [/^gasmed$/, 'gasmed', 'Икроножная, медиальная головка', ['calves']],
   [/^gaslat$/, 'gaslat', 'Икроножная, латеральная головка', ['calves']],
   [/^soleus$/, 'soleus', 'Камбаловидная', ['calves']],
@@ -86,6 +87,11 @@ const PARTS = [
   [/^trap_scap(_9|1\d)$/, 'trapinf', 'Трапециевидная, нижняя часть', ['traps']],
   [/^rhomboid_/, 'rhomb', 'Ромбовидные', ['midback']],
   [/^lev_scap_/, 'levscap', 'Поднимающая лопатку', []],
+  /* мышцы шеи (4.35.0, anatomy.js) — без группы приложения: упражнений на шею в каталоге нет */
+  [/^SCM\d$/, 'scm', 'Грудино-ключично-сосцевидная', []],
+  [/^SPLcap\d$/, 'splcap', 'Ременная мышца головы', []], [/^SPLcerv\d$/, 'splcerv', 'Ременная мышца шеи', []],
+  [/^SCALant\d$/, 'scalant', 'Передняя лестничная', []], [/^SCALmed\d$/, 'scalmed', 'Средняя лестничная', []],
+  [/^SCALpost\d$/, 'scalpost', 'Задняя лестничная', []],
   [/^serr_ant/, 'serrant', 'Передняя зубчатая', ['serratus']],
 ];
 

@@ -31,10 +31,10 @@ const GROUPS = [
   ['Supinator', /^SUP$/], ['Pronator teres', /^PT$/], ['Flexor carpi radialis and palmaris longus', /^(FCR|PL)$/],
   ['Flexor digitorum superficialis', /^FDS\d$/], ['Flexor carpi ulnaris', /^FCU$/], ['Flexor digitorum profundus', /^FDP\d$/],
   ['Flexor pollicis longus', /^FPL$/], ['Pronator quadratus', /^PQ$/],
-  ['Erector spinae', /^(IL|LTpT|LTpL)_/], ['Multifidus', /^MF_/], ['Rectus abdominis', /^rect_abd$/],
+  ['Erector spinae', /^(IL_|LTpT_|LTpL_|SPIN\d$)/], ['Multifidus', /^MF_/], ['Rectus abdominis', /^rect_abd$/],
   ['External oblique', /^EO\d$/], ['Quadratus lumborum', /^QL_/], ['Psoas major', /^(Ps_.*|psoas)$/], ['Iliacus', /^iliacus$/],
   ['Gluteus medius', /^glmed\d$/], ['Gluteus maximus', /^glmax\d$/], ['Gluteus minimus', /^glmin\d$/], ['Piriformis', /^piri$/],
-  ['Tensor fasciae latae', /^tfl$/], ['Rectus femoris', /^recfem$/], ['Vastus lateralis', /^vaslat$/],
+  ['Pectineus', /^pect$/], ['Tensor fasciae latae', /^tfl$/], ['Rectus femoris', /^recfem$/], ['Vastus lateralis', /^vaslat$/],
   ['Vastus intermedius', /^vasint$/], ['Vastus medialis', /^vasmed$/], ['Sartorius', /^sart$/], ['Adductor brevis', /^addbrev$/],
   ['Adductor magnus', /^addmag(Dist|Isch|Mid|Prox)$/], ['Adductor longus', /^addlong$/], ['Gracilis', /^grac$/],
   ['Semitendinosus', /^semiten$/], ['Semimembranosus', /^semimem$/], ['Biceps femoris: long head', /^bflh$/],
@@ -42,6 +42,22 @@ const GROUPS = [
   ['Soleus', /^soleus$/], ['Tibialis anterior', /^tibant$/], ['Phalangeal extensors', /^(edl|ehl)$/], ['Fibulari', /^per(long|brev)$/],
   ['Tibialis posterior', /^tibpost$/], ['Flexor digitorum longus', /^fdl$/], ['Flexor hallucis longus', /^fhl$/],
 ];
+/* Мышцы шеи (4.35.0, anatomy.js): в наборе Riem их нет. Объём мышцы — МРТ мужчин Zheng и др. (2013; доля от общего
+   объёма мышц шеи, сумма двух сторон — делится пополам), пересчёт на рост × массу так же; между частями — по массам
+   элементов у Borst (2009, препарат): линии манекена ↔ элементы Borst. Ременные у Zheng — вместе (головы и шеи) и
+   обрезаны на уровне T2: часть ниже T2 не измерена, объём занижен (tools/muscles/README.md). */
+const NECK = [
+  ['Sternocleidomastoid', /^SCM\d$/, { SCM1: ['sternocleidomastoid', [0]], SCM2: ['sternocleidomastoid', [1]], SCM3: ['sternocleidomastoid', [2]], SCM4: ['sternocleidomastoid', [3]] }],
+  ['Splenius', /^SPL(cap|cerv)\d$/, { SPLcap1: ['splenius_capitis', [0, 1]], SPLcap2: ['splenius_capitis', [2, 3, 4]], SPLcap3: ['splenius_capitis', [5, 6]],
+    SPLcerv1: ['splenius_cervicis', [0]], SPLcerv2: ['splenius_cervicis', [1]] }],
+  ['Scalenus', /^SCAL(ant|med|post)\d$/, { SCALant1: ['scalenus_anterior', [0, 1]], SCALant2: ['scalenus_anterior', [2]],
+    SCALmed1: ['scalenus_medius', [0, 1]], SCALmed2: ['scalenus_medius', [2, 3, 4]], SCALmed3: ['scalenus_medius', [5, 6]],
+    SCALpost1: ['scalenus_posterior', [0]], SCALpost2: ['scalenus_posterior', [1]] }],
+];
+/* Остистая мышца груди (4.35.0, anatomy.js) — доля объёма выпрямителя позвоночника (МРТ Riem — выпрямитель целиком):
+   поперечник × длина волокон у Delp и др. (2001) — остистая 1,6 см² × 5,2 см против длиннейшей 5,9 × 9,6 и
+   подвздошно-рёберной 4,1 × 12,0, ≈ 7,3 %. Между пучками остистой — по длине пути. */
+const SPINALIS = (() => { const e = A.delp2001.erector, w = Object.values(e).map(([a, l]) => a * l); return w[0] / w.reduce((s, x) => s + x, 0); })();
 /* мышцы пальцев: MyoSim (2–5 — указательный…мизинец) → MoBL-ARMS (I, M, R, L) */
 const DIGIT = { 2: 'I', 3: 'M', 4: 'R', 5: 'L' };
 function source(base) {
@@ -75,6 +91,10 @@ const BELLY = [
      сухожилия (апоневроз выпрямителя), поясничные — мясистые; у косых — апоневроз спереди (начало пути) */
   [/^Ps_/, .95, .5], [/^rect_abd$/, .95, .5], [/^IL_R/, .45, .9], [/^IL_L/, .9, .5], [/^LTpT_/, .35, .9], [/^LTpL_/, .9, .5],
   [/^QL_/, .9, .5], [/^MF_/, .85, .5], [/^(EO|IO)\d$/, .7, .9],
+  /* 4.35.0 (anatomy.js, gait2392_import.py; оценки по анатомии, Gray's): остистая — короткие волокна и длинные сухожилия
+     с обеих сторон; грудино-ключично-сосцевидная — сухожилие грудинной головки у грудины (начало пути); ременные и
+     лестничные — мясистые; гребенчатая — мясистое начало, короткое плоское сухожилие у бедра */
+  [/^SPIN\d$/, .5, .5], [/^SCM\d$/, .85, .6], [/^SPL(cap|cerv)\d$/, .9, .5], [/^SCAL(ant|med|post)\d$/, .85, .5], [/^pect$/, .85, .2],
 ];
 const WARD_OF = { vaslat: 'vaslat', vasint: 'vasint', vasmed: 'vasmed', tibant: 'tibant', ehl: 'ehl', edl: 'edl', perlong: 'perlong',
   perbrev: 'perbrev', fhl: 'fhl', fdl: 'fdl', tibpost: 'tibpost', soleus: 'soleus', gasmed: 'gasmed', gaslat: 'gaslat' };
@@ -126,11 +146,26 @@ function volumes(names, fmax, lengths, { stature, mass }) {
         const lLow = lengths[low[0][0]], vLow = V * lLow / (lUp + lLow);
         out[low[0][0]] = { v: vLow, group: g };
         for (const [n, w] of up) out[n] = { v: (V - vLow) * w / fUp, group: g };
+      } else if (g === 'Erector spinae' && lines.some(n => /^SPIN\d$/.test(base(n)))) {
+        /* остистая — своя доля (SPINALIS), остальное — линиям модели поясницы по весам */
+        const sp = parts.filter(([n]) => /^SPIN\d$/.test(base(n))), rest = parts.filter(([n]) => !/^SPIN\d$/.test(base(n)));
+        const sum = rest.reduce((s, [, w]) => s + w, 0), lsp = sp.reduce((s, [n]) => s + lengths[n], 0);
+        for (const [n, w] of rest) out[n] = { v: V * (1 - SPINALIS) * w / sum, group: g };
+        for (const [n] of sp) out[n] = { v: V * SPINALIS * lengths[n] / lsp, group: g + ': остистая (Delp 2001)' };
       } else {
         const sum = parts.reduce((s, [, w]) => s + w, 0);
         for (const [n, w] of parts) out[n] = { v: V * w / sum, group: g };
       }
       lines.forEach(n => assigned.add(n));
+    }
+    /* шея — МРТ Zheng 2013, части — по Borst 2009 */
+    const kn = stature * mass / (A.neck.height * A.neck.mass);
+    for (const [g, re, map] of NECK) {
+      const lines = mine.filter(n => re.test(base(n)));
+      if (!lines.length) continue;
+      const V = A.neck.percent[g] / 100 * A.neck.total / 2 * kn;
+      const w = n => { const [m, idx] = map[base(n)]; return idx.reduce((s, i) => s + A.borst2009.mass[m][i], 0); }, sum = lines.reduce((s, n) => s + w(n), 0);
+      for (const n of lines) { out[n] = { v: V * w(n) / sum, group: g + ' (Zheng 2013)' }; assigned.add(n); }
     }
     /* внутренняя косая — по наружной: по отношению весов линий модели поясницы (EO1–EO6, рёбра 7–11). Верхние зубцы
        наружной (EO7, EO8 — рёбра 5–6, anatomy.js) достроены по анатомии, у внутренней таких нет — в отношение не входят */
@@ -146,4 +181,4 @@ function volumes(names, fmax, lengths, { stature, mass }) {
   }
   return out;
 }
-module.exports = { volumes, GROUPS, BELLY, ORIGIN, source };
+module.exports = { volumes, GROUPS, NECK, SPINALIS, BELLY, ORIGIN, source };
