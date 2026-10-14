@@ -1,7 +1,10 @@
 /* ---------- Проигрыватель движений: карточки и увеличенный разбор ---------- */
 let figs = [], rafId = 0, io = null;
 const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-const motionPrefs = (() => {try {return Object.assign({speed:.5,joints:true,trace:false,vectors:true,muscles:true,skeleton:false,anatomy:false},JSON.parse(localStorage.getItem('podhod.motion.v2') || '{}'));}catch(e){return {speed:.5,joints:true,trace:false,vectors:true,muscles:true,skeleton:false,anatomy:false};}})();
+const motionPrefs = (() => {try {return Object.assign({speed:.5,joints:true,trace:false,vectors:false,muscles:true,skeleton:false,anatomy:false},JSON.parse(localStorage.getItem('podhod.motion.v2') || '{}'));}catch(e){return {speed:.5,joints:true,trace:false,vectors:false,muscles:true,skeleton:false,anatomy:false};}})();
+/* с 4.29.0 векторы движения по умолчанию выключены (мешали разглядывать технику); сохранённое «включено» прежних версий
+   было значением по умолчанию — выключаем один раз, дальше выбор человека запоминается как раньше */
+if (motionPrefs.vectorsV !== 2) { motionPrefs.vectors = false; motionPrefs.vectorsV = 2; try { localStorage.setItem('podhod.motion.v2', JSON.stringify(motionPrefs)); } catch (e) {} }
 if (![.25,.5,1].includes(+motionPrefs.speed)) motionPrefs.speed = .5;
 if(typeof motionPrefs.muscles!=='boolean')motionPrefs.muscles=true;
 if(typeof motionPrefs.stress!=='boolean')motionPrefs.stress=true;
@@ -339,6 +342,7 @@ function startRest(sec, label) {
   T.total = sec; T.left = sec; T.end = Date.now() + sec * 1000;
   $('#t-label').textContent = label || 'Отдых';
   $('#timer').hidden = false; $('#timer').classList.remove('over');
+  RestAlarm.unlock(); RestAlarm.arm(T.end); RestAlarm.paintButton($('#t-sound'));
   clearInterval(T.id); clearTimeout(T.id); tick(); T.id = setInterval(tick, 250);
 }
 function tick() {
@@ -347,13 +351,13 @@ function tick() {
   $('#t-time').textContent = `${m}:${String(s).padStart(2, '0')}`;
   $('#t-bar').style.width = (T.total ? (1 - T.left / T.total) * 100 : 100) + '%';
   if (T.left <= 0) {
-    clearInterval(T.id);
+    clearInterval(T.id); RestAlarm.due();
     $('#timer').classList.add('over'); $('#t-label').textContent = 'Пора к следующему подходу';
     T.id = setTimeout(() => { $('#timer').hidden = true; }, 5000);
   }
 }
-function adjustRest(d) { if ($('#timer').hidden) return; T.end += d * 1000; T.total = Math.max(1, T.total + d); clearTimeout(T.id); clearInterval(T.id); $('#timer').classList.remove('over'); tick(); T.id = setInterval(tick, 250); }
-function stopRest() { clearInterval(T.id); clearTimeout(T.id); $('#timer').hidden = true; }
+function adjustRest(d) { if ($('#timer').hidden) return; T.end = Math.max(Date.now(), T.end + d * 1000); T.total = Math.max(1, T.total + d); RestAlarm.arm(T.end); clearTimeout(T.id); clearInterval(T.id); $('#timer').classList.remove('over'); tick(); T.id = setInterval(tick, 250); }
+function stopRest() { clearInterval(T.id); clearTimeout(T.id); RestAlarm.cancel(); $('#timer').hidden = true; }
 
 /* ---------- текст для копирования ---------- */
 function blocksText(p) {
@@ -393,7 +397,7 @@ document.addEventListener('change', e => {
   if (e.target.id === 'place-adapt') { S.adapt = e.target.value || null; ensurePlaces(S); return regen(); }
 });
 const swapKey = () => S.mode === 'program' ? 'd' + S.day : 's';
-function regen(resetSwaps = true) { if (resetSwaps) swaps = {}; done = {}; saveSettings(); renderSetup(); renderPlan(); }
+function regen(resetSwaps = true) { if (resetSwaps) swaps = S.swaps = {}; done = {}; saveSettings(); renderSetup(); renderPlan(); }
 document.addEventListener('click', e => {
   const t = e.target.closest('button, summary');
   if (!t) return;
@@ -456,9 +460,21 @@ document.addEventListener('click', e => {
     if (S.mode === 'custom') { const item = customOf().items[slot]; if (item) { item.id = next.id; saveSettings(); } }
     else { const k = swapKey(); swaps[k] = swaps[k] || {}; swaps[k][slot] = next.id; }
     done = {};
-    renderPlan();
+    saveSettings(); renderPlan();
     const card = document.querySelector(`.card[data-slot="${slot}"]`);
     if (card) { card.classList.add('flash'); card.scrollIntoView({block:'nearest', behavior:reduceMotion ? 'auto' : 'smooth'}); }
+    return;
+  }
+  /* порядок упражнений: ↑ ↓ на карточке (в своём плане — свои кнопки, 11d-custom.js) */
+  if (t.dataset.move !== undefined) {
+    const slot = +t.dataset.move, d = +t.dataset.d;
+    if (!movePlanItem(slot, d)) return;
+    saveSettings(); renderPlan();
+    const card = document.querySelector(`.card[data-slot="${slot}"]`);
+    if (card) {
+      card.classList.add('flash'); card.scrollIntoView({block:'nearest', behavior:reduceMotion ? 'auto' : 'smooth'});
+      const b = card.querySelector(`[data-move][data-d="${d}"]:not([disabled])`) || card.querySelector('[data-move]:not([disabled])'); if (b) b.focus({preventScroll:true});
+    }
     return;
   }
   if (t.dataset.round !== undefined) {

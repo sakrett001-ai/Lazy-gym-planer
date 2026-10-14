@@ -59,7 +59,7 @@ document.addEventListener('click', e => {
   if (!it || !next || it.ex === next) return;
   /* в своём плане хват записывается в сам план (подходы, вес и заметка остаются); в собранном — как замена */
   if (S.mode === 'custom') { const item = customOf().items[slot]; if (!item || customOf().items.some(x => x.id === next.id)) return; item.id = next.id; saveSettings(); }
-  else { const k = swapKey(); swaps[k] = swaps[k] || {}; swaps[k][slot] = next.id; }
+  else { const k = swapKey(); swaps[k] = swaps[k] || {}; swaps[k][slot] = next.id; saveSettings(); }
   done = {}; renderPlan();
   const card = document.querySelector(`.card[data-slot="${slot}"]`), b = card && card.querySelector(`[data-variant="${next.id}"]`);
   if (b) b.focus({preventScroll:true});
