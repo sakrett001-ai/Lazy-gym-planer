@@ -195,3 +195,50 @@ test('кожа корпуса в глубоком скручивании и по
     assert.ok(sdf < .7, `${name}: расстояние до кожи у точки кожи ${sdf.toFixed(2)} см`);
   }
 });
+
+test('складки подмышки: кожа корпуса над осью складки поднимается плавно, симметрично и одинаково в сетке и в расстояниях', () => {
+  const up = M.neutral(); for (const s of ['L', 'R']) up[s].shoulder = [0, 160, 0];   /* руки над головой */
+  const side = M.neutral(); for (const s of ['L', 'R']) side[s].shoulder = [0, 90, 0];  /* руки в стороны */
+  const lift = (R, s) => { let mx = 0; for (let h = 30; h <= 56; h += 1) for (let a = 0; a <= Math.PI; a += Math.PI / 24) mx = Math.max(mx, M.V.dist(M.torsoPoint(R, h, s, a), M.noFolds(() => M.torsoPoint(R, h, s, a)))); return mx; };
+  const R0 = M.catalogPose(M.neutral()), Ru = M.catalogPose(up), Rs = M.catalogPose(side);
+  /* стоя кожа почти не меняется (замеры ANSUR — tools/mannequin/anthro.js), рука отведена — складка поднимается */
+  assert.ok(lift(R0, 'L') < 1.6, `стоя подъём ${lift(R0, 'L').toFixed(2)} см`);
+  assert.ok(lift(Rs, 'L') > lift(R0, 'L') + 1 && lift(Ru, 'L') > lift(R0, 'L') + 1, 'с отведённой рукой складка выше');
+  for (const R of [R0, Ru, Rs]) {
+    near(lift(R, 'L'), lift(R, 'R'), .02, 'слева и справа одинаково');
+    /* без складок — ровно прежняя кожа; с ними точки сетки лежат на нулевом уровне расстояний */
+    const cache = M.torsoCache(R), S = M.surface(R);
+    let dT = 0, dA = 0;
+    /* выше 52 см — надплечья со сдвигом за плечевым поясом: там сетка и расстояние расходятся и без складок (до 0,6 см) */
+    S.torsoHeights.forEach((h, i) => { if (h >= 25 && h <= 52) for (const p of S.torso[i]) dT = Math.max(dT, Math.abs(M.torsoSDF(R, p, cache))); });
+    for (const s of ['L', 'R']) for (const row of S.limbs['ua' + s]) for (const p of row) dA = Math.max(dA, Math.abs(M.limbSDF(R, 'ua', s, p)));
+    assert.ok(dT < .15 && dA < .05, `кожа сетки и расстояний расходится: корпус ${dT.toFixed(2)}, плечо ${dA.toFixed(2)} см`);
+  }
+  /* соседние точки сетки сдвинуты почти одинаково: без зубцов */
+  for (const R of [Ru, Rs]) {
+    const S = M.surface(R), S0 = M.noFolds(() => M.surface(R));
+    let jump = 0;
+    const a = S.torso, b = S0.torso, d = (i, j) => M.V.dist(a[i][j % a[i].length], b[i][j % a[i].length]);
+    for (let i = 0; i < a.length; i++) for (let j = 0; j < a[i].length; j++) {
+      jump = Math.max(jump, Math.abs(d(i, j) - d(i, j + 1)));
+      if (i + 1 < a.length) jump = Math.max(jump, Math.abs(d(i, j) - d(i + 1, j)));
+    }
+    /* соседние точки сетки — в 2,5–3 см друг от друга */
+    assert.ok(jump < 1.3, `скачок подъёма между соседними точками ${jump.toFixed(2)} см`);
+    /* плечо складки не меняют */
+    for (const s of ['L', 'R']) assert.deepEqual(S.limbs['ua' + s], S0.limbs['ua' + s]);
+  }
+});
+
+test('подгонка складок (tools/mannequin/folds-fit.js) считает подъём кожи той же формулой, что манекен', () => {
+  const F = require('./mannequin/folds-fit.js'), NR = M.catalogPose(M.neutral());
+  const q = M.neutral(); q.L.shoulder = [20, 120, 0]; q.R.shoulder = [-10, 60, 0]; const R = M.catalogPose(q);
+  const L0 = Object.fromEntries(Object.entries(M.FOLDS).map(([k, f]) => [k, F.axes(f, NR.frames.thorax, NR.frames.uaL, 'L', 0).L]));
+  for (const s of ['L', 'R']) {
+    const set = Object.entries(M.FOLDS).map(([k, f]) => F.axes(f, R.frames.thorax, R.frames['ua' + s], s, L0[k]));
+    for (let i = 0; i < 300; i++) {
+      const p = V.add(R['sh' + s], [rnd() * 36 - 18, rnd() * 36 - 6, rnd() * 30 - 15]);
+      near(F.lift(set, p), M.foldLift(R, p), 1e-9, 'подъём');
+    }
+  }
+});

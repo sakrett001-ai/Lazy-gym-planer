@@ -247,8 +247,11 @@ function checkFrame(R, entry = {}) {
     if (worst) push('floor', worst.depth > 3 ? 'error' : 'warn', `${worst.b.seg}${worst.b.side} ниже пола`, worst.depth);
     for (const c of cols) { const low = Math.max(...c.pts.map(p => p[1])); if (low > FLOOR + 1) push('floor', 'error', `${c.id} ниже пола`, low - FLOOR); }
   }
-  /* 4. Самопересечения */
-  {
+  /* 4. Самопересечения — по коже без складок подмышки (Mannequin.FOLDS): складка — мягкая ткань именно между плечом
+     и корпусом, прижатая к телу рука её сминает; сегменты друг в друга проверяются по их собственной форме */
+  M.noFolds(() => {
+    const pts = bodyPoints(R), torsoD = p => inBox(SB.torso, p, BOX_M) ? M.torsoSDF(R, p, cache) : Infinity;
+    const limbD = (k, s, p) => inBox(SB[k + s], p, BOX_M) ? M.limbSDF(R, k, s, p) : Infinity;
     let worst = null;
     const adj = { ua: ['fa', 'torso', 'neck'], fa: ['ua', 'hand'], hand: ['fa'], th: ['sk', 'torso'], sk: ['th', 'foot'], foot: ['sk'], neck: ['torso', 'head', 'ua'], head: ['neck'], torso: ['ua', 'th', 'neck'] };
     const tolPair = (a, b) => (a === 'ua' || b === 'ua') && (a === 'torso' || b === 'torso') ? 3.2 : (a === 'th' || b === 'th') && (a === 'torso' || b === 'torso') ? 3.5 : (a === 'th' && b === 'th') ? 2.5 : (a === 'sk' || b === 'sk') && (a === 'th' || b === 'th') ? 3 : 1.5;
@@ -271,7 +274,7 @@ function checkFrame(R, entry = {}) {
       }
     }
     if (worst) push('self-collision', worst.depth - worst.tol > 3 ? 'error' : 'warn', `${worst.a} ⟂ ${worst.b}`, worst.depth);
-  }
+  });
   /* 5. Заявленные контакты */
   for (const k of contacts) {
     /* контакт может действовать только в части цикла: when [t0, t1] (прыжки, шаги) */

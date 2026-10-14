@@ -29,8 +29,10 @@ function ctx(equipment) {
       const elev = V.angle(hum, down), fwd = V.dot(hum, M3.col(f.F.thorax.R, 2));
       q[s].girdle = [M.clamp(Math.max(0, elev - 30) * .22 + extra[0], -10, 38), M.clamp(fwd * 8 + extra[1], -20, 26)]; return q;
     },
-    /* точки поверхности тела по областям — во внутренних координатах */
-    region(q, name) {
+    /* точки поверхности тела по областям — во внутренних координатах. Кожа — без складок подмышки (Mannequin.FOLDS):
+       складка — мягкая ткань над широчайшей и большой грудной, на опоре она сминается, тело опирается на лопатки и рёбра */
+    region(q, name) { return M.noFolds(() => C.regionOf(q, name)); },
+    regionOf(q, name) {
       const R = M.catalogPose(q), out = [];
       const torso = (h0, h1, a0, a1) => { for (let h = h0; h <= h1; h += 2) for (let a = a0; a <= a1 + 1e-9; a += Math.PI / 16) for (const s of ['L', 'R']) out.push(fromCat(M.torsoPoint(R, h, s, a))); };
       const limb = (k, s, t0, t1, a0, a1) => { for (let t = t0; t <= t1 + 1e-9; t += .05) for (let a = a0; a <= a1 + 1e-9; a += Math.PI / 12) out.push(fromCat(M.limbPoint(R, k, s, t, a))); };
@@ -173,7 +175,7 @@ function ctx(equipment) {
     /* одномерный подбор: f монотонна на [lo, hi], ищем f = 0 */
     solve1D(f, lo, hi, it = 40) { let a = lo, b = hi, fa = f(a); for (let i = 0; i < it; i++) { const m = (a + b) / 2, fm = f(m); if (fa * fm <= 0) b = m; else { a = m; fa = fm; } } return (a + b) / 2; },
     /* точка передней поверхности корпуса по средней линии на высоте h */
-    chestPoint(q, h, ang = 0) { const R = M.catalogPose(q); return fromCat(M.torsoPoint(R, h, 'L', ang)); },
+    chestPoint(q, h, ang = 0) { const R = M.catalogPose(q); return fromCat(M.noFolds(() => M.torsoPoint(R, h, 'L', ang))); },
     /* Свободная рука: запястье в точку, кисть продолжает предплечье (pron — пронация, wrist — [сгиб., откл.]) */
     armTo(q, s, wrist, pole, opts = {}) {
       const r = M.solveArmWrist(q, s, wrist, pole, null);

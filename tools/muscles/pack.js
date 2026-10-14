@@ -109,7 +109,9 @@ function withVolumes(out) {
   /* кожа над брюшком (Muscles.SKIN_U): глубина пути под кожей d (см), направление к коже o — перпендикуляр к пути,
      в рамке кости начала (первая половина брюшка) или конца пути (вторая), и радиус кривизны кожи поперёк мышцы ρ (см):
      по ним мышца у кожи сплющивается и изгибается вдоль неё */
-  const G = require('./geometry.js'), frames = Skeleton.frames(R, M.bodyData(R), skel.bones), sdf = G.skinSDF(R), fine = Muscles.layoutDrawn(bound, frames, .5);
+  /* кожа над мышцей — без складок подмышки (Mannequin.FOLDS): сплющивание у кожи считается по основной форме тела,
+     складки только добавляют места над мышцами */
+  const G = require('./geometry.js'), frames = Skeleton.frames(R, M.bodyData(R), skel.bones), sdf0 = M.noFolds(() => G.skinSDF(R)), sdf = p => M.noFolds(() => sdf0(p)), fine = Muscles.layoutDrawn(bound, frames, .5);
   const unit = v => { const n = Math.hypot(...v) || 1; return v.map(x => x / n); };
   out.muscles.forEach((m, i) => {
     const pts = fine[i].points, cum = [0];

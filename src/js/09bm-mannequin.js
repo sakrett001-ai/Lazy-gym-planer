@@ -179,6 +179,23 @@ const SH_CAP=[0,.6];
 /* «шапка» над акромионом: задний край акромиона и ость лопатки лежат прямо под кожей верха плеча (между трапецией
    и дельтой). Центр — от центра плечевого сустава в рамке плечевого пояса: внутрь, вверх, назад; радиус */
 const AC_CAP={off:[-2.2,2.6,-2.2],r:3.6};
+/* Складки подмышки. Между плечом и корпусом кожу поднимают мышцы, идущие с корпуса на плечевую кость: задняя складка —
+   широчайшая и большая круглая (с ними — мышцы у наружного края лопатки), передняя — большая грудная. Кожа корпуса и плеча
+   — отдельные формы, поэтому складки задаются подъёмом кожи корпуса (плечо не меняется): над осью складки (от точки
+   у корпуса tr — рамка грудной клетки — к точке у плеча ua — рамка плеча; координаты — латерально, вверх, вперёд,
+   у правой стороны латерально — зеркально) кожа поднимается по своей нормали на a·k·w·exp(−(d/s)²): d — расстояние от
+   точки кожи до оси, w = sin²(πu) — по длине оси подъём плавно сходит на нет к концам (u — доля длины), s — ширина складки, a — высота у стоящей
+   фигуры. Когда рука
+   отходит от корпуса, мышцы складки отходят от рёбер и поднимают кожу выше: k = (L/L0)^kv, L — длина оси в кадре, L0 —
+   стоя. Подъём гладкий, без отдельных частей и изломов, и один и тот же в сетке и в знаковых расстояниях проверок.
+   Оси, высоты и ширины подогнаны (tools/mannequin/folds-fit.js) так, чтобы кожа покрывала тела этих мышц (этап М2) во всех
+   упражнениях каталога и не поднималась выше мышц под ней, а стоящая фигура не уходила от замеров ANSUR II: ширина груди
+   не растёт, обхват груди растёт к ANSUR. */
+const FOLDS={
+ post:{tr:[10,23.1,-10.1],ua:[-1.1,-6.8,-4.2],a:0.44,s:6.07,kv:2.56},
+ ant:{tr:[4.7,19.4,-4.8],ua:[-4.1,-7,-2.3],a:2.61,s:9.17,kv:0.38}
+};
+const FOLD_SP=2;
 /* «шапка» колена — вперёд от центра сустава (по биссектрисе передних осей бедра и голени): надколенник лежит
    перед мыщелками бедра под тонкой кожей и при сгибании скользит по ним */
 const KN_CAP_Z=.9;
@@ -474,6 +491,8 @@ function torsoPointIn(R,h,side,ang,extra,f,[w,a,b,n=2,nf=2]){
   /* основание шеи следует за лопаткой лишь частично (до 60 % у верхнего сечения): трапеция растягивается плавно, без складок */
   p=V.add(p,girdleShift(R,h,side,s));
  }
+ /* складки подмышки (foldLift): подъём — по поверхности без отступа extra */
+ if(h>20&&R.frames){const n=V.unit(V.perp(V.sub(p,f.c),f.y)),d=foldLift(R,extra?V.add(p,n,-extra):p);if(d)p=V.add(p,n,d);}
  return p;
 }
 /* сдвиг кожи надплечий за плечевым поясом: доля k от смещения центра плечевого сустава из нейтрального положения;
@@ -503,7 +522,7 @@ function limbAxes(R,kind,side,t){
  const f=fr[kind+side];return{front:f.z,lat:V.scale(f.x,g),axis:V.scale(f.y,-1)};
 }
 function limbPoint(R,kind,side,t,ang,extra=0){
- const[,a,b]=LIMB_DEF[kind];return limbPointIn(V.mix(R[a+side],R[b+side],t),limbAxes(R,kind,side,t),profileAt(LIMBS[kind],t),ang,extra);
+ const[,a,b]=LIMB_DEF[kind],c=V.mix(R[a+side],R[b+side],t);return limbPointIn(c,limbAxes(R,kind,side,t),profileAt(LIMBS[kind],t),ang,extra);
 }
 /* ряд точек на одном сечении: рамка, оси и профиль считаются один раз (сетки тела и мышечных зон) */
 /* рамки сечений кадра по высоте: ряды левой и правой стороны мышечных зон — на одних и тех же высотах */
@@ -570,12 +589,44 @@ function ellipseRadius(lx,ly,rf,rb,rl,rm,nBack=2,nFront=2){
  if(ne!==2){const r=Math.hypot(lx,ly),u=Math.abs(lx)/r,v=Math.abs(ly)/r;return Math.pow(Math.pow(u/a,ne)+Math.pow(v/b,ne),-1/ne);}
  const th=Math.atan2(ly/b,lx/a);return Math.hypot(a*Math.cos(th),b*Math.sin(th));
 }
-function limbSDF(R,kind,side,p){
+/* info (необязательно) — точка поверхности на луче от оси и нормаль (подгонка складок, tools/mannequin/folds-fit.js) */
+function limbSDF(R,kind,side,p,info){
  const[,a,b]=LIMB_DEF[kind],A=R[a+side],Bp=R[b+side],d=V.sub(Bp,A),L2=V.dot(d,d),t=clamp(V.dot(V.sub(p,A),d)/L2,0,1);
  const ax=limbAxes(R,kind,side,t),c=V.mix(A,Bp,t),off=V.sub(p,c),along=V.dot(off,V.unit(d)),rad=V.perp(off,V.unit(d));
  const lx=V.dot(rad,ax.front),ly=V.dot(rad,ax.lat),[rf,rb,rl,rm]=profileAt(LIMBS[kind],t),rho=Math.hypot(lx,ly),r=rho<1e-9?Math.min(rf,rb,rl,rm):ellipseRadius(lx,ly,rf,rb,rl,rm);
  const radial=rho-r,axial=t<=0||t>=1?Math.abs(along):0;
+ if(info&&rho>1e-9){const n=V.scale(rad,1/V.len(rad));info.ps=V.add(c,n,r);info.n=n;}
  return axial>0?(radial>0?Math.hypot(radial,axial):axial):radial;
+}
+/* ---------- Складки подмышки (FOLDS) ---------- */
+let FOLD_L0=null;
+/* ось складки в кадре: начало, направление, длина, множитель высоты (объём постоянен) */
+function foldAxes(R,kind,side){
+ const F=FOLDS[kind],g=SIGN[side],T=R.frames.thorax,U=R.frames['ua'+side];
+ const A=V.add(V.add(V.add(T.o,T.x,g*F.tr[0]),T.y,F.tr[1]),T.z,F.tr[2]),Bp=V.add(V.add(V.add(U.o,U.x,g*F.ua[0]),U.y,F.ua[1]),U.z,F.ua[2]);
+ const ab=V.sub(Bp,A),L=V.len(ab);
+ if(!FOLD_L0){FOLD_L0={};const R0=catalogPose(neutral());for(const k of Object.keys(FOLDS)){FOLD_L0[k]=1;FOLD_L0[k]=foldAxes(R0,k,'L').L;}}
+ return{A,B:Bp,d:V.scale(ab,1/L),L,k:Math.pow(L/FOLD_L0[kind],F.kv),F,kind,side};
+}
+const FOLD_AX=new WeakMap();
+function foldSet(R){
+ let a=FOLD_AX.get(R.frames);
+ if(!a){a=[];if(R.frames.thorax&&R.frames.uaL)for(const s of SIDES)for(const k of Object.keys(FOLDS))a.push(foldAxes(R,k,s));FOLD_AX.set(R.frames,a);}
+ return a;
+}
+/* без складок (самопересечения в валидаторе: складка — мягкая ткань между плечом и корпусом, прижатая рука её сминает) */
+let FOLD_OFF=false;
+function noFolds(f){const o=FOLD_OFF;FOLD_OFF=true;try{return f();}finally{FOLD_OFF=o;}}
+/* подъём кожи складками в точке поверхности p, см (наибольший из складок) */
+function foldLift(R,p){
+ if(FOLD_OFF)return 0;
+ let h=0;
+ for(const ax of foldSet(R)){
+  const A=ax.A,d=ax.d,ox=p[0]-A[0],oy=p[1]-A[1],oz=p[2]-A[2],u=clamp(ox*d[0]+oy*d[1]+oz*d[2],0,ax.L);
+  const e=Math.hypot(ox-d[0]*u,oy-d[1]*u,oz-d[2]*u)/ax.F.s;if(e>3)continue;
+  const v=ax.F.a*ax.k*Math.pow(Math.sin(Math.PI*u/ax.L),FOLD_SP)*Math.exp(-e*e);if(v>h)h=v;
+ }
+ return h;
 }
 const TORSO_SAMPLES=[];for(let h=TORSO[0][0];h<=TORSO.at(-1)[0]+1e-9;h+=1)TORSO_SAMPLES.push(h);
 /* рамка сечения кожи с долей k передней схемы скругления: точки кожи с той же долей лежат на сечении этой рамки
@@ -588,10 +639,10 @@ function nearestSection(frames,p,hint,k=0,span=4){
  for(let i=i0;i<=i1;i++){const s=frames[i],f=mixFrame(s.f,k),off=V.sub(p,f.c),along=V.dot(off,f.y);if(!best||Math.abs(along)<Math.abs(best.along))best={s,f,off,along,i};}
  return best;
 }
-function torsoSDF(R,p,cache){
+function torsoSDF(R,p,cache,info){
  const frames=cache||torsoCache(R);
  /* надплечья сдвинуты за плечевым поясом (как сетка кожи): расстояние считаем от точки, сдвинутой обратно */
- const h0=nearestSection(frames,p).i;
+ const h0=nearestSection(frames,p).i,p0=p;
  if(R.girdle&&R.frames.thorax){let q=p;for(let it=0;it<10;it++){const d=torsoShiftAt(R,q,frames,h0);if(!it&&!(d[0]||d[1]||d[2]))break;const n=V.mix(q,V.sub(p,d),.6);if(V.dist(n,q)<.01){q=n;break;}q=n;}p=q;}
  /* живот спереди — по передней схеме скругления: доля k — по углу точки на сечении, сечение — смешанная рамка */
  let kf=0,best=nearestSection(frames,p);
@@ -603,7 +654,9 @@ function torsoSDF(R,p,cache){
  const{s,f,off,along}=best,lz=V.dot(off,f.z),lx=V.dot(off,f.x),rho=Math.hypot(lz,lx),hp=s.h+along;
  /* ниже тазобедренных — скошенный низ: сечение берётся с «номинальной» высоты, торец — на высоте lo·(1 + K·w) */
  const k=hp<0?1+SEAT_K*seatW(rho<1e-9?0:lz/rho):1,[w,a,b,n,nf]=sectionAt(hp<0?hp/k:s.h);
- const r=rho<1e-9?Math.min(w,a,b):ellipseRadius(lz,lx,a,b,w,w,n,nf),radial=rho-r;
+ const r=rho<1e-9?Math.min(w,a,b):ellipseRadius(lz,lx,a,b,w,w,n,nf);let radial=rho-r;
+ /* складки подмышки: та же точка поверхности, что у сетки (по лучу от оси сечения), с обратным сдвигом плечевого пояса */
+ if(hp>20&&rho>1e-9&&R.frames.thorax){const dir=V.unit(V.add(V.scale(f.z,lz),f.x,lx)),ps=V.add(V.add(V.add(f.c,f.y,along),dir,r),V.sub(p0,p)),dl=foldLift(R,ps);radial-=dl;if(info){info.ps=ps;info.n=dir;info.drape=dl;}}
  /* торец корпуса (низ таза, основание шеи): внутри — до ближайшей поверхности, снаружи — до кромки */
  const lo=TORSO[0][0]*k,hi=TORSO.at(-1)[0],axial=Math.max(lo-hp,hp-hi);
  return axial>0?(radial>0?Math.hypot(radial,axial):axial):Math.max(radial,axial);
@@ -880,6 +933,7 @@ return{V,M3,Q,B,TORSO,TORSO_H,TORSO_JOINTS,TORSO_BLEND,TORSO_BLEND_FRONT,FRONT_W
  neutral,clone,pack,unpack,PACK,PACK_SIZE,fk,solePoints,twoBone,solveArm,solveArmWrist,setArmFromPoints,footFrame,heelFrame,solveLeg,rootRot,rootFromAxes,
  swing,swingTwist,eulerXZY,eulerYZX,spineRot,makeTrack,monotone,toCat,dirCat,catalogPose,
  profileAt,sectionAt,spineFrame,torsoFrame,frontK,vertebraFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,neckSDF,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,
+ FOLDS,FOLD_SP,foldAxes,foldSet,foldLift,noFolds,
  headLocalSDF,headLocal,headWorld,headMesh,headSamples,HEAD_PARTS,HEAD_EAR,HEAD_EARS,ellipseRadius,centerOfMass,LIMB_DEF,
  handShape,footShape,footPoints,footPointWorld,footBlendW,FOOT_SECTIONS,TOES,malleoli,bodyData,jointAngles};
 })();
