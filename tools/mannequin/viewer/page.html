@@ -191,8 +191,9 @@ let down=null;canvas.addEventListener('pointerdown',e=>{down=[e.clientX,e.client
 canvas.addEventListener('pointerup',e=>{
  if(!muscOn||!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>4)return;
  const r=canvas.getBoundingClientRect(),ray=new T.Raycaster();ray.setFromCamera(new T.Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1),camera);
- const i=view.muscleLayer.pick(ray),mu=MUSCLES_RAW.muscles[i];
- $('muscleInfo').textContent=mu?`${MUSCLES_RAW.parts[mu.part]} (${mu.side==='L'?'левая':'правая'}) — ${mu.name}${mu.group.length?'; группа в приложении: '+mu.group.join(', '):''}`:'Мимо мышцы — нажмите точнее на линию.';
+ /* мышца-трубка или пласт (межрёберные) — ближайшее под курсором */
+ const hit=view.muscleLayer.pickAny(ray),mu=hit?(hit.sheet!==undefined?MUSCLES_RAW.sheets[hit.sheet]:MUSCLES_RAW.muscles[hit.muscle]):null;
+ $('muscleInfo').textContent=mu?`${MUSCLES_RAW.parts[mu.part]} (${mu.side==='L'?'левая':'правая'}${mu.space?', '+mu.space+'-й межрёберный промежуток':''}) — ${mu.name}${mu.group.length?'; группа в приложении: '+mu.group.join(', '):''}`:'Мимо мышцы — нажмите точнее на линию.';
 });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',theme);new MutationObserver(theme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 let first=REVIEW[0].id;try{const s=localStorage.getItem('mv.ex');if(s&&CATALOG_POSES[s])first=s;}catch(e){}

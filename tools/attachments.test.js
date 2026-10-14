@@ -22,8 +22,35 @@ test('every muscle lies on its own side of the body', () => {
 
 test('known discrepancies are explained, missing muscles are really missing', () => {
   for (const [k, why] of Object.entries(ref.known)) assert(why.length > 40, 'нужно объяснение: ' + k);
-  const parts = new Set(A.bound.map(m => m.part));
+  const parts = new Set([...A.bound.map(m => m.part), ...A.SHEETS.map(s => s.part)]);
   for (const k of Object.keys(ref.missing.list)) assert(!parts.has(k), k + ' уже есть в данных — уберите из missing');
+  /* межрёберные (4.39.0) — уже не в списке отсутствующих: их проверяет раздел sheets эталона */
+  assert(!('intercostals' in ref.missing.list), 'межрёберные есть в данных — уберите из missing');
+});
+
+/* Межрёберные мышцы (4.39.0) — пласты: 11 промежутков, наружные и внутренние, с каждой стороны; все проверки эталона
+   (края на своих рёбрах, концы у ориентиров, стороны) — в норме, в том числе в общем аудите выше */
+test('intercostal sheets: every space on both sides, edges on their own ribs, ends at the anatomical landmarks', () => {
+  assert.equal(A.SHEETS.length, 44);
+  const r = A.sheetAudit(ref);
+  assert(r.results.length >= 7, 'проверок пластов ' + r.results.length);
+  assert.deepEqual(r.results.filter(x => !x.ok).map(x => x.tag + ' — ' + x.fail.join('; ')), []);
+  assert.deepEqual(r.orphan, []);
+});
+
+test('the sheet audit catches a sheet on the wrong ribs, on the wrong side, or stopping short', () => {
+  const copy = A.SHEETS.map(s => JSON.parse(JSON.stringify(s)));
+  const by = n => copy.find(s => s.name === n);
+  /* наружный пласт 5-го промежутка — на месте 6-го (сдвиг на ребро вниз) */
+  Object.assign(by('ICe5_r'), { a: by('ICe6_r').a, b: by('ICe6_r').b });
+  /* внутренний 4-го слева — отражён на правую сторону */
+  const m = by('ICi4_l'); m.a = m.a.map(p => [-p[0], p[1], p[2]]); m.b = m.b.map(p => [-p[0], p[1], p[2]]);
+  /* внутренний 3-го справа — обрезан спереди на треть (не доходит до грудины) */
+  const c = by('ICi3_r'), k = Math.round(c.a.length * 2 / 3); c.a = c.a.slice(0, k); c.b = c.b.slice(0, k); c.t = c.t.slice(0, k);
+  const res = A.sheetAudit(ref, copy).results, failed = res.filter(x => !x.ok).flatMap(x => x.fail).join('\n');
+  assert.match(failed, /ICe5_r: верх: \d+ у ребра 6/, 'сдвиг на ребро не найден');
+  assert.match(failed, /ICi4_l за средней линией/, 'пласт на чужой стороне не найден');
+  assert.match(failed, /ICi3_r: промежуток впереди открыт/, 'укороченный пласт не найден');
 });
 
 test('the audit catches a wrong attachment: a missing end and an end in the wrong place fail', () => {

@@ -372,9 +372,52 @@ const Muscles = (() => {
     return Math.max(b.rt, Math.sqrt(b.area * Math.pow(Math.sin(Math.PI * u), SPINDLE) / SPINDLE_I / Math.PI));
   }
 
+  /* ---------- пласты (межрёберные мышцы, формат данных 3) ----------
+     Пласт — тонкая мышца на всю площадь промежутка между костями, а не трубка вдоль линии действия
+     (tools/muscles/intercostals.js). В данных: кость (bone — пласт жёсткий, движется вместе с ней), верхний и нижний края
+     наружной поверхности (a, b — точки в рамке кости, по порядку сзади вперёд) и толщина t в каждой точке (см).
+     Наружная поверхность — полосы между краями; внутренняя — сдвиг на t вглубь по нормали; торцы закрыты. Нормаль наружу —
+     cross(вдоль пласта, от a к b), у правой стороны — с обратным знаком (порядок точек на обеих сторонах — сзади вперёд). */
+  function sheetNormals(sh) {
+    const a = sh.a, b = sh.b, n = a.length, g = sh.side === 'L' ? 1 : -1, out = [];
+    for (let i = 0; i < n; i++) {
+      const i0 = Math.max(0, i - 1), i1 = Math.min(n - 1, i + 1);
+      const t = [a[i1][0] + b[i1][0] - a[i0][0] - b[i0][0], a[i1][1] + b[i1][1] - a[i0][1] - b[i0][1], a[i1][2] + b[i1][2] - a[i0][2] - b[i0][2]];
+      const v = sub3(b[i], a[i]), c = cross3(t, v), l = Math.sqrt(dot3(c, c)) || 1;
+      out.push([g * c[0] / l, g * c[1] / l, g * c[2] / l]);
+    }
+    return out;
+  }
+  /* сетка пласта в рамке его кости: {pos, nor (Float32Array), idx (номера вершин), n — вершин}; вершины: наружная поверхность
+     (a, b по точкам), внутренняя, два торца */
+  function sheetMesh(sh) {
+    const a = sh.a, b = sh.b, n = a.length, N = sheetNormals(sh), nv = 4 * n + 8;
+    const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), idx = [];
+    const put = (v, p, q) => { pos.set(p, v * 3); nor.set(q, v * 3); };
+    const deep = (p, i) => [p[0] - N[i][0] * sh.t[i], p[1] - N[i][1] * sh.t[i], p[2] - N[i][2] * sh.t[i]], neg = q => [-q[0], -q[1], -q[2]];
+    for (let i = 0; i < n; i++) {
+      put(2 * i, a[i], N[i]); put(2 * i + 1, b[i], N[i]);
+      put(2 * n + 2 * i, deep(a[i], i), neg(N[i])); put(2 * n + 2 * i + 1, deep(b[i], i), neg(N[i]));
+    }
+    /* обход: снаружи — против часовой, если смотреть со стороны нормали */
+    const f = cross3(sub3(a[Math.min(1, n - 1)], a[0]), sub3(b[0], a[0])), flip = dot3(f, N[0]) < 0;
+    const quad = (p, q, r, s, rev) => { if (rev) idx.push(p, r, q, q, r, s); else idx.push(p, q, r, q, s, r); };
+    for (let i = 0; i < n - 1; i++) { quad(2 * i, 2 * i + 2, 2 * i + 1, 2 * i + 3, flip); quad(2 * n + 2 * i, 2 * n + 2 * i + 2, 2 * n + 2 * i + 1, 2 * n + 2 * i + 3, !flip); }
+    /* торцы: сзади (i = 0) нормаль — против хода пласта, спереди — по ходу */
+    for (const [i, s, v] of [[0, -1, 4 * n], [n - 1, 1, 4 * n + 4]]) {
+      const j = s < 0 ? Math.min(1, n - 1) : Math.max(0, n - 2), t = sub3(a[i], a[j]), l = Math.sqrt(dot3(t, t)) || 1, e = [t[0] / l, t[1] / l, t[2] / l];
+      put(v, a[i], e); put(v + 1, b[i], e); put(v + 2, deep(a[i], i), e); put(v + 3, deep(b[i], i), e);
+      const g = cross3(sub3(b[i], a[i]), sub3(deep(a[i], i), a[i]));
+      quad(v, v + 1, v + 2, v + 3, dot3(g, e) < 0);
+    }
+    return { pos, nor, idx, n: nv };
+  }
+
   /* ---------- данные ----------
      src/data/muscles.bin (tools/muscles/pack.js): gzip от JSON. Грузится заранее, в простое после первого экрана, или при первом открытии вида «Анатомия»;
-     в офлайн-файле встроен (window.MUSCLES_BIN, base64). */
+     в офлайн-файле встроен (window.MUSCLES_BIN, base64).
+     Формат 2 — мышцы-трубки (muscles); формат 3 (4.39.0) добавляет пласты (sheets) — читатель формата 2 их не видит и рисует
+     мышцы как раньше, данные формата 2 без sheets этот читатель рисует без пластов. */
   let data = null, pending = null;
   const decode = u8 => JSON.parse(new TextDecoder().decode(u8));
   async function gunzip(bytes) {
@@ -396,7 +439,7 @@ const Muscles = (() => {
     pending = bytes.then(gunzip).then(decode).then(d => (data = d)).catch(e => { pending = null; throw e; });
     return pending;
   }
-  return { path, wrap, bind, place, layout, drawn, layoutDrawn, body, radiusAt, skinAt, section, surface, ringCount, SIDES, SKIN_U, SKIN_GAP, FLAT, SPINDLE, SPINDLE_I, load, decode, get data() { return data; }, set data(d) { data = d; } };
+  return { path, wrap, bind, place, layout, drawn, layoutDrawn, body, radiusAt, skinAt, section, surface, ringCount, sheetNormals, sheetMesh, SIDES, SKIN_U, SKIN_GAP, FLAT, SPINDLE, SPINDLE_I, load, decode, get data() { return data; }, set data(d) { data = d; } };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = Muscles;
 if (typeof window !== 'undefined') window.Muscles = Muscles;

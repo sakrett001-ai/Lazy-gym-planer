@@ -1,7 +1,10 @@
 'use strict';
 /* Упаковка мышц для приложения: qa/muscles/muscles.json (build_muscles.py + das3_import.py) → src/data/muscles.bin.
    node tools/muscles/pack.js [вход.json] [выход.bin]
-   Формат: gzip от JSON {version, source, parts:{ключ: название}, muscles:[{name, side, part, group:[…], el, v, t0, t1, l0, sk}]}.
+   Формат: gzip от JSON {version, source, parts:{ключ: название}, muscles:[{name, side, part, group:[…], el, v, t0, t1, l0, sk}],
+   sheets:[{name, side, part, group, bone, space, a, b, t}]}. Формат 3 (4.39.0) — с пластами sheets (межрёберные мышцы:
+   края наружной поверхности a, b в рамке кости bone и толщина t, см; сетку строит Muscles.sheetMesh); читатели формата 2
+   поле sheets пропускают.
    el — как во входном файле (точки и огибающие тела в рамках костей скелета), координаты округлены до 0,1 мм;
    служебные поля (имена сайтов MuJoCo, сила, длины волокон) не берутся. group — группы мышц приложения
    (MUSCLE_NAMES в 00-engine.js): по ним в разборе подсвечиваются мышцы упражнения; part — анатомическое название.
@@ -93,6 +96,8 @@ const PARTS = [
   [/^SCALant\d$/, 'scalant', 'Передняя лестничная', []], [/^SCALmed\d$/, 'scalmed', 'Средняя лестничная', []],
   [/^SCALpost\d$/, 'scalpost', 'Задняя лестничная', []],
   [/^serr_ant/, 'serrant', 'Передняя зубчатая', ['serratus']],
+  /* межрёберные (4.39.0, anatomy.js, раздел 7; intercostals.js) — пласты (sheets), без группы приложения, как мышцы шеи */
+  [/^ICe\d+$/, 'icext', 'Наружные межрёберные', []], [/^ICi\d+$/, 'icint', 'Внутренние межрёберные', []],
 ];
 
 /* объём и сухожилия (этап М2, volumes.js): длины путей — в нейтральной позе манекена, по тем же данным, что в приложении */
@@ -157,7 +162,14 @@ function pack(src) {
     });
     return { name: m.name, side: m.side, part, group, el, fmax: m.fmax };
   });
-  return withVolumes({ version: 2, source: src.source, parts, muscles });
+  /* пласты (формат 3): края наружной поверхности в рамке кости — до 0,1 мм, толщина — до 0,01 мм */
+  const sheets = (src.sheets || []).map(s => {
+    const hit = PARTS.find(([re]) => re.test(s.name.replace(/_[rl]$/, '')));
+    if (!hit) throw Error('пласт без семейства: ' + s.name);
+    const [, part, title, group] = hit; parts[part] = title;
+    return { name: s.name, side: s.side, part, group, bone: s.bone, space: s.space, a: s.a.map(r2), b: s.b.map(r2), t: s.t.map(x => Math.round(x * 1e3) / 1e3) };
+  });
+  return withVolumes({ version: 3, source: src.source, parts, muscles, sheets });
 }
 if (require.main === module) {
   const out = pack(JSON.parse(fs.readFileSync(input, 'utf8')));

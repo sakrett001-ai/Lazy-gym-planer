@@ -47,7 +47,8 @@ test('muscle data: every muscle sits on existing bones, has an anatomical name a
   assert.equal(md.muscles.length, 530);   /* 4.32.0: +6 — поясничный и подвздошные пучки широчайшей; 4.34.0: +4 — верхние зубцы наружной косой;
                                               4.35.0: +42 — мышцы шеи, остистая (anatomy.js), гребенчатая (gait2392_import.py);
                                               4.36.0: +4 — задняя часть дельтовидной веером (anatomy.js, раздел 5);
-                                              4.37.0: +12 — большая грудная и подостная веером (раздел 6) */
+                                              4.37.0: +12 — большая грудная и подостная веером (раздел 6);
+                                              4.39.0: + межрёберные — не трубки, а 44 пласта (md.sheets, раздел 7), число мышц-трубок прежнее */
   for (const mu of md.muscles) {
     assert(md.parts[mu.part], `${mu.name}: part ${mu.part}`);
     for (const g of mu.group) assert(GROUPS.has(g), `${mu.name}: unknown group ${g}`);
@@ -281,6 +282,143 @@ test('muscle paths stay out of bones and under the skin in catalog poses', () =>
     assert(f.skin <= (EXCEPT.skin[k] ?? 2.2), `${k}: ${f.skin.toFixed(2)} cm above the skin (${f.skinAt})`);
     assert(f.body <= (EXCEPT.body[k] ?? 2.6), `${k}: muscle body ${f.body.toFixed(2)} cm above the skin (${f.bodyAt})`);
   }
+});
+
+/* ---------- межрёберные мышцы — пласты (4.39.0, tools/muscles/intercostals.js; данные формата 3 — sheets) ---------- */
+const IC = require('./muscles/intercostals.js'), RCAGE = IC.ribcage(skel);
+const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+/* часть сетки грудной клетки у точки (рамка грудной клетки): номер ребра стороны s или 0 — грудина с хрящами */
+const ribAt = (s, p) => { let best = Infinity, k = -1; RCAGE.P.forEach((q, i) => { const d = Math.hypot(...sub3(q, p)); if (d < best) { best = d; k = i; } }); return { part: RCAGE.label[s][k], d: best }; };
+/* расстояние от вертикальной оси грудной клетки */
+const radial = p => Math.hypot(p[0], p[2] - RCAGE.zc);
+
+test('intercostal sheets: 11 spaces × 2 layers × 2 sides, anatomical names, no app group, closed mesh facing outward', () => {
+  assert.equal(md.version, 3);
+  assert.equal(md.sheets.length, 44);   /* 4.39.0: + межрёберные — 11 промежутков × наружные и внутренние × 2 стороны */
+  assert.equal(md.parts.icext, 'Наружные межрёберные'); assert.equal(md.parts.icint, 'Внутренние межрёберные');
+  const names = new Set(md.sheets.map(s => s.name));
+  for (const s of ['r', 'l']) for (let k = 1; k <= 11; k++) for (const l of ['e', 'i']) assert(names.has(`IC${l}${k}_${s}`), `нет IC${l}${k}_${s}`);
+  for (const sh of md.sheets) {
+    assert.equal(sh.part, sh.name[2] === 'e' ? 'icext' : 'icint');
+    assert.deepEqual(sh.group, [], `${sh.name}: межрёберные не входят в группы приложения`);
+    assert.deepEqual(sh.bone, ['ribcage', '']);
+    assert(sh.a.length >= 4 && sh.a.length === sh.b.length && sh.a.length === sh.t.length, `${sh.name}: точек ${sh.a.length}`);
+    const m = Muscles.sheetMesh(sh), N = Muscles.sheetNormals(sh);
+    assert.equal(m.n, 4 * sh.a.length + 8); assert(m.idx.every(i => i >= 0 && i < m.n) && m.idx.length % 3 === 0);
+    /* нормаль наружной поверхности смотрит от оси грудной клетки (внутренняя поверхность — вглубь) */
+    sh.a.forEach((p, i) => { const q = [(p[0] + sh.b[i][0]) / 2, 0, (p[2] + sh.b[i][2]) / 2 - RCAGE.zc]; assert(dot3(N[i], q) > 0, `${sh.name}: нормаль ${i} внутрь`); });
+    /* обход треугольников наружной поверхности согласован с нормалью */
+    const [i0, i1, i2] = m.idx, v = k => [m.pos[k * 3], m.pos[k * 3 + 1], m.pos[k * 3 + 2]], f = [v(i1), v(i2)].map(q => sub3(q, v(i0)));
+    assert(dot3([f[0][1] * f[1][2] - f[0][2] * f[1][1], f[0][2] * f[1][0] - f[0][0] * f[1][2], f[0][0] * f[1][1] - f[0][1] * f[1][0]], N[0]) > 0, `${sh.name}: обход наизнанку`);
+  }
+});
+
+/* Пласт промежутка k — между рёбрами k и k+1: у верхнего края ближе всего ребро k (или его хрящ), у нижнего — k+1, верхний
+   край выше нижнего; больше половины точек краёв — у костных рёбер; пласт на уровне рёбер — не снаружи от них и не глубже
+   внутренних поверхностей рёбер (не в полости груди) */
+test('each intercostal sheet lies between its own ribs, at the level of the ribs', () => {
+  for (const sh of md.sheets) {
+    const s = sh.side, k = sh.space; let bony = 0;
+    sh.a.forEach((a, i) => {
+      const b = sh.b[i], A = ribAt(s, a), B = ribAt(s, b);
+      assert(A.part === k || A.part === 0, `${sh.name} ${i}: верхний край у ребра ${A.part}`);
+      assert(B.part === k + 1 || B.part === 0, `${sh.name} ${i}: нижний край у ребра ${B.part}`);
+      assert(a[1] > b[1], `${sh.name} ${i}: верхний край ниже нижнего`);
+      if (A.part === k && B.part === k + 1) bony++;
+    });
+    assert(bony > sh.a.length / 2, `${sh.name}: у костных рёбер ${bony} из ${sh.a.length}`);
+    /* уровень рёбер: вершины пласта — между наружной и внутренней поверхностью соседних рёбер (по расстоянию от оси, с запасом 1 мм
+       снаружи и 3 мм внутри — у края ребра сетка грубая) */
+    const m = Muscles.sheetMesh(sh);
+    for (let v = 0; v < m.n; v++) {
+      const q = [m.pos[v * 3], m.pos[v * 3 + 1], m.pos[v * 3 + 2]], near = RCAGE.P.filter(p => Math.hypot(...sub3(p, q)) < 2.5).map(radial);
+      assert(near.length, `${sh.name}: вершина ${v} вдали от рёбер`);
+      const r = radial(q);
+      assert(r <= Math.max(...near) + .1, `${sh.name}: вершина ${v} снаружи рёбер на ${(r - Math.max(...near)).toFixed(2)} см`);
+      assert(r >= Math.min(...near) - .3, `${sh.name}: вершина ${v} глубже рёбер на ${(Math.min(...near) - r).toFixed(2)} см`);
+    }
+  }
+});
+
+/* Толщина — по УЗИ здоровых мужчин (Yoshida и др., 2019): спереди у грудины (там только внутренние) — в пределах средних по
+   промежуткам 1,97–2,79 мм, сбоку оба слоя вместе — 3,03–3,68 мм, сзади (от угла ребра к позвоночнику — только наружные) —
+   4,25–4,85 мм; сбоку наружные — 60 % (отношение масс слоёв у препаратов: Wilson и др., 2001 — 52,5 и 34,4 г) */
+test('intercostal thickness follows the ultrasound data and the layer split by mass', () => {
+  const Ax = require('./muscles/fixtures/anatomy.json').intercostal, range = o => { const v = Object.values(o).map(x => x[0] / 10); return [Math.min(...v), Math.max(...v)]; };
+  const ANT = range(Ax.yoshida2019.anterior), LAT = range(Ax.yoshida2019.lateral), POST = range(Ax.yoshida2019.posterior);
+  const LM = IC.landmarks(skel, RCAGE), fExt = Ax.wilson2001.external / (Ax.wilson2001.external + Ax.wilson2001.internal);
+  const az = (sh, i) => IC.azimuth(RCAGE, sh.side, [(sh.a[i][0] + sh.b[i][0]) / 2, 0, (sh.a[i][2] + sh.b[i][2]) / 2]);
+  /* толщина слоя в азимуте th — по точкам пласта (линейно между точками, шаг ≈ 1 см: у излома профиля на 90° — до 3 %
+     доли), 0 вне его */
+  const tAt = (sh, th) => { const z = sh.a.map((_, i) => az(sh, i)); for (let i = 1; i < z.length; i++) if ((z[i - 1] - th) * (z[i] - th) <= 0) { const u = z[i - 1] === z[i] ? 0 : (th - z[i - 1]) / (z[i] - z[i - 1]); return sh.t[i - 1] + (sh.t[i] - sh.t[i - 1]) * u; } return 0; };
+  let lateral = 0, front = 0, back = 0;
+  for (const s of ['r', 'l']) for (let k = 1; k <= 11; k++) {
+    const e = md.sheets.find(x => x.name === `ICe${k}_${s}`), n = md.sheets.find(x => x.name === `ICi${k}_${s}`), S = s.toUpperCase();
+    for (const sh of [e, n]) for (const t of sh.t) assert(t >= 0 && t <= POST[1] + 1e-9, `${sh.name}: толщина ${t}`);
+    const angle = Math.min(LM[S][k - 1].th.angle, LM[S][k].th.angle);
+    /* сбоку (90°): вместе — как по УЗИ, доля наружных — по массам */
+    const te = tAt(e, 90), ti = tAt(n, 90);
+    if (te > 0 && ti > 0) { lateral++; assert(te + ti >= LAT[0] - 1e-3 && te + ti <= LAT[1] + 1e-3, `ICe/ICi${k}_${s}: сбоку ${(10 * (te + ti)).toFixed(2)} мм`); assert(Math.abs(te / (te + ti) - fExt) < .035, `${k}_${s}: доля наружных ${te / (te + ti)}`); }
+    /* сзади от угла ребра — только наружные, толщина как сзади по УЗИ */
+    e.t.forEach((t, i) => { if (az(e, i) > angle + 1 && i > 0) { back++; assert(t >= POST[0] - 1e-3 && t <= POST[1] + 1e-3, `ICe${k}_${s} ${i}: сзади ${(10 * t).toFixed(2)} мм`); } });
+    n.t.forEach((t, i) => assert(!(az(n, i) > angle + 1), `ICi${k}_${s}: внутренние за углом ребра`));
+    /* спереди, где наружных нет (дальше рёберно-хрящевых соединений), — окологрудинная часть внутренних */
+    const eFront = az(e, e.a.length - 1);
+    n.t.forEach((t, i) => { if (az(n, i) < eFront - 1) { front++; assert(t >= ANT[0] - 1e-3 && t <= ANT[1] + 1e-3, `ICi${k}_${s} ${i}: спереди ${(10 * t).toFixed(2)} мм`); } });
+  }
+  assert(lateral >= 16 && back >= 40 && front >= 30, `проверено: сбоку ${lateral}, сзади ${back}, спереди ${front}`);
+  /* Независимая сверка — масса слоёв у препаратов (Wilson и др., 2001; 5 препаратов старше 65–70 лет): наружные и внутренние
+     в промежутках 2, 4, 6, 8 обеих сторон от углов рёбер до рёберно-хрящевых соединений — 52,5 и 34,4 г, окологрудинная часть
+     внутренних в промежутках 2–5 — 16,5 г. Нарисованные пласты (толщина по УЗИ молодых мужчин, плотность мышцы 1,06 г/см³)
+     тяжелее или такие же (наружные ×1,75, внутренние ×1,38, окологрудинные ×1,0) — как у мышц шеи, где масса пожилого
+     препарата (Borst) меньше объёма по МРТ в 1,25–1,5 раза (README, «Объём»); допуск ×0,8–2,5; ошибка в единицах (мм вместо
+     см) дала бы ×10 или ×0,1 */
+  const mid = (sh, i) => sh.a[i].map((v, j) => (v + sh.b[i][j]) / 2);
+  const mass = (sh, lo, hi) => { let v = 0; for (let i = 1; i < sh.a.length; i++) { const m = (az(sh, i) + az(sh, i - 1)) / 2; if (m < lo || m > hi) continue;
+    const w = (Math.hypot(...sub3(sh.a[i], sh.b[i])) + Math.hypot(...sub3(sh.a[i - 1], sh.b[i - 1]))) / 2 - .3; v += w * Math.hypot(...sub3(mid(sh, i), mid(sh, i - 1))) * (sh.t[i] + sh.t[i - 1]) / 2; } return 1.06 * v; };
+  let me = 0, mi = 0, mp = 0;
+  for (const S of ['R', 'L']) {
+    const s = S.toLowerCase(), L = k => ({ angle: Math.min(LM[S][k - 1].th.angle, LM[S][k].th.angle), ccj: (LM[S][k - 1].th.ccj + LM[S][k].th.ccj) / 2 }), sh = n => md.sheets.find(x => x.name === `${n}_${s}`);
+    for (const k of Ax.wilson2001.spaces) { me += mass(sh('ICe' + k), L(k).ccj, L(k).angle); mi += mass(sh('ICi' + k), L(k).ccj, L(k).angle); }
+    for (const k of [2, 3, 4, 5]) mp += mass(sh('ICi' + k), -1, L(k).ccj);
+  }
+  for (const [label, m, w] of [['наружные', me, Ax.wilson2001.external], ['внутренние', mi, Ax.wilson2001.internal], ['окологрудинные', mp, Ax.wilson2001.parasternal]])
+    assert(m / w >= .8 && m / w <= 2.5, `${label}: ${m.toFixed(1)} г против ${w} г у препаратов (×${(m / w).toFixed(2)})`);
+});
+
+/* левая и правая стороны — зеркальные: края левого пласта, отражённые через среднюю линию, лежат у краёв правого — по
+   медиане не дальше 1,5 мм, у 90 % точек — не дальше 4,5 мм, везде — не дальше 1 см; длина пласта и толщина — те же. Рёбра
+   5 и 8 в сетке скелета (MyoSim) слева и справа немного различаются (88 и 93 вершины, до 5 мм), и углы рёбер 8 — на 2°:
+   концы пластов там расходятся сильнее середины */
+test('left and right intercostal sheets are mirror images', () => {
+  const len = sh => sh.a.reduce((s, p, i) => i ? s + Math.hypot(...sub3([(p[0] + sh.b[i][0]) / 2, (p[1] + sh.b[i][1]) / 2, (p[2] + sh.b[i][2]) / 2], [(sh.a[i - 1][0] + sh.b[i - 1][0]) / 2, (sh.a[i - 1][1] + sh.b[i - 1][1]) / 2, (sh.a[i - 1][2] + sh.b[i - 1][2]) / 2])) : 0, 0);
+  const segDist = (p, P) => { let d = Infinity; for (let i = 1; i < P.length; i++) { const a = P[i - 1], ab = sub3(P[i], a), u = Math.max(0, Math.min(1, dot3(sub3(p, a), ab) / (dot3(ab, ab) || 1))); d = Math.min(d, Math.hypot(...sub3(p, [a[0] + ab[0] * u, a[1] + ab[1] * u, a[2] + ab[2] * u]))); } return d; };
+  for (const r of md.sheets.filter(s => s.side === 'R')) {
+    const l = md.sheets.find(s => s.name === r.name.replace(/_r$/, '_l')), mir = P => P.map(p => [-p[0], p[1], p[2]]);
+    for (const k of ['a', 'b']) {
+      const L = mir(l[k]), d = r[k].map(p => segDist(p, L)).sort((x, y) => x - y), q = f => d[Math.floor(f * (d.length - 1))];
+      assert(q(.5) <= .15 && q(.9) <= .45 && q(1) <= 1, `${r.name}: край ${k} слева дальше: медиана ${q(.5).toFixed(2)}, 90 % — ${q(.9).toFixed(2)}, наибольшее ${q(1).toFixed(2)} см`);
+    }
+    assert(Math.abs(len(r) - len(l)) / len(r) < .05, `${r.name}: длина ${len(r).toFixed(1)} и ${len(l).toFixed(1)} см`);
+    assert(Math.abs(Math.max(...r.t) - Math.max(...l.t)) < .01, `${r.name}: толщина`);
+  }
+});
+
+/* Пласт — жёсткий, в рамке грудной клетки; кожа же вокруг груди меняется с позой (складки подмышки, наклоны). Во всех позах
+   проверки (вся проверка — npm run muscles:check) — рука над головой (жим стоя, подтягивания, вис, «звёздочка») и
+   скручивания (велосипед, дровосек, боковая планка, скручивания): пласт под кожей и почти не заходит в чужие кости (ключица
+   ложится на рёбра 1–3 спереди — README). Отрицательная проверка: пласт, вынесенный на 4 см наружу, ловится. */
+test('intercostal sheets stay under the skin and out of other bones with the arm overhead and in twists', () => {
+  const C = require('./muscles/check.js');
+  const r = C.sheetRun(['ohp', 'pullup', 'hang', 'jumpingjack', 'bicycle', 'cablewood', 'sideplank', 'crunch'], [0, .25, .5, .75, 1]);
+  assert.equal(Object.keys(r).length, 44);
+  for (const [n, o] of Object.entries(r)) {
+    assert(o.skin <= C.SHEET_LIMIT.body, `${n}: над кожей на ${o.skin.toFixed(2)} см (${o.skinAt})`);
+    assert(o.bone <= C.SHEET_LIMIT.bone, `${n}: в кости на ${o.bone.toFixed(2)} см (${o.boneAt})`);
+  }
+  const S = C.SHEETS.find(x => x.sh.name === 'ICe6_r'), N = Muscles.sheetNormals(S.sh), out = { ...S, pos: S.pos.slice() };
+  for (let v = 0; v < out.n; v++) { const i = Math.min(N.length - 1, (v < 4 * N.length ? v % (2 * N.length) : 0) >> 1); for (let j = 0; j < 3; j++) out.pos[v * 3 + j] += 4 * N[i][j]; }
+  assert(C.sheetRun(['ohp'], [0], [out]).ICe6_r.skin > 1, 'пласт снаружи кожи не найден');
 });
 
 /* проверки ловят порчу данных: перенесённое прикрепление меняет направление хода, точка в кости — глубину */
