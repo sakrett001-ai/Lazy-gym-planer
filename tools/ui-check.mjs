@@ -12,18 +12,25 @@ if (!fs.existsSync(file)) { console.error('Нет собранного файл�
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const fails = [], errors = [];
 const check = (ok, what) => { if (!ok) fails.push(what); };
-async function open(width) {
-  const page = await browser.newPage({ viewport: { width, height: 800 } });
+/* рисунки движений — заглушки: проверяется поведение и раскладка, а не фигура */
+const fakeFigures = page => page.evaluate(() => {
+  const fake = () => { const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('class', 'fig'); return { svg, camera: 'side', at() {}, setTrace() {}, setVectors() {}, setJoints() {}, setStress() {}, setMuscles() {}, setRegion() {}, dispose() {} }; };
+  window.buildFigure = fake; window.createMotionFigure = fake;
+});
+async function open(width, height = 800) {
+  const page = await browser.newPage({ viewport: { width, height } });
   page.on('pageerror', e => errors.push(String(e)));
   await page.goto('file://' + file); await page.waitForTimeout(500);
+  await fakeFigures(page);
   await page.evaluate(() => {
-    const fake = () => { const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); return { svg, camera: 'side', at() {}, setTrace() {}, setVectors() {}, setJoints() {}, setStress() {}, setMuscles() {}, setRegion() {}, dispose() {} }; };
-    window.buildFigure = fake; window.createMotionFigure = fake;
     Object.assign(S, { view: 'plan', mode: 'single', format: 'classic', goal: 'mass', level: 'mid', groups: ['chest', 'back', 'shoulders'], count: 5, seed: 3, fold: null });
     LOG.data = {}; regen();
   });
   return page;
 }
+/* прямоугольник элемента простым объектом */
+const rect = (page, sel) => page.evaluate(s => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; }, sel);
+const apart = (a, b) => !!a && !!b && (a.r <= b.l + .5 || b.r <= a.l + .5 || a.b <= b.t + .5 || b.b <= a.t + .5);
 /* checkVisibility учитывает и закрытый <details>: его содержимое в Chromium сохраняет размеры, но не рисуется */
 const shown = (page, sel) => page.evaluate(s => { const e = document.querySelector(s); return !!e && e.getClientRects().length > 0 && e.offsetHeight > 0 && (!e.checkVisibility || e.checkVisibility({ contentVisibilityAuto: true, visibilityProperty: true })); }, sel);
 
@@ -179,6 +186,100 @@ await page.close();
   await o.close();
 }
 
+/* телефон (разбор 4.23.1, У2–У4, В1–В3): шапка в две строки, при повторном запуске план на первом экране; в разборе
+   сцена сразу под заголовком, ракурсы одной строкой под ней; серый переключатель нагрузки на суставы с подписью;
+   подписи карточки не закрывают рисунок, фаза — в одну строку; месяцы журнала не наезжают; счётчик оборудования целиком */
+{
+  const p = await open(390, 844);
+  const head = await p.evaluate(() => {
+    const q = s => { const r = document.querySelector(s).getBoundingClientRect(); return { t: r.top, b: r.bottom }; };
+    return { top: q('.top'), logo: q('.logo'), atlas: q('#motion-atlas'), views: q('#views'), lang: q('.lang'), tag: getComputedStyle(document.querySelector('.tag')).display };
+  });
+  check(head.top.b - head.top.t <= 120 && head.tag === 'none' && head.atlas.t < head.logo.b && head.views.t >= head.atlas.b - 1 && head.lang.t < head.views.b && head.lang.b > head.views.t,
+    'телефон: шапка в две строки — логотип и атлас, под ними разделы и язык; подпись скрыта');
+  check(await p.evaluate(() => !S.fold.setup), 'первый запуск: параметры раскрыты');
+  await p.reload(); await p.waitForTimeout(500); await fakeFigures(p);
+  check(await p.evaluate(() => S.fold.setup === true && document.querySelector('.setup').classList.contains('folded') && document.querySelector('#plan').getBoundingClientRect().top < innerHeight * .6),
+    'после первого плана параметры на телефоне свёрнуты, план — на первом экране');
+  /* разбор: сцена под заголовком, ракурсы под сценой одной строкой, выбор упражнения — после управления движением */
+  await p.evaluate(() => openMotionItem(previewItem('latpull'))); await p.waitForTimeout(150);
+  const mv = await p.evaluate(() => {
+    const q = s => { const r = document.querySelector(s).getBoundingClientRect(); return { t: r.top, b: r.bottom, h: r.height, w: r.width }; };
+    return { head: q('.mv-head'), stage: q('#mv-stage'), cams: q('#mv-cameras'), toggles: q('.mv-toggles'), select: q('.mv-select'), tools: q('.mv-tools'),
+      rows: new Set([...document.querySelectorAll('#mv-cameras button')].map(b => Math.round(b.getBoundingClientRect().top))).size,
+      fit: document.querySelector('#mv-cameras').scrollWidth <= document.querySelector('#mv-cameras').clientWidth + 1, n: document.querySelectorAll('#mv-cameras button').length,
+      back: !!document.querySelector('.mv-head #mv-back')?.offsetHeight, vh: innerHeight };
+  });
+  check(mv.stage.t - mv.head.b < 24 && mv.stage.t < 200, 'разбор на телефоне: сцена сразу под заголовком');
+  check(mv.stage.h >= mv.vh * .5 && mv.stage.h > 320, 'разбор на телефоне: сцена выше прежних 320 px — кадр «Сверху под углом» крупнее');
+  check(mv.n === 5 && mv.rows === 1 && mv.fit && mv.cams.t >= mv.stage.b, 'ракурсы — одной строкой под сценой, все пять видны');
+  check(mv.select.t > mv.toggles.b && mv.tools.t > mv.select.t && mv.back, 'выбор упражнения и избранное — после управления движением, «← Все упражнения» — в шапке');
+  check(await p.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'разбор на телефоне без прокрутки вбок');
+  /* нагрузка на суставы: без меток переключатель выключен и подписан, с метками — подписи нет */
+  const stress = await p.evaluate(() => {
+    const none = EX.find(e => !jointStress(e).rules.length), some = EX.find(e => jointStress(e).rules.length);
+    const said = id => { const n = $(id); return !!n && !n.hidden && n.offsetParent !== null; };
+    selectMotion(previewItem(none.id));
+    const a = { off: $('#mv-stress-toggle').disabled, note: said('#mv-stress-none'), desc: $('#mv-stress-toggle').getAttribute('aria-describedby') === 'mv-stress-none' };
+    selectMotion(previewItem(some.id));
+    const b = { off: $('#mv-stress-toggle').disabled, note: said('#mv-stress-none') };
+    configureStressPanel('wv', { it: previewItem(none.id) }); const w1 = !!$('#wv-stress-none') && !$('#wv-stress-none').hidden;
+    configureStressPanel('wv', { it: previewItem(some.id) }); const w2 = !!$('#wv-stress-none') && $('#wv-stress-none').hidden;
+    return { a, b, w: w1 && w2 };
+  });
+  check(stress.a.off && stress.a.note && stress.a.desc && !stress.b.off && !stress.b.note && stress.w, 'нагрузка на суставы: «в этом упражнении меток нет» — только у упражнений без меток (разбор и тренировка)');
+  await p.click('#mv-back'); await p.waitForTimeout(100);
+  check(!(await shown(p, '#mv-back')) && await shown(p, '#mv-close'), 'на витрине «← Все упражнения» скрыта');
+  await p.evaluate(() => closeMotion());
+  /* журнал: подписи месяцев не наезжают и не обрезаются ни в один день года */
+  const months = await p.evaluate(() => {
+    const host = document.createElement('div'); host.style.cssText = 'position:absolute;left:0;top:0;width:300px;visibility:hidden'; document.body.append(host);
+    const bad = [];
+    for (let i = 0; i < 366; i++) {
+      const d = new Date(2026, 0, 1 + i, 12); host.innerHTML = heatmap(d);
+      const svg = host.querySelector('svg'), W = svg.viewBox.baseVal.width;
+      const ls = [...svg.querySelectorAll('text.hm-l[y="10"]')].map(t => t.getBBox()).sort((a, b) => a.x - b.x);
+      if (ls.length < 2 || ls.some((b, k) => b.x < 0 || b.x + b.width > W + .5 || (k && ls[k - 1].x + ls[k - 1].width + 2 > b.x))) bad.push(d.toDateString());
+    }
+    host.remove(); return bad;
+  });
+  check(!months.length, `журнал: подписи месяцев не наезжают друг на друга (${months.slice(0, 3).join(', ')})`);
+  await p.close();
+
+  for (const w of [360, 390]) {
+    const c = await open(w, 800);
+    await c.evaluate(() => document.querySelector('.card').scrollIntoView()); await c.waitForTimeout(150);
+    const fig = await rect(c, '.card .illus > .fig'), view = await rect(c, '.card .illus-v'), zoom = await rect(c, '.card .illus-zoom');
+    check(fig && Math.abs(fig.w - fig.h) < 1.5 && apart(fig, view) && apart(fig, zoom), `карточка (${w} px): «Изометрия» и «↗» не лежат на рисунке`);
+    const caps = await c.evaluate(() => {
+      const cap = document.querySelector('.card .motion-caption'), lh = parseFloat(getComputedStyle(cap).lineHeight), out = [];
+      for (const label of ['Рабочая фаза', 'Конечная точка', 'Возврат', 'Исходное положение', 'Опускание', 'Нижняя точка', 'Подъём', 'Верхняя точка']) {
+        cap.textContent = label; if (cap.scrollWidth > cap.clientWidth + .5 || cap.getBoundingClientRect().height > lh * 1.5) out.push(label);
+      }
+      return out;
+    });
+    check(!caps.length, `карточка (${w} px): фаза в одну строку без обрезки (${caps.join(', ')})`);
+    const cnt = await c.evaluate(() => { const e = $('#e-count'), h3 = e.closest('.lbl'); return { h: e.getBoundingClientRect().height, lh: parseFloat(getComputedStyle(h3).lineHeight), text: e.textContent }; });
+    check(/^\d+ из \d+$/.test(cnt.text) && cnt.h <= cnt.lh * 1.5, `«Оборудование места» (${w} px): счётчик «${cnt.text}» в одну строку`);
+    check(await c.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), `план (${w} px) без прокрутки вбок`);
+    await c.close();
+  }
+}
+
+/* компьютер: параметры в боковой колонке не сворачиваются, в том числе при повторном запуске; разбор — как прежде,
+   ракурсы над сценой; счётчик оборудования в узкой колонке целиком */
+{
+  const d = await open(1280);
+  await d.reload(); await d.waitForTimeout(400); await fakeFigures(d);
+  check(await d.evaluate(() => S.fold.setup === false && !document.querySelector('.setup').classList.contains('folded')), 'на компьютере параметры не сворачиваются и при повторном запуске');
+  const cnt = await d.evaluate(() => { const e = $('#e-count'); return e.getBoundingClientRect().height <= parseFloat(getComputedStyle(e.closest('.lbl')).lineHeight) * 1.5; });
+  check(cnt, 'компьютер: счётчик оборудования в одну строку');
+  await d.evaluate(() => openMotionItem(previewItem('latpull'))); await d.waitForTimeout(100);
+  const cams = await rect(d, '#mv-camera-controls'), stage = await rect(d, '#mv-stage');
+  check(cams && stage && cams.b <= stage.t && await shown(d, '#mv-view') && await shown(d, '#mv-back'), 'компьютер: ракурсы над сценой, подпись ракурса на месте');
+  await d.close();
+}
+
 /* компьютер: параметры в боковой колонке не сворачиваются */
 const desk = await open(1280);
 await desk.evaluate(() => { S.fold.setup = true; regen(); });
@@ -188,4 +289,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, витрина атласа, виды фигуры «Анатомия», «Скелет» и «Манекен» работают на телефоне и компьютере.');
+console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, витрина атласа, виды фигуры «Анатомия», «Скелет» и «Манекен», первый экран и разбор на телефоне, карточка, журнал и счётчик оборудования работают на телефоне и компьютере.');
