@@ -4,7 +4,8 @@ import * as THREE from 'three';
    промежуточные точки к прикреплению, огибающий кости (src/js/09br-muscles.js). Толщина — по объёму брюшка и длинам
    сухожилий (этап М2): при укорочении мышца утолщается; у кожи сечение сплющивается вдоль неё. Вершины тела считает
    Muscles.surface (каталог, см) — те же, что проверяет tools/muscles/check.js; здесь они переводятся в сцену (м, Y вверх).
-   Все мышцы — одна сетка трубок постоянной топологии: кадр обновляет координаты, нормали и (при смене упражнения) цвета.
+   Все мышцы — одна сетка постоянной топологии (трубки и ленты широких плоских мышц — Muscles.ribbon, те же кольца по
+   8 вершин): кадр обновляет координаты, нормали и (при смене упражнения) цвета.
    Цвет (look из сцены): с «Мышцами по фазам» — участие мышцы в текущей фазе по учебному профилю упражнения (как
    у областей манекена: головка берёт свою область профиля, у упражнений на одну сторону — своя сторона), без них —
    основные мышцы цветом нагрузки, вспомогательные бледнее. Выбранная область оставляет цвет только своим мышцам. */
@@ -83,7 +84,7 @@ export function createMuscleLayer(parent){
  const c=new THREE.Color();
  function build(){
   const M=globalThis.Muscles;SIDES=M.SIDES;
-  start=new Uint32Array(bound.length+1);for(let i=0;i<bound.length;i++)start[i+1]=start[i]+M.ringCount(bound[i]);
+  start=M.ringStarts(bound);
   const nv=start[bound.length]*SIDES,idx=[];owner=[];
   for(let i=0;i<bound.length;i++)for(let r=start[i];r<start[i+1]-1;r++)for(let j=0;j<SIDES;j++){
    /* обход против часовой снаружи (Muscles.surface: кольцо идёт от оси к коже o к w) */
@@ -119,15 +120,12 @@ export function createMuscleLayer(parent){
   placeSheets(frames);
   /* второй вид разбора показывает ту же позу: вершины берутся из прошлого расчёта, если кости кадра те же */
   if(LAST.muscles===k&&!only&&!LAST.only&&LAST.pos?.length===pos.length&&sameFrames(LAST.frames,frames)){pos.set(LAST.pos);nor.set(LAST.nor);finish();return;}
-  const paths=M.layoutDrawn(bound,frames,ARC_STEP);
-  paths.forEach((path,i)=>{
-   const a=start[i]*SIDES*3,z=start[i+1]*SIDES*3;
-   /* только выбранные мышцы (просмотрщик, контактные листы): остальные — в точку */
-   if(only&&!only.test(bound[i].name)){pos.fill(0,a,z);return;}
-   M.surface(bound[i],path,frames,pos,nor,start[i]*SIDES);
-   /* каталог (см, Y вниз, пол 186) → сцена (м, Y вверх): отражение по Y — у нормалей меняется знак y */
-   for(let v=a;v<z;v+=3){pos[v]/=100;pos[v+1]=(186-pos[v+1])/100;pos[v+2]/=100;nor[v+1]=-nor[v+1];}
-  });
+  /* трубки и ленты (широкие плоские мышцы — полосы между соседними линиями, Muscles.ribbon) */
+  M.surfaceAll(bound,M.layoutDrawn(bound,frames,ARC_STEP),frames,pos,nor,start);
+  /* каталог (см, Y вниз, пол 186) → сцена (м, Y вверх): отражение по Y — у нормалей меняется знак y */
+  for(let v=0;v<pos.length;v+=3){pos[v]/=100;pos[v+1]=(186-pos[v+1])/100;pos[v+2]/=100;nor[v+1]=-nor[v+1];}
+  /* только выбранные мышцы (просмотрщик, контактные листы): остальные — в точку */
+  if(only)for(let i=0;i<bound.length;i++)if(!only.test(bound[i].name))pos.fill(0,start[i]*SIDES*3,start[i+1]*SIDES*3);
   /* копии — в те же массивы, если размер прежний (≈1 МБ на кадр без новых выделений и сборки мусора) */
   const keep=(a,b)=>a&&a.length===b.length?(a.set(b),a):Float32Array.from(b);
   LAST.muscles=k;LAST.only=only;LAST.frames=keep(LAST.frames,frames);LAST.pos=keep(LAST.pos,pos);LAST.nor=keep(LAST.nor,nor);

@@ -60,11 +60,13 @@ function dataset() {
 function build() {
   const skel = SK.decode(zlib.gunzipSync(fs.readFileSync(path.join(root, 'src/data/skeleton.bin'))));
   const md = MU.decode(zlib.gunzipSync(fs.readFileSync(path.join(root, 'src/data/muscles.bin')))), bound = MU.bind(md, skel);
-  const buf = new Float64Array(64 * MU.SIDES * 3), out = [], fr = f => ({ o: f.o, x: f.x, y: f.y, z: f.z });
+  /* тела мышц — как в приложении (Muscles.surfaceAll: трубки и ленты широких мышц — кольцо ленты зависит от соседних линий) */
+  const START = MU.ringStarts(bound), all = new Float64Array(START[bound.length] * MU.SIDES * 3), out = [], fr = f => ({ o: f.o, x: f.x, y: f.y, z: f.z });
   for (const id of Object.keys(POSES).filter(k => !k.startsWith('_'))) {
     const rig = EQ.rig(POSES[id]);
     for (const t of [0, .25, .5, .75, 1]) {
       const R = rig(t), m = SK.frames(R, M.bodyData(R), skel.bones), paths = MU.layoutDrawn(bound, m, 1.5);
+      MU.surfaceAll(bound, paths, m, all, null, START);
       M.noFolds(() => {
         const body = M.bodyData(R), cache = M.torsoCache(R), others = [p => M.headSDF(R, p), p => M.neckSDF(R, p)];
         for (const s of ['L', 'R']) for (const k of ['fa', 'th', 'sk']) others.push(p => M.limbSDF(R, k, s, p));
@@ -72,7 +74,7 @@ function build() {
         const rec = { id, t, T: fr(R.frames.thorax), U: { L: fr(R.frames.uaL), R: fr(R.frames.uaR) }, v: [] };
         paths.forEach((p, i) => {
           const mu = bound[i]; if (!WANT.test(mu.name)) return;
-          const side = mu.name.endsWith('_l') ? 'L' : 'R', n = MU.surface(mu, p, m, buf, null, 0) * MU.SIDES, cand = [];
+          const side = mu.name.endsWith('_l') ? 'L' : 'R', n = (START[i + 1] - START[i]) * MU.SIDES, buf = all.subarray(START[i] * MU.SIDES * 3), cand = [];
           for (let k = 0; k < n; k++) {
             const q = [buf[k * 3], buf[k * 3 + 1], buf[k * 3 + 2]], it = {};
             const dt = M.torsoSDF(R, q, cache, it), da = M.limbSDF(R, 'ua', side, q);

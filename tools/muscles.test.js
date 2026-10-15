@@ -272,6 +272,188 @@ test('muscle thickness: constant belly volume, thicker when shorter, flattened u
   assert(area(1) > area(0) * 1.2, `biceps at the top ${area(1).toFixed(1)} vs bottom ${area(0).toFixed(1)} cm²`);
 });
 
+/* ---------- ленты: широкие плоские мышцы (Muscles.ribbon, FANS) ----------
+   Соседние линии одной плоской мышцы рисуются не трубками, а полосами пласта между швами с соседями (README, «Ленты»).
+   Проверяется: какие мышцы — ленты и порядок их линий по началам; объём (площадь многоугольника сечения против площади
+   трубки, той же, что по МРТ); нет щелей между соседними полосами; нет перекрута; под кожей; в костях не глубже трубок. */
+const EQR = require('../src/js/09bn-equipment.js'), POSES_R = require('../src/js/09bp-poses.js');
+const RSTART = Muscles.ringStarts(bound), RSIDES = Muscles.SIDES, RBUF = new Float64Array(RSTART[bound.length] * RSIDES * 3);
+const RIBBON_POSES = [['neutral', 0], ['ohp', 1], ['pullup', 0], ['ytw', 0], ['latpull', .5], ['bbbench', .5], ['pushup', 0], ['deadlift', 0], ['cablewood', 1], ['hipthrust', 1]];
+const rPose = (id, t) => { const R = id === 'neutral' ? L.M.catalogPose(L.M.neutral()) : EQR.rig(POSES_R[id])(t); return { R, m: L.Skeleton.frames(R, L.M.bodyData(R), skel.bones) }; };
+const rSub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], rDot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const rCross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const rUnit = a => { const l = Math.hypot(...a) || 1; return a.map(x => x / l); };
+/* вершина j кольца r мышцы i в буфере pos */
+const rV = (pos, i, r, j) => { const v = ((RSTART[i] + r) * RSIDES + j) * 3; return [pos[v], pos[v + 1], pos[v + 2]]; };
+const rMid = (pos, i, r, j0, j1) => rV(pos, i, r, j0).map((x, k) => (x + rV(pos, i, r, j1)[k]) / 2);
+/* многоугольник кольца в плоскости поперёк касательной: точки (2D) и подписанная площадь */
+function rRing(pos, i, r, T) {
+  const e1 = rUnit(rCross(T, Math.abs(T[0]) < .9 ? [1, 0, 0] : [0, 1, 0])), e2 = rCross(T, e1), P = [];
+  for (let j = 0; j < RSIDES; j++) { const v = rV(pos, i, r, j); P.push([rDot(v, e1), rDot(v, e2)]); }
+  let A = 0; for (let j = 0; j < RSIDES; j++) { const a = P[j], b = P[(j + 1) % RSIDES]; A += a[0] * b[1] - a[1] * b[0]; }
+  return { P, A: A / 2, e1, e2 };
+}
+function rInside(p, ring) {
+  const x = [rDot(p, ring.e1), rDot(p, ring.e2)], P = ring.P; let inside = false, best = Infinity;
+  for (let j = 0, l = P.length - 1; j < P.length; l = j++) {
+    const a = P[j], b = P[l]; if ((a[1] > x[1]) !== (b[1] > x[1]) && x[0] < (b[0] - a[0]) * (x[1] - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
+    const ab = [b[0] - a[0], b[1] - a[1]], u = Math.max(0, Math.min(1, ((x[0] - a[0]) * ab[0] + (x[1] - a[1]) * ab[1]) / (ab[0] * ab[0] + ab[1] * ab[1] || 1)));
+    best = Math.min(best, Math.hypot(x[0] - a[0] - ab[0] * u, x[1] - a[1] - ab[1] * u));
+  }
+  return inside ? 0 : best;
+}
+/* показатели лент кадра: объём по линиям (∫ площади многоугольника и трубки по длине), щели у швов, перекрут, обход колец */
+function ribbonStats(pos, fans = bound.fans) {
+  const out = [];
+  for (const fan of fans) {
+    const st = { key: fan.key, side: fan.side, lines: [], shared: 0, seams: 0, hole: 0, holeAt: '', twist: 1, twistAt: '', flips: 0 };
+    for (let k = 0; k < fan.K; k++) {
+      const i = fan.lines[k], rev = fan.rev[k]; let vd = 0, vn = 0, prev = null, prevN = null;
+      for (let r = 0; r < fan.n; r++) {
+        const q = rev ? fan.n - 1 - r : r, ri = Muscles.ribbonRing(fan, k, q), ring = rRing(pos, i, r, rUnit(ri.t));
+        /* обход кольца — как у трубки (Muscles.surface): от нормали к w = N × t своей линии */
+        if (ring.A * (rev ? -1 : 1) > 0) st.flips++;
+        if (prev) { const ds = Math.abs(ri.s - prev.s); vd += (Math.abs(ring.A) + prev.A) / 2 * ds; vn += (ri.area + prev.area) / 2 * ds; }
+        prev = { s: ri.s, A: Math.abs(ring.A), area: ri.area };
+        const N = rUnit(rSub(rV(pos, i, r, 0), rV(pos, i, r, 4)));
+        if (prevN && rDot(N, prevN) < st.twist) { st.twist = rDot(N, prevN); st.twistAt = `${bound[i].name} r${r}`; }
+        prevN = N;
+      }
+      st.lines.push({ name: bound[i].name, drawn: vd, tube: vn });
+    }
+    for (let k = 0; k + 1 < fan.K; k++) for (let q = 0; q < fan.n; q++) {
+      const a = fan.lines[k], b = fan.lines[k + 1], ra = fan.rev[k] ? fan.n - 1 - q : q, rb = fan.rev[k + 1] ? fan.n - 1 - q : q;
+      /* правый шов полосы k (вершины 1–3, у линии с путём против u — 7–5) и левый полосы k+1 */
+      const jR = fan.rev[k] ? [7, 5] : [1, 3], jL = fan.rev[k + 1] ? [1, 3] : [7, 5];
+      st.seams++;
+      if (Math.hypot(...rSub(rV(pos, a, ra, jR[0]), rV(pos, b, rb, jL[0]))) < 1e-9 && Math.hypot(...rSub(rV(pos, a, ra, jR[1]), rV(pos, b, rb, jL[1]))) < 1e-9) { st.shared++; continue; }
+      /* шов не общий (линии сошлись или перекрестились — у полосы своя кромка): точки между центрами двух линий — в сечении
+         одной из полос */
+      const Ca = rMid(pos, a, ra, 0, 4), Cb = rMid(pos, b, rb, 0, 4);
+      const pa = rRing(pos, a, ra, rUnit(Muscles.ribbonRing(fan, k, q).t)), pb = rRing(pos, b, rb, rUnit(Muscles.ribbonRing(fan, k + 1, q).t));
+      for (const l of [.1, .3, .5, .7, .9]) {
+        const p = Ca.map((x, j) => x + (Cb[j] - x) * l), d = Math.min(rInside(p, pa), rInside(p, pb));
+        if (d > st.hole) { st.hole = d; st.holeAt = `${bound[a].name}–${bound[b].name} q${q}`; }
+      }
+    }
+    out.push(st);
+  }
+  return out;
+}
+
+test('ribbons: broad flat muscles are drawn as ribbons of neighbouring lines, in the order of their origins', () => {
+  /* какие мышцы — ленты (README, «Ленты»: Gray's Anatomy, OpenStax A&P 2e — плоские, веерные, четырёхугольные пласты) */
+  const EXPECT = { pecmaj: 7, delt3: 3, lat: 6, trap: 13, infsp: 3, serrant: 12, rhomb: 4, eo: 8, glmax: 3, glmed: 3 };
+  for (const side of ['R', 'L']) assert.deepEqual(Object.fromEntries(bound.fans.filter(f => f.side === side).map(f => [f.key, f.K])), EXPECT, side);
+  const seen = new Set();
+  for (const fan of bound.fans) {
+    for (const i of fan.lines) {
+      assert(!seen.has(i), `${bound[i].name} in two ribbons`); seen.add(i);
+      assert.equal(bound[i].side, fan.side); assert.equal(Muscles.ringCount(bound[i]), fan.n, 'common ring count');
+    }
+    /* левая лента — зеркало правой */
+    const twin = bound.fans.find(f => f.key === fan.key && f.side !== fan.side);
+    assert.deepEqual(twin.lines.map(i => bound[i].name.replace(/_[rl]$/, '')), fan.lines.map(i => bound[i].name.replace(/_[rl]$/, '')));
+  }
+  /* порядок линий — по началам вдоль кости: ближайшее к началу линии начало другой линии той же мышцы — у соседа по ленте
+     (начало — конец пути с другой стороны от кости, где волокна сходятся); у верхних зубцов передней зубчатой (рёбра 1–2)
+     начала собраны в пучок — там сосед не дальше ближайшего больше чем на 1 см */
+  const { m } = rPose('neutral', 0), paths = Muscles.layoutDrawn(bound, m, 1.5);
+  for (const fan of bound.fans) {
+    const O = fan.lines.map((i, k) => { const p = paths[i].points; return fan.rev[k] ? p[0] : p[p.length - 1]; });
+    O.forEach((o, k) => {
+      let best = Infinity, at = -1; O.forEach((p, j) => { if (j !== k) { const d = Math.hypot(...rSub(o, p)); if (d < best) { best = d; at = j; } } });
+      const nb = Math.min(...[k - 1, k + 1].filter(j => j >= 0 && j < O.length).map(j => Math.hypot(...rSub(o, O[j]))));
+      assert(nb <= best + 1, `${fan.key}${fan.side}: nearest origin to ${bound[fan.lines[k]].name} is ${bound[fan.lines[at]].name}, ${best.toFixed(1)} cm (neighbour ${nb.toFixed(1)})`);
+    });
+  }
+});
+
+test('ribbons keep the MRI volume of every part: cross-section polygons have the area of the tube section', () => {
+  let worstFan = 0, worstLine = 0, at = '';
+  for (const [id, t] of RIBBON_POSES) {
+    const { m } = rPose(id, t); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
+    for (const st of ribbonStats(RBUF)) {
+      const d = st.lines.reduce((s, l) => s + l.drawn, 0), n = st.lines.reduce((s, l) => s + l.tube, 0);
+      if (Math.abs(d / n - 1) > worstFan) worstFan = Math.abs(d / n - 1);
+      assert(Math.abs(d / n - 1) < .03, `${st.key}${st.side} in ${id} t=${t}: ribbon volume ×${(d / n).toFixed(3)} of the tube volume`);
+      for (const l of st.lines) if (Math.abs(l.drawn / l.tube - 1) > worstLine) { worstLine = Math.abs(l.drawn / l.tube - 1); at = `${l.name} ${id} t=${t}`; }
+    }
+  }
+  /* у отдельной линии — до 12 % (сейчас до 6 % — зубцы наружной косой и задняя дельта у плеча): где линии перекрещиваются
+     или сходятся в пучок, полоса со своей кромкой перекрывает соседку; лента целиком — в пределах 3 % (сейчас до 2 %) */
+  assert(worstLine < .12, `line volume off by ${(worstLine * 100).toFixed(0)} % (${at})`);
+  /* площадь трубки по длине — объём части по МРТ (Muscles.body): та же сумма по кольцам на линиях лент даёт объём v с
+     точностью выборки колец */
+  const { m } = rPose('neutral', 0), paths = Muscles.layoutDrawn(bound, m, 1.5); Muscles.surfaceAll(bound, paths, m, RBUF, null, RSTART);
+  for (const st of ribbonStats(RBUF)) {
+    const fan = bound.fans.find(f => f.key === st.key && f.side === st.side), v = fan.lines.reduce((s, i) => s + bound[i].v, 0), n = st.lines.reduce((s, l) => s + l.tube, 0);
+    assert(Math.abs(n / v - 1) < .12, `${st.key}${st.side}: ring sampling of the tube area ${n.toFixed(0)} vs MRI ${v.toFixed(0)} cm³`);
+  }
+});
+
+test('ribbons: no gaps between neighbouring strips, no twist, rings wound like tubes — neutral and with the arm overhead', () => {
+  for (const [id, t] of RIBBON_POSES) {
+    const { m } = rPose(id, t); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
+    for (const st of ribbonStats(RBUF)) {
+      const where = `${st.key}${st.side} in ${id} t=${t}`;
+      /* общие швы — те же вершины у обеих полос; где шов не общий, между линиями нет непокрытого места больше 7 мм (сейчас
+         до 5,7 мм — задняя дельта при руке над головой, где её линии перекрещиваются) */
+      assert(st.hole <= .7, `${where}: gap ${st.hole.toFixed(2)} cm between strips (${st.holeAt})`);
+      assert(st.twist > 0, `${where}: the strip turns over between rings (${st.twistAt}, cos ${st.twist.toFixed(2)})`);
+      assert.equal(st.flips, 0, `${where}: rings wound inside out`);
+    }
+  }
+  /* в нейтральной позе швы большей частью общие (у широчайшей, трапециевидной, наружной косой, зубчатой) */
+  const { m } = rPose('neutral', 0); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
+  const share = Object.fromEntries(ribbonStats(RBUF).filter(s => s.side === 'R').map(s => [s.key, s.shared / s.seams]));
+  for (const k of ['lat', 'trap', 'eo', 'serrant']) assert(share[k] > .5, `${k}: shared seams ${(share[k] * 100).toFixed(0)} %`);
+  /* отрицательные: полоса, сдвинутая с шва на 1,5 см, — щель; перевёрнутое кольцо — перекрут и обход наизнанку */
+  const lat = bound.fans.find(f => f.key === 'lat' && f.side === 'R'), i = lat.lines[2], copy = RBUF.slice();
+  for (let r = 0; r < lat.n; r++) for (let j = 0; j < RSIDES; j++) { const v = ((RSTART[i] + r) * RSIDES + j) * 3; copy[v + 1] += 1.5; copy[v] += 1.5; }
+  const bad = ribbonStats(copy, [lat])[0];
+  assert(bad.hole > .7 || bad.shared < ribbonStats(RBUF, [lat])[0].shared, 'a strip moved off its seams is not detected');
+  const flip = RBUF.slice(), r0 = 5;
+  for (let j = 0; j < RSIDES; j++) for (let c = 0; c < 3; c++) flip[((RSTART[i] + r0) * RSIDES + j) * 3 + c] = RBUF[((RSTART[i] + r0) * RSIDES + (RSIDES - j) % RSIDES) * 3 + c];
+  for (let c = 0; c < 3; c++) { flip[((RSTART[i] + r0) * RSIDES) * 3 + c] = RBUF[((RSTART[i] + r0) * RSIDES + 4) * 3 + c]; flip[((RSTART[i] + r0) * RSIDES + 4) * 3 + c] = RBUF[((RSTART[i] + r0) * RSIDES) * 3 + c]; }
+  const f = ribbonStats(flip, [lat])[0];
+  assert(f.twist < 0 && f.flips > 0, 'a ring turned over is not detected');
+});
+
+/* Под кожей и в костях — не хуже трубок: тело ленты не выше 2,6 см над кожей (вся проверка — npm run muscles:check,
+   исключений для широчайшей и задней дельты больше нет), а вершины тела ленты в костях (дальше 2 см от концов пути)
+   глубже 0,5 см — не чаще, чем у трубок тех же линий (Muscles.surface), с запасом 2 процентных пункта, и не глубже их
+   больше чем на 0,3 см */
+test('ribbons stay under the skin and do not go into bones deeper than the tubes they replace', () => {
+  const G = require('./muscles/geometry.js'), pbs = G.prepareBones(skel), TUBE = new Float64Array(RBUF.length);
+  const fam = {};
+  for (const id of ['ohp', 'pullup', 'ytw', 'latpull', 'bbbench', 'deadlift', 'hipthrust']) for (const t of [0, .5, 1]) {
+    const { R, m } = rPose(id, t), paths = Muscles.layoutDrawn(bound, m, 1.5), pose = G.poseBones(pbs, m), sdf = G.skinSDF(R);
+    Muscles.surfaceAll(bound, paths, m, RBUF, null, RSTART);
+    for (const fan of bound.fans) for (const i of fan.lines) {
+      Muscles.surface(bound[i], paths[i], m, TUBE, null, RSTART[i] * RSIDES);
+      const out = G.skinOutPoints(sdf, RBUF.subarray(RSTART[i] * RSIDES * 3, RSTART[i + 1] * RSIDES * 3), R).out;
+      assert(out <= 2.6, `${bound[i].name} in ${id} t=${t}: ${out.toFixed(2)} cm above the skin`);
+      const f = fam[fan.key] || (fam[fan.key] = { rib: [0, 0, 0], tube: [0, 0, 0] }), a = paths[i].points[0], b = paths[i].points.at(-1);
+      for (const [buf, acc] of [[RBUF, f.rib], [TUBE, f.tube]]) for (let v = RSTART[i] * RSIDES; v < RSTART[i + 1] * RSIDES; v++) {
+        const p = [buf[v * 3], buf[v * 3 + 1], buf[v * 3 + 2]];
+        if (Math.hypot(...rSub(p, a)) < 2 || Math.hypot(...rSub(p, b)) < 2) continue;
+        acc[0]++;
+        for (let bi = 0; bi < pbs.length; bi++) {
+          const w = pose[bi]; if (p[0] < w.lo[0] || p[0] > w.hi[0] || p[1] < w.lo[1] || p[1] > w.hi[1] || p[2] < w.lo[2] || p[2] > w.hi[2]) continue;
+          const q = w.inv(p); if (!G.insideBone(pbs[bi], q)) continue;
+          const d = pbs[bi].near(q); if (d > .5) acc[1]++; acc[2] = Math.max(acc[2], d); break;
+        }
+      }
+    }
+  }
+  for (const [k, f] of Object.entries(fam)) {
+    const r = f.rib[1] / f.rib[0], tb = f.tube[1] / f.tube[0];
+    assert(r <= tb + .02, `${k}: ${(r * 100).toFixed(1)} % of vertices deeper than 5 mm in bones (tubes ${(tb * 100).toFixed(1)} %)`);
+    assert(f.rib[2] <= f.tube[2] + .3, `${k}: ${f.rib[2].toFixed(2)} cm deep in a bone (tubes ${f.tube[2].toFixed(2)})`);
+  }
+});
+
 /* Геометрия на позах каталога (вся проверка — npm run muscles:check): несколько упражнений с крайними положениями
    рук, ног и туловища — путь не глубже 2 см в костях и не выше 2,2 см над кожей (исключения — подмышечные складки). */
 test('muscle paths stay out of bones and under the skin in catalog poses', () => {
