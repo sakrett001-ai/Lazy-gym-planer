@@ -505,7 +505,8 @@ await page.close();
   check(await p.evaluate(() => localStorage.getItem('podhod.perf') === 'open' && !!globalThis.GymPerf) && box && box.l >= 0 && box.r <= 390 && box.b <= 844 && box.w >= 300,
     '?perf: панель включена и запомнена, плашка целиком на экране телефона');
   check(await p.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), '?perf: страница без прокрутки вбок');
-  await p.evaluate(() => document.querySelector('.card').scrollIntoView({ block: 'center' })); await p.waitForTimeout(1600);
+  await p.evaluate(() => document.querySelector('.card').scrollIntoView({ block: 'center' }));
+  await p.waitForFunction(() => /кадр \d/.test(document.querySelector('[data-perf-k="screen"]').textContent) && /заново \d/.test(document.querySelector('[data-perf-k="cards"]').textContent), null, { timeout: 15000 }).catch(() => {});
   const live = await p.evaluate(() => ({ pill: document.querySelector('[data-perf-pill]').textContent, screen: document.querySelector('[data-perf-k="screen"]').textContent, cards: document.querySelector('[data-perf-k="cards"]').textContent }));
   check(/^\d/.test(live.pill) && /^\d+(,\d)? к\/с · кадр \d/.test(live.screen) && /заново \d/.test(live.cards), `живые цифры: кадры и карточки (${live.screen} | ${live.cards})`);
   await p.evaluate(() => { motionPrefs.view = 'mannequin'; openMotionItem(previewItem('legpress')); detailMotion.paused = false; });

@@ -190,23 +190,25 @@ test('the panel follows the topmost open modal window (a modal makes the rest of
 test('3D hooks: each call goes to its part, nested bone frames are not counted twice, figure creation is not a frame', async () => {
   const dom = panelDom('https://lazy-gym.test/?perf');
   try {
-    /* занятость с замером себя: сравнение — с тем, что фигуры потратили на самом деле (стенд может быть загружен) */
-    const w = dom.window, P = w.GymPerf, own = { frames: 0, update: 0 };
-    const busy = (ms, key) => { const t = w.performance.now(), end = t + ms; while (w.performance.now() < end); if (key) own[key] += w.performance.now() - t; };
-    w.Skeleton = { frames() { busy(2, 'frames'); return 'A'; } };
-    const skeleton = { update(data, pose, body, A = w.Skeleton.frames()) { busy(1, 'update'); return A; } };
-    const scene = { mannequin: { apply() { busy(1); } }, skeleton, muscleLayer: { update() { busy(1); } }, apply() { this.mannequin.apply(); skeleton.update(); this.muscleLayer.update(); busy(1); } };
-    const renderer = { render() { busy(1); } }, options = { data() { busy(1); return {}; } };
+    /* часы — свои: каждая часть «работает» ровно столько, сколько сдвигает часы (на загруженном стенде настоящие
+       часы дают паузы сборки мусора и вытеснения) */
+    const w = dom.window, P = w.GymPerf; let clock = 1000;
+    w.performance.now = () => clock;
+    const busy = ms => { clock += ms; };
+    w.Skeleton = { frames() { busy(2); return 'A'; } };
+    const skeleton = { update(data, pose, body, A = w.Skeleton.frames()) { busy(1); return A; } };
+    const scene = { mannequin: { apply() { busy(1); } }, skeleton, muscleLayer: { update() { busy(4); } }, apply() { this.mannequin.apply(); skeleton.update(); this.muscleLayer.update(); busy(.5); } };
+    const renderer = { render() { busy(6); } }, options = { data() { busy(3); return {}; } };
     P.volume({ scene, renderer, options, root: null, low: () => true });
     options.data(); scene.apply(); renderer.render();
     assert.equal(P.bucket, null, 'creation (same task) is not recorded');
     await new Promise(r => setTimeout(r, 0));
-    own.frames = own.update = 0;
+    P.bucket = null;
     options.data(); scene.apply(); renderer.render();
-    const b = P.bucket;
-    assert.deepEqual(Object.keys(b).sort(), ['bones', 'muscles', 'pose', 'render', 'scene', 'skin']);
-    assert(Math.abs(b.bones - own.frames - own.update) < .5, `bones = layer update with its frames, once: ${b.bones} vs ${own.frames} + ${own.update}`);
-    assert(b.scene >= b.skin + b.bones + b.muscles, 'scene includes its parts');
+    assert.deepEqual({ ...P.bucket }, { pose: 3, skin: 1, bones: 3, muscles: 4, scene: 8.5, render: 6 }, 'bones = layer update with its own frames, counted once');
+    /* кости в «Анатомии»: рамки считаются в сцене и передаются слою — тоже один раз */
+    P.bucket = null; w.Skeleton.frames(); skeleton.update(null, null, null, 'A');
+    assert.deepEqual({ ...P.bucket }, { bones: 3 });
     assert.equal(w.eval('perfQuality()'), 'low', 'quality comes from the 3D module');
     /* обёртки не наслаиваются: та же фигура второй раз — тот же вызов */
     const once = scene.apply; P.volume({ scene, renderer, options, low: () => false }); assert.equal(scene.apply, once);
