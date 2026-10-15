@@ -809,7 +809,7 @@ const EX = [
   A:{hip:[118, 126], torso:-90, arm:{ik:[70, 72], b:'down'}, leg:{ik:[160, 180], b:'up', f:90}},
   B:{hip:[118, 126], torso:-90, arm:{ik:[78, 111], b:'down'}, leg:{ik:[160, 180], b:'up', f:90}},
   props:[...benchFlat(30, 150, 136), PLATE(17)]}},
-{id:'dbbench', name:'Dumbbell bench press', eq:[['db'], ['bench']], g:'chest', pri:['chest'], sec:['triceps', 'delt_f'], type:'c', lvl:1,
+{id:'dbbench', name:'Dumbbell bench press', eq:[['db'], ['bench']], g:'chest', pri:['chest'], sec:['triceps', 'delt_f'], type:'c', lvl:1, imp:2, sides:'both',
  tech:['Sit on the end of the bench with dumbbells on your thighs, lie back and bring them over your chest.',
    'Shoulder blades squeezed, feet on the floor, slight natural arch in the lower back.',
    'Lower the dumbbells to chest level, forearms vertical.',
@@ -820,7 +820,7 @@ const EX = [
   A:{hip:[118, 126], torso:-90, arm:{ik:[70, 72], b:'down'}, leg:{ik:[160, 180], b:'up', f:90}},
   B:{hip:[118, 126], torso:-90, arm:{ik:[74, 113], b:'down'}, leg:{ik:[160, 180], b:'up', f:90}},
   props:[...benchFlat(30, 150, 136), ...DB_SIDES('end')]}},
-{id:'dbincline', name:'Incline dumbbell press', eq:[['db'], ['incline']], g:'chest', pri:['chest', 'delt_f'], sec:['triceps'], type:'c', lvl:1,
+{id:'dbincline', name:'Incline dumbbell press', eq:[['db'], ['incline']], g:'chest', pri:['chest', 'delt_f'], sec:['triceps'], type:'c', lvl:1, imp:2, sides:'both',
  tech:['Set the backrest to 30–45°. Squeeze your shoulder blades and press them into the pad.',
    'Bring the dumbbells over your upper chest on straight arms.',
    'Lower the dumbbells to your upper chest, elbows at 45–60° to your torso.',
@@ -842,7 +842,7 @@ const EX = [
   A:{hip:[112, 128], torso:-55, arm:{ik:[77, 44], b:'down'}, leg:{ik:[162, 180], b:'up', f:90}},
   B:{hip:[112, 128], torso:-55, arm:{ik:[77, 89], b:'down'}, leg:{ik:[162, 180], b:'up', f:90}},
   props:[{k:'line', pts:[[86, 8], [86, GROUND]], w:3, cls:'eq-rail'}, {k:'line', pts:[[66, 8], [106, 8]], w:5}, ...inclineBench([112, 128], -55), PLATE(15)]}},
-{id:'dbfly', name:'Dumbbell fly', eq:[['db'], ['bench']], g:'chest', pri:['chest'], sec:['delt_f'], type:'i', lvl:1,
+{id:'dbfly', name:'Dumbbell fly', eq:[['db'], ['bench']], g:'chest', pri:['chest'], sec:['delt_f'], type:'i', lvl:1, imp:2, sides:'both',
  tech:['Lie on the bench, dumbbells over your chest, palms facing each other, elbows slightly bent.',
    'Open your arms out in an arc, keeping the elbow angle, until you feel a light chest stretch.',
    'Bring the dumbbells back along the same arc, as if hugging a barrel.'],
@@ -902,7 +902,7 @@ const EX = [
   A:Object.assign({hip:[85, 104], torso:55, arm:{ik:[130, 129], b:'up', hA:180}}, legsAt(100)),
   B:Object.assign({hip:[85, 104], torso:55, arm:{tf:[20, 16], b:'up', hA:180}}, legsAt(100)),
   props:[PLATE(16)]}},
-{id:'dbrow', name:'One-arm dumbbell row', eq:[['db'], ['bench']], g:'back', pri:['lats', 'midback'], sec:['biceps', 'delt_r'], type:'c', lvl:1, uni:true,
+{id:'dbrow', name:'One-arm dumbbell row', eq:[['db'], ['bench']], g:'back', pri:['lats', 'midback'], sec:['biceps', 'delt_r'], type:'c', lvl:1, uni:true, imp:1, sides:'one',
  tech:['Place one knee and the same-side hand on the bench, other foot on the floor. Back nearly parallel to the floor.',
    'The dumbbell hangs in your free hand below your shoulder.',
    'Pull the dumbbell to your hip, driving your elbow back and up along your side.',
@@ -1001,7 +1001,7 @@ const EX = [
   B:{hip:[100, 105], torso:158, arm:{ra:[160, 15]}, leg:{a:[225, 225], fr:-90}},
   props:[{k:'line', pts:[[34, 162], [104, 124]], w:6}, {k:'circle', c:[108, 121], r:8, cls:'eq-pad'}, {k:'circle', c:[34, 158], r:6, cls:'eq-pad'},
    {k:'line', pts:[[60, 148], [52, GROUND]], w:4}, {k:'line', pts:[[96, 128], [104, GROUND]], w:4}]}},
-{id:'shrug', name:'Dumbbell shrugs', eq:[['db']], g:'back', pri:['traps'], sec:['forearms'], type:'i', lvl:1,
+{id:'shrug', name:'Dumbbell shrugs', eq:[['db']], g:'back', pri:['traps'], sec:['forearms'], type:'i', lvl:1, imp:2, sides:'both',
  tech:['Stand tall, dumbbells hanging at your sides.',
    'Raise your shoulders straight up toward your ears.',
    'Hold for 1–2 seconds and lower slowly.'],
@@ -1021,7 +1021,7 @@ const EX = [
   props:[{k:'band', from:'toeN', at:'gripN', layer:'front'}]}},
 
 /* ===== ПЛЕЧИ ===== */
-{id:'dbpress', name:'Seated dumbbell press', eq:[['db'], ['incline', 'bench']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'traps', 'serratus'], type:'c', lvl:1,
+{id:'dbpress', name:'Seated dumbbell press', eq:[['db'], ['incline', 'bench']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'traps', 'serratus'], type:'c', lvl:1, imp:2, sides:'both',
  tech:['Backrest upright. Dumbbells at your shoulders, elbows under the dumbbells, palms forward.',
    'Press your back into the pad, abs tight.',
    'Press the dumbbells up in an arc, bringing them together overhead.',
@@ -1044,7 +1044,7 @@ const EX = [
   A:stand({torso:-3, head:-10, arm:{ik:[101, 50], b:'down'}}),
   B:stand({torso:0, head:0, arm:{ik:[94, -10], b:'down'}}),
   props:[PLATE(16)]}},
-{id:'latraise', name:'Dumbbell lateral raises', eq:[['db']], g:'shoulders', pri:['delt_s'], sec:['traps', 'delt_f'], type:'i', lvl:1,
+{id:'latraise', name:'Dumbbell lateral raises', eq:[['db']], g:'shoulders', pri:['delt_s'], sec:['traps', 'delt_f'], type:'i', lvl:1, imp:2, sides:'both',
  tech:['Standing, dumbbells at your thighs, elbows slightly bent, torso leaning slightly forward.',
    'Raise your arms out to the sides to shoulder height, leading with your elbows.',
    'Keep your hands no higher than your elbows; don\'t shrug your shoulders toward your ears.',
@@ -1061,7 +1061,7 @@ const EX = [
  breath:'Exhale on the way up, inhale on the way down.',
  anim:{view:'front', A:frontStand({arm:{p:[[4, 29], [7, 55]]}}), B:frontStand({arm:{p:[[29, 2], [55, 7]]}}),
   props:[{k:'band', from:'anR', at:'gripR', layer:'front'}, {k:'band', from:'anL', at:'gripL', layer:'front'}]}},
-{id:'frontraise', name:'Dumbbell front raises', eq:[['db']], g:'shoulders', pri:['delt_f'], sec:['delt_s', 'chest'], type:'i', lvl:1,
+{id:'frontraise', name:'Dumbbell front raises', eq:[['db']], g:'shoulders', pri:['delt_f'], sec:['delt_s', 'chest'], type:'i', lvl:1, imp:2, sides:'both',
  tech:['Stand with dumbbells in front of your thighs, overhand grip.',
    'Raise your straight arms forward to shoulder height, elbows slightly bent.',
    'Pause for a second and lower under control.'],
@@ -1097,14 +1097,14 @@ const EX = [
  err:['Swinging the torso', 'Elbows drifting forward', 'Dropping the weight'],
  breath:'Exhale on the way up, inhale on the way down.',
  anim:{view:'side', A:stand({arm:{a:[178, 176]}}), B:stand({arm:{a:[174, 28]}}), props:[PLATE(15)]}},
-{id:'dbcurl', name:'Dumbbell biceps curl', eq:[['db']], g:'biceps', pri:['biceps'], sec:['forearms'], type:'i', lvl:1,
+{id:'dbcurl', name:'Dumbbell biceps curl', eq:[['db']], g:'biceps', pri:['biceps'], sec:['forearms'], type:'i', lvl:1, uni:true, imp:2, sides:'alt',
  tech:['Stand with dumbbells at your sides, palms forward, elbows close to your body.',
    'Curl both arms together or alternately up to shoulder level.',
    'Lower slowly until your arms are straight.'],
  err:['Cheating with the torso', 'Elbows drifting forward', 'Not fully extending at the bottom'],
  breath:'Exhale on the way up, inhale on the way down.',
  anim:{view:'side', A:stand({arm:{a:[178, 176]}}), B:stand({arm:{a:[174, 28]}}), props:DB_SIDES('end')}},
-{id:'hammer', name:'Hammer curls', eq:[['db']], g:'biceps', pri:['biceps', 'forearms'], sec:[], type:'i', lvl:1,
+{id:'hammer', name:'Hammer curls', eq:[['db']], g:'biceps', pri:['biceps', 'forearms'], sec:[], type:'i', lvl:1, imp:2, sides:'both',
  tech:['Hold dumbbells with palms facing each other.',
    'Curl while keeping a neutral grip; elbows close to your body.',
    'Lower slowly until your arms are straight.'],
@@ -1197,7 +1197,7 @@ const EX = [
   A:{hip:[90, 124], torso:0, arm:{ik:[80, 125], b:'back', hA:90}, leg:{ik:[150, 180], b:'up', f:60}},
   B:{hip:[88, 150], torso:-2, arm:{ik:[80, 125], b:'back', hA:90}, leg:{ik:[150, 180], b:'up', f:60}},
   props:benchFlat(20, 82, 129)}},
-{id:'ohext', name:'Overhead dumbbell triceps extension', eq:[['db']], g:'triceps', pri:['triceps'], sec:[], type:'i', lvl:1,
+{id:'ohext', name:'Overhead dumbbell triceps extension', eq:[['db']], g:'triceps', pri:['triceps'], sec:[], type:'i', lvl:1, imp:1, sides:'both',
  tech:['Standing or seated, hold a dumbbell overhead with both hands by the top plate.',
    'Elbows point up and stay close to your head.',
    'Lower the dumbbell behind your head by bending your elbows.',
@@ -1217,7 +1217,7 @@ const EX = [
   A:{hip:[82, 138], torso:35, arm:{ik:[128, 127], b:'back', w:70}, leg:{a:[90, 180], f:90}},
   B:{hip:[82, 138], torso:35, arm:{ik:[128, 127], b:'back', w:-55}, leg:{a:[90, 180], f:90}},
   props:[...benchFlat(48, 116, 148), PLATE(13)]}},
-{id:'farmer', name:'Farmer\'s carry', nameV:{kb:'Kettlebell farmer\'s carry'}, eq:[['db', 'kb']], g:'forearms', pri:['forearms', 'traps'], sec:['abs', 'glutes', 'obliques', 'lowback', 'lats'], type:'c', lvl:1, kind:'dist',
+{id:'farmer', name:'Farmer\'s carry', nameV:{kb:'Kettlebell farmer\'s carry'}, eq:[['db', 'kb']], g:'forearms', pri:['forearms', 'traps'], sec:['abs', 'glutes', 'obliques', 'lowback', 'lats'], type:'c', lvl:1, imp:2, sides:'both', kind:'dist',
  tech:['Pick up heavy dumbbells or kettlebells and stand tall, shoulders down and back.',
    'Walk with short, quick steps, keeping your torso upright.',
    'Don\'t let the weight sway your torso. Set the weights down by squatting, not bending over.'],
@@ -1319,7 +1319,7 @@ const EX = [
  anim:{view:'side',
   A:{hip:hipFromSh([58, 176], -90), torso:-90, head:0, arm:{a:[90, 90], hA:90}, leg:{ik:[146, 180], b:'up', f:90}},
   B:{hip:hipFromSh([58, 176], -122), torso:-122, head:30, arm:{a:[90, 90], hA:90}, leg:{ik:[146, 180], b:'up', f:90}}}},
-{id:'kbswing', name:'Kettlebell swing', eq:[['kb']], g:'glutes', pri:['glutes', 'hams'], sec:['lowback', 'delt_f', 'forearms', 'lats', 'obliques'], type:'c', lvl:2,
+{id:'kbswing', name:'Kettlebell swing', eq:[['kb']], g:'glutes', pri:['glutes', 'hams'], sec:['lowback', 'delt_f', 'forearms', 'lats', 'obliques'], type:'c', lvl:2, imp:1, sides:'both',
  tech:['Feet wider than shoulders, kettlebell on the floor in front of you. Push your hips back, grab the kettlebell and hike it between your legs.',
    'Drive your hips forward powerfully — momentum swings the kettlebell up to chest height.',
    'Your arms only guide the kettlebell. At the top, your body is straight and glutes squeezed.',
@@ -1330,7 +1330,7 @@ const EX = [
   A:Object.assign({hip:[72, 108], torso:62, arm:{ik:[86, 130], b:'down'}}, legsAt(98)),
   B:Object.assign({hip:[92, 97], torso:-3, arm:{ik:[145, 52], b:'down'}}, legsAt(98)),
   props:[{k:'kb', at:'gripN', layer:'front'}]}},
-{id:'bulgarian', name:'Bulgarian split squat', eq:[['bench']], opt:['db'], g:'glutes', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:2, uni:true,
+{id:'bulgarian', name:'Bulgarian split squat', eq:[['bench']], opt:['db'], g:'glutes', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:2, uni:true, imp:2, sides:'one',
  tech:['Stand with your back to a bench, the top of your rear foot resting on it and your front foot a stride ahead.',
    'Lower straight down until your front thigh is parallel to the floor.',
    'Keep your front knee in line with your toes.',
@@ -1341,7 +1341,7 @@ const EX = [
   A:{hip:[90, 100], torso:4, arm:{a:[180, 180]}, legN:{ik:[124, 180], b:'fwd', f:90}, legF:{ik:[36, 134], b:'fwd', f:250}},
   B:{hip:[84, 139], torso:12, arm:{a:[180, 180]}, legN:{ik:[124, 180], b:'fwd', f:90}, legF:{ik:[36, 134], b:'fwd', f:250}},
   props:[...benchFlat(10, 56, 140), ...DB_SIDES('perp', 'db')]}},
-{id:'stepup', name:'Step-ups', eq:[['bench']], opt:['db'], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:1, uni:true,
+{id:'stepup', name:'Step-ups', eq:[['bench']], opt:['db'], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:1, uni:true, imp:2, sides:'one',
  tech:['Place one foot on a bench or a stable box no higher than knee height.',
    'Shift your weight onto that leg and step up until it is fully straight.',
    'Step down under control with the same leg.'],
@@ -1351,7 +1351,7 @@ const EX = [
   A:{hip:[86, 104], torso:8, arm:{a:[180, 180]}, legN:{ik:[126, 135], b:'fwd', f:90}, legF:{ik:[78, 180], b:'fwd', f:90}},
   B:{hip:[118, 54], torso:0, arm:{a:[180, 180]}, legN:{ik:[126, 135], b:'fwd', f:90}, legF:{ik:[112, 128], b:'fwd', f:110}},
   props:[{k:'rect', x:104, y:140, w:52, h:46, rx:3}, ...DB_SIDES('perp', 'db')]}},
-{id:'rdl', name:'Romanian deadlift', nameV:{bb:'Barbell Romanian deadlift', db:'Dumbbell Romanian deadlift'}, eq:[['bb', 'db']], g:'hams', pri:['hams', 'glutes'], sec:['lowback'], type:'c', lvl:1,
+{id:'rdl', name:'Romanian deadlift', nameV:{bb:'Barbell Romanian deadlift', db:'Dumbbell Romanian deadlift'}, eq:[['bb', 'db']], g:'hams', pri:['hams', 'glutes'], sec:['lowback'], type:'c', lvl:1, imp:2, sides:'both',
  tech:['Stand holding the weight in straight arms in front of your thighs, knees slightly bent.',
    'Push your hips back, hinging forward with a flat back; the weight slides down along your legs.',
    'Lower until you feel a strong stretch in your hamstrings — usually to mid-shin.',
@@ -1376,7 +1376,7 @@ const EX = [
   A:Object.assign({hip:[92, 97], torso:2, arm:{tf:[51, -6], b:'down'}}, legsAt(98)),
   B:Object.assign({hip:[70, 146], torso:44, arm:{tf:[51, -6], b:'down'}}, legsAt(98)),
   props:[{k:'plate', tf:[53, -10], r:17, layer:'mid'}]}},
-{id:'goblet', name:'Goblet squat', nameV:{kb:'Kettlebell goblet squat'}, eq:[['db', 'kb']], g:'quads', pri:['quads', 'glutes'], sec:['abs', 'lowback', 'hams', 'adductors'], type:'c', lvl:1,
+{id:'goblet', name:'Goblet squat', nameV:{kb:'Kettlebell goblet squat'}, eq:[['db', 'kb']], g:'quads', pri:['quads', 'glutes'], sec:['abs', 'lowback', 'hams', 'adductors'], type:'c', lvl:1, imp:1, sides:'both',
  tech:['Hold a dumbbell vertically at your chest with both palms under the top head (or a kettlebell by the horns), elbows pointing down.',
    'Feet slightly wider than shoulders. Squat down, dropping your hips between your knees; keep your torso upright.',
    'Go as low as you can with a straight back, then stand up.'],
@@ -1393,7 +1393,7 @@ const EX = [
  err:['Knees caving in', 'Heels lifting off', 'Rounding the back'],
  breath:'Inhale down, exhale up.',
  anim:{view:'side', A:stand({arm:{a:[180, 180]}}), B:Object.assign({hip:[70, 146], torso:38, arm:{a:[88, 88]}}, legsAt(98))}},
-{id:'lunge', name:'Split squat', eq:[], opt:['db'], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:1, uni:true,
+{id:'lunge', name:'Split squat', eq:[], opt:['db'], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:1, uni:true, imp:2, sides:'one',
  tech:['Take a long stride stance, torso upright.',
    'Lower straight down until your back knee almost touches the floor.',
    'Front knee stays over the foot, not far past the toes. Stand up.'],
@@ -1479,7 +1479,7 @@ const EX = [
    {k:'roller', leg:'N', side:90, out:8, pivot:[47, 128], layer:'front'}]}},
 
 /* ===== ИКРЫ ===== */
-{id:'calfraise', name:'Standing calf raise', eq:[], opt:['db'], g:'calves', pri:['calves'], sec:[], type:'i', lvl:1,
+{id:'calfraise', name:'Standing calf raise', eq:[], opt:['db'], g:'calves', pri:['calves'], sec:[], type:'i', lvl:1, imp:2, sides:'both',
  tech:['Stand tall, ideally with the balls of your feet on the edge of a step; knees straight.',
    'Rise onto your toes as high as you can and hold for 1–2 seconds.',
    'Lower slowly, stretching your calves.'],
@@ -1563,7 +1563,7 @@ EX.push(
   A:{hip:[118, 126], torso:-90, arm:{ik:[70, 72], b:'down'}, leg:{ik:[160, 180], b:'up', f:90}},
   B:{hip:[118, 126], torso:-90, arm:{ik:[82, 112], b:'down'}, leg:{ik:[160, 180], b:'up', f:90}},
   props:[...benchFlat(30, 150, 136), PLATE(16)]}},
-{id:'pullover', name:'Dumbbell pullover', eq:[['db'], ['bench']], g:'chest', pri:['chest'], sec:['lats', 'triceps', 'serratus'], type:'i', lvl:1,
+{id:'pullover', name:'Dumbbell pullover', eq:[['db'], ['bench']], g:'chest', pri:['chest'], sec:['lats', 'triceps', 'serratus'], type:'i', lvl:1, imp:1, sides:'both',
  tech:['Lie on the bench and hold a dumbbell with both hands by the top plate over your chest, elbows slightly bent.',
    'Lower the dumbbell in an arc behind your head until you feel a stretch in your chest and lats.',
    'Bring the dumbbell back along the same arc over your chest without bending your elbows further.'],
@@ -1616,7 +1616,7 @@ EX.push(
   props:[{k:'plate', tf:[53, -10], r:17, layer:'mid'}]}},
 
 /* ===== ПЛЕЧИ ===== */
-{id:'arnold', name:'Arnold press', eq:[['db'], ['incline', 'bench']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'traps', 'serratus'], type:'c', lvl:2,
+{id:'arnold', name:'Arnold press', eq:[['db'], ['incline', 'bench']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'traps', 'serratus'], type:'c', lvl:2, imp:2, sides:'both',
  tech:['Sit on a bench with back support. Dumbbells at your upper chest, palms facing you, elbows in front of your body.',
    'As you start pressing, spread your elbows out and rotate your palms to face forward.',
    'Press the dumbbells overhead. Lower them by reversing the movement.'],
@@ -1686,7 +1686,7 @@ EX.push(
   props:[{k:'rect', x:18, y:98, w:8, h:12, rx:2}, {k:'band', from:[26, 104], at:'gripR', layer:'front'}]}},
 
 /* ===== БИЦЕПС ===== */
-{id:'preacher', name:'Preacher curl', eq:[['preacher'], ['bb', 'db']], g:'biceps', pri:['biceps'], sec:['forearms'], type:'i', lvl:1,
+{id:'preacher', name:'Preacher curl', eq:[['preacher'], ['bb', 'db']], g:'biceps', pri:['biceps'], sec:['forearms'], type:'i', lvl:1, imp:2, sides:'both',
  tech:['Sit so the top edge of the pad is under your armpits and your upper arms rest on the pad.',
    'Underhand grip. Curl the weight toward your shoulders; upper arms stay on the pad.',
    'Lower slowly to almost full extension, without jerking at the bottom.'],
@@ -1700,7 +1700,7 @@ EX.push(
     props:[{k:'line', pts:[[p1[0] - 4, p1[1]], [p1[0] - 4, GROUND]], w:4}, {k:'rect', x:58, y:150, w:40, h:8}, {k:'line', pts:[[78, 158], [78, GROUND]], w:4},
      {k:'line', pts:[p0, p1], w:9, cls:'eq-pad-s', layer:'mid'}, {k:'plate', at:'grips', r:13, layer:'mid', if:'bb'}, ...DB_SIDES('end', 'db')]};
  })()},
-{id:'inclinecurl', name:'Incline dumbbell curl', eq:[['db'], ['incline']], g:'biceps', pri:['biceps'], sec:['forearms'], type:'i', lvl:1,
+{id:'inclinecurl', name:'Incline dumbbell curl', eq:[['db'], ['incline']], g:'biceps', pri:['biceps'], sec:['forearms'], type:'i', lvl:1, imp:2, sides:'both',
  tech:['Set the backrest to 45–60°, sit down and press your back into it. Dumbbells hang at arm\'s length, palms forward.',
    'Curl the weights without bringing your elbows forward.',
    'Lower slowly to full extension, feeling the stretch in your biceps.'],
@@ -1710,7 +1710,7 @@ EX.push(
   A:{hip:[92, 128], torso:-32, arm:{a:[182, 180]}, leg:{ik:[140, 180], b:'up', f:90}},
   B:{hip:[92, 128], torso:-32, arm:{a:[178, 28]}, leg:{ik:[140, 180], b:'up', f:90}},
   props:[...inclineBench([92, 128], -32), ...DB_SIDES('end')]}},
-{id:'concentration', name:'Concentration curl', eq:[['db'], ['bench']], g:'biceps', pri:['biceps'], sec:['forearms'], type:'i', lvl:1, uni:true,
+{id:'concentration', name:'Concentration curl', eq:[['db'], ['bench']], g:'biceps', pri:['biceps'], sec:['forearms'], type:'i', lvl:1, uni:true, imp:1, sides:'one',
  tech:['Sit on the edge of a bench, feet wide. Brace the elbow of your working arm against your inner thigh.',
    'Curl the dumbbell toward your shoulder; upper arm stays still.',
    'Hold for a second and lower slowly. Then switch arms.'],
@@ -1722,7 +1722,7 @@ EX.push(
   props:[...benchFlat(46, 100, 150), {k:'db', at:'gripN', o:'end', layer:'front'}]}},
 
 /* ===== ТРИЦЕПС ===== */
-{id:'kickback', name:'Dumbbell triceps kickback', eq:[['db'], ['bench']], g:'triceps', pri:['triceps'], sec:[], type:'i', lvl:1, uni:true,
+{id:'kickback', name:'Dumbbell triceps kickback', eq:[['db'], ['bench']], g:'triceps', pri:['triceps'], sec:[], type:'i', lvl:1, uni:true, imp:1, sides:'one',
  tech:['Brace your knee and hand on the bench, torso almost parallel to the floor. Upper arm of the working arm tight to your side.',
    'Extend your arm back to a straight line and hold for a second.',
    'Return to a 90° elbow angle; upper arm stays still. Then switch arms.'],
@@ -1777,7 +1777,7 @@ EX.push(
   A:{hip:hipFromSh([128, 113], 64), torso:64, arm:{ik:[128, 170], b:'back'}, leg:{ik:[40, 180], b:'down', f:200}},
   B:{hip:[108, 158], torso:84, arm:{ik:[210, 170], b:'back'}, leg:{ik:[40, 180], b:'down', f:200}},
   props:[{k:'plate', at:'grips', r:8, off:[0, 2], layer:'mid'}]}},
-{id:'sidebend', name:'Dumbbell side bend', eq:[['db']], g:'abs', pri:['obliques'], sec:['abs'], type:'i', lvl:1, uni:true,
+{id:'sidebend', name:'Dumbbell side bend', eq:[['db']], g:'abs', pri:['obliques'], sec:['abs'], type:'i', lvl:1, uni:true, imp:1, sides:'one',
  tech:['Stand tall, dumbbell in one hand, other hand behind your head.',
    'Bend sideways toward the dumbbell without tipping forward or back.',
    'Return upright by contracting the obliques on the opposite side. Then switch sides.'],
@@ -1842,7 +1842,7 @@ EX.push(
   keys:[Object.assign({hip:[72, 146], torso:38, arm:{a:[212, 210]}}, legsAt(98)),
    Object.assign({hip:[95, 90], torso:0, arm:{a:[40, 38]}}, legsAt(99, 172, 'fwd', 130)),
    Object.assign({hip:[95, 74], torso:0, arm:{a:[24, 22]}}, legsAt(99, 158, 'fwd', 150))]}},
-{id:'thruster', name:'Dumbbell thrusters', eq:[['db']], g:'cardio', pri:['quads', 'glutes', 'delt_f'], sec:['triceps', 'abs', 'delt_s'], type:'c', lvl:2,
+{id:'thruster', name:'Dumbbell thrusters', eq:[['db']], g:'cardio', pri:['quads', 'glutes', 'delt_f'], sec:['triceps', 'abs', 'delt_s'], type:'c', lvl:2, imp:2, sides:'both',
  tech:['Dumbbells at your shoulders, elbows pointing forward. Feet shoulder-width apart.',
    'Squat to parallel, keeping your torso upright.',
    'Drive up powerfully and press the dumbbells overhead in one fluid motion.',
@@ -2054,7 +2054,7 @@ EX.push(
   A:{hip:[84, 138], torso:0, arm:{a:[180, 180]}, leg:{ik:[128, 180], b:'fwd', f:90}},
   B:{hip:[84, 137], torso:0, arm:{a:[180, 180]}, leg:{ik:[128, 180], b:'fwd', f:90}},
   props:[{k:'line', pts:[[72, 0], [72, GROUND]], w:6, cls:'eq-rail'}]}},
-{id:'revlunge', name:'Reverse lunges', eq:[], opt:['db'], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:1, uni:true,
+{id:'revlunge', name:'Reverse lunges', eq:[], opt:['db'], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:1, uni:true, imp:2, sides:'alt',
  tech:['From standing, step back and lower until your back knee almost touches the floor.', 'Front knee over the foot, torso upright.', 'Push off the front leg and return to standing. Alternate legs.'],
  err:['Short step', 'Leaning the torso forward', 'Knee caving in'],
  breath:'Inhale as you step back, exhale as you return.',
@@ -2108,7 +2108,7 @@ EX.push(
   A:{hip:[92, 98], torso:6, arm:{a:[90, 88]}, legN:{ik:[98, 180], b:'fwd', f:90}, legF:{a:[86, 90], f:120}},
   B:{hip:[82, 136], torso:30, arm:{a:[80, 76]}, legN:{ik:[98, 180], b:'fwd', f:90}, legF:{a:[72, 70], f:110}},
   props:benchFlat(20, 76, 140)}},
-{id:'sllift', name:'Single-leg Romanian deadlift', eq:[], opt:['db'], g:'hams', pri:['hams', 'glutes'], sec:['lowback', 'calves'], type:'c', lvl:2, uni:true,
+{id:'sllift', name:'Single-leg Romanian deadlift', eq:[], opt:['db'], g:'hams', pri:['hams', 'glutes'], sec:['lowback', 'calves'], type:'c', lvl:2, uni:true, imp:1, sides:'one',
  tech:['Stand on one leg, knee soft. Hinge forward, extending the free leg back; one line from crown to heel.', 'Lower until your torso is nearly parallel to the floor.', 'Return by extending your hips. Then switch legs.'],
  err:['Hips opening to the side', 'Rounding the back', 'Bending the standing knee as in a squat'],
  breath:'Inhale as you bend, exhale as you rise.',
@@ -2296,7 +2296,7 @@ EX.push(
   props:[{k:'line', pts:[[42, 16], [158, 16]], w:5}, {k:'line', pts:[[46, 0], [46, 16]], w:4}, {k:'line', pts:[[154, 0], [154, 16]], w:4},
    {k:'line', pts:[[40, 0], [40, GROUND]], w:4}, {k:'line', pts:[[160, 0], [160, GROUND]], w:4},
    {k:'seg', a:'knL', b:'knR', aoff:[-22, 10], boff:[22, 10], w:8, cls:'eq-pad-s', layer:'back'}]}},
-{id:'chestrowdb', name:'Chest-supported incline dumbbell row', eq:[['db'], ['incline']], g:'back', pri:['midback', 'lats'], sec:['delt_r', 'biceps'], type:'c', lvl:1,
+{id:'chestrowdb', name:'Chest-supported incline dumbbell row', eq:[['db'], ['incline']], g:'back', pri:['midback', 'lats'], sec:['delt_r', 'biceps'], type:'c', lvl:1, imp:2, sides:'both',
  tech:['Backrest at 30–45°. Lie chest-down on the bench, feet planted, dumbbells hanging under your shoulders.',
    'Pull the dumbbells toward your hips, squeezing your shoulder blades; keep your chest on the pad.',
    'Lower until your arms are fully straight, letting your shoulder blades spread.'],
@@ -8357,7 +8357,8 @@ const WEEKS = [
 ];
 
 const DEFAULTS = {goal:'mass', format:'classic', level:'mid', count:6, groups:['chest', 'back', 'shoulders'], equip:EQUIP.map(e => e.id), seed:7,
-  mode:'single', days:3, split:'full', week:1, day:0, view:'plan', atlasM:'chest', focus:null, fav:[], customs:[], custom:null, gen:null, author:'', fold:null, protect:[]};
+  mode:'single', days:3, split:'full', week:1, day:0, view:'plan', atlasM:'chest', focus:null, fav:[], customs:[], custom:null, gen:null, author:'', fold:null, protect:[],
+  lr:{} /* «Л/П отдельно» по упражнениям: {exId:true} (13a-sets.js) */};
 const STORE = 'podhod.settings.v1';
 function loadSettings() {
   try { const s = JSON.parse(localStorage.getItem(STORE) || 'null'); if (s && s.groups && s.equip) return Object.assign({}, DEFAULTS, s); } catch (e) {}
@@ -10076,7 +10077,7 @@ function variantHistNote(ex) {
   const rows = v.family.items.filter(([id]) => id !== ex.id).map(([id, label]) => {
     const ss = (LOG.data[id] || []).filter(x => x.s.some(Boolean)); if (!ss.length) return '';
     const last = ss[ss.length - 1];
-    return `<li><b>${esc(label)}</b> · ${ss.length} ${plural(ss.length, 'entry', 'entries', 'entries')}, last ${fmtDay(last.d, true)}: ${last.s.filter(Boolean).map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(' · ')}</li>`;
+    return `<li><b>${esc(label)}</b> · ${ss.length} ${plural(ss.length, 'entry', 'entries', 'entries')}, last ${fmtDay(last.d, true)}: ${setsText(last.s, EXI[id])}</li>`;
   }).filter(Boolean);
   return rows.length ? `<div class="h-var"><p class="h-cap">Other grips — logged separately</p><ul>${rows.join('')}</ul></div>` : '';
 }
@@ -10856,9 +10857,12 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) Rest
 
 /* ===================== ЖУРНАЛ ===================== */
 /* Хранилище: в опубликованной версии — аккаунт (db, личный раздел пользователя),
-   в офлайн-файле — браузер. Формат: LOG.data[exId] = [{d:'2026-10-05', wk?:1, s:[[кг|null, повторы, отдых?] | null, …]}, …].
+   в офлайн-файле — браузер. Формат: LOG.data[exId] = [{d:'2026-10-05', wk?:1, eq?:'db', s:[[кг|null, повторы, отдых?, стороны?] | null, …]}, …].
    Третье поле подхода — необязательное: фактический отдых после подхода, целые секунды (пишет режим тренировки). Старые
-   записи без него читаются как раньше, прежние версии приложения его просто не видят. */
+   записи без него читаются как раньше, прежние версии приложения его просто не видят. Четвёртое — левая и правая
+   сторона отдельно {l:[кг, повторы], r:[кг, повторы]} (переключатель «Л/П отдельно»); тогда отдых может быть пустым
+   (null), а основные поля — слабая сторона. eq — снаряд (гантели, гиря, штанга) у упражнений с гантелями или гирей:
+   по нему считается общий вес. Подробно — 13a-sets.js. */
 const LOG_KEY = 'podhod.log.v1';
 const LOG = {mode:'connecting', data:{}, col:null, pending:{}, writing:{}, again:{}, timers:{}, err:'', dl:null, canExport:false};
 const WEIGHTED = new Set(['db', 'bb', 'kb', 'cable', 'smith', 'legpress', 'legext', 'legcurl', 'pecdeck', 'hack', 'chestpress', 'shoulderpress', 'leverrow', 'tbar', 'abductor', 'calfseat', 'calfstand']);
@@ -11014,7 +11018,14 @@ function parseRange(r) { const m = String(r).match(/(\d+)\D+(\d+)/); if (m) retu
 const e1rm = (kg, reps) => kg * (1 + Math.min(reps, 12) / 30);
 
 /* ---------- подсказка по двойной прогрессии ---------- */
+/* прогрессия — по основным полям подхода (у Л/П это слабая сторона); если в прошлый раз одна сторона отставала —
+   короткая строка об этом */
 function suggest(it) {
+  const res = suggestBase(it), last = res.prev || pastSessions(it.ex.id).slice(-1)[0], note = weakSideNote(it.ex, last);
+  if (note) res.text += ' ' + note;
+  return res;
+}
+function suggestBase(it) {
   /* статодинамика и обычные подходы ведутся раздельно: вес в них отличается примерно вдвое */
   const ex = it.ex, lt = loadType(ex), all = pastSessions(ex.id), past = all.filter(s => (s.fmt === 'static') === !!it.rx.static);
   const [lo, hi] = parseRange(it.rx.reps);
@@ -11109,35 +11120,62 @@ function suggest(it) {
 /* ---------- блок записи в карточке ---------- */
 const SUG_ICON = {up:'↑', same:'→', down:'↓', deload:'↓', new:'+', plan:'≡'};
 function logRows(it) {
-  const ex = it.ex, lt = loadType(ex), sg = suggest(it);
+  const ex = it.ex, lt = loadType(ex), sg = suggest(it), wl = weightLabel(it), lr = lrOn(ex);
   const today = todaySession(ex.id, false);
   const tset = today ? today.s : [];
   const n = Math.max(it.rx.circ ? (it.rounds || it.rx.sets) : it.rx.sets, tset.length);
   const prevSets = sg.prev ? sg.prev.s.filter(Boolean) : [];
   const [lo, hi] = parseRange(it.rx.reps);
+  const SIDE = {l:'left', r:'right'};
+  /* поле веса и повторов; side — 'l' | 'r' в режиме Л/П */
+  const fields = (k, side, val, phKg, phR) => `${lt === 'none' ? '' : `<input class="lt-in" id="kg-${ex.id}-${k}${side ? '-' + side : ''}" data-f="kg"${side ? ` data-side="${side}"` : ''} type="text" inputmode="decimal" autocomplete="off" aria-label="${wl.full}${side ? ', ' + SIDE[side] : ''}, set ${k + 1}" placeholder="${phKg}" value="${val && val[0] != null ? fmtKg(val[0]) : ''}">`}
+      <input class="lt-in" id="rp-${ex.id}-${k}${side ? '-' + side : ''}" data-f="reps"${side ? ` data-side="${side}"` : ''} type="text" inputmode="numeric" autocomplete="off" aria-label="${repLabel(ex)}${side ? ', ' + SIDE[side] : ''}, set ${k + 1}" placeholder="${phR}" value="${val ? val[1] : ''}">`;
+  const prevText = p => (p[0] ? fmtKg(p[0]) + ' × ' : '') + p[1];
+  const sideTag = side => `<b class="lt-sd" aria-hidden="true">${side === 'l' ? 'L' : 'R'}</b><span class="vh">${side === 'l' ? 'Left:' : 'Right:'}</span>`;
   let rows = '';
   for (let k = 0; k < n; k++) {
     const v = tset[k];
     const p = prevSets[k] || prevSets[prevSets.length - 1];
-    const pTxt = p ? (p[0] ? fmtKg(p[0]) + ' × ' : '') + p[1] : '—';
     const pk = planKg(it.rx, k), phKg = pk != null ? fmtKg(pk) : sg.kg != null ? fmtKg(sg.kg) : (lt === 'kg' ? '' : '—');
     const phR = sg.reps[k] ?? sg.reps[sg.reps.length - 1] ?? (lo === hi ? String(lo) : `${lo}–${hi}`);
-    const done = !!v;
-    rows += `<div class="lt-r${done ? ' done' : ''}${it.rx.static && k > 0 && k % 3 === 0 ? ' lt-series' : ''}" data-k="${k}">
-      <span class="lt-n">${k + 1}</span><span class="lt-p">${pTxt}</span>
-      ${lt === 'none' ? '' : `<input class="lt-in" id="kg-${ex.id}-${k}" data-f="kg" type="text" inputmode="decimal" autocomplete="off" aria-label="Weight, set ${k + 1}" placeholder="${phKg}" value="${done && v[0] != null ? fmtKg(v[0]) : ''}">`}
-      <input class="lt-in" id="rp-${ex.id}-${k}" data-f="reps" type="text" inputmode="numeric" autocomplete="off" aria-label="${repLabel(ex)}, set ${k + 1}" placeholder="${phR}" value="${done ? v[1] : ''}">
-      <button type="button" class="lt-ok" data-tick="${ex.id}" data-k="${k}" aria-pressed="${done}" aria-label="Set ${k + 1} done">${ICON.check}</button>
+    const done = !!v, cls = `lt-r${done ? ' done' : ''}${lr ? ' lt-lr' : ''}${it.rx.static && k > 0 && k % 3 === 0 ? ' lt-series' : ''}`;
+    const ok = `<button type="button" class="lt-ok" data-tick="${ex.id}" data-k="${k}" aria-pressed="${done}" aria-label="Set ${k + 1} done">${ICON.check}</button>`;
+    if (lr) {
+      /* Л/П: две строки в одном подходе; прошлый раз — по сторонам, если они были записаны, иначе общее значение */
+      const sd = v && setSides(v, ex), psd = p && setSides(p, ex);
+      const val = side => v ? (sd ? sd[side] : [v[0], v[1]]) : null, pv = side => p ? prevText(psd ? psd[side] : p) : '—';
+      rows += `<div class="${cls}" data-k="${k}">
+      <span class="lt-n">${k + 1}</span><span class="lt-p">${sideTag('l')} ${pv('l')}</span>
+      ${fields(k, 'l', val('l'), phKg, phR)}
+      ${ok}
+      <span class="lt-p">${sideTag('r')} ${pv('r')}</span>
+      ${fields(k, 'r', val('r'), phKg, phR)}
+    </div>`;
+    } else rows += `<div class="${cls}" data-k="${k}">
+      <span class="lt-n">${k + 1}</span><span class="lt-p">${p ? prevText(p) : '—'}</span>
+      ${fields(k, null, done ? v : null, phKg, phR)}
+      ${ok}
     </div>`;
   }
   const doneN = tset.slice(0, n).filter(Boolean).length;
+  /* вес одной гантели: подсказка «×2 = 40 кг» — по первому заполненному полю (пока не вводили — по подсказке) */
+  const x2 = wl && wl.n > 1 && !lr ? `<span class="lt-x2" data-n="${wl.n}">${wl.impl === 'kb' ? 'weight — one kettlebell' : 'weight — one dumbbell'}<b>${pairTotalText(wl.n, firstKg(tset, sg, it))}</b></span>` : '';
+  const lrBtn = perSide(ex) ? `<button type="button" class="lt-lrb" data-lr="${ex.id}" aria-pressed="${lr}">${'L/R separately'}</button>` : '';
+  const perSideNote = perSide(ex) ? `<span>${ex.kind === 'time' ? 'seconds — per side' : 'reps — per side'}</span>` : '';
   return {sg, html:`<p class="sug sug-${sg.tone}"><b aria-hidden="true">${SUG_ICON[sg.tone]}</b><span>${esc(sg.text)}</span></p>
     ${logFoldBar(it, n, doneN)}
     <div class="lt-fold" id="lt-${ex.id}"><div class="lt${lt === 'none' ? ' lt-nokg' : ''}" role="group" aria-label="Set log">
-      <div class="lt-h"><span>#</span><span>Last time</span>${lt === 'none' ? '' : `<span>${lt === 'kg' ? 'Weight, kg' : lt === 'assist' ? 'Counterweight' : 'Extra kg'}</span>`}<span>${repLabel(ex)}</span><span></span></div>
+      <div class="lt-h"><span>#</span><span>Last time</span>${lt === 'none' ? '' : `<span title="${wl.full}">${wl.short}</span>`}<span>${repLabel(ex)}</span><span></span></div>
       ${rows}
     </div>
-    <div class="lt-foot"><button type="button" class="lt-add" data-addset="${ex.id}">+ set</button>${ex.uni ? '<span>reps — per side</span>' : ''}${it.rx.circ ? '<span>row — one round</span>' : ''}</div></div>`};
+    <div class="lt-foot"><button type="button" class="lt-add" data-addset="${ex.id}">+ set</button>${lrBtn}${perSideNote}${x2}${it.rx.circ ? '<span>row — one round</span>' : ''}</div></div>`};
+}
+/* вес для подсказки «×2»: записанный или введённый в первом подходе, иначе подсказка по весу */
+function firstKg(tset, sg, it) {
+  const v = tset.find(x => x && x[0] > 0);
+  if (v) return v[0];
+  const pk = planKg(it.rx, 0);
+  return pk != null ? pk : sg.kg;
 }
 function logBlock(it) { return `<div class="c-log" data-log="${it.ex.id}">${logRows(it).html}</div>`; }
 
@@ -11173,6 +11211,11 @@ function sparkSvg(pts, unit, step = 0.5) {
     <line class="sp-x" x1="0" x2="0" y1="${T - 4}" y2="${H - B}" visibility="hidden"/><circle class="sp-dot" r="4" cx="0" cy="0" visibility="hidden"/>
   </svg>`;
 }
+/* подходы записи и её общий вес второй строкой (если есть внешний вес) */
+function histSets(ex, s) {
+  const t = sessionTonnage(ex, s);
+  return `${setsText(s.s, ex)}${t > 0 ? `<small class="h-ton">${'total weight ' + fmtTon(t) + ' kg'}</small>` : ''}`;
+}
 function histHtml(ex) {
   const ss = (LOG.data[ex.id] || []).filter(x => x.s.some(Boolean));
   if (!ss.length) return `<p class="h-empty">No entries yet. Log your sets above — history and a chart will appear here.</p>${variantHistNote(ex)}`;
@@ -11180,7 +11223,7 @@ function histHtml(ex) {
   const pts = ss.map(s => ({d:s.d, v:m.f(s)})).filter(p => p.v != null).slice(-24);
   const best = pts.length ? Math.max(...pts.map(p => p.v)) : null;
   const rows = ss.slice(-6).reverse().map(s => `<li><span class="h-d">${fmtDay(s.d, true)}${s.wk ? `<small>wk ${s.wk}</small>` : ''}${s.fmt === 'static' ? '<small>static-dynamic</small>' : ''}</span>
-    <span class="h-s">${s.s.filter(Boolean).map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(' · ')}</span>
+    <span class="h-s">${histSets(ex, s)}</span>
     <button type="button" class="h-del" data-del="${ex.id}" data-d="${s.d}" aria-label="Delete entry for ${fmtDay(s.d, true)}">Delete</button></li>`).join('');
   return `<div class="h-chart"><p class="h-cap">${m.name}, ${m.unit}${best != null ? ` · best ${fmtKg(Math.round(best * 2) / 2)}` : ''}</p>${sparkSvg(pts, m.unit)}</div>
     <ul class="h-list">${rows}</ul>${ss.length > 6 ? `<p class="h-more">Total entries: ${ss.length}. Full history is in the “Log” section.</p>` : ''}${variantHistNote(ex)}`;
@@ -11196,7 +11239,7 @@ function refreshCard(card) {
   const ae = document.activeElement;
   if (box && !(box.contains(ae) && ae.tagName === 'INPUT')) {
     const refocus = !box.contains(ae) ? null : ae.dataset.k !== undefined ? `[data-${ae.dataset.tick ? 'tick' : 'addset'}][data-k="${ae.dataset.k}"]`
-      : ae.dataset.cfold ? '[data-cfold]' : ae.dataset.hist ? '[data-hist]' : null;
+      : ae.dataset.cfold ? '[data-cfold]' : ae.dataset.hist ? '[data-hist]' : ae.dataset.lr ? '[data-lr]' : null;
     box.innerHTML = logRows(it).html;
     syncCardLog(card);
     if (refocus) { const n = box.querySelector(refocus); if (n) n.focus(); }
@@ -11224,9 +11267,28 @@ function statusHtml() {
 function journalDays() { const s = new Set(); for (const ss of Object.values(LOG.data)) for (const x of ss) if (x.s.some(Boolean)) s.add(x.d); return s.size; }
 
 /* ---------- экран «Журнал» ---------- */
-function heatmap(today = new Date()) {
+/* тренировки по дням: упражнений, подходов и общий вес за день */
+function trainingDays(data = LOG.data) {
+  const by = {};
+  for (const [id, ss] of Object.entries(data || {})) {
+    const ex = EXI[id]; if (!ex || !Array.isArray(ss)) continue;
+    for (const s of ss) {
+      const n = s && Array.isArray(s.s) ? s.s.filter(Boolean).length : 0; if (!n) continue;
+      const d = by[s.d] || (by[s.d] = {d:s.d, ex:0, sets:0, t:0});
+      d.ex++; d.sets += n; d.t += sessionTonnage(ex, s);
+    }
+  }
+  return by;
+}
+/* последние тренировки списком: дата, упражнений и подходов, общий вес за день */
+function daysHtml(by = trainingDays(), limit = 5) {
+  const days = Object.values(by).sort((a, b) => a.d < b.d ? 1 : -1).slice(0, limit);
+  if (!days.length) return '';
+  return `<div class="j-days"><p class="lb-h">${'Recent workouts · total weight'}</p><ul>${days.map(x => `<li><span class="j-dd">${fmtDay(x.d, true)}</span><span class="j-dn">${x.ex} ${plural(x.ex, 'exercise', 'exercises', 'exercises')} · ${x.sets} ${plural(x.sets, 'set', 'sets', 'sets')}</span><b class="j-dt">${x.t > 0 ? fmtTon(x.t) + `<small>${'kg'}</small>` : '—'}</b></li>`).join('')}</ul></div>`;
+}
+function heatmap(today = new Date(), by = trainingDays()) {
   const byDay = {};
-  for (const ss of Object.values(LOG.data)) for (const x of ss) { const n = x.s.filter(Boolean).length; if (n) byDay[x.d] = (byDay[x.d] || 0) + n; }
+  for (const x of Object.values(by)) byDay[x.d] = x.sets;
   const W = 12, cell = 15, gap = 3, LX = 22, TY = 16;
   const now = new Date(today); now.setHours(12, 0, 0, 0);
   const dow = (now.getDay() + 6) % 7;
@@ -11238,7 +11300,8 @@ function heatmap(today = new Date()) {
     if (dt > now) continue;
     const k = dayKey(dt), n = byDay[k] || 0;
     const lv = n === 0 ? 0 : n < 10 ? 1 : n < 20 ? 2 : 3;
-    cells += `<rect class="hm hm${lv}" x="${LX + w * (cell + gap)}" y="${TY + d * (cell + gap)}" width="${cell}" height="${cell}" rx="3" data-tip="${fmtDay(k, true)}: ${n ? n + ' ' + plural(n, 'set', 'sets', 'sets') : 'no workout'}"/>`;
+    const t = n && by[k] ? by[k].t : 0;
+    cells += `<rect class="hm hm${lv}" x="${LX + w * (cell + gap)}" y="${TY + d * (cell + gap)}" width="${cell}" height="${cell}" rx="3" data-tip="${fmtDay(k, true)}: ${n ? n + ' ' + plural(n, 'set', 'sets', 'sets') + (t > 0 ? ` · ${fmtTon(t)} kg` : '') : 'no workout'}"/>`;
     if (d === 0 && dt.getMonth() !== lastM) { lastM = dt.getMonth(); marks.push([w, lastM]); }
   }
   /* подпись месяца — над его первой неделей; хвост прошлого месяца в первой колонке подписывается, только если до
@@ -11257,6 +11320,7 @@ function renderJournal() {
   const days = journalDays();
   const sets = entries.reduce((a, [, ss]) => a + ss.reduce((b, x) => b + x.s.filter(Boolean).length, 0), 0);
   const last = entries.reduce((m, [, ss]) => ss[ss.length - 1].d > m ? ss[ss.length - 1].d : m, '');
+  const byDays = trainingDays();
   entries.sort((a, b) => a[1][a[1].length - 1].d < b[1][b[1].length - 1].d ? 1 : -1);
   const tools = `<div class="j-tools">
       ${LOG.canExport ? `<button type="button" class="btn btn-2" id="exp-json">Full backup (JSON)</button><button type="button" class="btn btn-2" id="exp-csv">Log for Excel</button><button type="button" class="btn btn-2" id="exp-body">Measurements for Excel</button>` : ''}
@@ -11275,7 +11339,7 @@ function renderJournal() {
       <p class="ls" id="log-status">${statusHtml()}</p>
       ${tools}
     </div>
-    <figure class="j-heat"><figcaption class="lb-h">Activity over 12 weeks${last ? ` · last workout ${fmtDay(last, true)}` : ''}</figcaption>${heatmap()}</figure>
+    <figure class="j-heat"><figcaption class="lb-h">Activity over 12 weeks${last ? ` · last workout ${fmtDay(last, true)}` : ''}</figcaption>${heatmap(new Date(), byDays)}${daysHtml(byDays)}</figure>
   </header>${entries.length ? muscleLoadHtml() : ''}${bodyHtml()}`;
   if (!entries.length) {
     html += `<div class="empty"><h2>No entries yet</h2><p>Open the plan and log sets in the exercise cards: weight and reps will be saved here, and the planner will start suggesting when to add weight.</p><button type="button" class="btn" data-view="plan">Go to plan</button></div>`;
@@ -11292,11 +11356,12 @@ function renderJournal() {
             <span class="j-name">${esc(ex.name)}<small>${GN[ex.g]} · ${ss.length} ${plural(ss.length, 'entry', 'entries', 'entries')} · ${fmtDay(lastS.d, true)}</small></span>
             <span class="j-val">${lastV != null ? fmtKg(Math.round(lastV * 2) / 2) : '—'}<small>${m.unit}</small>${ch != null ? `<em class="${ch > 0 ? 'pos' : ch < 0 ? 'neg' : ''}">${ch > 0 ? '+' : ''}${ch}%</em>` : ''}</span>
           </summary>
-          <div class="j-body">${histHtml(ex).replace(/<p class="h-more">.*?<\/p>/, '')}${ss.length > 6 ? `<details class="j-all"><summary>All entries (${ss.length})</summary><ul class="h-list">${ss.slice(0, -6).reverse().map(s => `<li><span class="h-d">${fmtDay(s.d, true)}</span><span class="h-s">${s.s.filter(Boolean).map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(' · ')}</span><button type="button" class="h-del" data-del="${id}" data-d="${s.d}">Delete</button></li>`).join('')}</ul></details>` : ''}</div>
+          <div class="j-body">${histHtml(ex).replace(/<p class="h-more">.*?<\/p>/, '')}${ss.length > 6 ? `<details class="j-all"><summary>All entries (${ss.length})</summary><ul class="h-list">${ss.slice(0, -6).reverse().map(s => `<li><span class="h-d">${fmtDay(s.d, true)}</span><span class="h-s">${histSets(ex, s)}</span><button type="button" class="h-del" data-del="${id}" data-d="${s.d}">Delete</button></li>`).join('')}</ul></details>` : ''}</div>
         </details>
       </li>`;
     }).join('')}</ul>
-    <p class="legend">Estimated 1RM is the weight you could lift once, per the Epley formula: weight × (1 + reps / 30). It rises both when you add weight and when you do more reps with the same weight.</p>`;
+    <p class="legend">Estimated 1RM is the weight you could lift once, per the Epley formula: weight × (1 + reps / 30). It rises both when you add weight and when you do more reps with the same weight. For dumbbells and kettlebells it uses the weight of one implement.</p>
+    <p class="legend">Total weight is the sum of “weight × reps” over all implements and sides: a dumbbell press with 2 × 20 kg for 10 reps is 400 kg, a one-arm dumbbell row with 30 kg for 10 reps per side is 600 kg. Only external load counts: dumbbells, kettlebells, barbell, machine, extra weight; body weight, assisted-machine counterweight, timed holds and distance are not included. L/R — a set with the left and right side logged separately: progress and records follow the weaker side.</p>`;
   }
   $('#plan').innerHTML = html;
 }
@@ -11321,10 +11386,23 @@ async function saveFile(name, text, mime) {
   }
   return 'fail';
 }
+/* Таблица для Excel: подход — строка. Вес — одного снаряда (как записан); «Левая» и «Правая» — у подходов с Л/П
+   («12×10», у удержаний — секунды), основные вес и повторы тогда — слабая сторона; общий вес — последний столбец,
+   у подходов без внешнего веса пусто. */
 function csvText() {
-  const rows = [['Date', 'Exercise', 'Muscle group', 'Set', 'Weight, kg', 'Reps / seconds / meters', 'Cycle week', 'Rest after the set, s']];
-  const all = [];
-  for (const [id, ss] of Object.entries(LOG.data)) if (EXI[id]) for (const s of ss) s.s.forEach((x, k) => { if (x) all.push([s.d, EXI[id].name, GN[EXI[id].g], k + 1, x[0] != null ? fmtKg(x[0]) : '', x[1], s.wk || '', restField(x[2]) ?? '']); });
+  const rows = [['Date', 'Exercise', 'Muscle group', 'Set', 'Weight, kg', 'Reps / seconds / meters', 'Cycle week', 'Rest after the set, s', 'Left', 'Right', 'Total weight per set, kg']];
+  const all = [], side = p => (p[0] != null ? fmtKg(p[0]) + '×' : '') + p[1];
+  for (const [id, ss] of Object.entries(LOG.data)) {
+    const ex = EXI[id]; if (!ex) continue;
+    for (const s of ss) {
+      const impl = sessionImpl(ex, s);
+      s.s.forEach((x, k) => {
+        if (!x) return;
+        const sd = setSides(x, ex), t = setTonnage(ex, x, impl);
+        all.push([s.d, ex.name, GN[ex.g], k + 1, x[0] != null ? fmtKg(x[0]) : '', x[1], s.wk || '', restField(x[2]) ?? '', sd ? side(sd.l) : '', sd ? side(sd.r) : '', t > 0 ? fmtKg(t) : '']);
+      });
+    }
+  }
   all.sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] < b[1] ? -1 : 1);
   return '﻿' + rows.concat(all).map(r => r.map(v => /[;"\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : v).join(';')).join('\r\n');
 }
@@ -11381,34 +11459,47 @@ document.addEventListener('pointermove', e => {
 document.addEventListener('pointerleave', () => { tipEl.hidden = true; });
 
 /* ---------- действия журнала ---------- */
+/* снаряд — в запись дня (по нему считается общий вес: гантели, гиря или штанга у румынской тяги) */
+function markImpl(s, it) { if (!hasFreeWeights(it.ex)) return; const impl = itemImpl(it); if (impl) s.eq = impl; else delete s.eq; }
+/* поля подхода в строке карточки: side — 'l' | 'r' в режиме Л/П, иначе null */
+function rowFields(row, side) {
+  const q = f => row.querySelector(side ? `[data-f="${f}"][data-side="${side}"]` : `[data-f="${f}"]:not([data-side])`);
+  return {kgIn:q('kg'), rIn:q('reps')};
+}
+/* значения поля (пустое — подсказка); bad — поле, которое надо заполнить */
+function readFields({kgIn, rIn}, lt) {
+  const reps = parseNum(rIn.value !== '' ? rIn.value : rIn.placeholder);
+  let kg = kgIn ? parseNum(kgIn.value !== '' ? kgIn.value : kgIn.placeholder) : null;
+  if (reps == null || reps <= 0) return {bad:rIn};
+  if (lt === 'kg' && kg == null && kgIn) return {bad:kgIn};
+  if (kg != null && kg < 0) kg = null;
+  return {kg, reps:Math.round(reps * 10) / 10};
+}
 function tickSet(btn) {
   const id = btn.dataset.tick, k = +btn.dataset.k;
   const row = btn.closest('.lt-r');
   const it = plan.items.find(x => x.ex.id === id);
-  const lt = loadType(it.ex);
-  const kgIn = row.querySelector('[data-f="kg"]'), rIn = row.querySelector('[data-f="reps"]');
+  const lt = loadType(it.ex), lr = row.classList.contains('lt-lr');
+  const F = (lr ? ['l', 'r'] : [null]).map(side => rowFields(row, side));
   const s = todaySession(id, true);
   if (s.s[k]) {
     s.s[k] = null; cleanToday(id);
     row.classList.remove('done'); btn.setAttribute('aria-pressed', 'false');
-    if (kgIn) kgIn.value = ''; rIn.value = '';
+    for (const f of F) { if (f.kgIn) f.kgIn.value = ''; f.rIn.value = ''; }
     logTouch(id); refreshHist(id); return;
   }
-  const reps = parseNum(rIn.value !== '' ? rIn.value : rIn.placeholder);
-  let kg = kgIn ? parseNum(kgIn.value !== '' ? kgIn.value : kgIn.placeholder) : null;
-  if (reps == null || reps <= 0) {
+  const got = F.map(f => readFields(f, lt)), bad = got.find(g => g.bad);
+  if (bad) {
     cleanToday(id);
-    rIn.focus(); rIn.classList.add('need'); setTimeout(() => rIn.classList.remove('need'), 1600);
+    bad.bad.focus(); bad.bad.classList.add('need'); setTimeout(() => bad.bad.classList.remove('need'), 1600);
     return;
   }
-  if (lt === 'kg' && kg == null && kgIn) { kgIn.focus(); kgIn.classList.add('need'); setTimeout(() => kgIn.classList.remove('need'), 1600); cleanToday(id); return; }
-  if (kg != null && kg < 0) kg = null;
   while (s.s.length < k) s.s.push(null);
-  s.s[k] = [kg, Math.round(reps * 10) / 10];
+  s.s[k] = lr ? makeSidedSet([got[0].kg, got[0].reps], [got[1].kg, got[1].reps], it.ex) : [got[0].kg, got[0].reps];
   s.target=Math.max(s.target||0,it.rx.circ?(it.rounds||it.rx.sets):it.rx.sets);
   if (it.rx.static) s.fmt = 'static';
-  if (kgIn) kgIn.value = kg != null ? fmtKg(kg) : '';
-  rIn.value = s.s[k][1];
+  markImpl(s, it);
+  F.forEach((f, i) => { if (f.kgIn) f.kgIn.value = got[i].kg != null ? fmtKg(got[i].kg) : ''; f.rIn.value = got[i].reps; });
   row.classList.add('done'); btn.setAttribute('aria-pressed', 'true');
   logTouch(id); refreshHist(id);
   const total = it.rx.circ ? 0 : it.rx.sets;
@@ -11420,12 +11511,36 @@ function tickSet(btn) {
 }
 function editSet(inp) {
   const row = inp.closest('.lt-r'); if (!row || !row.classList.contains('done')) return;
-  const box = inp.closest('.c-log'), id = box.dataset.log, k = +row.dataset.k;
+  const box = inp.closest('.c-log'), id = box.dataset.log, k = +row.dataset.k, ex = EXI[id];
   const s = todaySession(id, false); if (!s || !s.s[k]) return;
-  const v = parseNum(inp.value);
-  if (inp.dataset.f === 'kg') s.s[k][0] = v != null && v >= 0 ? v : null;
-  else if (v != null && v > 0) s.s[k][1] = Math.round(v * 10) / 10; else return;
+  const v = parseNum(inp.value), x = s.s[k], side = inp.dataset.side;
+  if (side) {
+    /* Л/П: правится одна сторона, основные поля — снова слабая сторона, отдых остаётся */
+    const sd = setSides(x, ex), l = sd ? [...sd.l] : [x[0], x[1]], r = sd ? [...sd.r] : [x[0], x[1]], p = side === 'l' ? l : r;
+    if (inp.dataset.f === 'kg') p[0] = v != null && v >= 0 ? v : null;
+    else if (v != null && v > 0) p[1] = Math.round(v * 10) / 10; else return;
+    const nx = makeSidedSet(l, r, ex, x[2]); if (!nx) return;
+    s.s[k] = nx;
+  } else {
+    if (inp.dataset.f === 'kg') x[0] = v != null && v >= 0 ? v : null;
+    else if (v != null && v > 0) x[1] = Math.round(v * 10) / 10; else return;
+    /* одно значение на обе стороны: прежние стороны больше не верны */
+    if (x.length > 3) x.length = restField(x[2]) ? 3 : 2;
+  }
   logTouch(id); refreshHist(id);
+}
+/* «Л/П отдельно» в карточке: запоминается для упражнения, таблица перерисовывается */
+function toggleLr(btn) {
+  const id = btn.dataset.lr, ex = EXI[id]; if (!ex) return;
+  lrSet(ex, !lrOn(ex));
+  const box = btn.closest('.c-log'), it = plan && plan.items && plan.items.find(x => x.ex.id === id);
+  if (box && it) { box.innerHTML = logRows(it).html; const card = box.closest('.card'); if (card) syncCardLog(card); const b = box.querySelector(`[data-lr="${id}"]`); if (b) b.focus(); }
+}
+/* «×2 = 40 кг» под таблицей обновляется при вводе веса */
+function updatePairTotal(inp) {
+  const box = inp.closest('.c-log'), x2 = box && box.querySelector('.lt-x2 b'); if (!x2) return;
+  const n = +box.querySelector('.lt-x2').dataset.n, v = parseNum(inp.value !== '' ? inp.value : inp.placeholder);
+  x2.textContent = pairTotalText(n, v);
 }
 function refreshHist(id) {
   const card = document.querySelector(`.card[data-ex="${id}"]`); if (!card) return;
@@ -11455,6 +11570,7 @@ document.addEventListener('click', e => {
   const t = e.target.closest('button');
   if (!t) return;
   if (t.dataset.tick) { tickSet(t); return; }
+  if (t.dataset.lr) { toggleLr(t); return; }
   if (t.dataset.addset) {
     const id = t.dataset.addset, it = plan.items.find(x => x.ex.id === id);
     it.extra = (it.extra || 0) + 1;
@@ -11481,6 +11597,7 @@ document.addEventListener('change', e => {
   if (e.target.id === 'imp-file' && e.target.files && e.target.files[0]) { importLog(e.target.files[0]); e.target.value = ''; }
   else if (e.target.classList && e.target.classList.contains('lt-in')) editSet(e.target);
 });
+document.addEventListener('input', e => { if (e.target.classList && e.target.classList.contains('lt-in') && e.target.dataset.f === 'kg' && e.target.closest('.c-log')) updatePairTotal(e.target); });
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('lt-in')) {
     e.preventDefault();
@@ -11491,6 +11608,185 @@ document.addEventListener('keydown', e => {
     if (i < ins.length - 1) ins[i + 1].focus(); else row.querySelector('.lt-ok').click();
   }
 });
+
+/* ===================== ПОДХОД: СНАРЯДЫ, СТОРОНЫ, ОБЩИЙ ВЕС ===================== */
+/* Каталог. У каждого упражнения с гантелями или гирей (в eq или opt) — imp: сколько снарядов в руках (1 или 2) и sides:
+   как работают стороны. both — обе сразу (жим гантелей лёжа, гоблет); alt — попеременно (подъём гантелей на бицепс,
+   обратные выпады); one — одна сторона за раз (тяга гантели одной рукой). У alt и one повторы считаются на каждую
+   сторону — это и есть uni. У остальных упражнений стороны — по uni, снаряд один: вес штанги, стека и блока — общий.
+
+   Вес в журнале — вес одного снаряда (так владелец писал и раньше, история не пересчитывается). Рекорды, расчётный
+   максимум, подсказки и автонастройка работают по нему, как раньше.
+
+   Л/П — левая и правая сторона отдельно (переключатель у упражнений alt и one). Подход хранится обратно совместимо:
+   [кг, повторы, отдых | null, {l:[кг | null, повторы], r:[кг | null, повторы]}]. Основные поля — СЛАБАЯ сторона: по ним
+   идут прогрессия, подсказки, рекорды и старые версии приложения. Поле сторон действительно, только если основные поля
+   совпадают со слабой стороной: если старая версия исправила вес или повторы, а стороны не тронула, стороны
+   отбрасываются при чтении. */
+const SIDE_MODES = ['both', 'alt', 'one'];
+const sidesOf = ex => SIDE_MODES.includes(ex.sides) ? ex.sides : ex.uni ? 'one' : 'both';
+/* повторы на каждую сторону — и переключатель Л/П */
+const perSide = ex => sidesOf(ex) !== 'both';
+/* попеременно чередуются руки (у каждой своя гантель) — в упражнениях на верх тела; ноги — в упражнениях на ноги,
+   и тогда гантели в руках поднимаются в каждом повторе (обратные выпады) */
+const armsAlternate = ex => sidesOf(ex) === 'alt' && !LOWER_G.has(ex.g);
+
+/* ---------- чем нагружено упражнение ---------- */
+/* снаряд: 'db' — гантели, 'kb' — гиря, 'bb' — штанга, 'x' — доп. вес без гантелей (жилет, пояс) у упражнений, где гантели
+   по желанию, null — тренажёр, блок, вес тела */
+const IMPLS = ['db', 'kb', 'bb', 'x'];
+const FREE_IMPL = id => id === 'db' || id === 'kb' || id === 'bb';
+/* у упражнения есть гантели или гиря — его снаряд записывается в журнал (eq у записи), чтобы общий вес считался верно */
+const hasFreeWeights = ex => ex.eq.some(g => g.includes('db') || g.includes('kb')) || (ex.opt || []).includes('db') || (ex.opt || []).includes('kb');
+/* снаряд по умолчанию — для записей без поля eq: первый из списка (как в полном зале), гантели по желанию — гантели */
+function defaultImpl(ex) {
+  for (const g of ex.eq) { const f = g.find(FREE_IMPL); if (f) return f; }
+  if ((ex.opt || []).includes('db')) return 'db';
+  if ((ex.opt || []).includes('kb')) return 'kb';
+  return null;
+}
+/* снаряд карточки плана: выбранный инвентарь (eqIds) и инвентарь по желанию (has) */
+function itemImpl(it) {
+  const ex = it.ex, ids = it.eqIds;
+  if (!Array.isArray(ids)) return defaultImpl(ex);
+  for (const id of ['db', 'kb', 'bb']) if (ids.includes(id)) return id;
+  for (const id of ['db', 'kb']) if ((ex.opt || []).includes(id)) return it.has && it.has(id) ? id : 'x';
+  return null;
+}
+/* какие снаряды возможны у упражнения (для проверки поля eq записи) */
+function implChoices(ex) {
+  const out = new Set();
+  for (const g of ex.eq) for (const id of g) if (FREE_IMPL(id)) out.add(id);
+  for (const id of ex.opt || []) if (id === 'db' || id === 'kb') { out.add(id); out.add('x'); }
+  return out;
+}
+/* снаряд записи журнала */
+function sessionImpl(ex, s) { return s && IMPLS.includes(s.eq) && hasFreeWeights(ex) && implChoices(ex).has(s.eq) ? s.eq : defaultImpl(ex); }
+/* поле eq записи: пишется у упражнений с гантелями или гирей, проверяется при восстановлении из копии */
+function cleanImpl(ex, v) { return hasFreeWeights(ex) && IMPLS.includes(v) && implChoices(ex).has(v) ? v : null; }
+/* снарядов в руках при этом снаряде: у гантелей и гири — из каталога, у штанги и прочего — один (вес общий) */
+const impCount = (ex, impl) => (impl === 'db' || impl === 'kb') && ex.imp === 2 ? 2 : 1;
+/* сколько снарядов поднимается за повтор одной стороны: попеременно руками — одна гантель, иначе все, что в руках */
+const impPerRep = (ex, impl) => armsAlternate(ex) ? 1 : impCount(ex, impl);
+
+/* подпись поля веса: полная (режим тренировки) и короткая (столбец таблицы в карточке); n — снарядов в руках */
+function weightLabel(it) {
+  const lt = loadType(it.ex);
+  if (lt === 'none') return null;
+  if (lt === 'assist') return {full:'Counterweight, kg', short:'Counterweight', n:1, impl:null};
+  const impl = itemImpl(it), n = impCount(it.ex, impl);
+  if (impl === 'db') return {full:n > 1 ? 'Weight of one dumbbell, kg' : 'Dumbbell weight, kg', short:'DB, kg', n, impl};
+  if (impl === 'kb') return {full:n > 1 ? 'Weight of one kettlebell, kg' : 'Kettlebell weight, kg', short:'KB, kg', n, impl};
+  return lt === 'extra' ? {full:'Extra weight, kg', short:'Extra kg', n:1, impl} : {full:'Weight, kg', short:'Weight, kg', n:1, impl};
+}
+/* «×2 = 40 кг» — вес двух снарядов в руках */
+function pairTotalText(n, kg) { return n > 1 && kg > 0 ? `×${n} = ${fmtKg(kg * n)} kg` : ''; }
+
+/* ---------- стороны подхода ---------- */
+/* одна сторона: [кг | null, повторы]; кг — не меньше нуля, повторы (секунды, метры) — больше нуля */
+function sidePair(p) {
+  if (!Array.isArray(p) || p.length < 2) return null;
+  const kg = p[0] == null || p[0] === '' ? null : Number(p[0]), reps = Number(p[1]);
+  if ((kg !== null && !(Number.isFinite(kg) && kg >= 0 && kg < 1000)) || !(Number.isFinite(reps) && reps > 0 && reps < 100000)) return null;
+  return [kg, reps];
+}
+/* слабая сторона: по расчётному максимуму, если у обеих есть вес; у удержаний, дистанции, противовеса и без веса —
+   по повторам (секундам). При равенстве — меньше повторов, затем меньше вес; совсем поровну — левая */
+function weakSide(l, r, ex) {
+  const lt = loadType(ex), byE1rm = !ex.kind && (lt === 'kg' || lt === 'extra') && l[0] > 0 && r[0] > 0;
+  const key = p => byE1rm ? [e1rm(p[0], p[1]), p[1], p[0]] : lt === 'assist' ? [p[1], -(p[0] || 0)] : [p[1], p[0] || 0];
+  const a = key(l), b = key(r);
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] < b[i] ? 'l' : 'r';
+  return 'l';
+}
+/* стороны записанного подхода или null: поле сторон проверено, основные поля — слабая сторона */
+function setSides(x, ex) {
+  if (!Array.isArray(x) || !x[3] || typeof x[3] !== 'object' || !perSide(ex)) return null;
+  const l = sidePair(x[3].l), r = sidePair(x[3].r);
+  if (!l || !r) return null;
+  const w = weakSide(l, r, ex) === 'l' ? l : r;
+  return w[0] === (x[0] ?? null) && w[1] === x[1] ? {l, r, weak:w === l ? 'l' : 'r'} : null;
+}
+/* подход из двух сторон: основные поля — слабая сторона; отдых (третье поле) — если есть, иначе пусто */
+function makeSidedSet(l, r, ex, rest) {
+  const L = sidePair(l), R = sidePair(r);
+  if (!L || !R) return null;
+  const w = weakSide(L, R, ex) === 'l' ? L : R, rf = restField(rest);
+  return [w[0], w[1], rf || null, {l:L, r:R}];
+}
+/* подход из копии или чужого источника: [кг, повторы], отдых и стороны — если верны; неверное отбрасывается, подход остаётся */
+function cleanSet(v, ex) {
+  if (!Array.isArray(v) || !isFinite(+v[1])) return null;
+  const o = [v[0] == null || v[0] === '' ? null : +v[0], +v[1]], r = restField(v[2]);
+  const sd = ex && setSides([o[0], o[1], null, v[3]], ex);
+  if (sd) o.push(r || null, {l:sd.l, r:sd.r}); else if (r) o.push(r);
+  return o;
+}
+
+/* ---------- общий вес (тоннаж) ---------- */
+/* Общий вес подхода, кг = вес одного снаряда × повторы × снарядов в повторе × сторон.
+   both — × снарядов: жим гантелей 2 × 20 кг × 10 = 400 кг, гоблет 24 кг × 10 = 240 кг;
+   one — × снарядов × 2 стороны: тяга гантели одной рукой 30 кг по 10 на сторону = 600 кг;
+   alt руками — у каждой руки своя гантель, сторон две: попеременные сгибания 2 × 12 кг по 10 на руку = 240 кг;
+   alt ногами — гантели в руках поднимаются в каждом повторе: обратные выпады с 2 × 10 кг по 10 на ногу = 400 кг.
+   Л/П — сумма сторон, каждая — вес × повторы × снарядов в повторе.
+   Считается только внешний вес: гантели, гиря, штанга, стек, доп. вес. Вес тела не входит — доля веса тела, которую
+   двигает упражнение, разная (отжимания — около двух третей, подтягивания — почти весь), а взвешивания в день тренировки
+   может не быть; без доп. веса общий вес — 0. Противовес гравитрона облегчает подход, удержания на время и дистанция —
+   не «вес × повторы»: у них тоже 0. */
+function tonnageApplies(ex) { const lt = loadType(ex); return !ex.kind && (lt === 'kg' || lt === 'extra'); }
+function setTonnage(ex, x, impl = defaultImpl(ex)) {
+  if (!Array.isArray(x) || !tonnageApplies(ex)) return 0;
+  const n = impPerRep(ex, impl), sd = setSides(x, ex);
+  const part = p => p[0] > 0 && p[1] > 0 ? p[0] * p[1] * n : 0;
+  if (sd) return part(sd.l) + part(sd.r);
+  return part([x[0], x[1]]) * (perSide(ex) ? 2 : 1);
+}
+function sessionTonnage(ex, s) {
+  if (!s || !Array.isArray(s.s)) return 0;
+  const impl = sessionImpl(ex, s);
+  return s.s.reduce((a, x) => a + (x ? setTonnage(ex, x, impl) : 0), 0);
+}
+/* общий вес за день по всему журналу */
+function dayTonnage(d, data = LOG.data) {
+  let t = 0;
+  for (const [id, ss] of Object.entries(data || {})) { const ex = EXI[id]; if (ex && Array.isArray(ss)) for (const s of ss) if (s && s.d === d) t += sessionTonnage(ex, s); }
+  return t;
+}
+/* 4320 → «4 320»; в английской сборке — «4,320» */
+function fmtTon(v) { return String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, DEC === ',' ? ' ' : ','); }
+
+/* ---------- текст подхода ---------- */
+const pairText = p => (p[0] ? fmtKg(p[0]) + '×' : '') + p[1];
+/* «20×10», с Л/П — «Л 12×10 · П 12×8» */
+function setText(x, ex) { const sd = setSides(x, ex); return sd ? `${'L'} ${pairText(sd.l)} · ${'R'} ${pairText(sd.r)}` : pairText(x); }
+/* подходы записи (разметка): через « · »; если есть подход с Л/П — через «; », чтобы стороны не путались с подходами;
+   подход с Л/П не переносится посередине */
+function setsText(sets, ex) {
+  const xs = sets.filter(Boolean), lr = xs.some(x => setSides(x, ex));
+  return xs.map(x => lr ? `<span class="h-lr">${setText(x, ex)}</span>` : setText(x, ex)).join(lr ? '; ' : ' · ');
+}
+/* «слабая сторона — левая: догоняйте её» — если в записи стороны отличались и слабой всё время была одна и та же */
+function weakSideNote(ex, s) {
+  if (!s || !perSide(ex)) return '';
+  const weak = new Set();
+  for (const x of s.s || []) { const sd = x && setSides(x, ex); if (sd && (sd.l[0] !== sd.r[0] || sd.l[1] !== sd.r[1])) weak.add(sd.weak); }
+  return weak.size === 1 ? (weak.has('l') ? 'Weaker side — left: let it catch up.' : 'Weaker side — right: let it catch up.') : '';
+}
+
+/* ---------- переключатель Л/П (запоминается для упражнения, по умолчанию выключен) ---------- */
+function lrOn(ex) { return perSide(ex) && !!(S.lr && typeof S.lr === 'object' && S.lr[ex.id] === true); }
+function lrSet(ex, on) {
+  const m = {...(S.lr && typeof S.lr === 'object' ? S.lr : {})};
+  if (on) m[ex.id] = true; else delete m[ex.id];
+  S.lr = m; saveSettings();
+}
+/* из копии: только упражнения каталога со сторонами */
+function cleanLr(v) {
+  const o = {};
+  if (v && typeof v === 'object' && !Array.isArray(v)) for (const [k, on] of Object.entries(v)) if (on === true && EXI[k] && perSide(EXI[k])) o[k] = true;
+  return o;
+}
 
 /* ===================== АТЛАС МЫШЦ =====================
    Обратный путь к упражнениям: сначала мышца, потом движения. Список берётся из инвентаря текущего места;
@@ -11874,7 +12170,8 @@ function setupGallery() {
    Счёт подходов — то же правило, что у графика «Подходов на группу за неделю» в плане (groupShare, 11-planner.js):
    подход засчитывается целиком целевой группе упражнения и наполовину остальным работающим (Pelland et al.,
    Sports Med 2026; 56(2):481–505 — «дробный» счёт лучше всего предсказывает прирост). Считаются только записанные
-   (непустые) подходы; односторонний подход «по 10 на каждую сторону» — одна строка журнала, один подход.
+   (непустые) подходы; односторонний подход «по 10 на каждую сторону» — одна строка журнала, один подход (с левой
+   и правой стороной отдельно — тоже один: стороны лежат в том же подходе, 13a-sets.js).
 
    Журнал хранит только дату, без времени. Человек обычно тренируется примерно в одно время суток, поэтому часы отдыха —
    24 × число календарных дней между датой записи и сегодня: вчера — 24 ч, позавчера — 48 ч, три дня назад — 72 ч.
@@ -12117,10 +12414,12 @@ function saveWorkout(){
   if(!workout)return;
   try{localStorage.setItem(WORKOUT_STORE,JSON.stringify({stamp:workout.stamp,index:workout.index,started:workout.started,restUntil:workout.restUntil,restTotal:workout.restTotal,restFrom:workout.restFrom,next:workout.next,last:workout.last,drafts:workout.drafts}));}catch(e){}
 }
+/* введённое в полях подхода: общее (kg, reps) и по сторонам (kl, rl — левая, kr, rr — правая) */
+function workoutInputs(){return{kg:$('#wv-kg').value,reps:$('#wv-reps').value,kl:$('#wv-kg-l').value,rl:$('#wv-reps-l').value,kr:$('#wv-kg-r').value,rr:$('#wv-reps-r').value};}
 function workoutCapture(){
   if(!workout||$('#wv-active').hidden)return;
   const step=workout.queue[workout.index];if(!step)return;
-  workout.drafts[workoutDraftKey(step)]={kg:$('#wv-kg').value,reps:$('#wv-reps').value};saveWorkout();
+  workout.drafts[workoutDraftKey(step)]=workoutInputs();saveWorkout();
 }
 function startWorkout(id){
   if(!plan?.items?.length)return;
@@ -12149,26 +12448,19 @@ function closeWorkout(){
 }
 function workoutShow(index){
   if(!workout)return;
-  workout.index=Math.max(0,Math.min(workout.queue.length-1,index));workout.restUntil=0;workout.restFrom=0;workout.next=-1;workout.sideNote='';RestAlarm.cancel();paintRestPhase(false);
-  const s=workout.queue[workout.index],it=s.it,ex=it.ex,stored=workoutValue(s),lt=loadType(ex),sg=suggest(it),hold=isHold(ex);
+  workout.index=Math.max(0,Math.min(workout.queue.length-1,index));workout.restUntil=0;workout.restFrom=0;workout.next=-1;workout.sideNote='';workout.holdPair=null;RestAlarm.cancel();paintRestPhase(false);
+  const s=workout.queue[workout.index],it=s.it,ex=it.ex,stored=workoutValue(s),sg=suggest(it),hold=isHold(ex);
   const prev=sg.prev?.s[s.k]||sg.prev?.s.filter(Boolean).slice(-1)[0];
   $('#wv-active').hidden=false;$('#wv-rest').hidden=true;$('#wv-finish').hidden=true;
   $('#wv-title').textContent=it.name;$('#wv-exercise').value=ex.id;
   $('#wv-set-label').textContent=`${s.phase} · set ${s.k+1} of ${s.n}`;
   $('#wv-equipment').textContent=it.eqLine;
   $('#wv-target').textContent=it.rx.reps+(ex.kind?'':' reps');
-  $('#wv-previous').textContent=prev?`${prev[0]!=null?fmtKg(prev[0])+' kg × ':''}${prev[1]} ${ex.kind==='time'?'s':ex.kind==='dist'?'m':'reps'}`:'First entry';
+  const unit=ex.kind==='time'?'s':ex.kind==='dist'?'m':'reps',psd=prev&&setSides(prev,ex);
+  $('#wv-previous').textContent=psd?`${setText(prev,ex)} ${unit}`:prev?`${prev[0]!=null?fmtKg(prev[0])+' kg × ':''}${prev[1]} ${unit}`:'First entry';
   $('#wv-previous-date').textContent=sg.prev?fmtDay(sg.prev.d,true):'';
   $('#wv-set-chips').innerHTML=workout.queue.map((x,i)=>x.it.ex.id===ex.id?`<button type="button" data-wv-index="${i}" class="${workoutValue(x)?'is-done ':''}${i===workout.index?'is-current':''}" aria-label="Set ${x.k+1}${workoutValue(x)?', done':''}" aria-current="${i===workout.index?'step':'false'}">${workoutValue(x)?'✓ ':''}${x.k+1}</button>`:'').join('');
-  $('#wv-unilateral').hidden=!ex.uni;$('#wv-unilateral').textContent=hold?'Both sides in one set: left, a 10 s pause, right. The weaker side’s time is logged.':'Do both sides. Log the reps for one side.';
-  $('#wv-weight-label').hidden=lt==='none';$('#wv-weight-caption').textContent=lt==='extra'?'Extra weight, kg':lt==='assist'?'Counterweight, kg':'Weight, kg';$('#wv-rep-caption').textContent=repLabel(ex);$('#wv-reps').setAttribute('inputmode',ex.kind==='dist'?'decimal':'numeric');
-  const draft=workout.drafts[workoutDraftKey(s)],today=todaySession(ex.id,false)?.s||[],last=today.slice(0,s.k).filter(Boolean).slice(-1)[0];
-  const planned=planKg(it.rx,s.k);
-  $('#wv-kg').value=draft?draft.kg:stored?stored[0]!=null?fmtKg(stored[0]):'':planned!=null?fmtKg(planned):last?.[0]!=null?fmtKg(last[0]):prev?.[0]!=null?fmtKg(prev[0]):'';
-  $('#wv-reps').value=draft?draft.reps:stored?String(stored[1]):'';$('#wv-reps').placeholder=it.rx.reps;
-  $('#wv-input-hint').textContent=hold?(lt==='extra'?'Extra weight can be left empty. ':'')+'“Stop” logs the seconds and starts the rest. You can also type the seconds in.'
-    :lt==='extra'?'Extra weight can be left blank. Enter your actual result.':lt==='none'?'Enter the actual result of the set.':'Weight is filled in from your last entry, if there is one. Adjust it and enter your result.';
-  $('#wv-error').textContent='';$('#wv-kg').removeAttribute('aria-invalid');$('#wv-reps').removeAttribute('aria-invalid');
+  workoutFill(s,sg,prev);
   $('#wv-done').textContent=stored?'Save changes':'Set done';$('#wv-save-status').textContent=stored?'This set is already logged.':'The entry will appear in the main log.';
   $('#wv-suggestion').textContent=sg.text;
   holdSetup(s,sg);
@@ -12178,20 +12470,74 @@ function workoutShow(index){
   $('#wv-prev').disabled=workout.index===0;$('#wv-next').disabled=workout.index===workout.queue.length-1;
   saveWorkout();workoutTick();
 }
+/* поля подхода: подписи (вес одной гантели, повторы на каждую сторону), общий ввод или Л/П, подстановка веса */
+function workoutFill(s,sg,prev){
+  const it=s.it,ex=it.ex,stored=workoutValue(s),lt=loadType(ex),hold=isHold(ex),wl=weightLabel(it),lr=lrOn(ex),side=perSide(ex);
+  $('#wv-unilateral').hidden=!side;$('#wv-unilateral').textContent=hold?'Both sides in one set: left, a 10 s pause, right. Both sides are logged; progress follows the weaker side’s time.'
+    :lr?'Log each side. Progress and tips follow the weaker side.':sidesOf(ex)==='alt'?'Alternate sides. Log the reps for one side.':'Do both sides. Log the reps for one side.';
+  $('#wv-lr-bar').hidden=!side;$('#wv-lr').setAttribute('aria-pressed',String(lr));$('#wv-one').hidden=lr;$('#wv-lr-fields').hidden=!lr;
+  $('#wv-weight-label').hidden=lt==='none';$('#wv-weight-caption').textContent=wl?wl.full:'Weight, kg';$('#wv-rep-caption').textContent=side&&!ex.kind?'Reps per side':repLabel(ex);
+  $('#wv-lr-fields').classList.toggle('wv-lr-nokg',lt==='none');$('#wv-lr-kg-cap').textContent=wl?wl.full:'Weight, kg';$('#wv-lr-rep-cap').textContent=repLabel(ex);
+  for(const id of ['wv-reps','wv-reps-l','wv-reps-r'])$('#'+id).setAttribute('inputmode',ex.kind==='dist'?'decimal':'numeric');
+  const draft=workout.drafts[workoutDraftKey(s)],today=todaySession(ex.id,false)?.s||[],last=today.slice(0,s.k).filter(Boolean).slice(-1)[0];
+  const planned=planKg(it.rx,s.k),kgText=v=>v!=null?fmtKg(v):'';
+  $('#wv-kg').value=draft?draft.kg:stored?kgText(stored[0]):planned!=null?fmtKg(planned):last?.[0]!=null?fmtKg(last[0]):prev?.[0]!=null?fmtKg(prev[0]):'';
+  $('#wv-reps').value=draft?draft.reps:stored?String(stored[1]):'';$('#wv-reps').placeholder=it.rx.reps;
+  /* Л/П: записанные стороны, иначе — общий вес; вес стороны по умолчанию — из прошлых сторон, если они были */
+  const ssd=stored&&setSides(stored,ex),lsd=last&&setSides(last,ex),psd=prev&&setSides(prev,ex);
+  for(const k of ['l','r']){
+    const kgDef=planned!=null?fmtKg(planned):lsd?kgText(lsd[k][0]):last?.[0]!=null?fmtKg(last[0]):psd?kgText(psd[k][0]):prev?.[0]!=null?fmtKg(prev[0]):'';
+    $('#wv-kg-'+k).value=draft&&draft['k'+k]!==undefined?draft['k'+k]:ssd?kgText(ssd[k][0]):stored?kgText(stored[0]):kgDef;
+    $('#wv-reps-'+k).value=draft&&draft['r'+k]!==undefined?draft['r'+k]:ssd?String(ssd[k][1]):stored?String(stored[1]):'';$('#wv-reps-'+k).placeholder=it.rx.reps;
+  }
+  workoutPairTotal();
+  $('#wv-input-hint').textContent=hold?(lt==='extra'?'Extra weight can be left empty. ':'')+'“Stop” logs the seconds and starts the rest. You can also type the seconds in.'
+    :lt==='extra'?(wl.impl==='db'?'Without dumbbells, leave the weight blank. Enter your actual result.':'Extra weight can be left blank. Enter your actual result.'):lt==='none'?'Enter the actual result of the set.':'Weight is filled in from your last entry, if there is one. Adjust it and enter your result.';
+  $('#wv-error').textContent='';for(const id of ['wv-kg','wv-reps','wv-kg-l','wv-reps-l','wv-kg-r','wv-reps-r'])$('#'+id).removeAttribute('aria-invalid');
+}
+/* «×2 = 40 кг» под весом одной гантели, когда их две */
+function workoutPairTotal(){
+  const step=workout?.queue[workout.index];if(!step)return;
+  const wl=weightLabel(step.it),v=parseNum($('#wv-kg').value),t=wl&&wl.n>1&&!lrOn(step.it.ex)?pairTotalText(wl.n,v):'';
+  if($('#wv-kg-total').textContent!==t)$('#wv-kg-total').textContent=t;
+}
+/* «Л/П отдельно»: включили — введённое общее значение в обе стороны (вес — всегда, повторы — в пустые поля сторон);
+   выключили — слабая сторона (если обе заполнены), иначе левая */
+function workoutLrToggle(){
+  const step=workout.queue[workout.index],ex=step.it.ex,on=!lrOn(ex),d=workoutInputs();
+  if(on){if(d.kg.trim())d.kl=d.kr=d.kg;if(d.reps.trim()){if(!d.rl.trim())d.rl=d.reps;if(!d.rr.trim())d.rr=d.reps;}}
+  else{
+    const L=[parseNum(d.kl),parseNum(d.rl)],R=[parseNum(d.kr),parseNum(d.rr)];
+    if(L[1]>0&&R[1]>0){const w=weakSide(L,R,ex)==='l';d.kg=w?d.kl:d.kr;d.reps=w?d.rl:d.rr;}else if(d.kl||d.rl){d.kg=d.kl||d.kg;d.reps=d.rl||d.reps;}
+  }
+  workout.drafts[workoutDraftKey(step)]=d;lrSet(ex,on);saveWorkout();
+  const sg=suggest(step.it);workoutFill(step,sg,sg.prev?.s[step.k]||sg.prev?.s.filter(Boolean).slice(-1)[0]);
+  $('#wv-lr').focus();
+}
 function paintWorkoutMotion(){if(!workout?.motion)return;const F=workout.motion,m=motionFrame(F);F.f.at(m.t,m);if($('#wv-cue').textContent!==m.cue)$('#wv-cue').textContent=m.cue;paintMusclePanel('wv',F,m);paintStressPanel('wv',F,m);}
 function strictWorkoutNumber(value){const s=String(value).trim().replace(',','.');return /^\d+(\.\d+)?$/.test(s)?Number(s):null;}
 function commitWorkout(e){
   if(e)e.preventDefault();if(!workout||$('#wv-active').hidden)return;
-  const step=workout.queue[workout.index],ex=step.it.ex,lt=loadType(ex),kgRaw=$('#wv-kg').value.trim(),reps=strictWorkoutNumber($('#wv-reps').value),kg=lt==='none'?null:kgRaw?strictWorkoutNumber(kgRaw):null;
-  let bad=null,msg='';
-  if(lt!=='none'&&kgRaw&&kg===null){bad=$('#wv-kg');msg='Enter the weight as a number, e.g. 12.5.';}
-  else if(lt==='kg'&&(kg===null||kg<=0)){bad=$('#wv-kg');msg='Enter the actual weight used.';}
-  else if(reps===null||reps<=0||(!ex.kind&&!Number.isInteger(reps))){bad=$('#wv-reps');msg=ex.kind?'Enter the actual result as a number greater than zero.':'Enter a whole number of reps completed.';}
-  if(bad){$('#wv-error').textContent=msg;bad.setAttribute('aria-invalid','true');bad.focus();return;}
+  const step=workout.queue[workout.index],ex=step.it.ex,lt=loadType(ex),lr=lrOn(ex);
+  /* одна пара «вес × повторы» или две — левая и правая */
+  const read=(kgEl,repsEl)=>{
+    const kgRaw=kgEl.value.trim(),reps=strictWorkoutNumber(repsEl.value),kg=lt==='none'?null:kgRaw?strictWorkoutNumber(kgRaw):null;
+    if(lt!=='none'&&kgRaw&&kg===null)return{bad:kgEl,msg:'Enter the weight as a number, e.g. 12.5.'};
+    if(lt==='kg'&&(kg===null||kg<=0))return{bad:kgEl,msg:'Enter the actual weight used.'};
+    if(reps===null||reps<=0||(!ex.kind&&!Number.isInteger(reps)))return{bad:repsEl,msg:ex.kind?'Enter the actual result as a number greater than zero.':'Enter a whole number of reps completed.'};
+    return{kg,reps:Math.round(reps*10)/10};
+  };
+  const got=lr?[read($('#wv-kg-l'),$('#wv-reps-l')),read($('#wv-kg-r'),$('#wv-reps-r'))]:[read($('#wv-kg'),$('#wv-reps'))],bad=got.find(g=>g.bad),pair=workout.holdPair;
+  workout.holdPair=null;
+  if(bad){$('#wv-error').textContent=bad.msg;bad.bad.setAttribute('aria-invalid','true');bad.bad.focus();return;}
   /* отдых, уже записанный у этого подхода (третье поле), при исправлении сохраняется */
   const already=!!workoutValue(step),session=todaySession(ex.id,true),rest=already?restField(session.s[step.k][2]):null;
   while(session.s.length<step.k)session.s.push(null);
-  session.s[step.k]=[kg,Math.round(reps*10)/10];if(rest)session.s[step.k].push(rest);session.target=Math.max(session.target||0,step.n);if(step.it.rx.static)session.fmt='static';delete workout.drafts[workoutDraftKey(step)];
+  let rec;
+  if(lr)rec=makeSidedSet([got[0].kg,got[0].reps],[got[1].kg,got[1].reps],ex,rest);
+  else if(pair)rec=makeSidedSet([got[0].kg,pair[0]],[got[0].kg,pair[1]],ex,rest); /* таймер боковой планки: обе стороны, основное — слабая */
+  if(!rec){rec=[got[0].kg,got[0].reps];if(rest)rec.push(rest);}
+  session.s[step.k]=rec;session.target=Math.max(session.target||0,step.n);if(step.it.rx.static)session.fmt='static';markImpl(session,step.it);delete workout.drafts[workoutDraftKey(step)];
   logTouch(ex.id);logRefresh([ex.id]);workout.last=workout.index;
   if(already){workoutShow(workout.index);$('#wv-save-status').textContent='Changes saved.';return;}
   const next=workoutFirstOpen(workout.queue,workout.index);
@@ -12211,8 +12557,17 @@ function workoutShowRest(){
   holdStop();$('#wv-active').hidden=true;$('#wv-rest').hidden=false;$('#wv-finish').hidden=true;RestAlarm.paintButton($('#wv-sound'));RestAlarm.paintPrefs();
   const next=workout.queue[workout.next];
   $('#wv-next-name').textContent=next.it.name;$('#wv-next-detail').textContent=`${next.phase} · set ${next.k+1} of ${next.n} · ${next.it.rx.reps}${next.it.ex.kind?'':' reps'}`;
-  $('#wv-rest-note').textContent=workout.sideNote||'Result saved. Move on when you\'re ready.';workout.sideNote='';workout.restOver=null;workoutTick();$('#wv-continue').focus();
+  $('#wv-rest-note').textContent=workout.sideNote||restNote();workout.sideNote='';workout.restOver=null;workoutTick();$('#wv-continue').focus();
 }
+/* после подхода: общий вес подхода, если он считается (внешний вес), и слабая сторона, если стороны отличались */
+function restNote(){
+  const step=workout.queue[workout.last],x=step&&workoutValue(step);
+  if(!x)return 'Result saved. Move on when you\'re ready.';
+  const ex=step.it.ex,t=setTonnage(ex,x,sessionImpl(ex,todaySession(ex.id,false))),w=weakSideNote(ex,{s:[x]});
+  return (t>0?`Result saved: total weight of the set ${fmtTon(t)} kg.`:'Result saved.')+(w?' '+w:'')+' Move on when you’re ready.';
+}
+/* общий вес упражнения за сегодня */
+function todayTonnage(ex){return sessionTonnage(ex,todaySession(ex.id,false));}
 /* отдых закончился: экран меняет цвет (видно с расстояния, телефон на скамье), время считает вверх «+0:25» */
 function paintRestPhase(over){
   if(!workout)return;workout.restOver=over;
@@ -12221,9 +12576,9 @@ function paintRestPhase(over){
 }
 function workoutFinish(){
   workout.restUntil=0;workout.restFrom=0;workout.next=-1;RestAlarm.cancel();holdStop();paintRestPhase(false);$('#wv-active').hidden=true;$('#wv-rest').hidden=true;$('#wv-finish').hidden=false;
-  const n=workout.queue.filter(workoutValue).length,its=[...new Map(workout.queue.map(s=>[s.it.ex.id,s.it])).values()];
-  $('#wv-finish-text').textContent=`Completed ${n} ${plural(n,'set','sets','sets')} in ${its.length} ${plural(its.length,'exercise','exercises','exercises')}.`;
-  $('#wv-summary').innerHTML=its.map(it=>`<p><span>${esc(it.name)}</span><strong>${workout.queue.filter(s=>s.it.ex.id===it.ex.id&&workoutValue(s)).length} ✓</strong></p>`).join('');saveWorkout();workoutTick();
+  const n=workout.queue.filter(workoutValue).length,its=[...new Map(workout.queue.map(s=>[s.it.ex.id,s.it])).values()],tons=its.map(it=>todayTonnage(it.ex)),total=tons.reduce((a,b)=>a+b,0);
+  $('#wv-finish-text').textContent=`Completed ${n} ${plural(n,'set','sets','sets')} in ${its.length} ${plural(its.length,'exercise','exercises','exercises')}.`+(total>0?` Total weight — ${fmtTon(total)} kg.`:'');
+  $('#wv-summary').innerHTML=its.map((it,i)=>`<p><span>${esc(it.name)}</span><strong>${tons[i]>0?`<small>${fmtTon(tons[i])+' kg'}</small>`:''}${workout.queue.filter(s=>s.it.ex.id===it.ex.id&&workoutValue(s)).length} ✓</strong></p>`).join('');saveWorkout();workoutTick();
 }
 function workoutTick(){
   if(!workout)return;
@@ -12290,14 +12645,16 @@ function holdGo(){
 function holdCommit(){
   const H=workout.hold,st=holdState(H.h,Date.now());paintHold();
   if(!(st.value>0)){H.h=null;paintHold();$('#wv-error').textContent='The timer was stopped within the first second, so the set was not logged.';return;}
-  $('#wv-reps').value=String(st.value);$('#wv-reps').removeAttribute('aria-invalid');
+  /* обе стороны — в поле сторон подхода (основное — слабая); при «Л/П отдельно» — в поля левой и правой */
+  if(H.sides===2&&lrOn(workout.queue[workout.index].it.ex)){$('#wv-reps-l').value=String(st.results[0]);$('#wv-reps-r').value=String(st.results[1]);}
+  else{$('#wv-reps').value=String(st.value);$('#wv-reps').removeAttribute('aria-invalid');workout.holdPair=H.sides===2?[st.results[0],st.results[1]]:null;}
   workout.sideNote=H.sides===2?`Logged ${holdText(st.value)} — the weaker side’s time (left ${holdText(st.results[0])}, right ${holdText(st.results[1])}).`:'';
   commitWorkout();
 }
 function holdStop(){if(workout?.hold){workout.hold.h=null;workout.hold.last=null;}RestAlarm.hush();}
 function setupWorkout(){
   $('#wv-form').addEventListener('submit',commitWorkout);
-  for(const id of ['wv-kg','wv-reps'])$('#'+id).addEventListener('input',()=>{workoutCapture();$('#wv-error').textContent='';$('#'+id).removeAttribute('aria-invalid');});
+  for(const id of ['wv-kg','wv-reps','wv-kg-l','wv-reps-l','wv-kg-r','wv-reps-r'])$('#'+id).addEventListener('input',()=>{workoutCapture();$('#wv-error').textContent='';$('#'+id).removeAttribute('aria-invalid');if(id==='wv-kg')workoutPairTotal();});
   $('#wv-exercise').addEventListener('change',e=>{workoutCapture();const i=workout.queue.findIndex(s=>s.it.ex.id===e.target.value&&!workoutValue(s));workoutShow(i>=0?i:workout.queue.findIndex(s=>s.it.ex.id===e.target.value));});
   $('#workout-view').addEventListener('cancel',e=>{e.preventDefault();closeWorkout();});
   /* вернулись на экран: таймеры страницы в фоне редки — обновить отдых и удержание сразу */
@@ -12312,6 +12669,7 @@ function setupWorkout(){
     if(t.id==='wv-review'){workoutShow(0);return;}
     if(t.id==='wv-undo'){workoutShow(workout.last);return;}
     if(t.id==='wv-continue'){workoutRestTaken();workoutShow(workout.next);return;}
+    if(t.id==='wv-lr'){workoutLrToggle();return;}
     if(t.id==='wv-hold-go'){holdGo();return;}
     if(t.id==='wv-hold-reset'){holdStop();paintHold();return;}
     if(t.dataset.wvRest){const end=restAdjust(workout.restUntil,Date.now(),Number(t.dataset.wvRest));if(end!==workout.restUntil){workout.restUntil=end;RestAlarm.arm(end,{from:workout.restFrom||undefined});saveWorkout();workoutTick();}return;}
@@ -12795,7 +13153,9 @@ bodyLoad();
 
 /* ===================== ПОЛНАЯ РЕЗЕРВНАЯ КОПИЯ ===================== */
 /* v2: настройки планировщика, инвентарь, авторегулировка, календарь, атлас, журнал и замеры. v1 (только журнал) тоже читается.
-   Подход в журнале — [кг, повторы] или [кг, повторы, отдых, с]: отдых необязателен, неверный отбрасывается, подход остаётся. */
+   Подход в журнале — [кг, повторы], [кг, повторы, отдых, с] или [кг, повторы, отдых | null, {l, r}] (Л/П, 13a-sets.js):
+   отдых и стороны необязательны, неверные отбрасываются, подход остаётся. Снаряд записи (eq) — только допустимый
+   для упражнения. */
 function backupObject() {
   return {app:'podhod', v:2, exported:new Date().toISOString(), version:window.PODHOD_VERSION || '',
     settings:{...S}, gear:{bar:GEAR.bar, plates:GEAR.plates}, autoreg:{dismissed:AR.dismissed, light:AR.light}, ics:{...ICS}, motion:{...motionPrefs},
@@ -12806,9 +13166,11 @@ function restoreBackup(obj) {
   if (obj.log && typeof obj.log === 'object') {
     for (const [id, ss] of Object.entries(obj.log)) {
       if (!EXI[id] || !validSessions(ss)) continue;
+      const ex = EXI[id];
       const clean = ss.map(x => ({d:x.d, ...(x.wk ? {wk:+x.wk} : {}), ...(x.fmt === 'static' ? {fmt:'static'} : {}),
         ...(Number.isSafeInteger(+x.target) && +x.target > 0 ? {target:+x.target} : {}),
-        s:x.s.map(v => { if (!Array.isArray(v) || !isFinite(+v[1])) return null; const o = [v[0] == null || v[0] === '' ? null : +v[0], +v[1]], r = restField(v[2]); if (r) o.push(r); return o; })}));
+        ...(cleanImpl(ex, x.eq) ? {eq:x.eq} : {}),
+        s:x.s.map(v => cleanSet(v, ex))}));
       const merged = mergeSessions(LOG.data[id], clean);
       if (JSON.stringify(merged) !== JSON.stringify(LOG.data[id] || [])) { LOG.data[id] = merged; logTouch(id, true); out.exercises++; out.sessions += clean.length; }
     }
@@ -12825,6 +13187,7 @@ function restoreBackup(obj) {
       if (Array.isArray(ok.groups)) ok.groups = ok.groups.filter(g => GROUPS.some(x => x.id === g));
       if (Array.isArray(ok.equip)) ok.equip = ok.equip.filter(id => EQUIP.some(x => x.id === id));
       if (!GOALS[ok.goal]) delete ok.goal; if (!FORMATS[ok.format]) delete ok.format; if (!LEVELS[ok.level]) delete ok.level;
+      if ('lr' in ok) ok.lr = cleanLr(ok.lr);
       Object.assign(S, ok); saveSettings(); out.settings = true;
     }
     if (obj.gear && typeof obj.gear === 'object') { if (isFinite(obj.gear.bar) && obj.gear.bar > 0) GEAR.bar = +obj.gear.bar; if (Array.isArray(obj.gear.plates)) { const pl = obj.gear.plates.map(Number).filter(v => v > 0); if (pl.length) GEAR.plates = [...new Set(pl)].sort((a, b) => b - a); } gearSave(); }
@@ -12851,4 +13214,4 @@ logInit();
 plural = (n, a, b, c) => n === 1 ? a : c;
 DEC = '.';
 
-window.PODHOD_VERSION='4.47.0';window.PODHOD_BUILD='4.47.0-6d316954e2b9';window.PODHOD_LANG='en';
+window.PODHOD_VERSION='4.48.0';window.PODHOD_BUILD='4.48.0-60bc67b28be1';window.PODHOD_LANG='en';
