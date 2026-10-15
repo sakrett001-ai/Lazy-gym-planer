@@ -179,19 +179,42 @@ BIND.pecArm=(e,R)=>{
 };
 /* Гриф на опоре (крюки, стойки): c — центр во внутренних координатах */
 BIND.restingBarbell=e=>{const b=barbellPart(toCat(e.c),dirCat(V.unit(e.axis||[1,0,0])),e.plates||[],{id:e.id||'barRest'});b.mount=e.on||'floor';return[b];};
-/* Лента/трос: ломаная от точки крепления к хвату */
+/* Стремя рукояти (D-рукоять блока, рукоять эспандера): рукоять лежит в кулаке по его оси (z кисти), стремя вращается
+   вокруг рукояти, и его вершина — кольцо, за которое цепляется трос или лента, — встаёт в плоскости поперёк рукояти,
+   в сторону тяги, на height от оси. Боковины идут от концов рукояти сначала поперёк неё (side), затем сходятся к вершине:
+   кисть оказывается внутри стремени, а не на его боковинах. Прежде вершина стояла на линии «центр хвата — блок», боковины
+   сходились сразу от концов рукояти, а лента эспандера шла прямо в центр кулака — при тяге в ладонь, к запястью или вдоль
+   оси кулака трос и лента проходили сквозь пальцы и ладонь. */
+function stirrup(g,hz,to,{half=6,height=9,side=5,clear}={}){
+ const z=V.unit(hz),p=V.perp(V.sub(to,g),z);let n=V.len(p)>1e-6?V.unit(p):ortho([0,1,0],z);
+ /* тяга вдоль предплечья: стремя упирается в него и ложится снаружи — поворот вокруг рукояти на наименьший угол, при котором
+    вершина выходит из предплечья (clear — расстояние до его поверхности, запас 1,5 см) */
+ if(clear&&clear(V.add(g,n,height))<1.5){const w=V.cross(z,n);
+  for(let k=1;k<=36;k++){const m=[1,-1].map(sg=>V.add(V.scale(n,Math.cos(sg*k*5*D2R)),w,Math.sin(sg*k*5*D2R))).find(m=>clear(V.add(g,m,height))>=1.5);if(m){n=m;break;}}}
+ const a=V.add(g,z,-half),b=V.add(g,z,half),apex=V.add(g,n,height),k=Math.min(side,height*.6);
+ return{a,b,apex,n,pts:[a,V.add(a,n,k),apex,V.add(b,n,k),b]};
+}
+/* запас до поверхности предплечья стороны s — для стремени (E.stirrup, clear) */
+const clearOfForearm=(R,s)=>p=>M.limbSDF(R,'fa',s,p);
+/* Лента/трос: ломаная от точки крепления к кольцу стремени рукояти; рукоять в кулаке, стремя (лямка) — вокруг кисти */
 BIND.band=(e,R)=>{
- const out=[];
+ const out=[],id=e.id||'band';
  for(const s of e.hands||['L','R']){
   let from=e.fromSole?null:e.fromKey?R[e.fromKey+s]:toCat(e.from);
   let via=(e.via||[]).map(toCat);
   if(e.fromSole){const t=R.frames['toes'+s],g=s==='L'?1:-1,lat=V.scale(t.x,g);from=V.add(V.add(R['ball'+s],t.y,M.B.toeSole-(e.r||.7)),t.z,1.5);via=[V.add(V.add(R['ball'+s],lat,5.6),t.y,-1)];}
-  const pts=[from,...via,R['grip'+s]];
-  out.push({kind:'cable',pts,r:e.r||.7,tone:'band',role:'cable',id:(e.id||'band')+':'+s,mount:e.fromKey||e.fromSole?'body':'floor'});
-  out.push({kind:'beam',a:V.add(R['grip'+s],R.frames['hand'+s].z,6.5),b:V.add(R['grip'+s],R.frames['hand'+s].z,-6.5),r:1.6,tone:'rubber',role:'grip',id:(e.id||'band')+':handle'+s,mount:(e.id||'band')+':'+s});
+  const st=stirrup(R['grip'+s],R.frames['hand'+s].z,via.length?via[via.length-1]:from,{...BAND_HANDLE,clear:clearOfForearm(R,s)});
+  out.push({kind:'cable',pts:[from,...via,st.apex],r:e.r||.7,tone:'band',role:'cable',id:id+':'+s,mount:e.fromKey||e.fromSole?'body':'floor'});
+  out.push(...bandHandle(st,id,s));
  }
  return out;
 };
+/* рукоять эспандера: 13 см в кулаке, лямка-стремя 2,5 см шириной (r .45) до кольца в 8 см от оси рукояти */
+const BAND_HANDLE={half:6.5,height:8,side:4.5};
+function bandHandle(st,id,s){
+ return[{kind:'cable',pts:st.pts,r:.45,tone:'rubber',role:'frame',id:id+':strap'+s,mount:id+':'+s},
+  {kind:'beam',a:st.b,b:st.a,r:1.6,tone:'rubber',role:'grip',id:id+':handle'+s,mount:id+':strap'+s}];
+}
 /* ---------- Обобщённые подвижные части ---------- */
 /* Точка тела: ключ позы ('gripL'), смесь двух ключей или смещение в рамке сегмента (внутренние оси, см) */
 function bodyPoint(R,b){
@@ -270,10 +293,10 @@ BIND.cable=(e,R)=>{
   hands.forEach((s,i)=>{const g=grips[i],hz=R.frames['hand'+s].z;out.push({kind:'beam',a:V.add(g,hz,-5.5),b:V.add(g,hz,5.5),r:1.5,tone:'rubber',role:'grip',id:id+':grip'+s,mount:id+':v'+s});
    const far=V.dot(V.sub(V.add(g,hz,5.5),clip),V.sub(V.add(g,hz,5.5),clip))>V.dot(V.sub(V.add(g,hz,-5.5),clip),V.sub(V.add(g,hz,-5.5),clip))?V.add(g,hz,5.5):V.add(g,hz,-5.5);
    out.push({kind:'beam',a:far,b:clip,r:1.3,tone:'chrome',role:'frame',id:id+':v'+s,mount:id+':line'});});
- }else{ /* D-рукоять на каждую кисть (в кроссовере у каждой руки свой трос) */
-  const s=hands[0],g=grips[0],hz=R.frames['hand'+s].z,a=V.add(g,hz,-6),b=V.add(g,hz,6);clip=towards(g,e.clip??9);
-  out.push({kind:'beam',a,b,r:1.6,tone:'rubber',role:'grip',id:id+':handle',mount:id+':d'});
-  out.push({kind:'cable',pts:[a,clip,b],r:.8,tone:'chrome',role:'frame',id:id+':d',mount:id+':line'});
+ }else{ /* D-рукоять на каждую кисть (в кроссовере у каждой руки свой трос): стремя вокруг кисти, карабин — в его вершине */
+  const s=hands[0],st=stirrup(grips[0],R.frames['hand'+s].z,pulley,{half:6,height:e.clip??9,clear:clearOfForearm(R,s)});clip=st.apex;
+  out.push({kind:'beam',a:st.a,b:st.b,r:1.6,tone:'rubber',role:'grip',id:id+':handle',mount:id+':d'});
+  out.push({kind:'cable',pts:st.pts,r:.8,tone:'chrome',role:'frame',id:id+':d',mount:id+':line'});
  }
  const dir=V.unit(V.sub(clip,pulley)),colUp=[0,-1,0];let ax=V.cross(dir,colUp);if(V.len(ax)<1e-3)ax=[1,0,0];ax=V.unit(ax);
  const tangent=V.add(pulley,dir,wr*.2);
@@ -366,6 +389,6 @@ function rig(entry){
   return R;
  };
 }
-return{TYPES,BIND,Builder,build,anchors,rig,PLATES,padFrame,barbellPart,dumbbellPart,bodyPoint,ortho,visible,variantOf,variantEntry,ankleCuff};
+return{TYPES,BIND,Builder,build,anchors,rig,PLATES,padFrame,barbellPart,dumbbellPart,bodyPoint,ortho,visible,variantOf,variantEntry,ankleCuff,stirrup,bandHandle,BAND_HANDLE,clearOfForearm};
 })(typeof Mannequin!=='undefined'?Mannequin:require('./09bm-mannequin.js'));
 if(typeof module!=='undefined'&&module.exports){module.exports=GymEquipment;const fs=require('fs'),path=require('path');for(const f of fs.readdirSync(__dirname).filter(f=>/^09bo.*\.js$/.test(f)).sort()){try{require(path.join(__dirname,f));}catch(e){console.error('Инвентарь '+f+': '+e.message);}}}
