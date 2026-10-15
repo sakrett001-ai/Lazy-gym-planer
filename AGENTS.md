@@ -30,6 +30,7 @@ Lazy Gym Planner — PWA-планировщик тренировок с атла
 | `src/data/muscles.bin`, `tools/muscles/` | Пути мышц MyoSim, DAS3 (Apache 2.0) и Gait2392 (CC BY 3.0; `third_party/das3`). **Генерируется**: `build_muscles.py` → `das3_import.py` → `gait2392_import.py` → `anatomy.js` → `pack.js` (объём — `volumes.js`, источники — `fixtures/`); руками не править. Проверки — `tools/muscles.test.js`, `npm run muscles:check`; расхождения — `tools/muscles/README.md`. |
 | `tools/muscles/attach.js`, `tools/muscles/fixtures/attachments.json` | Аудит прикреплений мышц по анатомии (кость и место каждого конца, сторона тела; эталон с источниками). `node tools/muscles/attach.js --audit`; тест — `tools/attachments.test.js`. Новая мышца — только с записью в эталоне. |
 | `tools/biomech/validator2.js` | Валидатор биомеханики и столкновений. |
+| `tools/mannequin/holds-audit.js` | Аудит хватов по всем упражнениям, вариантам инвентаря и кадрам: ручка в кулаке, ладонь на опоре, канат вдоль кулака, трос мимо кисти; печатает подозрительное — его смотреть глазами. |
 | `src/js/09f-joint-stress.js` | Красные метки пиковой нагрузки на суставы: правила по углам манекена (`Mannequin.jointAngles`, общий расчёт с валидатором), пороги и источники. |
 | `docs/mannequin-authoring.md` | Подробное руководство по авторингу: координаты, помощники, приёмы. |
 
