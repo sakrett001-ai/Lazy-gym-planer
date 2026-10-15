@@ -1,5 +1,5 @@
 /* Сервис-воркер Lazy Gym Planner: кеширует оболочку приложения, работает без сети, обновляется при новой версии. */
-const VERSION = '4.40.0-c4728d1fda92';
+const VERSION = '4.42.0-e1fd27374605';
 const CACHE_PREFIX = 'podhod@' + self.registration.scope + ':';
 const CACHE = CACHE_PREFIX + VERSION;
 const SHELL = ['./', './index.html', './app.css?v=' + VERSION, './app.js?v=' + VERSION, './volume.js?v=' + VERSION, './pwa.js?v=' + VERSION, './manifest.webmanifest', './manifest.webmanifest?v=' + VERSION,
