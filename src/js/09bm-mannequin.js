@@ -102,19 +102,37 @@ const B={
 };
 B.hipHeight=B.sk+B.th+B.ankle;                   // 89,5 см от пола до центров тазобедренных суставов
 /* Сечения корпуса: h — высота над серединой тазобедренных суставов вдоль оси корпуса; w — полуширина, a — до передней
-   поверхности, b — до задней; nb, nf — показатели суперэллипса задней и передней половины (2 — эллипс). Размеры —
-   по обхватам, ширинам и глубинам ANSUR II (мужчины 170–180 см, 72–84 кг): грудь на уровне сосков (h ≈ 39) — обхват
-   ≈ 96, глубина 25; талия у пупка (h ≈ 16) — обхват 86, глубина 21,4; ягодицы (h ≈ −1,4) — обхват ≈ 96,5, глубина
-   23,5, ширина бёдер 33,6; основание шеи — 43. Самое узкое место — талия между рёбрами и гребнями таза (h ≈ 24, ширина
-   28,8): у пупка шире (30,3), грудь 30,4, под мышками — 31,6 (широчайшие). Сечение груди близко к прямоугольнику — плоские грудь и спина,
-   широчайшие по бокам: сзади nb = 4,4, спереди nf = 3,2 (спереди скруглено сильнее — там руки, сведённые перед грудью;
-   у эллипса того же размера обхват был бы на 13 см меньше). Вверху
-   спины задняя половина «квадратнее» передней: лопатки и трапеция; под ними лежат лопатки скелета (режим «Скелет»).
-   Ширина груди в ANSUR II — 28,3 при обхвате 101,7: с выпуклым сечением оба числа не совпадают, взят компромисс
-   (ширина 30,4, обхват 96). Замер — node tools/mannequin/anthro.js. */
-const TORSO=[[-5.3,12.5,4.5,8.5,2,2],[-2.4,15.8,7.8,14.2,3.2,2.6],[0,16.4,8.8,13.0,3.0,2.4],[6,16.2,10.4,10.8,2.4,2.2],[12,15.6,11.4,10.2,2.6,2.6],
- [18,14.9,11.2,10.0,2.8,2.8],[24,14.4,11.0,10.4,3,3],[31,14.6,12.0,11.0,3.4,3.0],[38.8,15.2,13.0,12.0,4.4,3.2],[47.2,15.8,11.4,11.6,3.6,2.6],
- [52.8,15.4,7.8,10.5,2.8,2],[56.8,11.6,5.6,9.0,2.5,2],[59.8,8.2,5.4,8.0,2.2,2]];
+   поверхности, b — до задней; nb, nf — показатели суперэллипса задней и передней половины (2 — эллипс, больше — площе
+   грани и острее углы: n = 4 — скруглённый прямоугольник с радиусом угла ≈ 7 см, n = 5,5 — ≈ 5,5 см). Размеры —
+   по обхватам, ширинам и глубинам ANSUR II (мужчины 170–180 см, 72–84 кг; со складками подмышки, замер —
+   node tools/mannequin/anthro.js): талия у пупка (h ≈ 16) — обхват 86, глубина 21,3; ягодицы (h ≈ −1,4) — обхват
+   ≈ 97, глубина 23,9, ширина бёдер 33,6; основание шеи — 42,8. Самое узкое место — талия между рёбрами и гребнями таза
+   (h ≈ 24, ширина 28,8): у пупка шире (30,3), грудь 29,8, под мышками — 30,5 (широчайшие).
+   Грудь на уровне сосков (h ≈ 38,7; 4.41.0) — скруглённый прямоугольник: плоская широкая спина с лопатками и широчайшими
+   в углах (nb = 5,5) и плоская грудь (nf = 4,8, спереди скруглено сильнее — там руки, сведённые перед грудью). Ширина
+   29,8 (ANSUR II 28,3, средняя половина людей 27,4–29,1), глубина 24,9 (24,2; 23,3–25,2), обхват 99,5 (101,7; 99,2–104,3);
+   до 4.41.0 было 30,4 × 25,2 при обхвате 98,6 — сечение шире и круглее (nb = 4,4, nf = 3,2). Все три числа ANSUR сразу
+   выпуклое сечение не даёт: при 28,3 × 24,2 обхват не больше 105 (прямоугольник), 101,7 — только почти прямоугольник
+   с углами радиусом ≈ 2 см. Что держит дальше:
+   - бок груди уже 29,8 не взять: при руке над головой или далеко в сторону широчайшая выходит из кожи сбоку — линии
+     MoBL-ARMS идут от рёбер к плечу по воздуху, а тело мышцы — трубка, а не пласт толщиной ≈ 1 см (при полуширине 14,4
+     тело широчайшей выходило бы на 4,2 см при прежнем допуске 3,9; tools/muscles/README.md, «Кожа»);
+   - углы спины острее n = 5,5 на груди и полнее под мышками (h 47,2: nb = 3,6, как до 4.41.0) не сделать: лопатка скользит
+     по коже спины (scapulaRot в 09bq-skeleton.js), и при n = 6,5 нижние зубцы передней зубчатой в подъёме руки, а при
+     nb = 4 под мышками ромбовидные в подъёме лопатки почти не укорачивались (проверка функции мышц лопатки, muscles.test.js);
+   - спереди острее n = 4,8 и полнее под мышками (h 47,2: nf = 2,6, как до 4.41.0; a 10,8) — нельзя: опущенная к колену рука
+     в концентрированном сгибании проходит у переднего угла груди и входила бы в него глубже допуска валидатора.
+   Живот над пупком (h 24–31) — на 0,5–0,6 см глубже: прямая мышца живота в глубоком скручивании — хорда над животом
+   (выходила из кожи на 3,1 см, теперь 2,4). Верх груди под ключицами (h 52,8) полнее (a 7,8 → 8,3, nf 2 → 2,6): большая
+   грудная от грудины к плечу при руке над головой выходила на 3,3 см (теперь 2,4). Валик трапециевидной между шеей и
+   плечом (h 56,8): полуширина 12,1 вместо 11,6 — провал линии плеча перед акромионом мельче (0,4 см вместо 0,7); полнее
+   нельзя — в валик глубже допуска вдавливаются упоры гакк-машины и икроножного тренажёра. Вверху спины задняя половина
+   «квадратнее» передней: лопатки и трапеция; под ними лежат лопатки скелета (режим «Скелет»). */
+const TORSO=Object.freeze([[-5.3,12.5,4.5,8.5,2,2],[-2.4,15.8,7.8,14.2,3.2,2.6],[0,16.4,8.8,13.0,3.0,2.4],[6,16.2,10.4,10.8,2.4,2.2],[12,15.6,11.4,10.2,2.6,2.6],
+ [18,14.9,11.2,10.0,2.8,2.8],[24,14.4,11.6,10.4,3,3],[31,14.6,12.5,11.0,4.0,3.2],[38.8,14.9,12.6,12.0,5.5,4.8],[47.2,15.6,10.8,11.6,3.6,2.6],
+ [52.8,15.4,8.3,10.5,2.8,2.6],[56.8,12.1,5.6,9.2,2.7,2],[59.8,8.2,5.4,8.0,2.2,2]].map(r=>Object.freeze(r)));
+/* TORSO заморожен: от него зависят постоянные столбцов сетки корпуса (ringConsts — считаются один раз на модуль); форму
+   меняют только правкой этой таблицы (в инструментах — копией модуля), а не на лету */
 const TORSO_JOINTS=[15,24];
 /* Кожа корпуса у шарниров поясницы гнётся плавно: [шарнир, высота шарнира, скругление ниже и выше, доля разгона e].
    Сзади и с боков (TORSO_BLEND) кожа лежит на костях: таз подходит к коже до 12 см (гребень подвздошной кости, крестец),
@@ -186,7 +204,9 @@ const SH_CAP=[0,.6];
    и дельтой). Центр — от центра плечевого сустава в рамке плечевого пояса: внутрь, вверх, назад; радиус */
 const AC_CAP={off:[-2.2,2.6,-2.2],r:3.6};
 /* Складки подмышки. Между плечом и корпусом кожу поднимают мышцы, идущие с корпуса на плечевую кость: задняя складка —
-   широчайшая и большая круглая (с ними — мышцы у наружного края лопатки), передняя — большая грудная. Кожа корпуса и плеча
+   широчайшая и большая круглая (с ними — мышцы у наружного края лопатки), передняя — большая грудная, боковая (4.41.0) —
+   наружный край широчайшей вдоль бока грудной клетки: при поднятой руке мышца натягивается от таза к плечу и поднимает
+   кожу бока (ось — от нижних рёбер сбоку к середине плеча; стоя складка почти не видна). Кожа корпуса и плеча
    — отдельные формы, поэтому складки задаются подъёмом кожи корпуса (плечо не меняется): над осью складки (от точки
    у корпуса tr — рамка грудной клетки — к точке у плеча ua — рамка плеча; координаты — латерально, вверх, вперёд,
    у правой стороны латерально — зеркально) кожа поднимается по своей нормали на a·k·w·exp(−(d/s)²): d — расстояние от
@@ -194,12 +214,15 @@ const AC_CAP={off:[-2.2,2.6,-2.2],r:3.6};
    фигуры. Когда рука
    отходит от корпуса, мышцы складки отходят от рёбер и поднимают кожу выше: k = (L/L0)^kv, L — длина оси в кадре, L0 —
    стоя. Подъём гладкий, без отдельных частей и изломов, и один и тот же в сетке и в знаковых расстояниях проверок.
-   Оси, высоты и ширины подогнаны (tools/mannequin/folds-fit.js) так, чтобы кожа покрывала тела этих мышц (этап М2) во всех
-   упражнениях каталога и не поднималась выше мышц под ней, а стоящая фигура не уходила от замеров ANSUR II: ширина груди
-   не растёт, обхват груди растёт к ANSUR. */
+   Оси, высоты и ширины подогнаны (tools/mannequin/folds-fit.js) так, чтобы кожа покрывала тела этих мышц (этап М2; с 4.41.0 —
+   все их линии, включая достроенные пучки широчайшей и линии веера большой грудной и задней дельты) во всех упражнениях
+   каталога и не поднималась выше мышц под ней, а стоящая фигура не уходила от замеров ANSUR II: ширина груди не растёт,
+   обхват груди растёт к ANSUR. Подгонка 4.41.0 — по новому сечению груди: широчайшая выходит из кожи на 3,1 см (было 3,8),
+   большая грудная — на 2,4 (3,3), задняя дельта — на 2,7 (3,1), большая круглая и подлопаточная — в допуске. */
 const FOLDS={
- post:{tr:[10,23.1,-10.1],ua:[-1.1,-6.8,-4.2],a:0.44,s:6.07,kv:2.56},
- ant:{tr:[4.7,19.4,-4.8],ua:[-4.1,-7,-2.3],a:2.61,s:9.17,kv:0.38}
+ post:{tr:[5.8,25.5,-1.6],ua:[-3,-5.6,-0.7],a:1.09,s:8.26,kv:2.32},
+ ant:{tr:[4.5,18.9,-2.3],ua:[-4.9,-5.1,-1.7],a:3.38,s:8.64,kv:0.35},
+ lat:{tr:[9.6,-1.9,-3.1],ua:[-0.5,-20.8,3.4],a:0.44,s:8.45,kv:1.72}
 };
 const FOLD_SP=2;
 /* «шапка» колена — вперёд от центра сустава (по биссектрисе передних осей бедра и голени): надколенник лежит
@@ -504,9 +527,13 @@ function torsoPointIn(R,h,side,ang,extra,f,[w,a,b,n=2,nf=2]){
 /* сдвиг кожи надплечий за плечевым поясом: доля k от смещения центра плечевого сустава из нейтрального положения;
    s — «боковитость» точки сечения (0 спереди и сзади, 1 сбоку, после суперэллипса) */
 function girdleShift(R,h,side,s){
- const k=smooth((h-38.8)/15)*(1-.4*smooth((h-53.8)/6))*Math.pow(Math.max(0,s),2),T=R.frames.thorax;
- const rest=V.add(V.add(V.add(T.o,T.y,B.sc[1]+B.ghRel[1]),T.x,SIGN[side]*(B.sc[0]+B.ghRel[0])),T.z,B.sc[2]+B.ghRel[2]);
- return V.scale(V.sub(R.girdle[side],rest),k*.85);
+ const k=smooth((h-38.8)/15)*(1-.4*smooth((h-53.8)/6))*Math.pow(Math.max(0,s),2);
+ return V.scale(girdleDelta(R,side),k*.85);
+}
+/* смещение центра плечевого сустава из нейтрального положения (в рамке грудной клетки) */
+function girdleDelta(R,side){
+ const T=R.frames.thorax,rest=V.add(V.add(V.add(T.o,T.y,B.sc[1]+B.ghRel[1]),T.x,SIGN[side]*(B.sc[0]+B.ghRel[0])),T.z,B.sc[2]+B.ghRel[2]);
+ return V.sub(R.girdle[side],rest);
 }
 /* Знаковое расстояние до шеи — по тому же профилю NECK и той же оси, что сетка (neckPoint); основание шеи —
    внутри корпуса, поэтому переход к надплечьям здесь не нужен: его закрывает кожа корпуса. */
@@ -554,17 +581,64 @@ function neckPoint(R,t,ang,top){
  if(w>=1)return p;
  /* основание — продолжение поверхности корпуса по её же касательной: стык корпуса и шеи без излома */
  const a=((ang%(2*Math.PI))+2*Math.PI)%(2*Math.PI),side=a<=Math.PI?'L':'R',an=a<=Math.PI?a:2*Math.PI-a,hTop=TORSO.at(-1)[0];
- const A=top?torsoPointIn(R,hTop,side,an,0,top.f,top.sec):torsoPoint(R,hTop,side,an),A0=top?torsoPointIn(R,hTop-2,side,an,0,top.f0,top.sec0):torsoPoint(R,hTop-2,side,an),base=V.add(A,V.unit(V.sub(A,A0)),t*V.dist(lo,hi));
+ /* у сетки (top) точки корпуса столбца одни и те же для всех рядов перехода — считаются один раз */
+ let AA=top?.memo?.get(side+an);
+ if(!AA){AA=top?[torsoPointIn(R,hTop,side,an,0,top.f,top.sec),torsoPointIn(R,hTop-2,side,an,0,top.f0,top.sec0)]:[torsoPoint(R,hTop,side,an),torsoPoint(R,hTop-2,side,an)];if(top)(top.memo??=new Map()).set(side+an,AA);}
+ const[A,A0]=AA,base=V.add(A,V.unit(V.sub(A,A0)),t*V.dist(lo,hi));
  return V.mix(base,p,w);
 }
-/* столбцов по окружности корпуса: суперэллипс спины даёт более крутой переход от спины к боку, при 24 хорда сетки
-   уходила под мышечные зоны трапеции на 1,7 мм; при 32 — не больше 1,2 мм, как у эллипса */
-const TORSO_COLS=32;
+/* Столбцы сетки корпуса. Угол сечения ang (torsoPointIn) — параметр суперэллипса: при n > 2 точки с равным шагом по нему
+   собираются в углы сечения, а на плоских гранях расходятся (грудь, n = 6: на боку 8,4 см между столбцами) — подъём кожи
+   складками там рисовался бы зубцами. Поэтому столбцы ставятся не с равным шагом по ang, а по углу φ «смешанного» сечения:
+   нормированный полярный угол точки — tg ψ = tg^k φ, k = 2/n + (1 − 2/n)·COL_MIX (k = 2/n — прежний шаг по ang, k = 1 —
+   равный шаг по углу). При n = 2 ничего не меняется. 48 столбцов (было 32): шаг не больше 3,3 см, хорда стоя — не больше
+   0,8 мм; при 40 в позах с рукой над головой подъём боковой складки сетка проходила под мышечной зоной передней зубчатой
+   на 1,9 мм (аудит отрисовки tools/catalog-render-audit.mjs, допуск 1,6). Точки — те же torsoPointIn: области тела,
+   мышечные зоны и проверки задаются углами ang, как раньше. */
+const TORSO_COLS=48,COL_MIX=.6;
+/* угол ang столбца по углу φ ∈ [0, π] (от передней линии); sec — сечение ряда (показатели nb, nf) */
+function colAngle(phi,sec){
+ const c=Math.cos(phi),n=(c>=0?sec[4]:sec[3])??2;if(n===2)return phi;
+ const e=1+(n/2-1)*COL_MIX,q=Math.atan2(Math.pow(Math.max(0,Math.sin(phi)),e),Math.pow(Math.abs(c),e));
+ return c>=0?q:Math.PI-q;
+}
 const TORSO_H=[];for(let h=TORSO[0][0];h<=TORSO.at(-1)[0]+1e-9;h+=2.5)TORSO_H.push(+h.toFixed(2));if(TORSO_H.at(-1)<TORSO.at(-1)[0])TORSO_H.push(TORSO.at(-1)[0]);
+/* Постоянные столбцов ряда (высота h, cols столбцов): сторона, множители суперэллипса (sePow — ширина dx и глубина dz),
+   доля передней схемы (frontK) и доля сдвига надплечий (girdleShift). Зависят только от h, cols и TORSO (заморожен),
+   поэтому считаются один раз; в кадре остаются рамка сечения, сдвиг надплечий и складки. Сетка корпуса пересчитывается
+   каждый кадр объёмной сцены: colAngle и sePow на каждую точку занимали четверть времени surface(). */
+const RING_K=new Map();
+function ringConsts(h,cols){
+ let m=RING_K.get(cols);if(!m)RING_K.set(cols,m=new Map());
+ let K=m.get(h);if(K)return K;
+ const sec=sectionAt(h),[w,a,b,n=2,nf=2]=sec,gk=smooth((h-38.8)/15)*(1-.4*smooth((h-53.8)/6));
+ K=Array.from({length:cols},(_,i)=>{
+  const a0=i/cols*2*Math.PI,side=a0<=Math.PI?'L':'R',ang=colAngle(a0<=Math.PI?a0:2*Math.PI-a0,sec);
+  const c0=Math.cos(ang),s0=Math.sin(ang),k=c0<0?n:nf,c=sePow(c0,k),s=sePow(s0,k);
+  return{side,dz:(c0>=0?a:b)*c,dx:w*s*SIGN[side],kf:frontK(ang),gk:gk*Math.pow(Math.max(0,s),2)*.85};
+ });
+ m.set(h,K);return K;
+}
+/* ряд сетки корпуса на высоте h: cols точек по окружности (левая половина — первые cols/2 + 1). Те же операции и в том же
+   порядке, что torsoPointIn(R, h, side, colAngle(φ), 0, …), — точки совпадают до бита (тест в tools/mannequin.test.js) */
+function torsoRing(R,h,cols){
+ const f=torsoFrame(R,h),K=ringConsts(h,cols),c=f.c,z=f.z,x=f.x,g=f.front,out=new Array(cols);
+ const gd=h>38.8&&R.girdle&&R.frames.thorax?{L:girdleDelta(R,'L'),R:girdleDelta(R,'R')}:null,fs=h>20&&R.frames&&!FOLD_OFF?foldSet(R):null;
+ for(let i=0;i<cols;i++){
+  const q=K[i],dz=q.dz,dx=q.dx;
+  let p=[c[0]+z[0]*dz+x[0]*dx,c[1]+z[1]*dz+x[1]*dx,c[2]+z[2]*dz+x[2]*dx];
+  if(g&&q.kf>0){const kf=q.kf,gc=g.c,gz=g.z,gx=g.x,r0=gc[0]+gz[0]*dz+gx[0]*dx,r1=gc[1]+gz[1]*dz+gx[1]*dx,r2=gc[2]+gz[2]*dz+gx[2]*dx;p=[p[0]+(r0-p[0])*kf,p[1]+(r1-p[1])*kf,p[2]+(r2-p[2])*kf];}
+  if(h<0){const d=V.sub(p,c),rho=V.len(d);p=V.add(p,f.y,h*SEAT_K*seatW(rho<1e-9?0:V.dot(d,f.z)/rho));}
+  if(gd){const D=gd[q.side],k=q.gk;p=[p[0]+D[0]*k,p[1]+D[1]*k,p[2]+D[2]*k];}
+  if(fs){const d=liftIn(fs,p);if(d)p=V.add(p,V.unit(V.perp(V.sub(p,c),f.y)),d);}
+  out[i]=p;
+ }
+ return out;
+}
 /* Полная сетка тела для сцены: точки в координатах каталога */
 function surface(R,{cols=TORSO_COLS,limbRows=10,limbCols=16}={}){
  /* рамка и профиль сечения считаются один раз на ряд — точки те же, что у torsoPoint/limbPoint/neckPoint */
- const torso=TORSO_H.map(h=>{const f=torsoFrame(R,h),sec=sectionAt(h);return Array.from({length:cols},(_,c)=>{const a=c/cols*2*Math.PI,side=a<=Math.PI?'L':'R',ang=a<=Math.PI?a:2*Math.PI-a;return torsoPointIn(R,h,side,ang,0,f,sec);});});
+ const torso=TORSO_H.map(h=>torsoRing(R,h,cols));
  const limbs={};
  for(const s of SIDES)for(const k of Object.keys(LIMB_DEF)){
   const[,a,b]=LIMB_DEF[k],A=R[a+s],Bp=R[b+s];
@@ -578,7 +652,7 @@ function surface(R,{cols=TORSO_COLS,limbRows=10,limbCols=16}={}){
 /* Точки для рамки кадра SVG-фигуры: все ряды туловища и каждый третий ряд конечностей (с последним) — ровно те точки
    surface(), по которым считается рамка, без шеи, кистей и стоп; совпадают с surface() до бита. */
 function boundsSurface(R,{cols=TORSO_COLS,limbRows=10,limbCols=16,limbStep=3}={}){
- const torso=TORSO_H.map(h=>{const f=torsoFrame(R,h),sec=sectionAt(h);return Array.from({length:cols},(_,c)=>{const a=c/cols*2*Math.PI,side=a<=Math.PI?'L':'R',ang=a<=Math.PI?a:2*Math.PI-a;return torsoPointIn(R,h,side,ang,0,f,sec);});});
+ const torso=TORSO_H.map(h=>torsoRing(R,h,cols));
  const rows=[];for(let r=0;r<=limbRows;r++)if(r%limbStep===0||r===limbRows)rows.push(r);
  const limbs={};
  for(const s of SIDES)for(const k of Object.keys(LIMB_DEF)){
@@ -624,13 +698,18 @@ function foldSet(R){
 let FOLD_OFF=false;
 function noFolds(f){const o=FOLD_OFF;FOLD_OFF=true;try{return f();}finally{FOLD_OFF=o;}}
 /* подъём кожи складками в точке поверхности p, см (наибольший из складок) */
-function foldLift(R,p){
- if(FOLD_OFF)return 0;
- let h=0;
- for(const ax of foldSet(R)){
-  const A=ax.A,d=ax.d,ox=p[0]-A[0],oy=p[1]-A[1],oz=p[2]-A[2],u=clamp(ox*d[0]+oy*d[1]+oz*d[2],0,ax.L);
-  const e=Math.hypot(ox-d[0]*u,oy-d[1]*u,oz-d[2]*u)/ax.F.s;if(e>3)continue;
-  const v=ax.F.a*ax.k*Math.pow(Math.sin(Math.PI*u/ax.L),FOLD_SP)*Math.exp(-e*e);if(v>h)h=v;
+function foldLift(R,p){return FOLD_OFF?0:liftIn(foldSet(R),p);}
+/* то же по готовому набору осей кадра. Формула прежняя; отбрасывания не меняют результат: a·k — верхняя граница подъёма
+   складки (sin² и exp не больше 1), квадрат расстояния больше (3s)² с запасом — та же отсечка e > 3 без корня */
+function liftIn(set,p){
+ let h=0;const px=p[0],py=p[1],pz=p[2];
+ for(let i=0;i<set.length;i++){
+  const ax=set[i],F=ax.F,ak=F.a*ax.k;if(ak<=h)continue;
+  const A=ax.A,d=ax.d,ox=px-A[0],oy=py-A[1],oz=pz-A[2],u=clamp(ox*d[0]+oy*d[1]+oz*d[2],0,ax.L);
+  const qx=ox-d[0]*u,qy=oy-d[1]*u,qz=oz-d[2]*u,s=F.s;if(qx*qx+qy*qy+qz*qz>9.00001*s*s)continue;
+  const e=Math.hypot(qx,qy,qz)/s;if(e>3)continue;
+  const t=ak*Math.pow(Math.sin(Math.PI*u/ax.L),FOLD_SP);if(t<=h)continue;
+  const v=t*Math.exp(-e*e);if(v>h)h=v;
  }
  return h;
 }
@@ -659,7 +738,9 @@ function torsoSDF(R,p,cache,info){
  }
  const{s,f,off,along}=best,lz=V.dot(off,f.z),lx=V.dot(off,f.x),rho=Math.hypot(lz,lx),hp=s.h+along;
  /* ниже тазобедренных — скошенный низ: сечение берётся с «номинальной» высоты, торец — на высоте lo·(1 + K·w) */
- const k=hp<0?1+SEAT_K*seatW(rho<1e-9?0:lz/rho):1,[w,a,b,n,nf]=sectionAt(hp<0?hp/k:s.h);
+ /* профиль — на высоте самой точки (hp), а не ближайшего сечения кэша (шаг 1 см): у строки TORSO, где профиль ломается
+    (грудь 4.41.0 — под мышками, h 47,2), кожа сетки и расстояния расходились на 2,4 мм */
+ const k=hp<0?1+SEAT_K*seatW(rho<1e-9?0:lz/rho):1,[w,a,b,n,nf]=sectionAt(hp<0?hp/k:hp);
  const r=rho<1e-9?Math.min(w,a,b):ellipseRadius(lz,lx,a,b,w,w,n,nf);let radial=rho-r;
  /* складки подмышки: та же точка поверхности, что у сетки (по лучу от оси сечения), с обратным сдвигом плечевого пояса */
  if(hp>20&&rho>1e-9&&R.frames.thorax){const dir=V.unit(V.add(V.scale(f.z,lz),f.x,lx)),ps=V.add(V.add(V.add(f.c,f.y,along),dir,r),V.sub(p0,p)),dl=foldLift(R,ps);radial-=dl;if(info){info.ps=ps;info.n=dir;info.drape=dl;}}
@@ -935,7 +1016,7 @@ function centerOfMass(R,extra=[]){
  const M=parts.reduce((s,[,w])=>s+w,0);return{c:parts.reduce((acc,[p,w])=>V.add(acc,p,w/M),[0,0,0]),mass:M};
 }
 
-return{V,M3,Q,B,TORSO,TORSO_H,TORSO_JOINTS,TORSO_BLEND,TORSO_BLEND_FRONT,FRONT_W,FRONT_H,VERT_LEVELS,VERT_SHARE,LIMBS,NECK,CAPS,SH_CAP,AC_CAP,MASS,LIMITS,SIDES,SIGN,FLOOR,D2R,R2D,clamp,
+return{V,M3,Q,B,TORSO,TORSO_H,TORSO_COLS,colAngle,TORSO_JOINTS,TORSO_BLEND,TORSO_BLEND_FRONT,FRONT_W,FRONT_H,VERT_LEVELS,VERT_SHARE,LIMBS,NECK,CAPS,SH_CAP,AC_CAP,MASS,LIMITS,SIDES,SIGN,FLOOR,D2R,R2D,clamp,
  neutral,clone,pack,unpack,PACK,PACK_SIZE,fk,solePoints,twoBone,solveArm,solveArmWrist,setArmFromPoints,footFrame,heelFrame,solveLeg,rootRot,rootFromAxes,
  swing,swingTwist,eulerXZY,eulerYZX,spineRot,makeTrack,monotone,toCat,dirCat,catalogPose,
  profileAt,sectionAt,spineFrame,torsoFrame,frontK,vertebraFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,neckSDF,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,
