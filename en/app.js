@@ -10096,6 +10096,97 @@ document.addEventListener('click', e => {
   if (b) b.focus({preventScroll:true});
 });
 
+/* ---------- «Анатомия» вне разбора: экран тренировки и карточки плана (этап 2) — правила без страницы ----------
+   Здесь — только расчёты (их проверяет tools/anatomy-cards.test.js без браузера): какой вид фигуры показать, с какой
+   частотой обновлять кости и мышцы и когда отступить на манекен, какие неподвижные кадры карточек отпустить из памяти.
+   Файл грузится раньше 12-motion-player.js (его постоянные нужны при запуске). Отрисовка — в 12-motion-player.js
+   (карточки) и 14-workout-mode.js (тренировка). */
+
+/* Ступени скорости. Кадр «Анатомии» — расчёт позы, костей, путей и тел мышц и отрисовка — ≈8 мс процессора на
+   компьютере и втрое дольше на бюджетном телефоне. Часы движения идут каждый кадр экрана; кости и мышцы обновляются с
+   частотой ступени. Если медиана времени кадра за окно (ANATOMY_PACE.window кадров) выше бюджета ступени — ступень ниже:
+   30 → 15 → 10 кадров в секунду, ниже десяти — манекен с подписью «… не успевает — показан манекен». Выбор человека при
+   этом не сбрасывается: при следующем открытии экрана (или при новом выборе вида) — снова попытка с 30 кадров.
+   Бюджет ступени — три четверти главного потока на её частоте (load: 1000 / fps × 0,75), но не дольше 50 мс (cap: дольше —
+   уже «длинная задача», страница заметно медленнее отвечает на нажатия): 30 кадров — до 25 мс на кадр, 15 и 10 — до 50 мс
+   (у 10 кадров запас нужен двум анимируемым карточкам: бюджет делится между ними).
+   Почему три четверти, а не половина: замер владельца (П8, 15.10.2026; Samsung Galaxy S22 Ultra, Android 16, Chrome 150,
+   сборка 4.49.0) — «Анатомия» в разборе обновляется через кадр и стоит 20–23 мс главного потока (медиана; 95 % —
+   23–27 мс), а экран при этом держит 52–58 кадров в секунду и разбор не подтормаживает. С бюджетом 16,7 мс такой
+   телефон без нужды опускался бы на 15 кадров.
+   Замеры стенда (Chromium 390 px, время процессора, медиана трёх прогонов; docs/roadmap.md, пункт 3): кадр карточки
+   ×1 (телефон среднего класса) — 8,5–11,5 мс → 30 кадров; ×3 (бюджетный) — 32–34 мс → 15 кадров; экран тренировки
+   ×1 — 9,5–14 мс (30 кадров), ×3 — 30–40 мс (15).
+   Кадры дольше 0,25 с не считаются (пауза, сборка сцены или шейдеров, вкладка в фоне), первые warmup кадров — тоже. */
+/* Ступень выше — после двух окон подряд с медианой ниже up × бюджета той ступени (запас против качелей: вниз при 25 мс,
+   назад к 30 кадрам — ниже 20 мс). Так первый круг повторения (матрицы костей ещё не в памяти, кадр дороже) и разовая
+   заминка (сборка мусора, соседняя вкладка) не оставляют анимацию на 10 кадрах навсегда.
+   Откат на манекен — окончательный до следующего открытия, поэтому решается только по «тёплым» кадрам (cold: false —
+   матрицы костей фазы взяты из памяти): если и с памятью кадр дольше 50 мс. Холодные кадры первого круга лишь опускают
+   ступень (до 10 кадров в секунду), чтобы не занять весь главный поток. */
+const ANATOMY_PACE={load:.75,cap:50,window:12,warmup:3,outlier:250,up:.8,steps:[30,15,10]};
+function anatomyBudget(fps,active=1,P=ANATOMY_PACE){return Math.min(1000/fps*P.load,P.cap??Infinity)/Math.max(1,active);}
+function anatomyPace(P=ANATOMY_PACE){
+  const S={step:0,fallback:false,samples:[],skip:P.warmup,upRun:0,
+    get fps(){return P.steps[Math.min(S.step,P.steps.length-1)];},
+    get frameMs(){return 1000/S.fps;},
+    /* время кадра (мс), число анимируемых фигур и «холодный» ли кадр; ответ — 'down' (ступень ниже), 'up' (выше),
+       'fallback' (манекен) или null */
+    sample(ms,active=1,cold=false){
+      if(S.fallback||!(ms>=0)||ms>P.outlier)return null;
+      if(S.skip>0){S.skip--;return null;}
+      if(cold&&S.step>=P.steps.length-1)return null;
+      S.samples.push(ms);if(S.samples.length<P.window)return null;
+      const sorted=S.samples.slice().sort((a,b)=>a-b),median=sorted[sorted.length>>1];S.samples.length=0;S.last=median;
+      if(median>anatomyBudget(S.fps,active,P)){
+        S.upRun=0;
+        if(S.step<P.steps.length-1){S.step++;S.skip=1;return 'down';}
+        S.fallback=true;return 'fallback';
+      }
+      if(S.step>0&&median<P.up*anatomyBudget(P.steps[S.step-1],active,P)){if(++S.upRun>=2){S.step--;S.upRun=0;S.skip=1;return 'up';}}
+      else S.upRun=0;
+      return null;
+    },
+    /* новые фигуры в кадре (другая карточка, другое упражнение): первые кадры не считаются, ступень та же */
+    settle(){S.samples.length=0;S.skip=Math.max(S.skip,P.warmup);S.upRun=0;},
+    reset(){S.step=0;S.fallback=false;S.samples.length=0;S.skip=P.warmup;S.upRun=0;S.last=undefined;}};
+  return S;
+}
+
+/* Вид фигуры, который можно показать сейчас. pref — выбор человека ('anatomy' | 'skeleton' | 'mannequin');
+   able — есть объёмная графика (WebGL) и манекен каталога; state — данные костей и мышц: 'ready' | 'loading' | 'error';
+   slow — сработал откат по скорости. Ответ: {view, note, wait} — wait: показан манекен, пока грузятся данные. */
+const FIGURE_NOTES={loading:'Loading bones and muscles — the mannequin is shown for now.',error:'Could not load the bones and muscles, so the mannequin is shown. Check the connection.',
+  slowPhone:'The phone can’t keep up — showing the mannequin',slowComputer:'The computer can’t keep up — showing the mannequin'};
+function figureViewFor(pref,{able=true,state='ready',slow=false,coarse=true}={}){
+  const want=['anatomy','skeleton','mannequin'].includes(pref)?pref:'anatomy';
+  if(want==='mannequin'||!able)return{view:'mannequin',note:'',wait:false};
+  if(slow)return{view:'mannequin',note:coarse?FIGURE_NOTES.slowPhone:FIGURE_NOTES.slowComputer,wait:false};
+  if(state==='error')return{view:'mannequin',note:FIGURE_NOTES.error,wait:false};
+  if(state!=='ready')return{view:'mannequin',note:FIGURE_NOTES.loading,wait:true};
+  return{view:want,note:'',wait:false};
+}
+
+/* Неподвижные кадры карточек плана живут в холстах карточек (≈ ширина × высота × 4 байта: 260 × 260 точек — 0,27 МБ).
+   Отпускается кадр карточки, ушедшей дальше двух экранов (far: false), и, если кадров больше limit, — давно не
+   виденные (seenAt) из тех, что не у экрана (near: false). Вернувшись к экрану, карточка рисует кадр заново в простое,
+   а до того показывает SVG-манекен. Ответ — номера карточек (id), чьи кадры отпустить. */
+const CARD_STILLS={limit:12,far:'200% 0px'};
+function stillsToFree(cards,limit=CARD_STILLS.limit){
+  const held=cards.filter(c=>c.has),out=new Set(held.filter(c=>!c.far).map(c=>c.id));
+  let left=held.length-out.size;
+  for(const c of held.filter(c=>!out.has(c.id)&&!c.near).sort((a,b)=>a.seenAt-b.seenAt)){if(left<=limit)break;out.add(c.id);left--;}
+  return [...out];
+}
+
+/* холст карточки — в точках экрана, не больше чем ×2 к размеру на странице (на телефоне ×2,6–3 не видно, а кадр
+   втрое дороже); null — карточка не на странице */
+const CARD_DPR=2;
+function cardCanvasSize(w,h,dpr=1){
+  if(!(w>0&&h>0))return null;const k=Math.min(CARD_DPR,Math.max(1,dpr||1));
+  return{width:Math.round(w*k),height:Math.round(h*k)};
+}
+
 /* ---------- Проигрыватель движений: карточки и увеличенный разбор ---------- */
 let figs = [], rafId = 0, io = null;
 const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -10146,8 +10237,10 @@ function cardClock(F){
   const total=F.durations.reduce((a,b)=>a+b,0)||4000,n=Math.max(1,Math.round(total/CARD_GRID_MS)),step=total/n;
   return (((Math.round(F.clock/step))%n)+n)%n*step;
 }
-function paintMotion(F, detailed=false) {
-  const m = motionFrame(F, detailed ? F.clock : cardClock(F)); F.f.at(m.t,m);if(F.extra)F.extra.at(m.t,m);
+function paintMotion(F, detailed=false, svgOnly=false) {
+  const m = motionFrame(F, detailed ? F.clock : cardClock(F));
+  /* карточка в «Анатомии» — кадр общего рендерера в её холст; не вышло (нет контекста) — SVG-манекен */
+  if (detailed || svgOnly || !F.card || !cardAnatomyLive(F) || !paintCardAnatomy(F,m)) {F.f.at(m.t,m);if(F.extra)F.extra.at(m.t,m);}
   if (!detailed) {
     const cap = F.btn.closest('.motion-tile').querySelector('.motion-caption');
     if (cap && cap.textContent!==m.label) cap.textContent=m.label;
@@ -10220,6 +10313,7 @@ function changeStressPreference(show){
  motionPrefs.stress=!!show;saveMotionPrefs();
  for(const F of [...figs,detailMotion,workout?.motion].filter(Boolean))for(const f of [F.f,F.extra].filter(Boolean))f.setStress?.(motionPrefs.stress);
  for(const line of document.querySelectorAll('.c-joints'))line.hidden=!motionPrefs.stress;
+ refreshCardAnatomy();
  if(detailMotion){configureStressPanel('mv',detailMotion);paintMotion(detailMotion,true);}
  if(workout?.motion){configureStressPanel('wv',workout.motion);paintWorkoutMotion();}
 }
@@ -10229,6 +10323,7 @@ function changeMusclePreference(show){
   for(const f of [F.f,F.extra].filter(Boolean))f.setMuscles?.(motionPrefs.muscles);
   const note=F.btn?.closest('.motion-tile').querySelector('.muscle-tile-note');if(note)note.hidden=!motionPrefs.muscles;
  }
+ refreshCardAnatomy();
  if(detailMotion){configureMusclePanel('mv',detailMotion.it);paintMotion(detailMotion,true);const note=$('#mv-figure-note'),text=figureNote(figureView(),detailMotion);if(!note.hidden&&!$('#mv-figure').hasAttribute('aria-busy')&&text)note.textContent=text;}
  if(workout?.motion){configureMusclePanel('wv',workout.motion.it);paintWorkoutMotion();}
 }
@@ -10242,11 +10337,17 @@ function scheduleMotionLoop() {
       if (detailMotion) {if (!detailMotion.paused) {detailMotion.clock+=dt*Number(motionPrefs.speed);detailMotion.since=(detailMotion.since||0)+dt;
         if(figureView()==='mannequin'||detailMotion.since>=CARD_FRAME_MS){detailMotion.since=0;paintMotion(detailMotion,true);}}}
       else if(gallery.on){/* витрина атласа закрывает план: карточки за ней не анимируются */}
-      else if(workout && $('#workout-view').open){const F=workout.motion;if(F && !F.paused && !$('#wv-active').hidden){F.clock+=dt;paintWorkoutMotion();}}
+      else if(workout && $('#workout-view').open){const F=workout.motion;if(F && !F.paused && !$('#wv-active').hidden){F.clock+=dt;
+        /* кости и мышцы — с частотой ступени скорости (workoutFigure.pace), манекен — каждый кадр, как раньше */
+        if(!workoutAnatomyLive())paintWorkoutMotion();
+        else{F.since=(F.since||0)+dt;if(F.since>=workoutFigure.pace.frameMs-PACE_SLACK){F.since=0;const c0=window.GymVolume?.boneMisses,t0=performance.now();paintWorkoutMotion();workoutPaceSample(performance.now()-t0,window.GymVolume?.boneMisses!==c0);}}}}
       else for (const F of figs) if (F.f && F.vis && !F.paused && F.active!==false) {
-        /* карточки и атлас — 30 кадров в секунду: часы идут каждый кадр, рисунок — через кадр */
+        /* карточки и атлас — 30 кадров в секунду: часы идут каждый кадр, рисунок — через кадр; карточка в «Анатомии» —
+           с частотой ступени скорости (cardAnatomy.pace: 30, 15, 10 кадров в секунду) */
         F.clock+=dt;F.since=(F.since||0)+dt;
-        if(F.since>=CARD_FRAME_MS){F.since=0;paintMotion(F);}
+        const live=F.card&&cardAnatomyLive(F);
+        if(F.since>=(live?cardAnatomy.pace.frameMs-PACE_SLACK:CARD_FRAME_MS)){F.since=0;
+          if(!live)paintMotion(F);else{const t0=performance.now();paintMotion(F);if(!F.av.built)cardPaceSample(performance.now()-t0,F.av.cold);}}
       }
     }
     rafId=requestAnimationFrame(loop);
@@ -10267,7 +10368,9 @@ function pickActiveCards(){
   const pick=F=>F.seen>=.4?F.pick||0:0;
   const order=cards.filter(F=>!F.paused&&(F.seen>0||F.hover)).sort((a,b)=>(b.hover|0)-(a.hover|0)||pick(b)-pick(a)||Math.round(b.seen*5)-Math.round(a.seen*5)||dist(a)-dist(b));
   const on=new Set(order.slice(0,activeCardCount()+(order[0]?.hover?1:0)));
-  let k=0;for(const F of figs)if(F.card){const was=F.active;F.active=on.has(F);if(F.active&&!was)F.since=CARD_FRAME_MS/2*(k++%2);}
+  let k=0,fresh=false;for(const F of figs)if(F.card){const was=F.active;F.active=on.has(F);if(F.active&&!was){F.since=CARD_FRAME_MS/2*(k++%2);fresh=true;}}
+  /* в движении другая карточка: её первые кадры (сборка сцены, холодная память кадров) скорость не меряют */
+  if(fresh)cardAnatomy.pace.settle();
 }
 function buildCardFigure(F){
   if(F.f||F.failed)return;
@@ -10275,7 +10378,8 @@ function buildCardFigure(F){
     /* начатую заранее рамку досчитать, а не начинать заново */
     if(F.job){F.job.step(41);F.job=null;}
     F.f=buildFigure(F.it.ex.anim,{primary:F.it.ex.pri,has:F.it.has,ratio:1,t:0,label:F.it.name,muscles:motionPrefs.muscles,frameCache:true});
-    F.btn.prepend(F.f.svg);paintMotion(F);
+    /* сразу — SVG-манекен (первая картинка плана не ждёт анатомию); кадр анатомии нарисуется в простое */
+    F.btn.prepend(F.f.svg);paintMotion(F,false,true);
   } catch(e) {F.failed=true;console.error('Demo',F.it.ex.id,e);}
 }
 /* Рамки ещё не построенных карточек досчитываются заранее, по два положения за раз: в простое, а если простоя
@@ -10301,6 +10405,135 @@ function prefetchCardFrames(){
   };
   idle(work);
 }
+/* ---------- «Анатомия» в карточках плана (этап 2) ----------
+   В виде «Анатомия» (или «Скелет») карточка показывает кости и мышцы в почти невидимом силуэте кожи, как разбор.
+   Своего WebGL у карточки нет: кадры рисует общий рендерер вне экрана (GymVolume.cards(), src/volume/main.mjs) и
+   копирует в холст карточки. Анимируются те же карточки, что и раньше (на телефоне одна, на широком экране — две);
+   кости и мышцы обновляются с частотой ступени скорости (cardAnatomy.pace, 12-figure-pace.js), часы — каждый кадр.
+   Остальные карточки показывают один неподвижный кадр своей фазы: он рисуется один раз в простое (queueCardStills) и
+   хранится в холсте карточки; карточка, ушедшая далеко от экрана, его отпускает (stillsToFree). До готовности кадра,
+   пока грузятся кости и мышцы, без объёмной графики и после отката по скорости — SVG-манекен, как раньше.
+   Ракурс — как у карточки (cardCamera), рамка — по телу. Цвет мышц — как в разборе: по фазам или основные ярче. */
+const PACE_SLACK=4;
+const cardAnatomy={pace:anatomyPace(),slow:false,failed:false,loading:false,view:'mannequin',theme:0,queued:false,far:null,idleFree:0};
+const coarsePointer=()=>typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches;
+/* ракурс анатомии в карточке: тот, что выбран для упражнения в разборе, иначе «Сверху под углом», как у SVG-карточки */
+function cardCamera(F){return motionCamera(F.it.ex);}
+function cardStage(){try{return window.GymVolume?.cards?.()||null;}catch(e){return null;}}
+function cardAnatomyState(view=figureView()){
+  const need=view==='anatomy'?[Skeleton,Muscles]:[Skeleton];
+  return need.every(x=>x.data)?'ready':cardAnatomy.failed?'error':'loading';
+}
+function cardAnatomyChoice(){
+  return figureViewFor(motionPrefs.view,{able:!!cardStage(),state:cardAnatomyState(),slow:cardAnatomy.slow,coarse:coarsePointer()});
+}
+const cardAnatomyLive=F=>cardAnatomy.view!=='mannequin'&&!!F.av;
+/* холст и фигура общего рендерера для карточки (один раз); null — у упражнения нет манекена каталога */
+function cardAnatomyFor(F){
+  if(F.av)return F.av;
+  const ex=F.it.ex,stage=cardStage();if(!stage||!ex.anim.catalogRig)return null;
+  const A=catalogAnimFor(ex.anim,F.it.has),bits=A.catalogRig(0).props.map(q=>GymEquipment.visible(q,F.it.has)?1:0).join('');
+  const canvas=document.createElement('canvas');canvas.className='fig card-anatomy';canvas.setAttribute('aria-hidden','true');canvas.width=canvas.height=0;
+  F.btn.prepend(canvas);
+  const handle=stage.figure({key:[A.catalogId,A.catalogVariant||'',bits].join('|'),fit:'body',color:muscleColor,muscles:motionPrefs.muscles,stress:motionPrefs.stress,
+    data:(t,index,coarse,lean)=>catalogVolumeData(A,t,index,F.it.has,coarse,lean)});
+  return F.av={canvas,handle,level:anatomyLevel(ex),on:false,still:null,size:null,seenAt:0,layers:null};
+}
+/* слои фигуры карточки по виду: кости, мышцы (уровни упражнения), цвет по фазам и метки нагрузки — из настроек */
+function cardAnatomyLayers(F){
+  const av=F.av,view=cardAnatomy.view,key=view+(motionPrefs.muscles?1:0)+(motionPrefs.stress?1:0);if(av.layers===key)return;
+  av.handle.setLayers(Skeleton.data,view==='anatomy'?{skeleton:Skeleton.data,muscles:Muscles.data,level:av.level}:null);
+  av.handle.setLook({muscles:motionPrefs.muscles,stress:motionPrefs.stress});av.layers=key;
+}
+function cardStillKey(F,m){const av=F.av,s=av.size;return [m.t,m.index,cardAnatomy.view,av.layers,cardAnatomy.theme,s?s.width+'x'+s.height:'',cardCamera(F)].join('|');}
+/* кадр анатомии в холст карточки; true — нарисован (SVG под ним скрыт) */
+function paintCardAnatomy(F,m){
+  const av=F.av;if(!av)return false;
+  if(!av.size){const r=(F.f?.svg||F.btn).getBoundingClientRect();av.size=cardCanvasSize(r.width,r.height,window.devicePixelRatio);if(!av.size)return false;}
+  cardAnatomyLayers(F);
+  if(av.canvas.width!==av.size.width||av.canvas.height!==av.size.height){av.canvas.width=av.size.width;av.canvas.height=av.size.height;}
+  const stage=cardStage(),b0=stage?.builds,c0=window.GymVolume?.boneMisses;
+  let ok=false;try{ok=av.handle.paint(av.canvas,m.t,m.index,cardCamera(F));}catch(e){console.error('Card anatomy',F.it.ex.id,e);ok=false;}
+  /* кадр со сборкой сцены (новое упражнение) — не для замера скорости */
+  av.built=!!stage&&stage.builds!==b0;av.cold=window.GymVolume?.boneMisses!==c0;
+  if(!ok)return false;
+  av.still=cardStillKey(F,m);av.seenAt=performance.now();
+  if(!av.on){av.on=true;F.btn.classList.add('anatomy-on');}
+  return true;
+}
+/* отпустить кадр карточки: холст без памяти, на виду — SVG-манекен в текущей фазе */
+function freeCardStill(F){
+  const av=F.av;if(!av)return;
+  if(av.on){av.on=false;F.btn.classList.remove('anatomy-on');if(F.f){const m=motionFrame(F,cardClock(F));F.f.at(m.t,m);}}
+  av.canvas.width=av.canvas.height=0;av.still=null;
+}
+function freeFarStills(){
+  const list=figs.map((F,id)=>({id,has:!!F.av?.on,near:!!F.vis,far:F.far!==false,seenAt:F.av?.seenAt||0}));
+  for(const id of stillsToFree(list))freeCardStill(figs[id]);
+}
+function anatomyDialogOpen(){return !!(detailMotion||gallery.on||($('#workout-view')?.open)||$('#motion-view')?.open);}
+/* неподвижные кадры: в простое, по одному, начиная с ближних к середине экрана; анимируемые карточки рисует цикл */
+function queueCardStills(){
+  /* одна заявка на всех: в простое берётся текущее состояние (вид, карточки, фазы), а не то, что было при заявке */
+  if(cardAnatomy.queued)return;cardAnatomy.queued=true;
+  const idle=window.requestIdleCallback?cb=>requestIdleCallback(cb,{timeout:300}):cb=>setTimeout(()=>cb({timeRemaining:()=>8,didTimeout:true}),60);
+  idle(()=>{
+    cardAnatomy.queued=false;
+    if(cardAnatomy.view==='mannequin'||document.hidden||anatomyDialogOpen())return;
+    const mid=window.innerHeight/2,dist=F=>{const r=F.btn.getBoundingClientRect();return Math.abs(r.top+r.height/2-mid);};
+    const todo=figs.filter(F=>F.card&&F.vis&&F.f&&F.av&&!(F.active&&!F.paused)).map(F=>[F,motionFrame(F,cardClock(F))]).filter(([F,m])=>F.av.still!==cardStillKey(F,m));
+    if(!todo.length)return;
+    const [F,m]=todo.sort((a,b)=>dist(a[0])-dist(b[0]))[0];
+    paintMotion(F);
+    /* не нарисовался (контекст потерян) — не крутиться вхолостую: следующая попытка — по событию */
+    if(F.av.still===cardStillKey(F,m)&&todo.length>1)queueCardStills();
+  });
+}
+/* загрузка костей и мышц для карточек (одна на всех; ошибка — манекен с подписью, повтор — при следующем плане) */
+function loadCardAnatomy(){
+  if(cardAnatomy.loading)return;cardAnatomy.loading=true;
+  /* в простое: разбор данных (≈1 МБ JSON мышц) не задерживает первую картинку плана — SVG-карточки */
+  const idle=window.requestIdleCallback?cb=>requestIdleCallback(cb,{timeout:3000}):cb=>setTimeout(cb,300);
+  idle(()=>{
+    const need=figureView()==='anatomy'?[Skeleton,Muscles]:[Skeleton];
+    Promise.all(need.map(x=>x.load())).then(()=>{cardAnatomy.loading=false;cardAnatomy.failed=false;applyCardsView();},()=>{cardAnatomy.loading=false;cardAnatomy.failed=true;applyCardsView();});
+  });
+}
+/* подпись под карточкой: откат по скорости или ошибка загрузки (пока грузится — просто SVG-манекен) */
+function paintCardNotes(note){
+  for(const F of figs){if(!F.card)continue;const el=F.btn.closest('.motion-tile')?.querySelector('.figure-tile-note');if(!el)continue;
+    if(el.textContent!==note)el.textContent=note;el.hidden=!note;}
+}
+/* вид карточек: выбор человека, объёмная графика, данные, откат по скорости — перерисовать всё нужное */
+function applyCardsView(){
+  const choice=cardAnatomyChoice(),was=cardAnatomy.view;cardAnatomy.view=choice.view;if(was!==choice.view)cardAnatomy.pace.settle();
+  paintCardNotes(choice.wait?'':choice.note);
+  if(choice.view==='mannequin'){
+    for(const F of figs)if(F.card)freeCardStill(F);
+    if(choice.wait)loadCardAnatomy();
+    /* без анатомии общий рендерер не нужен: контекст WebGL и сцены освобождаются */
+    else if(was!=='mannequin'||!figs.some(F=>F.av))cardStage()?.dispose();
+    return;
+  }
+  /* холсты и фигуры карточек; неподвижный кадр перерисуется, только если сменилось то, что в нём видно (ключ кадра:
+     фаза, вид, слои, тема, размер, ракурс), — закрытие разбора без перемен ничего не перерисовывает */
+  for(const F of figs)if(F.card)cardAnatomyFor(F);
+  /* анимируемые карточки рисует цикл, остальные — в простое */
+  queueCardStills();
+}
+/* настройки цвета мышц или меток нагрузки сменились: неподвижные кадры — заново */
+function refreshCardAnatomy(){if(cardAnatomy.view==='mannequin')return;for(const F of figs)if(F.av)F.av.still=null;queueCardStills();}
+function cardPaceSample(ms,cold=false){
+  const r=cardAnatomy.pace.sample(ms,figs.filter(F=>F.card&&F.active&&!F.paused&&F.vis).length,cold);
+  if(r==='fallback'){cardAnatomy.slow=true;applyCardsView();}
+}
+/* человек заново выбрал вид с костями: откат по скорости забывается — новая попытка с 30 кадров */
+function retryAnatomyPace(){cardAnatomy.slow=false;cardAnatomy.pace.reset();workoutFigure.slow=false;workoutFigure.pace.reset();}
+/* тема (кадр анатомии от неё сейчас не зависит, но перерисовка дешёвая и не пропустит будущих правок) */
+if(typeof matchMedia==='function')try{matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',()=>{cardAnatomy.theme++;refreshCardAnatomy();});}catch(e){}
+if(typeof MutationObserver==='function'&&typeof document!=='undefined'&&document.documentElement)new MutationObserver(()=>{cardAnatomy.theme++;refreshCardAnatomy();}).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+if(typeof document!=='undefined'&&document.addEventListener)document.addEventListener('visibilitychange',()=>{if(!document.hidden&&cardAnatomy.view!=='mannequin')queueCardStills();});
+
 let mountedKit=null;
 function mountFigures() {
   figs=[];
@@ -10309,10 +10542,11 @@ function mountFigures() {
   const flat=plan.blocks.flatMap(b=>b.items);
   document.querySelectorAll('[data-fig]').forEach(btn=>{
     const it=flat[+btn.dataset.fig];if(!it)return;
-    const F={btn,it,f:null,card:true,vis:false,seen:0,active:false,paused:reduceMotion,clock:0,durations:motionDurations(it)};
+    const F={btn,it,f:null,av:null,card:true,vis:false,far:true,seen:0,active:false,paused:reduceMotion,clock:0,durations:motionDurations(it)};
     figs.push(F);
     const tile=btn.closest('.motion-tile');
     if(motionProfile(it.ex.anim)){const note=document.createElement('p');note.className='muscle-tile-note';note.textContent='Color is an educational illustration';note.hidden=!motionPrefs.muscles;tile.appendChild(note);}
+    {const note=document.createElement('p');note.className='figure-tile-note';note.hidden=true;tile.appendChild(note);}
     const pause=tile.querySelector('[data-motion-pause]');
     if(pause){pause.textContent=F.paused?'Start':'Pause';pause.setAttribute('aria-pressed',String(!F.paused));pause.setAttribute('aria-label',`${F.paused?'Play':'Pause'} demo: ${it.name}`);}
     const hover=on=>e=>{if(e.pointerType&&e.pointerType!=='mouse')return;F.hover=on;pickActiveCards();};
@@ -10321,17 +10555,26 @@ function mountFigures() {
   });
   if ('IntersectionObserver' in window) {
     const byBtn=new Map(figs.map(F=>[F.btn,F]));
-    io=new IntersectionObserver(es=>{for(const e of es){const F=byBtn.get(e.target);if(!F)continue;F.vis=e.isIntersecting;if(F.vis)buildCardFigure(F);}pickActiveCards();},{rootMargin:CARD_NEAR});
+    io=new IntersectionObserver(es=>{for(const e of es){const F=byBtn.get(e.target);if(!F)continue;F.vis=e.isIntersecting;if(F.vis){buildCardFigure(F);if(F.av)F.av.seenAt=performance.now();}}pickActiveCards();if(cardAnatomy.view!=='mannequin')queueCardStills();},{rootMargin:CARD_NEAR});
     ioSeen=new IntersectionObserver(es=>{for(const e of es){const F=byBtn.get(e.target);if(F)F.seen=e.isIntersecting?e.intersectionRatio:0;}pickActiveCards();},{threshold:[0,.2,.4,.6,.8,1]});
-    for(const F of figs){io.observe(F.btn);ioSeen.observe(F.btn);}
+    /* дальняя зона (два экрана): ушедшая за неё карточка отпускает неподвижный кадр анатомии */
+    cardAnatomy.far=new IntersectionObserver(es=>{for(const e of es){const F=byBtn.get(e.target);if(F)F.far=e.isIntersecting;}freeFarStills();},{rootMargin:CARD_STILLS.far});
+    for(const F of figs){io.observe(F.btn);ioSeen.observe(F.btn);cardAnatomy.far.observe(F.btn);}
     prefetchCardFrames();
   } else for(const F of figs){F.vis=true;F.active=true;buildCardFigure(F);}
+  /* новый план — новая попытка загрузки костей и мышц, если прошлая не удалась */
+  if(cardAnatomy.failed&&!cardAnatomy.loading)cardAnatomy.failed=false;
+  applyCardsView();
   scheduleMotionLoop();
 }
 function stopFigures() {
   if(workout && $('#workout-view').open)closeWorkout();
   if(detailMotion) closeMotion();
-  cancelAnimationFrame(rafId);framePrefetchGen++;if(io)io.disconnect();if(ioSeen)ioSeen.disconnect();io=ioSeen=null;for(const F of figs)disposeMotion(F);figs=[];
+  cancelAnimationFrame(rafId);framePrefetchGen++;if(io)io.disconnect();if(ioSeen)ioSeen.disconnect();cardAnatomy.far?.disconnect();io=ioSeen=cardAnatomy.far=null;
+  for(const F of figs){disposeMotion(F);if(F.av){F.av.handle.release();F.av.canvas.width=F.av.canvas.height=0;}}figs=[];
+  /* журнал, атлас мышц: карточек нет — через несколько секунд общий рендерер карточек отдаёт контекст WebGL и сцены
+     (сразу нельзя: «Заменить» или новый подбор строят план заново, и сцены пригодятся) */
+  clearTimeout(cardAnatomy.idleFree);cardAnatomy.idleFree=setTimeout(()=>{if(!figs.some(F=>F.av))cardStage()?.dispose();},4000);
 }
 function previewItem(id) {
   const ex=EXI[id];let E=effEquip(S.equip);
@@ -10414,9 +10657,11 @@ function closeMotion() {
   document.documentElement.classList.remove('motion-open');
   if(detailReturn&&detailReturn.isConnected)detailReturn.focus();
   detailReturn=null;
+  /* вид фигуры мог смениться в разборе — карточки плана берут его же */
+  if(figs.some(F=>F.card))applyCardsView();
 }
 function setupMotionViewer() {
-  window.addEventListener('resize',()=>pickActiveCards(),{passive:true});
+  window.addEventListener('resize',()=>{pickActiveCards();for(const F of figs)if(F.av)F.av.size=null;if(cardAnatomy.view!=='mannequin')queueCardStills();},{passive:true});
   $('#mv-exercise').innerHTML=GROUPS.map(g=>`<optgroup label="${esc(g.name)}">${EX.filter(ex=>ex.g===g.id).map(ex=>`<option value="${ex.id}">${esc(ex.name)}</option>`).join('')}</optgroup>`).join('');
 
   document.addEventListener('click',e=>{
@@ -10425,7 +10670,7 @@ function setupMotionViewer() {
     if(t.id==='motion-atlas'){openGallery();return;}
     if(t.id==='mv-close'){closeMotion();return;}
     if(!detailMotion)return;
-    if(t.dataset.mvFigure){if(t.dataset.mvFigure!==figureView()||t.getAttribute('aria-pressed')!=='true'){motionPrefs.view=t.dataset.mvFigure;saveMotionPrefs();applyFigureView();}return;}
+    if(t.dataset.mvFigure){if(t.dataset.mvFigure!==figureView()||t.getAttribute('aria-pressed')!=='true'){motionPrefs.view=t.dataset.mvFigure;saveMotionPrefs();if(motionPrefs.view!=='mannequin')retryAnatomyPace();applyFigureView();}return;}
     if(t.id==='mv-play'){detailMotion.paused=!detailMotion.paused;paintMotion(detailMotion,true);}
     if(t.dataset.mvStep){const m=motionFrame(detailMotion);detailMotion.paused=true;detailMotion.clock=Math.max(0,Math.min(m.total-1,(m.progress+Number(t.dataset.mvStep))*m.total));paintMotion(detailMotion,true);}
     if(t.dataset.mvPose){const d=detailMotion.durations;detailMotion.paused=true;detailMotion.clock=({start:0,middle:d[0]*.5,end:d[0]+d[1]*.5,return:d[0]+d[1]+d[2]*.5})[t.dataset.mvPose];paintMotion(detailMotion,true);}
@@ -10448,6 +10693,8 @@ function setupMotionViewer() {
      плоская схема, а с приходом объёма та же фаза перерисовывается в нём */
   window.addEventListener('gym-volume',()=>{
     if(detailMotion&&!gallery.on)mountDetailCameras();if(workout?.motion&&$('#workout-view').open)mountWorkoutCameras();
+    /* карточки плана: объёмная графика пришла — анатомия (неподвижные кадры в простое, анимируемая — в цикле) */
+    if(figs.some(F=>F.card))applyCardsView();
     /* сетка головы (≈55 мс на компьютере) одна на все упражнения: готовится в простое, а не при первом открытии разбора */
     const idle=window.requestIdleCallback||(f=>setTimeout(f,2000));idle(()=>{try{Mannequin.headMesh();}catch(e){}},{timeout:6000});
     /* кости и мышцы для вида «Анатомия» — тоже заранее: первое открытие разбора сразу показывает анатомию */
@@ -12434,6 +12681,8 @@ function startWorkout(id){
   if(same){workout.index=Math.max(0,Math.min(queue.length-1,Math.trunc(old.index)||0));workout.restUntil=Number(old.restUntil)||0;workout.restTotal=Number(old.restTotal)||0;workout.restFrom=Number(old.restFrom)||0;workout.next=Number.isInteger(old.next)?old.next:-1;workout.last=Number.isInteger(old.last)?old.last:-1;}
   else workout.index=Math.max(0,first);
   if(id){const i=queue.findIndex(x=>x.it.ex.id===id&&!workoutValue(x));workout.index=i>=0?i:Math.max(0,queue.findIndex(x=>x.it.ex.id===id));workout.restUntil=0;}
+  /* каждое открытие тренировки — новая попытка показать кости и мышцы (и загрузить их, если прошлая не удалась) */
+  workoutFigure.slow=false;workoutFigure.failed=false;workoutFigure.pace.reset();
   const d=$('#workout-view');if(!d.open)d.showModal();document.documentElement.classList.add('workout-open');stopRest();ScreenAwake.on();
   $('#wv-context').textContent=S.mode==='program'?`${WD_FULL[prog.days[S.day].wd]} · ${prog.days[S.day].name}`:`${GOALS[S.goal].name} · ${FORMATS[S.format].name}`;
   const its=[...new Map(queue.map(x=>[x.it.ex.id,x.it])).values()];
@@ -12447,6 +12696,8 @@ function closeWorkout(){
   if(!workout)return;holdStop();workoutCapture();saveWorkout();disposeMotion(workout.motion);clearInterval(workoutTimer);workoutTimer=0;ScreenAwake.off();
   const d=$('#workout-view');if(d.open)d.close();document.documentElement.classList.remove('workout-open');d.classList.remove('rest-over');workout.restOver=null;
   logRefresh(null);if(workoutReturn?.isConnected)workoutReturn.focus();workoutReturn=null;
+  /* вид фигуры мог смениться на экране тренировки — карточки плана берут его же */
+  if(figs.some(F=>F.card))applyCardsView();
 }
 function workoutShow(index){
   if(!workout)return;
@@ -12516,7 +12767,9 @@ function workoutLrToggle(){
   const sg=suggest(step.it);workoutFill(step,sg,sg.prev?.s[step.k]||sg.prev?.s.filter(Boolean).slice(-1)[0]);
   $('#wv-lr').focus();
 }
-function paintWorkoutMotion(){if(!workout?.motion)return;const F=workout.motion,m=motionFrame(F);F.f.at(m.t,m);if($('#wv-cue').textContent!==m.cue)$('#wv-cue').textContent=m.cue;paintMusclePanel('wv',F,m);paintStressPanel('wv',F,m);}
+/* в «Анатомии» фаза — по сетке кадров карточек (cardClock, отличие от точного времени ≤17 мс): со второго круга матрицы костей
+   фаз берутся из памяти фигуры (memoBones в src/volume/main.mjs) */
+function paintWorkoutMotion(){if(!workout?.motion)return;const F=workout.motion,m=motionFrame(F,workoutAnatomyLive()?cardClock(F):F.clock);F.f.at(m.t,m);if($('#wv-cue').textContent!==m.cue)$('#wv-cue').textContent=m.cue;paintMusclePanel('wv',F,m);paintStressPanel('wv',F,m);}
 function strictWorkoutNumber(value){const s=String(value).trim().replace(',','.');return /^\d+(\.\d+)?$/.test(s)?Number(s):null;}
 function commitWorkout(e){
   if(e)e.preventDefault();if(!workout||$('#wv-active').hidden)return;
@@ -12736,13 +12989,46 @@ function pressCamera(sel,key){for(const b of $(sel).querySelectorAll('[data-moti
 function mountWorkoutCameras(){
  if(!workout?.motion)return;
  const F=workout.motion,ex=F.it.ex,key=motionCamera(ex),m=motionFrame(F);
- disposeMotion(F);F.f=createMotionFigure(ex.anim,{has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera:key,muscles:motionPrefs.muscles});F.f.setVectors(!!motionPrefs.vectors);
+ disposeMotion(F);F.f=createMotionFigure(ex.anim,{has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera:key,muscles:motionPrefs.muscles,memoBones:true});F.f.setVectors(!!motionPrefs.vectors);
  $('#wv-stage').replaceChildren(F.f.svg);$('#wv-cameras').innerHTML=cameraButtons(ex,key);$('#wv-cameras').hidden=!(ex.anim.catalogCameras||ex.anim.cameras);
- $('#wv-angle').textContent=CAMERA3[key]?.label||(ex.anim.view==='front'?'Front view':'Side view');configureMusclePanel('wv',F.it);configureStressPanel('wv',F);paintWorkoutMotion();
+ $('#wv-angle').textContent=CAMERA3[key]?.label||(ex.anim.view==='front'?'Front view':'Side view');configureMusclePanel('wv',F.it);configureStressPanel('wv',F);workoutFigure.pace.settle();applyWorkoutView(F);paintWorkoutMotion();
+}
+/* Вид фигуры на экране тренировки — тот же выбор, что в разборе (motionPrefs.view; по умолчанию «Анатомия»): кости и мышцы
+   в почти невидимом силуэте кожи, цвет мышц по фазам. Переключатель «Анатомия · Скелет · Манекен» — маленький, в углу
+   сцены. Пока кости и мышцы грузятся — манекен с подписью; ошибка загрузки — манекен с честной подписью; без объёмной
+   графики (WebGL) — как раньше, плоская схема. Кости и мышцы обновляются с частотой ступени скорости (workoutFigure.pace:
+   30, 15, 10 кадров в секунду, часы — каждый кадр); ниже — манекен с подписью «… не успевает — показан манекен»: выбор
+   человека не сбрасывается, при следующем открытии тренировки — снова попытка. */
+const workoutFigure={pace:anatomyPace(),slow:false,failed:false,view:'mannequin'};
+const workoutAnatomyLive=()=>workoutFigure.view!=='mannequin'&&typeof workout?.motion?.f?.setLayers==='function';
+function workoutPaceSample(ms,cold=false){if(workoutFigure.pace.sample(ms,1,cold)==='fallback'){workoutFigure.slow=true;applyWorkoutView();}}
+function applyWorkoutView(F=workout?.motion){
+ const group=$('#wv-figure'),note=$('#wv-figure-note');if(!group||!F?.f)return;
+ const able=typeof F.f.setLayers==='function',pref=figureView(),need=pref==='anatomy'?[Skeleton,Muscles]:[Skeleton];
+ const state=need.every(x=>x.data)?'ready':workoutFigure.failed?'error':'loading';
+ const choice=figureViewFor(motionPrefs.view,{able,state,slow:workoutFigure.slow,coarse:coarsePointer()});workoutFigure.view=choice.view;
+ /* нажата — то, что показано; пока грузится — выбранная (она и появится) */
+ const shown=choice.wait?pref:choice.view;
+ for(const b of group.querySelectorAll('[data-wv-figure]')){const off=!able&&b.dataset.wvFigure!=='mannequin';b.disabled=off;b.title=off?'Requires 3D graphics (WebGL)':'';b.setAttribute('aria-pressed',String(b.dataset.wvFigure===shown));}
+ group.toggleAttribute('aria-busy',choice.wait);
+ if(note.textContent!==choice.note)note.textContent=choice.note;note.hidden=!choice.note;
+ if(!able)return;
+ if(choice.view==='mannequin'){
+  F.f.setLayers(null,null);
+  if(choice.wait)Promise.all(need.map(x=>x.load())).then(()=>{workoutFigure.failed=false;},()=>{workoutFigure.failed=true;}).then(()=>{if(workout?.motion===F&&figureView()===pref)applyWorkoutView(F);});
+  return;
+ }
+ F.f.setLayers(Skeleton.data,choice.view==='anatomy'?{skeleton:Skeleton.data,muscles:Muscles.data,level:anatomyLevel(F.it.ex)}:null);
 }
 function setupMotionCameras(){
  $('#mv-cameras').addEventListener('click',e=>{const b=e.target.closest('[data-motion-camera]');if(b&&detailMotion&&rememberCamera(detailMotion.it.ex,b.dataset.motionCamera))switchDetailCamera();});
  $('#wv-cameras').addEventListener('click',e=>{const b=e.target.closest('[data-motion-camera]');if(b&&workout?.motion&&rememberCamera(workout.motion.it.ex,b.dataset.motionCamera))switchWorkoutCamera();});
+ $('#wv-figure').addEventListener('click',e=>{
+  const b=e.target.closest('[data-wv-figure]');if(!b||b.disabled||!workout?.motion)return;
+  if(b.dataset.wvFigure===figureView()&&b.getAttribute('aria-pressed')==='true')return;
+  motionPrefs.view=b.dataset.wvFigure;saveMotionPrefs();if(motionPrefs.view!=='mannequin'){retryAnatomyPace();workoutFigure.failed=false;}
+  applyWorkoutView();paintWorkoutMotion();
+ });
  $('#mv-dual').addEventListener('change',e=>{motionPrefs.dual=e.target.checked;saveMotionPrefs();mountDetailCameras();});
 }
 
@@ -13209,23 +13495,28 @@ function restoreBackup(obj) {
    Крючки замера в чужих файлах — по одной-две строки, и выключенными стоят одну проверку globalThis.GymPerf:
    · 07-rigs-core.js, at() SVG-фигуры (карточки плана): расчёт кадра — из памяти кадров или заново — и запись в DOM;
    · src/volume/main.mjs, создание объёмной фигуры: GymPerf.volume() оборачивает вызовы этой фигуры — поза (данные
-     кадра: поза и поверхность тела), кожа (сетка кожи), кости (с рамками костей), мышцы, сцена, отрисовка (render).
+     кадра: поза и поверхность тела), кожа (сетка кожи), кости (с рамками костей), мышцы, сцена, отрисовка (render);
+   · src/volume/main.mjs, общий рендерер карточек «Анатомии» (GymVolume.cards): GymPerf.volume({card:true}) при сборке
+     сцены упражнения — те же обёртки, GymPerf.card() — весь кадр карточки и копия в её холст. Ступень скорости и откат
+     на манекен панель читает сама: cardAnatomy (12-motion-player.js), workoutFigure (14-workout-mode.js).
    Кадры считает свой requestAnimationFrame; «кадр» — от метки кадра до первой задачи после отрисовки страницы
    (MessageChannel): оценка всего времени главного потока на кадр, вместе со стилями и отрисовкой SVG браузером.
-   «Замерить» — сценарий ≈75 с без участия человека: карточка плана, разбор трёх упражнений в видах «Анатомия» и
-   «Манекен», экран тренировки. Журнал, настройки и планы не меняются: выбор вида, ракурса и раздела возвращается. */
+   «Замерить» — сценарий ≈2 мин без участия человека: карточка плана, разбор трёх упражнений и экран тренировки — каждый
+   в видах «Анатомия» и «Манекен». Журнал, настройки и планы не меняются: выбор вида, ракурса и раздела возвращается. */
 const PERF_KEY = 'podhod.perf', PERF_LIVE_MS = 2000;
 const PERF_T = {
   title:'Speed test', expand:'Expand the speed test panel', collapse:'Collapse panel', fps:'fps',
   screen:'Screen', cards:'Cards', volume:'3D', frame:'frame', fromMemory:'from memory',
   anew:'computed', pose:'pose', skin:'skin', bones:'bones', muscles:'muscles', scene:'scene', render:'render', total:'total',
-  figure:'figure', ms:'ms', low:'light', noFrames:'no frames',
+  figure:'figure', ms:'ms', low:'light', noFrames:'no frames', anatCard:'anatomy', copyPart:'copy',
+  pace:'step {fps} fps, median {ms} ms', paceSlow:'fell back to the mannequin (median {ms} ms)', paceTag:'fallback',
+  slowNever:'“Anatomy” never fell back to the mannequin.', slowAt:'“Anatomy” fell back to the mannequin at step {i}.',
   anatomy:'Anatomy', skeleton:'Skeleton', mannequin:'Mannequin', svg:'SVG drawing',
   plan:'Plan', detail:'Breakdown', workout:'Workout', gallery:'Motion atlas', card:'card',
   liveNote:'Median / 95% over 2 s, ms per frame. “Frame” is the whole frame including page rendering (estimate).', view:'View',
   run:'Run test', stop:'Stop', off:'Turn off', device:'Device', copy:'Copy result', share:'Share',
   close:'Close result', step:'Step', frameCol:'Frame', fig:'Figure',
-  running:'Measuring… don’t touch the screen, step {i} of {n}', runHint:'About a minute and a half. Don’t touch or lock the screen.',
+  running:'Measuring… don’t touch the screen, step {i} of {n}', runHint:'About two minutes. Don’t touch or lock the screen.',
   stopped:'Test stopped — finished steps are shown.', closeWorkout:'Close the workout screen first, then tap “Run test”.',
   copied:'Copied — paste it into a message.', copyFail:'Couldn’t copy automatically. Select the text and copy it:',
   resultNote:'fps — frames per second on screen, below them — figure frames. Number pairs — median / 95th percentile, ms per frame. The per-part breakdown is in the text to copy.',
@@ -13233,7 +13524,7 @@ const PERF_T = {
   noVolume:'3D graphics unavailable', hidden:'the page went to the background — the step is inaccurate', skipped:'skipped', error:'error',
   head:'speed test', build:'build', memory:'memory {n} GB', screenSize:'screen', windowSize:'window',
   gpu:'GPU', webgl2:'WebGL2 available', noWebgl2:'no WebGL2', reduced:'reduce motion is on',
-  legend:'Number pairs — median/95th percentile, main-thread ms per frame. “Frame” is the whole frame including page rendering (estimate); pose — pose and body surface computation, skin — writing its mesh, bones — including bone frames.',
+  legend:'Number pairs — median/95th percentile, main-thread ms per frame. “Frame” is the whole frame including page rendering (estimate); pose — pose and body surface computation, skin — writing its mesh, bones — including bone frames; anatomy — the whole card frame in “Anatomy”, copy — moving the frame into its canvas; step — how often bones and muscles update (30, 15, 10 frames per second), median — what the step was chosen by.',
   open:'open {n} ms', wait:'data another {n} ms', lowAt:'Light 3D mode switched on at step {i}.',
   lowBefore:'Light 3D mode was already on before the test.', lowNever:'Light 3D mode did not switch on.',
   qNormal:'3D normal', qLow:'3D light', qSwitch:'3D switched to light mode',
@@ -13252,20 +13543,21 @@ function perfStat(list) { const v = (list || []).filter(Number.isFinite); return
 function perfFps(count, ms) { return ms > 0 ? count * 1000 / ms : null; }
 /* Кадр (запись цикла панели): t — метка rAF, cost — весь кадр главного потока, b — замеры крючков за кадр, мс:
    svgHit / svgMiss — расчёт кадра SVG из памяти / заново (nHit, nMiss — сколько фигур), svgDom — запись в DOM;
-   pose, scene (с кожей skin, костями bones и мышцами muscles внутри), render — объём. */
-const PERF_PARTS = ['svgHit', 'svgMiss', 'svgDom', 'card', 'pose', 'skin', 'bones', 'muscles', 'sceneRest', 'render', 'volume'];
+   pose, scene (с кожей skin, костями bones и мышцами muscles внутри), render — объём; anat — весь кадр карточки в
+   «Анатомии» (nAnat — сколько карточек), copy — копия кадра в её холст (части кадра — те же pose, scene, render). */
+const PERF_PARTS = ['svgHit', 'svgMiss', 'svgDom', 'card', 'anat', 'copy', 'pose', 'skin', 'bones', 'muscles', 'sceneRest', 'render', 'volume'];
 function perfSummary(frames, ms) {
-  const per = Object.fromEntries(PERF_PARTS.map(k => [k, []])), counts = {svgHit:0, svgMiss:0};
+  const per = Object.fromEntries(PERF_PARTS.map(k => [k, []])), counts = {svgHit:0, svgMiss:0, anat:0};
   let fig = 0;
   for (const f of frames) {
     const b = f.b; if (!b) continue;
-    for (const k of ['svgHit', 'svgMiss', 'svgDom', 'pose', 'skin', 'bones', 'muscles', 'render']) if (b[k] != null) per[k].push(b[k]);
-    counts.svgHit += b.nHit || 0; counts.svgMiss += b.nMiss || 0;
+    for (const k of ['svgHit', 'svgMiss', 'svgDom', 'anat', 'copy', 'pose', 'skin', 'bones', 'muscles', 'render']) if (b[k] != null) per[k].push(b[k]);
+    counts.svgHit += b.nHit || 0; counts.svgMiss += b.nMiss || 0; counts.anat += b.nAnat || 0;
     if (b.scene != null) per.sceneRest.push(Math.max(0, b.scene - (b.skin || 0) - (b.bones || 0) - (b.muscles || 0)));
     const svg = (b.svgHit || 0) + (b.svgMiss || 0) + (b.svgDom || 0), vol = (b.pose || 0) + (b.scene || 0) + (b.render || 0);
     if (b.nHit || b.nMiss) per.card.push(svg);
     if (b.pose != null || b.scene != null || b.render != null) per.volume.push(vol);
-    if (b.nHit || b.nMiss || b.scene != null || b.render != null) fig++;
+    if (b.nHit || b.nMiss || b.nAnat || b.scene != null || b.render != null) fig++;
   }
   return {frames:frames.length, ms, fps:perfFps(frames.length, ms), figFps:fig ? perfFps(fig, ms) : null,
     cost:perfStat(frames.map(f => f.cost)), parts:Object.fromEntries(PERF_PARTS.map(k => [k, perfStat(per[k])])), counts};
@@ -13341,13 +13633,21 @@ function perfStepLine(s, i) {
     const n = k => `${u.counts[k]} ${plural(u.counts[k], 'frame', 'frames', 'frames')}`;
     out.push(`SVG ${PERF_T.anew} ${perfPair(p.svgMiss)} (${n('svgMiss')}), ${PERF_T.fromMemory} ${perfPair(p.svgHit)} (${n('svgHit')}), DOM ${perfPair(p.svgDom)}`);
   }
+  if (p.anat) out.push(`${PERF_T.anatCard} ${perfPair(p.anat)} (${PERF_T.copyPart} ${perfPair(p.copy)})`);
   if (p.volume) {
     out.push([['pose', 'pose'], ['skin', 'skin'], ['bones', 'bones'], ['muscles', 'muscles'], ['sceneRest', 'scene'], ['render', 'render'], ['volume', 'total']]
       .filter(([k]) => p[k] || k === 'volume').map(([k, t]) => `${PERF_T[t]} ${perfPair(p[k])}`).join('; '));
-    out.push(s.q1 === 'low' ? (s.q0 === 'low' ? PERF_T.qLow : PERF_T.qSwitch) : PERF_T.qNormal);
+    /* «облегчённое» — свойство фигур разбора и тренировки; у карточек его нет */
+    if (s.kind !== 'plan') out.push(s.q1 === 'low' ? (s.q0 === 'low' ? PERF_T.qLow : PERF_T.qSwitch) : PERF_T.qNormal);
   }
+  if (s.pace) out.push(perfPaceText(s.pace));
   if (s.hidden) out.push(PERF_T.hidden);
   return `${head}: ${out.join('; ')}`;
+}
+/* ступень скорости «Анатомии» (карточки, тренировка): {fps, median, slow} → «ступень 30 к/с, медиана 9,8 мс» или откат */
+function perfPaceText(pc) {
+  const ms = perfNum(pc.median);
+  return pc.slow ? perfSay('paceSlow', {ms}) : perfSay('pace', {fps:pc.fps, ms});
 }
 function perfReportText(r) {
   const d = r.device, at = r.date instanceof Date ? r.date : new Date(r.date), two = v => String(v).padStart(2, '0');
@@ -13356,6 +13656,7 @@ function perfReportText(r) {
   r.steps.forEach((s, i) => lines.push(perfStepLine(s, i)));
   const lowAt = r.steps.findIndex(s => s.q1 === 'low');
   lines.push(lowAt < 0 ? PERF_T.lowNever : r.steps[lowAt].q0 === 'low' ? PERF_T.lowBefore : perfSay('lowAt', {i:lowAt + 1}));
+  if (r.steps.some(s => s.pace)) { const slowAt = r.steps.findIndex(s => s.pace?.slow); lines.push(slowAt < 0 ? PERF_T.slowNever : perfSay('slowAt', {i:slowAt + 1})); }
   if (r.aborted) lines.push(PERF_T.abortedLine);
   return lines.join('\n');
 }
@@ -13388,12 +13689,15 @@ function perfStart() {
   };
   /* src/volume/main.mjs: вызовы новой фигуры — через обёртки. Создание фигуры (рамка по 13 положениям, первые кадры)
      — не кадр анимации: до конца текущей задачи замеры не пишутся. */
-  P.volume = ({scene, renderer, options, low}) => {
-    P.low = low; P.creating = true; Promise.resolve().then(() => { P.creating = false; });
+  P.volume = ({scene, renderer, options, low, card}) => {
+    if (!card) P.low = low; P.creating = true; Promise.resolve().then(() => { P.creating = false; });
     perfWrap(options, 'data', 'pose'); perfWrap(scene, 'apply', 'scene'); perfWrap(scene.mannequin, 'apply', 'skin');
     perfWrap(scene.skeleton, 'update', 'bones'); perfWrap(scene.muscleLayer, 'update', 'muscles'); perfWrap(renderer, 'render', 'render');
     perfWrap(window.Skeleton, 'frames', 'bones');
   };
+  /* src/volume/main.mjs, общий рендерер карточек: весь кадр карточки в «Анатомии» и копия в её холст (кадр со сборкой
+     сцены — не кадр анимации: как у фигур, до конца задачи не пишется) */
+  P.card = (total, copy) => { if (P.creating) return; const b = B(); b.anat = (b.anat || 0) + total; b.copy = (b.copy || 0) + copy; b.nAnat = (b.nAnat || 0) + 1; };
   /* первая задача после отрисовки кадра: сообщение самому себе с номером кадра (без MessageChannel — таймер) */
   const pending = new Map(); let seq = 0;
   const done = id => { const f = pending.get(id); if (f) { pending.delete(id); f.cost = performance.now() - f.t; } };
@@ -13445,10 +13749,18 @@ function perfViewOf(root) {
   if (root.dataset?.renderer !== 'webgl') return 'svg';
   return root.dataset.anatomy === 'on' ? 'anatomy' : root.dataset.skeleton === 'on' ? 'skeleton' : 'mannequin';
 }
+/* ступень скорости «Анатомии» сейчас: карточки плана (cardAnatomy) или экран тренировки (workoutFigure); null — не в «Анатомии» */
+function perfPaceOf(place) {
+  const src = place === 'workout' ? (typeof workoutFigure !== 'undefined' ? workoutFigure : null) : place === 'plan' ? (typeof cardAnatomy !== 'undefined' ? cardAnatomy : null) : null;
+  if (!src || (src.view === 'mannequin' && !src.slow)) return null;
+  return {fps:src.pace.fps, median:src.pace.last ?? null, slow:!!src.slow};
+}
 function perfWhere() {
   if ($('#motion-view')?.open) return typeof detailMotion !== 'undefined' && detailMotion ? {place:'detail', view:perfViewOf($('#mv-stage')?.firstElementChild)} : {place:'gallery', view:'svg'};
-  if ($('#workout-view')?.open) return {place:'workout', view:perfViewOf($('#wv-stage')?.firstElementChild)};
-  return {place:'plan', view:'svg'};
+  if ($('#workout-view')?.open) return {place:'workout', view:perfViewOf($('#wv-stage')?.firstElementChild), pace:perfPaceOf('workout')};
+  /* карточки плана: «Анатомия» или «Скелет» — кадры общего рендерера, иначе (выбран манекен, откат, нет WebGL) — SVG */
+  const v = typeof cardAnatomy !== 'undefined' ? cardAnatomy.view : 'mannequin';
+  return {place:'plan', view:v === 'mannequin' ? 'svg' : v, pace:perfPaceOf('plan')};
 }
 
 /* ---------- панель ---------- */
@@ -13513,9 +13825,11 @@ function perfPaint(P) {
   if (!running && !P.result) {
     const k = key => el.querySelector(`[data-perf-k="${key}"]`);
     perfSet(k('screen'), `${perfNum(sum.fps)} ${PERF_T.fps} · ${PERF_T.frame} ${perfPair(sum.cost)} ${PERF_T.ms}`);
-    perfSet(k('cards'), p.card ? `${PERF_T.anew} ${perfPair(p.svgMiss)} · ${PERF_T.fromMemory} ${perfPair(p.svgHit)} · DOM ${perfPair(p.svgDom)} ${PERF_T.ms}` : PERF_T.noFrames);
+    perfSet(k('cards'), p.anat ? `${PERF_T.anatCard} ${perfPair(p.anat)} · ${PERF_T.copyPart} ${perfPair(p.copy)} ${PERF_T.ms}`
+      : p.card ? `${PERF_T.anew} ${perfPair(p.svgMiss)} · ${PERF_T.fromMemory} ${perfPair(p.svgHit)} · DOM ${perfPair(p.svgDom)} ${PERF_T.ms}` : PERF_T.noFrames);
     perfSet(k('volume'), p.volume ? `${PERF_T.total} ${perfPair(p.volume)} ${PERF_T.ms}, ${PERF_T.figure} ${perfNum(sum.figFps)} ${PERF_T.fps}\n${PERF_T.pose} ${perfPair(p.pose)} · ${PERF_T.skin} ${perfPair(p.skin)} · ${PERF_T.bones} ${perfPair(p.bones)} · ${PERF_T.muscles} ${perfPair(p.muscles)} · ${PERF_T.scene} ${perfPair(p.sceneRest)} · ${PERF_T.render} ${perfPair(p.render)}` : PERF_T.noFrames);
-    perfSet(k('view'), `${PERF_T[where.place]} — ${perfViewName(where.view)}` + (q ? `; ${q === 'low' ? PERF_T.qLow : PERF_T.qNormal}` : ''));
+    const qv = where.place === 'plan' ? null : q;
+    perfSet(k('view'), `${PERF_T[where.place]} — ${perfViewName(where.view)}` + (where.pace ? `; ${perfPaceText(where.pace)}` : '') + (qv ? `; ${qv === 'low' ? PERF_T.qLow : PERF_T.qNormal}` : ''));
   }
   const run = el.querySelector('[data-perf-run]'); run.hidden = !running;
   if (running) {
@@ -13530,8 +13844,8 @@ function perfPaint(P) {
 function perfResultHtml(r) {
   if (r.notice) return `<p class="perf-warn">${r.notice}</p><div class="perf-actions"><button type="button" data-perf="close">${PERF_T.close}</button></div>`;
   const rows = r.steps.map((s, i) => {
-    const u = s.sum, fig = u && (u.parts.volume || u.parts.card);
-    const tag = s.q1 === 'low' ? ` <span class="perf-low">${PERF_T.low}</span>` : '';
+    const u = s.sum, fig = u && (u.parts.anat || u.parts.volume || u.parts.card);
+    const tag = (s.q1 === 'low' && s.kind !== 'plan' ? ` <span class="perf-low">${PERF_T.low}</span>` : '') + (s.pace?.slow ? ` <span class="perf-low">${PERF_T.paceTag}</span>` : '');
     return s.skip || s.error ? `<tr><th scope="row">${i + 1}. ${esc(s.label)}</th><td colspan="3">${esc(s.skip || s.error)}</td></tr>`
       : `<tr><th scope="row">${i + 1}. ${esc(s.label)}${tag}</th><td>${perfNum(u.fps)}${u.figFps ? '<small>' + perfNum(u.figFps) + '</small>' : ''}</td><td>${perfPair(u.cost)}</td><td>${perfPair(fig)}</td></tr>`;
   }).join('');
@@ -13550,11 +13864,17 @@ function perfCopy(P) {
 }
 
 /* ---------- сценарий «Замерить» ----------
-   1 — план: активная карточка 10 с (память кадров сброшена: первый круг считается заново, дальше — из памяти);
-   2–7 — разбор latpulluh (верхний блок), legpress (тренажёр жима ногами), squat (штанга): по 8 с в «Анатомии»
-   и в «Манекене», ракурс по умолчанию, один вид; 8 — экран тренировки 8 с (если не идёт отдых). Перед каждым шагом
-   — 1 с прогрева (сборка шейдеров, рамка кадра). Длительности для проверок — perfRun({plan, step, warm}). */
-const PERF_STEPS = [{kind:'plan'}, ...['latpulluh', 'legpress', 'squat'].flatMap(id => [{kind:'detail', id, view:'anatomy'}, {kind:'detail', id, view:'mannequin'}]), {kind:'workout'}];
+   1–2 — план: активная карточка 10 с в «Анатомии» (общий рендерер карточек собирается заново, ступень — с 30 кадров,
+   прежний откат забыт; первый круг — матрицы костей считаются, дальше — из памяти) и в «Манекене» (SVG, память кадров
+   сброшена так же); 3–8 — разбор latpulluh (верхний блок), legpress (тренажёр жима ногами), squat (штанга): по 8 с
+   в «Анатомии» и в «Манекене», ракурс по умолчанию, один вид; 9–10 — экран тренировки 8 с в «Анатомии» и в «Манекене»
+   (если не идёт отдых). Перед каждым шагом — 1 с прогрева (сборка шейдеров, рамка кадра). У шагов «Анатомии» карточек
+   и тренировки в итоге — ступень (30, 15, 10 кадров в секунду или откат на манекен) и медиана, по которой она выбрана.
+   Вид фигуры на время шага меняется без записи; выбор человека возвращается в конце. Длительности для проверок —
+   perfRun({plan, step, warm}). */
+const PERF_STEPS = [{kind:'plan', view:'anatomy'}, {kind:'plan', view:'mannequin'},
+  ...['latpulluh', 'legpress', 'squat'].flatMap(id => [{kind:'detail', id, view:'anatomy'}, {kind:'detail', id, view:'mannequin'}]),
+  {kind:'workout', view:'anatomy'}, {kind:'workout', view:'mannequin'}];
 const PERF_ABORT = {abort:true}, PERF_RESTORE_KEYS = ['podhod.motion.v2', 'podhod.workout.v3', 'podhod.settings.v1', 'podhod.planSeen.v1'];
 let perfRunSerial = 0;
 async function perfWait(ms, run) {
@@ -13585,13 +13905,25 @@ async function perfStepRun(P, run, step, T, ctx) {
     if (S.view !== 'plan') { ctx.view = S.view; S.view = 'plan'; renderSetup(); renderPlan(); }
     const F = figs.find(x => x.card);
     if (!F) return Object.assign(out, {skip:PERF_T.noCards});
-    out.label += ` «${F.it.name}»`; out.id = F.it.ex.id; out.view = 'svg'; run.label = out.label;
-    ctx.card = {F, paused:F.paused, pick:F.pick};
+    out.id = F.it.ex.id; run.label = out.label + ` «${F.it.name}»`;
+    if (!ctx.card || ctx.card.F !== F) ctx.card = {F, paused:F.paused, pick:F.pick};
+    /* вид карточек — на время шага; «Анатомия» — новая попытка с холодной памятью (как первое открытие плана) */
+    const anat = step.view !== 'mannequin';
+    motionPrefs.view = step.view;
+    if (anat) { retryAnatomyPace(); cardStage()?.dispose(); }
+    applyCardsView();
     F.btn.scrollIntoView({block:'center'}); F.paused = false; F.pick = performance.now();
     figureFramesReset(); pickActiveCards();
     await perfUntil(() => F.f && F.active, 3000, run);
+    if (anat) await perfUntil(() => F.av?.on || cardAnatomy.view === 'mannequin' && !cardAnatomy.loading, 10000, run);
+    out.view = cardAnatomy.view === 'mannequin' ? 'svg' : cardAnatomy.view;
+    /* подпись — то, что показано: «Анатомия» («Скелет») или манекен (SVG-карточки); «Анатомия» без объёма — манекен с пометкой */
+    out.label += ` «${F.it.name}» — ${perfViewName(out.view === 'svg' ? 'mannequin' : out.view)}` + (anat && out.view === 'svg' ? ` (${PERF_T.noVolume})` : '');
+    run.label = out.label;
     await perfWait(T.warm / 2, run);
-    return finish(await perfMeasure(P, run, T.plan));
+    finish(await perfMeasure(P, run, T.plan));
+    if (anat && out.view !== 'svg') out.pace = perfPaceOf('plan') || {fps:cardAnatomy.pace.fps, median:cardAnatomy.pace.last ?? null, slow:!!cardAnatomy.slow};
+    return out;
   }
   if (step.kind === 'detail') {
     const it = previewItem(step.id);
@@ -13611,24 +13943,33 @@ async function perfStepRun(P, run, step, T, ctx) {
     await perfWait(T.warm, run);
     return finish(await perfMeasure(P, run, T.step));
   }
-  /* тренировка: открыть без записи в журнал; сохранённое состояние тренировки вернётся из снимка */
+  /* тренировка: открыть без записи в журнал; сохранённое состояние тренировки вернётся из снимка. Вид фигуры — на время
+     шага; каждое открытие тренировки — новая попытка «Анатомии» (ступень с 30 кадров) */
   out.label = PERF_T.workout; run.label = out.label;
+  const anat = step.view !== 'mannequin';
   if ($('#motion-view')?.open) closeMotion();
   if (!plan?.items?.length) return Object.assign(out, {skip:PERF_T.noPlan});
   let saved = null; try { saved = JSON.parse(localStorage.getItem(WORKOUT_STORE) || 'null'); } catch (e) {}
   /* отдых в плане или незаконченный отдых сегодняшней тренировки: открытие тренировки включило бы его сигнал */
   if (!$('#timer').hidden || (saved && saved.stamp === workoutStamp(workoutQueue(plan)) && Number(saved.restUntil) > 0 && saved.next >= 0)) return Object.assign(out, {skip:PERF_T.restOn});
+  motionPrefs.view = step.view;
   const t0 = performance.now();
   startWorkout(); ctx.workout = true;
   if ($('#wv-active').hidden) workoutShow(workout.index || 0);
   out.open = performance.now() - t0;
-  await perfUntil(() => $('#wv-stage')?.firstElementChild, 3000, run);
-  const F = workout.motion; out.view = perfViewOf($('#wv-stage')?.firstElementChild); out.id = F?.it.ex.id;
-  out.label = `${PERF_T.workout}: ${F ? F.it.name : '—'} — ${perfViewName(out.view)}`; run.label = out.label;
+  const root = () => $('#wv-stage')?.firstElementChild;
+  await perfUntil(() => root(), 3000, run);
+  /* «Анатомия»: кости и мышцы могут ещё грузиться — подпись шага по тому, что в итоге показано */
+  if (anat) await perfUntil(() => root()?.dataset.anatomy === 'on' || root()?.dataset.skeleton === 'on' || root()?.dataset.renderer !== 'webgl' || workoutFigure.failed, 10000, run);
+  out.wait = performance.now() - t0 - out.open;
+  const F = workout.motion; out.view = perfViewOf(root()); out.id = F?.it.ex.id;
+  out.label = `${PERF_T.workout}: ${F ? F.it.name : '—'} — ${perfViewName(out.view)}` + (anat && out.view === 'svg' ? ` (${PERF_T.noVolume})` : ''); run.label = out.label;
   if (F) F.paused = false;
   await perfWait(T.warm, run);
   const m = await perfMeasure(P, run, T.step);
-  finish(m); closeWorkout(); ctx.workout = false;
+  finish(m);
+  if (anat && (out.view === 'anatomy' || out.view === 'skeleton')) out.pace = {fps:workoutFigure.pace.fps, median:workoutFigure.pace.last ?? null, slow:!!workoutFigure.slow};
+  closeWorkout(); ctx.workout = false;
   return out;
 }
 async function perfRun(opts = {}) {
@@ -13660,6 +14001,8 @@ async function perfRun(opts = {}) {
     try { if ($('#motion-view')?.open) closeMotion(); } catch (e) {}
     for (const [k, [had, v]] of Object.entries(prefs)) { if (had) motionPrefs[k] = v; else delete motionPrefs[k]; }
     if (ctx.card) { ctx.card.F.paused = ctx.card.paused; ctx.card.F.pick = ctx.card.pick; try { pickActiveCards(); } catch (e) {} }
+    /* карточки — снова в виде, выбранном человеком */
+    try { if (typeof applyCardsView === 'function' && figs.some(F => F.card)) applyCardsView(); } catch (e) {}
     if (ctx.view) { S.view = ctx.view; renderSetup(); renderPlan(); }
     for (const [k, v] of Object.entries(store)) try { if (localStorage.getItem(k) !== v) { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } } catch (e) {}
     window.scrollTo(0, ctx.scroll);
@@ -13701,4 +14044,4 @@ logInit();
 plural = (n, a, b, c) => n === 1 ? a : c;
 DEC = '.';
 
-window.PODHOD_VERSION='4.49.0';window.PODHOD_BUILD='4.49.0-0ffe9da7c436';window.PODHOD_LANG='en';
+window.PODHOD_VERSION='4.50.0';window.PODHOD_BUILD='4.50.0-d41ada3a31d4';window.PODHOD_LANG='en';
