@@ -2,9 +2,12 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
 const{JSDOM,VirtualConsole}=require('jsdom');
 const root=path.resolve(__dirname,'..');
 const expectedVersion=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8')).version;
-const sw=fs.readFileSync(path.join(root,'dist/sw.js'),'utf8'),shell=require('node:vm').runInNewContext(sw+'\nSHELL;',{self:{registration:{scope:'https://test.invalid/'},addEventListener(){}}}),cached=new Set(shell.map(p=>new URL(p,'https://test.invalid/').href));
+const sw=fs.readFileSync(path.join(root,'dist/sw.js'),'utf8'),shellFor=require('node:vm').runInNewContext(sw+'\nshellFor;',{self:{registration:{scope:'https://test.invalid/'},addEventListener(){}}});
 for(const lang of ['ru','en']){
  console.log(`Checking packaged ${lang}…`);
+ /* оболочка одного языка: всё, что рисует страница, — в ней; файлов другого языка в ней нет */
+ const cached=new Set(shellFor([lang]).map(p=>new URL(p,'https://test.invalid/').href));
+ assert(![...cached].some(u=>lang==='ru'?u.includes('/en/'):/^https:\/\/test\.invalid\/(index\.html|app\.|pwa\.|manifest\.|$)/.test(u)),'Shell of '+lang+' carries the other language');
  const dir=path.join(root,'dist',lang==='ru'?'':'en'),html=fs.readFileSync(path.join(dir,'index.html'),'utf8'),errors=[],vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));vc.on('error',(...a)=>errors.push(a.map(String).join(' ')));
  const dom=new JSDOM(html,{url:'https://sakrett001-ai.github.io/Lazy-gym-planer/atlas-preview/'+(lang==='en'?'en/':''),runScripts:'outside-only',pretendToBeVisual:true,virtualConsole:vc}),w=dom.window,d=w.document;
  const base='https://test.invalid/'+(lang==='en'?'en/':'');

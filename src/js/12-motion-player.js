@@ -22,26 +22,34 @@ function motionDurations(it) {
   const q = parsed.length===4 && parsed.every(Number.isFinite) ? parsed : [3,0,1,0];
   return (a.eccFirst ? q : [q[2],q[3],q[0],q[1]]).map(x=>Math.max(0,x)*1000);
 }
-function motionFrame(F) {
+function motionFrame(F, clock=F.clock) {
   const d = F.durations, total = d.reduce((a,b)=>a+b,0) || 4000;
-  let x = ((F.clock%total)+total)%total, index = 0;
+  let x = ((clock%total)+total)%total, index = 0;
   while (index<3 && x>=d[index]) {x-=d[index];index++;}
   const q = d[index] ? Math.min(1,x/d[index]) : 0;
   const eased = .5-.5*Math.cos(Math.PI*q);
   let t = index===0 ? eased : index===1 ? 1 : index===2 ? 1-eased : 0;
   if (F.it.ex.anim.hold) t=0;
   /* замкнутый цикл (педали, бег, «велосипед»): фаза идёт по кругу без возврата назад */
-  if (F.it.ex.anim.loop) {const p=((F.clock%total)+total)%total/total;t=p;index=p<.5?0:2;}
+  if (F.it.ex.anim.loop) {const p=((clock%total)+total)%total/total;t=p;index=p<.5?0:2;}
   /* статодинамика: только рабочая часть амплитуды, без выпрямления и без провала */
   const part=F.it.rx&&F.it.rx.partial;if(part&&!F.it.ex.anim.loop&&!F.it.ex.anim.hold)t=part[0]+(part[1]-part[0])*t;
   const a = F.it.ex.anim;
   let labels = a.eccFirst ? ['Опускание','Нижняя точка','Подъём','Верхняя точка'] : ['Рабочая фаза','Конечная точка','Возврат','Исходное положение'];
   if (F.it.ex.id === 'kbswing') labels=['Мах вперёд','Верхняя точка','Замах назад','Исходное положение'];
   if (F.it.ex.id === 'deadlift') labels=['Подъём','Верхняя точка','Опускание','Исходное положение'];
-  return {t,index,label:a.hold?'Удержание':labels[index],cue:a.hold?a.cues[0]:a.cues[(index<2)!==!!a.eccFirst?0:1],progress:((F.clock%total)+total)%total/total,total};
+  return {t,index,label:a.hold?'Удержание':labels[index],cue:a.hold?a.cues[0]:a.cues[(index<2)!==!!a.eccFirst?0:1],progress:((clock%total)+total)%total/total,total};
+}
+/* Часы рисунка карточки — по сетке ≈30 кадров в секунду, целое число кадров на повторение: каждый круг проходит те же
+   фазы, и готовые кадры берутся из памяти (FIGURE_FRAMES, 07-rigs-core.js). Кадр отстаёт от точного времени
+   не больше чем на полкадра (≤17 мс); сами часы идут без округления. */
+const CARD_GRID_MS=1000/30;
+function cardClock(F){
+  const total=F.durations.reduce((a,b)=>a+b,0)||4000,n=Math.max(1,Math.round(total/CARD_GRID_MS)),step=total/n;
+  return (((Math.round(F.clock/step))%n)+n)%n*step;
 }
 function paintMotion(F, detailed=false) {
-  const m = motionFrame(F); F.f.at(m.t,m);if(F.extra)F.extra.at(m.t,m);
+  const m = motionFrame(F, detailed ? F.clock : cardClock(F)); F.f.at(m.t,m);if(F.extra)F.extra.at(m.t,m);
   if (!detailed) {
     const cap = F.btn.closest('.motion-tile').querySelector('.motion-caption');
     if (cap && cap.textContent!==m.label) cap.textContent=m.label;
@@ -168,7 +176,7 @@ function buildCardFigure(F){
   try {
     /* начатую заранее рамку досчитать, а не начинать заново */
     if(F.job){F.job.step(41);F.job=null;}
-    F.f=buildFigure(F.it.ex.anim,{primary:F.it.ex.pri,has:F.it.has,ratio:1,t:0,label:F.it.name,muscles:motionPrefs.muscles});
+    F.f=buildFigure(F.it.ex.anim,{primary:F.it.ex.pri,has:F.it.has,ratio:1,t:0,label:F.it.name,muscles:motionPrefs.muscles,frameCache:true});
     F.btn.prepend(F.f.svg);paintMotion(F);
   } catch(e) {F.failed=true;console.error('Демонстрация',F.it.ex.id,e);}
 }
@@ -195,8 +203,11 @@ function prefetchCardFrames(){
   };
   idle(work);
 }
+let mountedKit=null;
 function mountFigures() {
   figs=[];
+  /* инвентарь места сменился: готовые кадры карточек прежнего набора больше не понадобятся */
+  const kit=S.place+':'+(S.equip||[]).slice().sort().join(',');if(mountedKit!==null&&kit!==mountedKit)figureFramesReset();mountedKit=kit;
   const flat=plan.blocks.flatMap(b=>b.items);
   document.querySelectorAll('[data-fig]').forEach(btn=>{
     const it=flat[+btn.dataset.fig];if(!it)return;

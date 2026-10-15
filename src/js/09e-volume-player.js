@@ -19,7 +19,10 @@ function catalogVectorGroup(svg,anim,camera){
  const nodes=vectors.map(v=>{const kind=/^(sh|hip)$/.test(v.key)?'core':'limb';return el('path',{class:'vec-line vec-'+kind,'data-vector':v.key,'marker-end':`url(#${id}-${kind})`},g);});
  const toggle=show=>g.setAttribute('display',show?'inline':'none');
  toggle.bounds=vectors.flatMap(v=>v.points.flatMap((p,i)=>[0,2].flatMap(index=>{const q=catalogVectorFrame(v,i/(v.points.length-1),index,{[v.key]:p});return q?[project(q.a),project(q.b)]:[];})));
- toggle.at=(t,frame,R)=>vectors.forEach((v,i)=>{const q=catalogVectorFrame(v,t,frame?.index||0,R),node=nodes[i];node.setAttribute('display',q?'inline':'none');if(q){const a=project(q.a),b=project(q.b);node.setAttribute('d',`M${f1(a[0])},${f1(a[1])} L${f1(b[0])},${f1(b[1])}`);}});
+ /* кадр стрелок (путь или null — стрелки нет) отдельно от записи в узлы: его хранит память кадров карточек */
+ toggle.frame=(t,frame,R)=>vectors.map(v=>{const q=catalogVectorFrame(v,t,frame?.index||0,R);if(!q)return null;const a=project(q.a),b=project(q.b);return`M${f1(a[0])},${f1(a[1])} L${f1(b[0])},${f1(b[1])}`;});
+ toggle.paint=list=>list.forEach((d,i)=>{const node=nodes[i];node.setAttribute('display',d?'inline':'none');if(d)node.setAttribute('d',d);});
+ toggle.at=(t,frame,R)=>toggle.paint(toggle.frame(t,frame,R));
  return toggle;
 }
 function createMotionFigure(anim,opts){

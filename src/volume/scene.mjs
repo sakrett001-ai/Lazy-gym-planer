@@ -104,6 +104,38 @@ function gripAxis(R,side,props){
  if(len(x)<1e-5)x=cross(d,Math.abs(d[0])<.8?[1,0,0]:[0,0,1]);
  return unit(x);
 }
+/* Неподвижные детали инвентаря — рама, стойки, подушки тренажёров (без dyn: их положение не зависит от позы,
+   GymEquipment.build) — рисуются объединёнными сетками, по одной на материал: вызовов отрисовки и теней меньше в разы.
+   Подвижные детали (dyn: гриф, рукояти, трос, каретка, рычаги) — как раньше, сетка на деталь. */
+export const isStaticProp=s=>!s.dyn&&isNewProp(s);
+/* та же деталь (значения, не объекты: деталь копируется из общего запаса в каждом кадре) */
+export function sameProp(a,b){
+ if(a===b)return true;
+ if(Array.isArray(a)){if(!Array.isArray(b)||a.length!==b.length)return false;for(let i=0;i<a.length;i++)if(!sameProp(a[i],b[i]))return false;return true;}
+ if(!a||!b||typeof a!=='object'||typeof b!=='object'||Array.isArray(b))return false;
+ const keys=Object.keys(a);if(keys.length!==Object.keys(b).length)return false;
+ for(const k of keys)if(!sameProp(a[k],b[k]))return false;
+ return true;
+}
+/* одна сетка из нескольких: вершины и нормали — в мировых координатах детали; у зеркальной детали обход треугольников
+   разворачивается, как это делает рендерер (frontFaceCW), — лицевая сторона та же */
+export function mergeMeshes(list){
+ let vertices=0,indices=0;for(const o of list){const g=o.geometry;vertices+=g.attributes.position.count;indices+=g.index?g.index.count:g.attributes.position.count;}
+ const pos=new Float32Array(vertices*3),nor=new Float32Array(vertices*3),idx=vertices>65535?new Uint32Array(indices):new Uint16Array(indices);
+ const v=new THREE.Vector3(),nm=new THREE.Matrix3();let base=0,k=0;
+ for(const o of list){
+  const g=o.geometry,p=g.attributes.position,n=g.attributes.normal,M=o.matrixWorld,flip=M.determinant()<0,ix=g.index;nm.getNormalMatrix(M);
+  for(let j=0;j<p.count;j++){
+   v.fromBufferAttribute(p,j).applyMatrix4(M);pos[(base+j)*3]=v.x;pos[(base+j)*3+1]=v.y;pos[(base+j)*3+2]=v.z;
+   v.fromBufferAttribute(n,j).applyMatrix3(nm).normalize();nor[(base+j)*3]=v.x;nor[(base+j)*3+1]=v.y;nor[(base+j)*3+2]=v.z;
+  }
+  const count=ix?ix.count:p.count,at=j=>base+(ix?ix.getX(j):j);
+  for(let j=0;j+2<count;j+=3){idx[k++]=at(j);if(flip){idx[k++]=at(j+2);idx[k++]=at(j+1);}else{idx[k++]=at(j+1);idx[k++]=at(j+2);}}
+  base+=p.count;
+ }
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('normal',new THREE.BufferAttribute(nor,3));g.setIndex(new THREE.BufferAttribute(idx.subarray(0,k),1));
+ g.computeBoundingSphere();g.computeBoundingBox();return g;
+}
 function placeHand(hand,R,side,props){
  const grip=R['grip'+side],axis=gripAxis(R,side,props),d=unit(sub(grip,R['wr'+side]));
  let y=sub(d,axis.map(v=>v*dot(d,axis)));
@@ -170,6 +202,17 @@ export function createCatalogScene(first,{coarse=false}={}){
  }
  const regionMeshes=new Map(),regionsGroup=new THREE.Group();regionsGroup.name='regions';scene.add(regionsGroup);
  const equipment=new THREE.Group();equipment.name='equipment';scene.add(equipment);let propNodes=[],lastData,options={};
+ /* неподвижные детали: сами детали — в скрытой группе (по ним считаются рамка камер, тень и проверки отрисовки,
+    из них собирается объединение), на экране — объединённые сетки (isStaticProp, mergeMeshes) */
+ const staticParts=new THREE.Group();staticParts.name='equipment-static-parts';staticParts.visible=false;staticParts.userData.drawnMerged=true;scene.add(staticParts);
+ const staticMerged=new THREE.Group();staticMerged.name='equipment-static';scene.add(staticMerged);let mergedFrom=null;
+ function mergeStatic(props){
+  staticMerged.traverse(o=>o.geometry?.dispose());staticMerged.clear();
+  const byMaterial=new Map();
+  propNodes.forEach((n,i)=>{if(isStaticProp(props[i]))n.group.traverse(o=>{if(o.isMesh&&o.visible){if(!byMaterial.has(o.material))byMaterial.set(o.material,[]);byMaterial.get(o.material).push(o);}});});
+  for(const[m,list]of byMaterial){const o=mesh(staticMerged,mergeMeshes(list),m,'static-'+list.length);o.userData.merged=true;o.userData.sources=list;}
+  mergedFrom=props.map(s=>isStaticProp(s)?s:null);
+ }
  /* метки нагрузки на суставы: красный ореол с ядром, видны сквозь тело и снаряд */
  const stressGroup=new THREE.Group();stressGroup.name='joint-stress';scene.add(stressGroup);
  const stressGeo=new THREE.SphereGeometry(1,18,12),stressHalo=new THREE.MeshBasicMaterial({color:'#ff3b30',transparent:true,opacity:.36,depthTest:false,depthWrite:false,toneMapped:false}),stressCore=new THREE.MeshBasicMaterial({color:'#ff453a',depthTest:false,depthWrite:false,toneMapped:false});
@@ -184,7 +227,7 @@ export function createCatalogScene(first,{coarse=false}={}){
   for(let i=marks.length;i<stressMarks.length;i++)stressMarks[i].visible=false;
  }
  function propNode(s,i){
-  if(isNewProp(s))return createPropNode(equipment,s,mats,mesh);
+  if(isNewProp(s))return createPropNode(isStaticProp(s)?staticParts:equipment,s,mats,mesh);
   const g=new THREE.Group();g.name='prop-'+i+'-'+s.kind;equipment.add(g);const m=mats[s.tone]||mats.steel;
   if(s.kind==='box'||s.kind==='panel')mesh(g,new RoundedBoxGeometry(1,1,1,2,.012),m,'pad');
   else if(s.kind==='line')mesh(g,new THREE.CylinderGeometry(1,1,1,12),m,'beam');
@@ -259,18 +302,23 @@ export function createCatalogScene(first,{coarse=false}={}){
    /* собственное свечение участка: жёлтый и оранжевый в тени не уходят в коричневый */
    if(active)o.material.emissive.copy(o.material.color).multiplyScalar(STUDIO.muscleGlow);else o.material.emissive.setRGB(0,0,0);
   }
-  if(propNodes.length!==data.props.length||propNodes.some((n,i)=>n.key!==(isNewProp(data.props[i])?propKey(data.props[i]):data.props[i].kind))){
-   equipment.traverse(o=>o.geometry?.dispose());equipment.clear();propNodes=data.props.map(propNode);
+  if(propNodes.length!==data.props.length||propNodes.some((n,i)=>n.key!==(isNewProp(data.props[i])?propKey(data.props[i]):data.props[i].kind)||n.group.parent!==(isStaticProp(data.props[i])?staticParts:equipment))){
+   for(const g of [equipment,staticParts,staticMerged]){g.traverse(o=>o.geometry?.dispose());g.clear();}
+   propNodes=data.props.map(propNode);mergedFrom=null;
   }
-  data.props.forEach((s,i)=>updateProp(propNodes[i],s));applyStress(options.stress?data.stress||[]:[]);scene.updateMatrixWorld(true);
+  /* неподвижные детали те же, что в объединении, — их не трогаем; иначе — расставить и собрать объединение заново */
+  const keep=!!mergedFrom&&data.props.every((s,i)=>!isStaticProp(s)||sameProp(mergedFrom[i],s));
+  data.props.forEach((s,i)=>{if(!keep||!isStaticProp(s))updateProp(propNodes[i],s);});applyStress(options.stress?data.stress||[]:[]);scene.updateMatrixWorld(true);
+  if(!keep)mergeStatic(data.props);
  }
  const cameras=Object.fromEntries(Object.entries(CAMERA_SETTINGS).map(([id,[yaw,elev]])=>{
   const y=yaw*Math.PI/180,e=elev*Math.PI/180,eye=[-Math.sin(y)*Math.cos(e),-Math.sin(e),Math.cos(y)*Math.cos(e)];
   const c=new THREE.OrthographicCamera(-1,1,1,-1,.01,30);c.position.fromArray(eye.map(v=>v*8));c.lookAt(0,0,0);c.updateMatrixWorld(true);return[id,c];
  }));
  const bounds=Object.fromEntries(Object.keys(cameras).map(id=>[id,{minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity}]));
+ /* рамка — по самим деталям (и неподвижным: их сетки в скрытой группе), а не по объединённой сетке: кадр тот же, что до объединения */
  function includeBounds(){
-  scene.traverse(o=>{if(!o.isMesh||!o.visible||o===floor||o.name==='dot-ring'||o.parent===dots||o.parent?.name==='joint-dots'||o.parent?.parent===stressGroup)return;if(!o.geometry.boundingBox)o.geometry.computeBoundingBox();const b=o.geometry.boundingBox;
+  scene.traverse(o=>{if(!o.isMesh||!o.visible||o===floor||o.name==='dot-ring'||o.parent===dots||o.parent?.name==='joint-dots'||o.parent?.parent===stressGroup||o.userData.merged)return;if(!o.geometry.boundingBox)o.geometry.computeBoundingBox();const b=o.geometry.boundingBox;
    for(const x of [b.min.x,b.max.x])for(const y of [b.min.y,b.max.y])for(const z of [b.min.z,b.max.z]){
     const p=vec([x,y,z]).applyMatrix4(o.matrixWorld);for(const[id,c]of Object.entries(cameras)){const q=p.clone().applyMatrix4(c.matrixWorldInverse),e=bounds[id];e.minX=Math.min(e.minX,q.x);e.maxX=Math.max(e.maxX,q.x);e.minY=Math.min(e.minY,q.y);e.maxY=Math.max(e.maxY,q.y);}
    }
@@ -313,14 +361,14 @@ export function createCatalogScene(first,{coarse=false}={}){
  }
  /* теневая камера ключевого света охватывает всю сцену со всеми фазами (по рамке камер) с запасом */
  function fitShadow(){
-  const box=new THREE.Box3();scene.traverse(o=>{if(!o.isMesh||!o.visible||o===floor||o.name==='dot-ring'||o.parent===dots||o.parent?.name==='joint-dots'||o.parent?.parent===stressGroup)return;box.expandByObject(o);});
+  const box=new THREE.Box3();scene.traverse(o=>{if(!o.isMesh||!o.visible||o===floor||o.name==='dot-ring'||o.parent===dots||o.parent?.name==='joint-dots'||o.parent?.parent===stressGroup||o.userData.merged)return;box.expandByObject(o);});
   if(box.isEmpty())box.set(new THREE.Vector3(-1,0,-1),new THREE.Vector3(1,2,2));
   box.expandByScalar(.7);const center=box.getCenter(new THREE.Vector3()),r=box.getSize(new THREE.Vector3()).length()/2;
   for(const l of [key,fill,rim]){l.target.position.copy(center);l.position.copy(center).add(l.userData.dir||(l.userData.dir=l.position.clone().normalize().multiplyScalar(8)));l.target.updateMatrixWorld();}
   const cam=key.shadow.camera;cam.left=-r;cam.right=r;cam.top=r;cam.bottom=-r;cam.near=.1;cam.far=8+r*2;cam.updateProjectionMatrix();key.shadow.needsUpdate=true;
  }
  apply(first,{color:()=> '#a7b3c6'});
- return{scene,cameras,apply,includeBounds,resize,bounds,regionMeshes,parts,body,head,mannequin,skeleton:skeletonLayer,muscleLayer,propNodes:()=>propNodes,studio,fitShadow,setShadows,
+ return{scene,cameras,apply,includeBounds,resize,bounds,regionMeshes,parts,body,head,mannequin,skeleton:skeletonLayer,muscleLayer,propNodes:()=>propNodes,staticMeshes:()=>staticMerged.children,studio,fitShadow,setShadows,
   dispose(){disposeGeometry();disposeMaterials();},disposeGeometry,disposeMaterials};
  /* геометрия, текстуры и карты теней освобождаются сразу; материалы — отдельно: пока они живы, рендерер держит их
     собранные программы для следующей фигуры (main.mjs) */
