@@ -92,7 +92,7 @@ html.workout-open{overflow:hidden}
    сцены (общий с разбором), подпись (загрузка, ошибка, «не успевает») — строкой под сценой.
    Карточки плана: кадр анатомии — холст поверх SVG-манекена; SVG остаётся в разметке (размер карточки не меняется)
    и снова виден, пока кадра нет. */
-.wv-figure{position:absolute;top:7px;right:7px;z-index:1;display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:color-mix(in srgb,var(--surface) 85%,transparent)}
+.wv-figure{position:absolute;top:7px;right:7px;z-index:1;display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--surface)}
 .wv-figure button{border:0;background:none;min-height:32px;padding:4px 8px;font:500 11px/1.2 var(--f-body);color:var(--muted);cursor:pointer}
 .wv-figure button+button{border-left:1px solid var(--line)}
 .wv-figure button[aria-pressed="true"]{background:var(--accent-soft);color:var(--ink);font-weight:600}
