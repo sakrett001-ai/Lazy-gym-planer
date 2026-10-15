@@ -3,9 +3,12 @@ const assert=require('node:assert/strict');
 const {loadModel}=require('./biomechanics-audit');
 const model=loadModel({fullApp:true});
 const {muscleFrame,muscleSurfaces,visibleMuscleSurfaces,motionFrame,muscleColor}=model.get('({muscleFrame,muscleSurfaces,visibleMuscleSurfaces,motionFrame,muscleColor})');
-const pilot=model.EX.filter(ex=>ex.anim.muscleProfile);
+/* три исходных профиля ригов (с поверхностями мышц на схеме rig3d) и профили прицельных упражнений каталога на манекене */
+const ORIGINAL=['bbbench','latpull','squat'],TARGETED=['bandextrot','cableadduct','cableextrot','copenhagen','copenhagenknee'];
+const authored=model.EX.filter(ex=>ex.anim.muscleProfile),pilot=authored.filter(ex=>ORIGINAL.includes(ex.id));
 test('three original hand-authored profiles remain intact alongside the catalog',()=>{
- assert.deepEqual(Array.from(pilot,ex=>ex.id).sort(),['bbbench','latpull','squat']);
+ assert.deepEqual(Array.from(authored,ex=>ex.id).sort(),[...ORIGINAL,...TARGETED].sort());
+ assert.deepEqual(Array.from(pilot,ex=>ex.id).sort(),ORIGINAL);
  for(const ex of pilot){
   const p=ex.anim.muscleProfile;
   assert.equal(p.curveBasis,'illustrative');assert(p.sources.length>0);
@@ -84,4 +87,20 @@ test('rear torso muscles disappear in front views and appear in their own rear v
  assert(back.some(f=>f.id==='lats'));assert(!back.some(f=>f.id==='abs'));
  const bench=pilot.find(ex=>ex.id==='bbbench');
  assert(visibleMuscleSurfaces(bench.anim.rig3d(.5),bench.anim.muscleProfile,'above').some(f=>f.id==='chest'));
+});
+/* прицельные упражнения на приводящие и манжету: профиль ведёт каталог (catalogProfile), цель — основная мышца,
+   опускание слабее подъёма, на краях фаз яркость одна и та же, источники — исследования ЭМГ */
+test('targeted adductor and rotator-cuff profiles drive the catalog colours',()=>{
+ for(const id of TARGETED){
+  const ex=model.EX.find(e=>e.id===id),p=ex.anim.muscleProfile,c=ex.anim.catalogProfile;
+  assert.equal(p.curveBasis,'illustrative');assert(p.sources.length>0&&p.sources.every(([t,u])=>t.length>10&&/^https:\/\/doi\.org\//.test(u)),id+' cites the EMG study by DOI');
+  for(const m of ex.pri){assert.equal(p.muscles[m].role,'primary',id+' '+m);assert.equal(c.muscles[m].role,'primary');}
+  for(const m of ex.sec)assert(p.muscles[m],id+' profiles its helper '+m);
+  for(const[m,v]of Object.entries(p.muscles)){
+   assert.equal(v.concentric[0],v.eccentric[0]);assert.equal(v.concentric[2],v.eccentric[2]);
+   if(v.role!=='stabilizer')assert(v.concentric[1]>v.eccentric[1],id+' '+m+': lifting brighter than lowering');
+  }
+  const up=muscleFrame(ex.anim,.5,0).values,down=muscleFrame(ex.anim,.5,2).values,main=ex.pri[0];
+  assert(up[main]>down[main]&&up[main]>.6,id+' main muscle is bright in the working phase');
+ }
 });

@@ -25,10 +25,12 @@ test('joint angles are the validator\'s own calculation', () => {
 });
 
 const EXPECT = {
-  knee: { on: ['squat', 'goblet', 'smithsquat', 'hacksquat', 'legpress', 'legpresslow', 'lunge', 'revlunge', 'bulgarian', 'stepup', 'pistolbox'], off: ['dbpress', 'latpull', 'deadlift', 'jumpsquat', 'glutebridge1', 'crunch', 'legext', 'calfraise'] },
+  /* сведение на блоке: опорная нога почти прямая; копенгагенская планка: колено верхней ноги прямое, сгибания под весом нет */
+  knee: { on: ['squat', 'goblet', 'smithsquat', 'hacksquat', 'legpress', 'legpresslow', 'lunge', 'revlunge', 'bulgarian', 'stepup', 'pistolbox'], off: ['dbpress', 'latpull', 'deadlift', 'jumpsquat', 'glutebridge1', 'crunch', 'legext', 'calfraise', 'cableadduct', 'copenhagen'] },
   kneeOpen: { on: ['legext'], off: ['legcurl', 'squat', 'legpress'] },
   lumbar: { on: ['deadlift', 'rdl', 'sllift', 'goodmorning', 'bbrow', 'kbswing', 'squat'], off: ['latpull', 'cablerow', 'dbrow', 'shrug', 'ohp', 'chestrowdb', 'legpress'] },
-  shPress: { on: ['bbbench', 'smithbench', 'inclinebb', 'closegrip', 'dip', 'assistdip', 'benchdip', 'pecdeck'], off: ['ohp', 'pushup', 'latpull', 'bbrow', 'dbcurl'] },
+  /* вращение плеча наружу: плечо у бока, не уходит за линию корпуса */
+  shPress: { on: ['bbbench', 'smithbench', 'inclinebb', 'closegrip', 'dip', 'assistdip', 'benchdip', 'pecdeck'], off: ['ohp', 'pushup', 'latpull', 'bbrow', 'dbcurl', 'cableextrot', 'bandextrot'] },
   shLever: { on: ['dbfly', 'pullover'], off: ['bbbench', 'cablefly', 'latraise'] },
   shOverhead: { on: ['ohp', 'dbpress', 'arnold', 'shoulderpressm', 'smithohp', 'pikepush', 'declinepike'],
     off: ['latraise', 'bandlatraise', 'frontraise', 'facepull', 'bandfacepull', 'latpull', 'pullup', 'ohext', 'cableohext', 'bbbench', 'dbincline', 'pullover'] },
@@ -36,7 +38,8 @@ const EXPECT = {
   pullTop: { on: ['pullup', 'chinup', 'assistpull'], off: ['hang', 'legraise', 'latpull', 'invrow'] },
   neck: { on: ['pullup', 'chinup', 'assistpull'], off: ['crunch', 'latpull', 'hang', 'shrug'] },
   elbow: { on: ['skull', 'ohext', 'cableohext'], off: ['dbcurl', 'ohp', 'pushdown', 'closegrip'] },
-  wrist: { on: ['pushup', 'diamond', 'burpee', 'mountain', 'birddog', 'plankup'], off: ['plank', 'wallpush', 'nordic', 'bbbench', 'dbcurl'] },
+  /* копенгагенская планка — упор на предплечье, как планка: кисть не нагружена */
+  wrist: { on: ['pushup', 'diamond', 'burpee', 'mountain', 'birddog', 'plankup'], off: ['plank', 'wallpush', 'nordic', 'bbbench', 'dbcurl', 'copenhagen', 'copenhagenknee'] },
   achilles: { on: ['calfraise', 'calf1', 'seatedcalf', 'standcalf'], off: ['squat', 'jumpsquat', 'treadmill', 'lpcalf'] },
   landing: { on: ['jumpsquat', 'burpee', 'jumpingjack'], off: ['pullup', 'dip', 'stepup', 'elliptical', 'stairs', 'squat', 'hangknee'] },
   hams: { on: ['rdl', 'sllift', 'goodmorning', 'nordic'], off: ['squat', 'legcurl', 'hipthrust', 'lunge'] }

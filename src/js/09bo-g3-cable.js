@@ -6,7 +6,8 @@
    g3SeatedRow  — тяга горизонтального блока: длинная скамья, наклонные упоры для стоп, нижний блок между ними;
    g3Door       — участок стены с дверью и креплением для эспандера (вверху или сбоку на нужной высоте).
    Подвижные части: BIND.g3cable — трос с поворотным кронштейном блока (вилка, ось вращения), сход троса
-   по касательной к колесу и подъём выбранных плит стека на величину вытянутого троса.
+   по касательной к колесу и подъём выбранных плит стека на величину вытянутого троса; манжета на голеностоп
+   (лента 7,5 см, D-кольцо, карабин — E.ankleCuff); BIND.g3towelRoll — валик между локтем и боком (Ø6,5 × 14 см).
    Размеры (см): стойки 7,5×7,5, высота колонн 218–222, колесо блока Ø9, плиты стека 32×14×2,4,
    сиденье тяги верхнего блока 46, скамья горизонтальной тяги 44, дверной проём 80×203. */
 ((E) => {
@@ -233,15 +234,27 @@
       line.pts[0] = V.dot(V.sub(T1, P), wrap) >= V.dot(V.sub(T2, P), wrap) ? T1 : T2;
     }
     const out = base.filter(p => p.id !== id + ':strap');
-    /* манжета на голеностоп: мягкое кольцо вокруг голени (полое — голень внутри), D-кольцо к карабину */
+    /* манжета на голеностоп (E.ankleCuff): лента 7,5 см из девяти витков, облегающих голень по её сечению (голень внутри),
+       стальное D-кольцо на стороне блока и карабин троса от кольца к концу троса */
     if (e.attach === 'ankle') {
-      const s = e.foot || 'L', f = R.frames['sk' + s], c0 = V.add(R['an' + s], f.y, 6), rr = 4.7, u = f.z, w = f.x;
-      for (const [k, dy] of [['A', -1.5], ['B', 0], ['C', 1.5]]) {
-        const pts = []; for (let i = 0; i <= 16; i++) { const a = i / 16 * 2 * Math.PI; pts.push(V.add(V.add(V.add(c0, f.y, dy), u, rr * Math.cos(a)), w, rr * Math.sin(a))); }
-        out.push({ kind: 'cable', pts, r: .8, tone: 'rubber', role: 'strap', id: id + ':cuff' + k, mount: 'body' });
+      const s = e.foot || 'L', K = E.ankleCuff(R, s, toCat(e.from)), n = 9;
+      for (let i = 0; i < n; i++) {
+        const h = K.lo + K.ring + i * (K.hi - K.lo - 2 * K.ring) / (n - 1), t = 1 - h / M.B.sk, pts = [];
+        for (let j = 0; j <= 24; j++) pts.push(M.limbPoint(R, 'sk', s, t, K.ang + j / 24 * 2 * Math.PI, K.ring + .15));
+        out.push({ kind: 'cable', pts, r: K.ring, tone: 'rubber', role: 'strap', id: id + ':cuff' + i, mount: 'body' });
       }
-      const ring = V.add(c0, V.unit(V.perp(V.sub(clip, c0), f.y)), rr + 1);
-      out.push({ kind: 'cable', pts: [ring, clip], r: .5, tone: 'chrome', role: 'frame', id: id + ':dring', mount: id + ':line' });
+      /* D-кольцо: дуга наружу и прямая перемычка вдоль голени (замкнуто) */
+      const ring = [V.add(K.base, K.axis, -K.dLen / 2)];
+      for (let j = 1; j <= 10; j++) { const a = j / 10 * Math.PI; ring.push(V.add(V.add(K.base, K.axis, K.dLen / 2 * Math.cos(a + Math.PI)), K.n, K.dOut * Math.sin(a))); }
+      ring.push(ring[0]);
+      out.push({ kind: 'cable', pts: ring, r: .3, tone: 'chrome', role: 'frame', id: id + ':dring', mount: 'body' });
+      /* карабин: вытянутая петля 6 × 2,2 см от вершины D-кольца к концу троса */
+      const u = V.unit(V.sub(clip, K.apex)), w = V.unit(V.cross(u, K.axis)), L = V.dist(clip, K.apex), hook = [];
+      for (let j = 0; j <= 16; j++) {
+        const a = j / 16 * 2 * Math.PI, along = (1 - Math.cos(a)) / 2 * L, side = Math.sin(a) * 1.1 * Math.min(1, 4 * along / L, 4 * (L - along) / L);
+        hook.push(V.add(V.add(K.apex, u, along), w, side));
+      }
+      out.push({ kind: 'cable', pts: hook, r: .35, tone: 'chrome', role: 'frame', id: id + ':snap', mount: id + ':line' });
     }
     /* прямая рукоять: поворотный крюк от середины рукояти к карабину троса */
     const bar = base.find(p => p.id === id + ':bar');
@@ -282,6 +295,17 @@
       out.push({ kind: 'beam', a: V.add(g, hz, 6.5), b: V.add(g, hz, -6.5), r: 1.6, tone: 'rubber', role: 'grip', id: id + ':handle' + s, mount: id + ':' + s });
     }
     return out;
+  };
+  /* Валик между локтем и боком (свёрнутое полотенце, Ø6,5 × 14 см) во вращениях плеча: лежит вдоль корпуса спереди назад
+     у внутренней поверхности плеча над локтем, держится зажатым между плечом и корпусом и следует за плечом */
+  BIND.g3towelRoll = (e, R) => {
+    const s = e.side || 'R', r = e.r || 3.25, t = e.at ?? .8, ax = M.limbAxes(R, 'ua', s, t), T = R.frames.thorax;
+    /* сторона плеча, обращённая к корпусу (по грудной клетке, а не по закрутке плеча: при вращении плеча валик остаётся у бока) */
+    const d = V.unit(V.perp(V.scale(T.x, -M.SIGN[s]), ax.axis)), ang = Math.atan2(V.dot(d, ax.lat), V.dot(d, ax.front));
+    /* центр валика — у внутренней поверхности плеча над локтем и на back см позади него: предплечье при повороте внутрь
+       проходит перед валиком, а не сквозь него */
+    const c = V.add(V.add(M.limbPoint(R, 'ua', s, t, ang), d, r - (e.squeeze ?? .3)), T.z, -(e.back ?? 3));
+    return [{ kind: 'cyl', c, axis: V.unit(T.z), r, len: e.len || 14, sides: 20, tone: 'towel', role: 'support', id: (e.id || 'towel') + ':roll', mount: 'body' }];
   };
   /* Неподвижный трос между точками (внутри тренажёра: вдоль вылета, к колонне) */
   BIND.g3line = e => [{ kind: 'cable', pts: e.pts.map(toCat), r: e.r || .35, tone: 'cable', role: 'cable', id: e.id || 'g3line', mount: e.mountTo || 'floor' }];

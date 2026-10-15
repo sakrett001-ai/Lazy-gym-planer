@@ -41,9 +41,63 @@ const MUSCLE_PROFILES={
    hams:{role:'support',concentric:[.28,.43,.40],eccentric:[.28,.37,.40]},
    abs:{role:'stabilizer',concentric:[.36,.43,.43],eccentric:[.36,.43,.43]},
    lowback:{role:'stabilizer',concentric:[.36,.46,.46],eccentric:[.36,.46,.46]}
+  }},
+ /* Прицельно на приводящие и манжету: фазы — по ходу движения и рычагу, состав — по ЭМГ из источников */
+ cableadduct:{pair:'above',curveBasis:'illustrative',
+  sources:[['Сведение бедра против резины и другие упражнения на приводящие: ЭМГ — Serner и др., 2014','https://doi.org/10.1136/bjsports-2012-091746']],
+  notes:{concentric:'Приводящие сводят ногу к опорной и чуть за неё. Корпус и таз неподвижны.',
+   eccentric:'Приводящие сдерживают возврат ноги в отведение под тягой троса.',
+   end:'Нога за средней линией: приводящие удерживают её перед опорной стопой.',
+   start:'Нога в отведении: приводящие растянуты, трос натянут.'},
+  muscles:{
+   adductors:{role:'primary',concentric:[.36,.86,.70],eccentric:[.36,.62,.70]},
+   obliques:{role:'stabilizer',concentric:[.30,.36,.36],eccentric:[.30,.36,.36]}
+  }},
+ copenhagen:{pair:'above',curveBasis:'illustrative',
+  sources:[['Копенгагенское упражнение и другие упражнения на приводящие: ЭМГ — Serner и др., 2014','https://doi.org/10.1136/bjsports-2012-091746'],
+   ['Копенгагенское упражнение: рост эксцентрической силы приводящих — Ishøi и др., 2016','https://doi.org/10.1111/sms.12585']],
+  notes:{concentric:'Приводящие верхней ноги поднимают таз до прямой линии, нижние подтягивают ногу к скамье. Косые держат корпус.',
+   eccentric:'Приводящие верхней ноги тормозят опускание таза — уступающая работа под весом тела.',
+   end:'Верхняя точка: тело прямое, приводящие держат его на опоре голеностопом.',
+   start:'Нижняя точка: таз опущен наполовину, приводящие верхней ноги растянуты под нагрузкой.'},
+  muscles:{
+   adductors:{role:'primary',concentric:[.62,.92,.80],eccentric:[.62,.78,.80]},
+   obliques:{role:'support',concentric:[.40,.58,.52],eccentric:[.40,.50,.52]}
+  }},
+ copenhagenknee:{pair:'above',curveBasis:'illustrative',
+  sources:[['Копенгагенское упражнение и другие упражнения на приводящие: ЭМГ — Serner и др., 2014','https://doi.org/10.1136/bjsports-2012-091746'],
+   ['Ступени копенгагенского упражнения от опоры коленом — Polglass и др., 2019','https://doi.org/10.1136/bmjsem-2019-000570']],
+  notes:{concentric:'Приводящие верхней ноги поднимают таз до прямой линии от плеч до колена, нижние подтягивают согнутую ногу к скамье. Косые держат корпус.',
+   eccentric:'Приводящие тормозят опускание таза; рычаг короче, чем с опорой голеностопом.',
+   end:'Верхняя точка: тело прямое, опора — колено и голень на скамье.',
+   start:'Нижняя точка: таз опущен наполовину, нижнее колено на полу, приводящие растянуты.'},
+  muscles:{
+   adductors:{role:'primary',concentric:[.48,.78,.66],eccentric:[.48,.64,.66]},
+   obliques:{role:'support',concentric:[.36,.52,.46],eccentric:[.36,.45,.46]}
+  }},
+ cableextrot:{pair:'back',curveBasis:'illustrative',
+  sources:[['Мышцы манжеты и дельтовидная в упражнениях на наружную ротацию: ЭМГ — Reinold и др., 2004','https://doi.org/10.2519/jospt.2004.34.7.385']],
+  notes:{concentric:'Подостная и малая круглая поворачивают плечо наружу, задняя дельта помогает. Локоть у бока.',
+   eccentric:'Наружные ротаторы сдерживают возврат кисти к животу под тягой троса.',
+   end:'Плечо развёрнуто наружу: манжета удерживает положение, локоть не отходит от валика.',
+   start:'Кисть у живота: трос натянут, плечо повёрнуто внутрь.'},
+  muscles:{
+   cuff:{role:'primary',concentric:[.34,.80,.72],eccentric:[.34,.58,.72]},
+   delt_r:{role:'support',concentric:[.26,.52,.50],eccentric:[.26,.42,.50]}
+  }},
+ bandextrot:{pair:'back',curveBasis:'illustrative',
+  sources:[['Мышцы манжеты и дельтовидная в упражнениях на наружную ротацию: ЭМГ — Reinold и др., 2004','https://doi.org/10.2519/jospt.2004.34.7.385']],
+  notes:{concentric:'Подостная и малая круглая поворачивают плечо наружу; лента тянет сильнее к концу движения.',
+   eccentric:'Наружные ротаторы сдерживают возврат кисти к животу, лента не дёргает руку.',
+   end:'Плечо развёрнуто наружу — лента натянута сильнее всего.',
+   start:'Кисть у живота: лента едва натянута.'},
+  muscles:{
+   cuff:{role:'primary',concentric:[.26,.70,.86],eccentric:[.26,.56,.86]},
+   delt_r:{role:'support',concentric:[.22,.46,.60],eccentric:[.22,.38,.60]}
   }}
 };
-for(const[id,profile]of Object.entries(MUSCLE_PROFILES))DEMO[id].anim.muscleProfile=profile;
+/* DEMO собран до модулей 04 и 04b: упражнения оттуда ищутся в EX */
+for(const[id,profile]of Object.entries(MUSCLE_PROFILES))(DEMO[id]||EX.find(ex=>ex.id===id)).anim.muscleProfile=profile;
 
 function muscleFrame(anim,t,index=0){
  const profile=motionProfile(anim);
