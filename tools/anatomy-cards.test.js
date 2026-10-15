@@ -112,12 +112,13 @@ async function stageRuntime({ available = true } = {}) {
     setPixelRatio() {} setSize(a, b) { n.sizes.push([a, b]); } render(scene, camera) { n.renders++; n.scene = scene; n.camera = camera; } dispose() {} forceContextLoss() { n.losses++; }
   }
   /* Skeleton — как в браузере, глобальный (кости — приложения, src/js/09bq-skeleton.js) */
-  vm.runInNewContext(mainSrc, { window: w, document: w.document, performance, THREE: { ...THREE, WebGLRenderer: Renderer }, createCatalogScene, world, get Skeleton() { return globalThis.Skeleton; } });
+  const env = { window: w, document: w.document, performance, THREE: { ...THREE, WebGLRenderer: Renderer }, createCatalogScene, world, GymPerf: null, get Skeleton() { return globalThis.Skeleton; } };
+  vm.runInNewContext(mainSrc, env);
   const m = loadModel(), { catalogVolumeData, muscleColor, catalogAnimFor } = m.get('({catalogVolumeData,muscleColor,catalogAnimFor})');
   let datas = 0;
   const opts = (id, key = id) => ({ key, fit: 'body', color: muscleColor, data: (t, index, coarse, lean) => { datas++; return catalogVolumeData(m.EX.find(e => e.id === id).anim, t, index, undefined, coarse, lean); } });
   const target = (width = 261, height = 261) => { const calls = []; return { width, height, calls, getContext: () => ({ drawImage: (...a) => calls.push(a) }) }; };
-  return { dom, w, n, stage: () => w.GymVolume.cards(), opts, target, datas: () => datas, m, catalogAnimFor };
+  return { dom, w, n, env, stage: () => w.GymVolume.cards(), opts, target, datas: () => datas, m, catalogAnimFor };
 }
 
 test('one renderer for every card: scenes by exercise, at most three kept, each frame copied into the card canvas', async () => {
@@ -202,6 +203,23 @@ test('a lost WebGL context keeps every card picture; disposal frees the context 
     assert.equal(f.paint(t, .3, 0), true); assert.equal(r.n.constructors, 2, 'новый контекст — по требованию');
     f.release(); assert.equal(f.paint(t, .4, 0), false, 'отпущенная фигура не рисует');
   } finally { r.stage()?.dispose(); r.dom.window.close(); }
+});
+
+test('speed panel (?perf): a card scene gets the 3D wrappers once, each card frame is reported; off — one flag check', async () => {
+  const r = await stageRuntime();
+  try {
+    const calls = { volume: [], card: [] };
+    r.env.GymPerf = { volume: o => calls.volume.push(o), card: (total, copy) => calls.card.push([total, copy]) };
+    const f = r.stage().figure(r.opts('squat'));
+    f.paint(r.target(), .2, 0); f.paint(r.target(), .3, 0);
+    assert.equal(calls.volume.length, 1, 'wrappers — once per scene build');
+    const v = calls.volume[0];
+    assert.equal(v.card, true); assert.equal(typeof v.scene.apply, 'function'); assert.equal(typeof v.renderer.render, 'function'); assert.equal(typeof v.options.data, 'function');
+    assert.equal(calls.card.length, 2, 'every painted card frame');
+    for (const [total, copy] of calls.card) assert(total >= copy && copy >= 0);
+    r.env.GymPerf = null; f.paint(r.target(), .4, 0);
+    assert.equal(calls.card.length, 2, 'off — nothing reported');
+  } finally { r.stage().dispose(); r.dom.window.close(); }
 });
 
 test('without WebGL2 cards have no stage: they stay SVG', async () => {

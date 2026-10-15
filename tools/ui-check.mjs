@@ -560,8 +560,9 @@ await page.close();
 }
 
 /* скрытая панель замера скорости (?perf, 19-perf-panel.js): без флага панели нет, а крючки только читают флаг
-   (globalThis.GymPerf); с флагом — плашка на телефоне, живые цифры карточек и объёма, панель переезжает в открытое
-   окно; «Замерить» проходит все 8 шагов (короткие длительности, фигуры — заглушки) и не меняет журнал, настройки,
+   (globalThis.GymPerf); с флагом — плашка на телефоне, живые цифры карточек (в «Анатомии» — кадр карточки, копия,
+   ступень скорости) и объёма, панель переезжает в открытое окно; «Замерить» проходит все 10 шагов (карточка и
+   тренировка — в «Анатомии» и «Манекене»; короткие длительности, фигуры — заглушки) и не меняет журнал, настройки,
    планы и вид фигуры; «Остановить» прерывает и всё возвращает; «Скопировать результат» — текст или поле для ручного
    копирования; ?perf=0 выключает */
 {
@@ -582,9 +583,15 @@ await page.close();
     '?perf: панель включена и запомнена, плашка целиком на экране телефона');
   check(await p.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), '?perf: страница без прокрутки вбок');
   await p.evaluate(() => document.querySelector('.card').scrollIntoView({ block: 'center' }));
-  await p.waitForFunction(() => /кадр \d/.test(document.querySelector('[data-perf-k="screen"]').textContent) && /заново \d/.test(document.querySelector('[data-perf-k="cards"]').textContent), null, { timeout: 15000 }).catch(() => {});
-  const live = await p.evaluate(() => ({ pill: document.querySelector('[data-perf-pill]').textContent, screen: document.querySelector('[data-perf-k="screen"]').textContent, cards: document.querySelector('[data-perf-k="cards"]').textContent }));
-  check(/^\d/.test(live.pill) && /^\d+(,\d)? к\/с · кадр \d/.test(live.screen) && /заново \d/.test(live.cards), `живые цифры: кадры и карточки (${live.screen} | ${live.cards})`);
+  /* карточки по умолчанию — в «Анатомии»: живые цифры — кадр карточки общего рендерера, копия в её холст, ступень скорости */
+  await p.waitForFunction(() => /кадр \d/.test(document.querySelector('[data-perf-k="screen"]').textContent) && /анатомия \d/.test(document.querySelector('[data-perf-k="cards"]').textContent), null, { timeout: 30000 }).catch(() => {});
+  const live = await p.evaluate(() => ({ pill: document.querySelector('[data-perf-pill]').textContent, screen: document.querySelector('[data-perf-k="screen"]').textContent, cards: document.querySelector('[data-perf-k="cards"]').textContent, view: document.querySelector('[data-perf-k="view"]').textContent }));
+  check(/^\d/.test(live.pill) && /^\d+(,\d)? к\/с · кадр \d/.test(live.screen) && /анатомия \d.* · копия \d/.test(live.cards) && /^План — Анатомия; ступень (30|15|10) к\/с, медиана /.test(live.view),
+    `живые цифры: кадры, карточка в «Анатомии» и её ступень (${live.screen} | ${live.cards} | ${live.view})`);
+  /* «Манекен» — снова SVG-карточки: из памяти и заново */
+  await p.evaluate(() => { motionPrefs.view = 'mannequin'; applyCardsView(); });
+  const svgLive = await p.waitForFunction(() => /заново \d/.test(document.querySelector('[data-perf-k="cards"]').textContent) && /^План — рисунок SVG$/.test(document.querySelector('[data-perf-k="view"]').textContent), null, { timeout: 15000 }).then(() => true, () => false);
+  check(svgLive, 'живые цифры в «Манекене»: SVG-карточки, без ступени');
   await p.evaluate(() => { motionPrefs.view = 'mannequin'; openMotionItem(previewItem('legpress')); detailMotion.paused = false; });
   const volLive = await p.waitForFunction(() => /поза \d/.test(document.querySelector('[data-perf-k="volume"]')?.textContent || ''), null, { timeout: 15000 }).then(() => true, () => false);
   /* программная графика стенда отстаёт от кадров — фигуру сразу на паузу */
@@ -612,27 +619,30 @@ await page.close();
   });
   const before = await snap();
   await p.click('[data-perf="run"]'); await p.waitForTimeout(400);
-  check(/^Идёт замер… не трогайте экран, шаг 1 из 8$/.test(await p.evaluate(() => document.querySelector('[data-perf-runtext]').textContent)), '«Замерить»: надпись «Идёт замер… не трогайте экран, шаг 1 из 8»');
+  check(/^Идёт замер… не трогайте экран, шаг 1 из 10$/.test(await p.evaluate(() => document.querySelector('[data-perf-runtext]').textContent)), '«Замерить»: надпись «Идёт замер… не трогайте экран, шаг 1 из 10»');
   await p.click('[data-perf="stop"]');
   await p.waitForFunction(() => !GymPerf.run && GymPerf.result, null, { timeout: 5000 });
   check(await p.evaluate(() => GymPerf.result.aborted && /Замер остановлен/.test(document.querySelector('[data-perf-result]').textContent)) && await snap() === before, '«Остановить» прерывает замер и возвращает всё как было');
   /* экран не гаснет на время замера: блокировка берётся и отпускается (тренировка берёт свою — тоже отпускает) */
   await p.evaluate(() => { window.__wk = { req: 0, rel: 0 }; Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: { request: async () => { __wk.req++; return { release: async () => { __wk.rel++; } }; } } }); });
-  const run = await p.evaluate(() => perfRun({ plan: 700, step: 500, warm: 150 }).then(r => ({ kinds: r.steps.map(s => s.kind + (s.id ? ':' + s.id : '')), bad: r.steps.filter(s => s.skip || s.error).map(s => s.label + ' ' + (s.skip || s.error)), text: perfReportText(r) })));
+  const run = await p.evaluate(() => perfRun({ plan: 700, step: 500, warm: 150 }).then(r => ({ kinds: r.steps.map(s => s.kind + (s.id ? ':' + s.id : '')), labels: r.steps.map(s => s.label), bad: r.steps.filter(s => s.skip || s.error).map(s => s.label + ' ' + (s.skip || s.error)), text: perfReportText(r) })));
   await p.waitForTimeout(50);
   check(await p.evaluate(() => __wk.req >= 2 && __wk.rel === __wk.req), 'на время замера экран не гаснет: блокировка экрана взята и отпущена');
-  check(run.kinds.length === 8 && /^plan:\w+$/.test(run.kinds[0]) && /^workout:\w+$/.test(run.kinds[7]) && !run.bad.length
-    && run.kinds.slice(1, 7).join() === 'detail:latpulluh,detail:latpulluh,detail:legpress,detail:legpress,detail:squat,detail:squat',
-    `«Замерить»: все 8 шагов — карточка, три разбора в двух видах, тренировка (${run.kinds.join(', ')}${run.bad.length ? '; ' + run.bad.join('; ') : ''})`);
+  check(run.kinds.length === 10 && /^plan:\w+$/.test(run.kinds[0]) && run.kinds[1] === run.kinds[0] && /^workout:\w+$/.test(run.kinds[8]) && run.kinds[9] === run.kinds[8] && !run.bad.length
+    && run.kinds.slice(2, 8).join() === 'detail:latpulluh,detail:latpulluh,detail:legpress,detail:legpress,detail:squat,detail:squat',
+    `«Замерить»: все 10 шагов — карточка и тренировка в двух видах, три разбора в двух видах (${run.kinds.join(', ')}${run.bad.length ? '; ' + run.bad.join('; ') : ''})`);
+  /* фигуры — заглушки (объёма нет): шаги «Анатомии» честно подписаны манекеном без объёмной графики */
+  check(/ — Манекен \(объёмная графика недоступна\)$/.test(run.labels[0]) && / — Манекен$/.test(run.labels[1]) && /^Тренировка: .* \(объёмная графика недоступна\)$/.test(run.labels[8]) && /^Тренировка: /.test(run.labels[9]),
+    `подписи шагов — по тому, что показано (${run.labels[0]} | ${run.labels[1]} | ${run.labels[8]} | ${run.labels[9]})`);
   const after = await snap();
   check(after === before, 'после замера журнал, настройки, планы, сохранённая тренировка, вид фигуры и прокрутка — как были');
-  check(await p.evaluate(() => document.querySelectorAll('#perf-panel .perf-table tbody tr').length === 8 && !document.querySelector('[data-perf-run]').offsetHeight), 'итог: таблица из 8 шагов');
+  check(await p.evaluate(() => document.querySelectorAll('#perf-panel .perf-table tbody tr').length === 10 && !document.querySelector('[data-perf-run]').offsetHeight), 'итог: таблица из 10 шагов');
   /* копирование: буфер обмена; не вышло — поле с выделенным текстом */
   await p.evaluate(() => { window.__copied = null; Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: t => { window.__copied = t; return Promise.resolve(); } } }); });
   await p.click('[data-perf="copy"]'); await p.waitForTimeout(100);
   const copied = await p.evaluate(() => ({ text: window.__copied, msg: document.querySelector('[data-perf-msg]').textContent }));
-  check(copied.text && /^Lazy Gym Planner .* — замер скорости, /.test(copied.text) && /\nУстройство: .*\nВидеокарта: /.test(copied.text) && (copied.text.match(/^\d\. /gm) || []).length === 8 && /Скопировано/.test(copied.msg),
-    '«Скопировать результат»: устройство и 8 шагов в буфере обмена');
+  check(copied.text && /^Lazy Gym Planner .* — замер скорости, /.test(copied.text) && /\nУстройство: .*\nВидеокарта: /.test(copied.text) && (copied.text.match(/^\d+\. /gm) || []).length === 10 && /Скопировано/.test(copied.msg),
+    '«Скопировать результат»: устройство и 10 шагов в буфере обмена');
   await p.evaluate(() => { navigator.clipboard.writeText = () => Promise.reject(new Error('нет доступа')); });
   await p.click('[data-perf="copy"]'); await p.waitForTimeout(100);
   check(await p.evaluate(() => { const ta = document.querySelector('[data-perf-msg] textarea'); return !!ta && ta.value === window.__copied && document.activeElement === ta && ta.selectionEnd - ta.selectionStart === ta.value.length; }),

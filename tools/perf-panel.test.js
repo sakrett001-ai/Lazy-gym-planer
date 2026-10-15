@@ -10,7 +10,7 @@ const { loadModel } = require('./biomechanics-audit');
 const dir = path.join(__dirname, '../src/js');
 const read = f => fs.readFileSync(path.join(dir, f), 'utf8');
 const m = loadModel({ fullApp: true });
-const api = m.get('({perfMedian, perfPercentile, perfStat, perfFps, perfSummary, perfNum, perfPair, perfUa, perfFlag, perfReportText, perfStepLine})');
+const api = m.get('({perfMedian, perfPercentile, perfStat, perfFps, perfSummary, perfNum, perfPair, perfUa, perfFlag, perfReportText, perfStepLine, perfPaceText, PERF_STEPS})');
 
 test('median and percentiles: unsorted input, even and odd counts, gaps ignored', () => {
   const { perfMedian, perfPercentile, perfStat } = api;
@@ -55,7 +55,7 @@ test('summary per frame: card frames from memory and computed, DOM; 3D parts, th
   assert.equal(s.frames, 5);
   assert.equal(s.fps, 50);
   assert.equal(s.figFps, 40, 'four frames drew a figure');
-  assert.deepEqual({ ...s.counts }, { svgHit: 1, svgMiss: 1 });
+  assert.deepEqual({ ...s.counts }, { svgHit: 1, svgMiss: 1, anat: 0 });
   assert.equal(s.parts.card.n, 2); assert.equal(s.parts.card.med, 3.5, 'card frame = calc + DOM: 5 and 2');
   assert.equal(s.parts.svgMiss.med, 4); assert.equal(s.parts.svgHit.med, .5); assert.equal(s.parts.svgDom.n, 2);
   assert.equal(s.parts.volume.n, 2); assert.deepEqual([s.parts.volume.med, s.parts.volume.p95], [18, 18], '3D frame = pose + scene + render');
@@ -237,5 +237,71 @@ test('SVG card hook: the second circle of a repetition hands over the same frame
     /* выключено — крючок молчит */
     dom.window.GymPerf = null; seen.length = 0; fig.at(.3, { index: 0 }); assert.equal(seen.length, 0);
     delete dom.window.GymPerf; fig.at(.4, { index: 0 }); assert.equal(seen.length, 0, 'and without the panel file at all');
+  } finally { dom.window.close(); }
+});
+
+/* «Анатомия» карточек плана и экрана тренировки (этап 2): общий рендерер карточек, ступень скорости и откат на манекен */
+test('anatomy cards: the whole card frame and its copy are counted per frame; a figure frame; parts come from the same wrappers', () => {
+  const { perfSummary } = api;
+  const frames = [
+    { t: 0, cost: 14, b: { anat: 10, copy: .2, nAnat: 1, pose: 2, scene: 6, skin: 1, bones: 1.5, muscles: 2.5, render: 1.8 } },
+    { t: 16, cost: 3, b: null },
+    { t: 33, cost: 13, b: { anat: 9, copy: .3, nAnat: 1, pose: 2, scene: 5, render: 1.7 } },
+    { t: 50, cost: 3, b: null }
+  ];
+  const s = perfSummary(frames, 66.7);
+  assert.equal(s.parts.anat.n, 2); assert.equal(s.parts.anat.med, 9.5);
+  assert.equal(s.parts.copy.med, .25);
+  assert.equal(s.counts.anat, 2);
+  assert.equal(Math.round(s.figFps), 30, 'two of four frames drew the card: 30 figure frames per second');
+  assert.equal(s.parts.card, null, 'no SVG card frames');
+  assert.equal(s.parts.volume.n, 2, 'pose + scene + render of the card');
+});
+
+test('anatomy step lines: step and median, or the fallback; the closing line says whether the fallback happened', () => {
+  const { perfReportText, perfSummary, perfPaceText } = api;
+  assert.equal(perfPaceText({ fps: 30, median: 9.84, slow: false }), 'ступень 30 к/с, медиана 9,8 мс');
+  assert.equal(perfPaceText({ fps: 10, median: 61.2, slow: true }), 'откат на манекен (медиана 61 мс)');
+  assert.equal(perfPaceText({ fps: 30, median: null, slow: false }), 'ступень 30 к/с, медиана — мс');
+  const card = Array.from({ length: 30 }, (_, i) => ({ t: i * 33, cost: 12, b: { anat: 10, copy: .2, nAnat: 1, pose: 2, scene: 6, render: 2 } }));
+  const r = {
+    date: new Date(2026, 9, 15, 9, 5), aborted: false,
+    device: { version: '4.49.0', build: 'b', os: 'Android 14', browser: 'Chrome 129', model: '', cores: 8, memory: 4, dpr: 2, screen: [412, 915], reduced: false, gpu: { renderer: 'Adreno', webgl2: true } },
+    steps: [
+      { kind: 'plan', label: 'План: карточка «Присед» — Анатомия', sum: perfSummary(card, 1000), q0: 'normal', q1: 'low', pace: { fps: 30, median: 9.6, slow: false } },
+      { kind: 'workout', label: 'Тренировка: Присед — Анатомия', open: 400, wait: 0, sum: perfSummary(card, 1000), q0: 'normal', q1: 'normal', pace: { fps: 10, median: 62, slow: true } }
+    ]
+  };
+  const lines = perfReportText(r).split('\n');
+  assert.equal(lines[4], '1. План: карточка «Присед» — Анатомия: экран 30 к/с, фигура 30 к/с; кадр 12/12; анатомия 10/10 (копия 0,2/0,2); поза 2,0/2,0; сцена 6,0/6,0; отрисовка 2,0/2,0; всего 10/10; ступень 30 к/с, медиана 9,6 мс',
+    'card in «Anatomy»: its frame, copy, parts; no light-mode words for cards');
+  assert.match(lines[5], /^2\. Тренировка: Присед — Анатомия: открытие 400 мс; .*; объём обычный; откат на манекен \(медиана 62 мс\)$/);
+  assert.equal(lines.at(-1), 'Откат «Анатомии» на манекен включился на шаге 2.');
+  r.steps[1].pace.slow = false;
+  assert.equal(perfReportText(r).split('\n').at(-1), 'Откат «Анатомии» на манекен не включался.');
+});
+
+test('the run measures the plan card and the workout in «Anatomy» and in «Mannequin»; the 3D detail — as before', () => {
+  const steps = JSON.parse(JSON.stringify(api.PERF_STEPS));
+  assert.deepEqual(steps.map(s => s.kind + ':' + s.view + (s.id ? ':' + s.id : '')), ['plan:anatomy', 'plan:mannequin',
+    'detail:anatomy:latpulluh', 'detail:mannequin:latpulluh', 'detail:anatomy:legpress', 'detail:mannequin:legpress', 'detail:anatomy:squat', 'detail:mannequin:squat',
+    'workout:anatomy', 'workout:mannequin']);
+});
+
+test('card hooks: GymPerf.card records the card frame (not while a scene is built); card scenes keep the 3D quality flag of the detail', async () => {
+  const dom = panelDom('https://lazy-gym.test/?perf');
+  try {
+    const w = dom.window, P = w.GymPerf; let clock = 1000;
+    w.performance.now = () => clock;
+    const fig = { scene: { apply() { clock += 3; } }, renderer: { render() { clock += 1; } }, options: { data() { clock += 2; return {}; } } };
+    P.volume({ ...fig, low: () => true });
+    assert.equal(w.eval('perfQuality()'), 'low');
+    const card = { scene: { apply() { clock += 5; } }, renderer: { render() { clock += 1; } }, options: { data() { clock += 2; return {}; } } };
+    P.volume({ ...card, root: null, card: true });
+    assert.equal(w.eval('perfQuality()'), 'low', 'a card scene does not replace the quality source');
+    P.card(9, .2); assert.equal(P.bucket, null, 'the frame that built a scene is not recorded');
+    await new Promise(r => setTimeout(r, 0)); P.bucket = null;
+    card.options.data(); card.scene.apply(); card.renderer.render(); P.card(8, .3); P.card(7, .1);
+    assert.deepEqual({ ...P.bucket }, { pose: 2, scene: 5, render: 1, anat: 15, copy: .4, nAnat: 2 });
   } finally { dom.window.close(); }
 });

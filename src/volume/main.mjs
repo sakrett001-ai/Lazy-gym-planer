@@ -163,6 +163,9 @@ function createCardStage(){
    boundsSet(fitKey,Object.fromEntries(Object.entries(scene.bounds).map(([k,e])=>[k,{minX:round4(e.minX),maxX:round4(e.maxX),minY:round4(e.minY),maxY:round4(e.maxY)}])));
   }
   scene.studio?.(slot.renderer);if(!CARD_SHADOWS)scene.setShadows?.(false);builds++;
+  /* замер скорости (?perf, src/js/19-perf-panel.js): обёртки вызовов этой сцены и общего рендерера (card — не трогать
+     признак облегчённого режима фигур разбора); выключенный — одна проверка на сборку сцены */
+  globalThis.GymPerf?.volume({scene,renderer:slot.renderer,options,root:null,card:true});
   return{key,scene,data,color:options.color,applied:null,aspect:0,bones:{map:new Map(),data:null}};
  }
  function disposeEntry(e,now){try{e.scene.disposeGeometry();}catch(x){}if(now)try{e.scene.disposeMaterials();}catch(x){}else afterRender.push(e.scene.disposeMaterials);}
@@ -199,6 +202,8 @@ function createCardStage(){
     const t2=now(),g=target.getContext('2d');if(!g)return false;g.drawImage(s.canvas,0,0,width,height);
     /* время частей последнего кадра (мс): поза и сцена, отрисовка, копия в холст карточки — для замеров */
     timing.apply=t1-t0;timing.render=t2-t1;timing.copy=now()-t2;
+    /* панель замера: весь кадр карточки и копия в её холст (части кадра пишут обёртки сцены) */
+    const pf=globalThis.GymPerf;if(pf)pf.card?.(timing.apply+timing.render+timing.copy,timing.copy);
     for(const f of afterRender.splice(0))try{f();}catch(x){}
     return true;
    },
