@@ -428,7 +428,8 @@ function buildSpatialFigure(anim,opts={}){
  }
  function at(t,frame){
   lastT=t;lastFrame=frame||null;
-  const F=frameData(t,frame),records=F.records;
+  /* замер скорости (?perf, 19-perf-panel.js): выключенный — одна проверка */
+  const pf=globalThis.GymPerf,p0=pf&&performance.now(),F=frameData(t,frame),records=F.records,p1=pf&&performance.now();
   /* атрибут пишется, только если он изменился с прошлого кадра: у неподвижного инвентаря и цветов — почти никогда;
      запись из памяти кадров, та же, что в прошлом кадре, — узел не трогается совсем */
   records.forEach((s,i)=>{let node=nodes[i];if(!node||node.tagName!==s.tag){const replacement=el(s.tag,{});if(node)node.replaceWith(replacement);else scene.appendChild(replacement);node=nodes[i]=replacement;nodeAttrs[i]=null;}const old=nodeAttrs[i];if(old===s.attrs)return;for(const attr of [...node.attributes])if(!(attr.name in s.attrs))node.removeAttribute(attr.name);for(const k in s.attrs){const v=s.attrs[k];if(!old||old[k]!==v||!node.hasAttribute(k))node.setAttribute(k,k==='fill'&&typeof v==='string'&&v.charCodeAt(0)===1?fills[v.slice(1)]:v);}nodeAttrs[i]=s.attrs;});
@@ -437,6 +438,7 @@ function buildSpatialFigure(anim,opts={}){
   svg.dataset.pose=F.pose;if(F.phase)svg.dataset.musclePhase=F.phase;allBounds.length=0;setRegion(selectedRegion);
   if(F.vectors)setVectors.paint(F.vectors);else setVectors?.at?.(t,frame,F.R);
   paintStress(F.stress);
+  if(pf)pf.svg(p0,p1,F);
  }
  const setStress=show=>{stressOn=!!show;at(lastT,lastFrame);};
  const setTrace=show=>trace.setAttribute('display',show?'inline':'none');

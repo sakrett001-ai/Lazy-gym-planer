@@ -254,6 +254,20 @@ await run(`(()=>{closeWorkout();S.view='journal';renderSetup();renderPlan();docu
 await scan('journal with L/R and total weight', await run('csvText()'));
 await run(`(()=>{S.lr={};S.view='plan';S.mode='single';regen();})()`);
 
+/* 8. скрытая панель замера скорости (?perf): живые цифры, устройство, идёт замер, итог, текст результата, все подписи */
+step('8. замер скорости');
+await run(`(()=>{perfStart();document.querySelector('.card')?.scrollIntoView({block:'center'});})()`); await page.waitForTimeout(700);
+await scan('perf panel live');
+await page.click('#perf-panel [data-perf="dev"]'); await scan('perf panel device');
+await run(`(()=>{perfRun({plan:300,step:250,warm:100});})()`); await page.waitForTimeout(150); await scan('perf panel running');
+await page.waitForFunction(() => !GymPerf.run, null, { timeout: 60000 });
+await scan('perf panel result', await run(`[perfReportText(GymPerf.result), Object.values(PERF_T).join('\\n'), perfUa('Mozilla/5.0 (Linux; Android 12; M2101K6G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 YaBrowser/24.1.2.86.00 Mobile Safari/537.36').browser, [1, 2, 5].map(n => perfDeviceLines({...perfDevice(), cores: n})[0] + '\\n' + perfStepLine({label: 'x', sum: perfSummary(Array.from({length: n}, (_, i) => ({t: i, cost: 1, b: {svgHit: 1, nHit: 1, svgMiss: 1, nMiss: 1, svgDom: 1}})), 1000)}, 0)).join('\\n')].join('\\n')`));
+await run(`(()=>{navigator.clipboard&&(navigator.clipboard.writeText=()=>Promise.reject(new Error('no')));})()`);
+await page.click('#perf-panel [data-perf="copy"]'); await page.waitForTimeout(100); await scan('perf copy fallback');
+await page.click('#start-workout'); await page.waitForTimeout(150);
+await run(`(()=>{perfRun();})()`); await page.waitForTimeout(100); await scan('perf: close the workout first');
+await run(`(()=>{closeWorkout();perfStop();})()`);
+
 await browser.close();
 const list = [...found.values()];
 const outIdx = process.argv.indexOf('--json');
