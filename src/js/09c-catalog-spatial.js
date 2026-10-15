@@ -283,7 +283,9 @@ for(const ex of EX){
  const raw={...ex.anim,catalogId:ex.id};delete raw.catalogRig;delete raw.catalogProfile;CATALOG_SOURCES.raw.set(ex.id,raw);
  /* Упражнения на манекене: запечённые ключи поз (tools/mannequin) и параметрический инвентарь */
  if(typeof CATALOG_POSES!=='undefined'&&CATALOG_POSES[ex.id]){
-  const rig=GymEquipment.rig(CATALOG_POSES[ex.id]);
+  /* поза по умолчанию — без необязательного инвентаря; варианты хвата (variants) — для показа с ним (catalogAnimFor) */
+  const entry=CATALOG_POSES[ex.id],rig=GymEquipment.rig(GymEquipment.variantEntry(entry,()=>false));
+  if(entry.variants)ex.anim.catalogVariants=Object.fromEntries(Object.keys(entry.variants).map(v=>[v,GymEquipment.rig(GymEquipment.variantEntry(entry,k=>k===v))]));
   ex.anim.catalogRig=rig;ex.anim.catalogCameras=[...CATALOG_CAMERAS];ex.anim.catalogId=ex.id;ex.anim.catalogBasis='mannequin';
   if(CATALOG_POSES[ex.id].loop)ex.anim.loop=true;
   continue;

@@ -507,28 +507,44 @@ module.exports = {
     }
   },
 
-  /* Гоблет-приседания: гантель вертикально у груди (верхний диск лежит на кулаках) или гиря «за рога» (optional 'kb').
+  /* Гоблет-приседания: гантель вертикально у груди — ладони «чашкой» под верхним диском, большие и указательные пальцы
+     охватывают рукоять (хват, как в пуловере, тип g2CupDumbbell); гиря (optional 'kb') — кулаками за рога (вариант позы
+     variants: ['kb'] — у гири другой хват). До 4.43.0 гантель тоже лежала верхним диском на кулаках: кулаки стояли по бокам
+     рукояти в 2–3 см от неё — сверху казалось, что рука проходит мимо гантели.
      Стопы шире плеч, носки врозь, колени по носкам, локти опущены и при приседе проходят внутри коленей.
      eccFirst: t=0 — стоя, t=1 — присед до параллели бедра с полом, спина нейтральна. */
   goblet: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [{ type: 'g2FistDumbbell', id: 'gdb', optionalNot: 'kb' }, { type: 'g2KbHorns', id: 'kb', optional: 'kb' }],
-    contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'handL', prop: 'gdb:top', optional: true }, { body: 'handR', prop: 'gdb:top', optional: true },
+    variants: ['kb'],
+    equipment: [{ type: 'g2CupDumbbell', id: 'cup', hands: ['L', 'R'], optionalNot: 'kb' }, { type: 'g2KbHorns', id: 'kb', optional: 'kb' }],
+    contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'palmL', prop: 'cup:top', optional: true }, { body: 'palmR', prop: 'cup:top', optional: true },
       { body: 'gripL', prop: 'kb:hornL', optional: true }, { body: 'gripR', prop: 'kb:hornR', optional: true }],
     gripRadius: { L: 1.7, R: 1.7 },
-    pose(t, C) {
+    pose(t, C, variant) {
       const { V, M } = C, q = C.base(), e = C.ease(t), lean = C.lerp(2, 42, e);
       pelvisLean(C, q, [0, C.lerp(88.4, 49.7, e), C.lerp(0, -20, e)], lean * .8);
       q.lumbar = [lean * .1, 0, 0]; q.thoracic = [lean * .1, 0, 0]; q.neck = [-lean * .35, 0, 0];
       for (const s of S) q[s].girdle = [0, 6];
       const feet = q => { for (const s of S) plant(C, q, s, [M.SIGN[s] * 15, 0, -2], { toeOut: 12 }); };
-      const hands = q => {
-        /* кулаки у груди, большие пальцы вверх (снаряд вертикален), локти вниз */
-        const T = C.axes(q, 'thorax'), Hc = V.add(V.add(T.o, T.y, 11.5), T.z, 26), b = 5 * C.D2R, fw = V.unit(V.perp(T.z, [0, 1, 0]));
-        const th = V.unit(V.add(V.scale([0, 1, 0], Math.cos(b)), fw, -Math.sin(b)));
+      /* точка у груди: прежний центр кулаков (под ним — та же раскладка рук и равновесие) */
+      const at = q => { const T = C.axes(q, 'thorax'); return { T, Hc: V.add(V.add(T.o, T.y, 11.5), T.z, 26), fw: V.unit(V.perp(T.z, [0, 1, 0])) }; };
+      const fists = q => {
+        /* гиря за рога: кулаки у груди, большие пальцы вверх, локти вниз */
+        const { Hc, fw } = at(q), b = 5 * C.D2R, th = V.unit(V.add(V.scale([0, 1, 0], Math.cos(b)), fw, -Math.sin(b)));
         for (const s of S) { const lat = C.lat(q, s); C.grip(q, s, V.add(Hc, lat, 8.65), th, V.unit(V.add(V.add([0, -1, 0], lat, .3), fw, -.2))); }
       };
-      settle(C, q, { lo: C.lerp(1, -6.5, Math.min(1, e * 2)), hi: C.lerp(4, -3.5, Math.min(1, e * 2)), loads: q => { const f = C.fk(q); return [[V.mix(f.P.gripL, f.P.gripR, .5), 16]]; }, resolve: q => { feet(q); hands(q); } });
+      /* гантель: внутренняя грань верхнего диска — на высоте прежних кулаков + 4,7 см (там лежал диск), стоя — на 3 см ближе
+         к груди (в нижней точке корпус наклонён на 42° и грудь сама подходит к гантели — ближе диск уходит в неё); ладони
+         внахлёст под диском (одна ближе к груди, другая дальше), большие и указательные пальцы у рукояти, локти вниз */
+      const cupped = q => {
+        const { T, Hc, fw } = at(q), P = V.add(V.add(Hc, [0, 1, 0], 4.7), T.z, -3 * (1 - e)), tl = 15 * C.D2R, n = V.add(V.scale([0, 1, 0], Math.cos(tl)), fw, -Math.sin(tl));
+        /* ладони смотрят вверх и на 15° к груди (строго вверх — предплечье выворачивается за предел супинации на 4–5°);
+           пальцы — вперёд и к середине на 50–80° (наружу при опущенных локтях — запястье за пределом отведения) */
+        cup(C, q, P, n, fw, { w: 4.5, stag: 3, yaw: [50, 80], poles: [(s, lat) => V.unit(V.add(V.add([0, -1, 0], lat, .35), fw, -.25)), (s, lat) => V.unit(V.add(V.add([0, -1, 0], lat, .15), fw, -.1))] });
+      };
+      const hands = variant === 'kb' ? fists : cupped;
+      const load = q => { const f = C.fk(q); return variant === 'kb' ? V.mix(f.P.gripL, f.P.gripR, .5) : V.add(V.add(at(q).Hc, [0, 1, 0], 4.7), at(q).T.z, -3 * (1 - e)); };
+      settle(C, q, { lo: C.lerp(1, -6.5, Math.min(1, e * 2)), hi: C.lerp(4, -3.5, Math.min(1, e * 2)), loads: q => [[load(q), 16]], resolve: q => { feet(q); hands(q); } });
       return q;
     }
   },

@@ -2,8 +2,7 @@
    g2Step — степ-платформа для подъёмов на носки: 90x35 см, высота 15 см, резиновое покрытие, две опоры.
    g2CupDumbbell — гантель, которую держат двумя ладонями под верхним диском (гоблет, разгибание из-за головы,
    пуловер): ось гантели — по нормали ладоней, внутренняя грань верхнего диска лежит на ладонях.
-   g2KbHorns — гиря двумя руками «за рога» (гоблет): хваты на дужках рукояти, шар под рукоятью.
-   g2FistDumbbell — гантель вертикально у груди, верхний диск лежит на кулаках (гоблет, та же поза кистей, что и с гирей). */
+   g2KbHorns — гиря двумя руками «за рога» (гоблет): хваты на дужках рукояти, шар под рукоятью. */
 ((E) => {
   const M = typeof Mannequin !== 'undefined' ? Mannequin : require('./09bm-mannequin.js');
   const { V } = M, { TYPES, BIND } = E;
@@ -44,19 +43,5 @@
     const c = V.add(mid, up, -10.5 * k), L = (a, u) => V.add(V.add(c, ax, a * k), up, u * k);
     const horn = sg => ({ kind: 'beam', a: L(sg * 8.1, 6.9), b: L(sg * 9.1, 13.4), r: 1.7, tone: 'plate', role: 'grip', id: id + ':horn' + (sg > 0 ? 'L' : 'R'), mount: id });
     return [{ kind: 'kettlebell', c, grip: L(0, 15.6), axis: ax, handleAxis: ax, radius: 10.5 * k, role: 'free', tone: 'plate', free: true, id, mount: 'hands' }, horn(1), horn(-1)];
-  };
-  /* Гантель верхним диском на кулаках (гоблет): кулаки по бокам рукояти, ось — средняя линия больших пальцев,
-     внутренняя грань верхнего диска лежит на указательных пальцах, рукоять и нижний диск — ниже кулаков. */
-  BIND.g2FistDumbbell = (e, R) => {
-    const id = e.id || 'gdb', gL = R.gripL, gR = R.gripR, mid = V.mix(gL, gR, .5);
-    const n = V.unit(V.add(R.frames.handL.z, R.frames.handR.z)), H = e.handle || 13.5, hr = e.headR || 7.5, hl = e.headLen || 7;
-    const face = V.add(mid, n, e.lift ?? 4.7), c = V.add(face, n, -(H / 2 + 1.2)), at = k => V.add(c, n, k);
-    return [
-      { kind: 'cyl', c: at(H / 2 + 1.2 + hl / 2), axis: n, r: hr, len: hl, sides: 6, tone: 'plate', role: 'weight', id: id + ':top', mount: 'hands' },
-      { kind: 'cyl', c: at(H / 2 + .6), axis: n, r: 2.6, len: 1.2, sides: 14, tone: 'chrome', role: 'weight', id: id + ':collarT', mount: id + ':top' },
-      { kind: 'beam', a: at(-(H / 2 + .6)), b: at(H / 2 + .6), r: 1.6, tone: 'chrome', role: 'weight', id: id + ':handle', mount: id + ':collarT' },
-      { kind: 'cyl', c: at(-(H / 2 + .6)), axis: n, r: 2.6, len: 1.2, sides: 14, tone: 'chrome', role: 'weight', id: id + ':collarB', mount: id + ':handle' },
-      { kind: 'cyl', c: at(-(H / 2 + 1.2 + hl / 2)), axis: n, r: hr, len: hl, sides: 6, tone: 'plate', role: 'weight', id: id + ':bottom', mount: id + ':collarB' }
-    ];
   };
 })(typeof GymEquipment !== 'undefined' ? GymEquipment : require('./09bn-equipment.js'));

@@ -144,6 +144,14 @@ function mannequinMuscleSurfaces(R,profile,{coarse=false}={}){
  }
  return faces;
 }
+/* анимация каталога под инвентарь показа: если хват зависит от необязательного снаряда (catalogVariants), берётся его поза —
+   выбор тот же, что у видимости деталей (GymEquipment.variantOf); копия запоминается, чтобы кеши фигуры не путались */
+function catalogAnimFor(anim,has){
+ const vs=anim&&anim.catalogVariants;if(!vs)return anim;
+ const v=Object.keys(vs).find(k=>!has||has(k));if(!v)return anim;
+ const memo=anim.catalogVariantAnims||(anim.catalogVariantAnims={});
+ return memo[v]||(memo[v]={...anim,catalogRig:vs[v],catalogVariants:null,catalogVariantAnims:null,catalogVariant:v});
+}
 function catalogFigureAnim(anim){
  return {...anim,noGround:anim.catalogBasis==='mannequin'?false:anim.noGround,rig3d:anim.catalogRig,muscleProfile:anim.catalogProfile,camera:'above',cameras:anim.catalogCameras,sample:t=>({spatialT:t}),catalogRig:null};
 }

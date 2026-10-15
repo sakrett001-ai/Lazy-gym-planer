@@ -335,6 +335,11 @@ BIND.towel=(e,R)=>{
    optional: 'kb' — деталь видна, если у пользователя есть этот инвентарь; optionalNot: 'kb' — видна, если его нет.
    Так один и тот же хват показывает гирю или гантель в зависимости от выбранного инвентаря. */
 function visible(p,has){if(!has)return!p.optionalNot;return(!p.optional||has(p.optional))&&(!p.optionalNot||!has(p.optionalNot));}
+/* Поза под вариант инвентаря: если хват с необязательным снарядом другой (гоблет: гантель — ладонями под верхний диск,
+   гиря — кулаками за рога), у записи позы есть variants: {kb: {keys}}. Вариант выбирается так же, как видимость деталей:
+   есть этот инвентарь (has(k)) — его ключи; has не задан — весь необязательный инвентарь «есть» (как в visible). */
+function variantOf(entry,has){const vs=entry&&entry.variants;if(!vs)return null;return Object.keys(vs).find(k=>!has||has(k))||null;}
+function variantEntry(entry,has){const v=variantOf(entry,has);return v?{...entry,keys:entry.variants[v].keys,variant:v}:entry;}
 /* ---------- Сборка сцены упражнения ---------- */
 function staticParts(list){
  const parts=[],anchors={};
@@ -361,6 +366,6 @@ function rig(entry){
   return R;
  };
 }
-return{TYPES,BIND,Builder,build,anchors,rig,PLATES,padFrame,barbellPart,dumbbellPart,bodyPoint,ortho,visible,ankleCuff};
+return{TYPES,BIND,Builder,build,anchors,rig,PLATES,padFrame,barbellPart,dumbbellPart,bodyPoint,ortho,visible,variantOf,variantEntry,ankleCuff};
 })(typeof Mannequin!=='undefined'?Mannequin:require('./09bm-mannequin.js'));
 if(typeof module!=='undefined'&&module.exports){module.exports=GymEquipment;const fs=require('fs'),path=require('path');for(const f of fs.readdirSync(__dirname).filter(f=>/^09bo.*\.js$/.test(f)).sort()){try{require(path.join(__dirname,f));}catch(e){console.error('Инвентарь '+f+': '+e.message);}}}

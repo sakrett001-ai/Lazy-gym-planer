@@ -15,15 +15,18 @@ function loadSpecs() {
   return all;
 }
 const round = (v, k) => Math.round(v * k) / k;
+/* variants: ['kb'] — поза зависит от необязательного инвентаря: pose(t, C, 'kb') печётся в variants.kb.keys
+   (GymEquipment.variantEntry выбирает ключи по инвентарю пользователя, как видимость деталей) */
 function bakeOne(id, spec) {
   const C = ctx(spec.equipment || []), ts = spec.keys || [0, .25, .5, .75, 1];
-  const keys = ts.map(t => {
+  const bake = variant => ts.map(t => {
     let q;
-    try { q = spec.pose(t, C); } catch (e) { e.message = `${id} t=${t}: ${e.message}`; throw e; }
+    try { q = spec.pose(t, C, variant); } catch (e) { e.message = `${id}${variant ? ' [' + variant + ']' : ''} t=${t}: ${e.message}`; throw e; }
     const v = M.pack(q).map((x, i) => i >= 3 && i < 7 ? round(x, 1e5) : round(x, 100));
     return { t, v, hands: { L: q.hands?.L || 'relaxed', R: q.hands?.R || 'relaxed' } };
   });
-  const out = { keys, equipment: spec.equipment || [], contacts: spec.contacts || [] };
+  const out = { keys: bake(), equipment: spec.equipment || [], contacts: spec.contacts || [] };
+  if (spec.variants) out.variants = Object.fromEntries(spec.variants.map(v => [v, { keys: bake(v) }]));
   if (spec.gripRadius) out.gripRadius = spec.gripRadius;
   if (spec.dynamic) out.dynamic = spec.dynamic;
   if (spec.loop) out.loop = true;

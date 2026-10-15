@@ -144,7 +144,7 @@ function setCam(k){camKey=k;const c=CAMS.find(c=>c[0]===k),y=c[2]*Math.PI/180,e=
  for(const b of $('cams').children)b.setAttribute('aria-pressed',String(b.dataset.cam===k));}
 function select(id,keepVars){
  if(view)view.dispose();cur=REVIEW.find(r=>r.id===id);if(!keepVars)has=new Set();
- $('vars').innerHTML=cur.opts.map(k=>`<label><input type="checkbox" data-opt="${k}" ${has.has(k)?'checked':''}> есть ${OPT[k]||k}</label>`).join('');rig=GymEquipment.rig(CATALOG_POSES[id]);view=X.createCatalogScene(dataFor(0));theme();
+ $('vars').innerHTML=cur.opts.map(k=>`<label><input type="checkbox" data-opt="${k}" ${has.has(k)?'checked':''}> есть ${OPT[k]||k}</label>`).join('');rig=GymEquipment.rig(GymEquipment.variantEntry(CATALOG_POSES[id],k=>has.has(k)));view=X.createCatalogScene(dataFor(0));theme();
  const box=new T.Box3();for(let i=0;i<=8;i++){view.apply(dataFor(i/8),{muscles:false,joints,color:()=>'#a7b3c6'});view.scene.traverse(o=>{if(o.isMesh&&o.visible&&o.name!=='floor'&&o.parent?.name!=='joint-dots')box.expandByObject(o);});}
  box.getCenter(center);radius=box.getSize(new T.Vector3()).length()/2;setCam(camKey);
  for(const b of $('list').querySelectorAll('button[data-id]')){const on=b.dataset.id===id;b.setAttribute('aria-pressed',String(on));if(on)b.scrollIntoView({block:'nearest'});}

@@ -13,7 +13,7 @@ window.Lab={
   const ctx=canvas.getContext('2d');ctx.fillStyle='#0b1018';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.font='15px sans-serif';
   if(title){ctx.fillStyle='#e6eefa';ctx.font='bold 18px sans-serif';ctx.fillText(title,10,23);ctx.font='14px sans-serif';}
   specs.forEach((s,i)=>{
-   const rig=GymEquipment.rig(entries[s.id]),x=(i%cols)*w,y=head+Math.floor(i/cols)*(h+lab);
+   const rig=GymEquipment.rig(GymEquipment.variantEntry(entries[s.id],hasFn)),x=(i%cols)*w,y=head+Math.floor(i/cols)*(h+lab);
    const view=createCatalogScene(dataFor(rig,s.t,hasFn));
    if(light){view.scene.background=new THREE.Color('#e4e9ef');view.scene.traverse(o=>{if(o.name==='floor')o.material.color.set('#c9d1db');if(o.isGridHelper){o.material.color.set('#aab4c0');}});const a=view.scene.children.find(o=>o.isAmbientLight);if(a)a.intensity=.75;}
    for(let k=0;k<=8;k++){view.apply(dataFor(rig,k/8,hasFn),{muscles:false,joints:!!s.joints,color:()=>'#a7b3c6'});view.includeBounds();}
