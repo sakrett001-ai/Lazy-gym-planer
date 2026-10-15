@@ -39,6 +39,7 @@ test('pace ladder: 30 → 15 → 10 frames per second by the median frame time, 
   const P = R.ANATOMY_PACE, p = R.anatomyPace();
   assert.deepEqual([p.step, p.fps, Math.round(p.frameMs)], [0, 30, 33]);
   assert.equal(R.anatomyBudget(30), 1000 / 30 * P.load);
+  assert.equal(R.anatomyBudget(10), P.cap, 'не дольше «длинной задачи»'); assert.equal(R.anatomyBudget(30), 25, 'замер владельца: 20–23 мс — ещё 30 кадров');
   /* кадры одного времени — до первого решения ступени (или 60 кадров без решения) */
   const feed = ms => { for (let i = 0; i < 60; i++) { const r = p.sample(ms); if (r) return r; } return null; };
   assert.equal(feed(R.anatomyBudget(30) - .5), null, 'в бюджете — та же ступень');
@@ -275,9 +276,9 @@ test('slow frames step the card down to 15 and 10 frames per second, then to the
   for (let k = 0; k < 5; k++) idle(); paints();
   const second = () => { m.get(`requestAnimationFrame=cb=>{window.__raf=cb;return 1;};scheduleMotionLoop();for(let k=0;k<=60;k++)window.__raf(k*1000/60);`); return paints().length; };
   const slow = ms => m.get(`for(let i=0;i<ANATOMY_PACE.warmup+ANATOMY_PACE.window;i++)cardPaceSample(${ms})`);
-  slow(25); assert.equal(m.get('cardAnatomy.pace.fps'), 15);
+  slow(30); assert.equal(m.get('cardAnatomy.pace.fps'), 15);
   const n15 = second(); assert(n15 >= 14 && n15 <= 16, '15 кадров: ' + n15);
-  slow(40); assert.equal(m.get('cardAnatomy.pace.fps'), 10);
+  slow(55); assert.equal(m.get('cardAnatomy.pace.fps'), 10);
   const n10 = second(); assert(n10 >= 9 && n10 <= 11, '10 кадров: ' + n10);
   slow(60);
   assert.equal(m.get('cardAnatomy.view'), 'mannequin');
