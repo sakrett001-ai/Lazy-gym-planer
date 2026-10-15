@@ -2944,8 +2944,51 @@ function spatialFrameSet(key,frame){
  if(!spatialFramesSave&&typeof addEventListener==='function'&&!spatialFrameSet.hooked){spatialFrameSet.hooked=true;addEventListener('pagehide',()=>{if(spatialFramesSave)spatialFramesFlush();});}
  spatialFramesSave=setTimeout(spatialFramesFlush,1500);
 }
+/* Готовые кадры SVG-фигур карточек плана (opts.frameCache). Карточка крутит одно и то же повторение: со второго круга
+   кадр не считается заново (поза, поверхность манекена, силуэты, мышцы — ≈¾ времени кадра), а берётся из памяти.
+   Ключ набора — рамка кадра (упражнение, ракурс, пропорция, видимый инвентарь) и вариант позы; ключ кадра — фаза
+   (t, index). Записи кадра не зависят от фигуры (цвета атлета — метки, см. buildSpatialFigure), поэтому набор общий
+   для всех карточек упражнения и переживает перестройку плана. Кадр карточки — ≈25–35 КБ (силуэты и мышцы — пути
+   SVG), повторение в 4 с — ≈120 кадров, ≈3–4 МБ. Память ограничена оценкой объёма (FIGURE_FRAMES_LIMIT): первыми
+   уходят наборы давно не показанных упражнений; если не помещается и один набор (медленный темп), новые кадры
+   не запоминаются — первые остаются. Записи, не изменившиеся с прошлого кадра (неподвижный инвентарь, тело в паузе),
+   хранятся один раз — общим объектом, и узел SVG с такой записью в кадре не трогается.
+   Сброс — figureFramesReset (смена темы, языка, инвентаря места). */
+const FIGURE_FRAMES=new Map(),FIGURE_FRAMES_LIMIT={bytes:8<<20,frames:600};let figureFramesBytes=0;
+function figureFrameGet(set,key){
+ const s=FIGURE_FRAMES.get(set),F=s&&s.frames.get(key);if(!F)return null;
+ if(FIGURE_FRAMES.size>1){FIGURE_FRAMES.delete(set);FIGURE_FRAMES.set(set,s);}
+ return F;
+}
+const sameAttrs=(a,b)=>{let n=0;for(const k in a){if(a[k]!==b[k])return false;n++;}for(const k in b)n--;return n===0;};
+/* оценка памяти кадра (байты): строки и объекты записей; общие с прошлым кадром записи не считаются */
+function figureFrameBytes(F,prev){
+ let n=96+F.joints.length*40;
+ F.records.forEach((r,i)=>{if(prev&&prev.records[i]===r)return;n+=48;for(const k in r.attrs){const v=r.attrs[k];n+=16+(typeof v==='string'?16+v.length:0);}});
+ for(const s of F.stress)n+=64+s.transform.length;
+ for(const v of F.vectors||[])n+=v?16+v.length:8;
+ return n;
+}
+function figureFramePut(set,key,F){
+ let s=FIGURE_FRAMES.get(set);
+ if(s)FIGURE_FRAMES.delete(set);else s={frames:new Map(),last:null,bytes:0};
+ FIGURE_FRAMES.set(set,s);
+ if(s.frames.has(key))return;
+ const prev=s.last;if(prev)F.records.forEach((r,i)=>{const q=prev.records[i];if(q&&q!==r&&q.tag===r.tag&&sameAttrs(q.attrs,r.attrs))F.records[i]=q;});
+ const size=figureFrameBytes(F,prev);
+ for(const[k,o]of FIGURE_FRAMES){if(o===s||figureFramesBytes+size<=FIGURE_FRAMES_LIMIT.bytes)break;FIGURE_FRAMES.delete(k);figureFramesBytes-=o.bytes;}
+ if(figureFramesBytes+size>FIGURE_FRAMES_LIMIT.bytes||s.frames.size>=FIGURE_FRAMES_LIMIT.frames){if(!s.frames.size)FIGURE_FRAMES.delete(set);return;}
+ s.frames.set(key,F);s.last=F;s.bytes+=size;figureFramesBytes+=size;
+}
+function figureFramesReset(){FIGURE_FRAMES.clear();figureFramesBytes=0;}
+/* тема (цвета атлета — переменные CSS, в записях их нет, но набор после смены темы считается заново) и язык страницы */
+if(typeof matchMedia==='function')try{matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',figureFramesReset);}catch(e){}
+if(typeof MutationObserver==='function'&&typeof document!=='undefined'&&document.documentElement)new MutationObserver(figureFramesReset).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme','lang']});
 function buildSpatialFigure(anim,opts={}){
- const camera=opts.camera||anim.camera||'side',project=camera3(camera),paletteRoot=el('svg',{}),palette=athletePalette(paletteRoot);
+ const camera=opts.camera||anim.camera||'side',project=camera3(camera),paletteRoot=el('svg',{}),fills=athletePalette(paletteRoot);
+ /* цвета атлета в записях кадра — метки ('\u0001skin'…): градиент у каждой фигуры свой (id), метка заменяется
+    им при записи в узел — так готовый кадр годится любой карточке этого упражнения */
+ const palette=Object.fromEntries(Object.keys(fills).map(k=>[k,'\u0001'+k]));
  const svg=el('svg',{class:'fig spatial-figure',role:'img','aria-label':`${opts.label||''} — ${CAMERA3[camera].label}`});
  svg.appendChild(paletteRoot.firstChild);
  const ground=el('g',{'aria-hidden':'true'},svg),trace=el('path',{class:'motion-trace',display:'none','aria-hidden':'true'},svg),scene=el('g',{},svg),dots=el('g',{class:'rig-dots','aria-hidden':'true'},svg);
@@ -3175,21 +3218,39 @@ function buildSpatialFigure(anim,opts={}){
  /* метки нагрузки на суставы — поверх всего рисунка */
  const stressLayer=el('g',{class:'stress-marks','aria-hidden':'true'},svg),stressNodes=[];
  let stressOn=(opts.stress??(typeof motionPrefs!=='undefined'?motionPrefs.stress:true))!==false,lastT=opts.t||0,lastFrame=null;
- function paintStress(R,t,frame){
-  const marks=stressOn&&anim.catalogId&&R.frames&&typeof jointStressPoints==='function'?jointStressPoints(anim,R,t,frame?.index||0):[];
-  marks.forEach((m,i)=>{const p=project(m.p);let n=stressNodes[i];if(!n){n=stressNodes[i]=el('g',{class:'stress-mark'},stressLayer);el('circle',{r:9,class:'stress-halo'},n);el('circle',{r:3.4,class:'stress-core'},n);}n.setAttribute('transform',`translate(${f1(p[0])},${f1(p[1])})`);n.dataset.joint=m.key;n.removeAttribute('display');});
+ /* метки нагрузки кадра: в памяти кадров — всегда (показ — по stressOn), без неё — только когда показаны */
+ function stressMarks(R,t,frame,always){
+  if(!(always||stressOn)||!(anim.catalogId&&R.frames&&typeof jointStressPoints==='function'))return[];
+  return jointStressPoints(anim,R,t,frame?.index||0).map(m=>{const p=project(m.p);return{key:m.key,transform:`translate(${f1(p[0])},${f1(p[1])})`};});
+ }
+ function paintStress(all){
+  const marks=stressOn?all:[];
+  marks.forEach((m,i)=>{let n=stressNodes[i];if(!n){n=stressNodes[i]=el('g',{class:'stress-mark'},stressLayer);el('circle',{r:9,class:'stress-halo'},n);el('circle',{r:3.4,class:'stress-core'},n);}n.setAttribute('transform',m.transform);n.dataset.joint=m.key;n.removeAttribute('display');});
   for(let i=marks.length;i<stressNodes.length;i++)stressNodes[i].setAttribute('display','none');
+ }
+ const JOINT_DOTS=['shL','elL','wrL','hipL','knL','anL','shR','elR','wrR','hipR','knR','anR'];
+ /* кадр: записи узлов, точки суставов, фаза мышц, метки нагрузки, стрелки векторов — из памяти кадров (карточки) или
+    посчитанный заново */
+ const cacheKey=opts.frameCache&&frameKey&&!still&&setVectors.frame?frameKey+'|'+(anim.catalogVariant||''):null;
+ function frameData(t,frame){
+  const key=t+'|'+(frame?.index||0),hit=cacheKey&&figureFrameGet(cacheKey,key);if(hit)return hit;
+  const {R,muscles,records}=compile(t,frame?.index||0);
+  const F={records,joints:JOINT_DOTS.map(name=>{const p=project(R[name]);return[f1(p[0]),f1(p[1])];}),pose:String(t),phase:muscles?muscles.phase:null,
+   stress:stressMarks(R,t,frame,!!cacheKey),vectors:cacheKey?setVectors.frame(t,frame,R):null,R:cacheKey?null:R};
+  if(cacheKey)figureFramePut(cacheKey,key,F);
+  return F;
  }
  function at(t,frame){
   lastT=t;lastFrame=frame||null;
-  const {R,muscles,records}=compile(t,frame?.index||0);
-  /* атрибут пишется, только если он изменился с прошлого кадра: у неподвижного инвентаря и цветов — почти никогда */
-  records.forEach((s,i)=>{let node=nodes[i];if(!node||node.tagName!==s.tag){const replacement=el(s.tag,{});if(node)node.replaceWith(replacement);else scene.appendChild(replacement);node=nodes[i]=replacement;nodeAttrs[i]=null;}const old=nodeAttrs[i];for(const attr of [...node.attributes])if(!(attr.name in s.attrs))node.removeAttribute(attr.name);for(const k in s.attrs){const v=s.attrs[k];if(!old||old[k]!==v||!node.hasAttribute(k))node.setAttribute(k,v);}nodeAttrs[i]=s.attrs;});
+  const F=frameData(t,frame),records=F.records;
+  /* атрибут пишется, только если он изменился с прошлого кадра: у неподвижного инвентаря и цветов — почти никогда;
+     запись из памяти кадров, та же, что в прошлом кадре, — узел не трогается совсем */
+  records.forEach((s,i)=>{let node=nodes[i];if(!node||node.tagName!==s.tag){const replacement=el(s.tag,{});if(node)node.replaceWith(replacement);else scene.appendChild(replacement);node=nodes[i]=replacement;nodeAttrs[i]=null;}const old=nodeAttrs[i];if(old===s.attrs)return;for(const attr of [...node.attributes])if(!(attr.name in s.attrs))node.removeAttribute(attr.name);for(const k in s.attrs){const v=s.attrs[k];if(!old||old[k]!==v||!node.hasAttribute(k))node.setAttribute(k,k==='fill'&&typeof v==='string'&&v.charCodeAt(0)===1?fills[v.slice(1)]:v);}nodeAttrs[i]=s.attrs;});
   for(let i=records.length;i<nodes.length;i++)nodes[i].remove();nodes.length=nodeAttrs.length=records.length;
-  const names=['shL','elL','wrL','hipL','knL','anL','shR','elR','wrR','hipR','knR','anR'];
-  names.forEach((name,i)=>{const p=project(R[name]),node=jointNodes[i]||(jointNodes[i]=el('circle',{r:2.1,class:'joint-dot'},dots));node.setAttribute('cx',f1(p[0]));node.setAttribute('cy',f1(p[1]));});
-  svg.dataset.pose=String(t);if(muscles)svg.dataset.musclePhase=muscles.phase;allBounds.length=0;setRegion(selectedRegion);
-  setVectors?.at?.(t,frame,R);paintStress(R,t,frame);
+  F.joints.forEach(([x,y],i)=>{const node=jointNodes[i]||(jointNodes[i]=el('circle',{r:2.1,class:'joint-dot'},dots));node.setAttribute('cx',x);node.setAttribute('cy',y);});
+  svg.dataset.pose=F.pose;if(F.phase)svg.dataset.musclePhase=F.phase;allBounds.length=0;setRegion(selectedRegion);
+  if(F.vectors)setVectors.paint(F.vectors);else setVectors?.at?.(t,frame,F.R);
+  paintStress(F.stress);
  }
  const setStress=show=>{stressOn=!!show;at(lastT,lastFrame);};
  const setTrace=show=>trace.setAttribute('display',show?'inline':'none');
@@ -7963,7 +8024,10 @@ function catalogVectorGroup(svg,anim,camera){
  const nodes=vectors.map(v=>{const kind=/^(sh|hip)$/.test(v.key)?'core':'limb';return el('path',{class:'vec-line vec-'+kind,'data-vector':v.key,'marker-end':`url(#${id}-${kind})`},g);});
  const toggle=show=>g.setAttribute('display',show?'inline':'none');
  toggle.bounds=vectors.flatMap(v=>v.points.flatMap((p,i)=>[0,2].flatMap(index=>{const q=catalogVectorFrame(v,i/(v.points.length-1),index,{[v.key]:p});return q?[project(q.a),project(q.b)]:[];})));
- toggle.at=(t,frame,R)=>vectors.forEach((v,i)=>{const q=catalogVectorFrame(v,t,frame?.index||0,R),node=nodes[i];node.setAttribute('display',q?'inline':'none');if(q){const a=project(q.a),b=project(q.b);node.setAttribute('d',`M${f1(a[0])},${f1(a[1])} L${f1(b[0])},${f1(b[1])}`);}});
+ /* кадр стрелок (путь или null — стрелки нет) отдельно от записи в узлы: его хранит память кадров карточек */
+ toggle.frame=(t,frame,R)=>vectors.map(v=>{const q=catalogVectorFrame(v,t,frame?.index||0,R);if(!q)return null;const a=project(q.a),b=project(q.b);return`M${f1(a[0])},${f1(a[1])} L${f1(b[0])},${f1(b[1])}`;});
+ toggle.paint=list=>list.forEach((d,i)=>{const node=nodes[i];node.setAttribute('display',d?'inline':'none');if(d)node.setAttribute('d',d);});
+ toggle.at=(t,frame,R)=>toggle.paint(toggle.frame(t,frame,R));
  return toggle;
 }
 function createMotionFigure(anim,opts){
@@ -8316,7 +8380,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;', '<':'&lt;', '>
 const fmtRest = s => s >= 60 ? (s % 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s / 60} min`) : `${s} s`;
 const midOf = r => { const m = String(r).match(/(\d+)\D+(\d+)/); if (m) return (+m[1] + +m[2]) / 2; const n = parseFloat(r); return isNaN(n) ? 10 : n; };
 function plural(n, a, b, c) { const m10 = n % 10, m100 = n % 100; if (m10 === 1 && m100 !== 11) return a; if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return b; return c; }
-const fmtNum = v => Number.isInteger(v) ? String(v) : v.toFixed(1).replace('.', ',');
+const fmtNum = v => Number.isInteger(v) ? String(v) : v.toFixed(1).replace('.', DEC); /* DEC — 13-log.js: в английской сборке точка */
 
 /* можно ли взвесить отягощение: свободные веса, тренажёры, блок, машина Смита (а не лента, турник, скамья или вес тела) */
 const WEIGHABLE = new Set(['db', 'bb', 'kb', 'cable', 'smith']);
@@ -8346,18 +8410,32 @@ function equipLine(ex, E) {
   return ch.concat(opt).join(' · ');
 }
 function groupsOf(ex) { const s = new Set([ex.g]); for (const m of ex.pri) s.add(MUSCLE_GROUP[m]); return s; }
+/* дробный учёт одного подхода: целевая группа упражнения — полный подход, остальные работающие (основные и вспомогательные
+   мышцы других групп) — половина; кардио своей группе подходов не даёт. Pelland et al., Sports Med 2026; 56(2):481–505:
+   косвенный подход как 0,5 лучше всего предсказывает прирост. Общее правило графика «Подходов на группу за неделю» и
+   загрузки мышц по журналу (13d-muscle-load.js) */
+function groupShare(ex) {
+  const w = {};
+  for (const m of ex.pri.concat(ex.sec)) { const g = MUSCLE_GROUP[m]; w[g] = Math.max(w[g] || 0, 0.5); }
+  if (ex.g !== 'cardio') w[ex.g] = 1;
+  else for (const m of ex.pri) w[MUSCLE_GROUP[m]] = Math.max(w[MUSCLE_GROUP[m]], 0.5);
+  return w;
+}
 function splitFor(days) { return SPLITS[S.split] && SPLITS[S.split].days[days] ? S.split : DEFAULT_SPLIT[days]; }
 
 /* ---------- подбор ---------- */
-function pickExercises(E, rand, groups, count, avoid) {
+/* opt — только для подбора по журналу (13d-muscle-load.js): weights — доли групп вместо GROUP_W,
+   rest — группы, которым нужен отдых (упражнения, где они основные, отодвигаются). Без opt подбор прежний. */
+function pickExercises(E, rand, groups, count, avoid, opt) {
   const G = new Set(groups);
   const lvlMax = S.level === 'beg' ? 2 : 3;
   const pool = EX.filter(ex => available(ex, E) && ex.lvl <= lvlMax && (ex.g !== 'cardio' || G.has('cardio')) && (S.format !== 'static' || staticOk(ex)) && fitsBody(ex));
   /* бережно: при прочих равных — упражнения без пиковой нагрузки на суставы */
   const strain = S.goal === 'gentle' ? new Map(pool.map(ex => [ex, stressIdsOf(ex).length])) : null;
-  const totalW = groups.reduce((a, g) => a + GROUP_W[g], 0) || 1;
+  const GW = opt && opt.weights || GROUP_W, rest = opt && opt.rest && opt.rest.size ? opt.rest : null;
+  const totalW = groups.reduce((a, g) => a + GW[g], 0) || 1;
   const quota = {};
-  for (const g of groups) quota[g] = count * GROUP_W[g] / totalW;
+  for (const g of groups) quota[g] = count * GW[g] / totalW;
   const picked = [];
   const usedPat = {};
   const compBonus = {strength:0.7, mass:0.35, cut:0.05, gentle:0.1}[S.goal];
@@ -8382,6 +8460,7 @@ function pickExercises(E, rand, groups, count, avoid) {
       if (strain) sc -= 0.5 * strain.get(ex);
       if (S.goal === 'strength' && ex.eq.some(g => g.includes('bb'))) sc += 0.3;
       for (const m of ex.pri) if (!G.has(MUSCLE_GROUP[m])) sc -= 0.3;
+      if (rest) for (const g of new Set(ex.pri.map(m => MUSCLE_GROUP[m]))) if (rest.has(g)) sc -= 0.8;
       const pat = PATTERN[ex.id] || 'solo:' + ex.id;
       if (usedPat[pat]) sc -= 0.7 * usedPat[pat] + (picked.some(p => PATTERN[p.id] === pat && p.g === ex.g) ? 0.4 : 0);
       if (!G.has(ex.g)) sc -= 0.6;
@@ -8491,7 +8570,9 @@ function byOrder(units, order, slotOf) {
 function buildPlan(ctx = {}) {
   /* свой план: упражнения и порядок задал человек; мышцы — только подсказка для подбора */
   const custom = S.mode === 'custom' && !ctx.groups ? customOf() : null;
-  const groups = ctx.groups || S.groups, count = custom ? custom.items.length : ctx.count || S.count, week = ctx.week || null;
+  /* тренировка на сегодня по журналу: группы уже в S.groups, отсюда — доли групп, отдых и облегчение (13d-muscle-load.js) */
+  const lp = !custom && !ctx.groups && S.mode === 'single' ? logPickCtx() : null;
+  const groups = ctx.groups || S.groups, count = custom ? custom.items.length : ctx.count || (lp ? lp.count : S.count), week = ctx.week || null;
   const sw = custom ? {} : ctx.swaps || {};
   const E = effEquip(S.equip);
   const rand = rng((ctx.seed ?? S.seed) * 9973 + count * 31 + groups.length * 7);
@@ -8500,7 +8581,7 @@ function buildPlan(ctx = {}) {
   /* программа другого места: подбор под его инвентарь, затем недоступное здесь заменяется аналогами;
      в своём плане так же заменяется то, чего нет в этом месте */
   const ref = custom ? null : programEquip(), PE = ref ? effEquip(ref) : E;
-  let picked = custom ? custom.items.map(it => EXI[it.id]) : pickExercises(PE, rand, groups, count, ctx.avoid).picked;
+  let picked = custom ? custom.items.map(it => EXI[it.id]) : pickExercises(PE, rand, groups, count, ctx.avoid, lp || undefined).picked;
   /* «можно здесь»: есть инвентарь, и упражнение не нагружает суставы, которые бережём (11g-gentle.js) */
   const usable = ex => available(ex, E) && fitsBody(ex);
   const pool = EX.filter(usable);
@@ -8526,6 +8607,7 @@ function buildPlan(ctx = {}) {
   const G = GOALS[S.goal];
   const items = picked.map((ex, k) => {
     const slot = slots[k], rx = applyLight(prescribe(ex, week, E), ex);
+    if (lp && lp.light.has(ex.g)) easeRx(rx);
     return {ex, slot, rx:custom ? customRx(rx, custom.items[slot], ex) : rx, name:exName(ex, E), eqLine:equipLine(ex, E), eqIds:chosenEquip(ex, E), has:propHas(ex, E), sub:subs.get(ex) || null};
   });
   const bySlot = new Map(items.map(it => [it.ex, it]));
@@ -8574,13 +8656,9 @@ function buildPlan(ctx = {}) {
     for (const m of it.ex.pri) load[m] = (load[m] || 0) + k;
     for (const m of it.ex.sec) load[m] = (load[m] || 0) + k * 0.5;
     /* дробный учёт: целевая группа — полный подход, остальные работающие — половина */
-    const w = {};
-    for (const m of it.ex.pri.concat(it.ex.sec)) { const g = MUSCLE_GROUP[m]; w[g] = Math.max(w[g] || 0, 0.5); }
-    if (it.ex.g !== 'cardio') w[it.ex.g] = 1;
-    else for (const m of it.ex.pri) w[MUSCLE_GROUP[m]] = Math.max(w[MUSCLE_GROUP[m]], 0.5);
-    for (const [g, x] of Object.entries(w)) gvol[g] = (gvol[g] || 0) + k * x;
+    for (const [g, x] of Object.entries(groupShare(it.ex))) gvol[g] = (gvol[g] || 0) + k * x;
   }
-  return {blocks, items, minutes:Math.round(minutes / 60), totalSets, missing:custom ? [] : missing, load, gvol, pool, E, groups, count, lost, custom:!!custom};
+  return {blocks, items, minutes:Math.round(minutes / 60), totalSets, missing:custom ? [] : missing, load, gvol, pool, E, groups, count, lost, custom:!!custom, byLog:!!lp};
 }
 
 /* ---------- сборка недели ---------- */
@@ -8667,7 +8745,8 @@ function renderSetup() {
   $('#g-presets').innerHTML = GROUP_PRESETS.map(p => {
     const on = p.g.length === gs.size && p.g.every(g => gs.has(g));
     return `<button type="button" class="pre${on ? ' on' : ''}" data-gp="${p.id}">${p.name}</button>`;
-  }).join('');
+  }).join('') + logPresetHtml();
+  const lpMsg = $('#lp-msg'); if (lpMsg) lpMsg.hidden = true;
   $('#g-chips').innerHTML = GROUPS.map(g => `<button type="button" class="chip${gs.has(g.id) ? ' on' : ''}" data-g="${g.id}" aria-pressed="${gs.has(g.id)}">${ICON.check}<span>${g.name}</span></button>`).join('');
   const cur = placeOf();
   $('#e-places').innerHTML = S.places.map(p => `<button type="button" class="place${p.id === S.place ? ' on' : ''}" data-place="${p.id}" aria-pressed="${p.id === S.place}"><b>${esc(p.name)}</b><small>${p.equip.length ? p.equip.length + ' ' + plural(p.equip.length, 'item', 'items', 'items') : 'no equipment'}</small></button>`).join('')
@@ -8716,13 +8795,16 @@ function loadBars(load) {
 function volBars(gvol, groups) {
   const ids = GROUPS.map(g => g.id).filter(g => g !== 'cardio' && (groups.has(g) || (gvol[g] || 0) >= 1));
   const max = Math.max(22, ...ids.map(g => gvol[g] || 0));
+  return ids.map(g => volRow(g, gvol[g] || 0, max)).join('');
+}
+/* строка полосы «подходов на группу»: коридор 10–20, «мало / в норме / много»; extra — добавка под полосой
+   (статус восстановления в журнале, 13d-muscle-load.js) */
+function volRow(g, val, max, extra = '', cls = '') {
   const pct = v => (v / max * 100).toFixed(1);
-  return ids.map(g => {
-    const v = Math.round((gvol[g] || 0) * 2) / 2;
-    const st = v < 10 ? 'lo' : v > 20 ? 'hi' : 'ok';
-    const lab = st === 'lo' ? 'low' : st === 'hi' ? 'high' : 'on target';
-    return `<li class="${st}"><span class="vb-n">${GN[g]}</span><span class="vb-v">${fmtNum(v)}<em>${lab}</em></span><span class="vb-t"><b style="left:${pct(10)}%;width:${pct(10)}%"></b><i style="width:${Math.max(1.5, +pct(v))}%"></i></span></li>`;
-  }).join('');
+  const v = Math.round(val * 2) / 2;
+  const st = v < 10 ? 'lo' : v > 20 ? 'hi' : 'ok';
+  const lab = st === 'lo' ? 'low' : st === 'hi' ? 'high' : 'on target';
+  return `<li class="${st}${cls ? ' ' + cls : ''}"${cls ? ` data-lg="${g}"` : ''}><span class="vb-n">${GN[g]}</span><span class="vb-v">${fmtNum(v)}<em>${lab}</em></span><span class="vb-t"><b style="left:${pct(10)}%;width:${pct(10)}%"></b><i style="width:${Math.max(1.5, +pct(v))}%"></i></span>${extra}</li>`;
 }
 
 /* вес по плану (свой план или план тренера) — рядом с подходами */
@@ -8735,10 +8817,10 @@ function rxHtml(it) {
   const r = it.rx;
   const unit = r.unit ? ` <small>${r.unit}</small>` : '';
   const side = r.uni ? '<small> per side</small>' : '';
-  if (r.static) return `<div class="rx"><span class="rx-big">${r.series} × 3 × ${r.reps}${unit}${side}</span><span class="rx-rest">${r.series} ${plural(r.series, 'series', 'series', 'series')} of 3 sets · rest ${fmtRest(r.rest)}${r.series > 1 ? `, between series ${fmtRest(r.seriesRest)}` : ''}</span>${rxKgHtml(it)}${r.light ? '<span class="rx-light">scaled down</span>' : ''}</div>`;
+  if (r.static) return `<div class="rx"><span class="rx-big">${r.series} × 3 × ${r.reps}${unit}${side}</span><span class="rx-rest">${r.series} ${plural(r.series, 'series', 'series', 'series')} of 3 sets · rest ${fmtRest(r.rest)}${r.series > 1 ? `, between series ${fmtRest(r.seriesRest)}` : ''}</span>${rxKgHtml(it)}${r.light ? '<span class="rx-light">scaled down</span>' : ''}${easedTag(r)}</div>`;
   if (r.circ) return `<div class="rx"><span class="rx-big">${r.reps}${unit}${side}</span>${rxKgHtml(it)}</div>`;
   const rest = r.restShown !== undefined ? (r.restShown ? `rest ${fmtRest(r.restShown)}` : 'straight to the next one') : `rest ${fmtRest(r.rest)}`;
-  return `<div class="rx"><span class="rx-big">${r.sets} × ${r.reps}${unit}${side}</span><span class="rx-rest">${rest}</span>${rxKgHtml(it)}${r.light ? '<span class="rx-light">scaled down</span>' : ''}</div>`;
+  return `<div class="rx"><span class="rx-big">${r.sets} × ${r.reps}${unit}${side}</span><span class="rx-rest">${rest}</span>${rxKgHtml(it)}${r.light ? '<span class="rx-light">scaled down</span>' : ''}${easedTag(r)}</div>`;
 }
 
 /* суставы под пиковой нагрузкой — короткая строка в карточке; подробности в разборе движения */
@@ -8900,7 +8982,7 @@ function renderPlan() {
   const lf = ensureFold(S).load, loadRows = Object.entries(plan.load).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([m, v]) => [MUSCLE_NAMES[m], v]);
   let html = `<header class="p-head${lf ? ' load-folded' : ''}">
     <div class="p-sum">
-      <p class="eyebrow">${plan.custom ? 'Custom plan · ' : ''}${G.name} · ${FORMATS[S.format].name} · ${LEVELS[S.level].name.toLowerCase()}</p>
+      <p class="eyebrow">${plan.custom ? 'Custom plan · ' : plan.byLog ? 'From log · ' : ''}${G.name} · ${FORMATS[S.format].name} · ${LEVELS[S.level].name.toLowerCase()}</p>
       <h1 class="p-title">${esc(titleFor())}</h1>
       ${plan.custom ? customHeadHtml() : focusHtml()}
       <dl class="stats">
@@ -8923,7 +9005,7 @@ function renderPlan() {
     const hints = customHints(plan), lost = lostMessages(plan.lost, plan.E);
     html += autoregHtml() + gentleHtml() + (lost.length ? `<div class="warn">${lost.map(w => `<p>${esc(w)}</p>`).join('')}</div>` : '')
       + (hints.length ? `<div class="cp-hints">${hints.map(w => `<p>${esc(w)}</p>`).join('')}</div>` : '') + blocksHtml(plan) + customAddHtml() + LEGEND;
-  } else html += autoregHtml() + gentleHtml() + warnHtml(plan) + blocksHtml(plan) + LEGEND;
+  } else html += logPickHtml(plan) + autoregHtml() + gentleHtml() + warnHtml(plan) + blocksHtml(plan) + LEGEND;
   root.innerHTML = html;
   mountFigures();
 }
@@ -10035,26 +10117,34 @@ function motionDurations(it) {
   const q = parsed.length===4 && parsed.every(Number.isFinite) ? parsed : [3,0,1,0];
   return (a.eccFirst ? q : [q[2],q[3],q[0],q[1]]).map(x=>Math.max(0,x)*1000);
 }
-function motionFrame(F) {
+function motionFrame(F, clock=F.clock) {
   const d = F.durations, total = d.reduce((a,b)=>a+b,0) || 4000;
-  let x = ((F.clock%total)+total)%total, index = 0;
+  let x = ((clock%total)+total)%total, index = 0;
   while (index<3 && x>=d[index]) {x-=d[index];index++;}
   const q = d[index] ? Math.min(1,x/d[index]) : 0;
   const eased = .5-.5*Math.cos(Math.PI*q);
   let t = index===0 ? eased : index===1 ? 1 : index===2 ? 1-eased : 0;
   if (F.it.ex.anim.hold) t=0;
   /* замкнутый цикл (педали, бег, «велосипед»): фаза идёт по кругу без возврата назад */
-  if (F.it.ex.anim.loop) {const p=((F.clock%total)+total)%total/total;t=p;index=p<.5?0:2;}
+  if (F.it.ex.anim.loop) {const p=((clock%total)+total)%total/total;t=p;index=p<.5?0:2;}
   /* статодинамика: только рабочая часть амплитуды, без выпрямления и без провала */
   const part=F.it.rx&&F.it.rx.partial;if(part&&!F.it.ex.anim.loop&&!F.it.ex.anim.hold)t=part[0]+(part[1]-part[0])*t;
   const a = F.it.ex.anim;
   let labels = a.eccFirst ? ['Lowering','Bottom position','Lifting','Top position'] : ['Working phase','End position','Return','Starting position'];
   if (F.it.ex.id === 'kbswing') labels=['Forward swing','Top position','Backswing','Starting position'];
   if (F.it.ex.id === 'deadlift') labels=['Lifting','Top position','Lowering','Starting position'];
-  return {t,index,label:a.hold?'Hold':labels[index],cue:a.hold?a.cues[0]:a.cues[(index<2)!==!!a.eccFirst?0:1],progress:((F.clock%total)+total)%total/total,total};
+  return {t,index,label:a.hold?'Hold':labels[index],cue:a.hold?a.cues[0]:a.cues[(index<2)!==!!a.eccFirst?0:1],progress:((clock%total)+total)%total/total,total};
+}
+/* Часы рисунка карточки — по сетке ≈30 кадров в секунду, целое число кадров на повторение: каждый круг проходит те же
+   фазы, и готовые кадры берутся из памяти (FIGURE_FRAMES, 07-rigs-core.js). Кадр отстаёт от точного времени
+   не больше чем на полкадра (≤17 мс); сами часы идут без округления. */
+const CARD_GRID_MS=1000/30;
+function cardClock(F){
+  const total=F.durations.reduce((a,b)=>a+b,0)||4000,n=Math.max(1,Math.round(total/CARD_GRID_MS)),step=total/n;
+  return (((Math.round(F.clock/step))%n)+n)%n*step;
 }
 function paintMotion(F, detailed=false) {
-  const m = motionFrame(F); F.f.at(m.t,m);if(F.extra)F.extra.at(m.t,m);
+  const m = motionFrame(F, detailed ? F.clock : cardClock(F)); F.f.at(m.t,m);if(F.extra)F.extra.at(m.t,m);
   if (!detailed) {
     const cap = F.btn.closest('.motion-tile').querySelector('.motion-caption');
     if (cap && cap.textContent!==m.label) cap.textContent=m.label;
@@ -10181,7 +10271,7 @@ function buildCardFigure(F){
   try {
     /* начатую заранее рамку досчитать, а не начинать заново */
     if(F.job){F.job.step(41);F.job=null;}
-    F.f=buildFigure(F.it.ex.anim,{primary:F.it.ex.pri,has:F.it.has,ratio:1,t:0,label:F.it.name,muscles:motionPrefs.muscles});
+    F.f=buildFigure(F.it.ex.anim,{primary:F.it.ex.pri,has:F.it.has,ratio:1,t:0,label:F.it.name,muscles:motionPrefs.muscles,frameCache:true});
     F.btn.prepend(F.f.svg);paintMotion(F);
   } catch(e) {F.failed=true;console.error('Demo',F.it.ex.id,e);}
 }
@@ -10208,8 +10298,11 @@ function prefetchCardFrames(){
   };
   idle(work);
 }
+let mountedKit=null;
 function mountFigures() {
   figs=[];
+  /* инвентарь места сменился: готовые кадры карточек прежнего набора больше не понадобятся */
+  const kit=S.place+':'+(S.equip||[]).slice().sort().join(',');if(mountedKit!==null&&kit!==mountedKit)figureFramesReset();mountedKit=kit;
   const flat=plan.blocks.flatMap(b=>b.items);
   document.querySelectorAll('[data-fig]').forEach(btn=>{
     const it=flat[+btn.dataset.fig];if(!it)return;
@@ -10361,29 +10454,37 @@ function setupMotionViewer() {
 }
 
 
-/* ---------- таймер отдыха ---------- */
-const T = {left:0, total:0, id:0};
+/* ---------- таймер отдыха в плане ----------
+   Время — по меткам (restView в 12a-set-timers.js). После нуля таймер считает вверх «+0:25» и повторяет сигнал (если
+   выбран «настойчивый»), пока не отмечен следующий подход или не нажато «Готово»; уходит через 5 с после последнего сигнала. */
+const T = {left:0, total:0, id:0, end:0, from:0, label:''};
 function startRest(sec, label) {
   if (!sec) return;
-  T.total = sec; T.left = sec; T.end = Date.now() + sec * 1000;
-  $('#t-label').textContent = label || 'Rest';
+  T.total = sec; T.left = sec; T.from = Date.now(); T.end = T.from + sec * 1000; T.label = label || 'Rest';
+  $('#t-label').textContent = T.label;
   $('#timer').hidden = false; $('#timer').classList.remove('over');
-  RestAlarm.unlock(); RestAlarm.arm(T.end); RestAlarm.paintButton($('#t-sound'));
+  RestAlarm.unlock(); RestAlarm.arm(T.end, {from:T.from}); RestAlarm.paintButton($('#t-sound'));
   clearInterval(T.id); clearTimeout(T.id); tick(); T.id = setInterval(tick, 250);
 }
 function tick() {
-  T.left = Math.max(0, Math.round((T.end - Date.now()) / 1000));
-  const m = Math.floor(T.left / 60), s = T.left % 60;
-  $('#t-time').textContent = `${m}:${String(s).padStart(2, '0')}`;
-  $('#t-bar').style.width = (T.total ? (1 - T.left / T.total) * 100 : 100) + '%';
-  if (T.left <= 0) {
-    clearInterval(T.id); RestAlarm.due();
-    $('#timer').classList.add('over'); $('#t-label').textContent = 'Time for the next set';
-    T.id = setTimeout(() => { $('#timer').hidden = true; }, 5000);
-  }
+  const now = Date.now(), v = restView(T.end, now);
+  T.left = v.left;
+  $('#t-time').textContent = v.text;
+  $('#t-bar').style.width = (T.total ? (1 - v.left / T.total) * 100 : 100) + '%';
+  RestAlarm.poll(now);
+  $('#timer').classList.toggle('over', v.over); $('#t-minus').disabled = v.over;
+  const label = v.over ? 'Time for the next set · over rest' : T.label;
+  if ($('#t-label').textContent !== label) $('#t-label').textContent = label;
+  if (v.over && now >= Math.max(T.end, RestAlarm.lastAt()) + 5000) stopRest();
 }
-function adjustRest(d) { if ($('#timer').hidden) return; T.end = Math.max(Date.now(), T.end + d * 1000); T.total = Math.max(1, T.total + d); RestAlarm.arm(T.end); clearTimeout(T.id); clearInterval(T.id); $('#timer').classList.remove('over'); tick(); T.id = setInterval(tick, 250); }
-function stopRest() { clearInterval(T.id); clearTimeout(T.id); RestAlarm.cancel(); $('#timer').hidden = true; }
+function adjustRest(d) {
+  if ($('#timer').hidden) return;
+  const now = Date.now(), end = restAdjust(T.end, now, d);
+  if (end === T.end) return;
+  T.total = Math.max(1, T.total + Math.round((end - T.end) / 1000)); T.end = end;
+  RestAlarm.arm(T.end, {from:T.from}); clearTimeout(T.id); clearInterval(T.id); tick(); T.id = setInterval(tick, 250);
+}
+function stopRest() { clearInterval(T.id); clearTimeout(T.id); RestAlarm.cancel(); $('#timer').hidden = true; $('#t-minus').disabled = false; }
 
 /* ---------- текст для копирования ---------- */
 function blocksText(p) {
@@ -10523,70 +10624,241 @@ document.addEventListener('click', e => {
   if (t.id === 't-skip') return stopRest();
 });
 
-/* ---------- сигнал в конце отдыха ----------
-   Звук — Web Audio: тон ставится в очередь звуковой карты сразу при старте отдыха на момент его окончания. Таймеры
-   страницы во «уснувшей» вкладке отстают, а запланированный звук всё равно прозвучит вовремя, пока браузер не
-   остановил звук страницы (при заблокированном экране iPhone останавливает — тогда сигнал прозвучит при возвращении,
-   если отдых ещё не пропущен). Звуковую карту браузеры разрешают включить только по нажатию — поэтому unlock()
-   вызывается из нажатий «Подход выполнен» и «Начать тренировку». На телефоне — ещё и вибрация, когда страница на экране.
-   Звук выключается кнопкой на таймере, выбор запоминается. */
+/* ---------- таймеры подхода: чистые расчёты ----------
+   Отдых и удержания (планка, вис, «стульчик», «лодочка») считаются только по меткам времени Date.now(), а не по числу
+   «тиков»: в скрытой вкладке Chrome таймеры страницы срабатывают раз в секунду, через 5 минут — раз в минуту, и счёт по
+   тикам отстал бы. Здесь нет страницы и звука — только фазы, числа на экране и моменты сигналов (проверки —
+   tools/set-timers.test.js). Звук и вибрация — 12b-rest-alarm.js, экран тренировки — 14-workout-mode.js. */
+/* every — повтор сигнала после нуля, с; repeats — не больше трёх повторов; warn — мягкий сигнал за 10 с до конца;
+   grace — сигнал, опоздавший больше чем на 2 с (страница спала), уже не подаётся; maxActual — отдых длиннее 30 мин —
+   перерыв, а не отдых: в журнал не пишется */
+const REST_SIGNAL = {every:20, repeats:3, warn:10, grace:2, maxActual:1800};
+/* удержание: отсчёт 3-2-1 перед стартом и пауза между сторонами (боковая планка), с */
+const HOLD = {lead:3, pause:10};
+
+function clockText(sec) { sec = Math.max(0, Math.floor(sec)); return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }
+
+/* отдых на момент now: до конца — обратный отсчёт (с округлением вверх: «0:01» до самого нуля), после — сколько сверх */
+function restView(end, now) {
+  const ms = end - now;
+  if (ms > 0) { const left = Math.ceil(ms / 1000); return {over:false, left, extra:0, text:clockText(left)}; }
+  const extra = Math.floor(-ms / 1000);
+  return {over:true, left:0, extra, text:'+' + clockText(extra)};
+}
+
+/* моменты сигналов отдыха (мс): за 10 с до конца — мягкий (если включён и отдых длиннее 15 с), конец, затем в режиме
+   «настойчиво» — повторы раз в 20 с, не больше трёх. from — начало отдыха. */
+function restSignals(end, {mode = 'persist', warn = false, from = null} = {}) {
+  const out = [];
+  if (warn && (from == null || end - from > (REST_SIGNAL.warn + 5) * 1000)) out.push({at:end - REST_SIGNAL.warn * 1000, kind:'warn'});
+  out.push({at:end, kind:'end'});
+  if (mode !== 'once') for (let i = 1; i <= REST_SIGNAL.repeats; i++) out.push({at:end + i * REST_SIGNAL.every * 1000, kind:'repeat'});
+  return out;
+}
+/* какие сигналы наступили к now и ещё не поданы (fired — отметки по номерам). Опоздавший больше чем на 2 с помечен late:
+   его не повторяют — на экране и так видно «+0:40» */
+function restDue(signals, fired, now) {
+  const out = [];
+  signals.forEach((s, i) => { if (!fired[i] && s.at <= now) out.push({i, kind:s.kind, late:now - s.at > REST_SIGNAL.grace * 1000}); });
+  return out;
+}
+/* момент последнего сигнала отдыха (после него таймер в плане может уйти с экрана) */
+function restLastAt(signals) { return signals.reduce((m, s) => Math.max(m, s.at), 0); }
+/* ±15 с: во время отдыха сдвигает конец (не раньше «сейчас»); после нуля «+15» даёт ещё 15 с от текущего момента,
+   «−15» ничего не меняет — отдых уже кончился */
+function restAdjust(end, now, d) { return end > now ? Math.max(now, end + d * 1000) : d > 0 ? now + d * 1000 : end; }
+/* фактический отдых, с: от записи подхода до перехода к следующему; меньше секунды или дольше 30 мин — не записывается */
+function restActual(from, to) {
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from <= 0 || to < from) return null;
+  const s = Math.round((to - from) / 1000);
+  return s >= 1 && s <= REST_SIGNAL.maxActual ? s : null;
+}
+/* третье поле записи подхода [кг, повторы, отдых]: целые секунды 1…1800, иначе поля нет */
+function restField(v) { if (typeof v !== 'number' && (typeof v !== 'string' || !v.trim())) return null; const n = Number(v); return Number.isInteger(n) && n >= 1 && n <= REST_SIGNAL.maxActual ? n : null; }
+
+/* ---------- удержание ---------- */
+function holdRange(text) { const m = String(text).match(/(\d+)\D+(\d+)/); if (m) return [+m[1], +m[2]]; const n = parseInt(text, 10); return [n || 0, n || 0]; }
+/* Цель отсчёта, с. По плану — нижняя граница диапазона («30–45 с» → 30): ноль значит «подход засчитан», дальше счёт вверх
+   ведёт к верхней границе, а не обрывает удержание раньше времени. Если журнал уже ведёт прогрессию (в прошлый раз 38 с —
+   сегодня 39; все подходы на верхней границе — на 10 с дольше), цель — из подсказки журнала, но не выше верхней
+   границы + 10 с. */
+function holdTarget(reps, suggested) {
+  const [lo, hi0] = holdRange(reps), lo1 = lo > 0 ? lo : 30, hi = Math.max(hi0, lo1), s = Math.round(Number(suggested));
+  if (Number.isFinite(s) && s > lo1) return {sec:Math.min(s, hi + 10), lo:lo1, hi, from:'log'};
+  return {sec:lo1, lo:lo1, hi, from:'plan'};
+}
+/* Таймер — только метки нажатий: t0 — «Старт», stops — «Стоп» каждой стороны, skip — «правая сейчас» (без паузы).
+   Фазы: lead (3-2-1) → hold (до цели, затем сверх цели) → у двусторонних switch (пауза 10 с) → hold правой → done. */
+function holdNew(t0, target, sides = 1) { return {t0, target, sides:sides === 2 ? 2 : 1, stops:[], skip:null}; }
+function holdStartOf(h, side) { return side === 0 ? h.t0 + HOLD.lead * 1000 : h.stops.length ? (h.skip ?? h.stops[0] + HOLD.pause * 1000) : Infinity; }
+function holdState(h, now) {
+  const results = h.stops.map((t, i) => Math.max(0, Math.floor((t - holdStartOf(h, i)) / 1000)));
+  if (h.stops.length >= h.sides) return {phase:'done', side:h.sides - 1, results, value:Math.min(...results)};
+  const side = h.stops.length, start = holdStartOf(h, side);
+  if (now < start) return {phase:side ? 'switch' : 'lead', side, count:Math.ceil((start - now) / 1000), results};
+  const ms = now - start, reach = h.target * 1000, elapsed = Math.floor(ms / 1000);
+  return ms < reach ? {phase:'hold', side, mode:'to', left:Math.ceil((reach - ms) / 1000), elapsed, results}
+    : {phase:'hold', side, mode:'over', over:Math.floor((ms - reach) / 1000), elapsed, results};
+}
+/* главная кнопка: в отсчёте 3-2-1 — отмена; в удержании — «Стоп» стороны; в паузе между сторонами — правая сразу */
+function holdPress(h, now) {
+  const st = holdState(h, now);
+  if (st.phase === 'lead') return {h:null, action:'cancel'};
+  if (st.phase === 'switch') return {h:{...h, skip:now}, action:'skip'};
+  if (st.phase === 'hold') { const n = {...h, stops:[...h.stops, now]}; return {h:n, action:n.stops.length >= n.sides ? 'done' : 'side'}; }
+  return {h, action:'none'};
+}
+/* звуки таймера (мс): короткие 3-2-1, «пошли», цель достигнута — для каждой начатой стороны. «Стоп» раньше цели снимает
+   её сигнал. Перед правой стороной — те же 3-2-1 в конце паузы (если правую не начали сразу). */
+function holdCues(h) {
+  const out = [], lead = (start, n) => { for (let k = n; k >= 1; k--) out.push({at:start - k * 1000, kind:'tick'}); out.push({at:start, kind:'go'}); };
+  for (let side = 0; side < h.sides && side <= h.stops.length; side++) {
+    const start = holdStartOf(h, side);
+    if (side === 0) lead(start, HOLD.lead); else if (h.skip == null) lead(start, Math.min(3, HOLD.pause)); else out.push({at:start, kind:'go'});
+    const reach = start + h.target * 1000;
+    if (!(h.stops[side] < reach)) out.push({at:reach, kind:'end'});
+  }
+  return out;
+}
+/* число на таймере удержания: «23 с», с минуты — «1:05»; сверх цели — «+7 с» */
+function holdText(sec, plus) { const t = sec < 60 ? `${sec} s` : clockText(sec); return plus ? '+' + t : t; }
+
+/* ---------- сигнал в конце отдыха и звуки таймера удержания ----------
+   Звук — Web Audio: тоны ставятся в очередь звуковой карты сразу при старте отдыха на моменты сигналов (restSignals в
+   12a-set-timers.js). Таймеры страницы во «уснувшей» вкладке отстают, а запланированный звук всё равно прозвучит вовремя,
+   пока браузер не остановил звук страницы. iPhone останавливает звуковую карту, когда приложение не на экране (или экран
+   заблокирован), и её время стоит, — поэтому при возвращении на экран очередь ставится заново по часам (resync):
+   прошедшие сигналы не догоняют, будущие звучат вовремя. Звуковую карту браузеры разрешают включить только по нажатию —
+   поэтому unlock() вызывается из нажатий «Подход выполнен», «Начать тренировку», «Старт» таймера удержания.
+   Сигнал «настойчиво» (по умолчанию): после нуля — повтор раз в 20 с, не больше трёх, пока не начат следующий подход;
+   «один раз» — только на нуле. По желанию — короткий мягкий сигнал за 10 с до конца (по умолчанию выключен).
+   Вибрация (Chrome на Android; Safari на iPhone её не умеет) и запасной звук, если очередь не была поставлена, — из шага
+   таймера на экране (poll), тоже по меткам времени. Звук выключается кнопкой 🔔, выбор запоминается. */
 const RestAlarm = (() => {
-  const KEY = 'podhod.restSound';
-  let ctx = null, nodes = [], end = 0, rang = 0, vib = 0;
-  let on = (() => { try { return localStorage.getItem(KEY) !== 'off'; } catch (e) { return true; } })();
+  const KEY = 'podhod.restSound', MODE_KEY = 'podhod.restSignal', WARN_KEY = 'podhod.restWarn';
+  const read = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const write = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+  let ctx = null, on = read(KEY) !== 'off', mode = read(MODE_KEY) === 'once' ? 'once' : 'persist', warn = read(WARN_KEY) === 'on';
+  /* очереди звуков: отдых и таймер удержания снимаются независимо */
+  const ch = {rest:[], hold:[]};
+  let sig = [], fired = [], queued = [], end = 0, from = 0, cues = [];
   const AC = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
   function unlock() {
     if (!AC || !on) return;
     try {
       if (!ctx) ctx = new AC();
-      if (ctx.state === 'suspended') ctx.resume();
+      if (ctx.state === 'suspended' || ctx.state === 'interrupted') ctx.resume();
     } catch (e) { ctx = null; }
   }
-  function silence() { for (const n of nodes) { try { n.stop(); } catch (e) {} } nodes = []; }
-  /* два коротких двойных сигнала: 880 и 1320 Гц, мягкое нарастание и спад без щелчков */
-  function schedule(at) {
-    const tones = [[0, 880], [.16, 1320], [.6, 880], [.76, 1320]];
-    for (const [dt, f] of tones) {
+  /* голоса: конец отдыха и его повторы — два коротких двойных сигнала 880 и 1320 Гц; предупреждение — один мягкий тон;
+     3-2-1 удержания — короткие щелчки, «пошли» — высокий тон; мягкое нарастание и спад без щелчков в динамике */
+  const VOICE = {end:{gain:.32, len:.14, tones:[[0, 880], [.16, 1320], [.6, 880], [.76, 1320]]}, warn:{gain:.16, len:.24, tones:[[0, 660]]},
+    tick:{gain:.24, len:.08, tones:[[0, 880]]}, go:{gain:.3, len:.22, tones:[[0, 1320]]}};
+  VOICE.repeat = VOICE.end;
+  function tone(list, at, kind) {
+    const v = VOICE[kind] || VOICE.end;
+    for (const [dt, f] of v.tones) {
       const o = ctx.createOscillator(), g = ctx.createGain(), t = at + dt;
       o.type = 'sine'; o.frequency.value = f;
-      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.32, t + .015); g.gain.exponentialRampToValueAtTime(.001, t + .14);
-      o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + .16); nodes.push(o);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v.gain, t + .015); g.gain.exponentialRampToValueAtTime(.001, t + v.len);
+      o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + v.len + .02); list.push(o);
     }
   }
-  /* сигнал в момент endMs (время Date.now()); повторный вызов переносит сигнал (±15 с) */
-  function arm(endMs) {
-    cancel(); rang = 0;
-    const left = (endMs - Date.now()) / 1000;
-    if (left <= 0) return;
-    end = endMs;
-    if (on && ctx && ctx.state !== 'closed') schedule(ctx.currentTime + left);
-    if (typeof navigator !== 'undefined' && navigator.vibrate) vib = setTimeout(() => { if (!document.hidden) navigator.vibrate([220, 120, 220]); }, left * 1000);
+  const ready = () => on && !!ctx && ctx.state !== 'closed';
+  function silence(c) { for (const n of ch[c]) { try { n.stop(); } catch (e) {} } ch[c] = []; }
+  /* поставить звук в очередь на момент at (время Date.now()); прошедшее не ставится */
+  function queue(c, at, kind) {
+    if (!ready()) return false;
+    const dt = (at - Date.now()) / 1000;
+    if (dt < -.05) return false;
+    try { tone(ch[c], ctx.currentTime + Math.max(0, dt), kind); return true; } catch (e) { return false; }
   }
-  function cancel() { silence(); clearTimeout(vib); vib = 0; end = 0; }
-  /* таймер на экране дошёл до нуля: если звук не был поставлен в очередь (звуковая карта ещё не была разрешена),
-     сыграть сейчас; не повторять */
-  function due() {
-    if (!end || rang) return; rang = 1;
-    if (on && ctx && ctx.state !== 'closed' && !nodes.length) { try { if (ctx.state === 'suspended') ctx.resume(); schedule(ctx.currentTime + .05); } catch (e) {} }
+  function queueRest() { silence('rest'); queued = sig.map((s, i) => !fired[i] && queue('rest', s.at, s.kind)); }
+  /* отдых до endMs (время Date.now()); from — начало отдыха. Повторный вызов переносит сигналы (±15 с). */
+  function arm(endMs, opts = {}) {
+    cancel();
+    if (!(endMs > 0)) return;
+    const now = Date.now();
+    end = endMs; from = opts.from || now;
+    sig = restSignals(end, {mode, warn, from});
+    fired = sig.map(s => s.at <= now); /* прошедшие (например, при возврате к тренировке после нуля) не подаются */
+    queueRest();
   }
+  function cancel() { silence('rest'); sig = []; fired = []; queued = []; end = 0; from = 0; }
+  function buzz(kind) {
+    if (typeof navigator === 'undefined' || !navigator.vibrate || (typeof document !== 'undefined' && document.hidden)) return;
+    try { navigator.vibrate(kind === 'warn' ? 90 : kind === 'tick' ? 40 : kind === 'go' ? 120 : [220, 120, 220]); } catch (e) {}
+  }
+  /* шаг таймера на экране: наступившие сигналы — вибрация и звук, если он не стоял в очереди (звуковая карта ещё не была
+     разрешена); опоздавшие (страница спала) — без сигнала. Возвращает поданные. */
+  function poll(now = Date.now()) {
+    if (!end) return [];
+    const due = restDue(sig, fired, now);
+    for (const d of due) {
+      fired[d.i] = true;
+      if (d.late) continue;
+      if (!queued[d.i] && ready()) { try { if (ctx.state !== 'running') ctx.resume(); tone(ch.rest, ctx.currentTime + .05, d.kind); } catch (e) {} }
+      buzz(d.kind);
+    }
+    return due;
+  }
+  /* таймер удержания: список {at, kind} заменяет прежний */
+  function cue(list) { silence('hold'); cues = list || []; for (const c of cues) queue('hold', c.at, c.kind); }
+  function hush() { silence('hold'); cues = []; }
+  /* страница снова на экране: очередь — заново по часам */
+  function resync() {
+    if (ctx && on && ctx.state !== 'running' && ctx.state !== 'closed') { try { ctx.resume(); } catch (e) {} }
+    if (end) {
+      const now = Date.now();
+      sig.forEach((s, i) => { if (!fired[i] && now - s.at > REST_SIGNAL.grace * 1000) fired[i] = true; });
+      queueRest();
+    }
+    if (cues.length) cue(cues);
+  }
+  /* звуковая карта стоит (iPhone не всегда запускает её сам после возвращения на экран, а без нажатия запустить её
+     нельзя): любое нажатие будит её и ставит очередь заново по часам */
+  function wake() { if (ctx && on && ctx.state !== 'running' && ctx.state !== 'closed') resync(); }
   function setOn(v) {
-    on = !!v; try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) {}
-    if (!on) silence(); else { unlock(); if (end > Date.now()) arm(end); }
+    on = !!v; write(KEY, on ? 'on' : 'off');
+    if (!on) { silence('rest'); silence('hold'); queued = sig.map(() => false); }
+    else { unlock(); if (end) queueRest(); if (cues.length) cue(cues); }
     for (const b of document.querySelectorAll('[data-rest-sound]')) paintButton(b);
   }
-  function paintButton(b) { b.setAttribute('aria-pressed', String(on)); b.textContent = on ? '🔔' : '🔕'; b.title = on ? 'Sound at the end of rest is on' : 'Sound at the end of rest is off'; }
+  /* «один раз» / «настойчиво» и предупреждение за 10 с: идущий отдых пересчитывается сразу */
+  function setPrefs(p) {
+    if (p.mode) { mode = p.mode === 'once' ? 'once' : 'persist'; write(MODE_KEY, mode); }
+    if (p.warn !== undefined) { warn = !!p.warn; write(WARN_KEY, warn ? 'on' : 'off'); }
+    if (end) {
+      const now = Date.now();
+      sig = restSignals(end, {mode, warn, from}); fired = sig.map(s => s.at <= now); queueRest();
+    }
+    paintPrefs();
+  }
+  function paintButton(b) { b.setAttribute('aria-pressed', String(on)); b.textContent = on ? '🔔' : '🔕'; b.title = on ? 'Timer sound is on' : 'Timer sound is off'; }
+  function paintPrefs() {
+    for (const b of document.querySelectorAll('[data-rest-mode]')) b.setAttribute('aria-pressed', String(b.dataset.restMode === mode));
+    for (const c of document.querySelectorAll('[data-rest-warn]')) c.checked = warn;
+  }
   /* состояние для проверок интерфейса (tools/ui-check.mjs) */
-  const state = () => ({ audio: ctx ? ctx.state : null, end, queued: nodes.length });
-  return { unlock, arm, cancel, due, setOn, paintButton, state, get on() { return on; } };
+  const state = () => ({audio:ctx ? ctx.state : null, end, queued:ch.rest.length, signals:sig.map(s => s.kind), fired:fired.filter(Boolean).length, mode, warn, hold:cues.map(c => c.kind)});
+  return {unlock, arm, cancel, poll, buzz, cue, hush, resync, wake, setOn, setPrefs, paintButton, paintPrefs, state, lastAt:() => restLastAt(sig),
+    get on() { return on; }, get mode() { return mode; }, get warn() { return warn; }};
 })();
 document.addEventListener('click', e => {
+  RestAlarm.wake();
   const b = e.target.closest('[data-rest-sound]');
-  if (b) { RestAlarm.setOn(!RestAlarm.on); if (RestAlarm.on) RestAlarm.unlock(); }
+  if (b) { RestAlarm.setOn(!RestAlarm.on); if (RestAlarm.on) RestAlarm.unlock(); return; }
+  const m = e.target.closest('[data-rest-mode]');
+  if (m) RestAlarm.setPrefs({mode:m.dataset.restMode});
 });
+document.addEventListener('change', e => { if (e.target.matches && e.target.matches('[data-rest-warn]')) RestAlarm.setPrefs({warn:e.target.checked}); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) RestAlarm.resync(); });
 
 /* ===================== ЖУРНАЛ ===================== */
 /* Хранилище: в опубликованной версии — аккаунт (db, личный раздел пользователя),
-   в офлайн-файле — браузер. Формат: LOG.data[exId] = [{d:'2026-10-05', wk?:1, s:[[кг|null, повторы] | null, …]}, …] */
+   в офлайн-файле — браузер. Формат: LOG.data[exId] = [{d:'2026-10-05', wk?:1, s:[[кг|null, повторы, отдых?] | null, …]}, …].
+   Третье поле подхода — необязательное: фактический отдых после подхода, целые секунды (пишет режим тренировки). Старые
+   записи без него читаются как раньше, прежние версии приложения его просто не видят. */
 const LOG_KEY = 'podhod.log.v1';
 const LOG = {mode:'connecting', data:{}, col:null, pending:{}, writing:{}, again:{}, timers:{}, err:'', dl:null, canExport:false};
 const WEIGHTED = new Set(['db', 'bb', 'kb', 'cable', 'smith', 'legpress', 'legext', 'legcurl', 'pecdeck', 'hack', 'chestpress', 'shoulderpress', 'leverrow', 'tbar', 'abductor', 'calfseat', 'calfstand']);
@@ -11004,7 +11276,7 @@ function renderJournal() {
       ${tools}
     </div>
     <figure class="j-heat"><figcaption class="lb-h">Activity over 12 weeks${last ? ` · last workout ${fmtDay(last, true)}` : ''}</figcaption>${heatmap()}</figure>
-  </header>${bodyHtml()}`;
+  </header>${entries.length ? muscleLoadHtml() : ''}${bodyHtml()}`;
   if (!entries.length) {
     html += `<div class="empty"><h2>No entries yet</h2><p>Open the plan and log sets in the exercise cards: weight and reps will be saved here, and the planner will start suggesting when to add weight.</p><button type="button" class="btn" data-view="plan">Go to plan</button></div>`;
   } else {
@@ -11050,9 +11322,9 @@ async function saveFile(name, text, mime) {
   return 'fail';
 }
 function csvText() {
-  const rows = [['Date', 'Exercise', 'Muscle group', 'Set', 'Weight, kg', 'Reps / seconds / meters', 'Cycle week']];
+  const rows = [['Date', 'Exercise', 'Muscle group', 'Set', 'Weight, kg', 'Reps / seconds / meters', 'Cycle week', 'Rest after the set, s']];
   const all = [];
-  for (const [id, ss] of Object.entries(LOG.data)) if (EXI[id]) for (const s of ss) s.s.forEach((x, k) => { if (x) all.push([s.d, EXI[id].name, GN[EXI[id].g], k + 1, x[0] != null ? fmtKg(x[0]) : '', x[1], s.wk || '']); });
+  for (const [id, ss] of Object.entries(LOG.data)) if (EXI[id]) for (const s of ss) s.s.forEach((x, k) => { if (x) all.push([s.d, EXI[id].name, GN[EXI[id].g], k + 1, x[0] != null ? fmtKg(x[0]) : '', x[1], s.wk || '', restField(x[2]) ?? '']); });
   all.sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] < b[1] ? -1 : 1);
   return '﻿' + rows.concat(all).map(r => r.map(v => /[;"\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : v).join(';')).join('\r\n');
 }
@@ -11594,9 +11866,235 @@ function setupGallery() {
   $('#mv-back').addEventListener('click', () => showGallery(detailMotion?.it.ex.id));
 }
 
+/* ===================== ЗАГРУЗКА МЫШЦ ПО ЖУРНАЛУ ===================== */
+/* Сколько подходов получила каждая группа мышц за 7 скользящих дней и сколько она отдыхает после последней существенной
+   нагрузки; по этому собирается «тренировка на сегодня»: сначала недогруженные и отдохнувшие группы.
+   Формат журнала прежний (13-log.js): LOG.data[exId] = [{d:'YYYY-MM-DD', s:[[кг, повторы] | null, …]}, …].
+
+   Счёт подходов — то же правило, что у графика «Подходов на группу за неделю» в плане (groupShare, 11-planner.js):
+   подход засчитывается целиком целевой группе упражнения и наполовину остальным работающим (Pelland et al.,
+   Sports Med 2026; 56(2):481–505 — «дробный» счёт лучше всего предсказывает прирост). Считаются только записанные
+   (непустые) подходы; односторонний подход «по 10 на каждую сторону» — одна строка журнала, один подход.
+
+   Журнал хранит только дату, без времени. Человек обычно тренируется примерно в одно время суток, поэтому часы отдыха —
+   24 × число календарных дней между датой записи и сегодня: вчера — 24 ч, позавчера — 48 ч, три дня назад — 72 ч.
+   «Середина дня» сделала бы статус зависимым от часа, когда открыт журнал: утром четверга понедельник — 68 ч
+   («восстанавливается»), вечером — 78 ч («готова»), хотя тренировка та же. */
+const LOAD = {
+  days:7,        /* окно: сегодня и 6 предыдущих дней */
+  lo:10, hi:20,  /* коридор подходов на группу в неделю: Schoenfeld, Ogborn, Krieger, J Sports Sci 2017; 35(11):1073–1082 —
+                    10 и больше подходов в неделю дают больший прирост, чем меньше; верх 20 — как у графика плана и у Fitbod */
+  minSets:2,     /* существенная нагрузка — 2 и больше подхода основной работы группы в одной тренировке (в один день) */
+  loadedH:48,    /* Morán-Navarro et al., Eur J Appl Physiol 2017; 117(12):2387–2399: без отказа восстановление в основном
+                    за 24–48 ч — до 48 ч группа «нагружена», */
+  readyH:72,     /* после подходов до отказа — до 72 ч: 48–72 ч — «восстанавливается», от 72 ч — «готова» */
+  perGroup:3     /* в тренировке на сегодня — не больше 3 упражнений на одну группу */
+};
+const LOAD_ST = {loaded:'fatigued', recovering:'recovering', ready:'ready'};
+const loadGroups = () => GROUPS.map(g => g.id).filter(g => g !== 'cardio');
+/* разница в календарных днях между ключами 'YYYY-MM-DD' (без часовых поясов и перевода часов) */
+function keyDays(a, b) {
+  const t = k => { const [y, m, d] = k.split('-').map(Number); return Date.UTC(y, m - 1, d); };
+  return Math.round((t(b) - t(a)) / 864e5);
+}
+
+/* Статус восстановления — по основной работе группы: подход засчитывается ей, если она целевая для упражнения или
+   её мышцы в нём основные (pri). Вспомогательные мышцы (sec) и кардио статус не меняют: восстановление у Morán-Navarro
+   и соавт. измерялось по основным мышцам упражнения, а иначе, например, четыре подхода тяги верхнего блока (грудные
+   во вспомогательных) и три жима стоя (передняя зубчатая — в группе «Грудь») делали бы грудь «нагруженной» после дня
+   спины и плеч. Объём за 7 дней (полосы) — по общему дробному правилу, как в плане. */
+const mainGroupsOf = ex => ex.g === 'cardio' ? [] : [...groupsOf(ex)];
+
+/* по каждой группе: v — засчитанные подходы за 7 дней; last — последняя существенная нагрузка {d, age (дней), sets —
+   подходов основной работы в тот день}; h — часы отдыха; st — loaded | recovering | ready */
+function muscleLoad(data = LOG.data, today = todayKey()) {
+  const days = {};
+  for (const [id, ss] of Object.entries(data || {})) {
+    const ex = EXI[id]; if (!ex || !Array.isArray(ss)) continue;
+    const share = groupShare(ex), main = mainGroupsOf(ex);
+    for (const s of ss) {
+      if (!s || typeof s.d !== 'string' || !Array.isArray(s.s)) continue;
+      const n = s.s.filter(Boolean).length, age = keyDays(s.d, today);
+      if (!n || !(age >= 0)) continue; /* записи «из будущего» (часы телефона) не считаем */
+      const day = days[s.d] || (days[s.d] = {age, g:{}, m:{}});
+      for (const [g, x] of Object.entries(share)) day.g[g] = (day.g[g] || 0) + n * x;
+      for (const g of main) day.m[g] = (day.m[g] || 0) + n;
+    }
+  }
+  const out = {};
+  for (const g of loadGroups()) {
+    let v = 0, last = null;
+    for (const [d, day] of Object.entries(days)) {
+      if (day.age < LOAD.days) v += day.g[g] || 0;
+      const x = day.m[g] || 0;
+      if (x >= LOAD.minSets && (!last || day.age < last.age)) last = {d, age:day.age, sets:x};
+    }
+    const h = last ? last.age * 24 : Infinity;
+    out[g] = {v, last, h, st:h < LOAD.loadedH ? 'loaded' : h < LOAD.readyH ? 'recovering' : 'ready'};
+  }
+  return out;
+}
+
+/* ---------- тренировка на сегодня ---------- */
+/* Кандидаты — «готовые» и «восстанавливающиеся» группы (у вторых вес вдвое меньше, одно упражнение и на подход меньше);
+   «нагруженные» пропускаются, упражнения, где они основные, отодвигаются. Порядок — по недобору до 10 подходов
+   за 7 дней, умноженному на долю группы в обычном плане (GROUP_W): 6 недостающих подходов спины важнее 6 подходов
+   предплечий, которые и так работают в каждой тяге. Групп — не больше, чем упражнений; при меньше 3 групп с недобором
+   добавляются готовые без недобора. Группы без упражнений в этом месте (инвентарь, уровень, бережный режим) не берутся. */
+function logPick(load = muscleLoad(), opt = {}) {
+  const count = opt.count || S.count, E = opt.E || effEquip(S.equip), lvlMax = S.level === 'beg' ? 2 : 3;
+  const can = g => EX.some(ex => ex.g === g && available(ex, E) && ex.lvl <= lvlMax && (S.format !== 'static' || staticOk(ex)) && fitsBody(ex));
+  const order = g => GROUPS.findIndex(x => x.id === g);
+  const rows = loadGroups().map(g => {
+    const L = load[g], need = Math.max(0, LOAD.lo - L.v);
+    return {g, v:L.v, st:L.st, age:L.last ? L.last.age : null, sets:L.last ? L.last.sets : 0, need,
+      p:GROUP_W[g] * (need / LOAD.lo + 0.1) * (L.st === 'recovering' ? 0.5 : 1)};
+  });
+  const rest = rows.filter(r => r.st === 'loaded');
+  const cand = rows.filter(r => r.st !== 'loaded' && r.v < LOAD.hi && can(r.g)).sort((a, b) => b.p - a.p || order(a.g) - order(b.g));
+  let chosen = cand.filter(r => r.need > 0).slice(0, count);
+  if (chosen.length < 3) chosen = chosen.concat(cand.filter(r => !chosen.includes(r)).slice(0, 3 - chosen.length));
+  return {rows:chosen, rest, groups:chosen.map(r => r.g).sort((a, b) => order(a) - order(b))};
+}
+/* доли групп для подбора: каждой — по упражнению, остальные упражнения — готовым группам пропорционально приоритету */
+function pickWeights(rows, count) {
+  const fresh = rows.filter(r => r.st !== 'recovering'), sumP = fresh.reduce((a, r) => a + r.p, 0), extra = Math.max(0, count - rows.length);
+  const weights = {};
+  for (const r of rows) weights[r.g] = Math.min(LOAD.perGroup, 1 + (r.st !== 'recovering' && sumP > 0 ? extra * r.p / sumP : 0));
+  const total = Object.values(weights).reduce((a, b) => a + b, 0);
+  return {weights, count:Math.max(1, Math.min(count, Math.round(total)))};
+}
+/* подбор по журналу действует в день, когда собран, пока группы в параметрах те же; иначе — обычный подбор */
+function logPickCtx() {
+  const p = S.logPick;
+  if (S.mode !== 'single' || !p || typeof p !== 'object' || p.d !== todayKey() || !Array.isArray(p.groups) || !Array.isArray(p.rows) || !p.groups.length) return null;
+  if (p.groups.length !== S.groups.length || !p.groups.every(g => S.groups.includes(g))) return null;
+  const rows = p.rows.filter(r => r && GROUP_W[r.g] && p.groups.includes(r.g) && r.p > 0);
+  if (rows.length !== p.groups.length) return null;
+  return {...pickWeights(rows, S.count), rest:new Set((p.rest || []).map(r => r && r.g).filter(g => GROUP_W[g])),
+    light:new Set(rows.filter(r => r.st === 'recovering').map(r => r.g)), pick:p};
+}
+/* восстанавливающаяся группа: на подход меньше (не меньше двух; в статодинамике — на серию меньше) */
+function easeRx(rx) {
+  if (rx.static) { if (rx.series > 1) { rx.eased = rx.sets; rx.series -= 1; rx.sets = rx.series * STATIC.perSeries; } }
+  else if (rx.sets > 2) { rx.eased = rx.sets; rx.sets -= 1; }
+  return rx;
+}
+function easedTag(r) { return r.eased && r.sets < r.eased && !r.circ ? '<span class="rx-light">one set fewer: muscles still recovering</span>' : ''; }
+
+/* собрать: группы — в параметры плана, снимок журнала — в S.logPick (план не меняется от записей по ходу тренировки) */
+function applyLogPick(today = todayKey()) {
+  const pick = logPick(muscleLoad(LOG.data, today));
+  if (!pick.rows.length) return null;
+  const prev = S.mode;
+  S.view = 'plan';
+  if (S.mode !== 'single') { S.mode = 'single'; S.day = 0; switchModeSettings(prev); }
+  S.groups = pick.groups;
+  S.logPick = {d:today, groups:pick.groups, rows:pick.rows, rest:pick.rest.map(r => ({g:r.g, age:r.age, sets:r.sets}))};
+  regen();
+  return pick;
+}
+
+/* ---------- тексты ---------- */
+function setsWord(v) { return Number.isInteger(v) ? plural(v, 'set', 'sets', 'sets') : 'sets'; }
+function agoText(age, d) {
+  if (age === 0) return 'today';
+  if (age === 1) return 'yesterday';
+  if (age === 2) return '2 days ago';
+  return age < LOAD.days ? `${age} ${plural(age, 'day', 'days', 'days')} ago` : fmtDay(d, true);
+}
+function restText(r) {
+  if (r.age == null) return r.v > 0 ? 'no main work' : 'no work';
+  return `rest ${r.age} ${plural(r.age, 'day', 'days', 'days')}`;
+}
+function loadStatusHtml(L) {
+  const det = L.last ? `${agoText(L.last.age, L.last.d)}, ${L.last.sets} ${setsWord(L.last.sets)}` : L.v > 0 ? 'no main work' : 'no work';
+  return `<span class="ml-st"><i aria-hidden="true"></i><b>${LOAD_ST[L.st]}</b><span>${det}</span></span>`;
+}
+
+/* одна строка сверху: кто нагружен, кто восстанавливается, сколько групп готово */
+function loadSummaryHtml(load) {
+  const by = st => loadGroups().filter(g => load[g].st === st), names = gs => gs.map(g => GN[g].toLowerCase()).join(', ');
+  const loaded = by('loaded'), rec = by('recovering'), ready = by('ready').length;
+  if (!loaded.length && !rec.length) return `<p class="ml-sum"><span class="st-ready"><i aria-hidden="true"></i>Every muscle group is ready to train.</span></p>`;
+  return `<p class="ml-sum">${loaded.length ? `<span class="st-loaded"><i aria-hidden="true"></i>Fatigued: ${names(loaded)}</span>` : ''}${rec.length ? `<span class="st-recovering"><i aria-hidden="true"></i>Recovering: ${names(rec)}</span>` : ''}${ready ? `<span class="st-ready"><i aria-hidden="true"></i>Ready: ${ready} ${plural(ready, 'group', 'groups', 'groups')}</span>` : ''}</p>`;
+}
+/* панель в журнале: подходы за 7 дней (полосы как в плане) и статус восстановления */
+function muscleLoadHtml(load = muscleLoad()) {
+  const ids = loadGroups(), any = ids.some(g => load[g].v > 0);
+  const max = Math.max(22, ...ids.map(g => load[g].v));
+  const body = any ? `<ul class="vbars ml-list">${ids.map(g => volRow(g, load[g].v, max, loadStatusHtml(load[g]), 'st-' + load[g].st)).join('')}</ul>
+    <p class="ml-legend"><span class="st-loaded"><i></i>fatigued — under 48 h</span><span class="st-recovering"><i></i>recovering — 48–72 h</span><span class="st-ready"><i></i>ready — 72 h or more</span></p>`
+    : `<p class="ml-empty">No entries in the last 7 days — every muscle has rested. Today's workout will start with the big muscle groups.</p>`;
+  return `<section class="ml" id="ml" aria-labelledby="ml-title">
+    <div class="ml-head">
+      <div><p class="eyebrow">Muscle load</p><h2 id="ml-title">Sets in 7 days and rest</h2>
+        <p class="ml-sub">Today and the 6 days before, from logged sets. The band is the growth target: 10–20 sets per muscle group per week.</p>
+        ${any ? loadSummaryHtml(load) : ''}</div>
+      <div class="ml-act"><button type="button" class="btn" data-logpick="journal">Build today's workout →</button>
+        <p class="p-hint ml-msg" id="ml-msg" role="status"></p></div>
+    </div>
+    ${body}
+    <details class="rule ml-how"><summary>How it is counted</summary>
+      <p>A set counts in full for the exercise's target group and as half a set for the other working groups — the same as the weekly chart in the plan (Pelland et al., 2026). Only logged sets count; “10 per side” is one set.</p>
+      <p>Target: 10–20 sets per muscle group per week — from 10 sets muscles grow noticeably more (Schoenfeld, Ogborn, Krieger, 2017).</p>
+      <p>Status comes from the last workout in which the group did 2 or more sets as a main mover: under 48 h ago — fatigued, 48–72 h — recovering, 72 h or more — ready. Without training to failure muscles mostly recover in 24–48 h, after sets to failure — in up to 72 h (Morán-Navarro et al., 2017). Assisting work and cardio do not change the status. The log stores dates only, so hours are counted in days: yesterday — 24 h, 2 days ago — 48 h, 3 days ago — 72 h.</p>
+      <p>Today's workout: groups with the biggest shortfall to 10 sets come first (big muscles before small ones), fatigued groups are skipped, recovering groups get one exercise with one set fewer. Gear, level and number of exercises come from the plan settings.</p>
+    </details>
+  </section>`;
+}
+
+/* строка-объяснение в плане по каждой выбранной группе */
+function logPickHtml(p) {
+  const lp = p && p.byLog ? logPickCtx() : null;
+  if (!lp) return '';
+  const order = g => GROUPS.findIndex(x => x.id === g);
+  const rows = lp.pick.rows.slice().sort((a, b) => b.p - a.p || order(a.g) - order(b.g));
+  const li = rows.map(r => {
+    const today = Math.round((p.gvol[r.g] || 0) * 2) / 2;
+    return `<li><span class="ar-i st-${r.st}" aria-hidden="true"></span><p><b>${GN[r.g]}:</b> ${fmtNum(r.v)} of 10 in 7 days, ${restText(r)}${r.st === 'recovering' ? ' — recovering, one set fewer' : ''}<em class="lp-add">${today ? `today +${fmtNum(today)}` : 'no exercise today'}</em></p></li>`;
+  }).join('');
+  const rest = (lp.pick.rest || []).filter(r => r && GN[r.g]);
+  const skip = rest.length ? `<p class="lp-skip">Resting — worked under 48 h ago: ${rest.map(r => `${GN[r.g].toLowerCase()} (${agoText(r.age)})`).join(', ')}.</p>` : '';
+  return `<section class="ar lp" aria-label="Built from your log"><h2>Built from your log</h2><ul>${li}</ul>${skip}</section>`;
+}
+/* «По журналу» среди заготовок мышц — в разовой тренировке, когда в журнале есть записи */
+function logPresetHtml() {
+  if (S.mode !== 'single' || !journalDays()) return '';
+  const on = !!logPickCtx();
+  return `<button type="button" class="pre pre-log${on ? ' on' : ''}" data-logpick="setup" aria-pressed="${on}" title="Under-trained and rested muscles from the last 7 days of your log">From log</button>`;
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-logpick]'); if (!t) return;
+  const from = t.dataset.logpick;
+  if (applyLogPick()) { window.scrollTo({top:0}); return; }
+  const msg = 'Every muscle group was worked under 48 h ago or has no exercises here — better rest today.';
+  const el = from === 'journal' ? $('#ml-msg') : $('#lp-msg');
+  if (el) { el.hidden = false; el.textContent = msg; }
+});
+
 /* Режим тренировки использует тот же журнал, что и карточки плана. */
 let workout=null,workoutTimer=0,workoutReturn=null;
 const WORKOUT_STORE='podhod.workout.v3';
+/* Экран не гаснет, пока открыт режим тренировки (Screen Wake Lock: Chrome; Safari с 16.4; приложение с экрана «Домой» на
+   iPhone — с iOS 18.4). Уходя с экрана, страница теряет блокировку — при возвращении она берётся снова. Без поддержки всё
+   работает как раньше: экран гаснет по настройкам телефона. */
+const ScreenAwake=(()=>{
+  let want=false,lock=null,asking=false;
+  const free=l=>{try{const p=l.release();if(p&&p.catch)p.catch(()=>{});}catch(e){}};
+  async function take(){
+    const wl=typeof navigator!=='undefined'&&navigator.wakeLock;
+    if(!want||lock||asking||!wl||typeof wl.request!=='function'||document.visibilityState==='hidden')return;
+    asking=true;
+    try{const l=await wl.request('screen');if(!want){free(l);return;}lock=l;if(l&&l.addEventListener)l.addEventListener('release',()=>{if(lock===l)lock=null;});}
+    catch(e){}finally{asking=false;}
+  }
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)take();});
+  return{on(){want=true;return take();},off(){want=false;const l=lock;lock=null;if(l)free(l);},state:()=>({want,held:!!lock})};
+})();
+/* удержания с таймером — упражнения на время, кроме кардио (беговая дорожка, прыжки — не удержание) */
+const isHold=ex=>ex.kind==='time'&&ex.g!=='cardio';
 function workoutQueue(p){
   const q=[];
   for(const b of p.blocks){
@@ -11617,7 +12115,7 @@ function workoutFirstOpen(q,after=-1){for(let j=1;j<=q.length;j++){const i=(afte
 function workoutDraftKey(step){return step.it.ex.id+':'+step.k;}
 function saveWorkout(){
   if(!workout)return;
-  try{localStorage.setItem(WORKOUT_STORE,JSON.stringify({stamp:workout.stamp,index:workout.index,started:workout.started,restUntil:workout.restUntil,restTotal:workout.restTotal,next:workout.next,last:workout.last,drafts:workout.drafts}));}catch(e){}
+  try{localStorage.setItem(WORKOUT_STORE,JSON.stringify({stamp:workout.stamp,index:workout.index,started:workout.started,restUntil:workout.restUntil,restTotal:workout.restTotal,restFrom:workout.restFrom,next:workout.next,last:workout.last,drafts:workout.drafts}));}catch(e){}
 }
 function workoutCapture(){
   if(!workout||$('#wv-active').hidden)return;
@@ -11630,29 +12128,29 @@ function startWorkout(id){
   const queue=workoutQueue(plan),stamp=workoutStamp(queue);
   let old=null;try{old=JSON.parse(localStorage.getItem(WORKOUT_STORE)||'null');}catch(e){}
   const same=old?.stamp===stamp;
-  workout={queue,stamp,index:0,started:same&&Number.isFinite(old.started)?old.started:Date.now(),drafts:same&&old.drafts&&typeof old.drafts==='object'?old.drafts:{},restUntil:0,restTotal:0,next:-1,last:-1,motion:null};
+  workout={queue,stamp,index:0,started:same&&Number.isFinite(old.started)?old.started:Date.now(),drafts:same&&old.drafts&&typeof old.drafts==='object'?old.drafts:{},restUntil:0,restTotal:0,restFrom:0,next:-1,last:-1,motion:null,hold:null,restOver:null,sideNote:''};
   const first=workoutFirstOpen(queue);
-  if(same){workout.index=Math.max(0,Math.min(queue.length-1,Math.trunc(old.index)||0));workout.restUntil=Number(old.restUntil)||0;workout.restTotal=Number(old.restTotal)||0;workout.next=Number.isInteger(old.next)?old.next:-1;workout.last=Number.isInteger(old.last)?old.last:-1;}
+  if(same){workout.index=Math.max(0,Math.min(queue.length-1,Math.trunc(old.index)||0));workout.restUntil=Number(old.restUntil)||0;workout.restTotal=Number(old.restTotal)||0;workout.restFrom=Number(old.restFrom)||0;workout.next=Number.isInteger(old.next)?old.next:-1;workout.last=Number.isInteger(old.last)?old.last:-1;}
   else workout.index=Math.max(0,first);
   if(id){const i=queue.findIndex(x=>x.it.ex.id===id&&!workoutValue(x));workout.index=i>=0?i:Math.max(0,queue.findIndex(x=>x.it.ex.id===id));workout.restUntil=0;}
-  const d=$('#workout-view');if(!d.open)d.showModal();document.documentElement.classList.add('workout-open');stopRest();
+  const d=$('#workout-view');if(!d.open)d.showModal();document.documentElement.classList.add('workout-open');stopRest();ScreenAwake.on();
   $('#wv-context').textContent=S.mode==='program'?`${WD_FULL[prog.days[S.day].wd]} · ${prog.days[S.day].name}`:`${GOALS[S.goal].name} · ${FORMATS[S.format].name}`;
   const its=[...new Map(queue.map(x=>[x.it.ex.id,x.it])).values()];
   $('#wv-exercise').innerHTML=its.map(it=>`<option value="${it.ex.id}">${esc(it.label+'. '+it.name)}</option>`).join('');
   if(first<0&&!id)workoutFinish();
-  else if(workout.restUntil&&workout.next>=0&&workout.next<queue.length){RestAlarm.unlock();RestAlarm.arm(workout.restUntil);workoutShowRest();}
+  else if(workout.restUntil&&workout.next>=0&&workout.next<queue.length){RestAlarm.unlock();RestAlarm.arm(workout.restUntil,{from:workout.restFrom||undefined});workoutShowRest();}
   else workoutShow(workout.index);
   clearInterval(workoutTimer);workoutTimer=setInterval(workoutTick,250);workoutTick();saveWorkout();$('#wv-close').focus();scheduleMotionLoop();
 }
 function closeWorkout(){
-  if(!workout)return;workoutCapture();saveWorkout();disposeMotion(workout.motion);clearInterval(workoutTimer);workoutTimer=0;
-  const d=$('#workout-view');if(d.open)d.close();document.documentElement.classList.remove('workout-open');
+  if(!workout)return;holdStop();workoutCapture();saveWorkout();disposeMotion(workout.motion);clearInterval(workoutTimer);workoutTimer=0;ScreenAwake.off();
+  const d=$('#workout-view');if(d.open)d.close();document.documentElement.classList.remove('workout-open');d.classList.remove('rest-over');workout.restOver=null;
   logRefresh(null);if(workoutReturn?.isConnected)workoutReturn.focus();workoutReturn=null;
 }
 function workoutShow(index){
   if(!workout)return;
-  workout.index=Math.max(0,Math.min(workout.queue.length-1,index));workout.restUntil=0;workout.next=-1;RestAlarm.cancel();
-  const s=workout.queue[workout.index],it=s.it,ex=it.ex,stored=workoutValue(s),lt=loadType(ex),sg=suggest(it);
+  workout.index=Math.max(0,Math.min(workout.queue.length-1,index));workout.restUntil=0;workout.restFrom=0;workout.next=-1;workout.sideNote='';RestAlarm.cancel();paintRestPhase(false);
+  const s=workout.queue[workout.index],it=s.it,ex=it.ex,stored=workoutValue(s),lt=loadType(ex),sg=suggest(it),hold=isHold(ex);
   const prev=sg.prev?.s[s.k]||sg.prev?.s.filter(Boolean).slice(-1)[0];
   $('#wv-active').hidden=false;$('#wv-rest').hidden=true;$('#wv-finish').hidden=true;
   $('#wv-title').textContent=it.name;$('#wv-exercise').value=ex.id;
@@ -11662,16 +12160,18 @@ function workoutShow(index){
   $('#wv-previous').textContent=prev?`${prev[0]!=null?fmtKg(prev[0])+' kg × ':''}${prev[1]} ${ex.kind==='time'?'s':ex.kind==='dist'?'m':'reps'}`:'First entry';
   $('#wv-previous-date').textContent=sg.prev?fmtDay(sg.prev.d,true):'';
   $('#wv-set-chips').innerHTML=workout.queue.map((x,i)=>x.it.ex.id===ex.id?`<button type="button" data-wv-index="${i}" class="${workoutValue(x)?'is-done ':''}${i===workout.index?'is-current':''}" aria-label="Set ${x.k+1}${workoutValue(x)?', done':''}" aria-current="${i===workout.index?'step':'false'}">${workoutValue(x)?'✓ ':''}${x.k+1}</button>`:'').join('');
-  $('#wv-unilateral').hidden=!ex.uni;$('#wv-unilateral').textContent='Do both sides. Log the reps for one side.';
+  $('#wv-unilateral').hidden=!ex.uni;$('#wv-unilateral').textContent=hold?'Both sides in one set: left, a 10 s pause, right. The weaker side’s time is logged.':'Do both sides. Log the reps for one side.';
   $('#wv-weight-label').hidden=lt==='none';$('#wv-weight-caption').textContent=lt==='extra'?'Extra weight, kg':lt==='assist'?'Counterweight, kg':'Weight, kg';$('#wv-rep-caption').textContent=repLabel(ex);$('#wv-reps').setAttribute('inputmode',ex.kind==='dist'?'decimal':'numeric');
   const draft=workout.drafts[workoutDraftKey(s)],today=todaySession(ex.id,false)?.s||[],last=today.slice(0,s.k).filter(Boolean).slice(-1)[0];
   const planned=planKg(it.rx,s.k);
   $('#wv-kg').value=draft?draft.kg:stored?stored[0]!=null?fmtKg(stored[0]):'':planned!=null?fmtKg(planned):last?.[0]!=null?fmtKg(last[0]):prev?.[0]!=null?fmtKg(prev[0]):'';
   $('#wv-reps').value=draft?draft.reps:stored?String(stored[1]):'';$('#wv-reps').placeholder=it.rx.reps;
-  $('#wv-input-hint').textContent=lt==='extra'?'Extra weight can be left blank. Enter your actual result.':lt==='none'?'Enter the actual result of the set.':'Weight is filled in from your last entry, if there is one. Adjust it and enter your result.';
+  $('#wv-input-hint').textContent=hold?(lt==='extra'?'Extra weight can be left empty. ':'')+'“Stop” logs the seconds and starts the rest. You can also type the seconds in.'
+    :lt==='extra'?'Extra weight can be left blank. Enter your actual result.':lt==='none'?'Enter the actual result of the set.':'Weight is filled in from your last entry, if there is one. Adjust it and enter your result.';
   $('#wv-error').textContent='';$('#wv-kg').removeAttribute('aria-invalid');$('#wv-reps').removeAttribute('aria-invalid');
   $('#wv-done').textContent=stored?'Save changes':'Set done';$('#wv-save-status').textContent=stored?'This set is already logged.':'The entry will appear in the main log.';
   $('#wv-suggestion').textContent=sg.text;
+  holdSetup(s,sg);
   const cue=MOTION_FOCUS[ex.id];$('#wv-setup').textContent=cue?.setup||ex.tech[0];$('#wv-control').textContent=cue?.control||ex.tech[1];$('#wv-breath').textContent=ex.breath;
   disposeMotion(workout.motion);workout.motion={it,f:null,clock:0,paused:reduceMotion,durations:motionDurations(it)};$('#wv-angle').textContent=ex.viewNote||(ex.anim.view==='front'?'Front view':'Side view');
   $('#wv-motion').textContent=reduceMotion?'Play':'Pause';$('#wv-motion').setAttribute('aria-pressed',String(!reduceMotion));mountWorkoutCameras();
@@ -11688,40 +12188,120 @@ function commitWorkout(e){
   else if(lt==='kg'&&(kg===null||kg<=0)){bad=$('#wv-kg');msg='Enter the actual weight used.';}
   else if(reps===null||reps<=0||(!ex.kind&&!Number.isInteger(reps))){bad=$('#wv-reps');msg=ex.kind?'Enter the actual result as a number greater than zero.':'Enter a whole number of reps completed.';}
   if(bad){$('#wv-error').textContent=msg;bad.setAttribute('aria-invalid','true');bad.focus();return;}
-  const already=!!workoutValue(step),session=todaySession(ex.id,true);
+  /* отдых, уже записанный у этого подхода (третье поле), при исправлении сохраняется */
+  const already=!!workoutValue(step),session=todaySession(ex.id,true),rest=already?restField(session.s[step.k][2]):null;
   while(session.s.length<step.k)session.s.push(null);
-  session.s[step.k]=[kg,Math.round(reps*10)/10];session.target=Math.max(session.target||0,step.n);if(step.it.rx.static)session.fmt='static';delete workout.drafts[workoutDraftKey(step)];
+  session.s[step.k]=[kg,Math.round(reps*10)/10];if(rest)session.s[step.k].push(rest);session.target=Math.max(session.target||0,step.n);if(step.it.rx.static)session.fmt='static';delete workout.drafts[workoutDraftKey(step)];
   logTouch(ex.id);logRefresh([ex.id]);workout.last=workout.index;
   if(already){workoutShow(workout.index);$('#wv-save-status').textContent='Changes saved.';return;}
   const next=workoutFirstOpen(workout.queue,workout.index);
   if(next<0){workoutFinish();return;}
-  if(step.rest>0){workout.next=next;workout.restTotal=step.rest;workout.restUntil=Date.now()+step.rest*1000;RestAlarm.unlock();RestAlarm.arm(workout.restUntil);workoutShowRest();}
+  if(step.rest>0){const now=Date.now();workout.next=next;workout.restTotal=step.rest;workout.restFrom=now;workout.restUntil=now+step.rest*1000;RestAlarm.unlock();RestAlarm.arm(workout.restUntil,{from:now});workoutShowRest();}
   else workoutShow(next);
   saveWorkout();
 }
+/* фактический отдых — от записи подхода до «Перейти к подходу» — третьим полем в запись подхода, после которого отдыхали */
+function workoutRestTaken(){
+  const sec=restActual(workout.restFrom,Date.now()),step=workout.queue[workout.last];workout.restFrom=0;
+  if(!sec||!step)return;
+  const v=todaySession(step.it.ex.id,false)?.s[step.k];
+  if(Array.isArray(v)){v[2]=sec;logTouch(step.it.ex.id);}
+}
 function workoutShowRest(){
-  $('#wv-active').hidden=true;$('#wv-rest').hidden=false;$('#wv-finish').hidden=true;RestAlarm.paintButton($('#wv-sound'));
+  holdStop();$('#wv-active').hidden=true;$('#wv-rest').hidden=false;$('#wv-finish').hidden=true;RestAlarm.paintButton($('#wv-sound'));RestAlarm.paintPrefs();
   const next=workout.queue[workout.next];
   $('#wv-next-name').textContent=next.it.name;$('#wv-next-detail').textContent=`${next.phase} · set ${next.k+1} of ${next.n} · ${next.it.rx.reps}${next.it.ex.kind?'':' reps'}`;
-  $('#wv-rest-note').textContent='Result saved. Move on when you\'re ready.';workoutTick();$('#wv-continue').focus();
+  $('#wv-rest-note').textContent=workout.sideNote||'Result saved. Move on when you\'re ready.';workout.sideNote='';workout.restOver=null;workoutTick();$('#wv-continue').focus();
+}
+/* отдых закончился: экран меняет цвет (видно с расстояния, телефон на скамье), время считает вверх «+0:25» */
+function paintRestPhase(over){
+  if(!workout)return;workout.restOver=over;
+  $('#workout-view').classList.toggle('rest-over',over);$('#wv-rest-heading').textContent=over?'Time for your set':'Rest';
+  $('#wv-rest-over').textContent=over?'over rest':'';$('#wv-rest-minus').disabled=over;
 }
 function workoutFinish(){
-  workout.restUntil=0;workout.next=-1;RestAlarm.cancel();$('#wv-active').hidden=true;$('#wv-rest').hidden=true;$('#wv-finish').hidden=false;
+  workout.restUntil=0;workout.restFrom=0;workout.next=-1;RestAlarm.cancel();holdStop();paintRestPhase(false);$('#wv-active').hidden=true;$('#wv-rest').hidden=true;$('#wv-finish').hidden=false;
   const n=workout.queue.filter(workoutValue).length,its=[...new Map(workout.queue.map(s=>[s.it.ex.id,s.it])).values()];
   $('#wv-finish-text').textContent=`Completed ${n} ${plural(n,'set','sets','sets')} in ${its.length} ${plural(its.length,'exercise','exercises','exercises')}.`;
   $('#wv-summary').innerHTML=its.map(it=>`<p><span>${esc(it.name)}</span><strong>${workout.queue.filter(s=>s.it.ex.id===it.ex.id&&workoutValue(s)).length} ✓</strong></p>`).join('');saveWorkout();workoutTick();
 }
 function workoutTick(){
   if(!workout)return;
-  const n=workout.queue.filter(workoutValue).length;$('#wv-progress').max=workout.queue.length;$('#wv-progress').value=n;$('#wv-progress-label').textContent=`${n} of ${workout.queue.length} sets`;
-  const elapsed=Math.max(0,Math.floor((Date.now()-workout.started)/60000));$('#wv-elapsed').textContent=elapsed?`${elapsed} min since start`:'';
-  if(!$('#wv-rest').hidden){const left=Math.max(0,Math.ceil((workout.restUntil-Date.now())/1000));if(!left)RestAlarm.due();$('#wv-rest-time').textContent=`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;$('#wv-rest-heading').textContent=left?'Rest':'You can keep going';}
+  const now=Date.now(),n=workout.queue.filter(workoutValue).length;$('#wv-progress').max=workout.queue.length;$('#wv-progress').value=n;$('#wv-progress-label').textContent=`${n} of ${workout.queue.length} sets`;
+  const elapsed=Math.max(0,Math.floor((now-workout.started)/60000));$('#wv-elapsed').textContent=elapsed?`${elapsed} min since start`:'';
+  if(!$('#wv-rest').hidden){
+    const v=restView(workout.restUntil,now);RestAlarm.poll(now);
+    if($('#wv-rest-time').textContent!==v.text)$('#wv-rest-time').textContent=v.text;
+    if(v.over!==workout.restOver)paintRestPhase(v.over);
+  }
+  if(workout.hold&&!$('#wv-active').hidden)paintHold(now);
 }
+
+/* ---------- таймер удержания (планка, боковая планка, «стульчик», вис, «лодочка») ----------
+   «Старт» → 3-2-1 → отсчёт до цели со звуком на нуле → счёт вверх «+7 с»; «Стоп» пишет секунды в поле и отмечает подход,
+   как «Подход выполнен». Боковая планка — левая, пауза 10 с, правая в одном подходе; записывается слабая сторона.
+   Фазы и времена — по меткам нажатий (holdState в 12a-set-timers.js). */
+function holdSetup(s,sg){
+  const it=s.it,ex=it.ex;RestAlarm.hush();
+  if(!isHold(ex)){workout.hold=null;$('#wv-hold').hidden=true;$('#wv-done').classList.remove('wv-secondary');$('#wv-done').disabled=false;return;}
+  const sug=sg.reps[s.k]??sg.reps[sg.reps.length-1],T=holdTarget(it.rx.reps,sug);
+  workout.hold={target:T,sides:ex.uni?2:1,h:null,last:null};
+  $('#wv-hold').hidden=false;$('#wv-done').classList.add('wv-secondary');RestAlarm.paintButton($('#wv-hold-sound'));
+  $('#wv-hold-goal').textContent=T.from==='log'?`Goal ${holdText(T.sec)} — from your log (plan ${it.rx.reps})`:`Goal ${holdText(T.sec)} — bottom of the plan range ${it.rx.reps}`;
+  paintHold();
+}
+function paintHold(now=Date.now()){
+  const H=workout?.hold;if(!H)return;
+  const st=H.h?holdState(H.h,now):null,two=H.sides===2,sideName=i=>i?'Right':'Left';
+  let mode,time,btn,cls='';
+  if(!st){mode=two?'Left, then right':'Hold timer';time=holdText(H.target.sec);btn='Start';}
+  else if(st.phase==='lead'){mode='Get ready';time=String(st.count);btn='Cancel';cls='is-lead';}
+  else if(st.phase==='switch'){mode='Switch sides';time=String(st.count);btn='Right side now';cls='is-lead';}
+  else if(st.phase==='hold'){mode=(two?sideName(st.side)+' · ':'')+(st.mode==='to'?(two?'to target':'To target'):(two?'over target':'Over target'));time=st.mode==='to'?holdText(st.left):holdText(st.over,true);btn='Stop';cls=st.mode==='over'?'is-over':'is-run';}
+  else{mode='Logged';time=holdText(st.value);btn='Start again';}
+  let sides='';
+  if(two&&st){
+    const r=st.results;
+    sides=st.phase==='done'?`Left ${holdText(r[0])}, right ${holdText(r[1])} — the weaker side is logged: ${holdText(st.value)}`
+      :st.phase==='switch'?`Left ${holdText(r[0])} · right in ${st.count} s`:r.length?`Left ${holdText(r[0])} · right in progress`:'';
+  }
+  const box=$('#wv-hold');box.className='wv-hold'+(cls?' '+cls:'');
+  if($('#wv-hold-mode').textContent!==mode)$('#wv-hold-mode').textContent=mode;
+  /* единица «с» — мельче числа и не моноширинная, иначе «30  с» расползается */
+  const tEl=$('#wv-hold-time');if(tEl.textContent!==time){const i=time.lastIndexOf(' ');if(i>0){const u=document.createElement('span');u.className='wv-hold-unit';u.textContent=time.slice(i);tEl.replaceChildren(time.slice(0,i),u);}else tEl.textContent=time;}
+  if($('#wv-hold-sides').textContent!==sides){$('#wv-hold-sides').textContent=sides;$('#wv-hold-sides').hidden=!sides;}
+  const go=$('#wv-hold-go');if(go.textContent!==btn)go.textContent=btn;
+  const running=!!st&&st.phase!=='done';go.classList.toggle('is-stop',running);$('#wv-hold-reset').hidden=!running||st.phase==='lead';$('#wv-done').disabled=running;
+  /* вибрация (Android) на «пошли» и на достижении цели — по смене фазы */
+  const key=st?st.phase+(st.mode||'')+st.side:'idle';
+  if(H.last!==key){if(st?.phase==='hold'&&(st.mode==='over'?H.last===`holdto${st.side}`:/^(lead|switch)/.test(H.last||'')))RestAlarm.buzz(st.mode==='over'?'end':'go');H.last=key;}
+}
+function holdGo(){
+  const H=workout?.hold;if(!H)return;
+  const now=Date.now();
+  if(!H.h||holdState(H.h,now).phase==='done'){RestAlarm.unlock();H.h=holdNew(now,H.target.sec,H.sides);H.last=null;RestAlarm.cue(holdCues(H.h));$('#wv-error').textContent='';paintHold(now);return;}
+  const r=holdPress(H.h,now);
+  if(r.action==='cancel'){H.h=null;RestAlarm.hush();}
+  else if(r.action==='done'){H.h=r.h;RestAlarm.hush();holdCommit();return;}
+  else if(r.h){H.h=r.h;RestAlarm.cue(holdCues(H.h));}
+  paintHold(now);
+}
+/* «Стоп» последней стороны: секунды — в поле подхода, дальше — как «Подход выполнен» */
+function holdCommit(){
+  const H=workout.hold,st=holdState(H.h,Date.now());paintHold();
+  if(!(st.value>0)){H.h=null;paintHold();$('#wv-error').textContent='The timer was stopped within the first second, so the set was not logged.';return;}
+  $('#wv-reps').value=String(st.value);$('#wv-reps').removeAttribute('aria-invalid');
+  workout.sideNote=H.sides===2?`Logged ${holdText(st.value)} — the weaker side’s time (left ${holdText(st.results[0])}, right ${holdText(st.results[1])}).`:'';
+  commitWorkout();
+}
+function holdStop(){if(workout?.hold){workout.hold.h=null;workout.hold.last=null;}RestAlarm.hush();}
 function setupWorkout(){
   $('#wv-form').addEventListener('submit',commitWorkout);
   for(const id of ['wv-kg','wv-reps'])$('#'+id).addEventListener('input',()=>{workoutCapture();$('#wv-error').textContent='';$('#'+id).removeAttribute('aria-invalid');});
   $('#wv-exercise').addEventListener('change',e=>{workoutCapture();const i=workout.queue.findIndex(s=>s.it.ex.id===e.target.value&&!workoutValue(s));workoutShow(i>=0?i:workout.queue.findIndex(s=>s.it.ex.id===e.target.value));});
   $('#workout-view').addEventListener('cancel',e=>{e.preventDefault();closeWorkout();});
+  /* вернулись на экран: таймеры страницы в фоне редки — обновить отдых и удержание сразу */
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&workout&&$('#workout-view').open)workoutTick();});
   document.addEventListener('click',e=>{
     const t=e.target.closest('button');if(!t)return;
     if(t.id==='start-workout'||t.dataset.workout!==undefined){startWorkout(t.dataset.workout);return;}
@@ -11731,8 +12311,10 @@ function setupWorkout(){
     if(t.dataset.wvIndex!==undefined){workoutCapture();workoutShow(Number(t.dataset.wvIndex));return;}
     if(t.id==='wv-review'){workoutShow(0);return;}
     if(t.id==='wv-undo'){workoutShow(workout.last);return;}
-    if(t.id==='wv-continue'){workoutShow(workout.next);return;}
-    if(t.dataset.wvRest){workout.restUntil=Math.max(Date.now(),workout.restUntil+Number(t.dataset.wvRest)*1000);RestAlarm.arm(workout.restUntil);saveWorkout();workoutTick();return;}
+    if(t.id==='wv-continue'){workoutRestTaken();workoutShow(workout.next);return;}
+    if(t.id==='wv-hold-go'){holdGo();return;}
+    if(t.id==='wv-hold-reset'){holdStop();paintHold();return;}
+    if(t.dataset.wvRest){const end=restAdjust(workout.restUntil,Date.now(),Number(t.dataset.wvRest));if(end!==workout.restUntil){workout.restUntil=end;RestAlarm.arm(end,{from:workout.restFrom||undefined});saveWorkout();workoutTick();}return;}
     if(t.id==='wv-motion'){const m=workout.motion;m.paused=!m.paused;t.textContent=m.paused?'Play':'Pause';t.setAttribute('aria-pressed',String(!m.paused));return;}
     if(t.id==='wv-technique'){workoutCapture();if(workout.motion)openMotionItem(workout.motion.it,workout.motion.clock);}
   });
@@ -12212,7 +12794,8 @@ document.addEventListener('click', e => {
 bodyLoad();
 
 /* ===================== ПОЛНАЯ РЕЗЕРВНАЯ КОПИЯ ===================== */
-/* v2: настройки планировщика, инвентарь, авторегулировка, календарь, атлас, журнал и замеры. v1 (только журнал) тоже читается. */
+/* v2: настройки планировщика, инвентарь, авторегулировка, календарь, атлас, журнал и замеры. v1 (только журнал) тоже читается.
+   Подход в журнале — [кг, повторы] или [кг, повторы, отдых, с]: отдых необязателен, неверный отбрасывается, подход остаётся. */
 function backupObject() {
   return {app:'podhod', v:2, exported:new Date().toISOString(), version:window.PODHOD_VERSION || '',
     settings:{...S}, gear:{bar:GEAR.bar, plates:GEAR.plates}, autoreg:{dismissed:AR.dismissed, light:AR.light}, ics:{...ICS}, motion:{...motionPrefs},
@@ -12225,7 +12808,7 @@ function restoreBackup(obj) {
       if (!EXI[id] || !validSessions(ss)) continue;
       const clean = ss.map(x => ({d:x.d, ...(x.wk ? {wk:+x.wk} : {}), ...(x.fmt === 'static' ? {fmt:'static'} : {}),
         ...(Number.isSafeInteger(+x.target) && +x.target > 0 ? {target:+x.target} : {}),
-        s:x.s.map(v => Array.isArray(v) && isFinite(+v[1]) ? [v[0] == null || v[0] === '' ? null : +v[0], +v[1]] : null)}));
+        s:x.s.map(v => { if (!Array.isArray(v) || !isFinite(+v[1])) return null; const o = [v[0] == null || v[0] === '' ? null : +v[0], +v[1]], r = restField(v[2]); if (r) o.push(r); return o; })}));
       const merged = mergeSessions(LOG.data[id], clean);
       if (JSON.stringify(merged) !== JSON.stringify(LOG.data[id] || [])) { LOG.data[id] = merged; logTouch(id, true); out.exercises++; out.sessions += clean.length; }
     }
@@ -12268,4 +12851,4 @@ logInit();
 plural = (n, a, b, c) => n === 1 ? a : c;
 DEC = '.';
 
-window.PODHOD_VERSION='4.44.0';window.PODHOD_BUILD='4.44.0-7a5ddabc885d';window.PODHOD_LANG='en';
+window.PODHOD_VERSION='4.47.0';window.PODHOD_BUILD='4.47.0-6d316954e2b9';window.PODHOD_LANG='en';
