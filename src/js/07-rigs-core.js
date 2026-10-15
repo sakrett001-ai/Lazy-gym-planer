@@ -130,8 +130,51 @@ function spatialFrameSet(key,frame){
  if(!spatialFramesSave&&typeof addEventListener==='function'&&!spatialFrameSet.hooked){spatialFrameSet.hooked=true;addEventListener('pagehide',()=>{if(spatialFramesSave)spatialFramesFlush();});}
  spatialFramesSave=setTimeout(spatialFramesFlush,1500);
 }
+/* Готовые кадры SVG-фигур карточек плана (opts.frameCache). Карточка крутит одно и то же повторение: со второго круга
+   кадр не считается заново (поза, поверхность манекена, силуэты, мышцы — ≈¾ времени кадра), а берётся из памяти.
+   Ключ набора — рамка кадра (упражнение, ракурс, пропорция, видимый инвентарь) и вариант позы; ключ кадра — фаза
+   (t, index). Записи кадра не зависят от фигуры (цвета атлета — метки, см. buildSpatialFigure), поэтому набор общий
+   для всех карточек упражнения и переживает перестройку плана. Кадр карточки — ≈25–35 КБ (силуэты и мышцы — пути
+   SVG), повторение в 4 с — ≈120 кадров, ≈3–4 МБ. Память ограничена оценкой объёма (FIGURE_FRAMES_LIMIT): первыми
+   уходят наборы давно не показанных упражнений; если не помещается и один набор (медленный темп), новые кадры
+   не запоминаются — первые остаются. Записи, не изменившиеся с прошлого кадра (неподвижный инвентарь, тело в паузе),
+   хранятся один раз — общим объектом, и узел SVG с такой записью в кадре не трогается.
+   Сброс — figureFramesReset (смена темы, языка, инвентаря места). */
+const FIGURE_FRAMES=new Map(),FIGURE_FRAMES_LIMIT={bytes:8<<20,frames:600};let figureFramesBytes=0;
+function figureFrameGet(set,key){
+ const s=FIGURE_FRAMES.get(set),F=s&&s.frames.get(key);if(!F)return null;
+ if(FIGURE_FRAMES.size>1){FIGURE_FRAMES.delete(set);FIGURE_FRAMES.set(set,s);}
+ return F;
+}
+const sameAttrs=(a,b)=>{let n=0;for(const k in a){if(a[k]!==b[k])return false;n++;}for(const k in b)n--;return n===0;};
+/* оценка памяти кадра (байты): строки и объекты записей; общие с прошлым кадром записи не считаются */
+function figureFrameBytes(F,prev){
+ let n=96+F.joints.length*40;
+ F.records.forEach((r,i)=>{if(prev&&prev.records[i]===r)return;n+=48;for(const k in r.attrs){const v=r.attrs[k];n+=16+(typeof v==='string'?16+v.length:0);}});
+ for(const s of F.stress)n+=64+s.transform.length;
+ for(const v of F.vectors||[])n+=v?16+v.length:8;
+ return n;
+}
+function figureFramePut(set,key,F){
+ let s=FIGURE_FRAMES.get(set);
+ if(s)FIGURE_FRAMES.delete(set);else s={frames:new Map(),last:null,bytes:0};
+ FIGURE_FRAMES.set(set,s);
+ if(s.frames.has(key))return;
+ const prev=s.last;if(prev)F.records.forEach((r,i)=>{const q=prev.records[i];if(q&&q!==r&&q.tag===r.tag&&sameAttrs(q.attrs,r.attrs))F.records[i]=q;});
+ const size=figureFrameBytes(F,prev);
+ for(const[k,o]of FIGURE_FRAMES){if(o===s||figureFramesBytes+size<=FIGURE_FRAMES_LIMIT.bytes)break;FIGURE_FRAMES.delete(k);figureFramesBytes-=o.bytes;}
+ if(figureFramesBytes+size>FIGURE_FRAMES_LIMIT.bytes||s.frames.size>=FIGURE_FRAMES_LIMIT.frames){if(!s.frames.size)FIGURE_FRAMES.delete(set);return;}
+ s.frames.set(key,F);s.last=F;s.bytes+=size;figureFramesBytes+=size;
+}
+function figureFramesReset(){FIGURE_FRAMES.clear();figureFramesBytes=0;}
+/* тема (цвета атлета — переменные CSS, в записях их нет, но набор после смены темы считается заново) и язык страницы */
+if(typeof matchMedia==='function')try{matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',figureFramesReset);}catch(e){}
+if(typeof MutationObserver==='function'&&typeof document!=='undefined'&&document.documentElement)new MutationObserver(figureFramesReset).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme','lang']});
 function buildSpatialFigure(anim,opts={}){
- const camera=opts.camera||anim.camera||'side',project=camera3(camera),paletteRoot=el('svg',{}),palette=athletePalette(paletteRoot);
+ const camera=opts.camera||anim.camera||'side',project=camera3(camera),paletteRoot=el('svg',{}),fills=athletePalette(paletteRoot);
+ /* цвета атлета в записях кадра — метки ('\u0001skin'…): градиент у каждой фигуры свой (id), метка заменяется
+    им при записи в узел — так готовый кадр годится любой карточке этого упражнения */
+ const palette=Object.fromEntries(Object.keys(fills).map(k=>[k,'\u0001'+k]));
  const svg=el('svg',{class:'fig spatial-figure',role:'img','aria-label':`${opts.label||''} — ${CAMERA3[camera].label}`});
  svg.appendChild(paletteRoot.firstChild);
  const ground=el('g',{'aria-hidden':'true'},svg),trace=el('path',{class:'motion-trace',display:'none','aria-hidden':'true'},svg),scene=el('g',{},svg),dots=el('g',{class:'rig-dots','aria-hidden':'true'},svg);
@@ -361,21 +404,39 @@ function buildSpatialFigure(anim,opts={}){
  /* метки нагрузки на суставы — поверх всего рисунка */
  const stressLayer=el('g',{class:'stress-marks','aria-hidden':'true'},svg),stressNodes=[];
  let stressOn=(opts.stress??(typeof motionPrefs!=='undefined'?motionPrefs.stress:true))!==false,lastT=opts.t||0,lastFrame=null;
- function paintStress(R,t,frame){
-  const marks=stressOn&&anim.catalogId&&R.frames&&typeof jointStressPoints==='function'?jointStressPoints(anim,R,t,frame?.index||0):[];
-  marks.forEach((m,i)=>{const p=project(m.p);let n=stressNodes[i];if(!n){n=stressNodes[i]=el('g',{class:'stress-mark'},stressLayer);el('circle',{r:9,class:'stress-halo'},n);el('circle',{r:3.4,class:'stress-core'},n);}n.setAttribute('transform',`translate(${f1(p[0])},${f1(p[1])})`);n.dataset.joint=m.key;n.removeAttribute('display');});
+ /* метки нагрузки кадра: в памяти кадров — всегда (показ — по stressOn), без неё — только когда показаны */
+ function stressMarks(R,t,frame,always){
+  if(!(always||stressOn)||!(anim.catalogId&&R.frames&&typeof jointStressPoints==='function'))return[];
+  return jointStressPoints(anim,R,t,frame?.index||0).map(m=>{const p=project(m.p);return{key:m.key,transform:`translate(${f1(p[0])},${f1(p[1])})`};});
+ }
+ function paintStress(all){
+  const marks=stressOn?all:[];
+  marks.forEach((m,i)=>{let n=stressNodes[i];if(!n){n=stressNodes[i]=el('g',{class:'stress-mark'},stressLayer);el('circle',{r:9,class:'stress-halo'},n);el('circle',{r:3.4,class:'stress-core'},n);}n.setAttribute('transform',m.transform);n.dataset.joint=m.key;n.removeAttribute('display');});
   for(let i=marks.length;i<stressNodes.length;i++)stressNodes[i].setAttribute('display','none');
+ }
+ const JOINT_DOTS=['shL','elL','wrL','hipL','knL','anL','shR','elR','wrR','hipR','knR','anR'];
+ /* кадр: записи узлов, точки суставов, фаза мышц, метки нагрузки, стрелки векторов — из памяти кадров (карточки) или
+    посчитанный заново */
+ const cacheKey=opts.frameCache&&frameKey&&!still&&setVectors.frame?frameKey+'|'+(anim.catalogVariant||''):null;
+ function frameData(t,frame){
+  const key=t+'|'+(frame?.index||0),hit=cacheKey&&figureFrameGet(cacheKey,key);if(hit)return hit;
+  const {R,muscles,records}=compile(t,frame?.index||0);
+  const F={records,joints:JOINT_DOTS.map(name=>{const p=project(R[name]);return[f1(p[0]),f1(p[1])];}),pose:String(t),phase:muscles?muscles.phase:null,
+   stress:stressMarks(R,t,frame,!!cacheKey),vectors:cacheKey?setVectors.frame(t,frame,R):null,R:cacheKey?null:R};
+  if(cacheKey)figureFramePut(cacheKey,key,F);
+  return F;
  }
  function at(t,frame){
   lastT=t;lastFrame=frame||null;
-  const {R,muscles,records}=compile(t,frame?.index||0);
-  /* атрибут пишется, только если он изменился с прошлого кадра: у неподвижного инвентаря и цветов — почти никогда */
-  records.forEach((s,i)=>{let node=nodes[i];if(!node||node.tagName!==s.tag){const replacement=el(s.tag,{});if(node)node.replaceWith(replacement);else scene.appendChild(replacement);node=nodes[i]=replacement;nodeAttrs[i]=null;}const old=nodeAttrs[i];for(const attr of [...node.attributes])if(!(attr.name in s.attrs))node.removeAttribute(attr.name);for(const k in s.attrs){const v=s.attrs[k];if(!old||old[k]!==v||!node.hasAttribute(k))node.setAttribute(k,v);}nodeAttrs[i]=s.attrs;});
+  const F=frameData(t,frame),records=F.records;
+  /* атрибут пишется, только если он изменился с прошлого кадра: у неподвижного инвентаря и цветов — почти никогда;
+     запись из памяти кадров, та же, что в прошлом кадре, — узел не трогается совсем */
+  records.forEach((s,i)=>{let node=nodes[i];if(!node||node.tagName!==s.tag){const replacement=el(s.tag,{});if(node)node.replaceWith(replacement);else scene.appendChild(replacement);node=nodes[i]=replacement;nodeAttrs[i]=null;}const old=nodeAttrs[i];if(old===s.attrs)return;for(const attr of [...node.attributes])if(!(attr.name in s.attrs))node.removeAttribute(attr.name);for(const k in s.attrs){const v=s.attrs[k];if(!old||old[k]!==v||!node.hasAttribute(k))node.setAttribute(k,k==='fill'&&typeof v==='string'&&v.charCodeAt(0)===1?fills[v.slice(1)]:v);}nodeAttrs[i]=s.attrs;});
   for(let i=records.length;i<nodes.length;i++)nodes[i].remove();nodes.length=nodeAttrs.length=records.length;
-  const names=['shL','elL','wrL','hipL','knL','anL','shR','elR','wrR','hipR','knR','anR'];
-  names.forEach((name,i)=>{const p=project(R[name]),node=jointNodes[i]||(jointNodes[i]=el('circle',{r:2.1,class:'joint-dot'},dots));node.setAttribute('cx',f1(p[0]));node.setAttribute('cy',f1(p[1]));});
-  svg.dataset.pose=String(t);if(muscles)svg.dataset.musclePhase=muscles.phase;allBounds.length=0;setRegion(selectedRegion);
-  setVectors?.at?.(t,frame,R);paintStress(R,t,frame);
+  F.joints.forEach(([x,y],i)=>{const node=jointNodes[i]||(jointNodes[i]=el('circle',{r:2.1,class:'joint-dot'},dots));node.setAttribute('cx',x);node.setAttribute('cy',y);});
+  svg.dataset.pose=F.pose;if(F.phase)svg.dataset.musclePhase=F.phase;allBounds.length=0;setRegion(selectedRegion);
+  if(F.vectors)setVectors.paint(F.vectors);else setVectors?.at?.(t,frame,F.R);
+  paintStress(F.stress);
  }
  const setStress=show=>{stressOn=!!show;at(lastT,lastFrame);};
  const setTrace=show=>trace.setAttribute('display',show?'inline':'none');
