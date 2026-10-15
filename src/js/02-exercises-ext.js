@@ -61,7 +61,7 @@ EX.push(
   A:{hip:[118, 126], torso:-90, arm:{ik:[70, 72], b:'down'}, leg:{ik:[160, 180], b:'up', f:90}},
   B:{hip:[118, 126], torso:-90, arm:{ik:[82, 112], b:'down'}, leg:{ik:[160, 180], b:'up', f:90}},
   props:[...benchFlat(30, 150, 136), PLATE(16)]}},
-{id:'pullover', name:'Пуловер с гантелью', eq:[['db'], ['bench']], g:'chest', pri:['chest'], sec:['lats', 'triceps', 'serratus'], type:'i', lvl:1,
+{id:'pullover', name:'Пуловер с гантелью', eq:[['db'], ['bench']], g:'chest', pri:['chest'], sec:['lats', 'triceps', 'serratus'], type:'i', lvl:1, imp:1, sides:'both',
  tech:['Лягте на скамью и держите гантель обеими руками за верхний диск над грудью, локти слегка согнуты.',
    'Опускайте гантель по дуге за голову до растяжения груди и широчайших.',
    'Верните гантель по той же дуге над грудью, не сгибая локти сильнее.'],
@@ -114,7 +114,7 @@ EX.push(
   props:[{k:'plate', tf:[53, -10], r:17, layer:'mid'}]}},
 
 /* ===== ПЛЕЧИ ===== */
-{id:'arnold', name:'Жим Арнольда', eq:[['db'], ['incline', 'bench']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'traps', 'serratus'], type:'c', lvl:2,
+{id:'arnold', name:'Жим Арнольда', eq:[['db'], ['incline', 'bench']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'traps', 'serratus'], type:'c', lvl:2, imp:2, sides:'both',
  tech:['Сядьте на скамью со спинкой. Гантели у верхней части груди, ладони к себе, локти перед корпусом.',
    'Начиная жим, разводите локти в стороны и разворачивайте кисти ладонями вперёд.',
    'Выжмите гантели над головой. Опустите их, выполняя движение в обратном порядке.'],
@@ -184,7 +184,7 @@ EX.push(
   props:[{k:'rect', x:18, y:98, w:8, h:12, rx:2}, {k:'band', from:[26, 104], at:'gripR', layer:'front'}]}},
 
 /* ===== БИЦЕПС ===== */
-{id:'preacher', name:'Сгибание рук на скамье Скотта', eq:[['preacher'], ['bb', 'db']], g:'biceps', pri:['biceps'], sec:['forearms'], type:'i', lvl:1,
+{id:'preacher', name:'Сгибание рук на скамье Скотта', eq:[['preacher'], ['bb', 'db']], g:'biceps', pri:['biceps'], sec:['forearms'], type:'i', lvl:1, imp:2, sides:'both',
  tech:['Сядьте так, чтобы верхний край упора был под подмышками, а плечи лежали на подушке.',
    'Хват снизу. Согните руки, поднимая снаряд к плечам; плечи не отрываются от упора.',
    'Медленно опустите почти до полного выпрямления, без рывка внизу.'],
@@ -198,7 +198,7 @@ EX.push(
     props:[{k:'line', pts:[[p1[0] - 4, p1[1]], [p1[0] - 4, GROUND]], w:4}, {k:'rect', x:58, y:150, w:40, h:8}, {k:'line', pts:[[78, 158], [78, GROUND]], w:4},
      {k:'line', pts:[p0, p1], w:9, cls:'eq-pad-s', layer:'mid'}, {k:'plate', at:'grips', r:13, layer:'mid', if:'bb'}, ...DB_SIDES('end', 'db')]};
  })()},
-{id:'inclinecurl', name:'Сгибание рук на наклонной скамье', eq:[['db'], ['incline']], g:'biceps', pri:['biceps'], sec:['forearms'], type:'i', lvl:1,
+{id:'inclinecurl', name:'Сгибание рук на наклонной скамье', eq:[['db'], ['incline']], g:'biceps', pri:['biceps'], sec:['forearms'], type:'i', lvl:1, imp:2, sides:'both',
  tech:['Установите спинку под 45–60°, сядьте и прижмите спину. Гантели свисают на прямых руках, ладони вперёд.',
    'Сгибайте руки, не выводя локти вперёд.',
    'Медленно опустите до полного выпрямления, чувствуя растяжение бицепса.'],
@@ -208,7 +208,7 @@ EX.push(
   A:{hip:[92, 128], torso:-32, arm:{a:[182, 180]}, leg:{ik:[140, 180], b:'up', f:90}},
   B:{hip:[92, 128], torso:-32, arm:{a:[178, 28]}, leg:{ik:[140, 180], b:'up', f:90}},
   props:[...inclineBench([92, 128], -32), ...DB_SIDES('end')]}},
-{id:'concentration', name:'Концентрированный подъём на бицепс', eq:[['db'], ['bench']], g:'biceps', pri:['biceps'], sec:['forearms'], type:'i', lvl:1, uni:true,
+{id:'concentration', name:'Концентрированный подъём на бицепс', eq:[['db'], ['bench']], g:'biceps', pri:['biceps'], sec:['forearms'], type:'i', lvl:1, uni:true, imp:1, sides:'one',
  tech:['Сядьте на край скамьи, ноги широко. Упритесь локтем рабочей руки во внутреннюю часть бедра.',
    'Согните руку, поднимая гантель к плечу; плечо неподвижно.',
    'Задержитесь на секунду и медленно опустите. Затем смените руку.'],
@@ -220,7 +220,7 @@ EX.push(
   props:[...benchFlat(46, 100, 150), {k:'db', at:'gripN', o:'end', layer:'front'}]}},
 
 /* ===== ТРИЦЕПС ===== */
-{id:'kickback', name:'Разгибание руки с гантелью в наклоне', eq:[['db'], ['bench']], g:'triceps', pri:['triceps'], sec:[], type:'i', lvl:1, uni:true,
+{id:'kickback', name:'Разгибание руки с гантелью в наклоне', eq:[['db'], ['bench']], g:'triceps', pri:['triceps'], sec:[], type:'i', lvl:1, uni:true, imp:1, sides:'one',
  tech:['Упритесь коленом и ладонью в скамью, корпус почти параллелен полу. Плечо рабочей руки прижато к корпусу.',
    'Разогните руку назад до прямой линии, задержитесь на секунду.',
    'Вернитесь до угла 90° в локте; плечо неподвижно. Затем смените руку.'],
@@ -275,7 +275,7 @@ EX.push(
   A:{hip:hipFromSh([128, 113], 64), torso:64, arm:{ik:[128, 170], b:'back'}, leg:{ik:[40, 180], b:'down', f:200}},
   B:{hip:[108, 158], torso:84, arm:{ik:[210, 170], b:'back'}, leg:{ik:[40, 180], b:'down', f:200}},
   props:[{k:'plate', at:'grips', r:8, off:[0, 2], layer:'mid'}]}},
-{id:'sidebend', name:'Наклоны в сторону с гантелью', eq:[['db']], g:'abs', pri:['obliques'], sec:['abs'], type:'i', lvl:1, uni:true,
+{id:'sidebend', name:'Наклоны в сторону с гантелью', eq:[['db']], g:'abs', pri:['obliques'], sec:['abs'], type:'i', lvl:1, uni:true, imp:1, sides:'one',
  tech:['Встаньте прямо, гантель в одной руке, вторая рука за головой.',
    'Наклонитесь в сторону гантели, не заваливаясь вперёд или назад.',
    'Вернитесь в вертикальное положение усилием косых мышц противоположной стороны. Затем смените сторону.'],
@@ -340,7 +340,7 @@ EX.push(
   keys:[Object.assign({hip:[72, 146], torso:38, arm:{a:[212, 210]}}, legsAt(98)),
    Object.assign({hip:[95, 90], torso:0, arm:{a:[40, 38]}}, legsAt(99, 172, 'fwd', 130)),
    Object.assign({hip:[95, 74], torso:0, arm:{a:[24, 22]}}, legsAt(99, 158, 'fwd', 150))]}},
-{id:'thruster', name:'Трастеры с гантелями', eq:[['db']], g:'cardio', pri:['quads', 'glutes', 'delt_f'], sec:['triceps', 'abs', 'delt_s'], type:'c', lvl:2,
+{id:'thruster', name:'Трастеры с гантелями', eq:[['db']], g:'cardio', pri:['quads', 'glutes', 'delt_f'], sec:['triceps', 'abs', 'delt_s'], type:'c', lvl:2, imp:2, sides:'both',
  tech:['Гантели у плеч, локти направлены вперёд. Стопы на ширине плеч.',
    'Присядьте до параллели, сохраняя корпус вертикальным.',
    'Мощно вставая, сразу выжмите гантели над головой одним слитным движением.',

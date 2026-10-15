@@ -1,8 +1,11 @@
 /* ===================== ЖУРНАЛ ===================== */
 /* Хранилище: в опубликованной версии — аккаунт (db, личный раздел пользователя),
-   в офлайн-файле — браузер. Формат: LOG.data[exId] = [{d:'2026-10-05', wk?:1, s:[[кг|null, повторы, отдых?] | null, …]}, …].
+   в офлайн-файле — браузер. Формат: LOG.data[exId] = [{d:'2026-10-05', wk?:1, eq?:'db', s:[[кг|null, повторы, отдых?, стороны?] | null, …]}, …].
    Третье поле подхода — необязательное: фактический отдых после подхода, целые секунды (пишет режим тренировки). Старые
-   записи без него читаются как раньше, прежние версии приложения его просто не видят. */
+   записи без него читаются как раньше, прежние версии приложения его просто не видят. Четвёртое — левая и правая
+   сторона отдельно {l:[кг, повторы], r:[кг, повторы]} (переключатель «Л/П отдельно»); тогда отдых может быть пустым
+   (null), а основные поля — слабая сторона. eq — снаряд (гантели, гиря, штанга) у упражнений с гантелями или гирей:
+   по нему считается общий вес. Подробно — 13a-sets.js. */
 const LOG_KEY = 'podhod.log.v1';
 const LOG = {mode:'connecting', data:{}, col:null, pending:{}, writing:{}, again:{}, timers:{}, err:'', dl:null, canExport:false};
 const WEIGHTED = new Set(['db', 'bb', 'kb', 'cable', 'smith', 'legpress', 'legext', 'legcurl', 'pecdeck', 'hack', 'chestpress', 'shoulderpress', 'leverrow', 'tbar', 'abductor', 'calfseat', 'calfstand']);
@@ -158,7 +161,14 @@ function parseRange(r) { const m = String(r).match(/(\d+)\D+(\d+)/); if (m) retu
 const e1rm = (kg, reps) => kg * (1 + Math.min(reps, 12) / 30);
 
 /* ---------- подсказка по двойной прогрессии ---------- */
+/* прогрессия — по основным полям подхода (у Л/П это слабая сторона); если в прошлый раз одна сторона отставала —
+   короткая строка об этом */
 function suggest(it) {
+  const res = suggestBase(it), last = res.prev || pastSessions(it.ex.id).slice(-1)[0], note = weakSideNote(it.ex, last);
+  if (note) res.text += ' ' + note;
+  return res;
+}
+function suggestBase(it) {
   /* статодинамика и обычные подходы ведутся раздельно: вес в них отличается примерно вдвое */
   const ex = it.ex, lt = loadType(ex), all = pastSessions(ex.id), past = all.filter(s => (s.fmt === 'static') === !!it.rx.static);
   const [lo, hi] = parseRange(it.rx.reps);
@@ -253,35 +263,62 @@ function suggest(it) {
 /* ---------- блок записи в карточке ---------- */
 const SUG_ICON = {up:'↑', same:'→', down:'↓', deload:'↓', new:'+', plan:'≡'};
 function logRows(it) {
-  const ex = it.ex, lt = loadType(ex), sg = suggest(it);
+  const ex = it.ex, lt = loadType(ex), sg = suggest(it), wl = weightLabel(it), lr = lrOn(ex);
   const today = todaySession(ex.id, false);
   const tset = today ? today.s : [];
   const n = Math.max(it.rx.circ ? (it.rounds || it.rx.sets) : it.rx.sets, tset.length);
   const prevSets = sg.prev ? sg.prev.s.filter(Boolean) : [];
   const [lo, hi] = parseRange(it.rx.reps);
+  const SIDE = {l:'левая', r:'правая'};
+  /* поле веса и повторов; side — 'l' | 'r' в режиме Л/П */
+  const fields = (k, side, val, phKg, phR) => `${lt === 'none' ? '' : `<input class="lt-in" id="kg-${ex.id}-${k}${side ? '-' + side : ''}" data-f="kg"${side ? ` data-side="${side}"` : ''} type="text" inputmode="decimal" autocomplete="off" aria-label="${wl.full}${side ? ', ' + SIDE[side] : ''}, подход ${k + 1}" placeholder="${phKg}" value="${val && val[0] != null ? fmtKg(val[0]) : ''}">`}
+      <input class="lt-in" id="rp-${ex.id}-${k}${side ? '-' + side : ''}" data-f="reps"${side ? ` data-side="${side}"` : ''} type="text" inputmode="numeric" autocomplete="off" aria-label="${repLabel(ex)}${side ? ', ' + SIDE[side] : ''}, подход ${k + 1}" placeholder="${phR}" value="${val ? val[1] : ''}">`;
+  const prevText = p => (p[0] ? fmtKg(p[0]) + ' × ' : '') + p[1];
+  const sideTag = side => `<b class="lt-sd" aria-hidden="true">${side === 'l' ? 'Л' : 'П'}</b><span class="vh">${side === 'l' ? 'Левая:' : 'Правая:'}</span>`;
   let rows = '';
   for (let k = 0; k < n; k++) {
     const v = tset[k];
     const p = prevSets[k] || prevSets[prevSets.length - 1];
-    const pTxt = p ? (p[0] ? fmtKg(p[0]) + ' × ' : '') + p[1] : '—';
     const pk = planKg(it.rx, k), phKg = pk != null ? fmtKg(pk) : sg.kg != null ? fmtKg(sg.kg) : (lt === 'kg' ? '' : '—');
     const phR = sg.reps[k] ?? sg.reps[sg.reps.length - 1] ?? (lo === hi ? String(lo) : `${lo}–${hi}`);
-    const done = !!v;
-    rows += `<div class="lt-r${done ? ' done' : ''}${it.rx.static && k > 0 && k % 3 === 0 ? ' lt-series' : ''}" data-k="${k}">
-      <span class="lt-n">${k + 1}</span><span class="lt-p">${pTxt}</span>
-      ${lt === 'none' ? '' : `<input class="lt-in" id="kg-${ex.id}-${k}" data-f="kg" type="text" inputmode="decimal" autocomplete="off" aria-label="Вес, подход ${k + 1}" placeholder="${phKg}" value="${done && v[0] != null ? fmtKg(v[0]) : ''}">`}
-      <input class="lt-in" id="rp-${ex.id}-${k}" data-f="reps" type="text" inputmode="numeric" autocomplete="off" aria-label="${repLabel(ex)}, подход ${k + 1}" placeholder="${phR}" value="${done ? v[1] : ''}">
-      <button type="button" class="lt-ok" data-tick="${ex.id}" data-k="${k}" aria-pressed="${done}" aria-label="Подход ${k + 1} выполнен">${ICON.check}</button>
+    const done = !!v, cls = `lt-r${done ? ' done' : ''}${lr ? ' lt-lr' : ''}${it.rx.static && k > 0 && k % 3 === 0 ? ' lt-series' : ''}`;
+    const ok = `<button type="button" class="lt-ok" data-tick="${ex.id}" data-k="${k}" aria-pressed="${done}" aria-label="Подход ${k + 1} выполнен">${ICON.check}</button>`;
+    if (lr) {
+      /* Л/П: две строки в одном подходе; прошлый раз — по сторонам, если они были записаны, иначе общее значение */
+      const sd = v && setSides(v, ex), psd = p && setSides(p, ex);
+      const val = side => v ? (sd ? sd[side] : [v[0], v[1]]) : null, pv = side => p ? prevText(psd ? psd[side] : p) : '—';
+      rows += `<div class="${cls}" data-k="${k}">
+      <span class="lt-n">${k + 1}</span><span class="lt-p">${sideTag('l')} ${pv('l')}</span>
+      ${fields(k, 'l', val('l'), phKg, phR)}
+      ${ok}
+      <span class="lt-p">${sideTag('r')} ${pv('r')}</span>
+      ${fields(k, 'r', val('r'), phKg, phR)}
+    </div>`;
+    } else rows += `<div class="${cls}" data-k="${k}">
+      <span class="lt-n">${k + 1}</span><span class="lt-p">${p ? prevText(p) : '—'}</span>
+      ${fields(k, null, done ? v : null, phKg, phR)}
+      ${ok}
     </div>`;
   }
   const doneN = tset.slice(0, n).filter(Boolean).length;
+  /* вес одной гантели: подсказка «×2 = 40 кг» — по первому заполненному полю (пока не вводили — по подсказке) */
+  const x2 = wl && wl.n > 1 && !lr ? `<span class="lt-x2" data-n="${wl.n}">${wl.impl === 'kb' ? 'вес — одной гири' : 'вес — одной гантели'}<b>${pairTotalText(wl.n, firstKg(tset, sg, it))}</b></span>` : '';
+  const lrBtn = perSide(ex) ? `<button type="button" class="lt-lrb" data-lr="${ex.id}" aria-pressed="${lr}">${'Л/П отдельно'}</button>` : '';
+  const perSideNote = perSide(ex) ? `<span>${ex.kind === 'time' ? 'секунды — на каждую сторону' : 'повторы — на каждую сторону'}</span>` : '';
   return {sg, html:`<p class="sug sug-${sg.tone}"><b aria-hidden="true">${SUG_ICON[sg.tone]}</b><span>${esc(sg.text)}</span></p>
     ${logFoldBar(it, n, doneN)}
     <div class="lt-fold" id="lt-${ex.id}"><div class="lt${lt === 'none' ? ' lt-nokg' : ''}" role="group" aria-label="Запись подходов">
-      <div class="lt-h"><span>№</span><span>Прошлый раз</span>${lt === 'none' ? '' : `<span>${lt === 'kg' ? 'Вес, кг' : lt === 'assist' ? 'Противовес' : 'Доп. кг'}</span>`}<span>${repLabel(ex)}</span><span></span></div>
+      <div class="lt-h"><span>№</span><span>Прошлый раз</span>${lt === 'none' ? '' : `<span title="${wl.full}">${wl.short}</span>`}<span>${repLabel(ex)}</span><span></span></div>
       ${rows}
     </div>
-    <div class="lt-foot"><button type="button" class="lt-add" data-addset="${ex.id}">+ подход</button>${ex.uni ? '<span>повторы — на каждую сторону</span>' : ''}${it.rx.circ ? '<span>строка — один круг</span>' : ''}</div></div>`};
+    <div class="lt-foot"><button type="button" class="lt-add" data-addset="${ex.id}">+ подход</button>${lrBtn}${perSideNote}${x2}${it.rx.circ ? '<span>строка — один круг</span>' : ''}</div></div>`};
+}
+/* вес для подсказки «×2»: записанный или введённый в первом подходе, иначе подсказка по весу */
+function firstKg(tset, sg, it) {
+  const v = tset.find(x => x && x[0] > 0);
+  if (v) return v[0];
+  const pk = planKg(it.rx, 0);
+  return pk != null ? pk : sg.kg;
 }
 function logBlock(it) { return `<div class="c-log" data-log="${it.ex.id}">${logRows(it).html}</div>`; }
 
@@ -317,6 +354,11 @@ function sparkSvg(pts, unit, step = 0.5) {
     <line class="sp-x" x1="0" x2="0" y1="${T - 4}" y2="${H - B}" visibility="hidden"/><circle class="sp-dot" r="4" cx="0" cy="0" visibility="hidden"/>
   </svg>`;
 }
+/* подходы записи и её общий вес второй строкой (если есть внешний вес) */
+function histSets(ex, s) {
+  const t = sessionTonnage(ex, s);
+  return `${setsText(s.s, ex)}${t > 0 ? `<small class="h-ton">${'общий вес ' + fmtTon(t) + ' кг'}</small>` : ''}`;
+}
 function histHtml(ex) {
   const ss = (LOG.data[ex.id] || []).filter(x => x.s.some(Boolean));
   if (!ss.length) return `<p class="h-empty">Записей пока нет. Отметьте подходы выше — здесь появится история и график.</p>${variantHistNote(ex)}`;
@@ -324,7 +366,7 @@ function histHtml(ex) {
   const pts = ss.map(s => ({d:s.d, v:m.f(s)})).filter(p => p.v != null).slice(-24);
   const best = pts.length ? Math.max(...pts.map(p => p.v)) : null;
   const rows = ss.slice(-6).reverse().map(s => `<li><span class="h-d">${fmtDay(s.d, true)}${s.wk ? `<small>нед. ${s.wk}</small>` : ''}${s.fmt === 'static' ? '<small>статодинамика</small>' : ''}</span>
-    <span class="h-s">${s.s.filter(Boolean).map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(' · ')}</span>
+    <span class="h-s">${histSets(ex, s)}</span>
     <button type="button" class="h-del" data-del="${ex.id}" data-d="${s.d}" aria-label="Удалить запись за ${fmtDay(s.d, true)}">Удалить</button></li>`).join('');
   return `<div class="h-chart"><p class="h-cap">${m.name}, ${m.unit}${best != null ? ` · лучший ${fmtKg(Math.round(best * 2) / 2)}` : ''}</p>${sparkSvg(pts, m.unit)}</div>
     <ul class="h-list">${rows}</ul>${ss.length > 6 ? `<p class="h-more">Всего записей: ${ss.length}. Полная история — в разделе «Журнал».</p>` : ''}${variantHistNote(ex)}`;
@@ -340,7 +382,7 @@ function refreshCard(card) {
   const ae = document.activeElement;
   if (box && !(box.contains(ae) && ae.tagName === 'INPUT')) {
     const refocus = !box.contains(ae) ? null : ae.dataset.k !== undefined ? `[data-${ae.dataset.tick ? 'tick' : 'addset'}][data-k="${ae.dataset.k}"]`
-      : ae.dataset.cfold ? '[data-cfold]' : ae.dataset.hist ? '[data-hist]' : null;
+      : ae.dataset.cfold ? '[data-cfold]' : ae.dataset.hist ? '[data-hist]' : ae.dataset.lr ? '[data-lr]' : null;
     box.innerHTML = logRows(it).html;
     syncCardLog(card);
     if (refocus) { const n = box.querySelector(refocus); if (n) n.focus(); }
@@ -368,9 +410,28 @@ function statusHtml() {
 function journalDays() { const s = new Set(); for (const ss of Object.values(LOG.data)) for (const x of ss) if (x.s.some(Boolean)) s.add(x.d); return s.size; }
 
 /* ---------- экран «Журнал» ---------- */
-function heatmap(today = new Date()) {
+/* тренировки по дням: упражнений, подходов и общий вес за день */
+function trainingDays(data = LOG.data) {
+  const by = {};
+  for (const [id, ss] of Object.entries(data || {})) {
+    const ex = EXI[id]; if (!ex || !Array.isArray(ss)) continue;
+    for (const s of ss) {
+      const n = s && Array.isArray(s.s) ? s.s.filter(Boolean).length : 0; if (!n) continue;
+      const d = by[s.d] || (by[s.d] = {d:s.d, ex:0, sets:0, t:0});
+      d.ex++; d.sets += n; d.t += sessionTonnage(ex, s);
+    }
+  }
+  return by;
+}
+/* последние тренировки списком: дата, упражнений и подходов, общий вес за день */
+function daysHtml(by = trainingDays(), limit = 5) {
+  const days = Object.values(by).sort((a, b) => a.d < b.d ? 1 : -1).slice(0, limit);
+  if (!days.length) return '';
+  return `<div class="j-days"><p class="lb-h">${'Последние тренировки · общий вес'}</p><ul>${days.map(x => `<li><span class="j-dd">${fmtDay(x.d, true)}</span><span class="j-dn">${x.ex} ${plural(x.ex, 'упражнение', 'упражнения', 'упражнений')} · ${x.sets} ${plural(x.sets, 'подход', 'подхода', 'подходов')}</span><b class="j-dt">${x.t > 0 ? fmtTon(x.t) + `<small>${'кг'}</small>` : '—'}</b></li>`).join('')}</ul></div>`;
+}
+function heatmap(today = new Date(), by = trainingDays()) {
   const byDay = {};
-  for (const ss of Object.values(LOG.data)) for (const x of ss) { const n = x.s.filter(Boolean).length; if (n) byDay[x.d] = (byDay[x.d] || 0) + n; }
+  for (const x of Object.values(by)) byDay[x.d] = x.sets;
   const W = 12, cell = 15, gap = 3, LX = 22, TY = 16;
   const now = new Date(today); now.setHours(12, 0, 0, 0);
   const dow = (now.getDay() + 6) % 7;
@@ -382,7 +443,8 @@ function heatmap(today = new Date()) {
     if (dt > now) continue;
     const k = dayKey(dt), n = byDay[k] || 0;
     const lv = n === 0 ? 0 : n < 10 ? 1 : n < 20 ? 2 : 3;
-    cells += `<rect class="hm hm${lv}" x="${LX + w * (cell + gap)}" y="${TY + d * (cell + gap)}" width="${cell}" height="${cell}" rx="3" data-tip="${fmtDay(k, true)}: ${n ? n + ' ' + plural(n, 'подход', 'подхода', 'подходов') : 'без тренировки'}"/>`;
+    const t = n && by[k] ? by[k].t : 0;
+    cells += `<rect class="hm hm${lv}" x="${LX + w * (cell + gap)}" y="${TY + d * (cell + gap)}" width="${cell}" height="${cell}" rx="3" data-tip="${fmtDay(k, true)}: ${n ? n + ' ' + plural(n, 'подход', 'подхода', 'подходов') + (t > 0 ? ` · ${fmtTon(t)} кг` : '') : 'без тренировки'}"/>`;
     if (d === 0 && dt.getMonth() !== lastM) { lastM = dt.getMonth(); marks.push([w, lastM]); }
   }
   /* подпись месяца — над его первой неделей; хвост прошлого месяца в первой колонке подписывается, только если до
@@ -401,6 +463,7 @@ function renderJournal() {
   const days = journalDays();
   const sets = entries.reduce((a, [, ss]) => a + ss.reduce((b, x) => b + x.s.filter(Boolean).length, 0), 0);
   const last = entries.reduce((m, [, ss]) => ss[ss.length - 1].d > m ? ss[ss.length - 1].d : m, '');
+  const byDays = trainingDays();
   entries.sort((a, b) => a[1][a[1].length - 1].d < b[1][b[1].length - 1].d ? 1 : -1);
   const tools = `<div class="j-tools">
       ${LOG.canExport ? `<button type="button" class="btn btn-2" id="exp-json">Полная копия (JSON)</button><button type="button" class="btn btn-2" id="exp-csv">Журнал для Excel</button><button type="button" class="btn btn-2" id="exp-body">Замеры для Excel</button>` : ''}
@@ -419,7 +482,7 @@ function renderJournal() {
       <p class="ls" id="log-status">${statusHtml()}</p>
       ${tools}
     </div>
-    <figure class="j-heat"><figcaption class="lb-h">Активность за 12 недель${last ? ` · последняя тренировка ${fmtDay(last, true)}` : ''}</figcaption>${heatmap()}</figure>
+    <figure class="j-heat"><figcaption class="lb-h">Активность за 12 недель${last ? ` · последняя тренировка ${fmtDay(last, true)}` : ''}</figcaption>${heatmap(new Date(), byDays)}${daysHtml(byDays)}</figure>
   </header>${entries.length ? muscleLoadHtml() : ''}${bodyHtml()}`;
   if (!entries.length) {
     html += `<div class="empty"><h2>Записей пока нет</h2><p>Откройте план и отмечайте подходы в карточках упражнений: вес и повторы сохранятся здесь, а планировщик начнёт подсказывать, когда прибавлять вес.</p><button type="button" class="btn" data-view="plan">Перейти к плану</button></div>`;
@@ -436,11 +499,12 @@ function renderJournal() {
             <span class="j-name">${esc(ex.name)}<small>${GN[ex.g]} · ${ss.length} ${plural(ss.length, 'запись', 'записи', 'записей')} · ${fmtDay(lastS.d, true)}</small></span>
             <span class="j-val">${lastV != null ? fmtKg(Math.round(lastV * 2) / 2) : '—'}<small>${m.unit}</small>${ch != null ? `<em class="${ch > 0 ? 'pos' : ch < 0 ? 'neg' : ''}">${ch > 0 ? '+' : ''}${ch}%</em>` : ''}</span>
           </summary>
-          <div class="j-body">${histHtml(ex).replace(/<p class="h-more">.*?<\/p>/, '')}${ss.length > 6 ? `<details class="j-all"><summary>Все записи (${ss.length})</summary><ul class="h-list">${ss.slice(0, -6).reverse().map(s => `<li><span class="h-d">${fmtDay(s.d, true)}</span><span class="h-s">${s.s.filter(Boolean).map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(' · ')}</span><button type="button" class="h-del" data-del="${id}" data-d="${s.d}">Удалить</button></li>`).join('')}</ul></details>` : ''}</div>
+          <div class="j-body">${histHtml(ex).replace(/<p class="h-more">.*?<\/p>/, '')}${ss.length > 6 ? `<details class="j-all"><summary>Все записи (${ss.length})</summary><ul class="h-list">${ss.slice(0, -6).reverse().map(s => `<li><span class="h-d">${fmtDay(s.d, true)}</span><span class="h-s">${histSets(ex, s)}</span><button type="button" class="h-del" data-del="${id}" data-d="${s.d}">Удалить</button></li>`).join('')}</ul></details>` : ''}</div>
         </details>
       </li>`;
     }).join('')}</ul>
-    <p class="legend">Расчётный максимум — вес, который вы, по формуле Эпли, подняли бы один раз: вес × (1 + повторы / 30). Он растёт и когда прибавляете вес, и когда делаете больше повторов с тем же весом.</p>`;
+    <p class="legend">Расчётный максимум — вес, который вы, по формуле Эпли, подняли бы один раз: вес × (1 + повторы / 30). Он растёт и когда прибавляете вес, и когда делаете больше повторов с тем же весом. У гантелей и гирь он — по весу одного снаряда.</p>
+    <p class="legend">Общий вес — сумма «вес × повторы» по всем снарядам и сторонам: жим гантелей 2 × 20 кг на 10 повторов — 400 кг, тяга гантели одной рукой 30 кг по 10 на каждую сторону — 600 кг. Считается только внешний вес: гантели, гири, штанга, тренажёр, доп. вес; вес тела, противовес гравитрона, удержания на время и дистанция не входят. Л/П — подход с левой и правой стороной отдельно: прогресс и рекорды — по слабой стороне.</p>`;
   }
   $('#plan').innerHTML = html;
 }
@@ -465,10 +529,23 @@ async function saveFile(name, text, mime) {
   }
   return 'fail';
 }
+/* Таблица для Excel: подход — строка. Вес — одного снаряда (как записан); «Левая» и «Правая» — у подходов с Л/П
+   («12×10», у удержаний — секунды), основные вес и повторы тогда — слабая сторона; общий вес — последний столбец,
+   у подходов без внешнего веса пусто. */
 function csvText() {
-  const rows = [['Дата', 'Упражнение', 'Группа мышц', 'Подход', 'Вес, кг', 'Повторы / секунды / метры', 'Неделя цикла', 'Отдых после подхода, с']];
-  const all = [];
-  for (const [id, ss] of Object.entries(LOG.data)) if (EXI[id]) for (const s of ss) s.s.forEach((x, k) => { if (x) all.push([s.d, EXI[id].name, GN[EXI[id].g], k + 1, x[0] != null ? fmtKg(x[0]) : '', x[1], s.wk || '', restField(x[2]) ?? '']); });
+  const rows = [['Дата', 'Упражнение', 'Группа мышц', 'Подход', 'Вес, кг', 'Повторы / секунды / метры', 'Неделя цикла', 'Отдых после подхода, с', 'Левая', 'Правая', 'Общий вес за подход, кг']];
+  const all = [], side = p => (p[0] != null ? fmtKg(p[0]) + '×' : '') + p[1];
+  for (const [id, ss] of Object.entries(LOG.data)) {
+    const ex = EXI[id]; if (!ex) continue;
+    for (const s of ss) {
+      const impl = sessionImpl(ex, s);
+      s.s.forEach((x, k) => {
+        if (!x) return;
+        const sd = setSides(x, ex), t = setTonnage(ex, x, impl);
+        all.push([s.d, ex.name, GN[ex.g], k + 1, x[0] != null ? fmtKg(x[0]) : '', x[1], s.wk || '', restField(x[2]) ?? '', sd ? side(sd.l) : '', sd ? side(sd.r) : '', t > 0 ? fmtKg(t) : '']);
+      });
+    }
+  }
   all.sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] < b[1] ? -1 : 1);
   return '﻿' + rows.concat(all).map(r => r.map(v => /[;"\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : v).join(';')).join('\r\n');
 }
@@ -525,34 +602,47 @@ document.addEventListener('pointermove', e => {
 document.addEventListener('pointerleave', () => { tipEl.hidden = true; });
 
 /* ---------- действия журнала ---------- */
+/* снаряд — в запись дня (по нему считается общий вес: гантели, гиря или штанга у румынской тяги) */
+function markImpl(s, it) { if (!hasFreeWeights(it.ex)) return; const impl = itemImpl(it); if (impl) s.eq = impl; else delete s.eq; }
+/* поля подхода в строке карточки: side — 'l' | 'r' в режиме Л/П, иначе null */
+function rowFields(row, side) {
+  const q = f => row.querySelector(side ? `[data-f="${f}"][data-side="${side}"]` : `[data-f="${f}"]:not([data-side])`);
+  return {kgIn:q('kg'), rIn:q('reps')};
+}
+/* значения поля (пустое — подсказка); bad — поле, которое надо заполнить */
+function readFields({kgIn, rIn}, lt) {
+  const reps = parseNum(rIn.value !== '' ? rIn.value : rIn.placeholder);
+  let kg = kgIn ? parseNum(kgIn.value !== '' ? kgIn.value : kgIn.placeholder) : null;
+  if (reps == null || reps <= 0) return {bad:rIn};
+  if (lt === 'kg' && kg == null && kgIn) return {bad:kgIn};
+  if (kg != null && kg < 0) kg = null;
+  return {kg, reps:Math.round(reps * 10) / 10};
+}
 function tickSet(btn) {
   const id = btn.dataset.tick, k = +btn.dataset.k;
   const row = btn.closest('.lt-r');
   const it = plan.items.find(x => x.ex.id === id);
-  const lt = loadType(it.ex);
-  const kgIn = row.querySelector('[data-f="kg"]'), rIn = row.querySelector('[data-f="reps"]');
+  const lt = loadType(it.ex), lr = row.classList.contains('lt-lr');
+  const F = (lr ? ['l', 'r'] : [null]).map(side => rowFields(row, side));
   const s = todaySession(id, true);
   if (s.s[k]) {
     s.s[k] = null; cleanToday(id);
     row.classList.remove('done'); btn.setAttribute('aria-pressed', 'false');
-    if (kgIn) kgIn.value = ''; rIn.value = '';
+    for (const f of F) { if (f.kgIn) f.kgIn.value = ''; f.rIn.value = ''; }
     logTouch(id); refreshHist(id); return;
   }
-  const reps = parseNum(rIn.value !== '' ? rIn.value : rIn.placeholder);
-  let kg = kgIn ? parseNum(kgIn.value !== '' ? kgIn.value : kgIn.placeholder) : null;
-  if (reps == null || reps <= 0) {
+  const got = F.map(f => readFields(f, lt)), bad = got.find(g => g.bad);
+  if (bad) {
     cleanToday(id);
-    rIn.focus(); rIn.classList.add('need'); setTimeout(() => rIn.classList.remove('need'), 1600);
+    bad.bad.focus(); bad.bad.classList.add('need'); setTimeout(() => bad.bad.classList.remove('need'), 1600);
     return;
   }
-  if (lt === 'kg' && kg == null && kgIn) { kgIn.focus(); kgIn.classList.add('need'); setTimeout(() => kgIn.classList.remove('need'), 1600); cleanToday(id); return; }
-  if (kg != null && kg < 0) kg = null;
   while (s.s.length < k) s.s.push(null);
-  s.s[k] = [kg, Math.round(reps * 10) / 10];
+  s.s[k] = lr ? makeSidedSet([got[0].kg, got[0].reps], [got[1].kg, got[1].reps], it.ex) : [got[0].kg, got[0].reps];
   s.target=Math.max(s.target||0,it.rx.circ?(it.rounds||it.rx.sets):it.rx.sets);
   if (it.rx.static) s.fmt = 'static';
-  if (kgIn) kgIn.value = kg != null ? fmtKg(kg) : '';
-  rIn.value = s.s[k][1];
+  markImpl(s, it);
+  F.forEach((f, i) => { if (f.kgIn) f.kgIn.value = got[i].kg != null ? fmtKg(got[i].kg) : ''; f.rIn.value = got[i].reps; });
   row.classList.add('done'); btn.setAttribute('aria-pressed', 'true');
   logTouch(id); refreshHist(id);
   const total = it.rx.circ ? 0 : it.rx.sets;
@@ -564,12 +654,36 @@ function tickSet(btn) {
 }
 function editSet(inp) {
   const row = inp.closest('.lt-r'); if (!row || !row.classList.contains('done')) return;
-  const box = inp.closest('.c-log'), id = box.dataset.log, k = +row.dataset.k;
+  const box = inp.closest('.c-log'), id = box.dataset.log, k = +row.dataset.k, ex = EXI[id];
   const s = todaySession(id, false); if (!s || !s.s[k]) return;
-  const v = parseNum(inp.value);
-  if (inp.dataset.f === 'kg') s.s[k][0] = v != null && v >= 0 ? v : null;
-  else if (v != null && v > 0) s.s[k][1] = Math.round(v * 10) / 10; else return;
+  const v = parseNum(inp.value), x = s.s[k], side = inp.dataset.side;
+  if (side) {
+    /* Л/П: правится одна сторона, основные поля — снова слабая сторона, отдых остаётся */
+    const sd = setSides(x, ex), l = sd ? [...sd.l] : [x[0], x[1]], r = sd ? [...sd.r] : [x[0], x[1]], p = side === 'l' ? l : r;
+    if (inp.dataset.f === 'kg') p[0] = v != null && v >= 0 ? v : null;
+    else if (v != null && v > 0) p[1] = Math.round(v * 10) / 10; else return;
+    const nx = makeSidedSet(l, r, ex, x[2]); if (!nx) return;
+    s.s[k] = nx;
+  } else {
+    if (inp.dataset.f === 'kg') x[0] = v != null && v >= 0 ? v : null;
+    else if (v != null && v > 0) x[1] = Math.round(v * 10) / 10; else return;
+    /* одно значение на обе стороны: прежние стороны больше не верны */
+    if (x.length > 3) x.length = restField(x[2]) ? 3 : 2;
+  }
   logTouch(id); refreshHist(id);
+}
+/* «Л/П отдельно» в карточке: запоминается для упражнения, таблица перерисовывается */
+function toggleLr(btn) {
+  const id = btn.dataset.lr, ex = EXI[id]; if (!ex) return;
+  lrSet(ex, !lrOn(ex));
+  const box = btn.closest('.c-log'), it = plan && plan.items && plan.items.find(x => x.ex.id === id);
+  if (box && it) { box.innerHTML = logRows(it).html; const card = box.closest('.card'); if (card) syncCardLog(card); const b = box.querySelector(`[data-lr="${id}"]`); if (b) b.focus(); }
+}
+/* «×2 = 40 кг» под таблицей обновляется при вводе веса */
+function updatePairTotal(inp) {
+  const box = inp.closest('.c-log'), x2 = box && box.querySelector('.lt-x2 b'); if (!x2) return;
+  const n = +box.querySelector('.lt-x2').dataset.n, v = parseNum(inp.value !== '' ? inp.value : inp.placeholder);
+  x2.textContent = pairTotalText(n, v);
 }
 function refreshHist(id) {
   const card = document.querySelector(`.card[data-ex="${id}"]`); if (!card) return;
@@ -599,6 +713,7 @@ document.addEventListener('click', e => {
   const t = e.target.closest('button');
   if (!t) return;
   if (t.dataset.tick) { tickSet(t); return; }
+  if (t.dataset.lr) { toggleLr(t); return; }
   if (t.dataset.addset) {
     const id = t.dataset.addset, it = plan.items.find(x => x.ex.id === id);
     it.extra = (it.extra || 0) + 1;
@@ -625,6 +740,7 @@ document.addEventListener('change', e => {
   if (e.target.id === 'imp-file' && e.target.files && e.target.files[0]) { importLog(e.target.files[0]); e.target.value = ''; }
   else if (e.target.classList && e.target.classList.contains('lt-in')) editSet(e.target);
 });
+document.addEventListener('input', e => { if (e.target.classList && e.target.classList.contains('lt-in') && e.target.dataset.f === 'kg' && e.target.closest('.c-log')) updatePairTotal(e.target); });
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('lt-in')) {
     e.preventDefault();

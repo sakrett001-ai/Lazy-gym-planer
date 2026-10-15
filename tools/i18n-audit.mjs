@@ -236,6 +236,23 @@ await page.click('#wv-hold-go'); await scan('side plank recorded');
 await run(`(()=>{closeWorkout();S.mode='single';regen();startRest(30);window.__dt+=45000;tick();})()`);
 await scan('plan rest timer overtime');
 await run(`(()=>{stopRest();})()`);
+/* 7б. вес гантелей и стороны: «вес одной гантели», «×2», «Л/П отдельно» в карточке и в тренировке, общий вес после
+   подхода и в итогах, слабая сторона, журнал с последними тренировками и «Л … · П …», таблица для Excel */
+step('7б. гантели и Л/П');
+await run(`(()=>{const d=n=>{const x=new Date();x.setDate(x.getDate()-n);return dayKey(x);};
+  S.customs=[{id:'i18n-db',name:'DB',items:[{id:'dbbench',sets:1},{id:'dbrow',sets:2},{id:'sideplank',sets:1},{id:'lunge',sets:1}]}];S.custom='i18n-db';S.mode='custom';S.lr={dbrow:true,sideplank:true};ensureCustoms(S);openCustom('i18n-db');
+  LOG.data={dbbench:[{d:d(3),eq:'db',s:[[20,10],[20,8]]}],dbrow:[{d:d(3),eq:'db',s:[[30,8,null,{l:[30,10],r:[30,8]}],[30,8,90,{l:[30,9],r:[30,8]}]]}],sideplank:[{d:d(3),s:[[null,35,null,{l:[null,42],r:[null,35]}]]}]};
+  regen();document.querySelectorAll('[data-cfold="log"]').forEach(b=>{if(b.getAttribute('aria-expanded')!=='true')b.click();});document.querySelectorAll('[data-hist]').forEach(b=>b.click());})()`);
+await scan('dumbbell cards with L/R', await run(`[weightLabel({...previewItem('farmer'),eqIds:['kb']}).full,weightLabel({...previewItem('goblet'),eqIds:['kb']}).full,weightLabel({...previewItem('goblet'),eqIds:['kb']}).short,weightLabel({...previewItem('dbrow'),eqIds:['db','bench']}).full].join('\\n')`));
+await page.click('#start-workout'); await page.waitForTimeout(200);
+await page.fill('#wv-kg', '20'); await page.fill('#wv-reps', '10'); await scan('workout: one dumbbell of two');
+await page.click('#wv-done'); await scan('rest note with total weight');
+await page.click('#wv-continue'); await scan('workout: L/R fields');
+await page.fill('#wv-reps-l', '10'); await page.fill('#wv-reps-r', '8'); await page.click('#wv-done'); await scan('rest note with the weaker side');
+await run(`(()=>{workoutFinish();})()`); await scan('finish with total weight');
+await run(`(()=>{closeWorkout();S.view='journal';renderSetup();renderPlan();document.querySelectorAll('details').forEach(x=>x.open=true);})()`);
+await scan('journal with L/R and total weight', await run('csvText()'));
+await run(`(()=>{S.lr={};S.view='plan';S.mode='single';regen();})()`);
 
 await browser.close();
 const list = [...found.values()];

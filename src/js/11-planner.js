@@ -89,7 +89,8 @@ const WEEKS = [
 ];
 
 const DEFAULTS = {goal:'mass', format:'classic', level:'mid', count:6, groups:['chest', 'back', 'shoulders'], equip:EQUIP.map(e => e.id), seed:7,
-  mode:'single', days:3, split:'full', week:1, day:0, view:'plan', atlasM:'chest', focus:null, fav:[], customs:[], custom:null, gen:null, author:'', fold:null, protect:[]};
+  mode:'single', days:3, split:'full', week:1, day:0, view:'plan', atlasM:'chest', focus:null, fav:[], customs:[], custom:null, gen:null, author:'', fold:null, protect:[],
+  lr:{} /* «Л/П отдельно» по упражнениям: {exId:true} (13a-sets.js) */};
 const STORE = 'podhod.settings.v1';
 function loadSettings() {
   try { const s = JSON.parse(localStorage.getItem(STORE) || 'null'); if (s && s.groups && s.equip) return Object.assign({}, DEFAULTS, s); } catch (e) {}

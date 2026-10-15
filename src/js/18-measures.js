@@ -124,7 +124,9 @@ bodyLoad();
 
 /* ===================== ПОЛНАЯ РЕЗЕРВНАЯ КОПИЯ ===================== */
 /* v2: настройки планировщика, инвентарь, авторегулировка, календарь, атлас, журнал и замеры. v1 (только журнал) тоже читается.
-   Подход в журнале — [кг, повторы] или [кг, повторы, отдых, с]: отдых необязателен, неверный отбрасывается, подход остаётся. */
+   Подход в журнале — [кг, повторы], [кг, повторы, отдых, с] или [кг, повторы, отдых | null, {l, r}] (Л/П, 13a-sets.js):
+   отдых и стороны необязательны, неверные отбрасываются, подход остаётся. Снаряд записи (eq) — только допустимый
+   для упражнения. */
 function backupObject() {
   return {app:'podhod', v:2, exported:new Date().toISOString(), version:window.PODHOD_VERSION || '',
     settings:{...S}, gear:{bar:GEAR.bar, plates:GEAR.plates}, autoreg:{dismissed:AR.dismissed, light:AR.light}, ics:{...ICS}, motion:{...motionPrefs},
@@ -135,9 +137,11 @@ function restoreBackup(obj) {
   if (obj.log && typeof obj.log === 'object') {
     for (const [id, ss] of Object.entries(obj.log)) {
       if (!EXI[id] || !validSessions(ss)) continue;
+      const ex = EXI[id];
       const clean = ss.map(x => ({d:x.d, ...(x.wk ? {wk:+x.wk} : {}), ...(x.fmt === 'static' ? {fmt:'static'} : {}),
         ...(Number.isSafeInteger(+x.target) && +x.target > 0 ? {target:+x.target} : {}),
-        s:x.s.map(v => { if (!Array.isArray(v) || !isFinite(+v[1])) return null; const o = [v[0] == null || v[0] === '' ? null : +v[0], +v[1]], r = restField(v[2]); if (r) o.push(r); return o; })}));
+        ...(cleanImpl(ex, x.eq) ? {eq:x.eq} : {}),
+        s:x.s.map(v => cleanSet(v, ex))}));
       const merged = mergeSessions(LOG.data[id], clean);
       if (JSON.stringify(merged) !== JSON.stringify(LOG.data[id] || [])) { LOG.data[id] = merged; logTouch(id, true); out.exercises++; out.sessions += clean.length; }
     }
@@ -154,6 +158,7 @@ function restoreBackup(obj) {
       if (Array.isArray(ok.groups)) ok.groups = ok.groups.filter(g => GROUPS.some(x => x.id === g));
       if (Array.isArray(ok.equip)) ok.equip = ok.equip.filter(id => EQUIP.some(x => x.id === id));
       if (!GOALS[ok.goal]) delete ok.goal; if (!FORMATS[ok.format]) delete ok.format; if (!LEVELS[ok.level]) delete ok.level;
+      if ('lr' in ok) ok.lr = cleanLr(ok.lr);
       Object.assign(S, ok); saveSettings(); out.settings = true;
     }
     if (obj.gear && typeof obj.gear === 'object') { if (isFinite(obj.gear.bar) && obj.gear.bar > 0) GEAR.bar = +obj.gear.bar; if (Array.isArray(obj.gear.plates)) { const pl = obj.gear.plates.map(Number).filter(v => v > 0); if (pl.length) GEAR.plates = [...new Set(pl)].sort((a, b) => b - a); } gearSave(); }
