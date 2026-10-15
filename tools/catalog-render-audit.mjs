@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import {createRequire} from 'node:module';
 import * as THREE from 'three';
-import {createCatalogScene,world} from '../src/volume/scene.mjs';
+import {createCatalogScene,world,isStaticProp} from '../src/volume/scene.mjs';
 const require=createRequire(import.meta.url),{loadModel}=require('./biomechanics-audit.js'),Mannequin=require('../src/js/09bm-mannequin.js');
 const dist=(a,b)=>Math.hypot(...a.map((v,i)=>v-b[i]));
-const visible=o=>{for(let p=o;p;p=p.parent)if(!p.visible)return false;return true;};
+/* видимая сетка; неподвижные детали инвентаря нарисованы объединёнными сетками (scene.mjs) — проверяются сами детали,
+   а объединение сверяется с ними отдельно (checkMerged) */
+const visible=o=>{if(o.userData.merged)return false;for(let p=o;p;p=p.parent)if(!p.visible&&!p.userData.drawnMerged)return false;return true;};
 const vector=p=>new THREE.Vector3(...p);
 const normalWorld=p=>vector([p[0],-p[1],p[2]]).normalize();
 function checkRegions(view,data){
@@ -63,6 +65,22 @@ function checkDrawnMannequin(view,data,failures){
   if(dist(grip,world(R['grip'+side]))>1e-4)failures.push('drawn-grip:'+side);
  }
 }
+/* Объединённые сетки неподвижных деталей: в них ровно видимые сетки неподвижных деталей, вершины — на местах деталей */
+export function checkMerged(view,data,failures=[]){
+ const merged=view.staticMeshes?.()||[],inside=new Set(merged.flatMap(m=>m.userData.sources)),p=new THREE.Vector3(),q=new THREE.Vector3();
+ for(const m of merged){
+  const attr=m.geometry.attributes.position;let at=0;
+  for(const o of m.userData.sources){
+   const own=o.geometry.attributes.position;
+   for(const j of [0,own.count>>1,own.count-1])if(at+j>=attr.count||p.fromBufferAttribute(own,j).applyMatrix4(o.matrixWorld).distanceTo(q.fromBufferAttribute(attr,at+j))>1e-5){failures.push('drawn-merged:'+m.name);break;}
+   if(o.material!==m.material)failures.push('drawn-merged-material:'+m.name);
+   at+=own.count;
+  }
+  if(at!==attr.count)failures.push('drawn-merged-count:'+m.name);
+ }
+ view.propNodes().forEach((n,i)=>{if(isStaticProp(data.props[i]))n.group.traverse(o=>{if(o.isMesh&&o.visible&&!inside.has(o))failures.push('drawn-merged-missing:'+i);});});
+ return failures;
+}
 export function checkDrawnScene(view,data,{cameras=true}={}){
  const failures=[],R=data.pose;
  if(view.mannequin)checkDrawnMannequin(view,data,failures);
@@ -82,6 +100,7 @@ export function checkDrawnScene(view,data,{cameras=true}={}){
   const s=data.props[i],expected=propCenter(s),obj=s.kind==='kettlebell'&&s.handleAxis?node.group:node.group.children[0];
   const p=obj.getWorldPosition(new THREE.Vector3()).toArray();if(dist(p,world(expected))>1e-5)failures.push('drawn-prop:'+i+':'+s.kind);
  }
+ checkMerged(view,data,failures);
  if(cameras)for(const [id,c]of Object.entries(view.cameras))view.scene.traverse(o=>{
   if(!o.isMesh||o.name==='floor'||!visible(o))return;if(!o.geometry.boundingBox)o.geometry.computeBoundingBox();const b=o.geometry.boundingBox;
   for(const x of [b.min.x,b.max.x])for(const y of [b.min.y,b.max.y])for(const z of [b.min.z,b.max.z]){
