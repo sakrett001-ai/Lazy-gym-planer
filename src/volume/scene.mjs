@@ -49,6 +49,11 @@ function ghostMaterial(){
    gl_FragColor=vec4(outgoingLight,${f(GHOST.core)}+${f(GHOST.rim-GHOST.core)}*ghostRim);`);
  };
  m.name='ghost-skin';m.customProgramCacheKey=()=>'ghost-skin';
+ /* один проход на обе стороны: three.js рисует прозрачный двусторонний материал в два прохода (изнанка, потом лицо) и
+    перед каждым помечает его needsUpdate — на каждой из ~80 сеток кожи дважды за кадр поиск программы шейдера (≈⅓
+    отрисовки кадра «Анатомии») и вдвое больше вызовов. Здесь порядок сторон не нужен: виден только ближний слой кожи
+    (предпроход глубины ghostDepth), а прозрачность считается по модулю косинуса — изнанка выглядит так же */
+ m.forceSinglePass=true;
  return m;
 }
 /* радиальная растяжка пола без DOM: светлое пятно под сценой, к краям — в цвет фона */
@@ -168,7 +173,7 @@ export function createCatalogScene(first,{coarse=false}={}){
     суставов) просвечивают друг через друга пятнами. Два прохода: невидимый двойник каждой сетки пишет глубину кожи
     уже после костей и мышц (прозрачные рисуются после непрозрачных), затем цветной проход рисует только этот слой.
     Кисти пересобираются при смене хвата — двойники заводятся заново в каждом кадре. */
- const ghostSkin=ghostMaterial(),ghostDepth=new THREE.MeshBasicMaterial({name:'ghost-depth',colorWrite:false,depthWrite:true,transparent:true,side:THREE.DoubleSide});
+ const ghostSkin=ghostMaterial(),ghostDepth=new THREE.MeshBasicMaterial({name:'ghost-depth',colorWrite:false,depthWrite:true,transparent:true,side:THREE.DoubleSide,forceSinglePass:true});
  function ghost(on){
   ghosted=on;
   const list=[];mannequin.group.traverse(o=>{if(o.isMesh&&!o.userData.ghostTwin)list.push(o);});
@@ -268,8 +273,9 @@ export function createCatalogScene(first,{coarse=false}={}){
   lastData=data;options={...options,...nextOptions};const R=data.pose;
   if(mannequin)mannequin.apply(data,options);
   const bonesOn=!!(mannequin&&options.skeleton&&data.body),musclesOn=!!(mannequin&&options.anatomy&&data.body),skeletonOn=bonesOn||musclesOn;
-  const frames=musclesOn?globalThis.Skeleton.frames(R,data.body,options.anatomy.skeleton.bones):null;
-  if(bonesOn)skeletonLayer.update(options.skeleton,R,data.body,frames&&options.anatomy.skeleton===options.skeleton?frames:undefined);else skeletonLayer.hide();
+  /* матрицы костей кадра: готовые (data.boneFrames — память кадров карточек плана, main.mjs) или посчитанные здесь */
+  const frames=musclesOn?data.boneFrames||globalThis.Skeleton.frames(R,data.body,options.anatomy.skeleton.bones):null;
+  if(bonesOn)skeletonLayer.update(options.skeleton,R,data.body,frames&&options.anatomy.skeleton===options.skeleton?frames:data.boneFrames||undefined);else skeletonLayer.hide();
   if(musclesOn)muscleLayer.update(options.anatomy,frames,options.color,{values:data.values,sideValues:data.sideValues,regions:data.regions,phases:options.muscles!==false,selected:options.selected});else muscleLayer.hide();
   if(mannequin&&(skeletonOn||ghosted))ghost(skeletonOn);
   if(skeletonOn||!data.surfaces.length)for(const o of regionMeshes.values())o.visible=false;
@@ -316,17 +322,19 @@ export function createCatalogScene(first,{coarse=false}={}){
   const c=new THREE.OrthographicCamera(-1,1,1,-1,.01,30);c.position.fromArray(eye.map(v=>v*8));c.lookAt(0,0,0);c.updateMatrixWorld(true);return[id,c];
  }));
  const bounds=Object.fromEntries(Object.keys(cameras).map(id=>[id,{minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity}]));
- /* рамка — по самим деталям (и неподвижным: их сетки в скрытой группе), а не по объединённой сетке: кадр тот же, что до объединения */
- function includeBounds(){
-  scene.traverse(o=>{if(!o.isMesh||!o.visible||o===floor||o.name==='dot-ring'||o.parent===dots||o.parent?.name==='joint-dots'||o.parent?.parent===stressGroup||o.userData.merged)return;if(!o.geometry.boundingBox)o.geometry.computeBoundingBox();const b=o.geometry.boundingBox;
+ /* рамка — по самим деталям (и неподвижным: их сетки в скрытой группе), а не по объединённой сетке: кадр тот же, что до объединения.
+    only='body' — только тело манекена (карточки плана в виде «Анатомия»: человек крупнее, тренажёр может уйти за край) */
+ function includeBounds(only){
+  const root=only==='body'&&mannequin?mannequin.group:scene;
+  root.traverse(o=>{if(!o.isMesh||!o.visible||o===floor||o.name==='dot-ring'||o.parent===dots||o.parent?.name==='joint-dots'||o.parent?.parent===stressGroup||o.userData.merged||o.userData.ghostTwin)return;if(!o.geometry.boundingBox)o.geometry.computeBoundingBox();const b=o.geometry.boundingBox;
    for(const x of [b.min.x,b.max.x])for(const y of [b.min.y,b.max.y])for(const z of [b.min.z,b.max.z]){
     const p=vec([x,y,z]).applyMatrix4(o.matrixWorld);for(const[id,c]of Object.entries(cameras)){const q=p.clone().applyMatrix4(c.matrixWorldInverse),e=bounds[id];e.minX=Math.min(e.minX,q.x);e.maxX=Math.max(e.maxX,q.x);e.minY=Math.min(e.minY,q.y);e.maxY=Math.max(e.maxY,q.y);}
    }
   });
  }
- function resize(width,height){
+ function resize(width,height,pad=1.13){
   for(const[id,c]of Object.entries(cameras)){
-   const b=bounds[id],cx=(b.minX+b.maxX)/2,cy=(b.minY+b.maxY)/2;let w=(b.maxX-b.minX)*1.13,h=(b.maxY-b.minY)*1.13;
+   const b=bounds[id],cx=(b.minX+b.maxX)/2,cy=(b.minY+b.maxY)/2;let w=(b.maxX-b.minX)*pad,h=(b.maxY-b.minY)*pad;
    const ratio=width/height;if(w/h<ratio)w=h*ratio;else h=w/ratio;c.left=cx-w/2;c.right=cx+w/2;c.top=cy+h/2;c.bottom=cy-h/2;c.updateProjectionMatrix();
   }
  }

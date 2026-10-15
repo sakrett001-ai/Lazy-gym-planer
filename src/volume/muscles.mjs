@@ -128,7 +128,9 @@ export function createMuscleLayer(parent){
    /* каталог (см, Y вниз, пол 186) → сцена (м, Y вверх): отражение по Y — у нормалей меняется знак y */
    for(let v=a;v<z;v+=3){pos[v]/=100;pos[v+1]=(186-pos[v+1])/100;pos[v+2]/=100;nor[v+1]=-nor[v+1];}
   });
-  LAST.muscles=k;LAST.only=only;LAST.frames=Float32Array.from(frames);LAST.pos=Float32Array.from(pos);LAST.nor=Float32Array.from(nor);
+  /* копии — в те же массивы, если размер прежний (≈1 МБ на кадр без новых выделений и сборки мусора) */
+  const keep=(a,b)=>a&&a.length===b.length?(a.set(b),a):Float32Array.from(b);
+  LAST.muscles=k;LAST.only=only;LAST.frames=keep(LAST.frames,frames);LAST.pos=keep(LAST.pos,pos);LAST.nor=keep(LAST.nor,nor);
   finish();
  }
  function finish(){geo.attributes.position.needsUpdate=true;geo.attributes.normal.needsUpdate=true;geo.boundingSphere=null;geo.boundingBox=null;group.visible=true;}

@@ -16,6 +16,8 @@ const check = (ok, what) => { if (!ok) fails.push(what); };
 const fakeFigures = page => page.evaluate(() => {
   const fake = () => { const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('class', 'fig'); return { svg, camera: 'side', at() {}, setTrace() {}, setVectors() {}, setJoints() {}, setStress() {}, setMuscles() {}, setRegion() {}, dispose() {} }; };
   window.buildFigure = fake; window.createMotionFigure = fake;
+  /* карточки «Анатомии» (общий рендерер карточек) — тоже без настоящей графики; их проверка — отдельным блоком ниже */
+  if (window.GymVolume) window.GymVolume.cards = () => null;
 });
 async function open(width, height = 800) {
   const page = await browser.newPage({ viewport: { width, height } });
@@ -483,9 +485,84 @@ await page.close();
   await jd.close();
 }
 
+/* «Анатомия» вне разбора (этап 2) — настоящая объёмная графика (программный WebGL): карточки плана рисует общий рендерер
+   (у карточки нет своего WebGL), анимируется одна, у остальных — один неподвижный кадр; «↗» открывает разбор; выбор
+   «Манекен» в разборе возвращает SVG-карточки, «Анатомия» — кадры; экран тренировки — в «Анатомии» с переключателем;
+   подделанные медленные кадры — откат на манекен с подписью, выбор человека не сбрасывается */
+{
+  const a = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  a.on('pageerror', e => errors.push(String(e)));
+  await a.goto('file://' + file); await a.waitForTimeout(400);
+  await a.evaluate(() => {
+    Object.assign(S, { view: 'plan', fold: { ...S.fold, setup: true } }); LOG.data = {}; motionPrefs.view = 'anatomy';
+    S.mode = 'custom'; S.customs = [{ id: 'ua', name: 'Анатомия', items: ['squat', 'pushup', 'dbcurl', 'latpull'].map(id => ({ id })) }]; S.custom = 'ua'; ensureCustoms(S); openCustom('ua'); regen();
+    document.querySelector('.card .illus').scrollIntoView({ block: 'start' }); window.scrollBy(0, -40);
+  });
+  const anat = () => a.evaluate(() => figs.map(F => !!F.av?.on));
+  const ok = await a.waitForFunction(() => figs.filter(F => F.vis && F.av?.on).length >= 2, null, { timeout: 90000 }).then(() => true, () => false);
+  check(ok, 'карточки в «Анатомии»: кадры костей и мышц появляются у карточек рядом с экраном');
+  const pic = await a.evaluate(() => {
+    const F = figs.find(F => F.av?.on), c = F.av.canvas, g = c.getContext('2d'), d = g.getImageData(0, 0, c.width, c.height).data;
+    let lo = 255, hi = 0, warm = 0; for (let i = 0; i < d.length; i += 16) { const v = d[i] + d[i + 1] + d[i + 2]; lo = Math.min(lo, v); hi = Math.max(hi, v); if (d[i] > d[i + 2] + 60 && d[i] > 120) warm++; }
+    return { w: c.width, h: c.height, svgHidden: getComputedStyle(F.f.svg).visibility === 'hidden', range: hi - lo, warm, contexts: GymVolume.cards().stats() };
+  });
+  check(pic.w > 100 && pic.w === pic.h && pic.svgHidden && pic.range > 200 && pic.warm > 5, `в карточке — картинка анатомии (холст ${pic.w}×${pic.h}, мышцы цветом), SVG-манекен под ней скрыт`);
+  check(pic.contexts.context && pic.contexts.scenes <= 3, 'у карточек один общий рендерер, сцен — не больше трёх');
+  const motion = await a.evaluate(async () => {
+    const act = figs.find(F => F.active && !F.paused), rest = figs.filter(F => F !== act && F.av?.on), calls = new Map();
+    for (const F of rest) { const p = F.av.handle.paint; F.av.handle.paint = (...x) => { calls.set(F, (calls.get(F) || 0) + 1); return p.apply(F.av.handle, x); }; }
+    const s0 = act?.av?.still; await new Promise(r => setTimeout(r, 1500));
+    return { act: !!act, moved: !!act && act.av.still !== s0, restPaints: [...calls.values()].reduce((x, y) => x + y, 0), rest: rest.length };
+  });
+  check(motion.act && motion.moved, 'анимируемая карточка двигается в «Анатомии»');
+  check(motion.rest > 0 && motion.restPaints === 0, `неподвижные карточки — один кадр, без перерисовки (${motion.restPaints})`);
+  await a.click('.card .illus.anatomy-on'); await a.waitForTimeout(200);
+  check(await a.evaluate(() => $('#motion-view').open && !!detailMotion && detailMotion.it.ex.id === figs.find(F => F.btn === document.querySelector('.card .illus.anatomy-on'))?.it.ex.id), '«↗» в карточке с анатомией открывает разбор этого упражнения');
+  await a.evaluate(() => { $('[data-mv-figure="mannequin"]').disabled = false; $('[data-mv-figure="mannequin"]').click(); }); await a.click('#mv-close'); await a.waitForTimeout(200);
+  check(await a.evaluate(() => motionPrefs.view === 'mannequin' && cardAnatomy.view === 'mannequin' && figs.every(F => !F.av?.on && (!F.f || getComputedStyle(F.f.svg).visibility !== 'hidden'))), '«Манекен» в разборе — карточки снова SVG-манекен');
+  await a.evaluate(() => openMotion(0)); await a.waitForTimeout(100);
+  await a.evaluate(() => $('[data-mv-figure="anatomy"]').click()); await a.click('#mv-close');
+  check(await a.waitForFunction(() => cardAnatomy.view === 'anatomy' && figs.filter(F => F.vis && F.av?.on).length >= 2, null, { timeout: 60000 }).then(() => true, () => false), 'и обратно «Анатомия» — кадры костей и мышц возвращаются');
+  /* экран тренировки */
+  await a.evaluate(() => startWorkout('squat'));
+  const wv = await a.waitForFunction(() => document.querySelector('#wv-stage .volume-figure')?.dataset.anatomy === 'on', null, { timeout: 60000 }).then(() => true, () => false);
+  const wstate = await a.evaluate(() => ({ pressed: [...document.querySelectorAll('[data-wv-figure]')].filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.dataset.wvFigure).join(), note: $('#wv-figure-note').hidden, renderer: document.querySelector('#wv-stage .volume-figure')?.dataset.renderer }));
+  check(wv && wstate.pressed === 'anatomy' && wstate.note && wstate.renderer === 'webgl', 'экран тренировки — в «Анатомии»: кости и мышцы, выбор виден, подписи нет');
+  await a.click('[data-wv-figure="mannequin"]');
+  check(await a.evaluate(() => document.querySelector('#wv-stage .volume-figure').dataset.anatomy === 'off' && motionPrefs.view === 'mannequin' && JSON.parse(localStorage.getItem('podhod.motion.v2')).view === 'mannequin'), 'тренировка: «Манекен» убирает кости и мышцы, выбор общий с разбором');
+  await a.click('[data-wv-figure="anatomy"]');
+  check(await a.evaluate(() => document.querySelector('#wv-stage .volume-figure').dataset.anatomy === 'on' && motionPrefs.view === 'anatomy'), 'тренировка: снова «Анатомия»');
+  /* подделанные медленные кадры (120 мс — дольше бюджета 10 кадров в секунду): откат на манекен с подписью */
+  const slow = await a.evaluate(() => { for (let i = 0; i < 80; i++) workoutPaceSample(120); return { view: workoutFigure.view, anat: document.querySelector('#wv-stage .volume-figure').dataset.anatomy, note: $('#wv-figure-note').hidden ? '' : $('#wv-figure-note').textContent, pref: motionPrefs.view, pressed: $('[data-wv-figure="mannequin"]').getAttribute('aria-pressed') }; });
+  check(slow.view === 'mannequin' && slow.anat === 'off' && /не успевает — показан манекен/.test(slow.note) && slow.pref === 'anatomy' && slow.pressed === 'true', `тренировка: медленные кадры — манекен с подписью «${slow.note}», выбор «Анатомия» сохранён`);
+  await a.evaluate(() => closeWorkout());
+  await a.evaluate(() => startWorkout('squat'));
+  check(await a.waitForFunction(() => document.querySelector('#wv-stage .volume-figure')?.dataset.anatomy === 'on', null, { timeout: 60000 }).then(() => true, () => false), 'следующее открытие тренировки — снова попытка «Анатомии»');
+  await a.evaluate(() => closeWorkout());
+  const cslow = await a.evaluate(() => { for (let i = 0; i < 80; i++) cardPaceSample(120); const t = figs[0].btn.closest('.motion-tile').querySelector('.figure-tile-note'); return { view: cardAnatomy.view, on: figs.some(F => F.av?.on), note: t.hidden ? '' : t.textContent, pref: motionPrefs.view }; });
+  check(cslow.view === 'mannequin' && !cslow.on && /не успевает — показан манекен/.test(cslow.note) && cslow.pref === 'anatomy', 'карточки: медленные кадры — SVG-манекен с подписью, выбор не сброшен');
+  check(await a.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'план с подписью отката (390 px) без прокрутки вбок');
+  await a.close();
+}
+/* без WebGL — как раньше: карточки SVG, в тренировке плоская схема, виды с костями недоступны */
+{
+  const n = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  n.on('pageerror', e => errors.push(String(e)));
+  await n.addInitScript(() => { delete window.WebGL2RenderingContext; });
+  await n.goto('file://' + file); await n.waitForTimeout(400);
+  await n.evaluate(() => { Object.assign(S, { view: 'plan', mode: 'single', groups: ['chest', 'back'], count: 4, seed: 3, fold: { ...S.fold, setup: true } }); LOG.data = {}; motionPrefs.view = 'anatomy'; regen(); document.querySelector('.card .illus').scrollIntoView({ block: 'center' }); });
+  await n.waitForTimeout(1500);
+  const r = await n.evaluate(() => ({ svg: figs.filter(F => F.vis).every(F => F.f && F.f.svg.tagName.toLowerCase() === 'svg' && getComputedStyle(F.f.svg).visibility !== 'hidden'), canvas: document.querySelectorAll('canvas.card-anatomy').length, view: cardAnatomy.view }));
+  check(r.svg && r.canvas === 0 && r.view === 'mannequin', 'без WebGL карточки — SVG-манекен, как раньше');
+  await n.evaluate(() => startWorkout()); await n.waitForTimeout(200);
+  check(await n.evaluate(() => document.querySelector('#wv-stage .volume-figure')?.dataset.renderer === 'svg' && $('[data-wv-figure="anatomy"]').disabled && $('[data-wv-figure="mannequin"]').getAttribute('aria-pressed') === 'true' && $('#wv-figure-note').hidden), 'без WebGL тренировка — плоская схема, «Анатомия» недоступна');
+  await n.close();
+}
+
 /* скрытая панель замера скорости (?perf, 19-perf-panel.js): без флага панели нет, а крючки только читают флаг
-   (globalThis.GymPerf); с флагом — плашка на телефоне, живые цифры карточек и объёма, панель переезжает в открытое
-   окно; «Замерить» проходит все 8 шагов (короткие длительности, фигуры — заглушки) и не меняет журнал, настройки,
+   (globalThis.GymPerf); с флагом — плашка на телефоне, живые цифры карточек (в «Анатомии» — кадр карточки, копия,
+   ступень скорости) и объёма, панель переезжает в открытое окно; «Замерить» проходит все 10 шагов (карточка и
+   тренировка — в «Анатомии» и «Манекене»; короткие длительности, фигуры — заглушки) и не меняет журнал, настройки,
    планы и вид фигуры; «Остановить» прерывает и всё возвращает; «Скопировать результат» — текст или поле для ручного
    копирования; ?perf=0 выключает */
 {
@@ -506,9 +583,15 @@ await page.close();
     '?perf: панель включена и запомнена, плашка целиком на экране телефона');
   check(await p.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), '?perf: страница без прокрутки вбок');
   await p.evaluate(() => document.querySelector('.card').scrollIntoView({ block: 'center' }));
-  await p.waitForFunction(() => /кадр \d/.test(document.querySelector('[data-perf-k="screen"]').textContent) && /заново \d/.test(document.querySelector('[data-perf-k="cards"]').textContent), null, { timeout: 15000 }).catch(() => {});
-  const live = await p.evaluate(() => ({ pill: document.querySelector('[data-perf-pill]').textContent, screen: document.querySelector('[data-perf-k="screen"]').textContent, cards: document.querySelector('[data-perf-k="cards"]').textContent }));
-  check(/^\d/.test(live.pill) && /^\d+(,\d)? к\/с · кадр \d/.test(live.screen) && /заново \d/.test(live.cards), `живые цифры: кадры и карточки (${live.screen} | ${live.cards})`);
+  /* карточки по умолчанию — в «Анатомии»: живые цифры — кадр карточки общего рендерера, копия в её холст, ступень скорости */
+  await p.waitForFunction(() => /кадр \d/.test(document.querySelector('[data-perf-k="screen"]').textContent) && /анатомия \d/.test(document.querySelector('[data-perf-k="cards"]').textContent), null, { timeout: 30000 }).catch(() => {});
+  const live = await p.evaluate(() => ({ pill: document.querySelector('[data-perf-pill]').textContent, screen: document.querySelector('[data-perf-k="screen"]').textContent, cards: document.querySelector('[data-perf-k="cards"]').textContent, view: document.querySelector('[data-perf-k="view"]').textContent }));
+  check(/^\d/.test(live.pill) && /^\d+(,\d)? к\/с · кадр \d/.test(live.screen) && /анатомия \d.* · копия \d/.test(live.cards) && /^План — Анатомия; ступень (30|15|10) к\/с, медиана /.test(live.view),
+    `живые цифры: кадры, карточка в «Анатомии» и её ступень (${live.screen} | ${live.cards} | ${live.view})`);
+  /* «Манекен» — снова SVG-карточки: из памяти и заново */
+  await p.evaluate(() => { motionPrefs.view = 'mannequin'; applyCardsView(); });
+  const svgLive = await p.waitForFunction(() => /заново \d/.test(document.querySelector('[data-perf-k="cards"]').textContent) && /^План — рисунок SVG$/.test(document.querySelector('[data-perf-k="view"]').textContent), null, { timeout: 15000 }).then(() => true, () => false);
+  check(svgLive, 'живые цифры в «Манекене»: SVG-карточки, без ступени');
   await p.evaluate(() => { motionPrefs.view = 'mannequin'; openMotionItem(previewItem('legpress')); detailMotion.paused = false; });
   const volLive = await p.waitForFunction(() => /поза \d/.test(document.querySelector('[data-perf-k="volume"]')?.textContent || ''), null, { timeout: 15000 }).then(() => true, () => false);
   /* программная графика стенда отстаёт от кадров — фигуру сразу на паузу */
@@ -536,27 +619,30 @@ await page.close();
   });
   const before = await snap();
   await p.click('[data-perf="run"]'); await p.waitForTimeout(400);
-  check(/^Идёт замер… не трогайте экран, шаг 1 из 8$/.test(await p.evaluate(() => document.querySelector('[data-perf-runtext]').textContent)), '«Замерить»: надпись «Идёт замер… не трогайте экран, шаг 1 из 8»');
+  check(/^Идёт замер… не трогайте экран, шаг 1 из 10$/.test(await p.evaluate(() => document.querySelector('[data-perf-runtext]').textContent)), '«Замерить»: надпись «Идёт замер… не трогайте экран, шаг 1 из 10»');
   await p.click('[data-perf="stop"]');
   await p.waitForFunction(() => !GymPerf.run && GymPerf.result, null, { timeout: 5000 });
   check(await p.evaluate(() => GymPerf.result.aborted && /Замер остановлен/.test(document.querySelector('[data-perf-result]').textContent)) && await snap() === before, '«Остановить» прерывает замер и возвращает всё как было');
   /* экран не гаснет на время замера: блокировка берётся и отпускается (тренировка берёт свою — тоже отпускает) */
   await p.evaluate(() => { window.__wk = { req: 0, rel: 0 }; Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: { request: async () => { __wk.req++; return { release: async () => { __wk.rel++; } }; } } }); });
-  const run = await p.evaluate(() => perfRun({ plan: 700, step: 500, warm: 150 }).then(r => ({ kinds: r.steps.map(s => s.kind + (s.id ? ':' + s.id : '')), bad: r.steps.filter(s => s.skip || s.error).map(s => s.label + ' ' + (s.skip || s.error)), text: perfReportText(r) })));
+  const run = await p.evaluate(() => perfRun({ plan: 700, step: 500, warm: 150 }).then(r => ({ kinds: r.steps.map(s => s.kind + (s.id ? ':' + s.id : '')), labels: r.steps.map(s => s.label), bad: r.steps.filter(s => s.skip || s.error).map(s => s.label + ' ' + (s.skip || s.error)), text: perfReportText(r) })));
   await p.waitForTimeout(50);
   check(await p.evaluate(() => __wk.req >= 2 && __wk.rel === __wk.req), 'на время замера экран не гаснет: блокировка экрана взята и отпущена');
-  check(run.kinds.length === 8 && /^plan:\w+$/.test(run.kinds[0]) && /^workout:\w+$/.test(run.kinds[7]) && !run.bad.length
-    && run.kinds.slice(1, 7).join() === 'detail:latpulluh,detail:latpulluh,detail:legpress,detail:legpress,detail:squat,detail:squat',
-    `«Замерить»: все 8 шагов — карточка, три разбора в двух видах, тренировка (${run.kinds.join(', ')}${run.bad.length ? '; ' + run.bad.join('; ') : ''})`);
+  check(run.kinds.length === 10 && /^plan:\w+$/.test(run.kinds[0]) && run.kinds[1] === run.kinds[0] && /^workout:\w+$/.test(run.kinds[8]) && run.kinds[9] === run.kinds[8] && !run.bad.length
+    && run.kinds.slice(2, 8).join() === 'detail:latpulluh,detail:latpulluh,detail:legpress,detail:legpress,detail:squat,detail:squat',
+    `«Замерить»: все 10 шагов — карточка и тренировка в двух видах, три разбора в двух видах (${run.kinds.join(', ')}${run.bad.length ? '; ' + run.bad.join('; ') : ''})`);
+  /* фигуры — заглушки (объёма нет): шаги «Анатомии» честно подписаны манекеном без объёмной графики */
+  check(/ — Манекен \(объёмная графика недоступна\)$/.test(run.labels[0]) && / — Манекен$/.test(run.labels[1]) && /^Тренировка: .* \(объёмная графика недоступна\)$/.test(run.labels[8]) && /^Тренировка: /.test(run.labels[9]),
+    `подписи шагов — по тому, что показано (${run.labels[0]} | ${run.labels[1]} | ${run.labels[8]} | ${run.labels[9]})`);
   const after = await snap();
   check(after === before, 'после замера журнал, настройки, планы, сохранённая тренировка, вид фигуры и прокрутка — как были');
-  check(await p.evaluate(() => document.querySelectorAll('#perf-panel .perf-table tbody tr').length === 8 && !document.querySelector('[data-perf-run]').offsetHeight), 'итог: таблица из 8 шагов');
+  check(await p.evaluate(() => document.querySelectorAll('#perf-panel .perf-table tbody tr').length === 10 && !document.querySelector('[data-perf-run]').offsetHeight), 'итог: таблица из 10 шагов');
   /* копирование: буфер обмена; не вышло — поле с выделенным текстом */
   await p.evaluate(() => { window.__copied = null; Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: t => { window.__copied = t; return Promise.resolve(); } } }); });
   await p.click('[data-perf="copy"]'); await p.waitForTimeout(100);
   const copied = await p.evaluate(() => ({ text: window.__copied, msg: document.querySelector('[data-perf-msg]').textContent }));
-  check(copied.text && /^Lazy Gym Planner .* — замер скорости, /.test(copied.text) && /\nУстройство: .*\nВидеокарта: /.test(copied.text) && (copied.text.match(/^\d\. /gm) || []).length === 8 && /Скопировано/.test(copied.msg),
-    '«Скопировать результат»: устройство и 8 шагов в буфере обмена');
+  check(copied.text && /^Lazy Gym Planner .* — замер скорости, /.test(copied.text) && /\nУстройство: .*\nВидеокарта: /.test(copied.text) && (copied.text.match(/^\d+\. /gm) || []).length === 10 && /Скопировано/.test(copied.msg),
+    '«Скопировать результат»: устройство и 10 шагов в буфере обмена');
   await p.evaluate(() => { navigator.clipboard.writeText = () => Promise.reject(new Error('нет доступа')); });
   await p.click('[data-perf="copy"]'); await p.waitForTimeout(100);
   check(await p.evaluate(() => { const ta = document.querySelector('[data-perf-msg] textarea'); return !!ta && ta.value === window.__copied && document.activeElement === ta && ta.selectionEnd - ta.selectionStart === ta.value.length; }),
@@ -577,4 +663,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа, виды фигуры «Анатомия», «Скелет» и «Манекен», первый экран и разбор на телефоне, карточка, журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования, панель замера скорости ?perf работают на телефоне и компьютере.');
+console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа, виды фигуры «Анатомия», «Скелет» и «Манекен», анатомия в карточках плана и на экране тренировки (откат на манекен, без WebGL — SVG), первый экран и разбор на телефоне, карточка, журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования, панель замера скорости ?perf работают на телефоне и компьютере.');

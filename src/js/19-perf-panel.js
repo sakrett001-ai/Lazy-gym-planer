@@ -5,23 +5,28 @@
    Крючки замера в чужих файлах — по одной-две строки, и выключенными стоят одну проверку globalThis.GymPerf:
    · 07-rigs-core.js, at() SVG-фигуры (карточки плана): расчёт кадра — из памяти кадров или заново — и запись в DOM;
    · src/volume/main.mjs, создание объёмной фигуры: GymPerf.volume() оборачивает вызовы этой фигуры — поза (данные
-     кадра: поза и поверхность тела), кожа (сетка кожи), кости (с рамками костей), мышцы, сцена, отрисовка (render).
+     кадра: поза и поверхность тела), кожа (сетка кожи), кости (с рамками костей), мышцы, сцена, отрисовка (render);
+   · src/volume/main.mjs, общий рендерер карточек «Анатомии» (GymVolume.cards): GymPerf.volume({card:true}) при сборке
+     сцены упражнения — те же обёртки, GymPerf.card() — весь кадр карточки и копия в её холст. Ступень скорости и откат
+     на манекен панель читает сама: cardAnatomy (12-motion-player.js), workoutFigure (14-workout-mode.js).
    Кадры считает свой requestAnimationFrame; «кадр» — от метки кадра до первой задачи после отрисовки страницы
    (MessageChannel): оценка всего времени главного потока на кадр, вместе со стилями и отрисовкой SVG браузером.
-   «Замерить» — сценарий ≈75 с без участия человека: карточка плана, разбор трёх упражнений в видах «Анатомия» и
-   «Манекен», экран тренировки. Журнал, настройки и планы не меняются: выбор вида, ракурса и раздела возвращается. */
+   «Замерить» — сценарий ≈2 мин без участия человека: карточка плана, разбор трёх упражнений и экран тренировки — каждый
+   в видах «Анатомия» и «Манекен». Журнал, настройки и планы не меняются: выбор вида, ракурса и раздела возвращается. */
 const PERF_KEY = 'podhod.perf', PERF_LIVE_MS = 2000;
 const PERF_T = {
   title:'Замер скорости', expand:'Развернуть панель замера скорости', collapse:'Свернуть панель', fps:'к/с',
   screen:'Экран', cards:'Карточки', volume:'Объём', frame:'кадр', fromMemory:'из памяти',
   anew:'заново', pose:'поза', skin:'кожа', bones:'кости', muscles:'мышцы', scene:'сцена', render:'отрисовка', total:'всего',
-  figure:'фигура', ms:'мс', low:'облегчённое', noFrames:'нет кадров',
+  figure:'фигура', ms:'мс', low:'облегчённое', noFrames:'нет кадров', anatCard:'анатомия', copyPart:'копия',
+  pace:'ступень {fps} к/с, медиана {ms} мс', paceSlow:'откат на манекен (медиана {ms} мс)', paceTag:'откат',
+  slowNever:'Откат «Анатомии» на манекен не включался.', slowAt:'Откат «Анатомии» на манекен включился на шаге {i}.',
   anatomy:'Анатомия', skeleton:'Скелет', mannequin:'Манекен', svg:'рисунок SVG',
   plan:'План', detail:'Разбор', workout:'Тренировка', gallery:'Атлас движений', card:'карточка',
   liveNote:'Медиана / 95 % за 2 с, мс на кадр. «Кадр» — весь кадр с отрисовкой страницы (оценка).', view:'Вид',
   run:'Замерить', stop:'Остановить', off:'Выключить', device:'Устройство', copy:'Скопировать результат', share:'Поделиться',
   close:'Закрыть итог', step:'Шаг', frameCol:'Кадр', fig:'Фигура',
-  running:'Идёт замер… не трогайте экран, шаг {i} из {n}', runHint:'Около полутора минут. Экран не трогайте и не блокируйте.',
+  running:'Идёт замер… не трогайте экран, шаг {i} из {n}', runHint:'Около двух минут. Экран не трогайте и не блокируйте.',
   stopped:'Замер остановлен — показаны готовые шаги.', closeWorkout:'Сначала закройте экран тренировки, потом нажмите «Замерить».',
   copied:'Скопировано — вставьте в сообщение.', copyFail:'Скопировать автоматически не удалось. Выделите текст и скопируйте:',
   resultNote:'к/с — кадров в секунду на экране, под ними — кадров фигуры. Пары чисел — медиана / 95-й процентиль, мс на кадр. Разбор по частям — в тексте для копирования.',
@@ -29,7 +34,7 @@ const PERF_T = {
   noVolume:'объёмная графика недоступна', hidden:'страница уходила в фон — шаг неточный', skipped:'пропущен', error:'ошибка',
   head:'замер скорости', build:'сборка', memory:'память {n} ГБ', screenSize:'экран', windowSize:'окно',
   gpu:'Видеокарта', webgl2:'WebGL2 есть', noWebgl2:'WebGL2 нет', reduced:'уменьшение движения включено',
-  legend:'Пары чисел — медиана/95-й процентиль, мс главного потока на кадр. «Кадр» — весь кадр вместе с отрисовкой страницы (оценка); поза — расчёт позы и поверхности тела, кожа — запись её сетки, кости — с рамками костей.',
+  legend:'Пары чисел — медиана/95-й процентиль, мс главного потока на кадр. «Кадр» — весь кадр вместе с отрисовкой страницы (оценка); поза — расчёт позы и поверхности тела, кожа — запись её сетки, кости — с рамками костей; анатомия — весь кадр карточки в «Анатомии», копия — перенос кадра в её холст; ступень — частота костей и мышц (30, 15, 10 кадров в секунду), медиана — по которой она выбрана.',
   open:'открытие {n} мс', wait:'данные ещё {n} мс', lowAt:'Облегчённый режим объёма включился на шаге {i}.',
   lowBefore:'Облегчённый режим объёма был включён ещё до замера.', lowNever:'Облегчённый режим объёма не включался.',
   qNormal:'объём обычный', qLow:'объём облегчённый', qSwitch:'объём перешёл в облегчённый режим',
@@ -48,20 +53,21 @@ function perfStat(list) { const v = (list || []).filter(Number.isFinite); return
 function perfFps(count, ms) { return ms > 0 ? count * 1000 / ms : null; }
 /* Кадр (запись цикла панели): t — метка rAF, cost — весь кадр главного потока, b — замеры крючков за кадр, мс:
    svgHit / svgMiss — расчёт кадра SVG из памяти / заново (nHit, nMiss — сколько фигур), svgDom — запись в DOM;
-   pose, scene (с кожей skin, костями bones и мышцами muscles внутри), render — объём. */
-const PERF_PARTS = ['svgHit', 'svgMiss', 'svgDom', 'card', 'pose', 'skin', 'bones', 'muscles', 'sceneRest', 'render', 'volume'];
+   pose, scene (с кожей skin, костями bones и мышцами muscles внутри), render — объём; anat — весь кадр карточки в
+   «Анатомии» (nAnat — сколько карточек), copy — копия кадра в её холст (части кадра — те же pose, scene, render). */
+const PERF_PARTS = ['svgHit', 'svgMiss', 'svgDom', 'card', 'anat', 'copy', 'pose', 'skin', 'bones', 'muscles', 'sceneRest', 'render', 'volume'];
 function perfSummary(frames, ms) {
-  const per = Object.fromEntries(PERF_PARTS.map(k => [k, []])), counts = {svgHit:0, svgMiss:0};
+  const per = Object.fromEntries(PERF_PARTS.map(k => [k, []])), counts = {svgHit:0, svgMiss:0, anat:0};
   let fig = 0;
   for (const f of frames) {
     const b = f.b; if (!b) continue;
-    for (const k of ['svgHit', 'svgMiss', 'svgDom', 'pose', 'skin', 'bones', 'muscles', 'render']) if (b[k] != null) per[k].push(b[k]);
-    counts.svgHit += b.nHit || 0; counts.svgMiss += b.nMiss || 0;
+    for (const k of ['svgHit', 'svgMiss', 'svgDom', 'anat', 'copy', 'pose', 'skin', 'bones', 'muscles', 'render']) if (b[k] != null) per[k].push(b[k]);
+    counts.svgHit += b.nHit || 0; counts.svgMiss += b.nMiss || 0; counts.anat += b.nAnat || 0;
     if (b.scene != null) per.sceneRest.push(Math.max(0, b.scene - (b.skin || 0) - (b.bones || 0) - (b.muscles || 0)));
     const svg = (b.svgHit || 0) + (b.svgMiss || 0) + (b.svgDom || 0), vol = (b.pose || 0) + (b.scene || 0) + (b.render || 0);
     if (b.nHit || b.nMiss) per.card.push(svg);
     if (b.pose != null || b.scene != null || b.render != null) per.volume.push(vol);
-    if (b.nHit || b.nMiss || b.scene != null || b.render != null) fig++;
+    if (b.nHit || b.nMiss || b.nAnat || b.scene != null || b.render != null) fig++;
   }
   return {frames:frames.length, ms, fps:perfFps(frames.length, ms), figFps:fig ? perfFps(fig, ms) : null,
     cost:perfStat(frames.map(f => f.cost)), parts:Object.fromEntries(PERF_PARTS.map(k => [k, perfStat(per[k])])), counts};
@@ -137,13 +143,21 @@ function perfStepLine(s, i) {
     const n = k => `${u.counts[k]} ${plural(u.counts[k], 'кадр', 'кадра', 'кадров')}`;
     out.push(`SVG ${PERF_T.anew} ${perfPair(p.svgMiss)} (${n('svgMiss')}), ${PERF_T.fromMemory} ${perfPair(p.svgHit)} (${n('svgHit')}), DOM ${perfPair(p.svgDom)}`);
   }
+  if (p.anat) out.push(`${PERF_T.anatCard} ${perfPair(p.anat)} (${PERF_T.copyPart} ${perfPair(p.copy)})`);
   if (p.volume) {
     out.push([['pose', 'pose'], ['skin', 'skin'], ['bones', 'bones'], ['muscles', 'muscles'], ['sceneRest', 'scene'], ['render', 'render'], ['volume', 'total']]
       .filter(([k]) => p[k] || k === 'volume').map(([k, t]) => `${PERF_T[t]} ${perfPair(p[k])}`).join('; '));
-    out.push(s.q1 === 'low' ? (s.q0 === 'low' ? PERF_T.qLow : PERF_T.qSwitch) : PERF_T.qNormal);
+    /* «облегчённое» — свойство фигур разбора и тренировки; у карточек его нет */
+    if (s.kind !== 'plan') out.push(s.q1 === 'low' ? (s.q0 === 'low' ? PERF_T.qLow : PERF_T.qSwitch) : PERF_T.qNormal);
   }
+  if (s.pace) out.push(perfPaceText(s.pace));
   if (s.hidden) out.push(PERF_T.hidden);
   return `${head}: ${out.join('; ')}`;
+}
+/* ступень скорости «Анатомии» (карточки, тренировка): {fps, median, slow} → «ступень 30 к/с, медиана 9,8 мс» или откат */
+function perfPaceText(pc) {
+  const ms = perfNum(pc.median);
+  return pc.slow ? perfSay('paceSlow', {ms}) : perfSay('pace', {fps:pc.fps, ms});
 }
 function perfReportText(r) {
   const d = r.device, at = r.date instanceof Date ? r.date : new Date(r.date), two = v => String(v).padStart(2, '0');
@@ -152,6 +166,7 @@ function perfReportText(r) {
   r.steps.forEach((s, i) => lines.push(perfStepLine(s, i)));
   const lowAt = r.steps.findIndex(s => s.q1 === 'low');
   lines.push(lowAt < 0 ? PERF_T.lowNever : r.steps[lowAt].q0 === 'low' ? PERF_T.lowBefore : perfSay('lowAt', {i:lowAt + 1}));
+  if (r.steps.some(s => s.pace)) { const slowAt = r.steps.findIndex(s => s.pace?.slow); lines.push(slowAt < 0 ? PERF_T.slowNever : perfSay('slowAt', {i:slowAt + 1})); }
   if (r.aborted) lines.push(PERF_T.abortedLine);
   return lines.join('\n');
 }
@@ -184,12 +199,15 @@ function perfStart() {
   };
   /* src/volume/main.mjs: вызовы новой фигуры — через обёртки. Создание фигуры (рамка по 13 положениям, первые кадры)
      — не кадр анимации: до конца текущей задачи замеры не пишутся. */
-  P.volume = ({scene, renderer, options, low}) => {
-    P.low = low; P.creating = true; Promise.resolve().then(() => { P.creating = false; });
+  P.volume = ({scene, renderer, options, low, card}) => {
+    if (!card) P.low = low; P.creating = true; Promise.resolve().then(() => { P.creating = false; });
     perfWrap(options, 'data', 'pose'); perfWrap(scene, 'apply', 'scene'); perfWrap(scene.mannequin, 'apply', 'skin');
     perfWrap(scene.skeleton, 'update', 'bones'); perfWrap(scene.muscleLayer, 'update', 'muscles'); perfWrap(renderer, 'render', 'render');
     perfWrap(window.Skeleton, 'frames', 'bones');
   };
+  /* src/volume/main.mjs, общий рендерер карточек: весь кадр карточки в «Анатомии» и копия в её холст (кадр со сборкой
+     сцены — не кадр анимации: как у фигур, до конца задачи не пишется) */
+  P.card = (total, copy) => { if (P.creating) return; const b = B(); b.anat = (b.anat || 0) + total; b.copy = (b.copy || 0) + copy; b.nAnat = (b.nAnat || 0) + 1; };
   /* первая задача после отрисовки кадра: сообщение самому себе с номером кадра (без MessageChannel — таймер) */
   const pending = new Map(); let seq = 0;
   const done = id => { const f = pending.get(id); if (f) { pending.delete(id); f.cost = performance.now() - f.t; } };
@@ -241,10 +259,18 @@ function perfViewOf(root) {
   if (root.dataset?.renderer !== 'webgl') return 'svg';
   return root.dataset.anatomy === 'on' ? 'anatomy' : root.dataset.skeleton === 'on' ? 'skeleton' : 'mannequin';
 }
+/* ступень скорости «Анатомии» сейчас: карточки плана (cardAnatomy) или экран тренировки (workoutFigure); null — не в «Анатомии» */
+function perfPaceOf(place) {
+  const src = place === 'workout' ? (typeof workoutFigure !== 'undefined' ? workoutFigure : null) : place === 'plan' ? (typeof cardAnatomy !== 'undefined' ? cardAnatomy : null) : null;
+  if (!src || (src.view === 'mannequin' && !src.slow)) return null;
+  return {fps:src.pace.fps, median:src.pace.last ?? null, slow:!!src.slow};
+}
 function perfWhere() {
   if ($('#motion-view')?.open) return typeof detailMotion !== 'undefined' && detailMotion ? {place:'detail', view:perfViewOf($('#mv-stage')?.firstElementChild)} : {place:'gallery', view:'svg'};
-  if ($('#workout-view')?.open) return {place:'workout', view:perfViewOf($('#wv-stage')?.firstElementChild)};
-  return {place:'plan', view:'svg'};
+  if ($('#workout-view')?.open) return {place:'workout', view:perfViewOf($('#wv-stage')?.firstElementChild), pace:perfPaceOf('workout')};
+  /* карточки плана: «Анатомия» или «Скелет» — кадры общего рендерера, иначе (выбран манекен, откат, нет WebGL) — SVG */
+  const v = typeof cardAnatomy !== 'undefined' ? cardAnatomy.view : 'mannequin';
+  return {place:'plan', view:v === 'mannequin' ? 'svg' : v, pace:perfPaceOf('plan')};
 }
 
 /* ---------- панель ---------- */
@@ -309,9 +335,11 @@ function perfPaint(P) {
   if (!running && !P.result) {
     const k = key => el.querySelector(`[data-perf-k="${key}"]`);
     perfSet(k('screen'), `${perfNum(sum.fps)} ${PERF_T.fps} · ${PERF_T.frame} ${perfPair(sum.cost)} ${PERF_T.ms}`);
-    perfSet(k('cards'), p.card ? `${PERF_T.anew} ${perfPair(p.svgMiss)} · ${PERF_T.fromMemory} ${perfPair(p.svgHit)} · DOM ${perfPair(p.svgDom)} ${PERF_T.ms}` : PERF_T.noFrames);
+    perfSet(k('cards'), p.anat ? `${PERF_T.anatCard} ${perfPair(p.anat)} · ${PERF_T.copyPart} ${perfPair(p.copy)} ${PERF_T.ms}`
+      : p.card ? `${PERF_T.anew} ${perfPair(p.svgMiss)} · ${PERF_T.fromMemory} ${perfPair(p.svgHit)} · DOM ${perfPair(p.svgDom)} ${PERF_T.ms}` : PERF_T.noFrames);
     perfSet(k('volume'), p.volume ? `${PERF_T.total} ${perfPair(p.volume)} ${PERF_T.ms}, ${PERF_T.figure} ${perfNum(sum.figFps)} ${PERF_T.fps}\n${PERF_T.pose} ${perfPair(p.pose)} · ${PERF_T.skin} ${perfPair(p.skin)} · ${PERF_T.bones} ${perfPair(p.bones)} · ${PERF_T.muscles} ${perfPair(p.muscles)} · ${PERF_T.scene} ${perfPair(p.sceneRest)} · ${PERF_T.render} ${perfPair(p.render)}` : PERF_T.noFrames);
-    perfSet(k('view'), `${PERF_T[where.place]} — ${perfViewName(where.view)}` + (q ? `; ${q === 'low' ? PERF_T.qLow : PERF_T.qNormal}` : ''));
+    const qv = where.place === 'plan' ? null : q;
+    perfSet(k('view'), `${PERF_T[where.place]} — ${perfViewName(where.view)}` + (where.pace ? `; ${perfPaceText(where.pace)}` : '') + (qv ? `; ${qv === 'low' ? PERF_T.qLow : PERF_T.qNormal}` : ''));
   }
   const run = el.querySelector('[data-perf-run]'); run.hidden = !running;
   if (running) {
@@ -326,8 +354,8 @@ function perfPaint(P) {
 function perfResultHtml(r) {
   if (r.notice) return `<p class="perf-warn">${r.notice}</p><div class="perf-actions"><button type="button" data-perf="close">${PERF_T.close}</button></div>`;
   const rows = r.steps.map((s, i) => {
-    const u = s.sum, fig = u && (u.parts.volume || u.parts.card);
-    const tag = s.q1 === 'low' ? ` <span class="perf-low">${PERF_T.low}</span>` : '';
+    const u = s.sum, fig = u && (u.parts.anat || u.parts.volume || u.parts.card);
+    const tag = (s.q1 === 'low' && s.kind !== 'plan' ? ` <span class="perf-low">${PERF_T.low}</span>` : '') + (s.pace?.slow ? ` <span class="perf-low">${PERF_T.paceTag}</span>` : '');
     return s.skip || s.error ? `<tr><th scope="row">${i + 1}. ${esc(s.label)}</th><td colspan="3">${esc(s.skip || s.error)}</td></tr>`
       : `<tr><th scope="row">${i + 1}. ${esc(s.label)}${tag}</th><td>${perfNum(u.fps)}${u.figFps ? '<small>' + perfNum(u.figFps) + '</small>' : ''}</td><td>${perfPair(u.cost)}</td><td>${perfPair(fig)}</td></tr>`;
   }).join('');
@@ -346,11 +374,17 @@ function perfCopy(P) {
 }
 
 /* ---------- сценарий «Замерить» ----------
-   1 — план: активная карточка 10 с (память кадров сброшена: первый круг считается заново, дальше — из памяти);
-   2–7 — разбор latpulluh (верхний блок), legpress (тренажёр жима ногами), squat (штанга): по 8 с в «Анатомии»
-   и в «Манекене», ракурс по умолчанию, один вид; 8 — экран тренировки 8 с (если не идёт отдых). Перед каждым шагом
-   — 1 с прогрева (сборка шейдеров, рамка кадра). Длительности для проверок — perfRun({plan, step, warm}). */
-const PERF_STEPS = [{kind:'plan'}, ...['latpulluh', 'legpress', 'squat'].flatMap(id => [{kind:'detail', id, view:'anatomy'}, {kind:'detail', id, view:'mannequin'}]), {kind:'workout'}];
+   1–2 — план: активная карточка 10 с в «Анатомии» (общий рендерер карточек собирается заново, ступень — с 30 кадров,
+   прежний откат забыт; первый круг — матрицы костей считаются, дальше — из памяти) и в «Манекене» (SVG, память кадров
+   сброшена так же); 3–8 — разбор latpulluh (верхний блок), legpress (тренажёр жима ногами), squat (штанга): по 8 с
+   в «Анатомии» и в «Манекене», ракурс по умолчанию, один вид; 9–10 — экран тренировки 8 с в «Анатомии» и в «Манекене»
+   (если не идёт отдых). Перед каждым шагом — 1 с прогрева (сборка шейдеров, рамка кадра). У шагов «Анатомии» карточек
+   и тренировки в итоге — ступень (30, 15, 10 кадров в секунду или откат на манекен) и медиана, по которой она выбрана.
+   Вид фигуры на время шага меняется без записи; выбор человека возвращается в конце. Длительности для проверок —
+   perfRun({plan, step, warm}). */
+const PERF_STEPS = [{kind:'plan', view:'anatomy'}, {kind:'plan', view:'mannequin'},
+  ...['latpulluh', 'legpress', 'squat'].flatMap(id => [{kind:'detail', id, view:'anatomy'}, {kind:'detail', id, view:'mannequin'}]),
+  {kind:'workout', view:'anatomy'}, {kind:'workout', view:'mannequin'}];
 const PERF_ABORT = {abort:true}, PERF_RESTORE_KEYS = ['podhod.motion.v2', 'podhod.workout.v3', 'podhod.settings.v1', 'podhod.planSeen.v1'];
 let perfRunSerial = 0;
 async function perfWait(ms, run) {
@@ -381,13 +415,25 @@ async function perfStepRun(P, run, step, T, ctx) {
     if (S.view !== 'plan') { ctx.view = S.view; S.view = 'plan'; renderSetup(); renderPlan(); }
     const F = figs.find(x => x.card);
     if (!F) return Object.assign(out, {skip:PERF_T.noCards});
-    out.label += ` «${F.it.name}»`; out.id = F.it.ex.id; out.view = 'svg'; run.label = out.label;
-    ctx.card = {F, paused:F.paused, pick:F.pick};
+    out.id = F.it.ex.id; run.label = out.label + ` «${F.it.name}»`;
+    if (!ctx.card || ctx.card.F !== F) ctx.card = {F, paused:F.paused, pick:F.pick};
+    /* вид карточек — на время шага; «Анатомия» — новая попытка с холодной памятью (как первое открытие плана) */
+    const anat = step.view !== 'mannequin';
+    motionPrefs.view = step.view;
+    if (anat) { retryAnatomyPace(); cardStage()?.dispose(); }
+    applyCardsView();
     F.btn.scrollIntoView({block:'center'}); F.paused = false; F.pick = performance.now();
     figureFramesReset(); pickActiveCards();
     await perfUntil(() => F.f && F.active, 3000, run);
+    if (anat) await perfUntil(() => F.av?.on || cardAnatomy.view === 'mannequin' && !cardAnatomy.loading, 10000, run);
+    out.view = cardAnatomy.view === 'mannequin' ? 'svg' : cardAnatomy.view;
+    /* подпись — то, что показано: «Анатомия» («Скелет») или манекен (SVG-карточки); «Анатомия» без объёма — манекен с пометкой */
+    out.label += ` «${F.it.name}» — ${perfViewName(out.view === 'svg' ? 'mannequin' : out.view)}` + (anat && out.view === 'svg' ? ` (${PERF_T.noVolume})` : '');
+    run.label = out.label;
     await perfWait(T.warm / 2, run);
-    return finish(await perfMeasure(P, run, T.plan));
+    finish(await perfMeasure(P, run, T.plan));
+    if (anat && out.view !== 'svg') out.pace = perfPaceOf('plan') || {fps:cardAnatomy.pace.fps, median:cardAnatomy.pace.last ?? null, slow:!!cardAnatomy.slow};
+    return out;
   }
   if (step.kind === 'detail') {
     const it = previewItem(step.id);
@@ -407,24 +453,33 @@ async function perfStepRun(P, run, step, T, ctx) {
     await perfWait(T.warm, run);
     return finish(await perfMeasure(P, run, T.step));
   }
-  /* тренировка: открыть без записи в журнал; сохранённое состояние тренировки вернётся из снимка */
+  /* тренировка: открыть без записи в журнал; сохранённое состояние тренировки вернётся из снимка. Вид фигуры — на время
+     шага; каждое открытие тренировки — новая попытка «Анатомии» (ступень с 30 кадров) */
   out.label = PERF_T.workout; run.label = out.label;
+  const anat = step.view !== 'mannequin';
   if ($('#motion-view')?.open) closeMotion();
   if (!plan?.items?.length) return Object.assign(out, {skip:PERF_T.noPlan});
   let saved = null; try { saved = JSON.parse(localStorage.getItem(WORKOUT_STORE) || 'null'); } catch (e) {}
   /* отдых в плане или незаконченный отдых сегодняшней тренировки: открытие тренировки включило бы его сигнал */
   if (!$('#timer').hidden || (saved && saved.stamp === workoutStamp(workoutQueue(plan)) && Number(saved.restUntil) > 0 && saved.next >= 0)) return Object.assign(out, {skip:PERF_T.restOn});
+  motionPrefs.view = step.view;
   const t0 = performance.now();
   startWorkout(); ctx.workout = true;
   if ($('#wv-active').hidden) workoutShow(workout.index || 0);
   out.open = performance.now() - t0;
-  await perfUntil(() => $('#wv-stage')?.firstElementChild, 3000, run);
-  const F = workout.motion; out.view = perfViewOf($('#wv-stage')?.firstElementChild); out.id = F?.it.ex.id;
-  out.label = `${PERF_T.workout}: ${F ? F.it.name : '—'} — ${perfViewName(out.view)}`; run.label = out.label;
+  const root = () => $('#wv-stage')?.firstElementChild;
+  await perfUntil(() => root(), 3000, run);
+  /* «Анатомия»: кости и мышцы могут ещё грузиться — подпись шага по тому, что в итоге показано */
+  if (anat) await perfUntil(() => root()?.dataset.anatomy === 'on' || root()?.dataset.skeleton === 'on' || root()?.dataset.renderer !== 'webgl' || workoutFigure.failed, 10000, run);
+  out.wait = performance.now() - t0 - out.open;
+  const F = workout.motion; out.view = perfViewOf(root()); out.id = F?.it.ex.id;
+  out.label = `${PERF_T.workout}: ${F ? F.it.name : '—'} — ${perfViewName(out.view)}` + (anat && out.view === 'svg' ? ` (${PERF_T.noVolume})` : ''); run.label = out.label;
   if (F) F.paused = false;
   await perfWait(T.warm, run);
   const m = await perfMeasure(P, run, T.step);
-  finish(m); closeWorkout(); ctx.workout = false;
+  finish(m);
+  if (anat && (out.view === 'anatomy' || out.view === 'skeleton')) out.pace = {fps:workoutFigure.pace.fps, median:workoutFigure.pace.last ?? null, slow:!!workoutFigure.slow};
+  closeWorkout(); ctx.workout = false;
   return out;
 }
 async function perfRun(opts = {}) {
@@ -456,6 +511,8 @@ async function perfRun(opts = {}) {
     try { if ($('#motion-view')?.open) closeMotion(); } catch (e) {}
     for (const [k, [had, v]] of Object.entries(prefs)) { if (had) motionPrefs[k] = v; else delete motionPrefs[k]; }
     if (ctx.card) { ctx.card.F.paused = ctx.card.paused; ctx.card.F.pick = ctx.card.pick; try { pickActiveCards(); } catch (e) {} }
+    /* карточки — снова в виде, выбранном человеком */
+    try { if (typeof applyCardsView === 'function' && figs.some(F => F.card)) applyCardsView(); } catch (e) {}
     if (ctx.view) { S.view = ctx.view; renderSetup(); renderPlan(); }
     for (const [k, v] of Object.entries(store)) try { if (localStorage.getItem(k) !== v) { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } } catch (e) {}
     window.scrollTo(0, ctx.scroll);
