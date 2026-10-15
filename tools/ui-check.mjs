@@ -349,6 +349,7 @@ await page.close();
   check(h.mode === 'Правая · сверх цели' && h.time === '+8 с', 'правая сторона начинается сама после паузы');
   await w.click('#wv-hold-go'); r = await rest();
   check(await w.evaluate(() => LOG.data.sideplank?.[0].s[0][1] === 38) && /левая 42 с, правая 38 с/.test(r.note), 'записано время слабой стороны, обе цифры — в подсказке');
+  check(await w.evaluate(() => JSON.stringify(LOG.data.sideplank[0].s[0].slice(3)) === '[{"l":[null,42],"r":[null,38]}]'), 'таймер боковой планки пишет обе стороны в поле сторон');
   await w.click('#wv-close');
   check(await w.evaluate(() => window.__wl.locks.at(-1).released && !ScreenAwake.state().want && !ScreenAwake.state().held && !$('#workout-view').classList.contains('rest-over')), 'выход из тренировки отпускает блокировку экрана');
   await w.evaluate(() => Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: undefined }));
@@ -365,6 +366,75 @@ await page.close();
   b = await bar(6000);
   check(b.hidden && await w.evaluate(() => RestAlarm.state().end === 0), 'таймер в плане уходит через 5 с после последнего повтора');
   await w.close();
+}
+
+/* вес гантелей и стороны (13a-sets.js): «Вес одной гантели, кг» и «×2 = 40 кг»; «Л/П отдельно» в тренировке и в карточке
+   пишет обе стороны, слабую — в основные поля; общий вес — после подхода, в итогах и в журнале; «Л … · П …» в истории */
+{
+  const v = await open(390, 844);
+  await v.evaluate(() => {
+    S.customs = [{ id: 'g1', name: 'Гантели', items: [{ id: 'dbbench', sets: 1 }, { id: 'dbrow', sets: 2 }, { id: 'goblet', sets: 1 }] }];
+    S.custom = 'g1'; S.mode = 'custom'; S.lr = {}; ensureCustoms(S); openCustom('g1'); regen();
+  });
+  const f = () => v.evaluate(() => ({ cap: $('#wv-weight-caption').textContent, rep: $('#wv-rep-caption').textContent, x2: $('#wv-kg-total').textContent,
+    bar: !$('#wv-lr-bar').hidden, lr: $('#wv-lr').getAttribute('aria-pressed'), one: !$('#wv-one').hidden, two: !$('#wv-lr-fields').hidden }));
+  await v.click('#start-workout'); await v.waitForTimeout(50);
+  await v.fill('#wv-kg', '20'); await v.fill('#wv-reps', '10');
+  let s = await f();
+  check(s.cap === 'Вес одной гантели, кг' && s.x2 === '×2 = 40 кг' && s.rep === 'Повторы' && !s.bar && s.one, `жим гантелей: «Вес одной гантели, кг», «×2 = 40 кг», без Л/П (${JSON.stringify(s)})`);
+  await v.fill('#wv-kg', '22');
+  check(await v.evaluate(() => $('#wv-kg-total').textContent === '×2 = 44 кг'), '«×2» обновляется при вводе веса');
+  await v.fill('#wv-kg', '20'); await v.click('#wv-done');
+  check(await v.evaluate(() => JSON.stringify(LOG.data.dbbench[0].s) === '[[20,10]]' && LOG.data.dbbench[0].eq === 'db' && /общий вес подхода 400 кг/.test($('#wv-rest-note').textContent)), 'подход записан как вес одной гантели; после подхода — общий вес 400 кг');
+  await v.click('#wv-continue');
+  s = await f();
+  check(s.cap === 'Вес гантели, кг' && !s.x2 && s.rep === 'Повторы на каждую сторону' && s.bar && s.lr === 'false' && s.one && !s.two, `тяга одной рукой: одна гантель, повторы на каждую сторону, «Л/П отдельно» выключен (${JSON.stringify(s)})`);
+  await v.click('#wv-lr'); s = await f();
+  check(s.lr === 'true' && !s.one && s.two && await v.evaluate(() => S.lr.dbrow === true && JSON.parse(localStorage.getItem('podhod.settings.v1')).lr.dbrow === true), '«Л/П отдельно»: две строки — левая и правая, выбор запоминается');
+  await v.fill('#wv-kg-l', '30'); await v.fill('#wv-reps-l', '10'); await v.fill('#wv-kg-r', '30'); await v.fill('#wv-reps-r', '8'); await v.click('#wv-done');
+  check(await v.evaluate(() => JSON.stringify(LOG.data.dbrow[0].s[0]) === '[30,8,null,{"l":[30,10],"r":[30,8]}]'), 'тренировка: обе стороны в поле сторон, слабая (правая) — в основных полях');
+  check(await v.evaluate(() => /общий вес подхода 540 кг/.test($('#wv-rest-note').textContent) && /слабая сторона — правая/i.test($('#wv-rest-note').textContent)), 'после подхода с Л/П: общий вес — сумма сторон, слабая сторона названа');
+  await v.click('#wv-continue');
+  s = await f();
+  check(s.two && await v.evaluate(() => $('#wv-kg-l').value === '30' && $('#wv-kg-r').value === '30' && $('#wv-reps-l').value === ''), 'второй подход: Л/П остаётся включённым, вес сторон подставлен из первого');
+  await v.fill('#wv-reps-l', '9'); await v.fill('#wv-reps-r', '9');
+  await v.click('#wv-lr'); s = await f();
+  check(s.one && await v.evaluate(() => $('#wv-kg').value === '30' && $('#wv-reps').value === '9' && !S.lr.dbrow), 'выключили Л/П — введённое переходит в общую пару');
+  await v.click('#wv-done');
+  check(await v.evaluate(() => JSON.stringify(LOG.data.dbrow[0].s[1].slice(0, 2)) === '[30,9]' && LOG.data.dbrow[0].s[1].length <= 3), 'без Л/П — одна пара «вес × повторы», как раньше');
+  await v.click('#wv-continue');
+  s = await f();
+  check(s.cap === 'Вес гантели, кг' && !s.x2 && !s.bar, 'гоблет: одна гантель, без «×2» и без Л/П');
+  await v.fill('#wv-kg', '24'); await v.fill('#wv-reps', '10'); await v.click('#wv-done');
+  check(await v.evaluate(() => !$('#wv-finish').hidden && /Общий вес — 1 720 кг/.test($('#wv-finish-text').textContent) && /1 080 кг/.test($('#wv-summary').textContent)), 'итоги тренировки: общий вес за тренировку и по упражнениям');
+  await v.click('#wv-finish-close');
+  /* карточка плана: Л/П в таблице, подпись столбца, «×2» под таблицей */
+  await v.evaluate(() => { document.querySelectorAll('.card').forEach(c => { const b = c.querySelector('[data-cfold="log"]'); if (b && b.getAttribute('aria-expanded') !== 'true') b.click(); }); });
+  check(await v.evaluate(() => { const h = document.querySelector('.card[data-ex="dbbench"] .lt-h span[title]'); return h && h.title === 'Вес одной гантели, кг' && h.textContent === 'Гантель, кг' && document.querySelector('.card[data-ex="dbbench"] .lt-x2').textContent.includes('×2 = 40 кг'); }), 'карточка: столбец «Гантель, кг» (подсказка — вес одной гантели), под таблицей «×2 = 40 кг»');
+  await v.click('.card[data-ex="dbbench"] [data-addset]');
+  await v.fill('.card[data-ex="dbbench"] .lt-r[data-k="1"] [data-f="kg"]', '24');
+  check(await v.evaluate(() => document.querySelector('.card[data-ex="dbbench"] .lt-x2 b').textContent === '×2 = 48 кг'), 'карточка: «×2» обновляется при вводе');
+  await v.click('.card[data-ex="dbrow"] [data-lr]');
+  check(await v.evaluate(() => S.lr.dbrow === true && document.querySelectorAll('.card[data-ex="dbrow"] .lt-r.lt-lr').length === 2 && document.querySelector('.card[data-ex="dbrow"] [data-lr]').getAttribute('aria-pressed') === 'true' && document.activeElement?.dataset.lr === 'dbrow'), 'карточка: «Л/П отдельно» — подход в две строки, фокус на переключателе');
+  check(await v.evaluate(() => { const r = document.querySelector('.card[data-ex="dbrow"] .lt-r[data-k="0"]'); return r.classList.contains('done') && r.querySelector('[data-side="l"][data-f="reps"]').value === '10' && r.querySelector('[data-side="r"][data-f="reps"]').value === '8'; }), 'карточка: записанный подход показывает обе стороны');
+  await v.click('.card[data-ex="dbrow"] [data-tick][data-k="1"]'); /* снять второй подход и записать его заново по сторонам */
+  await v.fill('.card[data-ex="dbrow"] .lt-r[data-k="1"] [data-f="kg"][data-side="l"]', '28');
+  await v.fill('.card[data-ex="dbrow"] .lt-r[data-k="1"] [data-f="reps"][data-side="l"]', '12');
+  await v.fill('.card[data-ex="dbrow"] .lt-r[data-k="1"] [data-f="kg"][data-side="r"]', '30');
+  await v.fill('.card[data-ex="dbrow"] .lt-r[data-k="1"] [data-f="reps"][data-side="r"]', '8');
+  await v.click('.card[data-ex="dbrow"] [data-tick][data-k="1"]');
+  check(await v.evaluate(() => JSON.stringify(LOG.data.dbrow[0].s[1]) === '[30,8,null,{"l":[28,12],"r":[30,8]}]'), 'карточка: обе стороны записаны, слабая по расчётному максимуму (30 × 8 слабее 28 × 12) — в основных полях');
+  await v.fill('.card[data-ex="dbrow"] .lt-r[data-k="1"] [data-f="reps"][data-side="r"]', '11');
+  await v.dispatchEvent('.card[data-ex="dbrow"] .lt-r[data-k="1"] [data-f="reps"][data-side="r"]', 'change');
+  check(await v.evaluate(() => JSON.stringify(LOG.data.dbrow[0].s[1]) === '[28,12,null,{"l":[28,12],"r":[30,11]}]'), 'карточка: исправление стороны пересчитывает слабую');
+  await v.click('.card[data-ex="dbrow"] [data-lr]');
+  check(await v.evaluate(() => !S.lr.dbrow && !document.querySelector('.card[data-ex="dbrow"] .lt-r.lt-lr') && document.querySelector('.card[data-ex="dbrow"] .lt-r[data-k="1"] [data-f="reps"]').value === '12'), 'карточка: выключили Л/П — в строке слабая сторона');
+  /* журнал: последние тренировки с общим весом, история «Л … · П …» */
+  await v.evaluate(() => { S.view = 'journal'; renderSetup(); renderPlan(); });
+  const j = await v.evaluate(() => ({ day: document.querySelector('.j-days li')?.textContent || '', hist: [...document.querySelectorAll('.j-row')].find(li => li.querySelector('[data-del="dbrow"]'))?.textContent || '' }));
+  check(/сегодня/.test(j.day) && /3 упражнения · 4 подхода/.test(j.day) && /1 846\s*кг/.test(j.day), `журнал: тренировка дня — упражнения, подходы, общий вес (${j.day})`);
+  check(/Л 30×10 · П 30×8; Л 28×12 · П 30×11/.test(j.hist) && /общий вес 1 206 кг/.test(j.hist), `журнал: история — «Л … · П …» и общий вес (${j.hist.replace(/\s+/g, ' ').slice(0, 200)})`);
+  await v.close();
 }
 
 /* загрузка мышц по журналу (13d-muscle-load.js): панели нет при пустом журнале; с записями — 11 групп со статусами;
@@ -422,4 +492,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа, виды фигуры «Анатомия», «Скелет» и «Манекен», первый экран и разбор на телефоне, карточка, журнал, загрузка мышц и тренировка по журналу, счётчик оборудования работают на телефоне и компьютере.');
+console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа, виды фигуры «Анатомия», «Скелет» и «Манекен», первый экран и разбор на телефоне, карточка, журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования работают на телефоне и компьютере.');

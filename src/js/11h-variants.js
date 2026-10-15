@@ -51,7 +51,7 @@ function variantHistNote(ex) {
   const rows = v.family.items.filter(([id]) => id !== ex.id).map(([id, label]) => {
     const ss = (LOG.data[id] || []).filter(x => x.s.some(Boolean)); if (!ss.length) return '';
     const last = ss[ss.length - 1];
-    return `<li><b>${esc(label)}</b> · ${ss.length} ${plural(ss.length, 'запись', 'записи', 'записей')}, последняя ${fmtDay(last.d, true)}: ${last.s.filter(Boolean).map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(' · ')}</li>`;
+    return `<li><b>${esc(label)}</b> · ${ss.length} ${plural(ss.length, 'запись', 'записи', 'записей')}, последняя ${fmtDay(last.d, true)}: ${setsText(last.s, EXI[id])}</li>`;
   }).filter(Boolean);
   return rows.length ? `<div class="h-var"><p class="h-cap">Другие хваты — ведутся отдельно</p><ul>${rows.join('')}</ul></div>` : '';
 }

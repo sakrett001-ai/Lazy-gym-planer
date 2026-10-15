@@ -170,7 +170,8 @@ test('suggestions ignore the rest field, CSV gets a rest column', () => {
   a.LOG.data = {bbbench:[{d:'2000-01-01', target:4, s:[[60, 10, 90], [60, 10, 95], [60, 10, 100], [60, 10]]}]};
   assert.equal(before.tone, 'up'); assert.deepEqual(advice(), before);
   const rows = a.csvText().replace(/^﻿/, '').split('\r\n').map(r => r.split(';'));
-  assert.equal(rows[0].at(-1), 'Отдых после подхода, с');
-  assert.deepEqual(rows.slice(1).map(r => r.at(-1)), ['90', '95', '100', '']);
+  const rest = rows[0].indexOf('Отдых после подхода, с');
+  assert.equal(rest, 7, 'столбец отдыха на прежнем месте; новые столбцы (стороны, общий вес) — после него');
+  assert.deepEqual(rows.slice(1).map(r => r[rest]), ['90', '95', '100', '']);
   assert(rows.every(r => r.length === rows[0].length));
 });
