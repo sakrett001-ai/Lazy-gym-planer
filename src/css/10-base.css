@@ -458,6 +458,8 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 #t-label { font-size:13px; color:var(--muted); }
 #t-time { font:600 30px/1 var(--f-mono); font-variant-numeric:tabular-nums; }
 .timer.over #t-time { color:var(--hot); }
+.timer.over { background:var(--hot-soft); }
+.t-btns button:disabled { opacity:.4; }
 .t-track { position:absolute; left:0; right:0; top:0; height:3px; background:var(--surface-2); }
 #t-bar { height:100%; width:0; background:var(--accent); transition:width .25s linear; }
 .t-btns { display:flex; gap:6px; }

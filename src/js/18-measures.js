@@ -123,7 +123,8 @@ document.addEventListener('click', e => {
 bodyLoad();
 
 /* ===================== ПОЛНАЯ РЕЗЕРВНАЯ КОПИЯ ===================== */
-/* v2: настройки планировщика, инвентарь, авторегулировка, календарь, атлас, журнал и замеры. v1 (только журнал) тоже читается. */
+/* v2: настройки планировщика, инвентарь, авторегулировка, календарь, атлас, журнал и замеры. v1 (только журнал) тоже читается.
+   Подход в журнале — [кг, повторы] или [кг, повторы, отдых, с]: отдых необязателен, неверный отбрасывается, подход остаётся. */
 function backupObject() {
   return {app:'podhod', v:2, exported:new Date().toISOString(), version:window.PODHOD_VERSION || '',
     settings:{...S}, gear:{bar:GEAR.bar, plates:GEAR.plates}, autoreg:{dismissed:AR.dismissed, light:AR.light}, ics:{...ICS}, motion:{...motionPrefs},
@@ -136,7 +137,7 @@ function restoreBackup(obj) {
       if (!EXI[id] || !validSessions(ss)) continue;
       const clean = ss.map(x => ({d:x.d, ...(x.wk ? {wk:+x.wk} : {}), ...(x.fmt === 'static' ? {fmt:'static'} : {}),
         ...(Number.isSafeInteger(+x.target) && +x.target > 0 ? {target:+x.target} : {}),
-        s:x.s.map(v => Array.isArray(v) && isFinite(+v[1]) ? [v[0] == null || v[0] === '' ? null : +v[0], +v[1]] : null)}));
+        s:x.s.map(v => { if (!Array.isArray(v) || !isFinite(+v[1])) return null; const o = [v[0] == null || v[0] === '' ? null : +v[0], +v[1]], r = restField(v[2]); if (r) o.push(r); return o; })}));
       const merged = mergeSessions(LOG.data[id], clean);
       if (JSON.stringify(merged) !== JSON.stringify(LOG.data[id] || [])) { LOG.data[id] = merged; logTouch(id, true); out.exercises++; out.sessions += clean.length; }
     }

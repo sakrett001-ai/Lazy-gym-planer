@@ -202,6 +202,24 @@ await scan('workout');
 await run(`(()=>{startRest(90);})()`);
 await scan('rest timer');
 await run(`(()=>{closeWorkout&&closeWorkout();stopRest();})()`);
+/* таймер удержания (планка, боковая планка), отдых после нуля, таймер в плане сверх отдыха — часы подделаны */
+await run(`(()=>{const base=Date.now();window.__dt=0;Date.now=()=>base+window.__dt;
+  S.customs=[{id:'i18n-hold',name:'Hold',items:[{id:'plank',sets:1},{id:'sideplank',sets:1},{id:'pushup',sets:1}]}];S.custom='i18n-hold';S.mode='custom';ensureCustoms(S);openCustom('i18n-hold');LOG.data={};regen();
+  document.querySelector('#start-workout').click();})()`);
+await scan('hold timer idle');
+const tickBy = ms => run(`(()=>{window.__dt+=${ms};workoutTick();})()`);
+await page.click('#wv-hold-go'); await scan('hold 3-2-1');
+await tickBy(3000 + 10000); await scan('hold to target');
+await tickBy(30000); await scan('hold over target');
+await page.click('#wv-hold-go'); await scan('rest after hold');
+await tickBy(200000); await scan('rest overtime');
+await page.click('#wv-continue');
+await page.click('#wv-hold-go'); await tickBy(3000 + 35000); await page.click('#wv-hold-go'); await scan('side plank switch');
+await tickBy(10000 + 33000); await scan('side plank right');
+await page.click('#wv-hold-go'); await scan('side plank recorded');
+await run(`(()=>{closeWorkout();S.mode='single';regen();startRest(30);window.__dt+=45000;tick();})()`);
+await scan('plan rest timer overtime');
+await run(`(()=>{stopRest();})()`);
 
 await browser.close();
 const list = [...found.values()];

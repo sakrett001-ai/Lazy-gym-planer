@@ -348,29 +348,37 @@ function setupMotionViewer() {
 }
 
 
-/* ---------- таймер отдыха ---------- */
-const T = {left:0, total:0, id:0};
+/* ---------- таймер отдыха в плане ----------
+   Время — по меткам (restView в 12a-set-timers.js). После нуля таймер считает вверх «+0:25» и повторяет сигнал (если
+   выбран «настойчивый»), пока не отмечен следующий подход или не нажато «Готово»; уходит через 5 с после последнего сигнала. */
+const T = {left:0, total:0, id:0, end:0, from:0, label:''};
 function startRest(sec, label) {
   if (!sec) return;
-  T.total = sec; T.left = sec; T.end = Date.now() + sec * 1000;
-  $('#t-label').textContent = label || 'Отдых';
+  T.total = sec; T.left = sec; T.from = Date.now(); T.end = T.from + sec * 1000; T.label = label || 'Отдых';
+  $('#t-label').textContent = T.label;
   $('#timer').hidden = false; $('#timer').classList.remove('over');
-  RestAlarm.unlock(); RestAlarm.arm(T.end); RestAlarm.paintButton($('#t-sound'));
+  RestAlarm.unlock(); RestAlarm.arm(T.end, {from:T.from}); RestAlarm.paintButton($('#t-sound'));
   clearInterval(T.id); clearTimeout(T.id); tick(); T.id = setInterval(tick, 250);
 }
 function tick() {
-  T.left = Math.max(0, Math.round((T.end - Date.now()) / 1000));
-  const m = Math.floor(T.left / 60), s = T.left % 60;
-  $('#t-time').textContent = `${m}:${String(s).padStart(2, '0')}`;
-  $('#t-bar').style.width = (T.total ? (1 - T.left / T.total) * 100 : 100) + '%';
-  if (T.left <= 0) {
-    clearInterval(T.id); RestAlarm.due();
-    $('#timer').classList.add('over'); $('#t-label').textContent = 'Пора к следующему подходу';
-    T.id = setTimeout(() => { $('#timer').hidden = true; }, 5000);
-  }
+  const now = Date.now(), v = restView(T.end, now);
+  T.left = v.left;
+  $('#t-time').textContent = v.text;
+  $('#t-bar').style.width = (T.total ? (1 - v.left / T.total) * 100 : 100) + '%';
+  RestAlarm.poll(now);
+  $('#timer').classList.toggle('over', v.over); $('#t-minus').disabled = v.over;
+  const label = v.over ? 'Пора к следующему подходу · сверх отдыха' : T.label;
+  if ($('#t-label').textContent !== label) $('#t-label').textContent = label;
+  if (v.over && now >= Math.max(T.end, RestAlarm.lastAt()) + 5000) stopRest();
 }
-function adjustRest(d) { if ($('#timer').hidden) return; T.end = Math.max(Date.now(), T.end + d * 1000); T.total = Math.max(1, T.total + d); RestAlarm.arm(T.end); clearTimeout(T.id); clearInterval(T.id); $('#timer').classList.remove('over'); tick(); T.id = setInterval(tick, 250); }
-function stopRest() { clearInterval(T.id); clearTimeout(T.id); RestAlarm.cancel(); $('#timer').hidden = true; }
+function adjustRest(d) {
+  if ($('#timer').hidden) return;
+  const now = Date.now(), end = restAdjust(T.end, now, d);
+  if (end === T.end) return;
+  T.total = Math.max(1, T.total + Math.round((end - T.end) / 1000)); T.end = end;
+  RestAlarm.arm(T.end, {from:T.from}); clearTimeout(T.id); clearInterval(T.id); tick(); T.id = setInterval(tick, 250);
+}
+function stopRest() { clearInterval(T.id); clearTimeout(T.id); RestAlarm.cancel(); $('#timer').hidden = true; $('#t-minus').disabled = false; }
 
 /* ---------- текст для копирования ---------- */
 function blocksText(p) {
