@@ -112,7 +112,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;', '<':'&lt;', '>
 const fmtRest = s => s >= 60 ? (s % 60 ? `${Math.floor(s / 60)} мин ${s % 60} с` : `${s / 60} мин`) : `${s} с`;
 const midOf = r => { const m = String(r).match(/(\d+)\D+(\d+)/); if (m) return (+m[1] + +m[2]) / 2; const n = parseFloat(r); return isNaN(n) ? 10 : n; };
 function plural(n, a, b, c) { const m10 = n % 10, m100 = n % 100; if (m10 === 1 && m100 !== 11) return a; if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return b; return c; }
-const fmtNum = v => Number.isInteger(v) ? String(v) : v.toFixed(1).replace('.', ',');
+const fmtNum = v => Number.isInteger(v) ? String(v) : v.toFixed(1).replace('.', DEC); /* DEC — 13-log.js: в английской сборке точка */
 
 /* можно ли взвесить отягощение: свободные веса, тренажёры, блок, машина Смита (а не лента, турник, скамья или вес тела) */
 const WEIGHABLE = new Set(['db', 'bb', 'kb', 'cable', 'smith']);
@@ -142,18 +142,32 @@ function equipLine(ex, E) {
   return ch.concat(opt).join(' · ');
 }
 function groupsOf(ex) { const s = new Set([ex.g]); for (const m of ex.pri) s.add(MUSCLE_GROUP[m]); return s; }
+/* дробный учёт одного подхода: целевая группа упражнения — полный подход, остальные работающие (основные и вспомогательные
+   мышцы других групп) — половина; кардио своей группе подходов не даёт. Pelland et al., Sports Med 2026; 56(2):481–505:
+   косвенный подход как 0,5 лучше всего предсказывает прирост. Общее правило графика «Подходов на группу за неделю» и
+   загрузки мышц по журналу (13d-muscle-load.js) */
+function groupShare(ex) {
+  const w = {};
+  for (const m of ex.pri.concat(ex.sec)) { const g = MUSCLE_GROUP[m]; w[g] = Math.max(w[g] || 0, 0.5); }
+  if (ex.g !== 'cardio') w[ex.g] = 1;
+  else for (const m of ex.pri) w[MUSCLE_GROUP[m]] = Math.max(w[MUSCLE_GROUP[m]], 0.5);
+  return w;
+}
 function splitFor(days) { return SPLITS[S.split] && SPLITS[S.split].days[days] ? S.split : DEFAULT_SPLIT[days]; }
 
 /* ---------- подбор ---------- */
-function pickExercises(E, rand, groups, count, avoid) {
+/* opt — только для подбора по журналу (13d-muscle-load.js): weights — доли групп вместо GROUP_W,
+   rest — группы, которым нужен отдых (упражнения, где они основные, отодвигаются). Без opt подбор прежний. */
+function pickExercises(E, rand, groups, count, avoid, opt) {
   const G = new Set(groups);
   const lvlMax = S.level === 'beg' ? 2 : 3;
   const pool = EX.filter(ex => available(ex, E) && ex.lvl <= lvlMax && (ex.g !== 'cardio' || G.has('cardio')) && (S.format !== 'static' || staticOk(ex)) && fitsBody(ex));
   /* бережно: при прочих равных — упражнения без пиковой нагрузки на суставы */
   const strain = S.goal === 'gentle' ? new Map(pool.map(ex => [ex, stressIdsOf(ex).length])) : null;
-  const totalW = groups.reduce((a, g) => a + GROUP_W[g], 0) || 1;
+  const GW = opt && opt.weights || GROUP_W, rest = opt && opt.rest && opt.rest.size ? opt.rest : null;
+  const totalW = groups.reduce((a, g) => a + GW[g], 0) || 1;
   const quota = {};
-  for (const g of groups) quota[g] = count * GROUP_W[g] / totalW;
+  for (const g of groups) quota[g] = count * GW[g] / totalW;
   const picked = [];
   const usedPat = {};
   const compBonus = {strength:0.7, mass:0.35, cut:0.05, gentle:0.1}[S.goal];
@@ -178,6 +192,7 @@ function pickExercises(E, rand, groups, count, avoid) {
       if (strain) sc -= 0.5 * strain.get(ex);
       if (S.goal === 'strength' && ex.eq.some(g => g.includes('bb'))) sc += 0.3;
       for (const m of ex.pri) if (!G.has(MUSCLE_GROUP[m])) sc -= 0.3;
+      if (rest) for (const g of new Set(ex.pri.map(m => MUSCLE_GROUP[m]))) if (rest.has(g)) sc -= 0.8;
       const pat = PATTERN[ex.id] || 'solo:' + ex.id;
       if (usedPat[pat]) sc -= 0.7 * usedPat[pat] + (picked.some(p => PATTERN[p.id] === pat && p.g === ex.g) ? 0.4 : 0);
       if (!G.has(ex.g)) sc -= 0.6;
@@ -287,7 +302,9 @@ function byOrder(units, order, slotOf) {
 function buildPlan(ctx = {}) {
   /* свой план: упражнения и порядок задал человек; мышцы — только подсказка для подбора */
   const custom = S.mode === 'custom' && !ctx.groups ? customOf() : null;
-  const groups = ctx.groups || S.groups, count = custom ? custom.items.length : ctx.count || S.count, week = ctx.week || null;
+  /* тренировка на сегодня по журналу: группы уже в S.groups, отсюда — доли групп, отдых и облегчение (13d-muscle-load.js) */
+  const lp = !custom && !ctx.groups && S.mode === 'single' ? logPickCtx() : null;
+  const groups = ctx.groups || S.groups, count = custom ? custom.items.length : ctx.count || (lp ? lp.count : S.count), week = ctx.week || null;
   const sw = custom ? {} : ctx.swaps || {};
   const E = effEquip(S.equip);
   const rand = rng((ctx.seed ?? S.seed) * 9973 + count * 31 + groups.length * 7);
@@ -296,7 +313,7 @@ function buildPlan(ctx = {}) {
   /* программа другого места: подбор под его инвентарь, затем недоступное здесь заменяется аналогами;
      в своём плане так же заменяется то, чего нет в этом месте */
   const ref = custom ? null : programEquip(), PE = ref ? effEquip(ref) : E;
-  let picked = custom ? custom.items.map(it => EXI[it.id]) : pickExercises(PE, rand, groups, count, ctx.avoid).picked;
+  let picked = custom ? custom.items.map(it => EXI[it.id]) : pickExercises(PE, rand, groups, count, ctx.avoid, lp || undefined).picked;
   /* «можно здесь»: есть инвентарь, и упражнение не нагружает суставы, которые бережём (11g-gentle.js) */
   const usable = ex => available(ex, E) && fitsBody(ex);
   const pool = EX.filter(usable);
@@ -322,6 +339,7 @@ function buildPlan(ctx = {}) {
   const G = GOALS[S.goal];
   const items = picked.map((ex, k) => {
     const slot = slots[k], rx = applyLight(prescribe(ex, week, E), ex);
+    if (lp && lp.light.has(ex.g)) easeRx(rx);
     return {ex, slot, rx:custom ? customRx(rx, custom.items[slot], ex) : rx, name:exName(ex, E), eqLine:equipLine(ex, E), eqIds:chosenEquip(ex, E), has:propHas(ex, E), sub:subs.get(ex) || null};
   });
   const bySlot = new Map(items.map(it => [it.ex, it]));
@@ -370,13 +388,9 @@ function buildPlan(ctx = {}) {
     for (const m of it.ex.pri) load[m] = (load[m] || 0) + k;
     for (const m of it.ex.sec) load[m] = (load[m] || 0) + k * 0.5;
     /* дробный учёт: целевая группа — полный подход, остальные работающие — половина */
-    const w = {};
-    for (const m of it.ex.pri.concat(it.ex.sec)) { const g = MUSCLE_GROUP[m]; w[g] = Math.max(w[g] || 0, 0.5); }
-    if (it.ex.g !== 'cardio') w[it.ex.g] = 1;
-    else for (const m of it.ex.pri) w[MUSCLE_GROUP[m]] = Math.max(w[MUSCLE_GROUP[m]], 0.5);
-    for (const [g, x] of Object.entries(w)) gvol[g] = (gvol[g] || 0) + k * x;
+    for (const [g, x] of Object.entries(groupShare(it.ex))) gvol[g] = (gvol[g] || 0) + k * x;
   }
-  return {blocks, items, minutes:Math.round(minutes / 60), totalSets, missing:custom ? [] : missing, load, gvol, pool, E, groups, count, lost, custom:!!custom};
+  return {blocks, items, minutes:Math.round(minutes / 60), totalSets, missing:custom ? [] : missing, load, gvol, pool, E, groups, count, lost, custom:!!custom, byLog:!!lp};
 }
 
 /* ---------- сборка недели ---------- */
@@ -463,7 +477,8 @@ function renderSetup() {
   $('#g-presets').innerHTML = GROUP_PRESETS.map(p => {
     const on = p.g.length === gs.size && p.g.every(g => gs.has(g));
     return `<button type="button" class="pre${on ? ' on' : ''}" data-gp="${p.id}">${p.name}</button>`;
-  }).join('');
+  }).join('') + logPresetHtml();
+  const lpMsg = $('#lp-msg'); if (lpMsg) lpMsg.hidden = true;
   $('#g-chips').innerHTML = GROUPS.map(g => `<button type="button" class="chip${gs.has(g.id) ? ' on' : ''}" data-g="${g.id}" aria-pressed="${gs.has(g.id)}">${ICON.check}<span>${g.name}</span></button>`).join('');
   const cur = placeOf();
   $('#e-places').innerHTML = S.places.map(p => `<button type="button" class="place${p.id === S.place ? ' on' : ''}" data-place="${p.id}" aria-pressed="${p.id === S.place}"><b>${esc(p.name)}</b><small>${p.equip.length ? p.equip.length + ' ' + plural(p.equip.length, 'снаряд', 'снаряда', 'снарядов') : 'без снаряжения'}</small></button>`).join('')
@@ -512,13 +527,16 @@ function loadBars(load) {
 function volBars(gvol, groups) {
   const ids = GROUPS.map(g => g.id).filter(g => g !== 'cardio' && (groups.has(g) || (gvol[g] || 0) >= 1));
   const max = Math.max(22, ...ids.map(g => gvol[g] || 0));
+  return ids.map(g => volRow(g, gvol[g] || 0, max)).join('');
+}
+/* строка полосы «подходов на группу»: коридор 10–20, «мало / в норме / много»; extra — добавка под полосой
+   (статус восстановления в журнале, 13d-muscle-load.js) */
+function volRow(g, val, max, extra = '', cls = '') {
   const pct = v => (v / max * 100).toFixed(1);
-  return ids.map(g => {
-    const v = Math.round((gvol[g] || 0) * 2) / 2;
-    const st = v < 10 ? 'lo' : v > 20 ? 'hi' : 'ok';
-    const lab = st === 'lo' ? 'мало' : st === 'hi' ? 'много' : 'в норме';
-    return `<li class="${st}"><span class="vb-n">${GN[g]}</span><span class="vb-v">${fmtNum(v)}<em>${lab}</em></span><span class="vb-t"><b style="left:${pct(10)}%;width:${pct(10)}%"></b><i style="width:${Math.max(1.5, +pct(v))}%"></i></span></li>`;
-  }).join('');
+  const v = Math.round(val * 2) / 2;
+  const st = v < 10 ? 'lo' : v > 20 ? 'hi' : 'ok';
+  const lab = st === 'lo' ? 'мало' : st === 'hi' ? 'много' : 'в норме';
+  return `<li class="${st}${cls ? ' ' + cls : ''}"${cls ? ` data-lg="${g}"` : ''}><span class="vb-n">${GN[g]}</span><span class="vb-v">${fmtNum(v)}<em>${lab}</em></span><span class="vb-t"><b style="left:${pct(10)}%;width:${pct(10)}%"></b><i style="width:${Math.max(1.5, +pct(v))}%"></i></span>${extra}</li>`;
 }
 
 /* вес по плану (свой план или план тренера) — рядом с подходами */
@@ -531,10 +549,10 @@ function rxHtml(it) {
   const r = it.rx;
   const unit = r.unit ? ` <small>${r.unit}</small>` : '';
   const side = r.uni ? '<small> на сторону</small>' : '';
-  if (r.static) return `<div class="rx"><span class="rx-big">${r.series} × 3 × ${r.reps}${unit}${side}</span><span class="rx-rest">${r.series} ${plural(r.series, 'серия', 'серии', 'серий')} по 3 подхода · отдых ${fmtRest(r.rest)}${r.series > 1 ? `, между сериями ${fmtRest(r.seriesRest)}` : ''}</span>${rxKgHtml(it)}${r.light ? '<span class="rx-light">облегчено</span>' : ''}</div>`;
+  if (r.static) return `<div class="rx"><span class="rx-big">${r.series} × 3 × ${r.reps}${unit}${side}</span><span class="rx-rest">${r.series} ${plural(r.series, 'серия', 'серии', 'серий')} по 3 подхода · отдых ${fmtRest(r.rest)}${r.series > 1 ? `, между сериями ${fmtRest(r.seriesRest)}` : ''}</span>${rxKgHtml(it)}${r.light ? '<span class="rx-light">облегчено</span>' : ''}${easedTag(r)}</div>`;
   if (r.circ) return `<div class="rx"><span class="rx-big">${r.reps}${unit}${side}</span>${rxKgHtml(it)}</div>`;
   const rest = r.restShown !== undefined ? (r.restShown ? `отдых ${fmtRest(r.restShown)}` : 'сразу к следующему') : `отдых ${fmtRest(r.rest)}`;
-  return `<div class="rx"><span class="rx-big">${r.sets} × ${r.reps}${unit}${side}</span><span class="rx-rest">${rest}</span>${rxKgHtml(it)}${r.light ? '<span class="rx-light">облегчено</span>' : ''}</div>`;
+  return `<div class="rx"><span class="rx-big">${r.sets} × ${r.reps}${unit}${side}</span><span class="rx-rest">${rest}</span>${rxKgHtml(it)}${r.light ? '<span class="rx-light">облегчено</span>' : ''}${easedTag(r)}</div>`;
 }
 
 /* суставы под пиковой нагрузкой — короткая строка в карточке; подробности в разборе движения */
@@ -696,7 +714,7 @@ function renderPlan() {
   const lf = ensureFold(S).load, loadRows = Object.entries(plan.load).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([m, v]) => [MUSCLE_NAMES[m], v]);
   let html = `<header class="p-head${lf ? ' load-folded' : ''}">
     <div class="p-sum">
-      <p class="eyebrow">${plan.custom ? 'Свой план · ' : ''}${G.name} · ${FORMATS[S.format].name} · ${LEVELS[S.level].name.toLowerCase()}</p>
+      <p class="eyebrow">${plan.custom ? 'Свой план · ' : plan.byLog ? 'По журналу · ' : ''}${G.name} · ${FORMATS[S.format].name} · ${LEVELS[S.level].name.toLowerCase()}</p>
       <h1 class="p-title">${esc(titleFor())}</h1>
       ${plan.custom ? customHeadHtml() : focusHtml()}
       <dl class="stats">
@@ -719,7 +737,7 @@ function renderPlan() {
     const hints = customHints(plan), lost = lostMessages(plan.lost, plan.E);
     html += autoregHtml() + gentleHtml() + (lost.length ? `<div class="warn">${lost.map(w => `<p>${esc(w)}</p>`).join('')}</div>` : '')
       + (hints.length ? `<div class="cp-hints">${hints.map(w => `<p>${esc(w)}</p>`).join('')}</div>` : '') + blocksHtml(plan) + customAddHtml() + LEGEND;
-  } else html += autoregHtml() + gentleHtml() + warnHtml(plan) + blocksHtml(plan) + LEGEND;
+  } else html += logPickHtml(plan) + autoregHtml() + gentleHtml() + warnHtml(plan) + blocksHtml(plan) + LEGEND;
   root.innerHTML = html;
   mountFigures();
 }

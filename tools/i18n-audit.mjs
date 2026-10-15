@@ -167,6 +167,22 @@ await run(`(()=>{const d=n=>{const x=new Date();x.setDate(x.getDate()-n);return 
 await scan('journal');
 await run(`(()=>{document.querySelectorAll('details').forEach(d=>d.open=true);})()`);
 await scan('journal expanded');
+/* 4б. загрузка мышц по журналу: «сегодня / вчера / позавчера», тренировка на сегодня с объяснением, всё нагружено, пустая неделя */
+step('4б. загрузка мышц');
+await run(`(()=>{const d=n=>{const x=new Date();x.setHours(12,0,0,0);x.setDate(x.getDate()-n);return dayKey(x);};window.__log=JSON.parse(JSON.stringify(LOG.data));
+  LOG.data.latpull=[{d:d(1),s:[[50,10],[50,10],[50,10]]}];LOG.data.squat=[{d:d(2),s:[[80,8],[80,8],[80,8]]}];LOG.data.bbcurl=[{d:d(0),s:[[20,10],[20,10]]}];
+  S.view='journal';renderSetup();renderPlan();document.querySelectorAll('#ml details').forEach(x=>x.open=true);})()`);
+await scan('journal muscle load');
+await run(`document.querySelector('[data-logpick="journal"]').click()`);
+await scan('plan from log', await run('planText()'));
+await run(`(()=>{LOG.data={};for(const id of ['bbbench','latpull','ohp','bbcurl','pushdown','wristcurl','crunch','hipthrust','legext','legcurl','calfraise'])LOG.data[id]=[{d:todayKey(),s:[[20,10],[20,10]]}];
+  S.view='journal';renderSetup();renderPlan();document.querySelector('[data-logpick="journal"]').click();})()`);
+await scan('journal, every group fatigued');
+await run(`(()=>{S.view='plan';S.mode='single';renderSetup();renderPlan();document.querySelector('.pre-log').click();})()`);
+await scan('plan setup, every group fatigued');
+await run(`(()=>{LOG.data={bbbench:[{d:'2020-01-06',s:[[50,8],[50,8]]}]};S.view='journal';renderSetup();renderPlan();})()`);
+await scan('journal, nothing in 7 days');
+await run(`(()=>{LOG.data=window.__log;})()`);
 /* 5. план с историей: карточки, история, разминка, подсказки */
 step('5. план с историей');
 await run(`(()=>{Object.assign(S,{view:'plan',mode:'single',format:'classic',groups:['chest','triceps'],count:6});regen();document.querySelectorAll('[data-hist]').forEach(b=>b.click());document.querySelectorAll('details').forEach(d=>d.open=true);})()`);
@@ -202,6 +218,24 @@ await scan('workout');
 await run(`(()=>{startRest(90);})()`);
 await scan('rest timer');
 await run(`(()=>{closeWorkout&&closeWorkout();stopRest();})()`);
+/* таймер удержания (планка, боковая планка), отдых после нуля, таймер в плане сверх отдыха — часы подделаны */
+await run(`(()=>{const base=Date.now();window.__dt=0;Date.now=()=>base+window.__dt;
+  S.customs=[{id:'i18n-hold',name:'Hold',items:[{id:'plank',sets:1},{id:'sideplank',sets:1},{id:'pushup',sets:1}]}];S.custom='i18n-hold';S.mode='custom';ensureCustoms(S);openCustom('i18n-hold');LOG.data={};regen();
+  document.querySelector('#start-workout').click();})()`);
+await scan('hold timer idle');
+const tickBy = ms => run(`(()=>{window.__dt+=${ms};workoutTick();})()`);
+await page.click('#wv-hold-go'); await scan('hold 3-2-1');
+await tickBy(3000 + 10000); await scan('hold to target');
+await tickBy(30000); await scan('hold over target');
+await page.click('#wv-hold-go'); await scan('rest after hold');
+await tickBy(200000); await scan('rest overtime');
+await page.click('#wv-continue');
+await page.click('#wv-hold-go'); await tickBy(3000 + 35000); await page.click('#wv-hold-go'); await scan('side plank switch');
+await tickBy(10000 + 33000); await scan('side plank right');
+await page.click('#wv-hold-go'); await scan('side plank recorded');
+await run(`(()=>{closeWorkout();S.mode='single';regen();startRest(30);window.__dt+=45000;tick();})()`);
+await scan('plan rest timer overtime');
+await run(`(()=>{stopRest();})()`);
 
 await browser.close();
 const list = [...found.values()];

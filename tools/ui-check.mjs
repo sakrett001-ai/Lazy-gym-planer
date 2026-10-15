@@ -280,6 +280,139 @@ await page.close();
   await d.close();
 }
 
+/* режим тренировки на телефоне — время (Date.now) и Screen Wake Lock подделаны: экран не гаснет в тренировке и
+   отпускается на выходе; отдых после нуля считает вверх «+0:25 сверх отдыха», экран меняет цвет, сигнал повторяется
+   (настройка «один раз / настойчиво» запоминается), фактический отдых — третьим полем подхода; таймер удержания:
+   «Старт» → 3-2-1 → «до цели» → «сверх цели», «Стоп» пишет секунды в подход и начинает отдых; ручной ввод секунд;
+   боковая планка — левая, пауза 10 с, правая, записывается слабая сторона; таймер отдыха в плане тоже считает вверх */
+{
+  const w = await open(390, 844);
+  await w.evaluate(() => {
+    const base = Date.now(); window.__dt = 0; Date.now = () => base + window.__dt; /* часы стоят, пока проверка их не сдвинет */
+    window.__wl = { req: 0, rel: 0, locks: [] };
+    Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: { request: async type => {
+      window.__wl.req++;
+      const l = { type, released: false, onrelease: null, addEventListener(e, f) { if (e === 'release') l.onrelease = f; },
+        release: async () => { if (!l.released) { l.released = true; window.__wl.rel++; l.onrelease?.(); } } };
+      window.__wl.locks.push(l); return l;
+    } } });
+    localStorage.removeItem('podhod.restSignal'); localStorage.removeItem('podhod.restWarn');
+    S.customs = [{ id: 'h1', name: 'Удержания', items: [{ id: 'plank', sets: 2 }, { id: 'sideplank', sets: 1 }, { id: 'pushup', sets: 1 }] }];
+    S.custom = 'h1'; S.mode = 'custom'; ensureCustoms(S); openCustom('h1'); regen();
+  });
+  const adv = ms => w.evaluate(ms => { window.__dt += ms; workoutTick(); }, ms);
+  const hold = () => w.evaluate(() => ({ mode: $('#wv-hold-mode').textContent, time: $('#wv-hold-time').textContent, btn: $('#wv-hold-go').textContent, sides: $('#wv-hold-sides').textContent, shown: !$('#wv-hold').hidden, done: $('#wv-done').disabled }));
+  const rest = () => w.evaluate(() => ({ t: $('#wv-rest-time').textContent, over: $('#wv-rest-over').textContent, h: $('#wv-rest-heading').textContent, red: $('#workout-view').classList.contains('rest-over'), note: $('#wv-rest-note').textContent, st: RestAlarm.state() }));
+  await w.click('#start-workout'); await w.waitForTimeout(50);
+  check(await w.evaluate(() => window.__wl.req === 1 && window.__wl.locks[0].type === 'screen' && ScreenAwake.state().held), 'тренировка: экран не гаснет — Wake Lock запрошен');
+  await w.evaluate(() => { window.__wl.locks[0].release(); document.dispatchEvent(new Event('visibilitychange')); }); await w.waitForTimeout(50);
+  check(await w.evaluate(() => window.__wl.req === 2 && ScreenAwake.state().held), 'система сняла блокировку — при возвращении на экран она берётся снова');
+
+  let h = await hold();
+  check(h.shown && h.time === '30 с' && h.btn === 'Старт' && /нижняя граница плана 30–45/.test(await w.textContent('#wv-hold-goal')) && /вручную/.test(await w.textContent('#wv-input-hint')), 'планка: таймер удержания, цель — нижняя граница плана, ручной ввод подписан');
+  await w.click('#wv-hold-go'); h = await hold();
+  check(h.mode === 'Приготовьтесь' && h.time === '3' && h.btn === 'Отмена' && h.done && await w.evaluate(() => RestAlarm.state().hold.join() === 'tick,tick,tick,go,end'), '«Старт»: отсчёт 3-2-1, звуки в очереди, «Подход выполнен» ждёт');
+  await adv(3000 + 12000); h = await hold();
+  check(h.mode === 'До цели' && h.time === '18 с' && h.btn === 'Стоп', 'после 3-2-1 — обратный отсчёт «до цели»');
+  await adv(25000); h = await hold();
+  check(h.mode === 'Сверх цели' && h.time === '+7 с', 'после цели — счёт вверх «сверх цели»');
+  await w.click('#wv-hold-go');
+  check(await w.evaluate(() => JSON.stringify(LOG.data.plank?.[0].s) === '[[null,37]]' && !$('#wv-rest').hidden && !RestAlarm.state().hold.length), '«Стоп» пишет секунды в подход и начинает отдых');
+
+  let r = await rest();
+  check(!r.red && /^\d:\d\d$/.test(r.t) && !r.over && r.st.signals.join() === 'end,repeat,repeat,repeat' && r.st.mode === 'persist', 'отдых: по умолчанию «настойчиво» — сигнал на нуле и три повтора');
+  const restSec = await w.evaluate(() => workout.queue[workout.last].rest);
+  await adv(restSec * 1000 + 25000); r = await rest();
+  check(r.t === '+0:25' && r.over === 'сверх отдыха' && r.h === 'Пора к подходу' && r.red && r.st.fired === 2, 'после нуля: «+0:25 сверх отдыха», экран меняет цвет, сигнал повторился');
+  check(await w.evaluate(() => $('#wv-rest-minus').disabled), 'после нуля «−15 сек.» выключена');
+  await w.click('[data-rest-mode="once"]');
+  check(await w.evaluate(() => localStorage.getItem('podhod.restSignal') === 'once' && RestAlarm.state().signals.join() === 'end' && $('[data-rest-mode="once"]').getAttribute('aria-pressed') === 'true'), '«Один раз» — без повторов, выбор запоминается');
+  await w.click('[data-rest-mode="persist"]'); await w.check('[data-rest-warn]');
+  check(await w.evaluate(() => localStorage.getItem('podhod.restSignal') === 'persist' && localStorage.getItem('podhod.restWarn') === 'on' && RestAlarm.warn), 'сигнал за 10 с до конца включается и запоминается');
+  await w.uncheck('[data-rest-warn]');
+  await w.click('#wv-continue');
+  const taken = await w.evaluate(() => LOG.data.plank[0].s[0]);
+  check(taken.length === 3 && taken[2] === restSec + 25, `фактический отдых записан третьим полем подхода (${JSON.stringify(taken)}, ждали ${restSec + 25})`);
+
+  h = await hold();
+  check(h.shown && !h.done && await w.evaluate(() => $('#wv-title').textContent.startsWith('Планка')), 'второй подход планки: таймер и ручной ввод доступны');
+  await w.fill('#wv-reps', '41'); await w.click('#wv-done');
+  check(await w.evaluate(() => LOG.data.plank[0].s[1][1] === 41 && LOG.data.plank[0].s[1].length === 2), 'ручной ввод секунд записывает подход');
+  await w.click('#wv-continue');
+  h = await hold();
+  check(h.mode === 'Левая, затем правая' && await w.evaluate(() => /слабой стороны/.test($('#wv-unilateral').textContent) && !$('#wv-unilateral').hidden), 'боковая планка: обе стороны в одном подходе');
+  await w.click('#wv-hold-go'); await adv(3000 + 42000); h = await hold();
+  check(h.mode === 'Левая · сверх цели' && h.time === '+12 с', 'боковая планка: левая сторона');
+  await w.click('#wv-hold-go'); h = await hold();
+  check(h.mode === 'Смена стороны' && h.time === '10' && h.btn === 'Правая — сейчас' && /Левая 42 с/.test(h.sides), 'пауза 10 с перед правой, время левой на виду');
+  await adv(10000 + 38000); h = await hold();
+  check(h.mode === 'Правая · сверх цели' && h.time === '+8 с', 'правая сторона начинается сама после паузы');
+  await w.click('#wv-hold-go'); r = await rest();
+  check(await w.evaluate(() => LOG.data.sideplank?.[0].s[0][1] === 38) && /левая 42 с, правая 38 с/.test(r.note), 'записано время слабой стороны, обе цифры — в подсказке');
+  await w.click('#wv-close');
+  check(await w.evaluate(() => window.__wl.locks.at(-1).released && !ScreenAwake.state().want && !ScreenAwake.state().held && !$('#workout-view').classList.contains('rest-over')), 'выход из тренировки отпускает блокировку экрана');
+  await w.evaluate(() => Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: undefined }));
+  await w.click('#start-workout'); await w.waitForTimeout(50);
+  check(await w.evaluate(() => $('#workout-view').open && !ScreenAwake.state().held), 'без Wake Lock тренировка работает как раньше');
+  await w.click('#wv-close');
+
+  await w.evaluate(() => { localStorage.setItem('podhod.restSignal', 'persist'); S.mode = 'single'; regen(); startRest(60, 'Отдых'); });
+  const bar = ms => w.evaluate(ms => { window.__dt += ms; tick(); return { t: $('#t-time').textContent, over: $('#timer').classList.contains('over'), hidden: $('#timer').hidden }; }, ms);
+  let b = await bar(70000);
+  check(b.t === '+0:10' && b.over && !b.hidden, 'таймер в плане после нуля считает вверх');
+  b = await bar(50000);
+  check(b.t === '+1:00' && !b.hidden, 'таймер в плане ждёт, пока идут повторы сигнала');
+  b = await bar(6000);
+  check(b.hidden && await w.evaluate(() => RestAlarm.state().end === 0), 'таймер в плане уходит через 5 с после последнего повтора');
+  await w.close();
+}
+
+/* загрузка мышц по журналу (13d-muscle-load.js): панели нет при пустом журнале; с записями — 11 групп со статусами;
+   «Собрать тренировку на сегодня» собирает разовую тренировку с объяснением по группам; смена мышц — обычный подбор */
+{
+  const seedLog = page => page.evaluate(() => {
+    const d = n => { const x = new Date(); x.setHours(12, 0, 0, 0); x.setDate(x.getDate() - n); return dayKey(x); };
+    const s = n => Array.from({ length: n }, () => [50, 10]);
+    LOG.data = { squat: [{ d: d(3), s: s(4) }], bbbench: [{ d: d(3), s: s(4) }], latpull: [{ d: d(1), s: s(4) }], ohp: [{ d: d(1), s: s(3) }], bbcurl: [{ d: d(2), s: s(3) }] };
+    S.view = 'journal'; renderSetup(); renderPlan();
+  });
+  const st = (page, g) => page.evaluate(g => { const li = document.querySelector(`#ml [data-lg="${g}"]`); return li ? ['loaded', 'recovering', 'ready'].find(x => li.classList.contains('st-' + x)) : null; }, g);
+  const noSide = page => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
+  const j = await open(390, 844);
+  await j.evaluate(() => { S.view = 'journal'; renderSetup(); renderPlan(); });
+  check(await j.evaluate(() => !document.querySelector('#ml') && !document.querySelector('[data-logpick]')), 'пустой журнал: панели «Загрузка мышц» и кнопки «По журналу» нет');
+  await seedLog(j);
+  check(await shown(j, '#ml') && await j.evaluate(() => document.querySelectorAll('#ml .ml-list li').length === 11), 'журнал с записями: панель загрузки мышц видна, 11 групп');
+  check(await st(j, 'back') === 'loaded' && await st(j, 'biceps') === 'recovering' && await st(j, 'chest') === 'ready'
+    && await j.evaluate(() => /вчера, 4 подхода/.test(document.querySelector('#ml [data-lg="back"] .ml-st').textContent)), 'статусы: спина вчера — нагружена, бицепс позавчера — восстанавливается, грудь — готова');
+  check(await noSide(j), 'журнал с панелью загрузки (390 px) без прокрутки вбок');
+  await j.click('[data-logpick="journal"]'); await j.waitForTimeout(100);
+  const built = await j.evaluate(() => ({ view: S.view, mode: S.mode, byLog: !!plan.byLog, groups: S.groups.slice(), lines: document.querySelectorAll('.lp li').length,
+    text: document.querySelector('.lp')?.textContent || '', eyebrow: document.querySelector('.p-head .eyebrow').textContent, pre: !!document.querySelector('.pre-log.on'),
+    ex: plan.items.map(it => it.ex.g) }));
+  check(built.view === 'plan' && built.mode === 'single' && built.byLog && built.lines === built.groups.length && built.lines > 0 && /^По журналу/.test(built.eyebrow) && built.pre,
+    'кнопка собирает тренировку на сегодня: строка-объяснение по каждой группе, заготовка «По журналу» отмечена');
+  check(!built.groups.includes('back') && !built.groups.includes('shoulders') && !built.ex.includes('back') && /Спина: \d/.test(built.text) === false && /Отдыхают.*спина \(вчера\)/.test(built.text),
+    'нагруженные вчера спина и плечи пропущены и названы в объяснении');
+  check(await noSide(j), 'план по журналу (390 px) без прокрутки вбок');
+  await j.click('#g-chips [data-g="back"]'); await j.waitForTimeout(100);
+  check(await j.evaluate(() => !plan.byLog && !document.querySelector('.lp') && !document.querySelector('.pre-log.on')), 'смена мышц вручную — обычный подбор без объяснения');
+  await j.click('.pre-log'); await j.waitForTimeout(100);
+  check(await j.evaluate(() => plan.byLog && !!document.querySelector('.lp')), '«По журналу» в параметрах собирает заново');
+  /* всё нагружено сегодня: тренировку не собираем, объясняем */
+  await j.evaluate(() => {
+    for (const id of ['bbbench', 'latpull', 'ohp', 'bbcurl', 'pushdown', 'wristcurl', 'crunch', 'hipthrust', 'legext', 'legcurl', 'calfraise']) LOG.data[id] = [{ d: todayKey(), s: [[20, 10], [20, 10]] }];
+    S.view = 'journal'; renderSetup(); renderPlan();
+  });
+  await j.click('[data-logpick="journal"]'); await j.waitForTimeout(100);
+  check(await j.evaluate(() => S.view === 'journal' && /лучше отдохнуть/.test(document.querySelector('#ml-msg').textContent)), 'всё нагружено: план не собирается, в панели — объяснение');
+  await j.close();
+  const jd = await open(1280);
+  await seedLog(jd);
+  check(await jd.evaluate(() => { const li = [...document.querySelectorAll('#ml .ml-list li')]; const t = li.slice(0, 2).map(x => Math.round(x.getBoundingClientRect().top)); return t[0] === t[1]; }), 'компьютер: группы загрузки в две колонки');
+  await jd.close();
+}
+
 /* компьютер: параметры в боковой колонке не сворачиваются */
 const desk = await open(1280);
 await desk.evaluate(() => { S.fold.setup = true; regen(); });
@@ -289,4 +422,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, витрина атласа, виды фигуры «Анатомия», «Скелет» и «Манекен», первый экран и разбор на телефоне, карточка, журнал и счётчик оборудования работают на телефоне и компьютере.');
+console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа, виды фигуры «Анатомия», «Скелет» и «Манекен», первый экран и разбор на телефоне, карточка, журнал, загрузка мышц и тренировка по журналу, счётчик оборудования работают на телефоне и компьютере.');
