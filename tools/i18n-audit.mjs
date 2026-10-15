@@ -167,6 +167,22 @@ await run(`(()=>{const d=n=>{const x=new Date();x.setDate(x.getDate()-n);return 
 await scan('journal');
 await run(`(()=>{document.querySelectorAll('details').forEach(d=>d.open=true);})()`);
 await scan('journal expanded');
+/* 4б. загрузка мышц по журналу: «сегодня / вчера / позавчера», тренировка на сегодня с объяснением, всё нагружено, пустая неделя */
+step('4б. загрузка мышц');
+await run(`(()=>{const d=n=>{const x=new Date();x.setHours(12,0,0,0);x.setDate(x.getDate()-n);return dayKey(x);};window.__log=JSON.parse(JSON.stringify(LOG.data));
+  LOG.data.latpull=[{d:d(1),s:[[50,10],[50,10],[50,10]]}];LOG.data.squat=[{d:d(2),s:[[80,8],[80,8],[80,8]]}];LOG.data.bbcurl=[{d:d(0),s:[[20,10],[20,10]]}];
+  S.view='journal';renderSetup();renderPlan();document.querySelectorAll('#ml details').forEach(x=>x.open=true);})()`);
+await scan('journal muscle load');
+await run(`document.querySelector('[data-logpick="journal"]').click()`);
+await scan('plan from log', await run('planText()'));
+await run(`(()=>{LOG.data={};for(const id of ['bbbench','latpull','ohp','bbcurl','pushdown','wristcurl','crunch','hipthrust','legext','legcurl','calfraise'])LOG.data[id]=[{d:todayKey(),s:[[20,10],[20,10]]}];
+  S.view='journal';renderSetup();renderPlan();document.querySelector('[data-logpick="journal"]').click();})()`);
+await scan('journal, every group fatigued');
+await run(`(()=>{S.view='plan';S.mode='single';renderSetup();renderPlan();document.querySelector('.pre-log').click();})()`);
+await scan('plan setup, every group fatigued');
+await run(`(()=>{LOG.data={bbbench:[{d:'2020-01-06',s:[[50,8],[50,8]]}]};S.view='journal';renderSetup();renderPlan();})()`);
+await scan('journal, nothing in 7 days');
+await run(`(()=>{LOG.data=window.__log;})()`);
 /* 5. план с историей: карточки, история, разминка, подсказки */
 step('5. план с историей');
 await run(`(()=>{Object.assign(S,{view:'plan',mode:'single',format:'classic',groups:['chest','triceps'],count:6});regen();document.querySelectorAll('[data-hist]').forEach(b=>b.click());document.querySelectorAll('details').forEach(d=>d.open=true);})()`);

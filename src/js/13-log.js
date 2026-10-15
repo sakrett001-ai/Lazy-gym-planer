@@ -420,7 +420,7 @@ function renderJournal() {
       ${tools}
     </div>
     <figure class="j-heat"><figcaption class="lb-h">Активность за 12 недель${last ? ` · последняя тренировка ${fmtDay(last, true)}` : ''}</figcaption>${heatmap()}</figure>
-  </header>${bodyHtml()}`;
+  </header>${entries.length ? muscleLoadHtml() : ''}${bodyHtml()}`;
   if (!entries.length) {
     html += `<div class="empty"><h2>Записей пока нет</h2><p>Откройте план и отмечайте подходы в карточках упражнений: вес и повторы сохранятся здесь, а планировщик начнёт подсказывать, когда прибавлять вес.</p><button type="button" class="btn" data-view="plan">Перейти к плану</button></div>`;
   } else {

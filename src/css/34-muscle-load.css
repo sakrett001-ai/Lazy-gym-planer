@@ -1,0 +1,42 @@
+/* ---------- загрузка мышц по журналу и тренировка на сегодня (13d-muscle-load.js) ---------- */
+.ml { background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:16px 14px; display:grid; gap:14px; }
+.ml-head { display:grid; gap:12px; }
+.ml-head h2 { margin:0; font:400 20px/1.1 var(--f-display); }
+.ml-head .eyebrow { margin-bottom:4px; }
+.ml-sub { margin:6px 0 0; color:var(--muted); font-size:14px; line-height:1.4; max-width:62ch; }
+.ml-act { display:grid; gap:6px; justify-items:start; align-content:start; }
+.ml-act .btn { white-space:nowrap; }
+.ml-msg:empty { display:none; }
+.ml-sum { margin:8px 0 0; font-size:14px; line-height:1.4; max-width:62ch; }
+.ml-sum span { display:inline-flex; align-items:baseline; gap:6px; margin-right:12px; }
+.ml-sum i { width:8px; height:8px; border-radius:50%; flex:none; align-self:center; background:var(--good); }
+.ml-sum .st-loaded i { background:var(--hot); } .ml-sum .st-recovering i { background:var(--warn-ink); }
+.ml-list { gap:12px; }
+.ml-st { grid-row:3; grid-column:1 / -1; display:flex; align-items:baseline; flex-wrap:wrap; gap:2px 6px; font-size:12.5px; line-height:1.3; color:var(--muted); }
+.ml-st i, .ml-legend i { width:8px; height:8px; border-radius:50%; flex:none; align-self:center; background:var(--good); }
+.ml-st b { font-weight:600; color:var(--ink); }
+.ml-st span::before { content:'· '; color:var(--faint); }
+.st-loaded .ml-st i, .ml-legend .st-loaded i, .ar-i.st-loaded { background:var(--hot); }
+.st-recovering .ml-st i, .ml-legend .st-recovering i, .ar-i.st-recovering { background:var(--warn-ink); }
+.st-ready .ml-st i, .ml-legend .st-ready i, .ar-i.st-ready { background:var(--good); }
+.ml-legend { margin:0; display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12px; color:var(--faint); }
+.ml-legend span { display:inline-flex; align-items:center; gap:6px; }
+.ml-empty { margin:0; font-size:14px; color:var(--muted); max-width:62ch; }
+.ml-how { max-width:none; }
+.ml-how p { margin:8px 0 0; max-width:75ch; }
+.ml-how summary { cursor:pointer; font-weight:600; color:var(--ink); }
+@media (min-width:700px) {
+  .ml { padding:20px 22px; }
+  .ml-head { grid-template-columns:minmax(0, 1fr) auto; align-items:start; gap:20px; }
+  .ml-act { justify-items:end; text-align:right; }
+  .ml-msg { max-width:300px; }
+  .ml-list { grid-template-columns:repeat(2, minmax(0, 1fr)); column-gap:32px; row-gap:14px; }
+}
+/* объяснение в плане */
+.lp .lp-add { display:inline-block; margin-left:8px; font:500 12px var(--f-mono); font-style:normal; color:var(--muted); white-space:nowrap; }
+.lp .lp-skip { margin:0; font-size:13.5px; color:var(--muted); max-width:70ch; }
+.lp li p b { font-weight:600; }
+/* «По журналу» среди заготовок мышц */
+.pre.pre-log { border-style:solid; color:var(--ink); }
+.pre.pre-log.on { border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
+.lp-msg { margin:6px 0 0; color:var(--warn-ink); }
