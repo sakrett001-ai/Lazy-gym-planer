@@ -483,6 +483,90 @@ await page.close();
   await jd.close();
 }
 
+/* скрытая панель замера скорости (?perf, 19-perf-panel.js): без флага панели нет, а крючки только читают флаг
+   (globalThis.GymPerf); с флагом — плашка на телефоне, живые цифры карточек и объёма, панель переезжает в открытое
+   окно; «Замерить» проходит все 8 шагов (короткие длительности, фигуры — заглушки) и не меняет журнал, настройки,
+   планы и вид фигуры; «Остановить» прерывает и всё возвращает; «Скопировать результат» — текст или поле для ручного
+   копирования; ?perf=0 выключает */
+{
+  const off = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  off.on('pageerror', e => errors.push(String(e)));
+  await off.addInitScript(() => { let reads = 0; Object.defineProperty(window, 'GymPerf', { configurable: true, get() { reads++; return undefined; } }); window.__perfReads = () => reads; });
+  await off.goto('file://' + file); await off.waitForTimeout(400);
+  await off.evaluate(() => document.querySelector('.card')?.scrollIntoView({ block: 'center' })); await off.waitForTimeout(800);
+  const o = await off.evaluate(() => ({ panel: !!document.querySelector('#perf-panel'), flag: localStorage.getItem('podhod.perf'), reads: window.__perfReads() }));
+  check(!o.panel && o.flag === null && o.reads > 0, `без ?perf: панели нет, крючки только проверяют флаг (${o.reads} проверок)`);
+  await off.close();
+
+  const p = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  p.on('pageerror', e => errors.push(String(e)));
+  await p.goto('file://' + file + '?perf'); await p.waitForTimeout(500);
+  const box = await rect(p, '#perf-panel .perf-body');
+  check(await p.evaluate(() => localStorage.getItem('podhod.perf') === 'open' && !!globalThis.GymPerf) && box && box.l >= 0 && box.r <= 390 && box.b <= 844 && box.w >= 300,
+    '?perf: панель включена и запомнена, плашка целиком на экране телефона');
+  check(await p.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), '?perf: страница без прокрутки вбок');
+  await p.evaluate(() => document.querySelector('.card').scrollIntoView({ block: 'center' })); await p.waitForTimeout(1600);
+  const live = await p.evaluate(() => ({ pill: document.querySelector('[data-perf-pill]').textContent, screen: document.querySelector('[data-perf-k="screen"]').textContent, cards: document.querySelector('[data-perf-k="cards"]').textContent }));
+  check(/^\d/.test(live.pill) && /^\d+(,\d)? к\/с · кадр \d/.test(live.screen) && /заново \d/.test(live.cards), `живые цифры: кадры и карточки (${live.screen} | ${live.cards})`);
+  await p.evaluate(() => { motionPrefs.view = 'mannequin'; openMotionItem(previewItem('legpress')); detailMotion.paused = false; });
+  const volLive = await p.waitForFunction(() => /поза \d/.test(document.querySelector('[data-perf-k="volume"]')?.textContent || ''), null, { timeout: 15000 }).then(() => true, () => false);
+  /* программная графика стенда отстаёт от кадров — фигуру сразу на паузу */
+  await p.evaluate(() => { if (detailMotion) detailMotion.paused = true; });
+  check(volLive && await p.evaluate(() => document.querySelector('#perf-panel').parentElement.id === 'motion-view' && /Разбор — Манекен/.test(document.querySelector('[data-perf-k="view"]').textContent)),
+    'разбор: панель в окне разбора, живые цифры объёма по частям, вид фигуры');
+  await p.click('#perf-panel [data-perf="dev"]');
+  check(await p.evaluate(() => /Устройство: .*\nВидеокарта: /.test(document.querySelector('[data-perf-dev]').textContent) && !document.querySelector('[data-perf-dev]').hidden), 'в открытом окне панель нажимается: сведения об устройстве и видеокарте');
+  await p.click('#perf-panel [data-perf="dev"]');
+  await p.evaluate(() => { closeMotion(); motionPrefs.view = 'anatomy'; });
+  check(await p.evaluate(() => document.querySelector('#perf-panel').parentElement === document.body), 'окно закрыто — панель снова на странице');
+  await p.waitForFunction(() => GymPerf.frames.filter(f => f.t > performance.now() - 500).length >= 10, null, { timeout: 20000 }).catch(() => {});
+
+  /* сценарий: журнал с записью, сохранённая тренировка — снимок до и после */
+  await fakeFigures(p);
+  const snap = () => p.evaluate(() => {
+    const ls = {}, keys = []; for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
+    for (const k of keys.sort()) if (!/^podhod\.(frames|volume-bounds|stress)\.v\d|^podhod\.perf/.test(k)) ls[k] = localStorage.getItem(k);
+    return JSON.stringify({ ls, log: LOG.data, S, prefs: motionPrefs, view: figureView(), dialogs: document.querySelectorAll('dialog[open]').length, y: Math.round(scrollY) });
+  });
+  await p.evaluate(() => {
+    LOG.data = { squat: [{ d: todayKey(), s: [[60, 8]] }] }; logSaveLocal();
+    localStorage.setItem('podhod.workout.v3', JSON.stringify({ stamp: 'старый день', index: 2, started: 1, restUntil: 0, drafts: {} }));
+    window.scrollTo(0, 300);
+  });
+  const before = await snap();
+  await p.click('[data-perf="run"]'); await p.waitForTimeout(400);
+  check(/^Идёт замер… не трогайте экран, шаг 1 из 8$/.test(await p.evaluate(() => document.querySelector('[data-perf-runtext]').textContent)), '«Замерить»: надпись «Идёт замер… не трогайте экран, шаг 1 из 8»');
+  await p.click('[data-perf="stop"]');
+  await p.waitForFunction(() => !GymPerf.run && GymPerf.result, null, { timeout: 5000 });
+  check(await p.evaluate(() => GymPerf.result.aborted && /Замер остановлен/.test(document.querySelector('[data-perf-result]').textContent)) && await snap() === before, '«Остановить» прерывает замер и возвращает всё как было');
+  /* экран не гаснет на время замера: блокировка берётся и отпускается (тренировка берёт свою — тоже отпускает) */
+  await p.evaluate(() => { window.__wk = { req: 0, rel: 0 }; Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: { request: async () => { __wk.req++; return { release: async () => { __wk.rel++; } }; } } }); });
+  const run = await p.evaluate(() => perfRun({ plan: 700, step: 500, warm: 150 }).then(r => ({ kinds: r.steps.map(s => s.kind + (s.id ? ':' + s.id : '')), bad: r.steps.filter(s => s.skip || s.error).map(s => s.label + ' ' + (s.skip || s.error)), text: perfReportText(r) })));
+  await p.waitForTimeout(50);
+  check(await p.evaluate(() => __wk.req >= 2 && __wk.rel === __wk.req), 'на время замера экран не гаснет: блокировка экрана взята и отпущена');
+  check(run.kinds.length === 8 && /^plan:\w+$/.test(run.kinds[0]) && /^workout:\w+$/.test(run.kinds[7]) && !run.bad.length
+    && run.kinds.slice(1, 7).join() === 'detail:latpulluh,detail:latpulluh,detail:legpress,detail:legpress,detail:squat,detail:squat',
+    `«Замерить»: все 8 шагов — карточка, три разбора в двух видах, тренировка (${run.kinds.join(', ')}${run.bad.length ? '; ' + run.bad.join('; ') : ''})`);
+  const after = await snap();
+  check(after === before, 'после замера журнал, настройки, планы, сохранённая тренировка, вид фигуры и прокрутка — как были');
+  check(await p.evaluate(() => document.querySelectorAll('#perf-panel .perf-table tbody tr').length === 8 && !document.querySelector('[data-perf-run]').offsetHeight), 'итог: таблица из 8 шагов');
+  /* копирование: буфер обмена; не вышло — поле с выделенным текстом */
+  await p.evaluate(() => { window.__copied = null; Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: t => { window.__copied = t; return Promise.resolve(); } } }); });
+  await p.click('[data-perf="copy"]'); await p.waitForTimeout(100);
+  const copied = await p.evaluate(() => ({ text: window.__copied, msg: document.querySelector('[data-perf-msg]').textContent }));
+  check(copied.text && /^Lazy Gym Planner .* — замер скорости, /.test(copied.text) && /\nУстройство: .*\nВидеокарта: /.test(copied.text) && (copied.text.match(/^\d\. /gm) || []).length === 8 && /Скопировано/.test(copied.msg),
+    '«Скопировать результат»: устройство и 8 шагов в буфере обмена');
+  await p.evaluate(() => { navigator.clipboard.writeText = () => Promise.reject(new Error('нет доступа')); });
+  await p.click('[data-perf="copy"]'); await p.waitForTimeout(100);
+  check(await p.evaluate(() => { const ta = document.querySelector('[data-perf-msg] textarea'); return !!ta && ta.value === window.__copied && document.activeElement === ta && ta.selectionEnd - ta.selectionStart === ta.value.length; }),
+    'без доступа к буферу — поле с выделенным текстом для ручного копирования');
+  await p.click('[data-perf="min"]');
+  check(await p.evaluate(() => localStorage.getItem('podhod.perf') === 'min' && !document.querySelector('#perf-panel .perf-body').offsetHeight && /^\d|—/.test(document.querySelector('.perf-pill').textContent.trim())), 'свёрнутая панель — кружок с кадрами в секунду');
+  await p.goto('file://' + file + '?perf=0'); await p.waitForTimeout(300);
+  check(await p.evaluate(() => !document.querySelector('#perf-panel') && localStorage.getItem('podhod.perf') === null && globalThis.GymPerf === null), '?perf=0 выключает панель');
+  await p.close();
+}
+
 /* компьютер: параметры в боковой колонке не сворачиваются */
 const desk = await open(1280);
 await desk.evaluate(() => { S.fold.setup = true; regen(); });
@@ -492,4 +576,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа, виды фигуры «Анатомия», «Скелет» и «Манекен», первый экран и разбор на телефоне, карточка, журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования работают на телефоне и компьютере.');
+console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа, виды фигуры «Анатомия», «Скелет» и «Манекен», первый экран и разбор на телефоне, карточка, журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования, панель замера скорости ?perf работают на телефоне и компьютере.');
