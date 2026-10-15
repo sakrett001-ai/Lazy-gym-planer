@@ -88,3 +88,18 @@ html.workout-open{overflow:hidden}
 @media(max-width:700px){.workout-view{width:100vw;height:100dvh;max-height:100dvh;margin:0;border-radius:0;border:0}.wv-shell{padding:16px 16px max(20px,env(safe-area-inset-bottom))}.wv-grid{grid-template-columns:1fr;grid-template-areas:none;gap:16px}.wv-visual,.wv-record{grid-area:auto}.wv-head button{padding:8px 10px}.wv-select{margin:14px 0}.wv-progress-line{margin-top:15px}#wv-stage{height:246px;padding-top:28px}.wv-cue{min-height:0;font-size:13px}.wv-visual .wv-guide{margin-top:0}#wv-title{font-size:23px}.wv-set-chips{margin:12px 0}.wv-fields{margin-top:15px}.wv-fields input{height:60px;font-size:25px}.wv-rest{margin-top:32px}.wv-record{padding-bottom:8px}.wv-primary{min-height:56px}.wv-target strong{font-size:15px}}
 @media(max-width:380px){.wv-shell{padding:12px}.wv-figure-tools button{font-size:11px}.wv-select select{font-size:13px}#wv-stage{height:225px}.wv-target{padding:11px}.wv-target strong{font-size:14px}}
 @media print{#start-workout,[data-workout],.workout-view,.motion-view{display:none!important}}
+/* «Анатомия» вне разбора (этап 2). Экран тренировки: выбор фигуры — маленький переключатель в правом верхнем углу
+   сцены (общий с разбором), подпись (загрузка, ошибка, «не успевает») — строкой под сценой.
+   Карточки плана: кадр анатомии — холст поверх SVG-манекена; SVG остаётся в разметке (размер карточки не меняется)
+   и снова виден, пока кадра нет. */
+.wv-figure{position:absolute;top:7px;right:7px;z-index:1;display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:color-mix(in srgb,var(--surface) 85%,transparent)}
+.wv-figure button{border:0;background:none;min-height:32px;padding:4px 8px;font:500 11px/1.2 var(--f-body);color:var(--muted);cursor:pointer}
+.wv-figure button+button{border-left:1px solid var(--line)}
+.wv-figure button[aria-pressed="true"]{background:var(--accent-soft);color:var(--ink);font-weight:600}
+.wv-figure button:disabled{opacity:.45;cursor:default}
+.wv-figure[aria-busy="true"] button{cursor:progress}
+.wv-figure-note{margin:6px 2px 0;font-size:12px;line-height:1.4;color:var(--muted)}
+.illus>canvas.card-anatomy{position:absolute;inset:0;width:100%;height:100%;display:block}
+.illus:not(.anatomy-on)>canvas.card-anatomy,.illus.anatomy-on>svg.fig{visibility:hidden}
+.figure-tile-note{font-size:10px;line-height:1.4;color:var(--muted);padding:0 10px 8px;margin:0}
+@media(max-width:380px){.wv-figure button{padding:4px 6px;font-size:10.5px}}

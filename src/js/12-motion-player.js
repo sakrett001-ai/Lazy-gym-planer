@@ -48,8 +48,10 @@ function cardClock(F){
   const total=F.durations.reduce((a,b)=>a+b,0)||4000,n=Math.max(1,Math.round(total/CARD_GRID_MS)),step=total/n;
   return (((Math.round(F.clock/step))%n)+n)%n*step;
 }
-function paintMotion(F, detailed=false) {
-  const m = motionFrame(F, detailed ? F.clock : cardClock(F)); F.f.at(m.t,m);if(F.extra)F.extra.at(m.t,m);
+function paintMotion(F, detailed=false, svgOnly=false) {
+  const m = motionFrame(F, detailed ? F.clock : cardClock(F));
+  /* карточка в «Анатомии» — кадр общего рендерера в её холст; не вышло (нет контекста) — SVG-манекен */
+  if (detailed || svgOnly || !F.card || !cardAnatomyLive(F) || !paintCardAnatomy(F,m)) {F.f.at(m.t,m);if(F.extra)F.extra.at(m.t,m);}
   if (!detailed) {
     const cap = F.btn.closest('.motion-tile').querySelector('.motion-caption');
     if (cap && cap.textContent!==m.label) cap.textContent=m.label;
@@ -122,6 +124,7 @@ function changeStressPreference(show){
  motionPrefs.stress=!!show;saveMotionPrefs();
  for(const F of [...figs,detailMotion,workout?.motion].filter(Boolean))for(const f of [F.f,F.extra].filter(Boolean))f.setStress?.(motionPrefs.stress);
  for(const line of document.querySelectorAll('.c-joints'))line.hidden=!motionPrefs.stress;
+ refreshCardAnatomy();
  if(detailMotion){configureStressPanel('mv',detailMotion);paintMotion(detailMotion,true);}
  if(workout?.motion){configureStressPanel('wv',workout.motion);paintWorkoutMotion();}
 }
@@ -131,6 +134,7 @@ function changeMusclePreference(show){
   for(const f of [F.f,F.extra].filter(Boolean))f.setMuscles?.(motionPrefs.muscles);
   const note=F.btn?.closest('.motion-tile').querySelector('.muscle-tile-note');if(note)note.hidden=!motionPrefs.muscles;
  }
+ refreshCardAnatomy();
  if(detailMotion){configureMusclePanel('mv',detailMotion.it);paintMotion(detailMotion,true);const note=$('#mv-figure-note'),text=figureNote(figureView(),detailMotion);if(!note.hidden&&!$('#mv-figure').hasAttribute('aria-busy')&&text)note.textContent=text;}
  if(workout?.motion){configureMusclePanel('wv',workout.motion.it);paintWorkoutMotion();}
 }
@@ -144,11 +148,17 @@ function scheduleMotionLoop() {
       if (detailMotion) {if (!detailMotion.paused) {detailMotion.clock+=dt*Number(motionPrefs.speed);detailMotion.since=(detailMotion.since||0)+dt;
         if(figureView()==='mannequin'||detailMotion.since>=CARD_FRAME_MS){detailMotion.since=0;paintMotion(detailMotion,true);}}}
       else if(gallery.on){/* витрина атласа закрывает план: карточки за ней не анимируются */}
-      else if(workout && $('#workout-view').open){const F=workout.motion;if(F && !F.paused && !$('#wv-active').hidden){F.clock+=dt;paintWorkoutMotion();}}
+      else if(workout && $('#workout-view').open){const F=workout.motion;if(F && !F.paused && !$('#wv-active').hidden){F.clock+=dt;
+        /* кости и мышцы — с частотой ступени скорости (workoutFigure.pace), манекен — каждый кадр, как раньше */
+        if(!workoutAnatomyLive())paintWorkoutMotion();
+        else{F.since=(F.since||0)+dt;if(F.since>=workoutFigure.pace.frameMs-PACE_SLACK){F.since=0;const c0=window.GymVolume?.boneMisses,t0=performance.now();paintWorkoutMotion();workoutPaceSample(performance.now()-t0,window.GymVolume?.boneMisses!==c0);}}}}
       else for (const F of figs) if (F.f && F.vis && !F.paused && F.active!==false) {
-        /* карточки и атлас — 30 кадров в секунду: часы идут каждый кадр, рисунок — через кадр */
+        /* карточки и атлас — 30 кадров в секунду: часы идут каждый кадр, рисунок — через кадр; карточка в «Анатомии» —
+           с частотой ступени скорости (cardAnatomy.pace: 30, 15, 10 кадров в секунду) */
         F.clock+=dt;F.since=(F.since||0)+dt;
-        if(F.since>=CARD_FRAME_MS){F.since=0;paintMotion(F);}
+        const live=F.card&&cardAnatomyLive(F);
+        if(F.since>=(live?cardAnatomy.pace.frameMs-PACE_SLACK:CARD_FRAME_MS)){F.since=0;
+          if(!live)paintMotion(F);else{const t0=performance.now();paintMotion(F);if(!F.av.built)cardPaceSample(performance.now()-t0,F.av.cold);}}
       }
     }
     rafId=requestAnimationFrame(loop);
@@ -169,7 +179,9 @@ function pickActiveCards(){
   const pick=F=>F.seen>=.4?F.pick||0:0;
   const order=cards.filter(F=>!F.paused&&(F.seen>0||F.hover)).sort((a,b)=>(b.hover|0)-(a.hover|0)||pick(b)-pick(a)||Math.round(b.seen*5)-Math.round(a.seen*5)||dist(a)-dist(b));
   const on=new Set(order.slice(0,activeCardCount()+(order[0]?.hover?1:0)));
-  let k=0;for(const F of figs)if(F.card){const was=F.active;F.active=on.has(F);if(F.active&&!was)F.since=CARD_FRAME_MS/2*(k++%2);}
+  let k=0,fresh=false;for(const F of figs)if(F.card){const was=F.active;F.active=on.has(F);if(F.active&&!was){F.since=CARD_FRAME_MS/2*(k++%2);fresh=true;}}
+  /* в движении другая карточка: её первые кадры (сборка сцены, холодная память кадров) скорость не меряют */
+  if(fresh)cardAnatomy.pace.settle();
 }
 function buildCardFigure(F){
   if(F.f||F.failed)return;
@@ -177,7 +189,8 @@ function buildCardFigure(F){
     /* начатую заранее рамку досчитать, а не начинать заново */
     if(F.job){F.job.step(41);F.job=null;}
     F.f=buildFigure(F.it.ex.anim,{primary:F.it.ex.pri,has:F.it.has,ratio:1,t:0,label:F.it.name,muscles:motionPrefs.muscles,frameCache:true});
-    F.btn.prepend(F.f.svg);paintMotion(F);
+    /* сразу — SVG-манекен (первая картинка плана не ждёт анатомию); кадр анатомии нарисуется в простое */
+    F.btn.prepend(F.f.svg);paintMotion(F,false,true);
   } catch(e) {F.failed=true;console.error('Демонстрация',F.it.ex.id,e);}
 }
 /* Рамки ещё не построенных карточек досчитываются заранее, по два положения за раз: в простое, а если простоя
@@ -203,6 +216,135 @@ function prefetchCardFrames(){
   };
   idle(work);
 }
+/* ---------- «Анатомия» в карточках плана (этап 2) ----------
+   В виде «Анатомия» (или «Скелет») карточка показывает кости и мышцы в почти невидимом силуэте кожи, как разбор.
+   Своего WebGL у карточки нет: кадры рисует общий рендерер вне экрана (GymVolume.cards(), src/volume/main.mjs) и
+   копирует в холст карточки. Анимируются те же карточки, что и раньше (на телефоне одна, на широком экране — две);
+   кости и мышцы обновляются с частотой ступени скорости (cardAnatomy.pace, 12-figure-pace.js), часы — каждый кадр.
+   Остальные карточки показывают один неподвижный кадр своей фазы: он рисуется один раз в простое (queueCardStills) и
+   хранится в холсте карточки; карточка, ушедшая далеко от экрана, его отпускает (stillsToFree). До готовности кадра,
+   пока грузятся кости и мышцы, без объёмной графики и после отката по скорости — SVG-манекен, как раньше.
+   Ракурс — как у карточки (cardCamera), рамка — по телу. Цвет мышц — как в разборе: по фазам или основные ярче. */
+const PACE_SLACK=4;
+const cardAnatomy={pace:anatomyPace(),slow:false,failed:false,loading:false,view:'mannequin',theme:0,queued:false,far:null,idleFree:0};
+const coarsePointer=()=>typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches;
+/* ракурс анатомии в карточке: тот, что выбран для упражнения в разборе, иначе «Сверху под углом», как у SVG-карточки */
+function cardCamera(F){return motionCamera(F.it.ex);}
+function cardStage(){try{return window.GymVolume?.cards?.()||null;}catch(e){return null;}}
+function cardAnatomyState(view=figureView()){
+  const need=view==='anatomy'?[Skeleton,Muscles]:[Skeleton];
+  return need.every(x=>x.data)?'ready':cardAnatomy.failed?'error':'loading';
+}
+function cardAnatomyChoice(){
+  return figureViewFor(motionPrefs.view,{able:!!cardStage(),state:cardAnatomyState(),slow:cardAnatomy.slow,coarse:coarsePointer()});
+}
+const cardAnatomyLive=F=>cardAnatomy.view!=='mannequin'&&!!F.av;
+/* холст и фигура общего рендерера для карточки (один раз); null — у упражнения нет манекена каталога */
+function cardAnatomyFor(F){
+  if(F.av)return F.av;
+  const ex=F.it.ex,stage=cardStage();if(!stage||!ex.anim.catalogRig)return null;
+  const A=catalogAnimFor(ex.anim,F.it.has),bits=A.catalogRig(0).props.map(q=>GymEquipment.visible(q,F.it.has)?1:0).join('');
+  const canvas=document.createElement('canvas');canvas.className='fig card-anatomy';canvas.setAttribute('aria-hidden','true');canvas.width=canvas.height=0;
+  F.btn.prepend(canvas);
+  const handle=stage.figure({key:[A.catalogId,A.catalogVariant||'',bits].join('|'),fit:'body',color:muscleColor,muscles:motionPrefs.muscles,stress:motionPrefs.stress,
+    data:(t,index,coarse,lean)=>catalogVolumeData(A,t,index,F.it.has,coarse,lean)});
+  return F.av={canvas,handle,level:anatomyLevel(ex),on:false,still:null,size:null,seenAt:0,layers:null};
+}
+/* слои фигуры карточки по виду: кости, мышцы (уровни упражнения), цвет по фазам и метки нагрузки — из настроек */
+function cardAnatomyLayers(F){
+  const av=F.av,view=cardAnatomy.view,key=view+(motionPrefs.muscles?1:0)+(motionPrefs.stress?1:0);if(av.layers===key)return;
+  av.handle.setLayers(Skeleton.data,view==='anatomy'?{skeleton:Skeleton.data,muscles:Muscles.data,level:av.level}:null);
+  av.handle.setLook({muscles:motionPrefs.muscles,stress:motionPrefs.stress});av.layers=key;
+}
+function cardStillKey(F,m){const av=F.av,s=av.size;return [m.t,m.index,cardAnatomy.view,av.layers,cardAnatomy.theme,s?s.width+'x'+s.height:'',cardCamera(F)].join('|');}
+/* кадр анатомии в холст карточки; true — нарисован (SVG под ним скрыт) */
+function paintCardAnatomy(F,m){
+  const av=F.av;if(!av)return false;
+  if(!av.size){const r=(F.f?.svg||F.btn).getBoundingClientRect();av.size=cardCanvasSize(r.width,r.height,window.devicePixelRatio);if(!av.size)return false;}
+  cardAnatomyLayers(F);
+  if(av.canvas.width!==av.size.width||av.canvas.height!==av.size.height){av.canvas.width=av.size.width;av.canvas.height=av.size.height;}
+  const stage=cardStage(),b0=stage?.builds,c0=window.GymVolume?.boneMisses;
+  let ok=false;try{ok=av.handle.paint(av.canvas,m.t,m.index,cardCamera(F));}catch(e){console.error('Анатомия карточки',F.it.ex.id,e);ok=false;}
+  /* кадр со сборкой сцены (новое упражнение) — не для замера скорости */
+  av.built=!!stage&&stage.builds!==b0;av.cold=window.GymVolume?.boneMisses!==c0;
+  if(!ok)return false;
+  av.still=cardStillKey(F,m);av.seenAt=performance.now();
+  if(!av.on){av.on=true;F.btn.classList.add('anatomy-on');}
+  return true;
+}
+/* отпустить кадр карточки: холст без памяти, на виду — SVG-манекен в текущей фазе */
+function freeCardStill(F){
+  const av=F.av;if(!av)return;
+  if(av.on){av.on=false;F.btn.classList.remove('anatomy-on');if(F.f){const m=motionFrame(F,cardClock(F));F.f.at(m.t,m);}}
+  av.canvas.width=av.canvas.height=0;av.still=null;
+}
+function freeFarStills(){
+  const list=figs.map((F,id)=>({id,has:!!F.av?.on,near:!!F.vis,far:F.far!==false,seenAt:F.av?.seenAt||0}));
+  for(const id of stillsToFree(list))freeCardStill(figs[id]);
+}
+function anatomyDialogOpen(){return !!(detailMotion||gallery.on||($('#workout-view')?.open)||$('#motion-view')?.open);}
+/* неподвижные кадры: в простое, по одному, начиная с ближних к середине экрана; анимируемые карточки рисует цикл */
+function queueCardStills(){
+  /* одна заявка на всех: в простое берётся текущее состояние (вид, карточки, фазы), а не то, что было при заявке */
+  if(cardAnatomy.queued)return;cardAnatomy.queued=true;
+  const idle=window.requestIdleCallback?cb=>requestIdleCallback(cb,{timeout:300}):cb=>setTimeout(()=>cb({timeRemaining:()=>8,didTimeout:true}),60);
+  idle(()=>{
+    cardAnatomy.queued=false;
+    if(cardAnatomy.view==='mannequin'||document.hidden||anatomyDialogOpen())return;
+    const mid=window.innerHeight/2,dist=F=>{const r=F.btn.getBoundingClientRect();return Math.abs(r.top+r.height/2-mid);};
+    const todo=figs.filter(F=>F.card&&F.vis&&F.f&&F.av&&!(F.active&&!F.paused)).map(F=>[F,motionFrame(F,cardClock(F))]).filter(([F,m])=>F.av.still!==cardStillKey(F,m));
+    if(!todo.length)return;
+    const [F,m]=todo.sort((a,b)=>dist(a[0])-dist(b[0]))[0];
+    paintMotion(F);
+    /* не нарисовался (контекст потерян) — не крутиться вхолостую: следующая попытка — по событию */
+    if(F.av.still===cardStillKey(F,m)&&todo.length>1)queueCardStills();
+  });
+}
+/* загрузка костей и мышц для карточек (одна на всех; ошибка — манекен с подписью, повтор — при следующем плане) */
+function loadCardAnatomy(){
+  if(cardAnatomy.loading)return;cardAnatomy.loading=true;
+  /* в простое: разбор данных (≈1 МБ JSON мышц) не задерживает первую картинку плана — SVG-карточки */
+  const idle=window.requestIdleCallback?cb=>requestIdleCallback(cb,{timeout:3000}):cb=>setTimeout(cb,300);
+  idle(()=>{
+    const need=figureView()==='anatomy'?[Skeleton,Muscles]:[Skeleton];
+    Promise.all(need.map(x=>x.load())).then(()=>{cardAnatomy.loading=false;cardAnatomy.failed=false;applyCardsView();},()=>{cardAnatomy.loading=false;cardAnatomy.failed=true;applyCardsView();});
+  });
+}
+/* подпись под карточкой: откат по скорости или ошибка загрузки (пока грузится — просто SVG-манекен) */
+function paintCardNotes(note){
+  for(const F of figs){if(!F.card)continue;const el=F.btn.closest('.motion-tile')?.querySelector('.figure-tile-note');if(!el)continue;
+    if(el.textContent!==note)el.textContent=note;el.hidden=!note;}
+}
+/* вид карточек: выбор человека, объёмная графика, данные, откат по скорости — перерисовать всё нужное */
+function applyCardsView(){
+  const choice=cardAnatomyChoice(),was=cardAnatomy.view;cardAnatomy.view=choice.view;if(was!==choice.view)cardAnatomy.pace.settle();
+  paintCardNotes(choice.wait?'':choice.note);
+  if(choice.view==='mannequin'){
+    for(const F of figs)if(F.card)freeCardStill(F);
+    if(choice.wait)loadCardAnatomy();
+    /* без анатомии общий рендерер не нужен: контекст WebGL и сцены освобождаются */
+    else if(was!=='mannequin'||!figs.some(F=>F.av))cardStage()?.dispose();
+    return;
+  }
+  /* холсты и фигуры карточек; неподвижный кадр перерисуется, только если сменилось то, что в нём видно (ключ кадра:
+     фаза, вид, слои, тема, размер, ракурс), — закрытие разбора без перемен ничего не перерисовывает */
+  for(const F of figs)if(F.card)cardAnatomyFor(F);
+  /* анимируемые карточки рисует цикл, остальные — в простое */
+  queueCardStills();
+}
+/* настройки цвета мышц или меток нагрузки сменились: неподвижные кадры — заново */
+function refreshCardAnatomy(){if(cardAnatomy.view==='mannequin')return;for(const F of figs)if(F.av)F.av.still=null;queueCardStills();}
+function cardPaceSample(ms,cold=false){
+  const r=cardAnatomy.pace.sample(ms,figs.filter(F=>F.card&&F.active&&!F.paused&&F.vis).length,cold);
+  if(r==='fallback'){cardAnatomy.slow=true;applyCardsView();}
+}
+/* человек заново выбрал вид с костями: откат по скорости забывается — новая попытка с 30 кадров */
+function retryAnatomyPace(){cardAnatomy.slow=false;cardAnatomy.pace.reset();workoutFigure.slow=false;workoutFigure.pace.reset();}
+/* тема (кадр анатомии от неё сейчас не зависит, но перерисовка дешёвая и не пропустит будущих правок) */
+if(typeof matchMedia==='function')try{matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',()=>{cardAnatomy.theme++;refreshCardAnatomy();});}catch(e){}
+if(typeof MutationObserver==='function'&&typeof document!=='undefined'&&document.documentElement)new MutationObserver(()=>{cardAnatomy.theme++;refreshCardAnatomy();}).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+if(typeof document!=='undefined'&&document.addEventListener)document.addEventListener('visibilitychange',()=>{if(!document.hidden&&cardAnatomy.view!=='mannequin')queueCardStills();});
+
 let mountedKit=null;
 function mountFigures() {
   figs=[];
@@ -211,10 +353,11 @@ function mountFigures() {
   const flat=plan.blocks.flatMap(b=>b.items);
   document.querySelectorAll('[data-fig]').forEach(btn=>{
     const it=flat[+btn.dataset.fig];if(!it)return;
-    const F={btn,it,f:null,card:true,vis:false,seen:0,active:false,paused:reduceMotion,clock:0,durations:motionDurations(it)};
+    const F={btn,it,f:null,av:null,card:true,vis:false,far:true,seen:0,active:false,paused:reduceMotion,clock:0,durations:motionDurations(it)};
     figs.push(F);
     const tile=btn.closest('.motion-tile');
     if(motionProfile(it.ex.anim)){const note=document.createElement('p');note.className='muscle-tile-note';note.textContent='Цвет — учебная схема';note.hidden=!motionPrefs.muscles;tile.appendChild(note);}
+    {const note=document.createElement('p');note.className='figure-tile-note';note.hidden=true;tile.appendChild(note);}
     const pause=tile.querySelector('[data-motion-pause]');
     if(pause){pause.textContent=F.paused?'Пуск':'Пауза';pause.setAttribute('aria-pressed',String(!F.paused));pause.setAttribute('aria-label',`${F.paused?'Воспроизвести':'Приостановить'} демонстрацию: ${it.name}`);}
     const hover=on=>e=>{if(e.pointerType&&e.pointerType!=='mouse')return;F.hover=on;pickActiveCards();};
@@ -223,17 +366,26 @@ function mountFigures() {
   });
   if ('IntersectionObserver' in window) {
     const byBtn=new Map(figs.map(F=>[F.btn,F]));
-    io=new IntersectionObserver(es=>{for(const e of es){const F=byBtn.get(e.target);if(!F)continue;F.vis=e.isIntersecting;if(F.vis)buildCardFigure(F);}pickActiveCards();},{rootMargin:CARD_NEAR});
+    io=new IntersectionObserver(es=>{for(const e of es){const F=byBtn.get(e.target);if(!F)continue;F.vis=e.isIntersecting;if(F.vis){buildCardFigure(F);if(F.av)F.av.seenAt=performance.now();}}pickActiveCards();if(cardAnatomy.view!=='mannequin')queueCardStills();},{rootMargin:CARD_NEAR});
     ioSeen=new IntersectionObserver(es=>{for(const e of es){const F=byBtn.get(e.target);if(F)F.seen=e.isIntersecting?e.intersectionRatio:0;}pickActiveCards();},{threshold:[0,.2,.4,.6,.8,1]});
-    for(const F of figs){io.observe(F.btn);ioSeen.observe(F.btn);}
+    /* дальняя зона (два экрана): ушедшая за неё карточка отпускает неподвижный кадр анатомии */
+    cardAnatomy.far=new IntersectionObserver(es=>{for(const e of es){const F=byBtn.get(e.target);if(F)F.far=e.isIntersecting;}freeFarStills();},{rootMargin:CARD_STILLS.far});
+    for(const F of figs){io.observe(F.btn);ioSeen.observe(F.btn);cardAnatomy.far.observe(F.btn);}
     prefetchCardFrames();
   } else for(const F of figs){F.vis=true;F.active=true;buildCardFigure(F);}
+  /* новый план — новая попытка загрузки костей и мышц, если прошлая не удалась */
+  if(cardAnatomy.failed&&!cardAnatomy.loading)cardAnatomy.failed=false;
+  applyCardsView();
   scheduleMotionLoop();
 }
 function stopFigures() {
   if(workout && $('#workout-view').open)closeWorkout();
   if(detailMotion) closeMotion();
-  cancelAnimationFrame(rafId);framePrefetchGen++;if(io)io.disconnect();if(ioSeen)ioSeen.disconnect();io=ioSeen=null;for(const F of figs)disposeMotion(F);figs=[];
+  cancelAnimationFrame(rafId);framePrefetchGen++;if(io)io.disconnect();if(ioSeen)ioSeen.disconnect();cardAnatomy.far?.disconnect();io=ioSeen=cardAnatomy.far=null;
+  for(const F of figs){disposeMotion(F);if(F.av){F.av.handle.release();F.av.canvas.width=F.av.canvas.height=0;}}figs=[];
+  /* журнал, атлас мышц: карточек нет — через несколько секунд общий рендерер карточек отдаёт контекст WebGL и сцены
+     (сразу нельзя: «Заменить» или новый подбор строят план заново, и сцены пригодятся) */
+  clearTimeout(cardAnatomy.idleFree);cardAnatomy.idleFree=setTimeout(()=>{if(!figs.some(F=>F.av))cardStage()?.dispose();},4000);
 }
 function previewItem(id) {
   const ex=EXI[id];let E=effEquip(S.equip);
@@ -316,9 +468,11 @@ function closeMotion() {
   document.documentElement.classList.remove('motion-open');
   if(detailReturn&&detailReturn.isConnected)detailReturn.focus();
   detailReturn=null;
+  /* вид фигуры мог смениться в разборе — карточки плана берут его же */
+  if(figs.some(F=>F.card))applyCardsView();
 }
 function setupMotionViewer() {
-  window.addEventListener('resize',()=>pickActiveCards(),{passive:true});
+  window.addEventListener('resize',()=>{pickActiveCards();for(const F of figs)if(F.av)F.av.size=null;if(cardAnatomy.view!=='mannequin')queueCardStills();},{passive:true});
   $('#mv-exercise').innerHTML=GROUPS.map(g=>`<optgroup label="${esc(g.name)}">${EX.filter(ex=>ex.g===g.id).map(ex=>`<option value="${ex.id}">${esc(ex.name)}</option>`).join('')}</optgroup>`).join('');
 
   document.addEventListener('click',e=>{
@@ -327,7 +481,7 @@ function setupMotionViewer() {
     if(t.id==='motion-atlas'){openGallery();return;}
     if(t.id==='mv-close'){closeMotion();return;}
     if(!detailMotion)return;
-    if(t.dataset.mvFigure){if(t.dataset.mvFigure!==figureView()||t.getAttribute('aria-pressed')!=='true'){motionPrefs.view=t.dataset.mvFigure;saveMotionPrefs();applyFigureView();}return;}
+    if(t.dataset.mvFigure){if(t.dataset.mvFigure!==figureView()||t.getAttribute('aria-pressed')!=='true'){motionPrefs.view=t.dataset.mvFigure;saveMotionPrefs();if(motionPrefs.view!=='mannequin')retryAnatomyPace();applyFigureView();}return;}
     if(t.id==='mv-play'){detailMotion.paused=!detailMotion.paused;paintMotion(detailMotion,true);}
     if(t.dataset.mvStep){const m=motionFrame(detailMotion);detailMotion.paused=true;detailMotion.clock=Math.max(0,Math.min(m.total-1,(m.progress+Number(t.dataset.mvStep))*m.total));paintMotion(detailMotion,true);}
     if(t.dataset.mvPose){const d=detailMotion.durations;detailMotion.paused=true;detailMotion.clock=({start:0,middle:d[0]*.5,end:d[0]+d[1]*.5,return:d[0]+d[1]+d[2]*.5})[t.dataset.mvPose];paintMotion(detailMotion,true);}
@@ -350,6 +504,8 @@ function setupMotionViewer() {
      плоская схема, а с приходом объёма та же фаза перерисовывается в нём */
   window.addEventListener('gym-volume',()=>{
     if(detailMotion&&!gallery.on)mountDetailCameras();if(workout?.motion&&$('#workout-view').open)mountWorkoutCameras();
+    /* карточки плана: объёмная графика пришла — анатомия (неподвижные кадры в простое, анимируемая — в цикле) */
+    if(figs.some(F=>F.card))applyCardsView();
     /* сетка головы (≈55 мс на компьютере) одна на все упражнения: готовится в простое, а не при первом открытии разбора */
     const idle=window.requestIdleCallback||(f=>setTimeout(f,2000));idle(()=>{try{Mannequin.headMesh();}catch(e){}},{timeout:6000});
     /* кости и мышцы для вида «Анатомия» — тоже заранее: первое открытие разбора сразу показывает анатомию */

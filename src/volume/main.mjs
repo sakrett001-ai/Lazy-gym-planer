@@ -48,6 +48,18 @@ function boundsSet(key,value){
 }
 const round4=v=>Math.round(v*1e4)/1e4;
 
+/* Память матриц костей по фазе: кадры с той же фазой t (часы карточек и экрана тренировки идут по сетке ≈30 кадров
+   в секунду) со второго круга повторения не раскладывают скелет заново — ≈5 КБ на кадр (102 кости × 12 чисел), а
+   лопатка с поднятой рукой стоит до 5 мс процессора на кадр (втрое больше на бюджетном телефоне). Не больше BONE_FRAMES
+   фаз: первые уходят первыми. Матрицы — те же, что посчитал бы scene.apply (data.boneFrames). */
+const BONE_FRAMES=240;let boneMisses=0;
+function memoBones(memo,sk,t,d){
+ if(!sk||!d.body||!globalThis.Skeleton?.frames)return;
+ if(memo.data!==sk){memo.map.clear();memo.data=sk;}
+ let fr=memo.map.get(t);
+ if(!fr){boneMisses++;fr=globalThis.Skeleton.frames(d.pose,d.body,sk.bones);if(memo.map.size>=BONE_FRAMES)memo.map.delete(memo.map.keys().next().value);memo.map.set(t,fr);}
+ d.boneFrames=fr;
+}
 export function createVolumeFigure(options){
  if(rendererUnavailable)return null;
  if(typeof window.WebGL2RenderingContext==='undefined'){rendererUnavailable=true;return null;}
@@ -60,7 +72,9 @@ export function createVolumeFigure(options){
  const scene=createCatalogScene(initial),cameras=scene.cameras;root.append(renderer.domElement);let disposed=false,lastT=options.t||0,lastIndex=0,camera=options.camera||'above',selected='all',muscles=options.muscles!==false,joints=!!options.joints,stress=options.stress!==false,skeleton=null,anatomy=null;
  if(!cameras[camera])throw Error('Unknown volume camera '+camera);
  let updateVectors=()=>{};
- const apply=(t,index)=>{const d=data(t,index,!!(skeleton||anatomy));scene.apply(d,{color:options.color,selected,muscles,joints,stress,skeleton,anatomy});updateVectors(t,index,d.pose);};
+ /* options.memoBones — фигура, которой показывают одно и то же повторение по сетке фаз (экран тренировки): матрицы костей — из памяти */
+ const bonesMemo=options.memoBones?{map:new Map(),data:null}:null;
+ const apply=(t,index)=>{const d=data(t,index,!!(skeleton||anatomy));if(bonesMemo)memoBones(bonesMemo,anatomy?.skeleton||skeleton,t,d);scene.apply(d,{color:options.color,selected,muscles,joints,stress,skeleton,anatomy});updateVectors(t,index,d.pose);};
  const trace=new THREE.Line(new THREE.BufferGeometry().setFromPoints(options.trace.map(p=>new THREE.Vector3(...world(p)))),new THREE.LineBasicMaterial({color:'#b4c3d9',transparent:true,opacity:.7}));trace.visible=false;scene.scene.add(trace);
  const vectors=new THREE.Group();vectors.name='movement-vectors';vectors.visible=false;scene.scene.add(vectors);
  for(const v of options.vectors){const a=new THREE.Vector3(...world(v.a)),b=new THREE.Vector3(...world(v.b)),d=b.clone().sub(a);vectors.add(new THREE.ArrowHelper(d.clone().normalize(),a,d.length(),/^(sh|hip)$/.test(v.key)?0x77a9d3:0xe97155,.075,.035));}
@@ -105,4 +119,97 @@ export function createVolumeFigure(options){
  return{svg:root,at,get camera(){return camera;},setCamera,setMuscles,setRegion,setJoints,setStress,setSkeleton,setAnatomy,setLayers,setTrace(show){trace.visible=!!show;draw();},setVectors(show){vectors.visible=!!show;draw();},
   dispose(){if(disposed)return;disposed=true;canvas.removeEventListener('webglcontextrestored',restore);observer?.disconnect();scene.disposeGeometry();slot.release=scene.disposeMaterials;spareRenderer(slot);}};
 }
-window.GymVolume={create:createVolumeFigure};
+
+/* ---------- Карточки плана: один общий рендерер вне экрана (вид «Анатомия», этап 2) ----------
+   WebGL-контекстов в браузере мало (8–16), а карточек в плане 3–10 (за неделю больше), поэтому своего рендерера у
+   карточки нет. Один рендерер с холстом вне страницы рисует кадр нужной карточки и сразу, в той же задаче, копирует его
+   в её холст 2D (drawImage; буфер кадра цел до конца задачи — preserveDrawingBuffer не нужен). Холст карточки и хранит
+   картинку: неподвижная карточка больше ничего не считает, а потеря контекста WebGL картинку не стирает.
+   Сцены упражнений — общий запас по ключу «упражнение, видимый инвентарь»: карточки одного упражнения рисуются из одной
+   сцены, и поза кадра (кости, пути и тела мышц) считается один раз на фазу, а не на карточку. В запасе не больше
+   CARD_SCENES сцен (анимируемые карточки и одна под неподвижные кадры); давняя сцена освобождается: геометрия — сразу,
+   материалы — после кадра следующей сцены, как у фигур разбора (собранные программы шейдеров переходят к ней).
+   Рамка карточки — по телу (fit:'body'): в маленьком кадре человек крупнее, тренажёр может уйти за край.
+   Теней нет (CARD_SHADOWS): в кадре 130–200 px их почти не видно, а проход тени — ещё одна отрисовка всех костей. */
+const CARD_SCENES=3,CARD_SHADOWS=false,CARD_PAD=1.1;
+function createCardStage(){
+ let slot=null,width=0,height=0,renders=0,builds=0;const scenes=new Map(),afterRender=[],timing={apply:0,render:0,copy:0};
+ const now=()=>typeof performance!=='undefined'?performance.now():Date.now();
+ function drop(){
+  for(const e of scenes.values())disposeEntry(e,true);scenes.clear();
+  for(const f of afterRender.splice(0))try{f();}catch(e){}
+  if(slot){slot.canvas.removeEventListener('webglcontextrestored',restored);dropRenderer(slot);slot=null;}width=height=0;
+ }
+ /* контекст вернулся: сцены собираются заново по требованию (картинки карточек остались в их холстах) */
+ function restored(){for(const e of scenes.values())disposeEntry(e,true);scenes.clear();width=height=0;}
+ function ensure(){
+  if(slot)return slot;
+  if(rendererUnavailable)return null;
+  if(typeof window.WebGL2RenderingContext==='undefined'){rendererUnavailable=true;return null;}
+  const canvas=document.createElement('canvas');let renderer=null,context=null;
+  try{context=canvas.getContext('webgl2',attributes);if(context){renderer=new THREE.WebGLRenderer({canvas,context,...attributes});renderer.setPixelRatio(1);}}catch(e){renderer=null;}
+  if(!renderer){context?.getExtension?.('WEBGL_lose_context')?.loseContext();rendererUnavailable=true;return null;}
+  slot={renderer,canvas,release:null};canvas.addEventListener('webglcontextrestored',restored);return slot;
+ }
+ function build(key,options){
+  const data=(t,index,lean)=>options.data(t,index,false,lean),initial=data(0,0,true),scene=createCatalogScene(initial);
+  const fit=options.fit==='body'?'body':'all',fitKey=initial.exerciseId+'|'+hashText(JSON.stringify([initial.props,[]]))+'|'+fit,saved=boundsGet(fitKey);
+  if(saved&&Object.keys(scene.bounds).every(k=>saved[k]))for(const k of Object.keys(scene.bounds))Object.assign(scene.bounds[k],saved[k]);
+  else{
+   /* рамка по телу: поза без областей манекена (lean) — их поверхности для рамки не нужны */
+   for(let i=0;i<=FIT_STEPS;i++){scene.apply(data(i/FIT_STEPS,0,true),{color:options.color});scene.includeBounds(fit==='body'?'body':undefined);}
+   boundsSet(fitKey,Object.fromEntries(Object.entries(scene.bounds).map(([k,e])=>[k,{minX:round4(e.minX),maxX:round4(e.maxX),minY:round4(e.minY),maxY:round4(e.maxY)}])));
+  }
+  scene.studio?.(slot.renderer);if(!CARD_SHADOWS)scene.setShadows?.(false);builds++;
+  return{key,scene,data,color:options.color,applied:null,aspect:0,bones:{map:new Map(),data:null}};
+ }
+ function disposeEntry(e,now){try{e.scene.disposeGeometry();}catch(x){}if(now)try{e.scene.disposeMaterials();}catch(x){}else afterRender.push(e.scene.disposeMaterials);}
+ function entry(key,options){
+  let e=scenes.get(key);
+  if(e){scenes.delete(key);scenes.set(key,e);return e;}
+  e=build(key,options);scenes.set(key,e);
+  for(const[k,old]of scenes){if(scenes.size<=CARD_SCENES)break;if(old===e)continue;scenes.delete(k);disposeEntry(old,false);}
+  return e;
+ }
+ /* фигура карточки: ключ сцены, данные кадра и свой вид (кости, мышцы, цвет по фазам, метки нагрузки) */
+ function figure(options){
+  let bones=null,body=null,muscles=options.muscles!==false,stress=options.stress!==false,released=false;
+  const layerKey=()=>(bones?'b':'')+(body?'a'+Object.entries(body.level||{}).map(([k,v])=>k+v).join(','):'')+(muscles?'m':'')+(stress?'s':'');
+  return{key:options.key,
+   setLayers(b,a){bones=b||null;body=a||null;},
+   setLook(o){if('muscles'in o)muscles=!!o.muscles;if('stress'in o)stress=!!o.stress;},
+   /* кадр фазы (t, index) ракурсом camera — в холст target (размер — его width × height в точках экрана); false — не нарисован */
+   paint(target,t,index,camera='above'){
+    if(released||!target?.width||!target?.height)return false;
+    const s=ensure();if(!s)return false;
+    if(s.renderer.getContext?.()?.isContextLost?.())return false;
+    const e=entry(options.key,options),cam=e.scene.cameras[camera]||e.scene.cameras.above;
+    if(width!==target.width||height!==target.height){width=target.width;height=target.height;s.renderer.setSize(width,height,false);}
+    if(e.aspect!==width/height){e.aspect=width/height;e.scene.resize(width,height,CARD_PAD);}
+    const k=t+'|'+(index||0)+'|'+layerKey(),t0=now();
+    if(e.applied!==k){
+     const d=e.data(t,index||0,!!(bones||body));
+     /* матрицы костей фазы — из памяти сцены (memoBones): часы карточки идут по сетке кадров */
+     memoBones(e.bones,body?.skeleton||bones,t,d);
+     e.scene.apply(d,{color:e.color,selected:'all',muscles,joints:false,stress,skeleton:bones,anatomy:body});e.applied=k;
+    }
+    const t1=now();s.renderer.render(e.scene.scene,cam);renders++;
+    const t2=now(),g=target.getContext('2d');if(!g)return false;g.drawImage(s.canvas,0,0,width,height);
+    /* время частей последнего кадра (мс): поза и сцена, отрисовка, копия в холст карточки — для замеров */
+    timing.apply=t1-t0;timing.render=t2-t1;timing.copy=now()-t2;
+    for(const f of afterRender.splice(0))try{f();}catch(x){}
+    return true;
+   },
+   release(){released=true;}};
+ }
+ /* builds — сколько сцен собрано: кадр со сборкой сцены не годится для замера скорости (12-motion-player.js) */
+ return{figure,dispose:drop,stats:()=>({scenes:scenes.size,renders,builds,context:!!slot,size:[width,height],timing:{...timing}}),get builds(){return builds;},get available(){return !rendererUnavailable;}};
+}
+let cardStage=null;
+/* общий рендерер карточек — один на страницу; null — объёмной графики нет (тогда карточки — SVG-манекен) */
+function cards(){
+ if(!rendererUnavailable&&typeof window.WebGL2RenderingContext==='undefined')rendererUnavailable=true;
+ if(rendererUnavailable)return null;if(!cardStage)cardStage=createCardStage();return cardStage;
+}
+/* boneMisses — сколько раз скелет раскладывался заново (кадр «с холодной памятью»: его время — не мерило скорости устройства) */
+window.GymVolume={create:createVolumeFigure,cards,get boneMisses(){return boneMisses;}};

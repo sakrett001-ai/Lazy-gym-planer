@@ -59,6 +59,8 @@ function startWorkout(id){
   if(same){workout.index=Math.max(0,Math.min(queue.length-1,Math.trunc(old.index)||0));workout.restUntil=Number(old.restUntil)||0;workout.restTotal=Number(old.restTotal)||0;workout.restFrom=Number(old.restFrom)||0;workout.next=Number.isInteger(old.next)?old.next:-1;workout.last=Number.isInteger(old.last)?old.last:-1;}
   else workout.index=Math.max(0,first);
   if(id){const i=queue.findIndex(x=>x.it.ex.id===id&&!workoutValue(x));workout.index=i>=0?i:Math.max(0,queue.findIndex(x=>x.it.ex.id===id));workout.restUntil=0;}
+  /* каждое открытие тренировки — новая попытка показать кости и мышцы (и загрузить их, если прошлая не удалась) */
+  workoutFigure.slow=false;workoutFigure.failed=false;workoutFigure.pace.reset();
   const d=$('#workout-view');if(!d.open)d.showModal();document.documentElement.classList.add('workout-open');stopRest();ScreenAwake.on();
   $('#wv-context').textContent=S.mode==='program'?`${WD_FULL[prog.days[S.day].wd]} · ${prog.days[S.day].name}`:`${GOALS[S.goal].name} · ${FORMATS[S.format].name}`;
   const its=[...new Map(queue.map(x=>[x.it.ex.id,x.it])).values()];
@@ -72,6 +74,8 @@ function closeWorkout(){
   if(!workout)return;holdStop();workoutCapture();saveWorkout();disposeMotion(workout.motion);clearInterval(workoutTimer);workoutTimer=0;ScreenAwake.off();
   const d=$('#workout-view');if(d.open)d.close();document.documentElement.classList.remove('workout-open');d.classList.remove('rest-over');workout.restOver=null;
   logRefresh(null);if(workoutReturn?.isConnected)workoutReturn.focus();workoutReturn=null;
+  /* вид фигуры мог смениться на экране тренировки — карточки плана берут его же */
+  if(figs.some(F=>F.card))applyCardsView();
 }
 function workoutShow(index){
   if(!workout)return;
@@ -141,7 +145,9 @@ function workoutLrToggle(){
   const sg=suggest(step.it);workoutFill(step,sg,sg.prev?.s[step.k]||sg.prev?.s.filter(Boolean).slice(-1)[0]);
   $('#wv-lr').focus();
 }
-function paintWorkoutMotion(){if(!workout?.motion)return;const F=workout.motion,m=motionFrame(F);F.f.at(m.t,m);if($('#wv-cue').textContent!==m.cue)$('#wv-cue').textContent=m.cue;paintMusclePanel('wv',F,m);paintStressPanel('wv',F,m);}
+/* в «Анатомии» фаза — по сетке кадров карточек (cardClock, отличие от точного времени ≤17 мс): со второго круга матрицы костей
+   фаз берутся из памяти фигуры (memoBones в src/volume/main.mjs) */
+function paintWorkoutMotion(){if(!workout?.motion)return;const F=workout.motion,m=motionFrame(F,workoutAnatomyLive()?cardClock(F):F.clock);F.f.at(m.t,m);if($('#wv-cue').textContent!==m.cue)$('#wv-cue').textContent=m.cue;paintMusclePanel('wv',F,m);paintStressPanel('wv',F,m);}
 function strictWorkoutNumber(value){const s=String(value).trim().replace(',','.');return /^\d+(\.\d+)?$/.test(s)?Number(s):null;}
 function commitWorkout(e){
   if(e)e.preventDefault();if(!workout||$('#wv-active').hidden)return;
@@ -361,12 +367,45 @@ function pressCamera(sel,key){for(const b of $(sel).querySelectorAll('[data-moti
 function mountWorkoutCameras(){
  if(!workout?.motion)return;
  const F=workout.motion,ex=F.it.ex,key=motionCamera(ex),m=motionFrame(F);
- disposeMotion(F);F.f=createMotionFigure(ex.anim,{has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera:key,muscles:motionPrefs.muscles});F.f.setVectors(!!motionPrefs.vectors);
+ disposeMotion(F);F.f=createMotionFigure(ex.anim,{has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera:key,muscles:motionPrefs.muscles,memoBones:true});F.f.setVectors(!!motionPrefs.vectors);
  $('#wv-stage').replaceChildren(F.f.svg);$('#wv-cameras').innerHTML=cameraButtons(ex,key);$('#wv-cameras').hidden=!(ex.anim.catalogCameras||ex.anim.cameras);
- $('#wv-angle').textContent=CAMERA3[key]?.label||(ex.anim.view==='front'?'Вид спереди':'Вид сбоку');configureMusclePanel('wv',F.it);configureStressPanel('wv',F);paintWorkoutMotion();
+ $('#wv-angle').textContent=CAMERA3[key]?.label||(ex.anim.view==='front'?'Вид спереди':'Вид сбоку');configureMusclePanel('wv',F.it);configureStressPanel('wv',F);workoutFigure.pace.settle();applyWorkoutView(F);paintWorkoutMotion();
+}
+/* Вид фигуры на экране тренировки — тот же выбор, что в разборе (motionPrefs.view; по умолчанию «Анатомия»): кости и мышцы
+   в почти невидимом силуэте кожи, цвет мышц по фазам. Переключатель «Анатомия · Скелет · Манекен» — маленький, в углу
+   сцены. Пока кости и мышцы грузятся — манекен с подписью; ошибка загрузки — манекен с честной подписью; без объёмной
+   графики (WebGL) — как раньше, плоская схема. Кости и мышцы обновляются с частотой ступени скорости (workoutFigure.pace:
+   30, 15, 10 кадров в секунду, часы — каждый кадр); ниже — манекен с подписью «… не успевает — показан манекен»: выбор
+   человека не сбрасывается, при следующем открытии тренировки — снова попытка. */
+const workoutFigure={pace:anatomyPace(),slow:false,failed:false,view:'mannequin'};
+const workoutAnatomyLive=()=>workoutFigure.view!=='mannequin'&&typeof workout?.motion?.f?.setLayers==='function';
+function workoutPaceSample(ms,cold=false){if(workoutFigure.pace.sample(ms,1,cold)==='fallback'){workoutFigure.slow=true;applyWorkoutView();}}
+function applyWorkoutView(F=workout?.motion){
+ const group=$('#wv-figure'),note=$('#wv-figure-note');if(!group||!F?.f)return;
+ const able=typeof F.f.setLayers==='function',pref=figureView(),need=pref==='anatomy'?[Skeleton,Muscles]:[Skeleton];
+ const state=need.every(x=>x.data)?'ready':workoutFigure.failed?'error':'loading';
+ const choice=figureViewFor(motionPrefs.view,{able,state,slow:workoutFigure.slow,coarse:coarsePointer()});workoutFigure.view=choice.view;
+ /* нажата — то, что показано; пока грузится — выбранная (она и появится) */
+ const shown=choice.wait?pref:choice.view;
+ for(const b of group.querySelectorAll('[data-wv-figure]')){const off=!able&&b.dataset.wvFigure!=='mannequin';b.disabled=off;b.title=off?'Нужна объёмная графика (WebGL)':'';b.setAttribute('aria-pressed',String(b.dataset.wvFigure===shown));}
+ group.toggleAttribute('aria-busy',choice.wait);
+ if(note.textContent!==choice.note)note.textContent=choice.note;note.hidden=!choice.note;
+ if(!able)return;
+ if(choice.view==='mannequin'){
+  F.f.setLayers(null,null);
+  if(choice.wait)Promise.all(need.map(x=>x.load())).then(()=>{workoutFigure.failed=false;},()=>{workoutFigure.failed=true;}).then(()=>{if(workout?.motion===F&&figureView()===pref)applyWorkoutView(F);});
+  return;
+ }
+ F.f.setLayers(Skeleton.data,choice.view==='anatomy'?{skeleton:Skeleton.data,muscles:Muscles.data,level:anatomyLevel(F.it.ex)}:null);
 }
 function setupMotionCameras(){
  $('#mv-cameras').addEventListener('click',e=>{const b=e.target.closest('[data-motion-camera]');if(b&&detailMotion&&rememberCamera(detailMotion.it.ex,b.dataset.motionCamera))switchDetailCamera();});
  $('#wv-cameras').addEventListener('click',e=>{const b=e.target.closest('[data-motion-camera]');if(b&&workout?.motion&&rememberCamera(workout.motion.it.ex,b.dataset.motionCamera))switchWorkoutCamera();});
+ $('#wv-figure').addEventListener('click',e=>{
+  const b=e.target.closest('[data-wv-figure]');if(!b||b.disabled||!workout?.motion)return;
+  if(b.dataset.wvFigure===figureView()&&b.getAttribute('aria-pressed')==='true')return;
+  motionPrefs.view=b.dataset.wvFigure;saveMotionPrefs();if(motionPrefs.view!=='mannequin'){retryAnatomyPace();workoutFigure.failed=false;}
+  applyWorkoutView();paintWorkoutMotion();
+ });
  $('#mv-dual').addEventListener('change',e=>{motionPrefs.dual=e.target.checked;saveMotionPrefs();mountDetailCameras();});
 }
