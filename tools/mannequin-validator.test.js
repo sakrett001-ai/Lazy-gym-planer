@@ -69,3 +69,43 @@ test('jump: a teleport between neighbouring frames is an error', () => {
   const rig = EQ.rig(POSES.squat), jumpy = t => { const R = rig(t); if (t > .5) for (const k of ['wrL', 'gripL']) R[k] = R[k].map((v, i) => i === 0 ? v + 40 : v); return R; };
   assert(checkClip(jumpy, POSES.squat, { samples: 21 }).some(i => i.rule === 'jump'));
 });
+
+/* Хваты (правило hold, ось каната в кулаке, трос у кисти): каждое ловит прежний дефект каталога */
+const { V } = M;
+test('hold: a clenched fist with nothing in it is an error', () => {
+  /* выпады без гантелей: прежде кисти оставались сжатыми вокруг невидимой рукояти */
+  const e0 = EQ.variantEntry(POSES.lunge, () => false), entry = { ...e0, has: () => false, contacts: e0.contacts.map(c => ({ ...c, optional: true })) }, R = EQ.rig(e0)(.5);
+  assert.deepEqual(errors(checkFrame(R, entry), 'hold'), [], 'relaxed hands without dumbbells');
+  assert(errors(checkFrame({ ...R, hands: { L: 'grip', R: 'grip' } }, entry), 'hold').some(i => /кулак L сжат/.test(i.detail)));
+});
+test('hold: a dumbbell on the edges of the fists, beside its handle, is an error (goblet before 4.43.0)', () => {
+  /* прежний гоблет: кулаки — как у гири за рога (ключи варианта kb совпадают с прежними), верхний диск гантели лежит на кулаках,
+     контакт заявлен областью кисти; касание было, валидатор молчал, а сверху рука проходила мимо гантели */
+  const R = EQ.rig({ keys: POSES.goblet.variants.kb.keys, equipment: [] })(.5);
+  const n = V.unit(V.add(R.frames.handL.z, R.frames.handR.z)), c = V.add(V.mix(R.gripL, R.gripR, .5), n, 4.7 - 7.95), at = k => V.add(c, n, k);
+  const db = role => [{ kind: 'cyl', c: at(11.45), axis: n, r: 7.5, len: 7, tone: 'plate', role: 'weight', id: 'gdb:top', mount: 'hands' },
+    { kind: 'beam', a: at(-7.35), b: at(7.35), r: 1.6, tone: 'chrome', role, id: 'gdb:handle', mount: 'gdb:top' },
+    { kind: 'cyl', c: at(-11.45), axis: n, r: 7.5, len: 7, tone: 'plate', role: 'weight', id: 'gdb:bottom', mount: 'gdb:handle' }];
+  const on = prop => ({ contacts: [...FEET, { body: 'handL', prop }, { body: 'handR', prop }] });
+  assert(errors(checkFrame({ ...R, props: db('weight') }, on('gdb:top')), 'hold').some(i => /handL: кулак касается gdb:top краем — ручки в кулаке нет/.test(i.detail)));
+  /* та же гантель с рукоятью-ручкой: кулаки рядом с ней, а не на ней */
+  assert(errors(checkFrame({ ...R, props: db('grip') }, on('gdb')), 'hold').some(i => /кулак касается gdb краем — ручка в/.test(i.detail)));
+  /* гантель в ладонях (4.43.0) — ладони под диском; поднятая с ладоней на 4 см — ошибка */
+  const e0 = EQ.variantEntry(POSES.goblet, () => false), entry = { ...e0, has: () => false }, C = EQ.rig(e0)(.5), up = C.props.find(p => p.id === 'cup:top').axis;
+  assert.deepEqual(errors(checkFrame(C, entry), 'hold'), []);
+  assert(errors(checkFrame(moveProp(C, p => p.id.startsWith('cup:'), V.scale(up, 4)), entry), 'hold').some(i => /ладонь не на cup:top/.test(i.detail)));
+});
+test('contact: a rope running across the fist is an error', () => {
+  /* прежде канат шёл прямо от карабина через центр хвата: при оси кулака поперёк ветви — сквозь ладонь и пальцы */
+  const R = frame('facepull', .5), straight = p => { const g = R['grip' + p.id.slice(-1)], d = V.unit(V.sub(g, p.pts[0])); return { ...p, pts: [p.pts[0], V.add(g, d, 4)] }; };
+  assert.deepEqual(errors(checkFrame(R, POSES.facepull), 'contact'), []);
+  const old = { ...R, props: R.props.map(p => /^cab:rope(L|R)$/.test(p.id) ? straight(p) : p) };
+  assert(errors(checkFrame(old, POSES.facepull), 'contact').some(i => /gripL: ладонь повёрнута к ручке/.test(i.detail)));
+});
+test('cable: a band running through the fingers into the middle of the fist is an error', () => {
+  /* прежде лента эспандера шла прямо в центр кулака; теперь — к кольцу стремени рукояти */
+  const R = frame('bandcurl', .9), band = R.props.find(p => p.id === 'band:L');
+  assert.deepEqual(errors(checkFrame(R, POSES.bandcurl), 'cable'), []);
+  const old = { ...R, props: R.props.map(p => p === band ? { ...p, pts: [...p.pts.slice(0, -1), R.gripL] } : p) };
+  assert(errors(checkFrame(old, POSES.bandcurl), 'cable').some(i => /band:L проходит сквозь кисть L у хвата/.test(i.detail)));
+});

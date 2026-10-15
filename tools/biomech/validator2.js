@@ -7,9 +7,11 @@
    floor          — тело ниже пола;
    self-collision — сегменты тела друг в друге;
    contact        — заявленный контакт не выполнен (стопа над полом, хват мимо ручки, спина над скамьёй);
+   hold           — кулак держит воздух (сжат, а ручки нет); снаряд в руках держится краем кулака или кончиками пальцев,
+                    а не ручкой в кулаке или ладонью;
    mount          — деталь не касается того, к чему крепится, или цепочка не доходит до пола;
    free-weight    — снаряд не в руке и не на опоре;
-   cable          — трос/лента проходит сквозь тело;
+   cable          — трос/лента проходит сквозь тело, в том числе сквозь кисть и запястье у хвата;
    balance        — общий центр масс вне площади опоры (стоя без других опор);
    jump           — скачок сустава между соседними кадрами.
    Координаты — каталога (см, Y вниз, пол 186). */
@@ -76,6 +78,21 @@ function romChecks(R, entry = {}) {
 function sdCapsule(p, a, b, r) { const pa = V.sub(p, a), ba = V.sub(b, a), bb = V.dot(ba, ba), h = bb < 1e-9 ? 0 : clamp(V.dot(pa, ba) / bb, 0, 1); return V.len(V.sub(pa, V.scale(ba, h))) - r; }
 function sdOBB(p, c, axes, half) { const d = V.sub(p, c), q = axes.map((ax, i) => Math.abs(V.dot(d, ax)) - half[i]); return V.len(q.map(v => Math.max(v, 0))) + Math.min(Math.max(...q), 0); }
 function sdCyl(p, c, axis, r, halfH) { const d = V.sub(p, c), y = V.dot(d, axis), rad = V.len(V.perp(d, axis)), dx = rad - r, dy = Math.abs(y) - halfH; return Math.min(Math.max(dx, dy), 0) + Math.hypot(Math.max(dx, 0), Math.max(dy, 0)); }
+/* ручка: расстояние от точки до её оси (капсула — отрезок оси, трос и канат — ломаная, прочее — до поверхности плюс
+   радиус) и направление ручки в ближайшей точке (у коробок — нет) */
+function handleAxis(c, p) {
+  const seg = (a, b) => { const ab = V.sub(b, a), l2 = V.dot(ab, ab), k = l2 < 1e-9 ? 0 : clamp(V.dot(V.sub(p, a), ab) / l2, 0, 1); return { d: V.dist(p, V.add(a, ab, k)), dir: ab }; };
+  if (c.axis) return seg(c.axis[0], c.axis[1]);
+  if (c.cable) { let best = { d: Infinity, dir: null }; for (let i = 1; i < c.pts.length; i++) { const r = seg(c.pts[i - 1], c.pts[i]); if (r.d < best.d) best = r; } return best; }
+  return { d: c.sdf(p) + (c.r || 0), dir: null };
+}
+/* объём кисти: ладонь (коробка) и фаланги (капсулы) — та же форма, что у сетки и точек тела (Mannequin.handShape) */
+function handSDF(R, s) {
+  const f = R.frames['hand' + s], sh = M.handShape(R.hands?.[s] || 'relaxed', s, R.gripRadius?.[s] ?? 1.4), L = p => V.add(V.add(V.add(f.o, f.x, p[0]), f.y, p[1]), f.z, p[2]);
+  const c = L(sh.palm.c), ax = [f.x, f.y, f.z], half = sh.palm.size.map(v => v / 2), caps = [];
+  for (const fg of [...sh.fingers, sh.thumb]) for (let i = 1; i < fg.pts.length; i++) caps.push([L(fg.pts[i - 1]), L(fg.pts[i]), fg.r]);
+  return p => { let m = sdOBB(p, c, ax, half); for (const [a, b, r] of caps) m = Math.min(m, sdCapsule(p, a, b, r)); return m; };
+}
 const linspace = (a, b, step) => { const n = Math.max(1, Math.ceil(V.dist(a, b) / step)), out = []; for (let i = 0; i <= n; i++) out.push(V.mix(a, b, i / n)); return out; };
 function beamAxes(s) { const y = V.unit(V.sub(s.b, s.a)); let z = V.perp(s.up || [0, -1, 0], y); if (V.len(z) < 1e-6) z = V.perp([0, 0, 1], y); if (V.len(z) < 1e-6) z = V.perp([1, 0, 0], y); z = V.unit(z); return [V.unit(V.cross(y, z)), y, z]; }
 function collider(s) {
@@ -286,11 +303,12 @@ function checkFrame(R, entry = {}) {
       const handle = cand.filter(c => c.grip || c.role === 'grip');
       const list = handle.length ? handle : cand;
       if (!list.length) { push('contact', 'error', `${k.body}: нет детали ${k.prop}`); continue; }
-      const d = Math.min(...list.map(c => c.sdf(g) + (c.r || 0)));
+      const near = list.map(c => handleAxis(c, g)).sort((a, b) => a.d - b.d)[0], d = near.d;
       const r = list[0].r || 1.4;
       if (d - r > 1.2 || d < -.3) push('contact', Math.abs(d - r) > 3 ? 'error' : 'warn', `${k.body} мимо ${k.prop}: центр хвата в ${(d - r).toFixed(1)} см от оси ручки`, Math.abs(d - r));
-      const ax = list.find(c => c.axis)?.axis;
-      if (ax) { const ang = V.angle(R.frames['hand' + s].z, V.sub(ax[1], ax[0])), off = Math.min(ang, 180 - ang); if (off > (k.axisTol ?? 25)) push('contact', off > 45 ? 'error' : 'warn', `${k.body}: ладонь повёрнута к ручке под ${off.toFixed(0)}°`, off, '°'); }
+      /* ось кулака — вдоль ручки, которую он держит (ближайшей к центру хвата): у грифа и рукояти — их ось, у каната и
+         полотенца — направление троса в кулаке (прежде канат не проверялся и мог идти поперёк кулака, сквозь ладонь) */
+      if (near.dir) { const ang = V.angle(R.frames['hand' + s].z, near.dir), off = Math.min(ang, 180 - ang); if (off > (k.axisTol ?? 25)) push('contact', off > 45 ? 'error' : 'warn', `${k.body}: ладонь повёрнута к ручке под ${off.toFixed(0)}°`, off, '°'); }
       continue;
     }
     if (k.prop === 'floor') {
@@ -304,6 +322,36 @@ function checkFrame(R, entry = {}) {
     let min = Infinity; for (const c of cand) for (const p of region) min = Math.min(min, c.sdf(p.p));
     const lim = k.gap ?? 1.5;
     if (min > lim) push('contact', min > 4 ? 'error' : 'warn', `${k.body} не касается ${k.prop}: зазор ${min.toFixed(1)} см`, min);
+  }
+  /* 5б. Хват (hold): что держит кулак и чем кисть лежит на снаряде в руках.
+     — Кулак 'grip' без заявленного контакта этой кисти и без ручки ближе 3 см от центра хвата держит воздух (гантели по
+       желанию убраны, а кисти остались сжатыми вокруг невидимой рукояти).
+     — Контакт областью кисти (handL/R, palmL/R) со снарядом в руках (свободный или mount 'hands': гантель, гиря, диск)
+       касанием любой точки выполняется и краем кулака. Поэтому: кулак ('grip', 'hook', 'fist') держит ручку этого снаряда —
+       центр хвата у её оси не дальше r + 1,2 см, как у хвата gripL/R (гоблет до 4.43.0: верхний диск гантели лежал на
+       кулаках, кулаки стояли в 2–3 см от рукояти — сверху рука проходила мимо гантели); раскрытая кисть лежит на снаряде
+       ладонью — центр ладони не дальше 2 см (3 — ошибка), а не кончиками пальцев или ребром. */
+  {
+    const active = k => !(k.when && entry.t != null && (entry.t < k.when[0] - 1e-6 || entry.t > k.when[1] + 1e-6)) && (k.prop === 'floor' || cols.some(c => c.id === k.prop || c.id.startsWith(k.prop + ':')));
+    const handles = cols.filter(c => (c.grip || c.role === 'grip') && !c.unknown), FIST = new Set(['grip', 'hook', 'fist']);
+    for (const s of M.SIDES) {
+      const mode = R.hands?.[s] || 'relaxed', g = R['grip' + s], mine = contacts.filter(k => k.body.endsWith(s) && /^(grip|hand|palm)(L|R)$/.test(k.body) && active(k));
+      if (mode === 'grip' && !mine.length) {
+        const d = Math.min(Infinity, ...handles.map(c => handleAxis(c, g).d));
+        if (d > 3) push('hold', 'error', `кулак ${s} сжат, а ручки в нём нет${isFinite(d) ? ` (ближайшая — в ${d.toFixed(1)} см)` : ''}`, isFinite(d) ? d : undefined);
+      }
+      for (const k of mine.filter(k => !k.body.startsWith('grip') && k.prop !== 'floor')) {
+        const cand = cols.filter(c => c.id === k.prop || c.id.startsWith(k.prop + ':'));
+        if (!cand.some(c => c.free || c.mount === 'hands')) continue;
+        if (FIST.has(mode)) {
+          const h = cand.filter(c => c.grip || c.role === 'grip').map(c => handleAxis(c, g).d - (c.r || 0)), d = Math.min(Infinity, ...h);
+          if (d > 1.2) push('hold', 'error', `${k.body}: кулак касается ${k.prop} краем — ${h.length ? `ручка в ${d.toFixed(1)} см от центра хвата` : 'ручки в кулаке нет'}`, isFinite(d) ? d : undefined);
+        } else {
+          const f = R.frames['hand' + s], palmC = V.add(V.add(f.o, f.x, -M.SIGN[s] * 1.7), f.y, -5.6), gap = Math.min(...cand.map(c => c.sdf(palmC)));
+          if (gap > 2) push('hold', gap > 3 ? 'error' : 'warn', `${k.body}: ладонь не на ${k.prop} — центр ладони в ${gap.toFixed(1)} см`, gap);
+        }
+      }
+    }
   }
   /* 6. Крепления деталей и свободные снаряды */
   {
@@ -383,6 +431,26 @@ function checkFrame(R, entry = {}) {
       }
     }
     if (worst > 1.0) push('cable', worst > 3 ? 'error' : 'warn', `${c.id} проходит сквозь ${where}`, worst);
+  }
+  /* 7б. Трос у хвата: в 9 см от центра хвата правило выше трос не проверяет (там рукоять и её крепление), но и здесь трос,
+     лента, стремя рукояти и канат не проходят сквозь кисть и запястье: ось троса не глубже 0,5 см (1 см — ошибка) в ладони
+     и фалангах (кроме отверстия кулака — 2,2 см вокруг центра хвата, где лежит ручка или канат) и в предплечье. Прежде лента
+     эспандера шла прямо в центр кулака сквозь пальцы, канат — поперёк кулака сквозь ладонь, стремя D-рукояти — сквозь
+     пальцы и ладонь. Манжета на голени (role 'strap') — не у кисти. */
+  {
+    const hand = {}; let worst = null;
+    for (const c of cols.filter(c => c.cable && c.role !== 'strap')) for (let i = 1; i < c.pts.length; i++) {
+      const a = c.pts[i - 1], b = c.pts[i], n = Math.max(1, Math.ceil(V.dist(a, b) / .5));
+      for (let j = 0; j <= n; j++) {
+        const p = V.mix(a, b, j / n);
+        for (const s of M.SIDES) {
+          const dg = V.dist(p, R['grip' + s]); if (dg > 9) continue;
+          const dh = dg > 2.2 ? -(hand[s] || (hand[s] = handSDF(R, s)))(p) : -Infinity, df = -limbD('fa', s, p), d = Math.max(dh, df);
+          if (d > .5 && (!worst || d > worst.d)) worst = { d, id: c.id, where: (dh >= df ? 'кисть ' : 'предплечье ') + s };
+        }
+      }
+    }
+    if (worst) push('cable', worst.d > 1 ? 'error' : 'warn', `${worst.id} проходит сквозь ${worst.where} у хвата`, worst.d);
   }
   /* 8. Равновесие: только если тело опирается лишь на пол */
   const active = contacts.filter(k => !(k.when && entry.t != null && (entry.t < k.when[0] || entry.t > k.when[1])));
