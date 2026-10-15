@@ -87,6 +87,8 @@ export function createVolumeFigure(options){
   boundsSet(fitKey,Object.fromEntries(Object.entries(scene.bounds).map(([key,e])=>[key,{minX:round4(e.minX),maxX:round4(e.maxX),minY:round4(e.minY),maxY:round4(e.maxY)}])));
  }
  apply(lastT,0);scene.studio?.(renderer);if(lowPower)scene.setShadows?.(false);
+ /* замер скорости (?perf, src/js/19-perf-panel.js): обёртки вызовов этой фигуры; выключенный — одна проверка при создании */
+ globalThis.GymPerf?.volume({scene,renderer,options,root,low:()=>lowPower});
  const pace=[];let lastAt=0;
  function watchPace(){
   const now=typeof performance!=='undefined'?performance.now():Date.now(),dt=now-lastAt;lastAt=now;if(lowPower||!(dt>0&&dt<200))return;
