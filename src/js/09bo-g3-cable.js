@@ -206,6 +206,34 @@
   /* Подушка под колени (поролон в чехле): size [ширина, толщина, длина] */
   TYPES.g3Pad = (s, b) => { const [w, t, l] = s.size || [46, 4.5, 30]; b.box('pad', [0, t / 2, 0], [w, t, l], { role: 'support', tone: 'mat', mount: 'floor', round: 1.2, contact: 'top' }); b.anchor('top', [0, t, 0]); };
 
+  /* ---------- Канат в кулаке ----------
+     Ветвь каната входит в кулак у одного его края, идёт по оси кулака (линия «мизинец → большой палец», ось z кисти) и
+     выходит у другого края к узлу-набалдашнику — так канат держат на самом деле. knob — где узел: 'pinky' — за мизинцем
+     (ветвь входит у большого и указательного пальцев: разгибание на верхнем блоке), 'thumb' — за большим пальцем (ветвь
+     входит у мизинца: сгибание на нижнем блоке); без knob — со стороны, обращённой от карабина. Если карабин позади края
+     входа (ветвь подходит под углом больше 90° к оси кулака), канат огибает кисть снаружи: точка обхода — у края входа,
+     за пределом кисти в сторону карабина. Прежде ветвь шла прямо от карабина через центр хвата и узел висел на её
+     продолжении: при оси кулака поперёк ветви канат проходил сквозь ладонь и пальцы. */
+  const ROPE = { r: 1.3, knobR: 2.1, gap: .3 };
+  /* насколько кисть выступает от центра хвата в направлении dir (точки ладони и фаланг с их радиусом) */
+  function handReach(R, s, dir) {
+    const f = R.frames['hand' + s], g = R['grip' + s], sh = M.handShape(R.hands?.[s] || 'grip', s, R.gripRadius?.[s] ?? 1.4);
+    const L = p => V.add(V.add(V.add(f.o, f.x, p[0]), f.y, p[1]), f.z, p[2]), at = (p, r = 0) => V.dot(V.sub(L(p), g), dir) + r;
+    let m = -Infinity; const c = sh.palm.c, h = sh.palm.size.map(v => v / 2);
+    for (const a of [-1, 1]) for (const b of [-1, 1]) for (const k of [-1, 1]) m = Math.max(m, at([c[0] + a * h[0], c[1] + b * h[1], c[2] + k * h[2]]));
+    for (const fg of [...sh.fingers, sh.thumb]) for (const p of fg.pts) m = Math.max(m, at(p, fg.r));
+    return m;
+  }
+  function ropeInFist(R, s, clip, knob, id) {
+    const g = R['grip' + s], z = V.unit(R.frames['hand' + s].z), d = V.unit(V.sub(clip, g));
+    const k = knob === 'pinky' ? 1 : knob === 'thumb' ? -1 : (V.dot(z, d) >= 0 ? 1 : -1), ez = V.scale(z, k);
+    const E = V.add(g, ez, handReach(R, s, ez) + ROPE.gap), K = V.add(g, ez, -(handReach(R, s, V.scale(ez, -1)) + ROPE.knobR + ROPE.gap));
+    const pts = [clip, E, K];
+    if (V.dot(d, ez) < 0) { const n = V.unit(V.perp(d, ez)); pts.splice(1, 0, V.add(E, n, Math.max(0, handReach(R, s, n)) + ROPE.r + ROPE.gap)); }
+    return [{ kind: 'cable', pts, r: ROPE.r, tone: 'rope', role: 'grip', id: id + ':rope' + s, mount: id + ':line' },
+      { kind: 'sphere', c: K, r: ROPE.knobR, tone: 'rubber', role: 'frame', id: id + ':knob' + s, mount: id + ':rope' + s }];
+  }
+
   /* ---------- Трос с поворотным блоком и стеком ---------- */
   /* e: from — центр колеса; swivel — точка крепления оси поворота; swivelPart — деталь, к которой крепится ось;
      attach/hands/foot/bend/ext/clip — как в BIND.cable; plane: 'swivel' — колесо в плоскости троса и оси поворота;
@@ -233,7 +261,9 @@
       const wrap = e.wrap ? V.unit(dirCat(e.wrap)) : bp;
       line.pts[0] = V.dot(V.sub(T1, P), wrap) >= V.dot(V.sub(T2, P), wrap) ? T1 : T2;
     }
-    const out = base.filter(p => p.id !== id + ':strap');
+    const out = base.filter(p => p.id !== id + ':strap' && !(e.attach === 'rope' && /:(rope|knob)(L|R)$/.test(p.id)));
+    /* канат: ветви по оси кулаков, узлы за краем кулака (ropeInFist); knob — общий или по руке {L, R} */
+    if (e.attach === 'rope') for (const s of e.hands || ['L', 'R']) out.push(...ropeInFist(R, s, clip, typeof e.knob === 'object' ? e.knob?.[s] : e.knob, id));
     /* манжета на голеностоп (E.ankleCuff): лента 7,5 см из девяти витков, облегающих голень по её сечению (голень внутри),
        стальное D-кольцо на стороне блока и карабин троса от кольца к концу троса */
     if (e.attach === 'ankle') {
@@ -286,13 +316,14 @@
     }
     return out;
   };
-  /* Эспандер от крепления (кольцо на двери): обе ветви от одной точки к рукоятям; ветви крепятся к детали mountTo */
+  /* Эспандер от крепления (кольцо на двери): обе ветви от одной точки к кольцам стремён рукоятей (E.stirrup, как у
+     эспандера под стопами); ветви крепятся к детали mountTo */
   BIND.g3band = (e, R) => {
     const id = e.id || 'band', from = toCat(e.from), out = [];
     for (const s of e.hands || ['L', 'R']) {
-      const g = R['grip' + s], hz = R.frames['hand' + s].z;
-      out.push({ kind: 'cable', pts: [from, g], r: e.r || .7, tone: 'band', role: 'cable', id: id + ':' + s, mount: e.mountTo });
-      out.push({ kind: 'beam', a: V.add(g, hz, 6.5), b: V.add(g, hz, -6.5), r: 1.6, tone: 'rubber', role: 'grip', id: id + ':handle' + s, mount: id + ':' + s });
+      const st = E.stirrup(R['grip' + s], R.frames['hand' + s].z, from, { ...E.BAND_HANDLE, clear: E.clearOfForearm(R, s) });
+      out.push({ kind: 'cable', pts: [from, st.apex], r: e.r || .7, tone: 'band', role: 'cable', id: id + ':' + s, mount: e.mountTo });
+      out.push(...E.bandHandle(st, id, s));
     }
     return out;
   };

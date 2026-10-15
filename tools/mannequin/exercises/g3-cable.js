@@ -602,7 +602,7 @@ module.exports = {
   /* На коленях лицом к верхнему блоку, канат у лба. t=0 — корпус почти прямой; t=1 — позвоночник скручен, локти к бёдрам. Таз неподвижен. */
   cablecrunch: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [CR_TOWER, CR_MAT, cable(CR_TOWER, '', { id: 'cab', attach: 'rope', hands: ['L', 'R'], ropeLen: 26, rest: 97 })],
+    equipment: [CR_TOWER, CR_MAT, cable(CR_TOWER, '', { id: 'cab', attach: 'rope', knob: 'thumb', hands: ['L', 'R'], ropeLen: 26, rest: 97 })],
     contacts: [{ body: 'kneeL', prop: 'mat' }, { body: 'kneeR', prop: 'mat' }, { body: 'footL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
@@ -702,7 +702,7 @@ module.exports = {
   /* Спиной к блоку, шаг вперёд, корпус наклонён, локти у ушей. t=0 — канат за головой; t=1 — руки выпрямлены вперёд-вверх, концы разведены. */
   cableohext: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [OH_TOWER, cable(OH_TOWER, '', { id: 'cab', attach: 'rope', hands: ['L', 'R'], ropeLen: 26, rest: 95 })],
+    equipment: [OH_TOWER, cable(OH_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26, rest: 95 })],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
@@ -725,7 +725,7 @@ module.exports = {
      t=1 — руки у правого колена, корпус и таз развёрнуты вправо, руки почти прямые. */
   cablewood: {
     keys: [0, .2, .4, .6, .8, 1],
-    equipment: [WD_TOWER, cable(WD_TOWER, '', { id: 'cab', attach: 'rope', hands: ['L', 'R'], ropeLen: 26, plane: 'swivel', rest: 57 })],
+    equipment: [WD_TOWER, cable(WD_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26, plane: 'swivel', rest: 57 })],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
@@ -738,7 +738,7 @@ module.exports = {
       placeFeet(C, q, feet, heel);
       for (const s of S) q[s].girdle = [C.lerp(16, 2, e), 10];
       const f = C.fk(q), gm = V.mix(f.P.ghL, f.P.ghR, .5), T = C.axes(q, 'thorax'), across = V.unit(V.perp(T.x, d));
-      const handAt = R => S.map(s => V.add(V.add(gm, d, R), across, (s === 'L' ? 1 : -1) * 4.5));
+      const handAt = R => S.map(s => V.add(V.add(gm, d, R), across, (s === 'L' ? 1 : -1) * 5.5));
       const Rr = C.solve1D(R => Math.max(...S.map((s, i) => V.dist(handAt(R)[i], f.P['gh' + s]))) - 59, 10, 75), hands = handAt(Rr);
       S.forEach((s, i) => {
         const gh = f.P['gh' + s], pole = V.unit(V.perp(V.add(V.scale(T.y, -1), C.lat(q, s), .9), V.unit(V.sub(hands[i], gh))));
@@ -751,7 +751,7 @@ module.exports = {
   /* Спиной к нижнему блоку, канат между ног. t=0 — стоя прямо, кисти у паха; t=1 — наклон с отведением таза назад, колени мягкие, спина прямая. */
   pullthrough: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [PT_TOWER, cable(PT_TOWER, '', { id: 'cab', attach: 'rope', hands: ['L', 'R'], ropeLen: 26, rest: 98 })],
+    equipment: [PT_TOWER, cable(PT_TOWER, '', { id: 'cab', attach: 'rope', knob: 'thumb', hands: ['L', 'R'], ropeLen: 26, rest: 98 })],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
@@ -795,7 +795,7 @@ module.exports = {
      t=0 — руки выпрямлены, кисти перед бёдрами; t=1 — кисти у груди, локти у корпуса. */
   ropecurl: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [CC_TOWER, cable(CC_TOWER, '', { id: 'cab', attach: 'rope', hands: ['L', 'R'], ropeLen: 26, rest: 62 })],
+    equipment: [CC_TOWER, cable(CC_TOWER, '', { id: 'cab', attach: 'rope', knob: 'thumb', hands: ['L', 'R'], ropeLen: 26, rest: 62 })],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
@@ -816,7 +816,7 @@ module.exports = {
   /* t=0 — руки вытянуты к блоку, канат перед лицом; t=1 — кисти у ушей, локти высоко в стороны. */
   facepull: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [FP_TOWER, cable(FP_TOWER, '', { id: 'cab', attach: 'rope', hands: ['L', 'R'], ropeLen: 26, rest: 39 })],
+    equipment: [FP_TOWER, cable(FP_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26, rest: 39 })],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
@@ -878,7 +878,7 @@ module.exports = {
      разведены к бёдрам, предплечья чуть повёрнуты ладонями назад. Локти у корпуса всю амплитуду. */
   ropepushdown: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [PD_TOWER, cable(PD_TOWER, '', { id: 'cab', attach: 'rope', hands: ['L', 'R'], ropeLen: 26, rest: 89 })],
+    equipment: [PD_TOWER, cable(PD_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26, rest: 89 })],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {

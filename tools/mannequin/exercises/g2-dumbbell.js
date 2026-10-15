@@ -30,11 +30,14 @@ function settle(C, q, { lo, hi, x = 0, xTol = 1.5, loads = () => [], resolve = (
 }
 /* масса гантелей в кистях для равновесия */
 const loadsIn = (C, hands, kg = DB_KG) => q => { const f = C.fk(q); return hands.map(s => [f.P['grip' + s], kg]); };
-/* рука углами: плечо [сгибание, отведение, ротация], локоть, пронация; кисть — хват снаряда */
-function armAngles(q, s, shoulder, elbow, pron, wrist = [0, 0]) {
+/* рука углами: плечо [сгибание, отведение, ротация], локоть, пронация; кисть — хват снаряда (mode 'relaxed' — без снаряда) */
+function armAngles(q, s, shoulder, elbow, pron, wrist = [0, 0], mode = 'grip') {
   q[s].shoulder = [...shoulder]; q[s].elbow = elbow; q[s].pron = pron; q[s].wrist = [...wrist];
-  q.hands = { ...(q.hands || {}), [s]: 'grip' };
+  q.hands = { ...(q.hands || {}), [s]: mode };
 }
+/* Гантели по желанию (optional 'db'): поза с ними — вариант 'db' (variants: ['db']), без них кисти расслаблены — иначе пустой
+   кулак держит воздух (прежде кисти и без гантелей были сжаты вокруг невидимой рукояти) */
+const dbHand = variant => variant === 'db' ? 'grip' : 'relaxed';
 /* свободная рука в расслабленном положении вдоль тела */
 function relaxArm(q, s, shoulder = [4, 8, 0], elbow = 10) { q[s].shoulder = [...shoulder]; q[s].elbow = elbow; q[s].pron = 0; q[s].wrist = [0, 0]; q.hands = { ...(q.hands || {}), [s]: 'relaxed' }; }
 
@@ -138,10 +141,11 @@ function cup(C, q, P, n, fingers, { w = 4, stag = 4.4, yaw = [0, 90], pole, pole
 }
 const CUP_CONTACTS = [{ body: 'palmL', prop: 'cup:top' }, { body: 'palmR', prop: 'cup:top' }];
 
-/* Гантели по желанию (optional 'db') в опущенных руках, нейтральный хват */
+/* Гантели по желанию (optional 'db') в опущенных руках, нейтральный хват; без гантелей руки те же, кисти расслаблены
+   (variants: ['db'] и hangArms(…, { mode: dbHand(variant) })) */
 const DB_OPT = [{ type: 'dumbbell', id: 'dbL', hand: 'L', optional: 'db' }, { type: 'dumbbell', id: 'dbR', hand: 'R', optional: 'db' }];
 const DB_OPT_CONTACTS = [{ body: 'gripL', prop: 'dbL', optional: true }, { body: 'gripR', prop: 'dbR', optional: true }];
-function hangArms(C, q, { abd = 12, flex = 2, elbow = 8 } = {}) { for (const s of S) { q[s].girdle = [-2, -3]; armAngles(q, s, [flex, abd, 0], elbow, 0); } }
+function hangArms(C, q, { abd = 12, flex = 2, elbow = 8, mode = 'grip' } = {}) { for (const s of S) { q[s].girdle = [-2, -3]; armAngles(q, s, [flex, abd, 0], elbow, 0, [0, 0], mode); } }
 /* задняя стопа на подушечке: подъём пятки подбирается так, чтобы бедро задней ноги было под нужным углом
    (hipFlex — сгибание в тазобедренном, отрицательное — разгибание), а голеностоп оставался в физиологических пределах */
 function rearFoot(C, q, s, ball, { hipFlex = -4, lo = 10, hi = 79, pole = [0, 0, 1], fwd = [0, 0, 1] } = {}) {
@@ -320,9 +324,11 @@ module.exports = {
       const d = V.unit(V.add(V.scale(u, Math.cos(phi)), w, Math.sin(phi))), grip = V.add(E, d, 35.6);
       q.L.girdle = [0, 8];
       C.hold(q, 'L', grip, V.unit(V.add(V.sub(E, V.mix(gh, grip, .5)), [1, 0, 0], .3)), { pron: C.lerp(-45, -86, e * e) });
-      /* правая рука: ладонь на правом бедре над коленом */
-      const g2 = C.fk(q), knR = g2.P.knR, hipR = g2.P.hipR, tR = V.unit(V.sub(knR, hipR));
-      palmBest(C, q, 'R', V.add(V.add(hipR, tR, 41), [0, 1, 0], 7.6), [0, 1, 0], fan(C, [0, 1, 0], tR, 20), [[-1, .3, -.3], [-1, 0, 0], [-1, .5, .3], [-.5, .3, -1]].map(v => V.unit(v)));
+      /* правая рука: ладонь на правом бедре над коленом — на верхней поверхности бедра (кожа сверху в этом месте, поджатие
+         0,2 см). Прежде ладонь ставилась на 7,6 см над осью колена и висела над округлым коленом на 1,4 см, касаясь краем */
+      const g2 = C.fk(q), knR = g2.P.knR, hipR = g2.P.hipR, tR = V.unit(V.sub(knR, hipR)), at = V.add(hipR, tR, 36);
+      const top = Math.max(...C.region(q, 'thR').filter(p => Math.hypot(p[0] - at[0], p[2] - at[2]) < 2.5).map(p => p[1]));
+      palmBest(C, q, 'R', [at[0], top - .2, at[2]], [0, 1, 0], fan(C, [0, 1, 0], tR, 20), [[-1, .3, -.3], [-1, 0, 0], [-1, .5, .3], [-.5, .3, -1]].map(v => V.unit(v)));
       return q;
     }
   },
@@ -353,10 +359,11 @@ module.exports = {
      свободная нога отведена назад — корпус и нога одной линией, таз не раскрывается. */
   sllift: {
     keys: [0, .2, .4, .6, .8, 1],
+    variants: ['db'],
     equipment: [{ type: 'dumbbell', id: 'dbR', hand: 'R', optional: 'db' }],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'gripR', prop: 'dbR', optional: true }],
     gripRadius: { L: 1.4, R: 1.6 },
-    pose(t, C) {
+    pose(t, C, variant) {
       const { V, M } = C, q = C.base(), e = C.ease(t), lean = C.lerp(2, 76, e), ankL = [4, 0, 0];
       pelvisLean(C, q, [-4, C.lerp(88.3, 86.1, e), C.lerp(0, -16, e)], lean * .9); q.lumbar = [lean * .03, 0, 0]; q.thoracic = [lean * .05, 0, 0]; q.neck = [-lean * .45, 0, 0];
       for (const s of S) q[s].girdle = [0, C.lerp(0, 6, e)];
@@ -371,6 +378,7 @@ module.exports = {
         C.armTo(q, 'L', V.add(V.add(shL, latL, C.lerp(5, 1, e)), [0, -53.5, 2]), V.unit([0, .2, -1]), { pron: 10, mode: 'relaxed' });
       };
       settle(C, q, { lo: 2, hi: 6, x: ankL[0] + 1.5, xTol: 1, loads: q => [[C.fk(q).P.gripR, DB_KG]], resolve: pose2 });
+      q.hands = { ...q.hands, R: dbHand(variant) };
       return q;
     }
   },
@@ -380,17 +388,18 @@ module.exports = {
      и ставится на скамью рядом; t=1 — стоя на скамье на прямых ногах. Опускание — обратным ходом той же ногой. */
   stepup: {
     keys: [0, .04, .08, .12, .16, .24, .32, .4, .48, .56, .64, .72, .8, .9, 1],
+    variants: ['db'],
     equipment: [{ type: 'flatBench', id: 'bench', yaw: 90 }, ...DB_OPT],
     contacts: [{ body: 'soleL', prop: 'bench:pad' }, { body: 'soleR', prop: 'floor', when: [0, .1] }, { body: 'soleR', prop: 'bench:pad', when: [.9, 1] }, ...DB_OPT_CONTACTS],
     gripRadius: { L: 1.6, R: 1.6 },
-    pose(t, C) {
+    pose(t, C, variant) {
       const { V } = C, q = C.base(), H = 44, u = C.ease(Math.min(1, t / .82));
       /* таз из геометрии рабочей ноги: угол голени от вертикали s и сгибание колена k */
       const ankL = [10, H + C.M.B.ankle, -7], s = C.lerp(18, 2, u) * C.D2R, k = C.lerp(110, 6, u) * C.D2R;
       const { th: TH, sk: SK } = C.M.B, knee = [ankL[0], ankL[1] + SK * Math.cos(s), ankL[2] + SK * Math.sin(s)], hipL = [knee[0], knee[1] + TH * Math.cos(s - k), knee[2] + TH * Math.sin(s - k)];
       const lean = C.lerp(26, 2, C.ease(Math.min(1, t / .9)));
       pelvisLean(C, q, [hipL[0] - 10 + 1.2, hipL[1], hipL[2]], lean * .8); q.lumbar = [lean * .1, 0, 0]; q.thoracic = [lean * .1 - 1, 0, 0]; q.neck = [-lean * .35, 0, 0];
-      hangArms(C, q);
+      hangArms(C, q, { mode: dbHand(variant) });
       plant(C, q, 'L', ankL, { y: H, toeOut: 0, pole: [0, 0, 1], fwd: [0, 0, 1] });
       const home = [-10, 0, -38], land = [-10, H, -7];
       if (t <= .1) plant(C, q, 'R', home, { toeOut: 3, heel: 35 * C.ease(t / .1) });
@@ -408,13 +417,14 @@ module.exports = {
      eccFirst: t=0 — верх, t=1 — низ: переднее бедро почти параллельно полу, колено над стопой, заднее колено к полу. */
   bulgarian: {
     keys: [0, .25, .5, .75, 1],
+    variants: ['db'],
     equipment: [{ type: 'flatBench', id: 'bench', at: [-8, 0, -92] }, ...DB_OPT],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'footR', prop: 'bench:pad' }, ...DB_OPT_CONTACTS],
     gripRadius: { L: 1.6, R: 1.6 },
-    pose(t, C) {
+    pose(t, C, variant) {
       const { V } = C, q = C.base(), e = C.ease(t), lean = C.lerp(8, 14, e);
       pelvisLean(C, q, [1, C.lerp(75.6, 54.4, e), C.lerp(-3, 0, e)], lean * .8); q.lumbar = [lean * .1, 0, 0]; q.thoracic = [lean * .1 - 2, 0, 0]; q.neck = [-lean * .3, 0, 0];
-      hangArms(C, q);
+      hangArms(C, q, { mode: dbHand(variant) });
       plant(C, q, 'L', [10, 0, 41], { toeOut: 4, pole: [.04, 0, 1] });
       instepOn(C, q, 'R', -8, -29, 44, 35, [0, -.3, 1]);
       return q;
@@ -425,13 +435,14 @@ module.exports = {
      t=1 — низ: переднее бедро параллельно полу, колено над стопой, заднее колено почти касается пола, корпус вертикален. */
   lunge: {
     keys: [0, .25, .5, .75, 1],
+    variants: ['db'],
     equipment: [...DB_OPT],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, ...DB_OPT_CONTACTS],
     gripRadius: { L: 1.6, R: 1.6 },
-    pose(t, C) {
+    pose(t, C, variant) {
       const { V } = C, q = C.base(), e = C.ease(t), hipY = C.lerp(76.5, 49.2, e), hipZ = C.lerp(-5, -6.4, e);
       pelvisLean(C, q, [0, hipY, hipZ], C.lerp(3, 5, e)); q.thoracic = [-2, 0, 0]; q.neck = [-2, 0, 0];
-      hangArms(C, q);
+      hangArms(C, q, { mode: dbHand(variant) });
       const feet = q => { plant(C, q, 'L', [10, 0, 36], { toeOut: 4, pole: [.04, 0, 1] }); rearFoot(C, q, 'R', [-10, 0, -51], { hipFlex: C.lerp(-14, -4, e) }); };
       settle(C, q, { lo: -6, hi: 10, x: 0, xTol: 3, loads: loadsIn(C, S), resolve: feet });
       return q;
@@ -446,10 +457,11 @@ module.exports = {
   revlunge: {
     keys: [0, .03, .06, .12, .18, .24, .3, .36, .42, .48, .53, .58, .66, .74, .82, .91, 1],
     dynamic: true,
+    variants: ['db'],
     equipment: [...DB_OPT],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor', when: [0, .06] }, { body: 'soleR', prop: 'floor', when: [.58, 1] }, ...DB_OPT_CONTACTS],
     gripRadius: { L: 1.6, R: 1.6 },
-    pose(t, C) {
+    pose(t, C, variant) {
       const { V } = C, q = C.base(), ball = -77, T0 = .06, T1 = .58;
       const tz = u => { u = Math.max(0, Math.min(1, u)); const k = .3, v = 1 / (1 - k); return u < k ? v * u * u / (2 * k) : u > 1 - k ? 1 - v * (1 - u) * (1 - u) / (2 * k) : v * (u - k / 2); };
       const a = tz((t - T0) / (T1 - T0)), d = C.ease(Math.max(0, (t - T1) / (1 - T1)));
@@ -457,7 +469,7 @@ module.exports = {
       const hipZ = t < T1 ? C.lerp(0, -26, a) : C.lerp(-26, -38.5, d), lean = t < T1 ? C.lerp(2, 12, a) : C.lerp(12, 5, d);
       const shift = t < T0 ? t / T0 : t < T1 ? 1 : 1 - d;
       pelvisLean(C, q, [5 * shift, hipY, hipZ], lean * .8); q.lumbar = [lean * .1, 0, 0]; q.thoracic = [lean * .1 - 2, 0, 0]; q.neck = [-lean * .3, 0, 0];
-      hangArms(C, q);
+      hangArms(C, q, { mode: dbHand(variant) });
       plant(C, q, 'L', [10, 0, 0], { toeOut: 4, pole: [.04, 0, 1] });
       if (t <= T0) plant(C, q, 'R', [-10, 0, 0], { toeOut: 4, heel: 30 * t / T0 });
       else if (t < T1) { const u = (t - T0) / (T1 - T0), z = C.lerp(13.5, ball, tz(u)), y = 7 * Math.sin(Math.PI * u); C.foot(q, 'R', [-10, y, z], 0, [0, 0, 1], { forward: [0, 0, 1], heel: C.lerp(30, 50, u) + 22 * Math.sin(Math.PI * u), allowShort: true }); }
@@ -555,7 +567,9 @@ module.exports = {
   kbswing: {
     keys: [0, .15, .3, .45, .6, .75, .9, 1],
     dynamic: true,
-    equipment: [{ type: 'kettlebell', id: 'kb', hands: ['L', 'R'], hang: 'arm' }],
+    /* рукоять в кулаках: у гири двумя руками шар висит на drop + 2 см ниже хватов, рукоять — на 15,6 см выше центра шара;
+       drop 13,6 ставит ось рукояти в центры хватов (прежде, при drop 15, рукоять шла на 1,4 см ниже — под пальцами) */
+    equipment: [{ type: 'kettlebell', id: 'kb', hands: ['L', 'R'], hang: 'arm', drop: 13.6 }],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'kb' }, { body: 'gripR', prop: 'kb' }],
     gripRadius: { L: 1.7, R: 1.7 },
     pose(t, C) {
@@ -580,14 +594,15 @@ module.exports = {
      Гантели по желанию (optional 'db'); центр масс держится над передним отделом стоп. */
   calfraise: {
     keys: [0, .25, .5, .75, 1],
+    variants: ['db'],
     equipment: [{ type: 'g2Step', id: 'step' }, { type: 'dumbbell', id: 'dbL', hand: 'L', optional: 'db' }, { type: 'dumbbell', id: 'dbR', hand: 'R', optional: 'db' }],
     contacts: [{ body: 'soleL', prop: 'step:top' }, { body: 'soleR', prop: 'step:top' }, { body: 'gripL', prop: 'dbL', optional: true }, { body: 'gripR', prop: 'dbR', optional: true }],
     gripRadius: { L: 1.6, R: 1.6 },
-    pose(t, C) {
+    pose(t, C, variant) {
       const { V, M } = C, q = C.base(), e = C.ease(t), H = C.point('step', 'top')[1], heel = C.lerp(-5.5, 36, e), ballZ = -15;
       C.root(q, [0, 100, -20], [0, 1, 0], [0, 0, 1]);
       q.neck = [2, 0, 0];
-      for (const s of S) { q[s].girdle = [-2, -4]; armAngles(q, s, [-2, 13, 0], 8, 0); }
+      for (const s of S) { q[s].girdle = [-2, -4]; armAngles(q, s, [-2, 13, 0], 8, 0, [0, 0], dbHand(variant)); }
       const sup = s => [M.SIGN[s] * 10.6, H, ballZ];
       const feet = q => {
         /* таз — на высоте, при которой колени почти прямые (5°) */
