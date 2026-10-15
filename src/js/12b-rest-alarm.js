@@ -90,6 +90,9 @@ const RestAlarm = (() => {
     }
     if (cues.length) cue(cues);
   }
+  /* звуковая карта стоит (iPhone не всегда запускает её сам после возвращения на экран, а без нажатия запустить её
+     нельзя): любое нажатие будит её и ставит очередь заново по часам */
+  function wake() { if (ctx && on && ctx.state !== 'running' && ctx.state !== 'closed') resync(); }
   function setOn(v) {
     on = !!v; write(KEY, on ? 'on' : 'off');
     if (!on) { silence('rest'); silence('hold'); queued = sig.map(() => false); }
@@ -113,10 +116,11 @@ const RestAlarm = (() => {
   }
   /* состояние для проверок интерфейса (tools/ui-check.mjs) */
   const state = () => ({audio:ctx ? ctx.state : null, end, queued:ch.rest.length, signals:sig.map(s => s.kind), fired:fired.filter(Boolean).length, mode, warn, hold:cues.map(c => c.kind)});
-  return {unlock, arm, cancel, poll, buzz, cue, hush, resync, setOn, setPrefs, paintButton, paintPrefs, state, lastAt:() => restLastAt(sig),
+  return {unlock, arm, cancel, poll, buzz, cue, hush, resync, wake, setOn, setPrefs, paintButton, paintPrefs, state, lastAt:() => restLastAt(sig),
     get on() { return on; }, get mode() { return mode; }, get warn() { return warn; }};
 })();
 document.addEventListener('click', e => {
+  RestAlarm.wake();
   const b = e.target.closest('[data-rest-sound]');
   if (b) { RestAlarm.setOn(!RestAlarm.on); if (RestAlarm.on) RestAlarm.unlock(); return; }
   const m = e.target.closest('[data-rest-mode]');
