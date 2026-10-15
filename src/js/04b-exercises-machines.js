@@ -96,7 +96,7 @@ EX.push(
   props:[{k:'line', pts:[[42, 16], [158, 16]], w:5}, {k:'line', pts:[[46, 0], [46, 16]], w:4}, {k:'line', pts:[[154, 0], [154, 16]], w:4},
    {k:'line', pts:[[40, 0], [40, GROUND]], w:4}, {k:'line', pts:[[160, 0], [160, GROUND]], w:4},
    {k:'seg', a:'knL', b:'knR', aoff:[-22, 10], boff:[22, 10], w:8, cls:'eq-pad-s', layer:'back'}]}},
-{id:'chestrowdb', name:'Тяга гантелей лёжа на наклонной скамье', eq:[['db'], ['incline']], g:'back', pri:['midback', 'lats'], sec:['delt_r', 'biceps'], type:'c', lvl:1,
+{id:'chestrowdb', name:'Тяга гантелей лёжа на наклонной скамье', eq:[['db'], ['incline']], g:'back', pri:['midback', 'lats'], sec:['delt_r', 'biceps'], type:'c', lvl:1, imp:2, sides:'both',
  tech:['Спинка под 30–45°. Лягте грудью на скамью, стопы упираются в пол, гантели висят под плечами.',
    'Тяните гантели к бёдрам, сводя лопатки; грудь прижата к спинке.',
    'Опустите до полного выпрямления рук, давая лопаткам разойтись.'],
