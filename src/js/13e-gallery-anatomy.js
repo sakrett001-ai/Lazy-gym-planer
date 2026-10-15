@@ -18,8 +18,8 @@
    · Без WebGL, после ошибки загрузки костей и мышц и если телефон не успевает (thumbPace) — SVG, как раньше; пока
      кости и мышцы грузятся — SVG, а готовые кадры из памяти и кеша показываются сразу. */
 const galleryAnat = {view:'mannequin', render:false, note:'', wait:false, size:0, theme:'', loading:false, failed:false,
-  mem:new Map(), base:new Map(), state:new Map(), fails:new Map(), near:new Set(), vis:new Set(), io:null, ioVis:null, queued:false, scrollAt:0,
-  job:null, canvas:null, type:'image/webp', noStore:false, pace:thumbPace(), stats:{painted:0, cached:0, chunks:0}, cleaned:false, freeTimer:0};
+  mem:new Map(), base:new Map(), state:new Map(), fails:new Map(), near:new Set(), fresh:new Set(), vis:new Set(), io:null, ioVis:null, queued:false, scrollAt:0,
+  job:null, canvas:null, watched:null, type:'image/webp', noStore:false, pace:thumbPace(), stats:{painted:0, cached:0, chunks:0}, cleaned:false, freeTimer:0};
 
 /* ---------- Cache Storage: готовые кадры между сеансами ---------- */
 /* место приложения: адрес корня (русская и английская страницы — одна корзина), во Floot (iframe srcdoc) — страница-хозяин;
@@ -108,22 +108,25 @@ function galleryTheme() {
   if (t === 'light' || t === 'dark') return t;
   try { return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch (e) { return 'light'; }
 }
-/* упражнение миниатюры: манекен каталога с видимым инвентарём места (как SVG-миниатюра); false — объёма нет */
+/* упражнение миниатюры: инвентарь места, как у SVG-миниатюры (то, чего нет в месте, — из полного набора). Ключ — по
+   выбранному инвентарю (он и задаёт вариант и видимые детали), без расчёта позы: дёшево, чтобы не задерживать витрину;
+   сам вариант (catalogAnimFor) и видимые детали — уже при отрисовке. false — объёма у упражнения нет */
 function galleryAnatBase(id) {
   const k = thumbKey(id);
   if (galleryAnat.base.has(k)) return galleryAnat.base.get(k);
   let b = false;
   try {
-    const it = previewItem(id), ex = it.ex;
-    if (ex.anim.catalogRig) {
-      const A = catalogAnimFor(ex.anim, it.has), bits = A.catalogRig(0).props.map(q => GymEquipment.visible(q, it.has) ? 1 : 0).join(''), t = thumbT(ex);
-      b = {id, it, A, variant:(A.catalogId || '') + '/' + (A.catalogVariant || ''), bits, t, index:t === 1 ? 1 : 0};
+    const ex = EXI[id];
+    if (ex && ex.anim.catalogRig) {
+      let E = effEquip(S.equip); if (!available(ex, E)) E = effEquip(EQUIP.map(e => e.id));
+      const equip = [...new Set(chosenEquip(ex, E))].sort().join(',') + '+' + (ex.opt || []).filter(x => E.has(x)).sort().join(','), t = thumbT(ex);
+      b = {id, ex, E, equip, t, index:t === 1 ? 1 : 0};
     }
   } catch (e) { b = false; }
   galleryAnat.base.set(k, b);
   return b;
 }
-const galleryAnatKey = b => thumbCacheKey({build:window.PODHOD_BUILD || '', view:galleryAnat.view, theme:galleryAnat.theme, id:b.id, variant:b.variant, bits:b.bits, t:b.t, size:galleryAnat.size});
+const galleryAnatKey = b => thumbCacheKey({build:window.PODHOD_BUILD || '', view:galleryAnat.view, theme:galleryAnat.theme, id:b.id, equip:b.equip, t:b.t, size:galleryAnat.size});
 const galleryAnatOn = () => galleryAnat.view !== 'mannequin' && galleryAnat.size > 0;
 /* показать готовый кадр в миниатюре: картинка поверх SVG (SVG скрыт; пока картинка не расшифрована — тёмный фон сцены) */
 function galleryAnatShow(el, key, e) {
@@ -146,7 +149,17 @@ function galleryAnatPlace(el) {
   const key = galleryAnatKey(b), e = galleryAnat.mem.get(key); if (!e) return false;
   galleryAnatShow(el, key, e); return true;
 }
-/* миниатюра подошла к экрану. true — SVG пока не нужен (кадр показан или ищется в кеше); false — нужен SVG */
+/* миниатюра на экране (очередь SVG, 13c-gallery.js): готовый кадр из памяти — сразу; true — SVG не нужен (кадр показан
+   или его ищут в кеше). Здесь ничего не считается: первая картинка витрины — SVG — не ждёт */
+function galleryAnatPeek(el) {
+  if (!galleryAnatOn()) return false;
+  const b = galleryAnat.base.get(thumbKey(el.dataset.thumb)); if (!b) return false;
+  const key = galleryAnatKey(b), e = galleryAnat.mem.get(key);
+  if (e) { galleryAnatShow(el, key, e); return true; }
+  return galleryAnat.state.get(key) === 'lookup';
+}
+/* миниатюра у экрана (в простое): готовый кадр — из памяти или кеша; нет — в очередь отрисовки.
+   true — SVG пока не нужен (кадр показан или ищется в кеше); false — нужен SVG */
 function galleryAnatTouch(el) {
   if (!galleryAnatOn()) return false;
   const b = galleryAnatBase(el.dataset.thumb); if (!b) return false;
@@ -198,7 +211,7 @@ function galleryAnatSync(el) {
 /* ---------- очередь: кадры в простое ---------- */
 const galleryIdle = window.requestIdleCallback ? cb => requestIdleCallback(cb, {timeout:1000}) : cb => setTimeout(() => { const end = performance.now() + 12; cb({timeRemaining:() => Math.max(0, end - performance.now()), didTimeout:true}); }, 50);
 function galleryAnatKick(delay = 0) {
-  if (galleryAnat.queued || !galleryAnat.render || !gallery.on) return;
+  if (galleryAnat.queued || !gallery.on || !galleryAnatOn() || (!galleryAnat.render && !galleryAnat.fresh.size)) return;
   galleryAnat.queued = true;
   if (delay) setTimeout(() => galleryIdle(galleryAnatWork), delay); else galleryIdle(galleryAnatWork);
 }
@@ -225,21 +238,34 @@ function galleryAnatNext() {
 }
 function galleryAnatWork(deadline) {
   galleryAnat.queued = false;
-  if (!gallery.on || !galleryAnat.render || document.hidden) return;
+  if (!gallery.on || !galleryAnatOn() || document.hidden) return;
   /* при прокрутке и пока строятся первые SVG-миниатюры — подождать */
   if (performance.now() - galleryAnat.scrollAt < GALLERY_THUMBS.quiet || galleryQueue.length || galleryRaf) { galleryAnatKick(GALLERY_THUMBS.quiet); return; }
+  /* миниатюры, подошедшие к экрану: кадр из памяти или поиск в кеше (сначала видимые) — пока есть время простоя */
+  if (galleryAnat.fresh.size) {
+    const box = $('#mv-gallery'), ids = [...galleryAnat.fresh].sort((a, b) => galleryAnat.vis.has(b) - galleryAnat.vis.has(a));
+    for (const id of ids) {
+      galleryAnat.fresh.delete(id); const el = box?.querySelector(`.mv-thumb[data-thumb="${id}"]`);
+      if (el && !el.classList.contains('anat')) galleryAnatTouch(el);
+      if (deadline.timeRemaining() < 3 && !deadline.didTimeout) break;
+    }
+    if (galleryAnat.fresh.size) { galleryAnatKick(); return; }
+  }
+  if (!galleryAnat.render) return;
   if (galleryAnatData() !== 'ready') { galleryAnatLoad(); return; }
   const stage = cardStage(); if (!stage) return;
   /* сжимаются уже два кадра — новый подождёт (снимки держат память видеокарты) */
   if (!galleryAnat.job && ThumbEncoder.pending >= 2) return;
   let job = galleryAnat.job;
   /* размер, тема или вид сменились, пока сцена ждала кадра, — работа не нужна */
-  if (job && (job.key !== galleryAnatKey(job.b) || !galleryAnat.near.has(job.id))) { job.h.release(); job = galleryAnat.job = null; }
+  if (job && (job.key !== galleryAnatKey(job.b) || !galleryAnat.near.has(job.id))) { job.h.forget(); job = galleryAnat.job = null; }
   if (!job) {
     const n = galleryAnatNext(); if (!n) return;
-    const {b} = n, layers = galleryAnat.view === 'anatomy' ? {skeleton:Skeleton.data, muscles:Muscles.data, level:anatomyLevel(b.it.ex)} : null;
-    const h = stage.figure({key:['thumb', b.A.catalogId, b.A.catalogVariant || '', b.bits].join('|'), still:true, fit:'body', color:muscleColor, muscles:false, stress:false,
-      data:(t, index, coarse, lean) => catalogVolumeData(b.A, t, index, b.it.has, coarse, lean)});
+    const {b} = n, layers = galleryAnat.view === 'anatomy' ? {skeleton:Skeleton.data, muscles:Muscles.data, level:anatomyLevel(b.ex)} : null;
+    /* вариант упражнения и видимые детали — по инвентарю миниатюры (как у SVG-миниатюры и карточки) */
+    const has = propHas(b.ex, b.E), A = catalogAnimFor(b.ex.anim, has), bits = A.catalogRig(0).props.map(q => GymEquipment.visible(q, has) ? 1 : 0).join('');
+    const h = stage.figure({key:['thumb', A.catalogId, A.catalogVariant || '', bits].join('|'), still:true, fit:'body', color:muscleColor, muscles:false, stress:false,
+      data:(t, index, coarse, lean) => catalogVolumeData(A, t, index, has, coarse, lean)});
     h.setLayers(Skeleton.data, layers); h.setLook({muscles:false, stress:false});
     job = galleryAnat.job = {id:n.id, b, key:n.key, h, prepared:false, long:0, t0:performance.now()};
   }
@@ -249,7 +275,7 @@ function galleryAnatWork(deadline) {
     else { galleryAnatPaint(job); painted = true; }
   } catch (e) {
     console.error('Миниатюра анатомии', job.id, e);
-    job.h.release(); galleryAnat.job = null;
+    job.h.forget(); galleryAnat.job = null;
     /* вторая неудача — у этой миниатюры остаётся SVG */
     const n = (galleryAnat.fails.get(job.key) || 0) + 1; galleryAnat.fails.set(job.key, n);
     galleryAnat.state.set(job.key, n >= 2 ? 'fail' : 'miss');
@@ -268,7 +294,8 @@ function galleryAnatPaint(job) {
   const c = galleryAnat.canvas || (galleryAnat.canvas = document.createElement('canvas')), size = galleryAnat.size;
   if (c.width !== size || c.height !== size) { c.width = size; c.height = size; }
   const ok = job.h.paint(c, job.b.t, job.b.index, GALLERY_THUMBS.camera);
-  job.h.release(); galleryAnat.job = null;
+  /* сцена миниатюры больше не нужна: память — сразу, а не после вытеснения (≈3 МБ кучи на сцену) */
+  job.h.forget(); galleryAnat.job = null;
   if (!ok) throw Error('paint');
   galleryAnat.state.set(job.key, 'encode');
   const {key, id} = job, t0 = performance.now();
@@ -302,26 +329,28 @@ function galleryAnatApply() {
 function galleryAnatWatch(box) {
   const root = $('#motion-view');
   if (!galleryAnat.io && typeof IntersectionObserver === 'function') {
+    galleryAnat.watched = new WeakSet();
+    /* у экрана: только отметка — поиск в кеше и отрисовка идут в простое (galleryAnatWork) */
     galleryAnat.io = new IntersectionObserver(es => {
-      for (const e of es) { const id = e.target.dataset.thumb; if (e.isIntersecting) { galleryAnat.near.add(id); galleryAnatTouch(e.target); } else galleryAnat.near.delete(id); }
+      for (const e of es) { const id = e.target.dataset.thumb; if (e.isIntersecting) { galleryAnat.near.add(id); galleryAnat.fresh.add(id); } else { galleryAnat.near.delete(id); galleryAnat.fresh.delete(id); } }
       galleryAnatKick();
     }, {root, rootMargin:GALLERY_THUMBS.near});
     galleryAnat.ioVis = new IntersectionObserver(es => { for (const e of es) { const id = e.target.dataset.thumb; if (e.isIntersecting) galleryAnat.vis.add(id); else galleryAnat.vis.delete(id); } }, {root});
   }
   if (!galleryAnat.io) return;
-  for (const el of box.querySelectorAll('.mv-thumb[data-thumb]')) if (!el.dataset.watched) { el.dataset.watched = '1'; galleryAnat.io.observe(el); galleryAnat.ioVis.observe(el); }
+  for (const el of box.querySelectorAll('.mv-thumb[data-thumb]')) if (!galleryAnat.watched.has(el)) { galleryAnat.watched.add(el); galleryAnat.io.observe(el); galleryAnat.ioVis.observe(el); }
 }
 /* витрина собрана заново (фильтр, поиск, возврат): прежние наблюдения — недействительны */
 function galleryAnatMount(box) {
   galleryAnat.io?.disconnect(); galleryAnat.ioVis?.disconnect(); galleryAnat.io = galleryAnat.ioVis = null;
-  galleryAnat.near.clear(); galleryAnat.vis.clear();
+  galleryAnat.near.clear(); galleryAnat.vis.clear(); galleryAnat.fresh.clear();
   galleryAnatApply();
 }
 /* витрина закрыта или открыт разбор: очередь стоит, готовые кадры остаются в памяти */
 function galleryAnatStop() {
   galleryAnat.io?.disconnect(); galleryAnat.ioVis?.disconnect(); galleryAnat.io = galleryAnat.ioVis = null;
-  galleryAnat.near.clear(); galleryAnat.vis.clear();
-  if (galleryAnat.job) { galleryAnat.job.h.release(); galleryAnat.job = null; }
+  galleryAnat.near.clear(); galleryAnat.vis.clear(); galleryAnat.fresh.clear();
+  if (galleryAnat.job) { galleryAnat.job.h.forget(); galleryAnat.job = null; }
   for (const [k, v] of galleryAnat.state) if (v === 'lookup') galleryAnat.state.delete(k);
   galleryAnat.pace.reset();
   /* без карточек плана в «Анатомии» общий рендерер через несколько секунд отдаёт контекст WebGL и сцены */

@@ -94,8 +94,8 @@ function renderGallery() {
     galleryIO = new IntersectionObserver(es => {
       for (const e of es) {
         if (e.isIntersecting) gallerySeen.add(e.target); else gallerySeen.delete(e.target);
-        /* кадр анатомии из памяти или кеша — SVG не нужен (или подождёт ответа кеша) */
-        if (e.isIntersecting && !e.target.classList.contains('ready') && !galleryQueue.includes(e.target) && !galleryAnatTouch(e.target)) galleryQueue.push(e.target);
+        /* кадр анатомии уже в памяти — SVG не нужен (или подождёт ответа кеша) */
+        if (e.isIntersecting && !e.target.classList.contains('ready') && !galleryQueue.includes(e.target) && !galleryAnatPeek(e.target)) galleryQueue.push(e.target);
       }
       if (galleryQueue.length && !galleryRaf) galleryRaf = requestAnimationFrame(pumpThumbs);
     }, {rootMargin:'300px 0px'});

@@ -225,6 +225,10 @@ function createCardStage(){
     if(released)return false;const s=ensure();if(!s||s.renderer.getContext?.()?.isContextLost?.())return false;
     entry(options.key,options);return true;
    },
+   /* сцена этой фигуры больше не нужна (миниатюра витрины нарисована: её упражнение второй раз не рисуется) — отпустить
+      сразу, не дожидаясь вытеснения: геометрия — сейчас, материалы — после следующего кадра (собранные программы шейдеров
+      переходят к следующей сцене); фигура отпускается */
+   forget(){released=true;const e=scenes.get(options.key);if(e){scenes.delete(options.key);disposeEntry(e,false);}},
    release(){released=true;}};
  }
  /* builds — сколько сцен собрано: кадр со сборкой сцены не годится для замера скорости (12-motion-player.js) */

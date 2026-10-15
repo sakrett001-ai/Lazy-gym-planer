@@ -114,9 +114,10 @@ function thumbCanvasSize(cssWidth,dpr=1,G=GALLERY_THUMBS){
   const px=cssWidth*Math.min(G.dpr,Math.max(1,dpr||1));
   return Math.min(G.max,Math.max(G.step,Math.ceil(px/G.step)*G.step));
 }
-/* ключ готового кадра: сборка, вид, тема, упражнение и вариант инвентаря (видимые детали), фаза, ракурс, размер */
-function thumbCacheKey({build='',view,theme,id,variant='',bits='',t,camera=GALLERY_THUMBS.camera,size}){
-  return ['t1',build,view,theme,id,variant,bits,t,camera,size].join('|');
+/* ключ готового кадра: сборка, вид, тема, упражнение и его инвентарь (он задаёт вариант и видимые детали), фаза,
+   ракурс, размер */
+function thumbCacheKey({build='',view,theme,id,equip='',t,camera=GALLERY_THUMBS.camera,size}){
+  return ['t1',build,view,theme,id,equip,t,camera,size].join('|');
 }
 /* Cache Storage: одна корзина на сборку и место приложения (scope); корзины прежних сборок удаляются */
 const THUMB_CACHE_PREFIX='podhod-thumbs@';

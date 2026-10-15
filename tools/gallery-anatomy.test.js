@@ -31,12 +31,19 @@ test('thumbnail canvas: device pixels up to ×2, in steps of 40 px, at most 320;
   assert(G.max * G.max * 4 < 0.5 * (1 << 20), 'общий холст — меньше 0,5 МБ');
 });
 
-test('cache key: build, view, theme, variant, visible equipment, phase, camera and size — each changes the key', () => {
-  const base = { build: '4.51.0-abc', view: 'anatomy', theme: 'dark', id: 'goblet', variant: 'goblet/db', bits: '101', t: 1, size: 320 };
+test('cache key: build, view, theme, exercise equipment (it sets the variant and visible parts), phase, camera and size — each changes the key', () => {
+  const base = { build: '4.51.0-abc', view: 'anatomy', theme: 'dark', id: 'goblet', equip: 'db+', t: 1, size: 320 };
   const k = R.thumbCacheKey(base);
-  assert.equal(k, 't1|4.51.0-abc|anatomy|dark|goblet|goblet/db|101|1|angle|320');
-  for (const [f, v] of Object.entries({ build: '4.51.0-def', view: 'skeleton', theme: 'light', id: 'squat', variant: 'goblet/kb', bits: '111', t: 0, camera: 'side', size: 200 }))
+  assert.equal(k, 't1|4.51.0-abc|anatomy|dark|goblet|db+|1|angle|320');
+  for (const [f, v] of Object.entries({ build: '4.51.0-def', view: 'skeleton', theme: 'light', id: 'squat', equip: 'kb+', t: 0, camera: 'side', size: 200 }))
     assert.notEqual(R.thumbCacheKey({ ...base, [f]: v }), k, f);
+});
+
+test('the equipment of a thumbnail decides the exercise variant: goblet with a dumbbell and with a kettlebell are different frames', () => {
+  const m = loadModel({ fullApp: true });
+  const r = m.get(`(() => { const out = {}; for (const [place, eq] of [['db', ['db']], ['kb', ['kb']]]) { S.places = [{ id: place, name: place, equip: eq }]; S.place = place; ensurePlaces(S);
+    const b = galleryAnatBase('goblet'); out[place] = { equip: b.equip, variant: catalogAnimFor(b.ex.anim, propHas(b.ex, b.E)).catalogVariant || '' }; } return out; })()`);
+  assert.notEqual(r.db.equip, r.kb.equip); assert.notEqual(r.db.variant, r.kb.variant, 'другой вариант позы — другой ключ кадра');
 });
 
 test('Cache Storage buckets: one per build and app place; older builds of this place go, other places stay; a bucket is trimmed to fresh entries', () => {
@@ -141,7 +148,10 @@ test('a still frame is framed by the pose it shows, without sampling 13 phases a
     assert(top.t - top.b > low.t - low.b, 'стоя человек выше, чем в нижней точке приседа');
     /* квадратный кадр, тело в нём целиком: высота рамки — по телу, с полем */
     assert(Math.abs((low.r - low.l) - (low.t - low.b)) < 1e-6, 'кадр квадратный');
-    still.release(); assert.equal(still.prepare(), false, 'отпущенная фигура не собирает сцену');
+    /* нарисованная миниатюра отпускает свою сцену сразу (карточка плана — остаётся) */
+    const scenes = stage.stats().scenes; still.forget();
+    assert.equal(stage.stats().scenes, scenes - 1, 'сцена миниатюры отпущена'); assert.equal(still.prepare(), false, 'отпущенная фигура не собирает сцену');
+    assert.equal(card.paint(r.target(), .5, 0, 'angle'), true); assert.equal(stage.builds, builds + 1, 'сцена карточки — та же');
   } finally { r.stage().dispose(); r.dom.window.close(); }
 });
 
