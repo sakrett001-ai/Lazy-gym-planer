@@ -2884,7 +2884,7 @@
  "WebGL2 есть": "WebGL2 available",
  "WebGL2 нет": "no WebGL2",
  "уменьшение движения включено": "reduce motion is on",
- "Пары чисел — медиана/95-й процентиль, мс главного потока на кадр. «Кадр» — весь кадр вместе с отрисовкой страницы (оценка); поза — расчёт позы и поверхности тела, кожа — запись её сетки, кости — с рамками костей; анатомия — весь кадр карточки в «Анатомии», копия — перенос кадра в её холст; ступень — частота костей и мышц (30, 15, 10 кадров в секунду), медиана — по которой она выбрана.": "Number pairs — median/95th percentile, main-thread ms per frame. “Frame” is the whole frame including page rendering (estimate); pose — pose and body surface computation, skin — writing its mesh, bones — including bone frames; anatomy — the whole card frame in “Anatomy”, copy — moving the frame into its canvas; step — how often bones and muscles update (30, 15, 10 frames per second), median — what the step was chosen by.",
+ "Пары чисел — медиана/95-й процентиль, мс главного потока на кадр. «Кадр» — весь кадр вместе с отрисовкой страницы (оценка); поза — расчёт позы и поверхности тела, кожа — запись её сетки, кости — с рамками костей; анатомия — весь кадр карточки в «Анатомии», копия — перенос кадра в её холст; ступень — частота костей и мышц (30, 15, 10 кадров в секунду), медиана — по которой она выбрана; миниатюры — задачи витрины атласа (сборка сцены, кадр).": "Number pairs — median/95th percentile, main-thread ms per frame. “Frame” is the whole frame including page rendering (estimate); pose — pose and body surface computation, skin — writing its mesh, bones — including bone frames; anatomy — the whole card frame in “Anatomy”, copy — moving the frame into its canvas; step — how often bones and muscles update (30, 15, 10 frames per second), median — what the step was chosen by; thumbnails — motion atlas gallery tasks (scene build, frame).",
  "открытие {n} мс": "open {n} ms",
  "данные ещё {n} мс": "data another {n} ms",
  "Облегчённый режим объёма включился на шаге {i}.": "Light 3D mode switched on at step {i}.",
@@ -2902,5 +2902,14 @@
  "кадра": "frames",
  "кадров": "frames",
  "Кадр": "Frame",
- "Атлас движений": "Motion atlas"
+ "Атлас движений": "Motion atlas",
+ "Миниатюра анатомии": "Anatomy thumbnail",
+ "миниатюры": "thumbnails",
+ "задача": "task",
+ "задачи": "tasks",
+ "задач": "tasks",
+ "у экрана готово {n} из {m}": "{n} of {m} near the screen ready",
+ "только видимые": "visible only",
+ "анатомия у экрана за {n} мс": "anatomy near the screen in {n} ms",
+ "витрина": "gallery"
 }

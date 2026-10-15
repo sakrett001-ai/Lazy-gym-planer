@@ -132,6 +132,10 @@ export function createVolumeFigure(options){
    CARD_SCENES сцен (анимируемые карточки и одна под неподвижные кадры); давняя сцена освобождается: геометрия — сразу,
    материалы — после кадра следующей сцены, как у фигур разбора (собранные программы шейдеров переходят к ней).
    Рамка карточки — по телу (fit:'body'): в маленьком кадре человек крупнее, тренажёр может уйти за край.
+   Миниатюры витрины атласа (этап 3, 13e-gallery-anatomy.js) — неподвижный кадр одной фазы (still:true): рамка — по
+   показанной позе (как у SVG-миниатюр), а не по 13 положениям повторения; она считается после самого кадра, без
+   лишних расчётов позы, и не пишется в общую память рамок (в ней — рамки карточек и разбора). Сцену такой фигуры
+   можно собрать заранее, отдельной задачей (prepare), — тогда кадр (поза, кости, мышцы, отрисовка) идёт следующей.
    Теней нет (CARD_SHADOWS): в кадре 130–200 px их почти не видно, а проход тени — ещё одна отрисовка всех костей. */
 const CARD_SCENES=3,CARD_SHADOWS=false,CARD_PAD=1.1;
 function createCardStage(){
@@ -155,8 +159,9 @@ function createCardStage(){
  }
  function build(key,options){
   const data=(t,index,lean)=>options.data(t,index,false,lean),initial=data(0,0,true),scene=createCatalogScene(initial);
-  const fit=options.fit==='body'?'body':'all',fitKey=initial.exerciseId+'|'+hashText(JSON.stringify([initial.props,[]]))+'|'+fit,saved=boundsGet(fitKey);
-  if(saved&&Object.keys(scene.bounds).every(k=>saved[k]))for(const k of Object.keys(scene.bounds))Object.assign(scene.bounds[k],saved[k]);
+  const fit=options.fit==='body'?'body':'all',still=!!options.still,fitKey=initial.exerciseId+'|'+hashText(JSON.stringify([initial.props,[]]))+'|'+fit,saved=still?null:boundsGet(fitKey);
+  if(still){/* рамка неподвижного кадра — по нему самому, при отрисовке (paint) */}
+  else if(saved&&Object.keys(scene.bounds).every(k=>saved[k]))for(const k of Object.keys(scene.bounds))Object.assign(scene.bounds[k],saved[k]);
   else{
    /* рамка по телу: поза без областей манекена (lean) — их поверхности для рамки не нужны */
    for(let i=0;i<=FIT_STEPS;i++){scene.apply(data(i/FIT_STEPS,0,true),{color:options.color});scene.includeBounds(fit==='body'?'body':undefined);}
@@ -166,7 +171,7 @@ function createCardStage(){
   /* замер скорости (?perf, src/js/19-perf-panel.js): обёртки вызовов этой сцены и общего рендерера (card — не трогать
      признак облегчённого режима фигур разбора); выключенный — одна проверка на сборку сцены */
   globalThis.GymPerf?.volume({scene,renderer:slot.renderer,options,root:null,card:true});
-  return{key,scene,data,color:options.color,applied:null,aspect:0,bones:{map:new Map(),data:null}};
+  return{key,scene,data,color:options.color,applied:null,aspect:0,bones:{map:new Map(),data:null},still,fit,framed:null};
  }
  function disposeEntry(e,now){try{e.scene.disposeGeometry();}catch(x){}if(now)try{e.scene.disposeMaterials();}catch(x){}else afterRender.push(e.scene.disposeMaterials);}
  function entry(key,options){
@@ -190,7 +195,7 @@ function createCardStage(){
     if(s.renderer.getContext?.()?.isContextLost?.())return false;
     const e=entry(options.key,options),cam=e.scene.cameras[camera]||e.scene.cameras.above;
     if(width!==target.width||height!==target.height){width=target.width;height=target.height;s.renderer.setSize(width,height,false);}
-    if(e.aspect!==width/height){e.aspect=width/height;e.scene.resize(width,height,CARD_PAD);}
+    if(!e.still&&e.aspect!==width/height){e.aspect=width/height;e.scene.resize(width,height,CARD_PAD);}
     const k=t+'|'+(index||0)+'|'+layerKey(),t0=now();
     if(e.applied!==k){
      const d=e.data(t,index||0,!!(bones||body));
@@ -198,14 +203,27 @@ function createCardStage(){
      memoBones(e.bones,body?.skeleton||bones,t,d);
      e.scene.apply(d,{color:e.color,selected:'all',muscles,joints:false,stress,skeleton:bones,anatomy:body});e.applied=k;
     }
+    /* неподвижный кадр: рамка — по показанной позе (тело или всё в кадре), один раз на фазу и размер */
+    const fk=k+'|'+width/height;
+    if(e.still&&e.framed!==fk){
+     for(const b of Object.values(e.scene.bounds))Object.assign(b,{minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity});
+     e.scene.includeBounds(e.fit==='body'?'body':undefined);e.scene.resize(width,height,CARD_PAD);e.framed=fk;e.aspect=width/height;
+    }
     const t1=now();s.renderer.render(e.scene.scene,cam);renders++;
     const t2=now(),g=target.getContext('2d');if(!g)return false;g.drawImage(s.canvas,0,0,width,height);
     /* время частей последнего кадра (мс): поза и сцена, отрисовка, копия в холст карточки — для замеров */
     timing.apply=t1-t0;timing.render=t2-t1;timing.copy=now()-t2;
-    /* панель замера: весь кадр карточки и копия в её холст (части кадра пишут обёртки сцены) */
-    const pf=globalThis.GymPerf;if(pf)pf.card?.(timing.apply+timing.render+timing.copy,timing.copy);
+    /* панель замера: весь кадр карточки и копия в её холст (части кадра пишут обёртки сцены); миниатюры витрины
+       панель считает сама (13e-gallery-anatomy.js) */
+    const pf=globalThis.GymPerf;if(pf&&!e.still)pf.card?.(timing.apply+timing.render+timing.copy,timing.copy);
     for(const f of afterRender.splice(0))try{f();}catch(x){}
     return true;
+   },
+   /* сцена упражнения — заранее, отдельной задачей (витрина: сборка сцены и кадр — две задачи покороче вместо одной
+      длинной); true — сцена готова (собрана сейчас или уже была), false — рисовать нечем */
+   prepare(){
+    if(released)return false;const s=ensure();if(!s||s.renderer.getContext?.()?.isContextLost?.())return false;
+    entry(options.key,options);return true;
    },
    release(){released=true;}};
  }

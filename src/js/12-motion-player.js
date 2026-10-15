@@ -385,7 +385,7 @@ function stopFigures() {
   for(const F of figs){disposeMotion(F);if(F.av){F.av.handle.release();F.av.canvas.width=F.av.canvas.height=0;}}figs=[];
   /* журнал, атлас мышц: карточек нет — через несколько секунд общий рендерер карточек отдаёт контекст WebGL и сцены
      (сразу нельзя: «Заменить» или новый подбор строят план заново, и сцены пригодятся) */
-  clearTimeout(cardAnatomy.idleFree);cardAnatomy.idleFree=setTimeout(()=>{if(!figs.some(F=>F.av))cardStage()?.dispose();},4000);
+  clearTimeout(cardAnatomy.idleFree);cardAnatomy.idleFree=setTimeout(()=>{if(!figs.some(F=>F.av)&&!gallery.on)cardStage()?.dispose();},4000);
 }
 function previewItem(id) {
   const ex=EXI[id];let E=effEquip(S.equip);
