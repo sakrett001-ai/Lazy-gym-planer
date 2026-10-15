@@ -280,6 +280,52 @@ await page.close();
   await d.close();
 }
 
+/* загрузка мышц по журналу (13d-muscle-load.js): панели нет при пустом журнале; с записями — 11 групп со статусами;
+   «Собрать тренировку на сегодня» собирает разовую тренировку с объяснением по группам; смена мышц — обычный подбор */
+{
+  const seedLog = page => page.evaluate(() => {
+    const d = n => { const x = new Date(); x.setHours(12, 0, 0, 0); x.setDate(x.getDate() - n); return dayKey(x); };
+    const s = n => Array.from({ length: n }, () => [50, 10]);
+    LOG.data = { squat: [{ d: d(3), s: s(4) }], bbbench: [{ d: d(3), s: s(4) }], latpull: [{ d: d(1), s: s(4) }], ohp: [{ d: d(1), s: s(3) }], bbcurl: [{ d: d(2), s: s(3) }] };
+    S.view = 'journal'; renderSetup(); renderPlan();
+  });
+  const st = (page, g) => page.evaluate(g => { const li = document.querySelector(`#ml [data-lg="${g}"]`); return li ? ['loaded', 'recovering', 'ready'].find(x => li.classList.contains('st-' + x)) : null; }, g);
+  const noSide = page => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
+  const j = await open(390, 844);
+  await j.evaluate(() => { S.view = 'journal'; renderSetup(); renderPlan(); });
+  check(await j.evaluate(() => !document.querySelector('#ml') && !document.querySelector('[data-logpick]')), 'пустой журнал: панели «Загрузка мышц» и кнопки «По журналу» нет');
+  await seedLog(j);
+  check(await shown(j, '#ml') && await j.evaluate(() => document.querySelectorAll('#ml .ml-list li').length === 11), 'журнал с записями: панель загрузки мышц видна, 11 групп');
+  check(await st(j, 'back') === 'loaded' && await st(j, 'biceps') === 'recovering' && await st(j, 'chest') === 'ready'
+    && await j.evaluate(() => /вчера, 4 подхода/.test(document.querySelector('#ml [data-lg="back"] .ml-st').textContent)), 'статусы: спина вчера — нагружена, бицепс позавчера — восстанавливается, грудь — готова');
+  check(await noSide(j), 'журнал с панелью загрузки (390 px) без прокрутки вбок');
+  await j.click('[data-logpick="journal"]'); await j.waitForTimeout(100);
+  const built = await j.evaluate(() => ({ view: S.view, mode: S.mode, byLog: !!plan.byLog, groups: S.groups.slice(), lines: document.querySelectorAll('.lp li').length,
+    text: document.querySelector('.lp')?.textContent || '', eyebrow: document.querySelector('.p-head .eyebrow').textContent, pre: !!document.querySelector('.pre-log.on'),
+    ex: plan.items.map(it => it.ex.g) }));
+  check(built.view === 'plan' && built.mode === 'single' && built.byLog && built.lines === built.groups.length && built.lines > 0 && /^По журналу/.test(built.eyebrow) && built.pre,
+    'кнопка собирает тренировку на сегодня: строка-объяснение по каждой группе, заготовка «По журналу» отмечена');
+  check(!built.groups.includes('back') && !built.groups.includes('shoulders') && !built.ex.includes('back') && /Спина: \d/.test(built.text) === false && /Отдыхают.*спина \(вчера\)/.test(built.text),
+    'нагруженные вчера спина и плечи пропущены и названы в объяснении');
+  check(await noSide(j), 'план по журналу (390 px) без прокрутки вбок');
+  await j.click('#g-chips [data-g="back"]'); await j.waitForTimeout(100);
+  check(await j.evaluate(() => !plan.byLog && !document.querySelector('.lp') && !document.querySelector('.pre-log.on')), 'смена мышц вручную — обычный подбор без объяснения');
+  await j.click('.pre-log'); await j.waitForTimeout(100);
+  check(await j.evaluate(() => plan.byLog && !!document.querySelector('.lp')), '«По журналу» в параметрах собирает заново');
+  /* всё нагружено сегодня: тренировку не собираем, объясняем */
+  await j.evaluate(() => {
+    for (const id of ['bbbench', 'latpull', 'ohp', 'bbcurl', 'pushdown', 'wristcurl', 'crunch', 'hipthrust', 'legext', 'legcurl', 'calfraise']) LOG.data[id] = [{ d: todayKey(), s: [[20, 10], [20, 10]] }];
+    S.view = 'journal'; renderSetup(); renderPlan();
+  });
+  await j.click('[data-logpick="journal"]'); await j.waitForTimeout(100);
+  check(await j.evaluate(() => S.view === 'journal' && /лучше отдохнуть/.test(document.querySelector('#ml-msg').textContent)), 'всё нагружено: план не собирается, в панели — объяснение');
+  await j.close();
+  const jd = await open(1280);
+  await seedLog(jd);
+  check(await jd.evaluate(() => { const li = [...document.querySelectorAll('#ml .ml-list li')]; const t = li.slice(0, 2).map(x => Math.round(x.getBoundingClientRect().top)); return t[0] === t[1]; }), 'компьютер: группы загрузки в две колонки');
+  await jd.close();
+}
+
 /* компьютер: параметры в боковой колонке не сворачиваются */
 const desk = await open(1280);
 await desk.evaluate(() => { S.fold.setup = true; regen(); });
@@ -289,4 +335,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, витрина атласа, виды фигуры «Анатомия», «Скелет» и «Манекен», первый экран и разбор на телефоне, карточка, журнал и счётчик оборудования работают на телефоне и компьютере.');
+console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, витрина атласа, виды фигуры «Анатомия», «Скелет» и «Манекен», первый экран и разбор на телефоне, карточка, журнал, загрузка мышц и тренировка по журналу, счётчик оборудования работают на телефоне и компьютере.');
