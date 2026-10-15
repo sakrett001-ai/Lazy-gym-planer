@@ -46,3 +46,26 @@ test('negative: a misplaced handle and a detached crossmember fail the validator
  const broken={...S,props:S.props.map(p=>p===cross?{...p,a:p.a.map((v,i)=>i===2?v+30:v),b:p.b.map((v,i)=>i===2?v+30:v)}:p)};
  assert(checkFrame(broken,s).issues.some(i=>i.rule==='mount'),'detached part must fail');
 });
+/* Поза под вариант инвентаря (4.43.0): хват гоблета зависит от снаряда — гантель лежит верхним диском в ладонях
+   («чашка»), гиря — в кулаках за рога. До 4.43.0 гантель лежала на кулаках, стоявших по бокам рукояти в 2–3 см от неё:
+   касание было, но сверху рука проходила мимо гантели. */
+test('goblet: the dumbbell rests in both palms under its top head, the kettlebell in fists on the horns',()=>{
+ const e=POSES.goblet,anim=model.EX.find(x=>x.id==='goblet').anim,forHas=model.get('catalogAnimFor');
+ assert(e.variants&&e.variants.kb,'goblet has a kettlebell pose');
+ const none=()=>false,kb=k=>k==='kb';
+ assert.equal(EQ.variantOf(e,none),null);assert.equal(EQ.variantOf(e,kb),'kb');assert.equal(EQ.variantOf(e),'kb','without has every optional item is present, as in visible()');
+ for(const[has,label]of [[none,'dumbbell'],[kb,'kettlebell']]){
+  const ev=EQ.variantEntry(e,has);
+  assert.deepEqual(checkClip(EQ.rig(ev),{...ev,has},{samples:21}).filter(i=>['contact','penetration','rom'].includes(i.rule)),[],label);
+ }
+ const palm=(R,s)=>{const f=R.frames['hand'+s],g=s==='L'?1:-1;return f.o.map((v,i)=>v-g*1.8*f.x[i]-5.6*f.y[i]);};
+ const toAxis=(p,a,b)=>{const ab=b.map((v,i)=>v-a[i]),ap=p.map((v,i)=>v-a[i]),k=Math.max(0,Math.min(1,ap.reduce((s,v,i)=>s+v*ab[i],0)/ab.reduce((s,v)=>s+v*v,0)));return dist(p,a.map((v,i)=>v+k*ab[i]));};
+ for(let i=0;i<=20;i++){
+  const t=i/20,R=anim.catalogRig(t),K=forHas(anim,kb).catalogRig(t);
+  assert.deepEqual([R.hands.L,R.hands.R],['flat','flat'],'dumbbell: open palms');
+  assert.deepEqual([K.hands.L,K.hands.R],['grip','grip'],'kettlebell: fists');
+  const h=R.props.find(p=>p.id==='cup:handle');
+  for(const s of ['L','R'])assert(toAxis(palm(R,s),h.a,h.b)<6.5,`t=${t}: ${s} palm by the dumbbell handle (${toAxis(palm(R,s),h.a,h.b).toFixed(1)} cm)`);
+ }
+ assert.equal(forHas(anim,none),anim,'no kettlebell — the default pose');
+});

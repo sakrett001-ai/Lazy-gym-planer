@@ -24,6 +24,7 @@ function catalogVectorGroup(svg,anim,camera){
 }
 function createMotionFigure(anim,opts){
  if(!window.GymVolume||!anim.catalogRig)return buildFigure(anim,opts);
+ anim=catalogAnimFor(anim,opts.has);
  let f=window.GymVolume.create({...opts,data:(t,index,coarse,lean)=>catalogVolumeData(anim,t,index,opts.has,coarse,lean),color:muscleColor,joints:motionPrefs.joints,stress:opts.stress??motionPrefs.stress,
   trace:Array.from({length:41},(_,i)=>anim.catalogRig(i/40).gripL),vectors:catalogVectors(anim),vectorFrame:catalogVectorFrame});
  if(!f){

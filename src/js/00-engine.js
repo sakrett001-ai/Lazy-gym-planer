@@ -489,10 +489,10 @@ function vectorGroup(svg, anim, camera) {
 /* рамка кадра SVG-фигуры без самой фигуры, по частям: job.step(n) считает n положений из 41 и возвращает true в конце.
    null — у фигуры нет общей памяти рамок (не манекен каталога). */
 function figureFrameJob(anim, opts = {}) {
-  return anim.catalogRig ? buildSpatialFigure(catalogFigureAnim(anim), {...opts, frameOnly:true}) : null;
+  return anim.catalogRig ? buildSpatialFigure(catalogFigureAnim(catalogAnimFor(anim, opts.has)), {...opts, frameOnly:true}) : null;
 }
 function buildFigure(anim, opts = {}) {
-  if(anim.catalogRig)return buildSpatialFigure(catalogFigureAnim(anim),opts);
+  if(anim.catalogRig)return buildSpatialFigure(catalogFigureAnim(catalogAnimFor(anim, opts.has)),opts);
   if(anim.rig3d)return buildSpatialFigure(anim,opts);
   const ratio = opts.ratio || 1;
   prepAnim(anim);
