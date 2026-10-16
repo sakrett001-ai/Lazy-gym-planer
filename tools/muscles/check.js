@@ -4,7 +4,8 @@
    Позы — запечённые (src/js/09bp-poses.js, то, что видит приложение); упражнения делятся между потоками по ядрам.
    Для каждой мышцы и каждой позы: наибольшая глубина пути внутри чужой или своей кости (см, по ближайшему треугольнику;
    1,5 см у начала и прикрепления не считаются — там мышца лежит на кости) и наибольший выход за кожу (см; кисти и
-   стопы — вне проверки, у них своя форма) — у линии пути и у тела мышцы (вершины Muscles.surface, этап М2).
+   стопы — вне проверки, у них своя форма) — у линии пути и у тела мышцы (вершины Muscles.surfaceAll — трубки, этап М2, и
+   ленты широких плоских мышц).
    Межрёберные мышцы (4.40.0) — пласты (sheets): тело пласта — вершины Muscles.sheetMesh — не выше кожи (--max-body) и
    не глубже --max-bone в чужих костях (своя кость, грудная клетка, — не в счёт).
    Печатает худшие семейства мышц и упражнения.
@@ -21,7 +22,10 @@ const G = require('./geometry.js');
 const args = process.argv.slice(2), flag = k => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
 const skel = Skeleton.decode(zlib.gunzipSync(fs.readFileSync(path.join(root, 'src/data/skeleton.bin'))));
 const md = Muscles.decode(zlib.gunzipSync(fs.readFileSync(path.join(root, 'src/data/muscles.bin'))));
-const bound = Muscles.bind(md, skel), pbs = G.prepareBones(skel), SURF = new Float64Array(64 * 16 * 3);
+const bound = Muscles.bind(md, skel), pbs = G.prepareBones(skel);
+/* вершины тел всех мышц кадра (трубки и ленты — Muscles.surfaceAll, как в приложении): у ленты кольцо полосы зависит от
+   соседних линий, поэтому кадр считается целиком, а проверяется по мышцам */
+const START = Muscles.ringStarts(bound), SURF = new Float64Array(START[bound.length] * Muscles.SIDES * 3);
 /* Пласты (межрёберные, формат 3): жёсткие, в рамке своей кости — вершины сетки (Muscles.sheetMesh) считаются один раз.
    В кадре проверяется выход тела пласта из кожи и глубина в чужих костях (своя кость — грудная клетка — не в счёт: края
    пласта нарочно заходят под рёбра на 1,5 мм) */
@@ -58,8 +62,12 @@ function sheetCheck(S, m, pose, sdf, R) {
    лопатки вместо пласта) при руке над головой и в разведении — до 2,7 см: у «шапки» плеча.
    4.41.0 (форма груди по ANSUR II, третья складка и подгонка складок по всем линиям мышц): широчайшая 3,8 → 3,1,
    задняя дельта 3,1 → 2,7; сняты исключения большой грудной (3,3 → 2,4: верх груди под ключицами полнее) и прямой
-   мышцы живота в предельном скручивании (3,1 → 2,4: живот над пупком глубже). */
-const EXCEPT = { skin: {}, body: { lat: 3.2, delt3: 2.8 } };
+   мышцы живота в предельном скручивании (3,1 → 2,4: живот над пупком глубже).
+   Ленты (Muscles.ribbon): широкие плоские мышцы — пласт между соседними линиями толщиной по объёму, а не трубки; тело
+   широчайшей — до 2,1 см над кожей (было 3,1): исключение снято. Задняя дельтовидная — по-прежнему трубки (её линии у
+   головки плеча при отведении и руке над головой перекрещиваются — пласт между ними мнётся, README, «Ленты»):
+   исключение прежнее. */
+const EXCEPT = { skin: {}, body: { delt3: 2.8 } };
 
 /* только пласты (быстро — для тестов): по каждому пласту худший выход из кожи и глубина в чужих костях по позам */
 function sheetRun(ids, ts, sheets = SHEETS) {
@@ -85,10 +93,11 @@ function run(ids, ts) {
     for (const t of ts) {
       const R = rig(t), body = M.bodyData(R), m = Skeleton.frames(R, body, skel.bones), sdf = G.skinSDF(R);
       const paths = Muscles.layout(bound, m, .5), drawn = Muscles.layoutDrawn(bound, m, 1.5), pose = G.poseBones(pbs, m);
+      Muscles.surfaceAll(bound, drawn, m, SURF, null, START);
       paths.forEach((p, i) => {
         const mu = bound[i], b = G.boneRun(pbs, m, p.points, 1.5, .5, pose), s = G.skinOut(sdf, p.points, R);
         /* тело мышцы (этап М2): вершины поверхности — те же, что рисует приложение */
-        const nr = Muscles.surface(mu, drawn[i], m, SURF, null, 0), v = G.skinOutPoints(sdf, SURF, R, nr * Muscles.SIDES);
+        const v = G.skinOutPoints(sdf, SURF.subarray(START[i] * Muscles.SIDES * 3, START[i + 1] * Muscles.SIDES * 3), R);
         const f = fam[mu.part] || (fam[mu.part] = { bone: 0, boneAt: '', skin: -Infinity, skinAt: '', body: -Infinity, bodyAt: '', n: 0 });
         if (b.depth > f.bone) { f.bone = b.depth; f.boneAt = `${id} t=${t} ${mu.name} в ${b.deepAt}`; }
         if (s > f.skin) { f.skin = s; f.skinAt = `${id} t=${t} ${mu.name}`; }

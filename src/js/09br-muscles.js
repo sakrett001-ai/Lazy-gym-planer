@@ -184,10 +184,12 @@ const Muscles = (() => {
     const idx = new Map(skel.bones.map((b, i) => [b.name + '|' + b.side, i]));
     const bone = k => { const i = idx.get(k[0] + '|' + k[1]); if (i === undefined) throw Error('muscles: no bone ' + k.join(' ')); return i; };
     const pt = s => ({ i: bone(s.bone), p: s.p });
-    return md.muscles.map(mu => ({
+    const bound = md.muscles.map(mu => ({
       name: mu.name, side: mu.side, group: mu.group, part: mu.part, v: mu.v, t0: mu.t0, t1: mu.t1, l0: mu.l0, sk: mu.sk, x0: mu.x0,
       el: mu.el.map(e => e.s ? { s: pt(e.s) } : { w: { t: e.w.t, i: bone(e.w.bone), c: e.w.c, a: e.w.a, r: e.w.r, B: e.w.B, side: e.w.side ? pt(e.w.side) : null } })
     }));
+    bound.fans = bindFans(md, bound, idx);
+    return bound;
   }
   const apply = (m, i, p) => { const o = i * 12; return [0, 1, 2].map(r => m[o + r * 4] * p[0] + m[o + r * 4 + 1] * p[1] + m[o + r * 4 + 2] * p[2] + m[o + r * 4 + 3]); };
   const lin = (m, i, v) => { const o = i * 12; return [0, 1, 2].map(r => m[o + r * 4] * v[0] + m[o + r * 4 + 1] * v[1] + m[o + r * 4 + 2] * v[2]); };
@@ -292,7 +294,8 @@ const Muscles = (() => {
      Координаты — каталога (см, Y вниз). */
   const RING = 2.5, SIDES = 8, MAX_RINGS = 40, STEER = .25;
   const COS = Array.from({ length: SIDES }, (_, j) => Math.cos(2 * Math.PI * j / SIDES)), SIN = Array.from({ length: SIDES }, (_, j) => Math.sin(2 * Math.PI * j / SIDES));
-  const ringCount = mu => Math.max(6, Math.min(MAX_RINGS, Math.ceil((mu.l0 || 10) / RING) + 1));
+  /* у линий ленты (ниже, «ленты») число колец общее на всю ленту — mu.rings */
+  const ringCount = mu => mu.rings || Math.max(6, Math.min(MAX_RINGS, Math.ceil((mu.l0 || 10) / RING) + 1));
   const RB = new Float64Array(MAX_RINGS * 9);
   /* курсор по ломаной: точка на длине s (s не убывает между вызовами) — в out[o..o+2] */
   function cursor(pts, cum) {
@@ -369,8 +372,473 @@ const Muscles = (() => {
   function radiusAt(b, s) {
     const u = (s - b.t0) / b.lb;
     if (u <= 0 || u >= 1) return b.rt;
-    return Math.max(b.rt, Math.sqrt(b.area * Math.pow(Math.sin(Math.PI * u), SPINDLE) / SPINDLE_I / Math.PI));
+    /* sin^SPINDLE(πu) — по таблице (кадр — тысячи колец, Math.pow был самым дорогим местом расчёта тел), у самых концов,
+       где кривая круче, — точно; ошибка радиуса < 0,1 % */
+    const x = u * SPN, i = Math.min(SPN - 1, x | 0), f = i > 3 && i < SPN - 4 ? SPT[i] + (SPT[i + 1] - SPT[i]) * (x - i) : Math.pow(Math.sin(Math.PI * u), SPINDLE);
+    return Math.max(b.rt, Math.sqrt(b.area * f / SPINDLE_I / Math.PI));
   }
+  const SPN = 1024, SPT = Float64Array.from({ length: SPN + 1 }, (_, i) => Math.pow(Math.sin(Math.PI * i / SPN), SPINDLE));
+
+  /* ---------- ленты: широкие плоские мышцы ----------
+     Трубка вдоль линии действия хороша для веретена (двуглавая, бедро); широкая плоская мышца (большая грудная,
+     широчайшая, трапециевидная…) — пласт, и несколько трубок по числу линий выглядели пучками, между которыми видны
+     рёбра, а тело широчайшей при руке над головой выходило из кожи на 3 см. Здесь соседние линии одной мышцы (в порядке
+     начал вдоль кости, FANS) образуют ленту: сечение линии — полоса пласта от шва с одним соседом до шва с другим.
+     - Соответствие линий — по доле длины пути u (0 — конец у кости anchor, где волокна сходятся; у линий с путём в
+       другую сторону — с другого конца); число колец — общее на ленту: кольцо q всех линий — одна доля u. Общие
+       промежуточные точки линий веера («узлы») стоят у всех линий на одной доле u; где линии совпадают, центры полос
+       раздвигаются вдоль поперечника ленты (только рисунок — путь и работа мышцы прежние).
+     - Нормаль пласта у линии — T × D (D — от соседа слева к соседу справа); где линии сходятся, нормаль переносится от
+       соседнего кольца без закрутки и понемногу ложится вдоль кожи.
+     - Шов соседей — точка хорды между центрами по доле площадей их сечений, приподнятая по кривизне пласта (стрелка
+       дуги по углу между направлениями к коже у двух линий) и вытолкнутая из огибающих сфер и цилиндров обеих линий;
+       вершины шва общие у обеих полос (те же числа) — щели между полосами нет. Где шов ближе RIB_WMIN·√A или с другой
+       стороны (линии сошлись или перекрестились), у полосы своя кромка, полосы перекрываются. Наружные края ленты — на
+       BORDER ширины внутренней половины полосы, тоньше (BORDER_H) и скруглены.
+     - Площадь сечения — та же, что у трубки (π·r² по объёму брюшка, веретено, утолщение при укорочении): полутолщина
+       центра решается из площади многоугольника сечения (solveH) — объём части сохраняется.
+     - Под кожей: если до кожи (за вычетом SKIN_GAP, по нейтральной позе — sk) меньше, чем до верха полосы, полоса
+       сдвигается вглубь — центр по верху и своим кромкам, шов по своей глубине и не меньше сдвига соседних центров; пучок
+       со своими кромками у кожи расплющивается, как трубка.
+     Кольцо — те же SIDES = 8 вершин, что у трубки (сетка слоя не меняется): верх в центре, верх шва, край, низ шва, низ
+     в центре, низ другого шва, край, верх другого шва. Нормали — по поверхности пласта лицевой стороной (у швов и своих
+     кромок внутри ленты — средняя двух полос; изнанка освещена как лицевая — шаг 5).
+     Источники выбора мышц и числа — tools/muscles/README.md, «Ленты». */
+  const FANS = [
+    /* [ключ, линии по порядку начал вдоль кости, кость конца u = 0]; источники — tools/muscles/README.md, «Ленты» */
+    ['pecmaj', ['PECM1', 'PECM1b', 'PECM2a', 'PECM2', 'PECM2c', 'PECM3', 'PECM3b'], /^humerus/],
+    ['lat', ['LAT1', 'LAT2', 'LAT3', 'LAT4', 'LAT5', 'LAT6'], /^humerus/],
+    ['trap', ['trap_clav_1', 'trap_clav_2', 'trap_scap_1', 'trap_scap_2', 'trap_scap_3', 'trap_scap_4', 'trap_scap_5', 'trap_scap_6', 'trap_scap_7', 'trap_scap_8', 'trap_scap_9', 'trap_scap10', 'trap_scap11'], /^(clavicle|scapula)/],
+    ['infsp', ['INFSPsup', 'INFSP', 'INFSPinf'], /^humerus/],
+    ['serrant', ['serr_ant_1', 'serr_ant_2', 'serr_ant_3', 'serr_ant_4', 'serr_ant_5', 'serr_ant_6', 'serr_ant_7', 'serr_ant_8', 'serr_ant_9', 'serr_ant10', 'serr_ant11', 'serr_ant12'], /^scapula/],
+    ['rhomb', ['rhomboid_2', 'rhomboid_3', 'rhomboid_4', 'rhomboid_5'], /^scapula/],
+    ['eo', ['EO7', 'EO8', 'EO1', 'EO2', 'EO3', 'EO4', 'EO5', 'EO6'], /^ribcage/],
+    ['glmax', ['glmax1', 'glmax2', 'glmax3'], /^femur/],
+    ['glmed', ['glmed1', 'glmed2', 'glmed3'], /^femur/],
+  ];
+  const BORDER = .35, BORDER_H = .5, TIP_IN = .25, TIP_OUT = .6, RIB_WMIN = .5, RIB_HMIN = .06, RIB_C0 = .3, RIB_C1 = 1, RIB_SPREAD = .8, RIB_STEER = .35, RIB_LAM = .3, RIB_AGREE = .5;
+  /* поля записи линии в кольце (LW): 0–2 центр, 3–5 касательная в сторону u, 6–8 нормаль пласта, 9–11 направление к коже,
+     12 глубина под кожей, 13 площадь сечения (как у трубки), 14 полупоперечник, 15–16 ширины до швов, 17 толщина η = A/(2w),
+     18 полутолщина центра, 19 сдвиг вглубь, 20–22 нормаль по соседям, 23 флаги своей кромки, 24 расстояние по пути (см),
+     25 радиус кривизны кожи поперёк линии;
+     шва (SW): 0–2 точка, 3–5 нормаль, 6–8 поперёк (от линии k к k+1), 9 полутолщина, 10 вынос кромки, 11 доля λ */
+  const LW = 26, SW = 12;
+  const GAP = new Float64Array(32), GAP2 = new Float64Array(32), PC = new Float64Array(96);
+  function bindFans(md, bound, idx) {
+    const at = new Map(bound.map((mu, i) => [mu.name, i])), fans = [];
+    for (const [key, names, anchor] of FANS) for (const s of ['r', 'l']) {
+      const lines = names.map(nm => at.get(nm + '_' + s));
+      if (lines.some(i => i === undefined)) continue;
+      const rev = new Uint8Array(lines.length);
+      lines.forEach((i, k) => {
+        const el = md.muscles[i].el, first = el[0].s.bone[0], last = el[el.length - 1].s.bone[0];
+        if (anchor.test(first)) rev[k] = 0; else if (anchor.test(last)) rev[k] = 1; else throw Error('muscles: ribbon ' + key + ': ' + bound[i].name + ' not at ' + anchor);
+      });
+      const n = Math.max(...lines.map(i => ringCount(bound[i]))), K = lines.length;
+      /* Узлы: линии веера, добавленные к линии модели (anatomy.js), проходят через её промежуточные точки — от конца u = 0
+         до последней общей точки путь у них один и тот же. Доля u такой точки у всех линий — одна (средняя их долей), иначе
+         кольца с равной долей u стояли бы у одной линии до общей точки, у другой — после, и линии на рисунке
+         перекрещивались бы. Узел — последняя общая точка пути пары линий (элементы пути от конца u = 0 совпадают). */
+      const keys = lines.map((i, k) => { const el = md.muscles[i].el.map(e => JSON.stringify(e)); return rev[k] ? el.reverse() : el; });
+      const knots = new Map();
+      for (let k = 0; k < K; k++) for (let j = 0; j < K; j++) {
+        if (j === k) continue;
+        let c = 0; while (c < keys[k].length && c < keys[j].length && keys[k][c] === keys[j][c]) c++;
+        let e = c - 1; while (e > 0 && !keys[k][e].startsWith('{"s"')) e--;
+        if (e <= 0 || e >= keys[k].length - 1 || e >= keys[j].length - 1) continue;
+        const kn = knots.get(keys[k][e]) || knots.set(keys[k][e], { s: JSON.parse(keys[k][e]).s, members: new Map() }).get(keys[k][e]);
+        kn.members.set(k, e); kn.members.set(j, e);
+      }
+      const knotList = [...knots.values()].map(kn => ({ i: idx.get(kn.s.bone[0] + '|' + kn.s.bone[1]), p: kn.s.p, members: [...kn.members.keys()] }));
+      const lineKnots = lines.map((_, k) => knotList.map((kn, id) => [id, knots.get([...knots.keys()][id]).members.get(k)]).filter(([, e]) => e !== undefined).sort((a, b) => a[1] - b[1]).map(([id]) => id));
+      const fan = { key, side: s.toUpperCase(), lines, rev, K, n, L: new Float64Array(K * n * LW), S: new Float64Array((K + 1) * n * SW),
+        knots: knotList, lineKnots, KU: new Float64Array(knotList.length), KF: new Float64Array(knotList.length * K) };
+      lines.forEach((i, k) => { bound[i].fan = fan; bound[i].fanK = k; bound[i].rings = n; });
+      /* огибающие тела линий (сферы и цилиндры — модели костей в исходных моделях): швы ленты не заходят в них */
+      const wraps = lines.map(i => bound[i].el.filter(e => e.w && e.w.t !== 'e').map(e => e.w));
+      fan.wrapOff = new Uint16Array(K + 1); wraps.forEach((l, k) => { fan.wrapOff[k + 1] = fan.wrapOff[k] + l.length; });
+      /* в рамке кости: центр, ось (у сферы — любая), поперечное к оси направление (масштаб радиуса), радиус, цилиндр ли */
+      fan.wrapEls = wraps.flat().map(w => { const fr = frameFromAxis(w.a || [0, 0, 1]); return { i: w.i, c: w.c, a: w.a || [0, 0, 1], p: [fr[0], fr[3], fr[6]], r: w.r, cyl: w.t === 'c' }; });
+      fan.WB = new Float64Array(fan.wrapEls.length * 8);
+      fans.push(fan);
+    }
+    return fans;
+  }
+  let CUM = new Float64Array(256);
+  /* нормаль для кривизны пласта у линии кольца (смещение в записи линии): направление к коже, без данных кожи — нормаль пласта */
+  let CURV_B = null;
+  const curv = o => (CURV_B[o + 12] < 1e8 ? o + 9 : o + 6);
+  /* вершины и нормали всех линий ленты fan (кадр — матрицы m, пути для рисования paths по номерам bound); вершины линии i —
+     с кольца start[i] (номера колец, как у слоя мышц) */
+  function ribbon(fan, bound, paths, m, pos, nor, start) {
+    const K = fan.K, n = fan.n, B = fan.L, S = fan.S, KN = fan.knots, KU = fan.KU, KF = fan.KF; CURV_B = B;
+    /* огибающие тела линий в кадре (как place, без новых объектов): центр, единичная ось, радиус, цилиндр ли */
+    const WB = fan.WB;
+    fan.wrapEls.forEach((w, j) => {
+      const o = w.i * 12, b = j * 8, c = w.c, a = w.a, pp = w.p;
+      for (let r = 0; r < 3; r++) {
+        WB[b + r] = m[o + r * 4] * c[0] + m[o + r * 4 + 1] * c[1] + m[o + r * 4 + 2] * c[2] + m[o + r * 4 + 3];
+        WB[b + 3 + r] = m[o + r * 4] * a[0] + m[o + r * 4 + 1] * a[1] + m[o + r * 4 + 2] * a[2];
+      }
+      const al = Math.sqrt(WB[b + 3] ** 2 + WB[b + 4] ** 2 + WB[b + 5] ** 2) || 1; WB[b + 3] /= al; WB[b + 4] /= al; WB[b + 5] /= al;
+      let kx = 0; for (let r = 0; r < 3; r++) { const v = m[o + r * 4] * pp[0] + m[o + r * 4 + 1] * pp[1] + m[o + r * 4 + 2] * pp[2]; kx += v * v; }
+      WB[b + 6] = w.r * (Math.sqrt(kx) || 1); WB[b + 7] = w.cyl ? 1 : 0;
+    });
+    const WO = fan.wrapOff;
+    /* 0. узлы (общие промежуточные точки линий): доля длины пути у каждой линии и средняя — доля узла */
+    for (let j = 0; j < KN.length; j++) {
+      const kn = KN[j], X = apply(m, kn.i, kn.p); let sum = 0;
+      for (const k of kn.members) {
+        const i = fan.lines[k], pts = paths[i].points; let best = Infinity, at = 0, c = 0, tot = 0;
+        for (let a = 0; a < pts.length; a++) {
+          if (a) tot += dist3(pts[a], pts[a - 1]);
+          const d = (pts[a][0] - X[0]) ** 2 + (pts[a][1] - X[1]) ** 2 + (pts[a][2] - X[2]) ** 2; if (d < best) { best = d; at = tot; }
+        }
+        c = tot > 1e-9 ? at / tot : 0; if (fan.rev[k]) c = 1 - c;
+        KF[j * K + k] = c; sum += c;
+      }
+      KU[j] = sum / kn.members.length;
+    }
+    /* 1. центры, касательные (в сторону u), площади, кожа; доля пути кольца — по u через узлы линии */
+    for (let k = 0; k < K; k++) {
+      const i = fan.lines[k], mu = bound[i], p = paths[i], pts = p.points, Ln = p.length, b = body(mu, Ln), sg = fan.rev[k] ? -1 : 1, lk = fan.lineKnots[k];
+      if (CUM.length < pts.length) CUM = new Float64Array(pts.length * 2);
+      const cum = CUM; cum[0] = 0; for (let a = 1; a < pts.length; a++) cum[a] = cum[a - 1] + dist3(pts[a], pts[a - 1]);
+      const scale = cum[pts.length - 1] > 1e-9 ? Ln / cum[pts.length - 1] : 1, atP = cursor(pts, cum), atA = cursor(pts, cum), atB = cursor(pts, cum);
+      for (let r = 0; r < n; r++) {
+        const q = fan.rev[k] ? n - 1 - r : r, o = (k * n + q) * LW, u = q / (n - 1);
+        /* u → доля пути своей линии: ломаная через (0, 0), узлы (доля узла, доля линии) и (1, 1) */
+        let u0 = 0, f0 = 0, u1 = 1, f1 = 1;
+        for (const j of lk) { const U = Math.max(u0 + 1e-4, KU[j]), F = Math.max(f0, KF[j * K + k]); if (U < u) { u0 = U; f0 = F; } else { u1 = U; f1 = F; break; } }
+        const f = f0 + (f1 - f0) * Math.max(0, Math.min(1, (u - u0) / Math.max(1e-6, u1 - u0))), s = Ln * (fan.rev[k] ? 1 - f : f);
+        atP(s / scale, B, o);
+        atA(Math.max(0, s - RING * .5) / scale, T3, 0); atB(Math.min(Ln, s + RING * .5) / scale, T3, 3);
+        let tx = T3[3] - T3[0], ty = T3[4] - T3[1], tz = T3[5] - T3[2], tl = Math.sqrt(tx * tx + ty * ty + tz * tz);
+        if (tl < 1e-9) { const e = pts.length - 1; tx = pts[e][0] - pts[0][0]; ty = pts[e][1] - pts[0][1]; tz = pts[e][2] - pts[0][2]; tl = Math.sqrt(tx * tx + ty * ty + tz * tz) || 1; }
+        B[o + 3] = sg * tx / tl; B[o + 4] = sg * ty / tl; B[o + 5] = sg * tz / tl;
+        const rr = radiusAt(b, s); B[o + 13] = Math.PI * rr * rr; B[o + 24] = s;
+        const sk = skinAt(mu, b, s, m);
+        if (sk) { B[o + 9] = sk.o[0]; B[o + 10] = sk.o[1]; B[o + 11] = sk.o[2]; B[o + 12] = sk.d; B[o + 25] = sk.rho; } else { B[o + 9] = B[o + 10] = B[o + 11] = 0; B[o + 12] = 1e9; B[o + 25] = 200; }
+      }
+    }
+    /* 1б. Линии веера, добавленные по площадке начала (большая грудная, подостная; LAT4 у нижнего угла
+       лопатки), идут к плечу через промежуточные точки своей линии-основы (tools/muscles/anatomy.js) — от этих точек до
+       плеча они совпадают, и лента там сжималась бы в пучок. Поэтому центры полос раздвигаются вдоль поперечника ленты
+       (ломаная через центры по порядку линий, длины — поперёк касательной): промежуток между соседями — не меньше
+       RIB_SPREAD средней, остальные сжимаются так, что края ленты остаются на месте. Где линии и так разошлись, центры —
+       на своих линиях; путь и длина мышцы (её работа) не меняются — только рисунок. */
+    if (K > 2) for (let q = 0; q < n; q++) {
+      let tot = 0;
+      for (let k = 0; k < K - 1; k++) {
+        const a = (k * n + q) * LW, c = a + n * LW;
+        let tx = B[a + 3] + B[c + 3], ty = B[a + 4] + B[c + 4], tz = B[a + 5] + B[c + 5]; const tl = Math.sqrt(tx * tx + ty * ty + tz * tz) || 1; tx /= tl; ty /= tl; tz /= tl;
+        let dx = B[c] - B[a], dy = B[c + 1] - B[a + 1], dz = B[c + 2] - B[a + 2]; const dt = dx * tx + dy * ty + dz * tz; dx -= dt * tx; dy -= dt * ty; dz -= dt * tz;
+        GAP[k] = Math.sqrt(dx * dx + dy * dy + dz * dz); tot += GAP[k];
+      }
+      if (tot < 1e-3) continue;
+      const lo = RIB_SPREAD * tot / (K - 1); let sum = 0;
+      for (let k = 0; k < K - 1; k++) { GAP2[k] = Math.max(GAP[k], lo); sum += GAP2[k]; }
+      if (sum - tot < 1e-6) continue;
+      /* новые доли поперечника → точки на ломаной через центры (копия центров — до сдвига) */
+      for (let k = 0; k < K; k++) { const a = (k * n + q) * LW; PC[k * 3] = B[a]; PC[k * 3 + 1] = B[a + 1]; PC[k * 3 + 2] = B[a + 2]; }
+      let c2 = 0;
+      for (let k = 1; k < K - 1; k++) {
+        c2 += GAP2[k - 1] * tot / sum;
+        let j = 0, acc = 0; while (j < K - 2 && acc + GAP[j] < c2) { acc += GAP[j]; j++; }
+        const f = GAP[j] > 1e-9 ? Math.min(1, Math.max(0, (c2 - acc) / GAP[j])) : 0, a = (k * n + q) * LW;
+        B[a] = PC[j * 3] + (PC[j * 3 + 3] - PC[j * 3]) * f; B[a + 1] = PC[j * 3 + 1] + (PC[j * 3 + 4] - PC[j * 3 + 1]) * f; B[a + 2] = PC[j * 3 + 2] + (PC[j * 3 + 5] - PC[j * 3 + 2]) * f;
+      }
+    }
+    /* 2. поперечник D (от соседа слева к соседу справа) и нормаль пласта T × D */
+    for (let q = 0; q < n; q++) for (let k = 0; k < K; k++) {
+      const o = (k * n + q) * LW, a = ((k > 0 ? k - 1 : 0) * n + q) * LW, c = ((k < K - 1 ? k + 1 : K - 1) * n + q) * LW;
+      const tx = B[o + 3], ty = B[o + 4], tz = B[o + 5];
+      let dx = B[c] - B[a], dy = B[c + 1] - B[a + 1], dz = B[c + 2] - B[a + 2];
+      /* у крайней линии — и второй сосед с половинным весом: если первый почти совпадает с ней (линии веера до общей
+         промежуточной точки), направление поперёк всё равно задано */
+      if ((k === 0 || k === K - 1) && K > 2) { const f = ((k === 0 ? 2 : K - 3) * n + q) * LW, g = k === 0 ? 1 : -1; dx += g * (B[f] - B[o]) * .5; dy += g * (B[f + 1] - B[o + 1]) * .5; dz += g * (B[f + 2] - B[o + 2]) * .5; }
+      const dt = dx * tx + dy * ty + dz * tz;
+      dx -= dt * tx; dy -= dt * ty; dz -= dt * tz;
+      const dl = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      /* полупоперечник — на один промежуток: у внутренней линии D — два промежутка, у крайней — один и половина двух */
+      B[o + 14] = dl * (k > 0 && k < K - 1 ? .5 : K > 2 ? .5 : 1);
+      if (dl > 1e-6) { B[o + 20] = (ty * dz - tz * dy) / dl; B[o + 21] = (tz * dx - tx * dz) / dl; B[o + 22] = (tx * dy - ty * dx) / dl; } else B[o + 20] = B[o + 21] = B[o + 22] = 0;
+    }
+    /* 3. нормаль вдоль линии: от кольца с самым широким поперечником в обе стороны; где линии сходятся — перенос без закрутки */
+    for (let k = 0; k < K; k++) {
+      let q0 = 0, best = -1;
+      for (let q = 0; q < n; q++) { const w = B[(k * n + q) * LW + 14]; if (w > best) { best = w; q0 = q; } }
+      for (const dir of [1, -1]) for (let q = q0; q >= 0 && q < n; q += dir) {
+        const o = (k * n + q) * LW, tx = B[o + 3], ty = B[o + 4], tz = B[o + 5];
+        let nx, ny, nz;
+        if (q === q0) {
+          if (dir === -1) continue;
+          nx = B[o + 20]; ny = B[o + 21]; nz = B[o + 22];
+          /* поперечника нет нигде (все линии в одной точке) — к коже */
+          if (nx * nx + ny * ny + nz * nz < .5) { nx = B[o + 9] || tz; ny = B[o + 10] || tx; nz = B[o + 11] || ty; }
+        } else {
+          const pq = (k * n + q - dir) * LW; nx = B[pq + 6]; ny = B[pq + 7]; nz = B[pq + 8];
+          const c = Math.max(0, Math.min(1, (B[o + 14] - RIB_C0) / RIB_C1));
+          if (c > 0) {
+            let rx = B[o + 20], ry = B[o + 21], rz = B[o + 22]; if (rx * nx + ry * ny + rz * nz < 0) { rx = -rx; ry = -ry; rz = -rz; }
+            nx += (rx - nx) * c; ny += (ry - ny) * c; nz += (rz - nz) * c;
+          }
+          /* где лента сходится в пучок, полоса понемногу ложится вдоль кожи — как сплющенная трубка (иначе её ширина
+             могла смотреть в кость под ней) */
+          const gx = B[o + 9], gy = B[o + 10], gz = B[o + 11], gd = gx * tx + gy * ty + gz * tz, k1 = (1 - c) * RIB_STEER;
+          let ux = gx - gd * tx, uy = gy - gd * ty, uz = gz - gd * tz; const ul = Math.sqrt(ux * ux + uy * uy + uz * uz);
+          if (k1 > 0 && ul > .1) { if (ux * nx + uy * ny + uz * nz < 0) { ux = -ux; uy = -uy; uz = -uz; } nx += (ux / ul - nx) * k1; ny += (uy / ul - ny) * k1; nz += (uz / ul - nz) * k1; }
+        }
+        const nd = nx * tx + ny * ty + nz * tz; nx -= nd * tx; ny -= nd * ty; nz -= nd * tz;
+        let nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        if (nl < 1e-6) { if (Math.abs(tx) < .9) { nx = 0; ny = tz; nz = -ty; } else { nx = -tz; ny = 0; nz = tx; } nl = Math.sqrt(nx * nx + ny * ny + nz * nz); }
+        B[o + 6] = nx / nl; B[o + 7] = ny / nl; B[o + 8] = nz / nl;
+      }
+    }
+    /* 3б. знак нормали — общий для ленты: перенос вдоль линии мог развернуть нормаль одной линии против соседей (пласт огибает
+       головку плеча — подостная, большая грудная, — а между кольцами линии почти сходятся). Линия, чья нормаль
+       большей частью (с весом надёжности поперечника) смотрит против нормали соседа, переворачивается целиком — вдоль
+       линии перекрута нет */
+    for (let k = 1; k < K; k++) {
+      let vote = 0;
+      for (let q = 0; q < n; q++) { const o = (k * n + q) * LW, a = o - n * LW, w = Math.min(B[o + 14], B[a + 14]); vote += w * (B[o + 6] * B[a + 6] + B[o + 7] * B[a + 7] + B[o + 8] * B[a + 8]); }
+      if (vote < 0) for (let q = 0; q < n; q++) { const o = (k * n + q) * LW; B[o + 6] = -B[o + 6]; B[o + 7] = -B[o + 7]; B[o + 8] = -B[o + 8]; }
+    }
+    /* 4. швы между соседями: точка хорды между центрами, приподнятая по кривизне пласта; общая нормаль и направление поперёк */
+    for (let q = 0; q < n; q++) {
+      for (let j = 1; j < K; j++) {
+        const a = ((j - 1) * n + q) * LW, c = (j * n + q) * LW, o = (j * n + q) * SW;
+        let nx = B[a + 6] + B[c + 6], ny = B[a + 7] + B[c + 7], nz = B[a + 8] + B[c + 8], nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        if (nl < .2) { nx = B[a + 6]; ny = B[a + 7]; nz = B[a + 8]; nl = 1; }
+        nx /= nl; ny /= nl; nz /= nl;
+        let tx = B[a + 3] + B[c + 3], ty = B[a + 4] + B[c + 4], tz = B[a + 5] + B[c + 5];
+        const td = tx * nx + ty * ny + tz * nz; tx -= td * nx; ty -= td * ny; tz -= td * nz;
+        let wx = ny * tz - nz * ty, wy = nz * tx - nx * tz, wz = nx * ty - ny * tx; const wl = Math.sqrt(wx * wx + wy * wy + wz * wz) || 1; wx /= wl; wy /= wl; wz /= wl;
+        const ex = B[c] - B[a], ey = B[c + 1] - B[a + 1], ez = B[c + 2] - B[a + 2], d = Math.sqrt(ex * ex + ey * ey + ez * ez);
+        /* кривизна пласта — по направлениям к коже у двух линий (они надёжнее нормалей пласта там, где линии огибают
+           кость: подостная и большая грудная у головки плеча); стрелка — вдоль среднего из них */
+        const ga = curv(a), gc = curv(c);
+        const cphi = B[ga] * B[gc] + B[ga + 1] * B[gc + 1] + B[ga + 2] * B[gc + 2];
+        let sag = 0, sx = 0, sy = 0, sz = 0;
+        if (cphi < .99999) {
+          const phi = Math.min(Math.PI / 2, Math.acos(Math.max(-1, cphi))), conv = ex * (B[gc] - B[ga]) + ey * (B[gc + 1] - B[ga + 1]) + ez * (B[gc + 2] - B[ga + 2]);
+          sag = (conv >= 0 ? 1 : -1) * d * .5 * Math.tan(phi / 4);
+          sx = B[ga] + B[gc]; sy = B[ga + 1] + B[gc + 1]; sz = B[ga + 2] + B[gc + 2]; const sl = Math.sqrt(sx * sx + sy * sy + sz * sz) || 1; sx /= sl; sy /= sl; sz /= sl;
+        }
+        /* шов — не посередине, а по площадям сечений двух полос (λ = A/(A + A'), в пределах RIB_LAM…1 − RIB_LAM): у линий
+           разного объёма (части большой грудной, широчайшей) толщина пласта ровнее; стрелка — по доле хорды */
+        const lam = Math.min(1 - RIB_LAM, Math.max(RIB_LAM, B[a + 13] / (B[a + 13] + B[c + 13] || 1)));
+        sag *= 4 * lam * (1 - lam);
+        S[o] = B[a] + (B[c] - B[a]) * lam + sx * sag; S[o + 1] = B[a + 1] + (B[c + 1] - B[a + 1]) * lam + sy * sag; S[o + 2] = B[a + 2] + (B[c + 2] - B[a + 2]) * lam + sz * sag;
+        S[o + 11] = lam;
+        S[o + 3] = nx; S[o + 4] = ny; S[o + 5] = nz; S[o + 6] = wx; S[o + 7] = wy; S[o + 8] = wz;
+      }
+      /* шов — на хорде между линиями: где линии огибают кость (подостная и большая грудная у головки плеча),
+         хорда проходит сквозь неё. Шов выталкивается на поверхность огибающих тел обеих линий (на ней лежат и сами линии,
+         когда огибают кость) */
+      for (let j = 1; j < K; j++) { const s = (j * n + q) * SW; clear(S, s, WB, WO[j - 1], WO[j + 1], .05); }
+      /* ширины полос до швов (вдоль W = N × T), не уже RIB_WMIN·√A; крайние — на BORDER внутренней половины */
+      for (let k = 0; k < K; k++) {
+        const o = (k * n + q) * LW, nx = B[o + 6], ny = B[o + 7], nz = B[o + 8], tx = B[o + 3], ty = B[o + 4], tz = B[o + 5];
+        const wx = ny * tz - nz * ty, wy = nz * tx - nx * tz, wz = nx * ty - ny * tx, wmin = RIB_WMIN * Math.sqrt(B[o + 13]);
+        let wl = -1, wr = -1, fl = 0;
+        /* шов общий, только если он со своей стороны не ближе wmin и нормали полосы и шва согласны (где линии
+           перекрещиваются, нормали соседних полос расходятся — общий шов перекрутил бы сечение «бантиком») */
+        if (k > 0) { const s = (k * n + q) * SW; wl = (B[o] - S[s]) * wx + (B[o + 1] - S[s + 1]) * wy + (B[o + 2] - S[s + 2]) * wz; if (nx * S[s + 3] + ny * S[s + 4] + nz * S[s + 5] < RIB_AGREE) fl |= 1; }
+        if (k < K - 1) { const s = ((k + 1) * n + q) * SW; wr = (S[s] - B[o]) * wx + (S[s + 1] - B[o + 1]) * wy + (S[s + 2] - B[o + 2]) * wz; if (nx * S[s + 3] + ny * S[s + 4] + nz * S[s + 5] < RIB_AGREE) fl |= 2; }
+        if (k === 0) wl = BORDER * Math.max(wmin, wr); if (k === K - 1) wr = BORDER * Math.max(wmin, wl);
+        if (wl < wmin || fl & 1) { wl = Math.max(wl, wmin); fl |= 1; } if (wr < wmin || fl & 2) { wr = Math.max(wr, wmin); fl |= 2; }
+        /* своя кромка дотягивается до середины пути к соседней линии с той же стороны, какой бы сосед там ни оказался: где
+           линии перекрещиваются (у головки плеча при руке над головой), полосы перекрывают промежуток */
+        if (fl) for (let j = k - 1; j <= k + 1; j += 2) {
+          if (j < 0 || j >= K) continue;
+          const c = (j * n + q) * LW, p = ((B[c] - B[o]) * wx + (B[c + 1] - B[o + 1]) * wy + (B[c + 2] - B[o + 2]) * wz) * .5;
+          if (p < 0 && fl & 1) wl = Math.max(wl, -p); else if (p > 0 && fl & 2) wr = Math.max(wr, p);
+        }
+        /* у кожи полоса со своими кромками (пучок, где линии сошлись) расплющивается, как трубка: толщина к коже — не больше
+           места до неё (но не тоньше FLAT радиуса), ширина своих кромок растёт так, что площадь та же */
+        const ng = Math.abs(nx * B[o + 9] + ny * B[o + 10] + nz * B[o + 11]), room = B[o + 12] - SKIN_GAP;
+        if (fl && ng > .8) {
+          const A = B[o + 13], eta = A / (2 * (wl + wr)), lim = Math.max(FLAT * Math.sqrt(A / Math.PI), room / ng);
+          if (eta > lim) {
+            /* не шире полуторной: кожа над широкой кромкой уходит вниз по своей кривизне */
+            const extra = Math.min(A / (2 * lim), 1.5 * (wl + wr)) - wl - wr;
+            if ((fl & 3) === 3) { wl += extra / 2; wr += extra / 2; } else if (fl & 1) wl += extra; else wr += extra;
+          }
+        }
+        B[o + 15] = wl; B[o + 16] = wr; B[o + 23] = fl; B[o + 17] = B[o + 13] / (2 * (wl + wr));
+      }
+      /* наружные края: по кривизне пласта у соседней линии (край уходит вглубь выпуклого пласта) */
+      border(B, S, n, q, 0, 1, 0, -1); border(B, S, n, q, K - 1, K - 2, K, 1);
+      clear(S, q * SW, WB, WO[0], WO[1], .05); clear(S, (K * n + q) * SW, WB, WO[K - 1], WO[K], .05);
+      /* толщина у шва — среднее гармоническое толщин двух полос: ближе к тонкой — толстая полоса выпуклее в своей
+         середине, а у тонкой кромка не толще её самой (иначе сечение — «бантик» с перекрутом) */
+      for (let j = 1; j < K; j++) { const s = (j * n + q) * SW, ea = B[((j - 1) * n + q) * LW + 17], ec = B[(j * n + q) * LW + 17]; S[s + 9] = 2 * ea * ec / (ea + ec || 1); S[s + 10] = TIP_IN * S[s + 9]; }
+      /* толщина центра — из площади сечения (solveH). Сдвиг вглубь у кожи (кожа над точкой — плоскость на её глубине d,
+         нейтральная поза): центр — по верху полосы и её своим кромкам; шов — сам по себе, по своей толщине и средней
+         глубине двух линий (иначе швы линий, лежащих у самой кожи, уходили бы вслед за центром в кость) */
+      for (let k = 0; k < K; k++) {
+        const o = (k * n + q) * LW, sl = (k * n + q) * SW, sr = ((k + 1) * n + q) * SW, wl = B[o + 15], wr = B[o + 16], fl = B[o + 23], eta = B[o + 17];
+        const h = B[o + 18] = solveH(B, S, o, sl, sr, k, K);
+        const gx = B[o + 9], gy = B[o + 10], gz = B[o + 11], nx = B[o + 6], ny = B[o + 7], nz = B[o + 8], tx = B[o + 3], ty = B[o + 4], tz = B[o + 5];
+        const ng = Math.abs(gx * nx + gy * ny + gz * nz), wg = gx * (ny * tz - nz * ty) + gy * (nz * tx - nx * tz) + gz * (nx * ty - ny * tx);
+        let ext = h * ng - (B[o + 12] - SKIN_GAP);
+        /* свои кромки — там же, где их поставит edge() (по направлению на шов); кожа над кромкой ниже, чем над линией, на
+           x²/(2ρ) — x — отход кромки вбок, ρ — радиус кривизны кожи поперёк линии (sk, как у трубок) */
+        for (let side = -1; side <= 1; side += 2) {
+          if (!(fl & (side < 0 ? 1 : 2))) continue;
+          const E = edge(S, side < 0 ? sl : sr, 1, B[o], B[o + 1], B[o + 2], nx, ny, nz, ny * tz - nz * ty, nz * tx - nx * tz, nx * ty - ny * tx, side < 0 ? wl : wr, side, (side < 0 ? k > 0 : k < K - 1) ? eta : -1);
+          const ex = E[0] - B[o], ey = E[1] - B[o + 1], ez = E[2] - B[o + 2], up = ex * gx + ey * gy + ez * gz, x2 = Math.max(0, ex * ex + ey * ey + ez * ez - up * up);
+          ext = Math.max(ext, up + E[9] * ng + Math.max(0, E[10] * (E[6] * gx + E[7] * gy + E[8] * gz)) - (B[o + 12] - SKIN_GAP - x2 / (2 * B[o + 25])));
+        }
+        B[o + 19] = Math.max(0, ext);
+      }
+      for (let j = 0; j <= K; j++) {
+        const s = (j * n + q) * SW, a = ((j > 0 ? j - 1 : 0) * n + q) * LW, c = ((j < K ? j : K - 1) * n + q) * LW;
+        let gx = B[a + 9] + B[c + 9], gy = B[a + 10] + B[c + 10], gz = B[a + 11] + B[c + 11]; const gl = Math.sqrt(gx * gx + gy * gy + gz * gz);
+        if (gl < 1e-6) continue;
+        gx /= gl; gy /= gl; gz /= gl;
+        /* глубина точки шва: средняя глубина линий минус подъём шва над их средней точкой к коже */
+        const lam = a === c ? .5 : S[s + 11];
+        const lift = (S[s] - B[a] - (B[c] - B[a]) * lam) * gx + (S[s + 1] - B[a + 1] - (B[c + 1] - B[a + 1]) * lam) * gy + (S[s + 2] - B[a + 2] - (B[c + 2] - B[a + 2]) * lam) * gz;
+        /* наружный край: кожа над ним ниже на x²/(2ρ) */
+        let x2 = 0; if (a === c) { const ex = S[s] - B[a], ey = S[s + 1] - B[a + 1], ez = S[s + 2] - B[a + 2], up = ex * gx + ey * gy + ez * gz; x2 = Math.max(0, ex * ex + ey * ey + ez * ez - up * up) / (2 * B[a + 25]); }
+        /* и не меньше сдвига соседних центров по доле λ: иначе у полосы, ушедшей вглубь, швы оставались бы наверху (сечение «галочкой») */
+        const room = B[a + 12] + (B[c + 12] - B[a + 12]) * lam - lift - SKIN_GAP - x2, sh = Math.max(0, S[s + 9] * Math.abs(gx * S[s + 3] + gy * S[s + 4] + gz * S[s + 5]) - room, B[a + 19] + (B[c + 19] - B[a + 19]) * lam);
+        S[s] -= gx * sh; S[s + 1] -= gy * sh; S[s + 2] -= gz * sh;
+      }
+      for (let k = 0; k < K; k++) { const o = (k * n + q) * LW, sh = B[o + 19]; B[o] -= B[o + 9] * sh; B[o + 1] -= B[o + 10] * sh; B[o + 2] -= B[o + 11] * sh; }
+      /* после сдвигов центр и швы сместились по-разному — толщина центра заново, по сечению, которое будет нарисовано */
+      for (let k = 0; k < K; k++) { const o = (k * n + q) * LW; B[o + 18] = solveH(B, S, o, (k * n + q) * SW, ((k + 1) * n + q) * SW, k, K); }
+    }
+    /* 5. вершины: порядок кольца — как у трубки (от нормали к w = N × t своей линии).
+       Изнанка пласта (сторона, обращённая от кожи) освещается как лицевая: нормали её вершин — нормали лицевой стороны
+       (so · N; знак — по большинству колец ленты, в какую сторону от N кожа, с весом u: у начала на туловище направление
+       к коже надёжнее, у плеча и бедра кожа нейтральной позы поворачивается вместе с костью). Изнанка видна только сквозь
+       прозрачный силуэт кожи (шея и затылок, если смотреть со стороны головы), и там широкая плоская изнанка, обращённая
+       вниз, — тёмный клин: свет сцены — сверху, снизу — только тёмная полусфера. У трубки изнанка узкая и круглая, её не
+       видно; тонкий пласт мышцы (5–15 мм) на рисунке — как лист, освещённый с лицевой стороны. Геометрия не меняется. */
+    let vote = 0;
+    for (let k = 0; k < K; k++) for (let q = 1; q < n; q++) { const o = (k * n + q) * LW; if (B[o + 12] < 1e8) vote += q * (B[o + 6] * B[o + 9] + B[o + 7] * B[o + 10] + B[o + 8] * B[o + 11]); }
+    const so = vote < 0 ? -1 : 1;
+    for (let k = 0; k < K; k++) {
+      const i = fan.lines[k], rev = fan.rev[k];
+      for (let r = 0; r < n; r++) {
+        const q = rev ? n - 1 - r : r, o = (k * n + q) * LW, sl = (k * n + q) * SW, sr = ((k + 1) * n + q) * SW, v = (start[i] + r) * SIDES * 3;
+        const cx = B[o], cy = B[o + 1], cz = B[o + 2], nx = B[o + 6], ny = B[o + 7], nz = B[o + 8], h = B[o + 18], fl = B[o + 23];
+        const tx = B[o + 3], ty = B[o + 4], tz = B[o + 5], wx = ny * tz - nz * ty, wy = nz * tx - nx * tz, wz = nx * ty - ny * tx;
+        /* правый шов (к линии k+1) и левый (к k−1): общие вершины — или своя кромка, если полоса шире шва (линии сходятся) */
+        const R = edge(S, sr, fl & 2, cx, cy, cz, nx, ny, nz, wx, wy, wz, B[o + 16], 1, k < K - 1 ? B[o + 17] : -1), Lf = edge(S, sl, fl & 1, cx, cy, cz, nx, ny, nz, wx, wy, wz, B[o + 15], -1, k > 0 ? B[o + 17] : -1);
+        /* своя кромка внутри ленты лежит на соседней полосе (они перекрываются): её вершины освещаются по средней нормали двух
+           полос, без бокового блика кромки — иначе край каждой полосы на соседке рисовался тёмной линией («ступеньки») */
+        smoothEdge(B, n, q, k, K, fl, so);
+        const order = rev ? ORDER_REV : ORDER;
+        for (let j = 0; j < SIDES; j++) {
+          const e = order[j], w = v + j * 3;
+          let px, py, pz, qx, qy, qz;
+          if (e === 0 || e === 4) { const sg = e === 0 ? 1 : -1; px = cx + nx * h * sg; py = cy + ny * h * sg; pz = cz + nz * h * sg; qx = nx * so; qy = ny * so; qz = nz * so; }
+          else {
+            const right = e < 4, E = right ? R : Lf, kind = right ? e - 1 : 7 - e, sm = right ? SMR : SML;   /* 0 — верх шва, 1 — кромка, 2 — низ шва */
+            if (kind === 1) { px = E[0] + E[6] * E[10]; py = E[1] + E[7] * E[10]; pz = E[2] + E[8] * E[10]; qx = E[6]; qy = E[7]; qz = E[8]; }
+            else { const sg = kind === 0 ? 1 : -1; px = E[0] + E[3] * E[9] * sg; py = E[1] + E[4] * E[9] * sg; pz = E[2] + E[5] * E[9] * sg; qx = E[3] * so; qy = E[4] * so; qz = E[5] * so; }
+            if (sm[3]) { qx = sm[0]; qy = sm[1]; qz = sm[2]; }
+          }
+          pos[w] = px; pos[w + 1] = py; pos[w + 2] = pz;
+          if (nor) { nor[w] = qx; nor[w + 1] = qy; nor[w + 2] = qz; }
+        }
+      }
+    }
+  }
+  /* нормаль освещения своих кромок полосы k (кольцо q) внутри ленты: средняя её нормали и нормали соседа с той же стороны,
+     лицевой стороной (so); SMR/SML[3] = 1, если кромка своя */
+  const SMR = new Float64Array(4), SML = new Float64Array(4);
+  function smoothEdge(B, n, q, k, K, fl, so) { smoothSide(SMR, B, n, q, k, k + 1, K, fl & 2, so); smoothSide(SML, B, n, q, k, k - 1, K, fl & 1, so); }
+  function smoothSide(sm, B, n, q, k, j, K, own, so) {
+    sm[3] = 0; if (!own || j < 0 || j >= K) return;
+    const o = (k * n + q) * LW, c = (j * n + q) * LW, g = B[o + 6] * B[c + 6] + B[o + 7] * B[c + 7] + B[o + 8] * B[c + 8] < 0 ? -1 : 1;
+    const x = B[o + 6] + g * B[c + 6], y = B[o + 7] + g * B[c + 7], z = B[o + 8] + g * B[c + 8], l = Math.sqrt(x * x + y * y + z * z);
+    if (l < 1e-6) return;
+    sm[0] = so * x / l; sm[1] = so * y / l; sm[2] = so * z / l; sm[3] = 1;
+  }
+  /* наружный край ленты (шов j у линии k, сосед nb, сторона side): на ширине своей половины, по кривизне пласта у соседа */
+  function border(B, S, n, q, k, nb, j, side) {
+    const o = (k * n + q) * LW, c = (nb * n + q) * LW, s = (j * n + q) * SW, e = side < 0 ? B[o + 15] : B[o + 16];
+    const nx = B[o + 6], ny = B[o + 7], nz = B[o + 8], tx = B[o + 3], ty = B[o + 4], tz = B[o + 5];
+    const wx = ny * tz - nz * ty, wy = nz * tx - nx * tz, wz = nx * ty - ny * tx;
+    const ex = B[c] - B[o], ey = B[c + 1] - B[o + 1], ez = B[c + 2] - B[o + 2], d = Math.sqrt(ex * ex + ey * ey + ez * ez) || 1;
+    const go = curv(o), gn = curv(c);
+    const cphi = Math.max(-1, Math.min(1, B[go] * B[gn] + B[go + 1] * B[gn + 1] + B[go + 2] * B[gn + 2])), conv = ex * (B[gn] - B[go]) + ey * (B[gn + 1] - B[go + 1]) + ez * (B[gn + 2] - B[go + 2]);
+    const kap = 2 * Math.sqrt(Math.max(0, (1 - cphi) * .5)) / d, dev = (conv >= 0 ? 1 : -1) * Math.min(.5 * e, kap * e * e * .5);
+    S[s] = B[o] + side * wx * e - B[go] * dev; S[s + 1] = B[o + 1] + side * wy * e - B[go + 1] * dev; S[s + 2] = B[o + 2] + side * wz * e - B[go + 2] * dev;
+    S[s + 3] = nx; S[s + 4] = ny; S[s + 5] = nz; S[s + 6] = wx; S[s + 7] = wy; S[s + 8] = wz;
+    S[s + 9] = BORDER_H * B[o + 17]; S[s + 10] = TIP_OUT * S[s + 9];
+  }
+  /* Полутолщина центра полосы из площади сечения. Половина сечения от центра до шва — четырёхугольник (толщина 2h по N у
+     центра, 2hS по NS у шва), площадь |(N·h + NS·hS) × a| в плоскости поперёк касательной, a — от центра к шву: у изогнутого
+     пласта (шов приподнят по кривизне или сдвинут у кожи иначе центра) — по самим векторам, а не ширина × толщина; своя
+     кромка — прямая полоса ширины w; плюс треугольники кромок. Своя кромка внутри ленты — толщины самой полосы η,
+     наружный край ленты — всегда тоньше (BORDER_H), как у шва края. */
+  function solveH(B, S, o, sl, sr, k, K) {
+    const wl = B[o + 15], wr = B[o + 16], fl = B[o + 23], eta = B[o + 17];
+    const oL = fl & 1 && k > 0, oR = fl & 2 && k < K - 1, hL = oL ? eta : S[sl + 9], hR = oR ? eta : S[sr + 9];
+    arm(B, S, o, sl, fl & 1, wl, -1); const aL = ARM[0], bL = ARM[1];
+    arm(B, S, o, sr, fl & 2, wr, 1); const aR = ARM[0], bR = ARM[1];
+    return Math.max(RIB_HMIN, .3 * eta, (B[o + 13] - bL * hL - bR * hR - (oL ? TIP_IN * eta : S[sl + 10]) * hL - (oR ? TIP_IN * eta : S[sr + 10]) * hR) / (aL + aR));
+  }
+  /* вклад половины сечения в площадь: ARM[0] — множитель при толщине центра, ARM[1] — при толщине шва (solveH) */
+  const ARM = new Float64Array(2);
+  function arm(B, S, o, s, own, w, side) {
+    if (own) { ARM[0] = ARM[1] = w; return; }
+    const tx = B[o + 3], ty = B[o + 4], tz = B[o + 5], ax = S[s] - B[o], ay = S[s + 1] - B[o + 1], az = S[s + 2] - B[o + 2];
+    /* (n × a)·t = n·(a × t), со знаком стороны: n — нормаль центра или шва */
+    const cx = ay * tz - az * ty, cy = az * tx - ax * tz, cz = ax * ty - ay * tx;
+    const at = ax * tx + ay * ty + az * tz, al = Math.sqrt(Math.max(0, ax * ax + ay * ay + az * az - at * at));
+    ARM[0] = Math.max(.2 * al, -side * (B[o + 6] * cx + B[o + 7] * cy + B[o + 8] * cz)); ARM[1] = Math.max(.2 * al, -side * (S[s + 3] * cx + S[s + 4] * cy + S[s + 5] * cz));
+  }
+  /* вытолкнуть точку шва (S[s..s+2]) из огибающих сфер и цилиндров WB[j0..j1) (кадр, ribbon) на расстояние cl от поверхности */
+  function clear(S, s, WB, j0, j1, cl) {
+    for (let j = j0; j < j1; j++) {
+      const b = j * 8; let vx = S[s] - WB[b], vy = S[s + 1] - WB[b + 1], vz = S[s + 2] - WB[b + 2];
+      if (WB[b + 7]) { const d = vx * WB[b + 3] + vy * WB[b + 4] + vz * WB[b + 5]; vx -= d * WB[b + 3]; vy -= d * WB[b + 4]; vz -= d * WB[b + 5]; }
+      const dl = Math.sqrt(vx * vx + vy * vy + vz * vz), need = WB[b + 6] + cl;
+      if (dl < need && dl > 1e-6) { const k = (need - dl) / dl; S[s] += vx * k; S[s + 1] += vy * k; S[s + 2] += vz * k; }
+    }
+  }
+  /* обход кольца: 0 — верх центра, 1–3 — правый шов (верх, кромка, низ), 4 — низ центра, 5–7 — левый (низ, кромка, верх);
+     у линии с путём против u её w смотрит влево — кольцо идёт через левый шов */
+  const ORDER = [0, 1, 2, 3, 4, 5, 6, 7], ORDER_REV = [0, 7, 6, 5, 4, 3, 2, 1];
+  const ER = new Float64Array(11), EL = new Float64Array(11);
+  /* шов для вершин полосы: [точка, нормаль, направление кромки (наружу полосы), толщина, вынос кромки]. Своя кромка — на
+     ширине w от центра, когда шов ближе (линии сходятся или перекрещиваются) */
+  function edge(S, s, own, cx, cy, cz, nx, ny, nz, wx, wy, wz, w, side, eta) {
+    const E = side > 0 ? ER : EL;
+    if (own) {
+      /* своя кромка — на продолжении направления на шов (полоса заходит за шов на соседа, без щели по кривизне пласта);
+         если шов сбоку или с другой стороны (линии перекрещиваются) — поперёк, по W */
+      const dx = S[s] - cx, dy = S[s + 1] - cy, dz = S[s + 2] - cz, ws = (dx * wx + dy * wy + dz * wz) * side;
+      if (ws > .5 * w) { const k = w / ws; E[0] = cx + dx * k; E[1] = cy + dy * k; E[2] = cz + dz * k; }
+      else { E[0] = cx + wx * w * side; E[1] = cy + wy * w * side; E[2] = cz + wz * w * side; }
+      E[3] = nx; E[4] = ny; E[5] = nz;
+      E[6] = wx * side; E[7] = wy * side; E[8] = wz * side;
+    }
+    else { E[0] = S[s]; E[1] = S[s + 1]; E[2] = S[s + 2]; E[3] = S[s + 3]; E[4] = S[s + 4]; E[5] = S[s + 5]; E[6] = S[s + 6] * side; E[7] = S[s + 7] * side; E[8] = S[s + 8] * side; }
+    /* толщина кромки: своя — толщины полосы η; у наружного края ленты (eta < 0) и у общего шва — как у шва */
+    if (own && eta > 0) { E[9] = eta; E[10] = TIP_IN * eta; } else { E[9] = S[s + 9]; E[10] = S[s + 10]; }
+    return E;
+  }
+  /* кольцо q линии k ленты после ribbon(): расстояние по пути s, площадь сечения area (как у трубки), полутолщина h и η,
+     ширины до швов, своя ли кромка (линии сошлись), нормаль пласта n и направление к коже skin — для проверок */
+  function ribbonRing(fan, k, q) {
+    const o = (k * fan.n + q) * LW, B = fan.L;
+    return { s: B[o + 24], area: B[o + 13], h: B[o + 18], eta: B[o + 17], wl: B[o + 15], wr: B[o + 16], own: B[o + 23], shift: B[o + 19], t: [B[o + 3], B[o + 4], B[o + 5]],
+      n: [B[o + 6], B[o + 7], B[o + 8]], skin: B[o + 12] < 1e8 ? [B[o + 9], B[o + 10], B[o + 11]] : null };
+  }
+  /* все мышцы кадра: трубки (surface) и ленты (ribbon); start — номера первых колец мышц (длина bound.length + 1) */
+  function surfaceAll(bound, paths, m, pos, nor, start) {
+    for (let i = 0; i < bound.length; i++) if (!bound[i].fan) surface(bound[i], paths[i], m, pos, nor, start[i] * SIDES);
+    for (const fan of bound.fans || []) ribbon(fan, bound, paths, m, pos, nor, start);
+  }
+  function ringStarts(bound) { const st = new Uint32Array(bound.length + 1); for (let i = 0; i < bound.length; i++) st[i + 1] = st[i] + ringCount(bound[i]); return st; }
 
   /* ---------- пласты (межрёберные мышцы, формат данных 3) ----------
      Пласт — тонкая мышца на всю площадь промежутка между костями, а не трубка вдоль линии действия
@@ -439,7 +907,7 @@ const Muscles = (() => {
     pending = bytes.then(gunzip).then(decode).then(d => (data = d)).catch(e => { pending = null; throw e; });
     return pending;
   }
-  return { path, wrap, bind, place, layout, drawn, layoutDrawn, body, radiusAt, skinAt, section, surface, ringCount, sheetNormals, sheetMesh, SIDES, SKIN_U, SKIN_GAP, FLAT, SPINDLE, SPINDLE_I, load, decode, get data() { return data; }, set data(d) { data = d; } };
+  return { path, wrap, bind, place, layout, drawn, layoutDrawn, body, radiusAt, skinAt, section, surface, ribbon, ribbonRing, surfaceAll, ringCount, ringStarts, sheetNormals, sheetMesh, FANS, SIDES, SKIN_U, SKIN_GAP, FLAT, SPINDLE, SPINDLE_I, load, decode, get data() { return data; }, set data(d) { data = d; } };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = Muscles;
 if (typeof window !== 'undefined') window.Muscles = Muscles;
