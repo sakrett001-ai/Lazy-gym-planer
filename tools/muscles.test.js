@@ -491,6 +491,143 @@ test('ribbons stay under the skin and do not go into bones deeper than the tubes
   }
 });
 
+/* ---------- колпак дельтовидной (Muscles.capSurface, tools/muscles/README.md, «Колпак дельтовидной») ----------
+   Позы с крайними положениями плеча: рука вниз, в сторону (90°), вперёд (90°), над головой (жим, вис), назад (отжимания на
+   брусьях), разведение лёжа (жим лёжа внизу), наружная ротация, подъём плеч, тяга в наклоне, пуловер, «Y-T-W». */
+const CAP_POSES = [['neutral', 0], ['latraise', 1], ['frontraise', 1], ['ohp', 1], ['pullup', 0], ['dip', 1], ['bbbench', 1], ['cableextrot', 1],
+  ['shrug', 1], ['bbrow', 0], ['bbrow', 1], ['pullover', 0], ['ytw', 0], ['reversefly', 1], ['facepull', 1], ['chinup', 0]];
+/* Гладкость тела части i по готовой сетке (как рисуется): излом волокна — наибольший угол между соседними отрезками линии
+   вершины снаружи (0) и на кости (4) у колец 2…n−3 (отрезки короче 5 мм — сухожилие у конца, не в счёт); выступ — насколько
+   наружная вершина (0, 1, 7) дальше от центра сустава H, чем самая дальняя из четырёх соседних (по кольцу и вдоль), см */
+function capSmooth(pos, i, H) {
+  const n = Muscles.ringCount(bound[i]), rad = p => Math.hypot(p[0] - H[0], p[1] - H[1], p[2] - H[2]);
+  let kink = 0, kinkAt = '', bump = 0, bumpAt = '';
+  for (const j of [0, 4]) for (let r = 2; r < n - 2; r++) {
+    const u = rSub(rV(pos, i, r, j), rV(pos, i, r - 1, j)), w = rSub(rV(pos, i, r + 1, j), rV(pos, i, r, j)), lu = Math.hypot(...u), lw = Math.hypot(...w);
+    if (lu < .5 || lw < .5) continue;
+    const g = Math.acos(Math.max(-1, Math.min(1, rDot(u, w) / (lu * lw)))) * 180 / Math.PI;
+    if (g > kink) { kink = g; kinkAt = `r${r} j${j}`; }
+  }
+  for (let r = 1; r < n - 1; r++) for (const j of [0, 1, 7]) {
+    const b = rad(rV(pos, i, r, j)) - Math.max(rad(rV(pos, i, r - 1, j)), rad(rV(pos, i, r + 1, j)), rad(rV(pos, i, r, (j + 1) % 8)), rad(rV(pos, i, r, (j + 7) % 8)));
+    if (b > bump) { bump = b; bumpAt = `r${r} j${j}`; }
+  }
+  return { kink, kinkAt, bump, bumpAt };
+}
+/* общие вершины соседних частей в строке q колпака: сколько вершин кольца части k совпадает с вершинами кольца части k+1 */
+function capShared(pos, cap, k, q) {
+  const n = cap.n, a = cap.lines[k], b = cap.lines[k + 1], ra = cap.rev[k] ? n - 1 - q : q, rb = cap.rev[k + 1] ? n - 1 - q : q;
+  let same = 0;
+  for (let j = 0; j < 8; j++) { const p = rV(pos, a, ra, j); for (let jj = 0; jj < 8; jj++) if (Math.hypot(...rSub(p, rV(pos, b, rb, jj))) < 1e-9) { same++; break; } }
+  return same;
+}
+/* угол кромки у края колпака (вершина середины крайнего шва между наружной и внутренней вершинами), там, где край толще 1 мм */
+function capTip(pos, cap) {
+  let tip = 180, at = '';
+  for (const [k, side] of [[0, 'border0'], [cap.K - 1, 'borderK']]) {
+    const i = cap.lines[k], n = cap.n;
+    for (let r = 1; r < n - 1; r++) for (const [jt, jm, jb] of [[1, 2, 3], [7, 6, 5]]) {
+      const m = rV(pos, i, r, jm), u = rSub(rV(pos, i, r, jt), m), w = rSub(rV(pos, i, r, jb), m), lu = Math.hypot(...u), lw = Math.hypot(...w);
+      if (lu < .05 || lw < .05) continue;
+      /* только у края колпака: середина шва вынесена в сторону от линии наружу — внутрь (у шва между частями — на ней) */
+      const t = rSub(rV(pos, i, r, jt), rV(pos, i, r, jb)), off = Math.hypot(...rCross(rSub(m, rV(pos, i, r, jb)), t)) / (Math.hypot(...t) || 1);
+      if (off < .01) continue;
+      const g = Math.acos(Math.max(-1, Math.min(1, rDot(u, w) / (lu * lw)))) * 180 / Math.PI;
+      if (g < tip) { tip = g; at = `${bound[i].name} r${r}`; }
+    }
+  }
+  return { tip, at };
+}
+const capH = (cap, m) => { const o = cap.hum * 12; return [m[o + 3], m[o + 7], m[o + 11]]; };
+
+test('deltoid cap: the five parts are one sheet over the humeral head — neighbouring parts share their seams', () => {
+  assert.equal(bound.caps.length, 2, 'a cap on each side');
+  for (const cap of bound.caps) {
+    assert.deepEqual(cap.lines.map(i => bound[i].name.replace(/_[rl]$/, '')), ['DELT1', 'DELT2', 'DELT3lat', 'DELT3', 'DELT3med'], 'parts from front to back');
+    for (const i of cap.lines) assert.equal(Muscles.ringCount(bound[i]), cap.n, `${bound[i].name}: one row of the cap per ring`);
+  }
+  for (const [id, t] of CAP_POSES) {
+    const { m } = rPose(id, t); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
+    for (const cap of bound.caps) for (let k = 0; k + 1 < cap.K; k++) for (let q = 0; q < cap.n; q++) {
+      const s = capShared(RBUF, cap, k, q);
+      assert(s >= 3, `${id} t=${t}: ${bound[cap.lines[k]].name} and ${bound[cap.lines[k + 1]].name} share ${s} of 3 seam vertices in row ${q}`);
+    }
+  }
+});
+
+/* Пороги. Излом волокна ≤ 80°: волокно огибает головку (радиус ≈ 3 см, с толщиной — до 5–6 см) с шагом колец 1–2,5 см —
+   это 20–45° на кольцо, в наружной ротации пучок ещё закручивается вокруг плеча; у трубок 4.52 изломы у промежуточных точек
+   путей — 94–129°, у 10 % поз каталога — больше 140° («звезда» шипов). Выступ ≤ 0,6 см: наружная вершина не торчит над
+   соседями (шип); на гладком колпаке — до 0,5 см у начала средней части, где сходятся швы. Угол кромки у края колпака
+   ≥ 60°: край скруглён (у сплющенных трубок — 42°, «лезвие»). */
+test('deltoid cap: smooth in extreme shoulder positions — no hooks along the fibres, no spikes, rounded edges', () => {
+  for (const [id, t] of CAP_POSES) {
+    const { m } = rPose(id, t); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
+    for (const cap of bound.caps) {
+      const H = capH(cap, m);
+      for (const i of cap.lines) {
+        const s = capSmooth(RBUF, i, H);
+        assert(s.kink <= 80, `${id} t=${t} ${bound[i].name}: fibre bends by ${s.kink.toFixed(0)}° (${s.kinkAt})`);
+        assert(s.bump <= .6, `${id} t=${t} ${bound[i].name}: a vertex sticks out by ${s.bump.toFixed(2)} cm (${s.bumpAt})`);
+      }
+      const e = capTip(RBUF, cap);
+      assert(e.tip >= 60, `${id} t=${t}: edge of the cap ${e.tip.toFixed(0)}° (${e.at})`);
+    }
+  }
+});
+
+test('negative: a spike, a fold, a torn seam and a razor edge in the deltoid cap are detected', () => {
+  const { m } = rPose('neutral', 0); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
+  const cap = bound.caps[0], H = capH(cap, m), i = cap.lines[1], at = (r, j) => ((RSTART[i] + r) * RSIDES + j) * 3;
+  const ok = capSmooth(RBUF, i, H);
+  assert(ok.kink <= 80 && ok.bump <= .6, 'the drawn cap passes');
+  /* шип: наружная вершина средней части отодвинута от центра сустава на 2 см */
+  const spike = RBUF.slice(), v = at(10, 0), d = rUnit(rSub(rV(RBUF, i, 10, 0), H));
+  for (let k = 0; k < 3; k++) spike[v + k] += 2 * d[k];
+  assert(capSmooth(spike, i, H).bump > .6, 'spike caught');
+  /* складка: два соседних кольца поменялись местами — волокно идёт назад */
+  const fold = RBUF.slice();
+  for (let j = 0; j < 8; j++) for (let k = 0; k < 3; k++) { const a = at(9, j) + k, b = at(10, j) + k; [fold[a], fold[b]] = [fold[b], fold[a]]; }
+  assert(capSmooth(fold, i, H).kink > 80, 'fold caught');
+  /* разрыв: шов средней части сдвинут на 5 мм — у соседки его вершин больше нет */
+  const torn = RBUF.slice();
+  for (const j of [1, 2, 3, 5, 6, 7]) torn[at(10, j)] += .5;
+  assert(capShared(torn, cap, 0, cap.rev[1] ? cap.n - 1 - 10 : 10) < 3 || capShared(torn, cap, 1, cap.rev[1] ? cap.n - 1 - 10 : 10) < 3, 'torn seam caught');
+  /* лезвие: кромка края колпака вынесена на 3 см */
+  const razor = RBUF.slice(), e = cap.lines[0];
+  for (let r = 1; r < cap.n - 1; r++) for (const [jt, jm, jb] of [[1, 2, 3], [7, 6, 5]]) {
+    const m0 = rV(razor, e, r, jm), mid = rV(razor, e, r, jt).map((x, k) => (x + rV(razor, e, r, jb)[k]) / 2), dir = rUnit(rSub(m0, mid)), w = ((RSTART[e] + r) * RSIDES + jm) * 3;
+    if (Math.hypot(...rSub(m0, mid)) > .01) for (let k = 0; k < 3; k++) razor[w + k] += 3 * dir[k];
+  }
+  assert(capTip(razor, cap).tip < 60, 'razor edge caught');
+});
+
+/* Объём частей — по замкнутой сетке (кольца и торцы): в нейтральной позе колпак держит не меньше 3/4 объёма по МРТ (трубки
+   4.52 — 0,79: у концов сухожилия, нить короче пути с промежуточными точками) и доли частей — как у препаратов Gómez et al.
+   (2022): передняя / средняя / задняя 17,5 / 53,4 / 29,1 % ± 3 пункта (у колпака доли смещаются на швах); левая — зеркало
+   правой */
+test('deltoid cap keeps the volume and the part shares of the dissections', () => {
+  const { m } = rPose('neutral', 0); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
+  const tri = (a, b, c) => rDot(a, rCross(b, c)) / 6;
+  const vol = i => {
+    const n = Muscles.ringCount(bound[i]), cen = r => [0, 1, 2].map(k => { let s = 0; for (let j = 0; j < 8; j++) s += rV(RBUF, i, r, j)[k]; return s / 8; });
+    let v = 0;
+    for (let r = 0; r + 1 < n; r++) for (let j = 0; j < 8; j++) { const a = rV(RBUF, i, r, j), b = rV(RBUF, i, r, (j + 1) % 8), c = rV(RBUF, i, r + 1, (j + 1) % 8), d = rV(RBUF, i, r + 1, j); v += tri(a, b, c) + tri(a, c, d); }
+    const c0 = cen(0), c1 = cen(n - 1);
+    for (let j = 0; j < 8; j++) v += tri(c0, rV(RBUF, i, 0, (j + 1) % 8), rV(RBUF, i, 0, j)) + tri(c1, rV(RBUF, i, n - 1, j), rV(RBUF, i, n - 1, (j + 1) % 8));
+    return Math.abs(v);
+  };
+  const tot = {};
+  for (const cap of bound.caps) {
+    const by = { delt1: 0, delt2: 0, delt3: 0 }; let drawn = 0, mri = 0;
+    for (const i of cap.lines) { const v = vol(i); by[bound[i].part] += v; drawn += v; mri += bound[i].v; }
+    assert(drawn >= .75 * mri && drawn <= 1.05 * mri, `${cap.side}: ${drawn.toFixed(0)} cm³ drawn, ${mri.toFixed(0)} by MRI`);
+    for (const [k, ref] of [['delt1', .175], ['delt2', .534], ['delt3', .291]]) assert(Math.abs(by[k] / drawn - ref) <= .03, `${cap.side} ${k}: ${(100 * by[k] / drawn).toFixed(1)} % (dissections ${ref * 100} %)`);
+    tot[cap.side] = drawn;
+  }
+  assert(Math.abs(tot.R - tot.L) <= .01 * tot.R, `left ${tot.L.toFixed(1)} vs right ${tot.R.toFixed(1)} cm³`);
+});
+
 /* Геометрия на позах каталога (вся проверка — npm run muscles:check): несколько упражнений с крайними положениями
    рук, ног и туловища — путь не глубже 2 см в костях и не выше 2,2 см над кожей (исключения — подмышечные складки). */
 test('muscle paths stay out of bones and under the skin in catalog poses', () => {
