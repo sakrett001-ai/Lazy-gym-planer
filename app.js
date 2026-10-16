@@ -7194,10 +7194,12 @@ const Muscles = (() => {
     const idx = new Map(skel.bones.map((b, i) => [b.name + '|' + b.side, i]));
     const bone = k => { const i = idx.get(k[0] + '|' + k[1]); if (i === undefined) throw Error('muscles: no bone ' + k.join(' ')); return i; };
     const pt = s => ({ i: bone(s.bone), p: s.p });
-    return md.muscles.map(mu => ({
+    const bound = md.muscles.map(mu => ({
       name: mu.name, side: mu.side, group: mu.group, part: mu.part, v: mu.v, t0: mu.t0, t1: mu.t1, l0: mu.l0, sk: mu.sk, x0: mu.x0,
       el: mu.el.map(e => e.s ? { s: pt(e.s) } : { w: { t: e.w.t, i: bone(e.w.bone), c: e.w.c, a: e.w.a, r: e.w.r, B: e.w.B, side: e.w.side ? pt(e.w.side) : null } })
     }));
+    bound.fans = bindFans(md, bound, idx);
+    return bound;
   }
   const apply = (m, i, p) => { const o = i * 12; return [0, 1, 2].map(r => m[o + r * 4] * p[0] + m[o + r * 4 + 1] * p[1] + m[o + r * 4 + 2] * p[2] + m[o + r * 4 + 3]); };
   const lin = (m, i, v) => { const o = i * 12; return [0, 1, 2].map(r => m[o + r * 4] * v[0] + m[o + r * 4 + 1] * v[1] + m[o + r * 4 + 2] * v[2]); };
@@ -7302,7 +7304,8 @@ const Muscles = (() => {
      Координаты — каталога (см, Y вниз). */
   const RING = 2.5, SIDES = 8, MAX_RINGS = 40, STEER = .25;
   const COS = Array.from({ length: SIDES }, (_, j) => Math.cos(2 * Math.PI * j / SIDES)), SIN = Array.from({ length: SIDES }, (_, j) => Math.sin(2 * Math.PI * j / SIDES));
-  const ringCount = mu => Math.max(6, Math.min(MAX_RINGS, Math.ceil((mu.l0 || 10) / RING) + 1));
+  /* у линий ленты (ниже, «ленты») число колец общее на всю ленту — mu.rings */
+  const ringCount = mu => mu.rings || Math.max(6, Math.min(MAX_RINGS, Math.ceil((mu.l0 || 10) / RING) + 1));
   const RB = new Float64Array(MAX_RINGS * 9);
   /* курсор по ломаной: точка на длине s (s не убывает между вызовами) — в out[o..o+2] */
   function cursor(pts, cum) {
@@ -7379,8 +7382,473 @@ const Muscles = (() => {
   function radiusAt(b, s) {
     const u = (s - b.t0) / b.lb;
     if (u <= 0 || u >= 1) return b.rt;
-    return Math.max(b.rt, Math.sqrt(b.area * Math.pow(Math.sin(Math.PI * u), SPINDLE) / SPINDLE_I / Math.PI));
+    /* sin^SPINDLE(πu) — по таблице (кадр — тысячи колец, Math.pow был самым дорогим местом расчёта тел), у самых концов,
+       где кривая круче, — точно; ошибка радиуса < 0,1 % */
+    const x = u * SPN, i = Math.min(SPN - 1, x | 0), f = i > 3 && i < SPN - 4 ? SPT[i] + (SPT[i + 1] - SPT[i]) * (x - i) : Math.pow(Math.sin(Math.PI * u), SPINDLE);
+    return Math.max(b.rt, Math.sqrt(b.area * f / SPINDLE_I / Math.PI));
   }
+  const SPN = 1024, SPT = Float64Array.from({ length: SPN + 1 }, (_, i) => Math.pow(Math.sin(Math.PI * i / SPN), SPINDLE));
+
+  /* ---------- ленты: широкие плоские мышцы ----------
+     Трубка вдоль линии действия хороша для веретена (двуглавая, бедро); широкая плоская мышца (большая грудная,
+     широчайшая, трапециевидная…) — пласт, и несколько трубок по числу линий выглядели пучками, между которыми видны
+     рёбра, а тело широчайшей при руке над головой выходило из кожи на 3 см. Здесь соседние линии одной мышцы (в порядке
+     начал вдоль кости, FANS) образуют ленту: сечение линии — полоса пласта от шва с одним соседом до шва с другим.
+     - Соответствие линий — по доле длины пути u (0 — конец у кости anchor, где волокна сходятся; у линий с путём в
+       другую сторону — с другого конца); число колец — общее на ленту: кольцо q всех линий — одна доля u. Общие
+       промежуточные точки линий веера («узлы») стоят у всех линий на одной доле u; где линии совпадают, центры полос
+       раздвигаются вдоль поперечника ленты (только рисунок — путь и работа мышцы прежние).
+     - Нормаль пласта у линии — T × D (D — от соседа слева к соседу справа); где линии сходятся, нормаль переносится от
+       соседнего кольца без закрутки и понемногу ложится вдоль кожи.
+     - Шов соседей — точка хорды между центрами по доле площадей их сечений, приподнятая по кривизне пласта (стрелка
+       дуги по углу между направлениями к коже у двух линий) и вытолкнутая из огибающих сфер и цилиндров обеих линий;
+       вершины шва общие у обеих полос (те же числа) — щели между полосами нет. Где шов ближе RIB_WMIN·√A или с другой
+       стороны (линии сошлись или перекрестились), у полосы своя кромка, полосы перекрываются. Наружные края ленты — на
+       BORDER ширины внутренней половины полосы, тоньше (BORDER_H) и скруглены.
+     - Площадь сечения — та же, что у трубки (π·r² по объёму брюшка, веретено, утолщение при укорочении): полутолщина
+       центра решается из площади многоугольника сечения (solveH) — объём части сохраняется.
+     - Под кожей: если до кожи (за вычетом SKIN_GAP, по нейтральной позе — sk) меньше, чем до верха полосы, полоса
+       сдвигается вглубь — центр по верху и своим кромкам, шов по своей глубине и не меньше сдвига соседних центров; пучок
+       со своими кромками у кожи расплющивается, как трубка.
+     Кольцо — те же SIDES = 8 вершин, что у трубки (сетка слоя не меняется): верх в центре, верх шва, край, низ шва, низ
+     в центре, низ другого шва, край, верх другого шва. Нормали — по поверхности пласта лицевой стороной (у швов и своих
+     кромок внутри ленты — средняя двух полос; изнанка освещена как лицевая — шаг 5).
+     Источники выбора мышц и числа — tools/muscles/README.md, «Ленты». */
+  const FANS = [
+    /* [ключ, линии по порядку начал вдоль кости, кость конца u = 0]; источники — tools/muscles/README.md, «Ленты» */
+    ['pecmaj', ['PECM1', 'PECM1b', 'PECM2a', 'PECM2', 'PECM2c', 'PECM3', 'PECM3b'], /^humerus/],
+    ['lat', ['LAT1', 'LAT2', 'LAT3', 'LAT4', 'LAT5', 'LAT6'], /^humerus/],
+    ['trap', ['trap_clav_1', 'trap_clav_2', 'trap_scap_1', 'trap_scap_2', 'trap_scap_3', 'trap_scap_4', 'trap_scap_5', 'trap_scap_6', 'trap_scap_7', 'trap_scap_8', 'trap_scap_9', 'trap_scap10', 'trap_scap11'], /^(clavicle|scapula)/],
+    ['infsp', ['INFSPsup', 'INFSP', 'INFSPinf'], /^humerus/],
+    ['serrant', ['serr_ant_1', 'serr_ant_2', 'serr_ant_3', 'serr_ant_4', 'serr_ant_5', 'serr_ant_6', 'serr_ant_7', 'serr_ant_8', 'serr_ant_9', 'serr_ant10', 'serr_ant11', 'serr_ant12'], /^scapula/],
+    ['rhomb', ['rhomboid_2', 'rhomboid_3', 'rhomboid_4', 'rhomboid_5'], /^scapula/],
+    ['eo', ['EO7', 'EO8', 'EO1', 'EO2', 'EO3', 'EO4', 'EO5', 'EO6'], /^ribcage/],
+    ['glmax', ['glmax1', 'glmax2', 'glmax3'], /^femur/],
+    ['glmed', ['glmed1', 'glmed2', 'glmed3'], /^femur/],
+  ];
+  const BORDER = .35, BORDER_H = .5, TIP_IN = .25, TIP_OUT = .6, RIB_WMIN = .5, RIB_HMIN = .06, RIB_C0 = .3, RIB_C1 = 1, RIB_SPREAD = .8, RIB_STEER = .35, RIB_LAM = .3, RIB_AGREE = .5;
+  /* поля записи линии в кольце (LW): 0–2 центр, 3–5 касательная в сторону u, 6–8 нормаль пласта, 9–11 направление к коже,
+     12 глубина под кожей, 13 площадь сечения (как у трубки), 14 полупоперечник, 15–16 ширины до швов, 17 толщина η = A/(2w),
+     18 полутолщина центра, 19 сдвиг вглубь, 20–22 нормаль по соседям, 23 флаги своей кромки, 24 расстояние по пути (см),
+     25 радиус кривизны кожи поперёк линии;
+     шва (SW): 0–2 точка, 3–5 нормаль, 6–8 поперёк (от линии k к k+1), 9 полутолщина, 10 вынос кромки, 11 доля λ */
+  const LW = 26, SW = 12;
+  const GAP = new Float64Array(32), GAP2 = new Float64Array(32), PC = new Float64Array(96);
+  function bindFans(md, bound, idx) {
+    const at = new Map(bound.map((mu, i) => [mu.name, i])), fans = [];
+    for (const [key, names, anchor] of FANS) for (const s of ['r', 'l']) {
+      const lines = names.map(nm => at.get(nm + '_' + s));
+      if (lines.some(i => i === undefined)) continue;
+      const rev = new Uint8Array(lines.length);
+      lines.forEach((i, k) => {
+        const el = md.muscles[i].el, first = el[0].s.bone[0], last = el[el.length - 1].s.bone[0];
+        if (anchor.test(first)) rev[k] = 0; else if (anchor.test(last)) rev[k] = 1; else throw Error('muscles: ribbon ' + key + ': ' + bound[i].name + ' not at ' + anchor);
+      });
+      const n = Math.max(...lines.map(i => ringCount(bound[i]))), K = lines.length;
+      /* Узлы: линии веера, добавленные к линии модели (anatomy.js), проходят через её промежуточные точки — от конца u = 0
+         до последней общей точки путь у них один и тот же. Доля u такой точки у всех линий — одна (средняя их долей), иначе
+         кольца с равной долей u стояли бы у одной линии до общей точки, у другой — после, и линии на рисунке
+         перекрещивались бы. Узел — последняя общая точка пути пары линий (элементы пути от конца u = 0 совпадают). */
+      const keys = lines.map((i, k) => { const el = md.muscles[i].el.map(e => JSON.stringify(e)); return rev[k] ? el.reverse() : el; });
+      const knots = new Map();
+      for (let k = 0; k < K; k++) for (let j = 0; j < K; j++) {
+        if (j === k) continue;
+        let c = 0; while (c < keys[k].length && c < keys[j].length && keys[k][c] === keys[j][c]) c++;
+        let e = c - 1; while (e > 0 && !keys[k][e].startsWith('{"s"')) e--;
+        if (e <= 0 || e >= keys[k].length - 1 || e >= keys[j].length - 1) continue;
+        const kn = knots.get(keys[k][e]) || knots.set(keys[k][e], { s: JSON.parse(keys[k][e]).s, members: new Map() }).get(keys[k][e]);
+        kn.members.set(k, e); kn.members.set(j, e);
+      }
+      const knotList = [...knots.values()].map(kn => ({ i: idx.get(kn.s.bone[0] + '|' + kn.s.bone[1]), p: kn.s.p, members: [...kn.members.keys()] }));
+      const lineKnots = lines.map((_, k) => knotList.map((kn, id) => [id, knots.get([...knots.keys()][id]).members.get(k)]).filter(([, e]) => e !== undefined).sort((a, b) => a[1] - b[1]).map(([id]) => id));
+      const fan = { key, side: s.toUpperCase(), lines, rev, K, n, L: new Float64Array(K * n * LW), S: new Float64Array((K + 1) * n * SW),
+        knots: knotList, lineKnots, KU: new Float64Array(knotList.length), KF: new Float64Array(knotList.length * K) };
+      lines.forEach((i, k) => { bound[i].fan = fan; bound[i].fanK = k; bound[i].rings = n; });
+      /* огибающие тела линий (сферы и цилиндры — модели костей в исходных моделях): швы ленты не заходят в них */
+      const wraps = lines.map(i => bound[i].el.filter(e => e.w && e.w.t !== 'e').map(e => e.w));
+      fan.wrapOff = new Uint16Array(K + 1); wraps.forEach((l, k) => { fan.wrapOff[k + 1] = fan.wrapOff[k] + l.length; });
+      /* в рамке кости: центр, ось (у сферы — любая), поперечное к оси направление (масштаб радиуса), радиус, цилиндр ли */
+      fan.wrapEls = wraps.flat().map(w => { const fr = frameFromAxis(w.a || [0, 0, 1]); return { i: w.i, c: w.c, a: w.a || [0, 0, 1], p: [fr[0], fr[3], fr[6]], r: w.r, cyl: w.t === 'c' }; });
+      fan.WB = new Float64Array(fan.wrapEls.length * 8);
+      fans.push(fan);
+    }
+    return fans;
+  }
+  let CUM = new Float64Array(256);
+  /* нормаль для кривизны пласта у линии кольца (смещение в записи линии): направление к коже, без данных кожи — нормаль пласта */
+  let CURV_B = null;
+  const curv = o => (CURV_B[o + 12] < 1e8 ? o + 9 : o + 6);
+  /* вершины и нормали всех линий ленты fan (кадр — матрицы m, пути для рисования paths по номерам bound); вершины линии i —
+     с кольца start[i] (номера колец, как у слоя мышц) */
+  function ribbon(fan, bound, paths, m, pos, nor, start) {
+    const K = fan.K, n = fan.n, B = fan.L, S = fan.S, KN = fan.knots, KU = fan.KU, KF = fan.KF; CURV_B = B;
+    /* огибающие тела линий в кадре (как place, без новых объектов): центр, единичная ось, радиус, цилиндр ли */
+    const WB = fan.WB;
+    fan.wrapEls.forEach((w, j) => {
+      const o = w.i * 12, b = j * 8, c = w.c, a = w.a, pp = w.p;
+      for (let r = 0; r < 3; r++) {
+        WB[b + r] = m[o + r * 4] * c[0] + m[o + r * 4 + 1] * c[1] + m[o + r * 4 + 2] * c[2] + m[o + r * 4 + 3];
+        WB[b + 3 + r] = m[o + r * 4] * a[0] + m[o + r * 4 + 1] * a[1] + m[o + r * 4 + 2] * a[2];
+      }
+      const al = Math.sqrt(WB[b + 3] ** 2 + WB[b + 4] ** 2 + WB[b + 5] ** 2) || 1; WB[b + 3] /= al; WB[b + 4] /= al; WB[b + 5] /= al;
+      let kx = 0; for (let r = 0; r < 3; r++) { const v = m[o + r * 4] * pp[0] + m[o + r * 4 + 1] * pp[1] + m[o + r * 4 + 2] * pp[2]; kx += v * v; }
+      WB[b + 6] = w.r * (Math.sqrt(kx) || 1); WB[b + 7] = w.cyl ? 1 : 0;
+    });
+    const WO = fan.wrapOff;
+    /* 0. узлы (общие промежуточные точки линий): доля длины пути у каждой линии и средняя — доля узла */
+    for (let j = 0; j < KN.length; j++) {
+      const kn = KN[j], X = apply(m, kn.i, kn.p); let sum = 0;
+      for (const k of kn.members) {
+        const i = fan.lines[k], pts = paths[i].points; let best = Infinity, at = 0, c = 0, tot = 0;
+        for (let a = 0; a < pts.length; a++) {
+          if (a) tot += dist3(pts[a], pts[a - 1]);
+          const d = (pts[a][0] - X[0]) ** 2 + (pts[a][1] - X[1]) ** 2 + (pts[a][2] - X[2]) ** 2; if (d < best) { best = d; at = tot; }
+        }
+        c = tot > 1e-9 ? at / tot : 0; if (fan.rev[k]) c = 1 - c;
+        KF[j * K + k] = c; sum += c;
+      }
+      KU[j] = sum / kn.members.length;
+    }
+    /* 1. центры, касательные (в сторону u), площади, кожа; доля пути кольца — по u через узлы линии */
+    for (let k = 0; k < K; k++) {
+      const i = fan.lines[k], mu = bound[i], p = paths[i], pts = p.points, Ln = p.length, b = body(mu, Ln), sg = fan.rev[k] ? -1 : 1, lk = fan.lineKnots[k];
+      if (CUM.length < pts.length) CUM = new Float64Array(pts.length * 2);
+      const cum = CUM; cum[0] = 0; for (let a = 1; a < pts.length; a++) cum[a] = cum[a - 1] + dist3(pts[a], pts[a - 1]);
+      const scale = cum[pts.length - 1] > 1e-9 ? Ln / cum[pts.length - 1] : 1, atP = cursor(pts, cum), atA = cursor(pts, cum), atB = cursor(pts, cum);
+      for (let r = 0; r < n; r++) {
+        const q = fan.rev[k] ? n - 1 - r : r, o = (k * n + q) * LW, u = q / (n - 1);
+        /* u → доля пути своей линии: ломаная через (0, 0), узлы (доля узла, доля линии) и (1, 1) */
+        let u0 = 0, f0 = 0, u1 = 1, f1 = 1;
+        for (const j of lk) { const U = Math.max(u0 + 1e-4, KU[j]), F = Math.max(f0, KF[j * K + k]); if (U < u) { u0 = U; f0 = F; } else { u1 = U; f1 = F; break; } }
+        const f = f0 + (f1 - f0) * Math.max(0, Math.min(1, (u - u0) / Math.max(1e-6, u1 - u0))), s = Ln * (fan.rev[k] ? 1 - f : f);
+        atP(s / scale, B, o);
+        atA(Math.max(0, s - RING * .5) / scale, T3, 0); atB(Math.min(Ln, s + RING * .5) / scale, T3, 3);
+        let tx = T3[3] - T3[0], ty = T3[4] - T3[1], tz = T3[5] - T3[2], tl = Math.sqrt(tx * tx + ty * ty + tz * tz);
+        if (tl < 1e-9) { const e = pts.length - 1; tx = pts[e][0] - pts[0][0]; ty = pts[e][1] - pts[0][1]; tz = pts[e][2] - pts[0][2]; tl = Math.sqrt(tx * tx + ty * ty + tz * tz) || 1; }
+        B[o + 3] = sg * tx / tl; B[o + 4] = sg * ty / tl; B[o + 5] = sg * tz / tl;
+        const rr = radiusAt(b, s); B[o + 13] = Math.PI * rr * rr; B[o + 24] = s;
+        const sk = skinAt(mu, b, s, m);
+        if (sk) { B[o + 9] = sk.o[0]; B[o + 10] = sk.o[1]; B[o + 11] = sk.o[2]; B[o + 12] = sk.d; B[o + 25] = sk.rho; } else { B[o + 9] = B[o + 10] = B[o + 11] = 0; B[o + 12] = 1e9; B[o + 25] = 200; }
+      }
+    }
+    /* 1б. Линии веера, добавленные по площадке начала (большая грудная, подостная; LAT4 у нижнего угла
+       лопатки), идут к плечу через промежуточные точки своей линии-основы (tools/muscles/anatomy.js) — от этих точек до
+       плеча они совпадают, и лента там сжималась бы в пучок. Поэтому центры полос раздвигаются вдоль поперечника ленты
+       (ломаная через центры по порядку линий, длины — поперёк касательной): промежуток между соседями — не меньше
+       RIB_SPREAD средней, остальные сжимаются так, что края ленты остаются на месте. Где линии и так разошлись, центры —
+       на своих линиях; путь и длина мышцы (её работа) не меняются — только рисунок. */
+    if (K > 2) for (let q = 0; q < n; q++) {
+      let tot = 0;
+      for (let k = 0; k < K - 1; k++) {
+        const a = (k * n + q) * LW, c = a + n * LW;
+        let tx = B[a + 3] + B[c + 3], ty = B[a + 4] + B[c + 4], tz = B[a + 5] + B[c + 5]; const tl = Math.sqrt(tx * tx + ty * ty + tz * tz) || 1; tx /= tl; ty /= tl; tz /= tl;
+        let dx = B[c] - B[a], dy = B[c + 1] - B[a + 1], dz = B[c + 2] - B[a + 2]; const dt = dx * tx + dy * ty + dz * tz; dx -= dt * tx; dy -= dt * ty; dz -= dt * tz;
+        GAP[k] = Math.sqrt(dx * dx + dy * dy + dz * dz); tot += GAP[k];
+      }
+      if (tot < 1e-3) continue;
+      const lo = RIB_SPREAD * tot / (K - 1); let sum = 0;
+      for (let k = 0; k < K - 1; k++) { GAP2[k] = Math.max(GAP[k], lo); sum += GAP2[k]; }
+      if (sum - tot < 1e-6) continue;
+      /* новые доли поперечника → точки на ломаной через центры (копия центров — до сдвига) */
+      for (let k = 0; k < K; k++) { const a = (k * n + q) * LW; PC[k * 3] = B[a]; PC[k * 3 + 1] = B[a + 1]; PC[k * 3 + 2] = B[a + 2]; }
+      let c2 = 0;
+      for (let k = 1; k < K - 1; k++) {
+        c2 += GAP2[k - 1] * tot / sum;
+        let j = 0, acc = 0; while (j < K - 2 && acc + GAP[j] < c2) { acc += GAP[j]; j++; }
+        const f = GAP[j] > 1e-9 ? Math.min(1, Math.max(0, (c2 - acc) / GAP[j])) : 0, a = (k * n + q) * LW;
+        B[a] = PC[j * 3] + (PC[j * 3 + 3] - PC[j * 3]) * f; B[a + 1] = PC[j * 3 + 1] + (PC[j * 3 + 4] - PC[j * 3 + 1]) * f; B[a + 2] = PC[j * 3 + 2] + (PC[j * 3 + 5] - PC[j * 3 + 2]) * f;
+      }
+    }
+    /* 2. поперечник D (от соседа слева к соседу справа) и нормаль пласта T × D */
+    for (let q = 0; q < n; q++) for (let k = 0; k < K; k++) {
+      const o = (k * n + q) * LW, a = ((k > 0 ? k - 1 : 0) * n + q) * LW, c = ((k < K - 1 ? k + 1 : K - 1) * n + q) * LW;
+      const tx = B[o + 3], ty = B[o + 4], tz = B[o + 5];
+      let dx = B[c] - B[a], dy = B[c + 1] - B[a + 1], dz = B[c + 2] - B[a + 2];
+      /* у крайней линии — и второй сосед с половинным весом: если первый почти совпадает с ней (линии веера до общей
+         промежуточной точки), направление поперёк всё равно задано */
+      if ((k === 0 || k === K - 1) && K > 2) { const f = ((k === 0 ? 2 : K - 3) * n + q) * LW, g = k === 0 ? 1 : -1; dx += g * (B[f] - B[o]) * .5; dy += g * (B[f + 1] - B[o + 1]) * .5; dz += g * (B[f + 2] - B[o + 2]) * .5; }
+      const dt = dx * tx + dy * ty + dz * tz;
+      dx -= dt * tx; dy -= dt * ty; dz -= dt * tz;
+      const dl = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      /* полупоперечник — на один промежуток: у внутренней линии D — два промежутка, у крайней — один и половина двух */
+      B[o + 14] = dl * (k > 0 && k < K - 1 ? .5 : K > 2 ? .5 : 1);
+      if (dl > 1e-6) { B[o + 20] = (ty * dz - tz * dy) / dl; B[o + 21] = (tz * dx - tx * dz) / dl; B[o + 22] = (tx * dy - ty * dx) / dl; } else B[o + 20] = B[o + 21] = B[o + 22] = 0;
+    }
+    /* 3. нормаль вдоль линии: от кольца с самым широким поперечником в обе стороны; где линии сходятся — перенос без закрутки */
+    for (let k = 0; k < K; k++) {
+      let q0 = 0, best = -1;
+      for (let q = 0; q < n; q++) { const w = B[(k * n + q) * LW + 14]; if (w > best) { best = w; q0 = q; } }
+      for (const dir of [1, -1]) for (let q = q0; q >= 0 && q < n; q += dir) {
+        const o = (k * n + q) * LW, tx = B[o + 3], ty = B[o + 4], tz = B[o + 5];
+        let nx, ny, nz;
+        if (q === q0) {
+          if (dir === -1) continue;
+          nx = B[o + 20]; ny = B[o + 21]; nz = B[o + 22];
+          /* поперечника нет нигде (все линии в одной точке) — к коже */
+          if (nx * nx + ny * ny + nz * nz < .5) { nx = B[o + 9] || tz; ny = B[o + 10] || tx; nz = B[o + 11] || ty; }
+        } else {
+          const pq = (k * n + q - dir) * LW; nx = B[pq + 6]; ny = B[pq + 7]; nz = B[pq + 8];
+          const c = Math.max(0, Math.min(1, (B[o + 14] - RIB_C0) / RIB_C1));
+          if (c > 0) {
+            let rx = B[o + 20], ry = B[o + 21], rz = B[o + 22]; if (rx * nx + ry * ny + rz * nz < 0) { rx = -rx; ry = -ry; rz = -rz; }
+            nx += (rx - nx) * c; ny += (ry - ny) * c; nz += (rz - nz) * c;
+          }
+          /* где лента сходится в пучок, полоса понемногу ложится вдоль кожи — как сплющенная трубка (иначе её ширина
+             могла смотреть в кость под ней) */
+          const gx = B[o + 9], gy = B[o + 10], gz = B[o + 11], gd = gx * tx + gy * ty + gz * tz, k1 = (1 - c) * RIB_STEER;
+          let ux = gx - gd * tx, uy = gy - gd * ty, uz = gz - gd * tz; const ul = Math.sqrt(ux * ux + uy * uy + uz * uz);
+          if (k1 > 0 && ul > .1) { if (ux * nx + uy * ny + uz * nz < 0) { ux = -ux; uy = -uy; uz = -uz; } nx += (ux / ul - nx) * k1; ny += (uy / ul - ny) * k1; nz += (uz / ul - nz) * k1; }
+        }
+        const nd = nx * tx + ny * ty + nz * tz; nx -= nd * tx; ny -= nd * ty; nz -= nd * tz;
+        let nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        if (nl < 1e-6) { if (Math.abs(tx) < .9) { nx = 0; ny = tz; nz = -ty; } else { nx = -tz; ny = 0; nz = tx; } nl = Math.sqrt(nx * nx + ny * ny + nz * nz); }
+        B[o + 6] = nx / nl; B[o + 7] = ny / nl; B[o + 8] = nz / nl;
+      }
+    }
+    /* 3б. знак нормали — общий для ленты: перенос вдоль линии мог развернуть нормаль одной линии против соседей (пласт огибает
+       головку плеча — подостная, большая грудная, — а между кольцами линии почти сходятся). Линия, чья нормаль
+       большей частью (с весом надёжности поперечника) смотрит против нормали соседа, переворачивается целиком — вдоль
+       линии перекрута нет */
+    for (let k = 1; k < K; k++) {
+      let vote = 0;
+      for (let q = 0; q < n; q++) { const o = (k * n + q) * LW, a = o - n * LW, w = Math.min(B[o + 14], B[a + 14]); vote += w * (B[o + 6] * B[a + 6] + B[o + 7] * B[a + 7] + B[o + 8] * B[a + 8]); }
+      if (vote < 0) for (let q = 0; q < n; q++) { const o = (k * n + q) * LW; B[o + 6] = -B[o + 6]; B[o + 7] = -B[o + 7]; B[o + 8] = -B[o + 8]; }
+    }
+    /* 4. швы между соседями: точка хорды между центрами, приподнятая по кривизне пласта; общая нормаль и направление поперёк */
+    for (let q = 0; q < n; q++) {
+      for (let j = 1; j < K; j++) {
+        const a = ((j - 1) * n + q) * LW, c = (j * n + q) * LW, o = (j * n + q) * SW;
+        let nx = B[a + 6] + B[c + 6], ny = B[a + 7] + B[c + 7], nz = B[a + 8] + B[c + 8], nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        if (nl < .2) { nx = B[a + 6]; ny = B[a + 7]; nz = B[a + 8]; nl = 1; }
+        nx /= nl; ny /= nl; nz /= nl;
+        let tx = B[a + 3] + B[c + 3], ty = B[a + 4] + B[c + 4], tz = B[a + 5] + B[c + 5];
+        const td = tx * nx + ty * ny + tz * nz; tx -= td * nx; ty -= td * ny; tz -= td * nz;
+        let wx = ny * tz - nz * ty, wy = nz * tx - nx * tz, wz = nx * ty - ny * tx; const wl = Math.sqrt(wx * wx + wy * wy + wz * wz) || 1; wx /= wl; wy /= wl; wz /= wl;
+        const ex = B[c] - B[a], ey = B[c + 1] - B[a + 1], ez = B[c + 2] - B[a + 2], d = Math.sqrt(ex * ex + ey * ey + ez * ez);
+        /* кривизна пласта — по направлениям к коже у двух линий (они надёжнее нормалей пласта там, где линии огибают
+           кость: подостная и большая грудная у головки плеча); стрелка — вдоль среднего из них */
+        const ga = curv(a), gc = curv(c);
+        const cphi = B[ga] * B[gc] + B[ga + 1] * B[gc + 1] + B[ga + 2] * B[gc + 2];
+        let sag = 0, sx = 0, sy = 0, sz = 0;
+        if (cphi < .99999) {
+          const phi = Math.min(Math.PI / 2, Math.acos(Math.max(-1, cphi))), conv = ex * (B[gc] - B[ga]) + ey * (B[gc + 1] - B[ga + 1]) + ez * (B[gc + 2] - B[ga + 2]);
+          sag = (conv >= 0 ? 1 : -1) * d * .5 * Math.tan(phi / 4);
+          sx = B[ga] + B[gc]; sy = B[ga + 1] + B[gc + 1]; sz = B[ga + 2] + B[gc + 2]; const sl = Math.sqrt(sx * sx + sy * sy + sz * sz) || 1; sx /= sl; sy /= sl; sz /= sl;
+        }
+        /* шов — не посередине, а по площадям сечений двух полос (λ = A/(A + A'), в пределах RIB_LAM…1 − RIB_LAM): у линий
+           разного объёма (части большой грудной, широчайшей) толщина пласта ровнее; стрелка — по доле хорды */
+        const lam = Math.min(1 - RIB_LAM, Math.max(RIB_LAM, B[a + 13] / (B[a + 13] + B[c + 13] || 1)));
+        sag *= 4 * lam * (1 - lam);
+        S[o] = B[a] + (B[c] - B[a]) * lam + sx * sag; S[o + 1] = B[a + 1] + (B[c + 1] - B[a + 1]) * lam + sy * sag; S[o + 2] = B[a + 2] + (B[c + 2] - B[a + 2]) * lam + sz * sag;
+        S[o + 11] = lam;
+        S[o + 3] = nx; S[o + 4] = ny; S[o + 5] = nz; S[o + 6] = wx; S[o + 7] = wy; S[o + 8] = wz;
+      }
+      /* шов — на хорде между линиями: где линии огибают кость (подостная и большая грудная у головки плеча),
+         хорда проходит сквозь неё. Шов выталкивается на поверхность огибающих тел обеих линий (на ней лежат и сами линии,
+         когда огибают кость) */
+      for (let j = 1; j < K; j++) { const s = (j * n + q) * SW; clear(S, s, WB, WO[j - 1], WO[j + 1], .05); }
+      /* ширины полос до швов (вдоль W = N × T), не уже RIB_WMIN·√A; крайние — на BORDER внутренней половины */
+      for (let k = 0; k < K; k++) {
+        const o = (k * n + q) * LW, nx = B[o + 6], ny = B[o + 7], nz = B[o + 8], tx = B[o + 3], ty = B[o + 4], tz = B[o + 5];
+        const wx = ny * tz - nz * ty, wy = nz * tx - nx * tz, wz = nx * ty - ny * tx, wmin = RIB_WMIN * Math.sqrt(B[o + 13]);
+        let wl = -1, wr = -1, fl = 0;
+        /* шов общий, только если он со своей стороны не ближе wmin и нормали полосы и шва согласны (где линии
+           перекрещиваются, нормали соседних полос расходятся — общий шов перекрутил бы сечение «бантиком») */
+        if (k > 0) { const s = (k * n + q) * SW; wl = (B[o] - S[s]) * wx + (B[o + 1] - S[s + 1]) * wy + (B[o + 2] - S[s + 2]) * wz; if (nx * S[s + 3] + ny * S[s + 4] + nz * S[s + 5] < RIB_AGREE) fl |= 1; }
+        if (k < K - 1) { const s = ((k + 1) * n + q) * SW; wr = (S[s] - B[o]) * wx + (S[s + 1] - B[o + 1]) * wy + (S[s + 2] - B[o + 2]) * wz; if (nx * S[s + 3] + ny * S[s + 4] + nz * S[s + 5] < RIB_AGREE) fl |= 2; }
+        if (k === 0) wl = BORDER * Math.max(wmin, wr); if (k === K - 1) wr = BORDER * Math.max(wmin, wl);
+        if (wl < wmin || fl & 1) { wl = Math.max(wl, wmin); fl |= 1; } if (wr < wmin || fl & 2) { wr = Math.max(wr, wmin); fl |= 2; }
+        /* своя кромка дотягивается до середины пути к соседней линии с той же стороны, какой бы сосед там ни оказался: где
+           линии перекрещиваются (у головки плеча при руке над головой), полосы перекрывают промежуток */
+        if (fl) for (let j = k - 1; j <= k + 1; j += 2) {
+          if (j < 0 || j >= K) continue;
+          const c = (j * n + q) * LW, p = ((B[c] - B[o]) * wx + (B[c + 1] - B[o + 1]) * wy + (B[c + 2] - B[o + 2]) * wz) * .5;
+          if (p < 0 && fl & 1) wl = Math.max(wl, -p); else if (p > 0 && fl & 2) wr = Math.max(wr, p);
+        }
+        /* у кожи полоса со своими кромками (пучок, где линии сошлись) расплющивается, как трубка: толщина к коже — не больше
+           места до неё (но не тоньше FLAT радиуса), ширина своих кромок растёт так, что площадь та же */
+        const ng = Math.abs(nx * B[o + 9] + ny * B[o + 10] + nz * B[o + 11]), room = B[o + 12] - SKIN_GAP;
+        if (fl && ng > .8) {
+          const A = B[o + 13], eta = A / (2 * (wl + wr)), lim = Math.max(FLAT * Math.sqrt(A / Math.PI), room / ng);
+          if (eta > lim) {
+            /* не шире полуторной: кожа над широкой кромкой уходит вниз по своей кривизне */
+            const extra = Math.min(A / (2 * lim), 1.5 * (wl + wr)) - wl - wr;
+            if ((fl & 3) === 3) { wl += extra / 2; wr += extra / 2; } else if (fl & 1) wl += extra; else wr += extra;
+          }
+        }
+        B[o + 15] = wl; B[o + 16] = wr; B[o + 23] = fl; B[o + 17] = B[o + 13] / (2 * (wl + wr));
+      }
+      /* наружные края: по кривизне пласта у соседней линии (край уходит вглубь выпуклого пласта) */
+      border(B, S, n, q, 0, 1, 0, -1); border(B, S, n, q, K - 1, K - 2, K, 1);
+      clear(S, q * SW, WB, WO[0], WO[1], .05); clear(S, (K * n + q) * SW, WB, WO[K - 1], WO[K], .05);
+      /* толщина у шва — среднее гармоническое толщин двух полос: ближе к тонкой — толстая полоса выпуклее в своей
+         середине, а у тонкой кромка не толще её самой (иначе сечение — «бантик» с перекрутом) */
+      for (let j = 1; j < K; j++) { const s = (j * n + q) * SW, ea = B[((j - 1) * n + q) * LW + 17], ec = B[(j * n + q) * LW + 17]; S[s + 9] = 2 * ea * ec / (ea + ec || 1); S[s + 10] = TIP_IN * S[s + 9]; }
+      /* толщина центра — из площади сечения (solveH). Сдвиг вглубь у кожи (кожа над точкой — плоскость на её глубине d,
+         нейтральная поза): центр — по верху полосы и её своим кромкам; шов — сам по себе, по своей толщине и средней
+         глубине двух линий (иначе швы линий, лежащих у самой кожи, уходили бы вслед за центром в кость) */
+      for (let k = 0; k < K; k++) {
+        const o = (k * n + q) * LW, sl = (k * n + q) * SW, sr = ((k + 1) * n + q) * SW, wl = B[o + 15], wr = B[o + 16], fl = B[o + 23], eta = B[o + 17];
+        const h = B[o + 18] = solveH(B, S, o, sl, sr, k, K);
+        const gx = B[o + 9], gy = B[o + 10], gz = B[o + 11], nx = B[o + 6], ny = B[o + 7], nz = B[o + 8], tx = B[o + 3], ty = B[o + 4], tz = B[o + 5];
+        const ng = Math.abs(gx * nx + gy * ny + gz * nz), wg = gx * (ny * tz - nz * ty) + gy * (nz * tx - nx * tz) + gz * (nx * ty - ny * tx);
+        let ext = h * ng - (B[o + 12] - SKIN_GAP);
+        /* свои кромки — там же, где их поставит edge() (по направлению на шов); кожа над кромкой ниже, чем над линией, на
+           x²/(2ρ) — x — отход кромки вбок, ρ — радиус кривизны кожи поперёк линии (sk, как у трубок) */
+        for (let side = -1; side <= 1; side += 2) {
+          if (!(fl & (side < 0 ? 1 : 2))) continue;
+          const E = edge(S, side < 0 ? sl : sr, 1, B[o], B[o + 1], B[o + 2], nx, ny, nz, ny * tz - nz * ty, nz * tx - nx * tz, nx * ty - ny * tx, side < 0 ? wl : wr, side, (side < 0 ? k > 0 : k < K - 1) ? eta : -1);
+          const ex = E[0] - B[o], ey = E[1] - B[o + 1], ez = E[2] - B[o + 2], up = ex * gx + ey * gy + ez * gz, x2 = Math.max(0, ex * ex + ey * ey + ez * ez - up * up);
+          ext = Math.max(ext, up + E[9] * ng + Math.max(0, E[10] * (E[6] * gx + E[7] * gy + E[8] * gz)) - (B[o + 12] - SKIN_GAP - x2 / (2 * B[o + 25])));
+        }
+        B[o + 19] = Math.max(0, ext);
+      }
+      for (let j = 0; j <= K; j++) {
+        const s = (j * n + q) * SW, a = ((j > 0 ? j - 1 : 0) * n + q) * LW, c = ((j < K ? j : K - 1) * n + q) * LW;
+        let gx = B[a + 9] + B[c + 9], gy = B[a + 10] + B[c + 10], gz = B[a + 11] + B[c + 11]; const gl = Math.sqrt(gx * gx + gy * gy + gz * gz);
+        if (gl < 1e-6) continue;
+        gx /= gl; gy /= gl; gz /= gl;
+        /* глубина точки шва: средняя глубина линий минус подъём шва над их средней точкой к коже */
+        const lam = a === c ? .5 : S[s + 11];
+        const lift = (S[s] - B[a] - (B[c] - B[a]) * lam) * gx + (S[s + 1] - B[a + 1] - (B[c + 1] - B[a + 1]) * lam) * gy + (S[s + 2] - B[a + 2] - (B[c + 2] - B[a + 2]) * lam) * gz;
+        /* наружный край: кожа над ним ниже на x²/(2ρ) */
+        let x2 = 0; if (a === c) { const ex = S[s] - B[a], ey = S[s + 1] - B[a + 1], ez = S[s + 2] - B[a + 2], up = ex * gx + ey * gy + ez * gz; x2 = Math.max(0, ex * ex + ey * ey + ez * ez - up * up) / (2 * B[a + 25]); }
+        /* и не меньше сдвига соседних центров по доле λ: иначе у полосы, ушедшей вглубь, швы оставались бы наверху (сечение «галочкой») */
+        const room = B[a + 12] + (B[c + 12] - B[a + 12]) * lam - lift - SKIN_GAP - x2, sh = Math.max(0, S[s + 9] * Math.abs(gx * S[s + 3] + gy * S[s + 4] + gz * S[s + 5]) - room, B[a + 19] + (B[c + 19] - B[a + 19]) * lam);
+        S[s] -= gx * sh; S[s + 1] -= gy * sh; S[s + 2] -= gz * sh;
+      }
+      for (let k = 0; k < K; k++) { const o = (k * n + q) * LW, sh = B[o + 19]; B[o] -= B[o + 9] * sh; B[o + 1] -= B[o + 10] * sh; B[o + 2] -= B[o + 11] * sh; }
+      /* после сдвигов центр и швы сместились по-разному — толщина центра заново, по сечению, которое будет нарисовано */
+      for (let k = 0; k < K; k++) { const o = (k * n + q) * LW; B[o + 18] = solveH(B, S, o, (k * n + q) * SW, ((k + 1) * n + q) * SW, k, K); }
+    }
+    /* 5. вершины: порядок кольца — как у трубки (от нормали к w = N × t своей линии).
+       Изнанка пласта (сторона, обращённая от кожи) освещается как лицевая: нормали её вершин — нормали лицевой стороны
+       (so · N; знак — по большинству колец ленты, в какую сторону от N кожа, с весом u: у начала на туловище направление
+       к коже надёжнее, у плеча и бедра кожа нейтральной позы поворачивается вместе с костью). Изнанка видна только сквозь
+       прозрачный силуэт кожи (шея и затылок, если смотреть со стороны головы), и там широкая плоская изнанка, обращённая
+       вниз, — тёмный клин: свет сцены — сверху, снизу — только тёмная полусфера. У трубки изнанка узкая и круглая, её не
+       видно; тонкий пласт мышцы (5–15 мм) на рисунке — как лист, освещённый с лицевой стороны. Геометрия не меняется. */
+    let vote = 0;
+    for (let k = 0; k < K; k++) for (let q = 1; q < n; q++) { const o = (k * n + q) * LW; if (B[o + 12] < 1e8) vote += q * (B[o + 6] * B[o + 9] + B[o + 7] * B[o + 10] + B[o + 8] * B[o + 11]); }
+    const so = vote < 0 ? -1 : 1;
+    for (let k = 0; k < K; k++) {
+      const i = fan.lines[k], rev = fan.rev[k];
+      for (let r = 0; r < n; r++) {
+        const q = rev ? n - 1 - r : r, o = (k * n + q) * LW, sl = (k * n + q) * SW, sr = ((k + 1) * n + q) * SW, v = (start[i] + r) * SIDES * 3;
+        const cx = B[o], cy = B[o + 1], cz = B[o + 2], nx = B[o + 6], ny = B[o + 7], nz = B[o + 8], h = B[o + 18], fl = B[o + 23];
+        const tx = B[o + 3], ty = B[o + 4], tz = B[o + 5], wx = ny * tz - nz * ty, wy = nz * tx - nx * tz, wz = nx * ty - ny * tx;
+        /* правый шов (к линии k+1) и левый (к k−1): общие вершины — или своя кромка, если полоса шире шва (линии сходятся) */
+        const R = edge(S, sr, fl & 2, cx, cy, cz, nx, ny, nz, wx, wy, wz, B[o + 16], 1, k < K - 1 ? B[o + 17] : -1), Lf = edge(S, sl, fl & 1, cx, cy, cz, nx, ny, nz, wx, wy, wz, B[o + 15], -1, k > 0 ? B[o + 17] : -1);
+        /* своя кромка внутри ленты лежит на соседней полосе (они перекрываются): её вершины освещаются по средней нормали двух
+           полос, без бокового блика кромки — иначе край каждой полосы на соседке рисовался тёмной линией («ступеньки») */
+        smoothEdge(B, n, q, k, K, fl, so);
+        const order = rev ? ORDER_REV : ORDER;
+        for (let j = 0; j < SIDES; j++) {
+          const e = order[j], w = v + j * 3;
+          let px, py, pz, qx, qy, qz;
+          if (e === 0 || e === 4) { const sg = e === 0 ? 1 : -1; px = cx + nx * h * sg; py = cy + ny * h * sg; pz = cz + nz * h * sg; qx = nx * so; qy = ny * so; qz = nz * so; }
+          else {
+            const right = e < 4, E = right ? R : Lf, kind = right ? e - 1 : 7 - e, sm = right ? SMR : SML;   /* 0 — верх шва, 1 — кромка, 2 — низ шва */
+            if (kind === 1) { px = E[0] + E[6] * E[10]; py = E[1] + E[7] * E[10]; pz = E[2] + E[8] * E[10]; qx = E[6]; qy = E[7]; qz = E[8]; }
+            else { const sg = kind === 0 ? 1 : -1; px = E[0] + E[3] * E[9] * sg; py = E[1] + E[4] * E[9] * sg; pz = E[2] + E[5] * E[9] * sg; qx = E[3] * so; qy = E[4] * so; qz = E[5] * so; }
+            if (sm[3]) { qx = sm[0]; qy = sm[1]; qz = sm[2]; }
+          }
+          pos[w] = px; pos[w + 1] = py; pos[w + 2] = pz;
+          if (nor) { nor[w] = qx; nor[w + 1] = qy; nor[w + 2] = qz; }
+        }
+      }
+    }
+  }
+  /* нормаль освещения своих кромок полосы k (кольцо q) внутри ленты: средняя её нормали и нормали соседа с той же стороны,
+     лицевой стороной (so); SMR/SML[3] = 1, если кромка своя */
+  const SMR = new Float64Array(4), SML = new Float64Array(4);
+  function smoothEdge(B, n, q, k, K, fl, so) { smoothSide(SMR, B, n, q, k, k + 1, K, fl & 2, so); smoothSide(SML, B, n, q, k, k - 1, K, fl & 1, so); }
+  function smoothSide(sm, B, n, q, k, j, K, own, so) {
+    sm[3] = 0; if (!own || j < 0 || j >= K) return;
+    const o = (k * n + q) * LW, c = (j * n + q) * LW, g = B[o + 6] * B[c + 6] + B[o + 7] * B[c + 7] + B[o + 8] * B[c + 8] < 0 ? -1 : 1;
+    const x = B[o + 6] + g * B[c + 6], y = B[o + 7] + g * B[c + 7], z = B[o + 8] + g * B[c + 8], l = Math.sqrt(x * x + y * y + z * z);
+    if (l < 1e-6) return;
+    sm[0] = so * x / l; sm[1] = so * y / l; sm[2] = so * z / l; sm[3] = 1;
+  }
+  /* наружный край ленты (шов j у линии k, сосед nb, сторона side): на ширине своей половины, по кривизне пласта у соседа */
+  function border(B, S, n, q, k, nb, j, side) {
+    const o = (k * n + q) * LW, c = (nb * n + q) * LW, s = (j * n + q) * SW, e = side < 0 ? B[o + 15] : B[o + 16];
+    const nx = B[o + 6], ny = B[o + 7], nz = B[o + 8], tx = B[o + 3], ty = B[o + 4], tz = B[o + 5];
+    const wx = ny * tz - nz * ty, wy = nz * tx - nx * tz, wz = nx * ty - ny * tx;
+    const ex = B[c] - B[o], ey = B[c + 1] - B[o + 1], ez = B[c + 2] - B[o + 2], d = Math.sqrt(ex * ex + ey * ey + ez * ez) || 1;
+    const go = curv(o), gn = curv(c);
+    const cphi = Math.max(-1, Math.min(1, B[go] * B[gn] + B[go + 1] * B[gn + 1] + B[go + 2] * B[gn + 2])), conv = ex * (B[gn] - B[go]) + ey * (B[gn + 1] - B[go + 1]) + ez * (B[gn + 2] - B[go + 2]);
+    const kap = 2 * Math.sqrt(Math.max(0, (1 - cphi) * .5)) / d, dev = (conv >= 0 ? 1 : -1) * Math.min(.5 * e, kap * e * e * .5);
+    S[s] = B[o] + side * wx * e - B[go] * dev; S[s + 1] = B[o + 1] + side * wy * e - B[go + 1] * dev; S[s + 2] = B[o + 2] + side * wz * e - B[go + 2] * dev;
+    S[s + 3] = nx; S[s + 4] = ny; S[s + 5] = nz; S[s + 6] = wx; S[s + 7] = wy; S[s + 8] = wz;
+    S[s + 9] = BORDER_H * B[o + 17]; S[s + 10] = TIP_OUT * S[s + 9];
+  }
+  /* Полутолщина центра полосы из площади сечения. Половина сечения от центра до шва — четырёхугольник (толщина 2h по N у
+     центра, 2hS по NS у шва), площадь |(N·h + NS·hS) × a| в плоскости поперёк касательной, a — от центра к шву: у изогнутого
+     пласта (шов приподнят по кривизне или сдвинут у кожи иначе центра) — по самим векторам, а не ширина × толщина; своя
+     кромка — прямая полоса ширины w; плюс треугольники кромок. Своя кромка внутри ленты — толщины самой полосы η,
+     наружный край ленты — всегда тоньше (BORDER_H), как у шва края. */
+  function solveH(B, S, o, sl, sr, k, K) {
+    const wl = B[o + 15], wr = B[o + 16], fl = B[o + 23], eta = B[o + 17];
+    const oL = fl & 1 && k > 0, oR = fl & 2 && k < K - 1, hL = oL ? eta : S[sl + 9], hR = oR ? eta : S[sr + 9];
+    arm(B, S, o, sl, fl & 1, wl, -1); const aL = ARM[0], bL = ARM[1];
+    arm(B, S, o, sr, fl & 2, wr, 1); const aR = ARM[0], bR = ARM[1];
+    return Math.max(RIB_HMIN, .3 * eta, (B[o + 13] - bL * hL - bR * hR - (oL ? TIP_IN * eta : S[sl + 10]) * hL - (oR ? TIP_IN * eta : S[sr + 10]) * hR) / (aL + aR));
+  }
+  /* вклад половины сечения в площадь: ARM[0] — множитель при толщине центра, ARM[1] — при толщине шва (solveH) */
+  const ARM = new Float64Array(2);
+  function arm(B, S, o, s, own, w, side) {
+    if (own) { ARM[0] = ARM[1] = w; return; }
+    const tx = B[o + 3], ty = B[o + 4], tz = B[o + 5], ax = S[s] - B[o], ay = S[s + 1] - B[o + 1], az = S[s + 2] - B[o + 2];
+    /* (n × a)·t = n·(a × t), со знаком стороны: n — нормаль центра или шва */
+    const cx = ay * tz - az * ty, cy = az * tx - ax * tz, cz = ax * ty - ay * tx;
+    const at = ax * tx + ay * ty + az * tz, al = Math.sqrt(Math.max(0, ax * ax + ay * ay + az * az - at * at));
+    ARM[0] = Math.max(.2 * al, -side * (B[o + 6] * cx + B[o + 7] * cy + B[o + 8] * cz)); ARM[1] = Math.max(.2 * al, -side * (S[s + 3] * cx + S[s + 4] * cy + S[s + 5] * cz));
+  }
+  /* вытолкнуть точку шва (S[s..s+2]) из огибающих сфер и цилиндров WB[j0..j1) (кадр, ribbon) на расстояние cl от поверхности */
+  function clear(S, s, WB, j0, j1, cl) {
+    for (let j = j0; j < j1; j++) {
+      const b = j * 8; let vx = S[s] - WB[b], vy = S[s + 1] - WB[b + 1], vz = S[s + 2] - WB[b + 2];
+      if (WB[b + 7]) { const d = vx * WB[b + 3] + vy * WB[b + 4] + vz * WB[b + 5]; vx -= d * WB[b + 3]; vy -= d * WB[b + 4]; vz -= d * WB[b + 5]; }
+      const dl = Math.sqrt(vx * vx + vy * vy + vz * vz), need = WB[b + 6] + cl;
+      if (dl < need && dl > 1e-6) { const k = (need - dl) / dl; S[s] += vx * k; S[s + 1] += vy * k; S[s + 2] += vz * k; }
+    }
+  }
+  /* обход кольца: 0 — верх центра, 1–3 — правый шов (верх, кромка, низ), 4 — низ центра, 5–7 — левый (низ, кромка, верх);
+     у линии с путём против u её w смотрит влево — кольцо идёт через левый шов */
+  const ORDER = [0, 1, 2, 3, 4, 5, 6, 7], ORDER_REV = [0, 7, 6, 5, 4, 3, 2, 1];
+  const ER = new Float64Array(11), EL = new Float64Array(11);
+  /* шов для вершин полосы: [точка, нормаль, направление кромки (наружу полосы), толщина, вынос кромки]. Своя кромка — на
+     ширине w от центра, когда шов ближе (линии сходятся или перекрещиваются) */
+  function edge(S, s, own, cx, cy, cz, nx, ny, nz, wx, wy, wz, w, side, eta) {
+    const E = side > 0 ? ER : EL;
+    if (own) {
+      /* своя кромка — на продолжении направления на шов (полоса заходит за шов на соседа, без щели по кривизне пласта);
+         если шов сбоку или с другой стороны (линии перекрещиваются) — поперёк, по W */
+      const dx = S[s] - cx, dy = S[s + 1] - cy, dz = S[s + 2] - cz, ws = (dx * wx + dy * wy + dz * wz) * side;
+      if (ws > .5 * w) { const k = w / ws; E[0] = cx + dx * k; E[1] = cy + dy * k; E[2] = cz + dz * k; }
+      else { E[0] = cx + wx * w * side; E[1] = cy + wy * w * side; E[2] = cz + wz * w * side; }
+      E[3] = nx; E[4] = ny; E[5] = nz;
+      E[6] = wx * side; E[7] = wy * side; E[8] = wz * side;
+    }
+    else { E[0] = S[s]; E[1] = S[s + 1]; E[2] = S[s + 2]; E[3] = S[s + 3]; E[4] = S[s + 4]; E[5] = S[s + 5]; E[6] = S[s + 6] * side; E[7] = S[s + 7] * side; E[8] = S[s + 8] * side; }
+    /* толщина кромки: своя — толщины полосы η; у наружного края ленты (eta < 0) и у общего шва — как у шва */
+    if (own && eta > 0) { E[9] = eta; E[10] = TIP_IN * eta; } else { E[9] = S[s + 9]; E[10] = S[s + 10]; }
+    return E;
+  }
+  /* кольцо q линии k ленты после ribbon(): расстояние по пути s, площадь сечения area (как у трубки), полутолщина h и η,
+     ширины до швов, своя ли кромка (линии сошлись), нормаль пласта n и направление к коже skin — для проверок */
+  function ribbonRing(fan, k, q) {
+    const o = (k * fan.n + q) * LW, B = fan.L;
+    return { s: B[o + 24], area: B[o + 13], h: B[o + 18], eta: B[o + 17], wl: B[o + 15], wr: B[o + 16], own: B[o + 23], shift: B[o + 19], t: [B[o + 3], B[o + 4], B[o + 5]],
+      n: [B[o + 6], B[o + 7], B[o + 8]], skin: B[o + 12] < 1e8 ? [B[o + 9], B[o + 10], B[o + 11]] : null };
+  }
+  /* все мышцы кадра: трубки (surface) и ленты (ribbon); start — номера первых колец мышц (длина bound.length + 1) */
+  function surfaceAll(bound, paths, m, pos, nor, start) {
+    for (let i = 0; i < bound.length; i++) if (!bound[i].fan) surface(bound[i], paths[i], m, pos, nor, start[i] * SIDES);
+    for (const fan of bound.fans || []) ribbon(fan, bound, paths, m, pos, nor, start);
+  }
+  function ringStarts(bound) { const st = new Uint32Array(bound.length + 1); for (let i = 0; i < bound.length; i++) st[i + 1] = st[i] + ringCount(bound[i]); return st; }
 
   /* ---------- пласты (межрёберные мышцы, формат данных 3) ----------
      Пласт — тонкая мышца на всю площадь промежутка между костями, а не трубка вдоль линии действия
@@ -7449,7 +7917,7 @@ const Muscles = (() => {
     pending = bytes.then(gunzip).then(decode).then(d => (data = d)).catch(e => { pending = null; throw e; });
     return pending;
   }
-  return { path, wrap, bind, place, layout, drawn, layoutDrawn, body, radiusAt, skinAt, section, surface, ringCount, sheetNormals, sheetMesh, SIDES, SKIN_U, SKIN_GAP, FLAT, SPINDLE, SPINDLE_I, load, decode, get data() { return data; }, set data(d) { data = d; } };
+  return { path, wrap, bind, place, layout, drawn, layoutDrawn, body, radiusAt, skinAt, section, surface, ribbon, ribbonRing, surfaceAll, ringCount, ringStarts, sheetNormals, sheetMesh, FANS, SIDES, SKIN_U, SKIN_GAP, FLAT, SPINDLE, SPINDLE_I, load, decode, get data() { return data; }, set data(d) { data = d; } };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = Muscles;
 if (typeof window !== 'undefined') window.Muscles = Muscles;
@@ -10187,6 +10655,81 @@ function cardCanvasSize(w,h,dpr=1){
   return{width:Math.round(w*k),height:Math.round(h*k)};
 }
 
+/* ---------- Миниатюры витрины атласа в «Анатомии» (этап 3) — правила без страницы ----------
+   Рисует их тот же общий рендерер, что карточки плана (GymVolume.cards), — неподвижный кадр той же фазы, что у
+   SVG-миниатюры, тем же ракурсом «Под углом»; рамка — по телу в показанной позе (человек крупнее, тренажёр может уйти за
+   край, как в карточках). Готовый кадр хранится сжатым (WebP, где браузер его не умеет, — JPEG; 7–12 КБ вместо 0,4 МБ
+   холста) — в памяти страницы и в Cache Storage между сеансами. Отрисовка и очередь — в 13e-gallery-anatomy.js.
+   Почему не заранее при сборке: 151 упражнение × варианты инвентаря × размеры — 2–5 МБ в сборке (и ещё раз в каждом
+   офлайн-файле, base64), сборка зависела бы от Chromium с WebGL, а кадры пришлось бы перерисовывать при каждой правке
+   поз, костей и мышц. На телефоне миниатюра рисуется один раз и дальше берётся из кеша; ключ кеша содержит номер
+   сборки (PODHOD_BUILD — хеш всех исходников, поз и данных костей и мышц), поэтому новая версия сама рисует новые кадры. */
+const GALLERY_THUMBS={
+  step:40,max:320,dpr:2,               /* холст: точки экрана, не больше ×2, ступенями по 40 точек (меньше разных ключей) */
+  near:'25% 0px 60% 0px',              /* «у экрана и чуть ниже»: четверть экрана сверху, 0,6 экрана снизу */
+  quiet:160,                           /* мс после прокрутки без новых кадров: при листании поток не тратится на пролетающее */
+  memory:3<<20,                        /* сжатые кадры в памяти страницы — до 3 МБ (≈300 миниатюр), дальше — давно не виденные */
+  cacheMax:600,cacheKeep:450,          /* записей в Cache Storage одной сборки: больше 600 — остаются 450 свежих */
+  window:3,warmup:1,visibleMs:90,svgMs:400,  /* скорость: медиана самой длинной задачи миниатюры за три последние (thumbPace);
+                                       первая миниатюра (сборка шейдеров) не считается */
+  quality:.82,camera:'angle'
+};
+/* размер холста миниатюры (квадрат, точки экрана) по её ширине на странице; 0 — миниатюры нет на странице */
+function thumbCanvasSize(cssWidth,dpr=1,G=GALLERY_THUMBS){
+  if(!(cssWidth>0))return 0;
+  const px=cssWidth*Math.min(G.dpr,Math.max(1,dpr||1));
+  return Math.min(G.max,Math.max(G.step,Math.ceil(px/G.step)*G.step));
+}
+/* ключ готового кадра: сборка, вид, тема, упражнение и его инвентарь (он задаёт вариант и видимые детали), фаза,
+   ракурс, размер */
+function thumbCacheKey({build='',view,theme,id,equip='',t,camera=GALLERY_THUMBS.camera,size}){
+  return ['t1',build,view,theme,id,equip,t,camera,size].join('|');
+}
+/* Cache Storage: одна корзина на сборку и место приложения (scope); корзины прежних сборок удаляются */
+const THUMB_CACHE_PREFIX='podhod-thumbs@';
+function thumbCacheName(scope,build){return THUMB_CACHE_PREFIX+scope+':'+build;}
+function thumbCachesStale(names,scope,build){
+  const mine=THUMB_CACHE_PREFIX+scope+':',now=mine+build;
+  return names.filter(n=>typeof n==='string'&&n.startsWith(mine)&&n!==now);
+}
+/* записи корзины по порядку добавления: больше cacheMax — удалить старые, оставить cacheKeep последних */
+function thumbCacheTrim(keys,G=GALLERY_THUMBS){return keys.length>G.cacheMax?keys.slice(0,keys.length-G.cacheKeep):[];}
+/* сжатые кадры в памяти: больше limit байт — отпустить давно не виденные (seenAt), кроме тех, что у экрана (near) */
+function thumbsToDrop(entries,limit=GALLERY_THUMBS.memory){
+  let total=entries.reduce((s,e)=>s+(e.bytes||0),0);const out=[];
+  for(const e of entries.filter(e=>!e.near).sort((a,b)=>a.seenAt-b.seenAt)){if(total<=limit)break;out.push(e.key);total-=e.bytes||0;}
+  return out;
+}
+/* следующая миниатюра для отрисовки: сначала видимые, потом ближние сверху вниз; only — только видимые */
+function thumbNext(tiles,only=false){
+  let best=null;
+  for(const c of tiles){if(only&&!c.visible)continue;if(!best||(c.visible&&!best.visible)||(c.visible===best.visible&&c.top<best.top))best=c;}
+  return best;
+}
+/* Скорость витрины. У миниатюры две задачи — сборка сцены и кадр (поза, кости, мышцы, отрисовка, копия); мерило —
+   самая длинная из них. Медиана за window миниатюр выше visibleMs — рисуются только видимые (без запаса ниже экрана),
+   выше svgMs — витрина возвращается к SVG-манекену с подписью «… не успевает — показан манекен», как карточки. Обратно
+   к запасу — когда медиана ниже 0,7 × visibleMs. Решение живёт до закрытия витрины. */
+function thumbPace(G=GALLERY_THUMBS){
+  const S={mode:'near',samples:[],last:null,skip:G.warmup,
+    sample(ms){
+      if(S.mode==='svg'||!(ms>=0))return null;
+      if(S.skip>0){S.skip--;return null;}
+      S.samples.push(ms);if(S.samples.length<G.window)return null;
+      const s=S.samples.slice().sort((a,b)=>a-b),m=s[s.length>>1];S.last=m;S.samples.length=0;
+      const next=m>G.svgMs?'svg':m>G.visibleMs||(S.mode==='visible'&&m>G.visibleMs*.7)?'visible':'near';
+      if(next===S.mode)return null;S.mode=next;return next;
+    },
+    reset(){S.mode='near';S.samples.length=0;S.last=null;S.skip=G.warmup;}};
+  return S;
+}
+/* вид миниатюр: как у карточек (figureViewFor); render — рисовать ли новые кадры. Пока грузятся кости и мышцы, вид —
+   выбранный (готовые кадры из памяти и кеша показываются), а новые не рисуются */
+function thumbViewFor(pref,{able=true,state='ready',slow=false,coarse=true}={}){
+  const c=figureViewFor(pref,{able,state,slow,coarse}),want=['anatomy','skeleton','mannequin'].includes(pref)?pref:'anatomy';
+  return{view:c.wait?want:c.view,render:c.view!=='mannequin',note:c.wait?'':c.note,wait:c.wait};
+}
+
 /* ---------- Проигрыватель движений: карточки и увеличенный разбор ---------- */
 let figs = [], rafId = 0, io = null;
 const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -10574,7 +11117,7 @@ function stopFigures() {
   for(const F of figs){disposeMotion(F);if(F.av){F.av.handle.release();F.av.canvas.width=F.av.canvas.height=0;}}figs=[];
   /* журнал, атлас мышц: карточек нет — через несколько секунд общий рендерер карточек отдаёт контекст WebGL и сцены
      (сразу нельзя: «Заменить» или новый подбор строят план заново, и сцены пригодятся) */
-  clearTimeout(cardAnatomy.idleFree);cardAnatomy.idleFree=setTimeout(()=>{if(!figs.some(F=>F.av))cardStage()?.dispose();},4000);
+  clearTimeout(cardAnatomy.idleFree);cardAnatomy.idleFree=setTimeout(()=>{if(!figs.some(F=>F.av)&&!gallery.on)cardStage()?.dispose();},4000);
 }
 function previewItem(id) {
   const ex=EXI[id];let E=effEquip(S.equip);
@@ -12285,7 +12828,9 @@ document.addEventListener('keydown', e => {
    «Увеличить» в карточке плана по-прежнему открывает сразу разбор.
    Миниатюра — неподвижный SVG-кадр того же манекена, что в карточках плана (конечная точка движения), строится,
    когда подходит к экрану, — сколько успеется за ~8 мс кадра; готовые миниатюры переиспользуются при смене фильтра. Рамка — по самой
-   показанной позе (opts.still), а не по всем фазам: так миниатюра в 4–5 раз дешевле. */
+   показанной позе (opts.still), а не по всем фазам: так миниатюра в 4–5 раз дешевле.
+   В виде «Анатомия» (и «Скелет») поверх SVG встаёт кадр костей и мышц из общего рендерера карточек — в простое, сжатой
+   картинкой из памяти или кеша (13e-gallery-anatomy.js); до его готовности — SVG, как раньше. */
 const WORK_KINDS = [
   {id:'all', name:'Всё'}, {id:'free', name:'Свободные веса'}, {id:'mach', name:'Тренажёры и блоки'},
   {id:'band', name:'Резинки'}, {id:'body', name:'Свой вес'}
@@ -12325,7 +12870,7 @@ function galleryHtml() {
   return `<div class="mv-gtools"><div class="mv-gkinds" role="group" aria-label="Чем работать">${chips}</div>`
     /* «…» вокруг названия места — в одном шаблоне со следующей подписью: перевод закрывающей кавычки идёт вместе с ней */
     + `<div class="mv-gfilters"><label class="mv-ghere"><input type="checkbox" id="mv-ghere"${gallery.here ? ' checked' : ''}> Только то, что есть в месте «${esc(placeOf().name)}»</label><label class="mv-gsearch"><span class="vh">Найти упражнение</span><input type="search" id="mv-gq" value="${esc(gallery.q)}" placeholder="Найти: жим, тяга, присед…" autocomplete="off"></label></div></div>`
-    + `<p class="mv-gcount" aria-live="polite">${list.length} ${plural(list.length, 'упражнение', 'упражнения', 'упражнений')}</p>`
+    + `<p class="mv-gcount" aria-live="polite">${list.length} ${plural(list.length, 'упражнение', 'упражнения', 'упражнений')}</p><p class="mv-gnote" hidden></p>`
     + (sections || `<p class="mv-gempty">Ничего не найдено. Выберите «Всё» или измените поиск.</p>`);
 }
 function thumbKey(id) { return id + '|' + S.place + '|' + S.equip.join(','); }
@@ -12340,32 +12885,46 @@ function buildThumb(el) {
     catch (e) { console.error('Миниатюра', id, e); return; }
     galleryThumbs.set(key, svg);
   }
-  el.replaceChildren(svg); el.classList.add('ready');
+  /* кадр анатомии (если уже есть) остаётся поверх SVG */
+  el.prepend(svg); for (const x of [...el.children]) if (x.tagName.toLowerCase() === 'svg' && x !== svg) x.remove();
+  el.classList.add('ready');
 }
+const galleryNeedsSvg = el => el.isConnected && !el.classList.contains('anat') && !el.querySelector('svg');
 /* за кадр — сколько успеется за ~8 мс, но не меньше одной миниатюры: на быстром телефоне экран заполняется сразу */
 function pumpThumbs() {
   galleryRaf = 0;
   const end = performance.now() + 8;
   do {
     const el = galleryQueue.shift(); if (!el) return;
-    if (el.isConnected && !el.classList.contains('ready')) buildThumb(el);
+    if (galleryNeedsSvg(el)) buildThumb(el);
   } while (galleryQueue.length && performance.now() < end);
   if (galleryQueue.length) galleryRaf = requestAnimationFrame(pumpThumbs);
+}
+/* миниатюре на экране нужен SVG (кадра анатомии нет или он убран) */
+const gallerySeen = new WeakSet();
+function galleryNeedSvg(el) {
+  if (!gallerySeen.has(el) || !galleryNeedsSvg(el) || galleryQueue.includes(el)) return;
+  galleryQueue.push(el); if (!galleryRaf) galleryRaf = requestAnimationFrame(pumpThumbs);
 }
 function renderGallery() {
   const box = $('#mv-gallery'); box.innerHTML = galleryHtml();
   if (galleryIO) galleryIO.disconnect();
   galleryQueue = [];
   const thumbs = [...box.querySelectorAll('[data-thumb]')];
-  /* готовые миниатюры ставятся сразу, остальные — когда подходят к экрану */
-  for (const el of thumbs) { const svg = galleryThumbs.get(thumbKey(el.dataset.thumb)); if (svg) { el.replaceChildren(svg); el.classList.add('ready'); } }
+  /* готовые миниатюры ставятся сразу (кадр анатомии из памяти — без SVG), остальные — когда подходят к экрану */
+  for (const el of thumbs) { if (galleryAnatPlace(el)) continue; const svg = galleryThumbs.get(thumbKey(el.dataset.thumb)); if (svg) { el.replaceChildren(svg); el.classList.add('ready'); } }
   if (typeof IntersectionObserver === 'function') {
     galleryIO = new IntersectionObserver(es => {
-      for (const e of es) if (e.isIntersecting && !e.target.classList.contains('ready') && !galleryQueue.includes(e.target)) galleryQueue.push(e.target);
+      for (const e of es) {
+        if (e.isIntersecting) gallerySeen.add(e.target); else gallerySeen.delete(e.target);
+        /* кадр анатомии уже в памяти — SVG не нужен (или подождёт ответа кеша) */
+        if (e.isIntersecting && !e.target.classList.contains('ready') && !galleryQueue.includes(e.target) && !galleryAnatPeek(e.target)) galleryQueue.push(e.target);
+      }
       if (galleryQueue.length && !galleryRaf) galleryRaf = requestAnimationFrame(pumpThumbs);
     }, {rootMargin:'300px 0px'});
-    for (const el of thumbs) if (!el.classList.contains('ready')) galleryIO.observe(el);
+    for (const el of thumbs) galleryIO.observe(el);
   }
+  galleryAnatMount(box);
 }
 function showGallery(focusId) {
   disposeMotion(detailMotion); detailMotion = null;
@@ -12379,10 +12938,11 @@ function showGallery(focusId) {
   else $('#mv-gallery').querySelector('[data-gallery-kind].on')?.focus({preventScroll:true});
 }
 function showDetail() {
-  gallery.on = false;
+  const was = gallery.on; gallery.on = false;
   $('#motion-view').classList.remove('mv-mode-gallery');
   $('#mv-gallery').hidden = true; $('#mv-detail').hidden = false;
   if (galleryIO) galleryIO.disconnect(); cancelAnimationFrame(galleryRaf); galleryRaf = 0; galleryQueue = [];
+  if (was) galleryAnatStop();
 }
 function openGallery() {
   detailReturn = document.activeElement;
@@ -12392,8 +12952,9 @@ function openGallery() {
   scheduleMotionLoop();
 }
 function closeGallery() {
-  gallery.on = false;
+  const was = gallery.on; gallery.on = false;
   if (galleryIO) galleryIO.disconnect(); cancelAnimationFrame(galleryRaf); galleryRaf = 0; galleryQueue = [];
+  if (was) galleryAnatStop();
 }
 function setupGallery() {
   $('#mv-gallery').addEventListener('click', e => {
@@ -12409,6 +12970,7 @@ function setupGallery() {
     renderGallery(); const q = $('#mv-gq'); q.focus(); q.setSelectionRange(at, at);
   });
   $('#mv-back').addEventListener('click', () => showGallery(detailMotion?.it.ex.id));
+  setupGalleryAnatomy();
 }
 
 /* ===================== ЗАГРУЗКА МЫШЦ ПО ЖУРНАЛУ ===================== */
@@ -12619,6 +13181,392 @@ document.addEventListener('click', e => {
   const el = from === 'journal' ? $('#ml-msg') : $('#lp-msg');
   if (el) { el.hidden = false; el.textContent = msg; }
 });
+
+/* ===================== АТЛАС ДВИЖЕНИЙ: МИНИАТЮРЫ В «АНАТОМИИ» (этап 3) =====================
+   В выбранном виде фигуры (motionPrefs.view; по умолчанию «Анатомия») миниатюры витрины — кадры костей и мышц в почти
+   невидимом силуэте кожи, «Скелет» — только кости, «Манекен» — прежний SVG. Правила (размер, ключ, кеш, память,
+   скорость) — в 12-figure-pace.js, проверка — tools/gallery-anatomy.test.js и tools/ui-check.mjs.
+   · Рисует тот же общий рендерер вне экрана, что карточки плана (GymVolume.cards; своего WebGL у витрины нет): неподвижный
+     кадр той же фазы, что SVG-миниатюра (конечная точка движения), ракурсом «Под углом», рамка — по телу в этой позе.
+     Цвет мышц — основные ярче, вспомогательные бледнее (без фаз), меток нагрузки нет.
+   · Первая картинка витрины не ждёт: сразу — SVG-миниатюры, как раньше (13c-gallery.js), кадры анатомии — в простое
+     (requestIdleCallback), только для миниатюр у экрана и чуть ниже (GALLERY_THUMBS.near), сначала видимые, и не во
+     время прокрутки. Миниатюра — две задачи: сборка сцены упражнения (prepare) и кадр (поза, кости, мышцы, отрисовка,
+     копия в холст); сцен у рендерера не больше трёх, как у карточек.
+   · Готовый кадр сжимается (WebP, иначе JPEG) в фоновом потоке (ThumbEncoder: снимок холста createImageBitmap →
+     Worker → OffscreenCanvas.convertToBlob): главный поток не ждёт ни видеокарту, ни сжатие; без Worker — toBlob.
+     Хранится картинкой blob: в памяти страницы (до 3 МБ, дальше отпускаются давно не виденные — thumbsToDrop) и в
+     Cache Storage (ThumbStore) между открытиями витрины и сеансами.
+     Ключ — сборка, вид, тема, вариант инвентаря, фаза, ракурс, размер (thumbCacheKey); корзины прежних сборок удаляет
+     страница (при открытии витрины) и сервис-воркер (при обновлении). Холст один на все миниатюры.
+   · Без WebGL, после ошибки загрузки костей и мышц и если телефон не успевает (thumbPace) — SVG, как раньше; пока
+     кости и мышцы грузятся — SVG, а готовые кадры из памяти и кеша показываются сразу. */
+const galleryAnat = {view:'mannequin', render:false, note:'', wait:false, size:0, theme:'', loading:false, failed:false,
+  mem:new Map(), base:new Map(), state:new Map(), fails:new Map(), near:new Set(), fresh:new Set(), vis:new Set(), io:null, ioVis:null, queued:false, scrollAt:0,
+  job:null, canvas:null, watched:null, type:'image/webp', noStore:false, pace:thumbPace(), stats:{painted:0, cached:0, chunks:0}, cleaned:false, freeTimer:0};
+
+/* ---------- Cache Storage: готовые кадры между сеансами ---------- */
+/* место приложения: адрес корня (русская и английская страницы — одна корзина), во Floot (iframe srcdoc) — страница-хозяин;
+   офлайн-файл (file://) — без кеша между сеансами */
+function thumbScope() {
+  const http = u => u && /^https?:$/.test(u.protocol) ? u : null;
+  let u = null;
+  try { u = http(new URL(location.href)); } catch (e) {}
+  if (!u) try { u = http(new URL(window.parent.location.href)); } catch (e) {}
+  if (!u) return null;
+  let dir = u.pathname.replace(/[^/]*$/, '');
+  if (window.PODHOD_LANG === 'en') dir = dir.replace(/\/en\/$/, '/');
+  return u.origin + dir;
+}
+const ThumbStore = (() => {
+  let cache = null, opening = null, off = false;
+  const build = () => window.PODHOD_BUILD || '';
+  /* адрес записи — условный (кадры в сеть не ходят): Cache Storage требует http(s) */
+  const url = key => 'https://thumbs.podhod.invalid/' + encodeURIComponent(key);
+  function open() {
+    if (cache || off) return Promise.resolve(cache);
+    if (!opening) opening = (async () => {
+      try {
+        const scope = thumbScope();
+        if (!scope || !build() || typeof caches === 'undefined') throw 0;
+        cache = await caches.open(thumbCacheName(scope, build()));
+      } catch (e) { off = true; cache = null; }
+      return cache;
+    })();
+    return opening;
+  }
+  async function get(key) {
+    const c = await open(); if (!c) return null;
+    try { const r = await c.match(url(key)); return r ? await r.blob() : null; } catch (e) { return null; }
+  }
+  async function put(key, blob) {
+    const c = await open(); if (!c) return;
+    try { await c.put(url(key), new Response(blob, {headers:{'Content-Type':blob.type}})); } catch (e) {}
+  }
+  /* корзины прежних сборок — удалить; в своей больше cacheMax записей — оставить свежие */
+  async function clean() {
+    const c = await open(); if (!c) return 0;
+    let n = 0;
+    try {
+      for (const name of thumbCachesStale(await caches.keys(), thumbScope(), build())) if (await caches.delete(name)) n++;
+      for (const r of thumbCacheTrim(await c.keys())) if (await c.delete(r)) n++;
+    } catch (e) {}
+    return n;
+  }
+  return {open, get, put, clean, get on() { return !off; }, url};
+})();
+
+/* ---------- сжатие кадра вне главного потока ----------
+   Чтение пикселей холста (toBlob) ждёт, пока видеокарта дорисует кадр, — на главном потоке это стояние (на стенде с
+   программной графикой — 0,2–0,6 с на миниатюру). Снимок холста (createImageBitmap) — без ожидания; читает и сжимает его
+   Worker. Снимок берётся сразу, поэтому общий холст можно рисовать дальше. Worker не создался или упал — toBlob. */
+const ThumbEncoder = (() => {
+  const code = `onmessage=async e=>{const d=e.data;try{const c=new OffscreenCanvas(d.bm.width,d.bm.height);c.getContext('2d').drawImage(d.bm,0,0);d.bm.close();postMessage({id:d.id,blob:await c.convertToBlob({type:d.type,quality:d.q})});}catch(x){postMessage({id:d.id,error:String(x)});}};`;
+  let w = null, broken = false, seq = 0, url = '';
+  const wait = new Map();
+  function worker() {
+    if (w || broken) return w;
+    try {
+      if (typeof Worker !== 'function' || typeof OffscreenCanvas !== 'function' || typeof createImageBitmap !== 'function') throw 0;
+      url = URL.createObjectURL(new Blob([code], {type:'text/javascript'})); w = new Worker(url);
+      w.onmessage = e => { const r = wait.get(e.data.id); wait.delete(e.data.id); r?.(e.data.blob || null); };
+      w.onerror = () => { broken = true; w?.terminate(); w = null; for (const r of wait.values()) r(null); wait.clear(); };
+    } catch (e) { broken = true; w = null; }
+    return w;
+  }
+  /* холст → Promise<Blob|null>; снимок (или toBlob) — сразу, до возврата */
+  function encode(canvas, type, q) {
+    const wk = worker();
+    if (wk) {
+      let bm; try { bm = createImageBitmap(canvas); } catch (e) { bm = null; }
+      if (bm) return bm.then(b => new Promise(res => { const id = ++seq; wait.set(id, res); wk.postMessage({id, bm:b, type, q}, [b]); }), () => null);
+    }
+    return new Promise(res => { try { canvas.toBlob(res, type, q); } catch (e) { res(null); } });
+  }
+  return {encode, get pending() { return wait.size; }, get worker() { return !!w && !broken; }};
+})();
+
+/* ---------- ключ и показ ---------- */
+function galleryTheme() {
+  const t = document.documentElement?.dataset?.theme;
+  if (t === 'light' || t === 'dark') return t;
+  try { return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch (e) { return 'light'; }
+}
+/* упражнение миниатюры: инвентарь места, как у SVG-миниатюры (то, чего нет в месте, — из полного набора). Ключ — по
+   выбранному инвентарю (он и задаёт вариант и видимые детали), без расчёта позы: дёшево, чтобы не задерживать витрину;
+   сам вариант (catalogAnimFor) и видимые детали — уже при отрисовке. false — объёма у упражнения нет */
+function galleryAnatBase(id) {
+  const k = thumbKey(id);
+  if (galleryAnat.base.has(k)) return galleryAnat.base.get(k);
+  let b = false;
+  try {
+    const ex = EXI[id];
+    if (ex && ex.anim.catalogRig) {
+      let E = effEquip(S.equip); if (!available(ex, E)) E = effEquip(EQUIP.map(e => e.id));
+      const equip = [...new Set(chosenEquip(ex, E))].sort().join(',') + '+' + (ex.opt || []).filter(x => E.has(x)).sort().join(','), t = thumbT(ex);
+      b = {id, ex, E, equip, t, index:t === 1 ? 1 : 0};
+    }
+  } catch (e) { b = false; }
+  galleryAnat.base.set(k, b);
+  return b;
+}
+const galleryAnatKey = b => thumbCacheKey({build:window.PODHOD_BUILD || '', view:galleryAnat.view, theme:galleryAnat.theme, id:b.id, equip:b.equip, t:b.t, size:galleryAnat.size});
+const galleryAnatOn = () => galleryAnat.view !== 'mannequin' && galleryAnat.size > 0;
+/* показать готовый кадр в миниатюре: картинка поверх SVG (SVG скрыт; пока картинка не расшифрована — тёмный фон сцены) */
+function galleryAnatShow(el, key, e) {
+  let img = el.querySelector('img.mv-anat');
+  if (!img) { img = document.createElement('img'); img.className = 'mv-anat'; img.alt = ''; img.decoding = 'async'; img.draggable = false; el.append(img); }
+  if (img.dataset.key !== key) { img.src = e.url; img.dataset.key = key; }
+  el.classList.add('ready', 'anat'); e.seenAt = performance.now();
+}
+/* убрать кадр: снова SVG (если его ещё нет — построится в очереди витрины) */
+function galleryAnatHide(el) {
+  const img = el.querySelector('img.mv-anat'); if (!img && !el.classList.contains('anat')) return;
+  img?.remove(); el.classList.remove('anat');
+  if (!el.querySelector('svg')) { el.classList.remove('ready'); galleryNeedSvg(el); }
+}
+const galleryThumbEl = id => $('#mv-gallery')?.querySelector(`.mv-thumb[data-thumb="${id}"]`);
+/* готовый кадр из памяти — сразу (витрина собрана заново: фильтр, поиск, возврат из разбора); true — показан */
+function galleryAnatPlace(el) {
+  if (!galleryAnatOn()) return false;
+  const b = galleryAnat.base.get(thumbKey(el.dataset.thumb)); if (!b) return false;
+  const key = galleryAnatKey(b), e = galleryAnat.mem.get(key); if (!e) return false;
+  galleryAnatShow(el, key, e); return true;
+}
+/* миниатюра на экране (очередь SVG, 13c-gallery.js): готовый кадр из памяти — сразу; true — SVG не нужен (кадр показан
+   или его ищут в кеше). Здесь ничего не считается: первая картинка витрины — SVG — не ждёт */
+function galleryAnatPeek(el) {
+  if (!galleryAnatOn()) return false;
+  const b = galleryAnat.base.get(thumbKey(el.dataset.thumb)); if (!b) return false;
+  const key = galleryAnatKey(b), e = galleryAnat.mem.get(key);
+  if (e) { galleryAnatShow(el, key, e); return true; }
+  return galleryAnat.state.get(key) === 'lookup';
+}
+/* миниатюра у экрана (в простое): готовый кадр — из памяти или кеша; нет — в очередь отрисовки.
+   true — SVG пока не нужен (кадр показан или ищется в кеше); false — нужен SVG */
+function galleryAnatTouch(el) {
+  if (!galleryAnatOn()) return false;
+  const b = galleryAnatBase(el.dataset.thumb); if (!b) return false;
+  const key = galleryAnatKey(b), e = galleryAnat.mem.get(key);
+  if (e) { galleryAnatShow(el, key, e); return true; }
+  const st = galleryAnat.state.get(key);
+  if (st === 'lookup') return true;
+  if (st === undefined && ThumbStore.on && !galleryAnat.noStore) {
+    galleryAnat.state.set(key, 'lookup');
+    const t0 = performance.now();
+    /* SVG ждёт ответа кеша не дольше 150 мс: кадр из кеша не сменяет только что построенный SVG */
+    const late = setTimeout(() => { const el2 = galleryThumbEl(b.id); if (el2 && !el2.classList.contains('anat')) galleryNeedSvg(el2); }, 150);
+    ThumbStore.get(key).then(blob => {
+      clearTimeout(late);
+      if (blob) { galleryAnat.state.delete(key); galleryAnatAdd(key, b.id, blob); galleryAnat.stats.cached++; galleryAnat.lookupMs = performance.now() - t0; return; }
+      galleryAnat.state.set(key, 'miss');
+      const el2 = galleryThumbEl(b.id); if (el2 && !el2.classList.contains('anat')) galleryNeedSvg(el2);
+      galleryAnatKick();
+    });
+    return true;
+  }
+  if (st === undefined) galleryAnat.state.set(key, 'miss');
+  galleryAnatKick();
+  return false;
+}
+/* готовый кадр — в память (blob: картинка), показать в миниатюре, если ключ ещё тот же; лишнее — отпустить */
+function galleryAnatAdd(key, id, blob) {
+  let e = galleryAnat.mem.get(key);
+  if (!e) { e = {key, id, url:URL.createObjectURL(blob), bytes:blob.size, seenAt:performance.now()}; galleryAnat.mem.set(key, e); }
+  const el = galleryThumbEl(id), b = galleryAnat.base.get(thumbKey(id));
+  if (el && b && galleryAnatOn() && galleryAnatKey(b) === key) galleryAnatShow(el, key, e);
+  galleryAnatTrim();
+}
+function galleryAnatTrim() {
+  const list = [...galleryAnat.mem.values()].map(e => ({key:e.key, bytes:e.bytes, seenAt:e.seenAt, near:galleryAnat.near.has(e.id)}));
+  for (const key of thumbsToDrop(list)) {
+    const e = galleryAnat.mem.get(key); galleryAnat.mem.delete(key);
+    const el = galleryThumbEl(e.id); if (el && el.querySelector('img.mv-anat')?.dataset.key === key) galleryAnatHide(el);
+    URL.revokeObjectURL(e.url);
+  }
+}
+/* миниатюра в нужном виде: тот же кадр, другой (тема, размер, вид сменились) или SVG */
+function galleryAnatSync(el) {
+  if (galleryAnatPlace(el)) return;
+  galleryAnatHide(el);
+  if (galleryAnatOn() && galleryAnat.near.has(el.dataset.thumb)) galleryAnatTouch(el);
+}
+
+/* ---------- очередь: кадры в простое ---------- */
+const galleryIdle = window.requestIdleCallback ? cb => requestIdleCallback(cb, {timeout:1000}) : cb => setTimeout(() => { const end = performance.now() + 12; cb({timeRemaining:() => Math.max(0, end - performance.now()), didTimeout:true}); }, 50);
+function galleryAnatKick(delay = 0) {
+  if (galleryAnat.queued || !gallery.on || !galleryAnatOn() || (!galleryAnat.render && !galleryAnat.fresh.size)) return;
+  galleryAnat.queued = true;
+  if (delay) setTimeout(() => galleryIdle(galleryAnatWork), delay); else galleryIdle(galleryAnatWork);
+}
+function galleryAnatData() {
+  const need = galleryAnat.view === 'anatomy' ? [Skeleton, Muscles] : [Skeleton];
+  return need.every(x => x.data) ? 'ready' : galleryAnat.failed ? 'error' : 'loading';
+}
+function galleryAnatLoad() {
+  if (galleryAnat.loading) return; galleryAnat.loading = true;
+  const need = figureView() === 'anatomy' ? [Skeleton, Muscles] : [Skeleton];
+  Promise.all(need.map(x => x.load())).then(() => { galleryAnat.failed = false; }, () => { galleryAnat.failed = true; })
+    .then(() => { galleryAnat.loading = false; if (gallery.on) galleryAnatApply(); });
+}
+/* следующая миниатюра: у экрана, без готового кадра и не в кеше; на медленном телефоне — только видимые */
+function galleryAnatNext() {
+  const box = $('#mv-gallery'), list = [];
+  for (const id of galleryAnat.near) {
+    const b = galleryAnatBase(id); if (!b) continue;
+    const key = galleryAnatKey(b); if (galleryAnat.state.get(key) !== 'miss' || galleryAnat.mem.has(key)) continue;
+    const el = box?.querySelector(`.mv-thumb[data-thumb="${id}"]`); if (!el) continue;
+    list.push({id, b, key, visible:galleryAnat.vis.has(id), top:el.getBoundingClientRect().top});
+  }
+  return thumbNext(list, galleryAnat.pace.mode === 'visible');
+}
+function galleryAnatWork(deadline) {
+  galleryAnat.queued = false;
+  if (!gallery.on || !galleryAnatOn() || document.hidden) return;
+  /* при прокрутке и пока строятся первые SVG-миниатюры — подождать */
+  if (performance.now() - galleryAnat.scrollAt < GALLERY_THUMBS.quiet || galleryQueue.length || galleryRaf) { galleryAnatKick(GALLERY_THUMBS.quiet); return; }
+  /* миниатюры, подошедшие к экрану: кадр из памяти или поиск в кеше (сначала видимые) — пока есть время простоя */
+  if (galleryAnat.fresh.size) {
+    const box = $('#mv-gallery'), ids = [...galleryAnat.fresh].sort((a, b) => galleryAnat.vis.has(b) - galleryAnat.vis.has(a));
+    for (const id of ids) {
+      galleryAnat.fresh.delete(id); const el = box?.querySelector(`.mv-thumb[data-thumb="${id}"]`);
+      if (el && !el.classList.contains('anat')) galleryAnatTouch(el);
+      if (deadline.timeRemaining() < 3 && !deadline.didTimeout) break;
+    }
+    if (galleryAnat.fresh.size) { galleryAnatKick(); return; }
+  }
+  if (!galleryAnat.render) return;
+  if (galleryAnatData() !== 'ready') { galleryAnatLoad(); return; }
+  const stage = cardStage(); if (!stage) return;
+  /* сжимаются уже два кадра — новый подождёт (снимки держат память видеокарты) */
+  if (!galleryAnat.job && ThumbEncoder.pending >= 2) return;
+  let job = galleryAnat.job;
+  /* размер, тема или вид сменились, пока сцена ждала кадра, — работа не нужна */
+  if (job && (job.key !== galleryAnatKey(job.b) || !galleryAnat.near.has(job.id))) { job.h.forget(); job = galleryAnat.job = null; }
+  if (!job) {
+    const n = galleryAnatNext(); if (!n) return;
+    const {b} = n, layers = galleryAnat.view === 'anatomy' ? {skeleton:Skeleton.data, muscles:Muscles.data, level:anatomyLevel(b.ex)} : null;
+    /* вариант упражнения и видимые детали — по инвентарю миниатюры (как у SVG-миниатюры и карточки) */
+    const has = propHas(b.ex, b.E), A = catalogAnimFor(b.ex.anim, has), bits = A.catalogRig(0).props.map(q => GymEquipment.visible(q, has) ? 1 : 0).join('');
+    const h = stage.figure({key:['thumb', A.catalogId, A.catalogVariant || '', bits].join('|'), still:true, fit:'body', color:muscleColor, muscles:false, stress:false,
+      data:(t, index, coarse, lean) => catalogVolumeData(A, t, index, has, coarse, lean)});
+    h.setLayers(Skeleton.data, layers); h.setLook({muscles:false, stress:false});
+    job = galleryAnat.job = {id:n.id, b, key:n.key, h, prepared:false, long:0, t0:performance.now()};
+  }
+  const t0 = performance.now(); let painted = false;
+  try {
+    if (!job.prepared) { if (!job.h.prepare()) throw Error('webgl'); job.prepared = true; }
+    else { galleryAnatPaint(job); painted = true; }
+  } catch (e) {
+    console.error('Миниатюра анатомии', job.id, e);
+    job.h.forget(); galleryAnat.job = null;
+    /* вторая неудача — у этой миниатюры остаётся SVG */
+    const n = (galleryAnat.fails.get(job.key) || 0) + 1; galleryAnat.fails.set(job.key, n);
+    galleryAnat.state.set(job.key, n >= 2 ? 'fail' : 'miss');
+  }
+  const ms = performance.now() - t0; job.long = Math.max(job.long, ms); galleryAnat.stats.chunks++;
+  globalThis.GymPerf?.thumb?.(ms);
+  if (painted) {
+    galleryAnat.lastMs = job.long;
+    const r = galleryAnat.pace.sample(job.long);
+    if (r === 'svg') { galleryAnatApply(); return; }
+  }
+  galleryAnatKick();
+}
+/* кадр — в общий холст, оттуда сжатым (в фоне) в память и кеш */
+function galleryAnatPaint(job) {
+  const c = galleryAnat.canvas || (galleryAnat.canvas = document.createElement('canvas')), size = galleryAnat.size;
+  if (c.width !== size || c.height !== size) { c.width = size; c.height = size; }
+  const ok = job.h.paint(c, job.b.t, job.b.index, GALLERY_THUMBS.camera);
+  /* сцена миниатюры больше не нужна: память — сразу, а не после вытеснения (≈3 МБ кучи на сцену) */
+  job.h.forget(); galleryAnat.job = null;
+  if (!ok) throw Error('paint');
+  galleryAnat.state.set(job.key, 'encode');
+  const {key, id} = job, t0 = performance.now();
+  ThumbEncoder.encode(c, galleryAnat.type, GALLERY_THUMBS.quality).then(blob => {
+    galleryAnat.encodeMs = performance.now() - t0;
+    /* не вышло (Worker упал) — нарисовать заново, уже через toBlob */
+    if (!blob) { galleryAnat.state.set(key, 'miss'); galleryAnatKick(); return; }
+    /* браузер без WebP отдаёт PNG (в 5–8 раз больше) — дальше JPEG */
+    if (galleryAnat.type === 'image/webp' && blob.type !== 'image/webp') galleryAnat.type = 'image/jpeg';
+    galleryAnat.state.delete(key); galleryAnat.stats.painted++;
+    galleryAnatAdd(key, id, blob); ThumbStore.put(key, blob);
+    galleryAnatKick();
+  });
+}
+
+/* ---------- вид витрины: выбор человека, объёмная графика, данные, скорость ---------- */
+function galleryAnatApply() {
+  const box = $('#mv-gallery'); if (!box || !gallery.on) return;
+  const pref = figureView(), was = galleryAnat.view + galleryAnat.theme + galleryAnat.size;
+  const choice = thumbViewFor(pref, {able:!!cardStage(), state:galleryAnatData(), slow:galleryAnat.pace.mode === 'svg', coarse:coarsePointer()});
+  Object.assign(galleryAnat, {view:choice.view, render:choice.render, note:choice.note, wait:choice.wait, theme:galleryTheme()});
+  const first = box.querySelector('.mv-thumb');
+  galleryAnat.size = galleryAnat.view === 'mannequin' ? 0 : thumbCanvasSize(first ? first.getBoundingClientRect().width : 0, window.devicePixelRatio);
+  const note = box.querySelector('.mv-gnote'); if (note) { if (note.textContent !== galleryAnat.note) note.textContent = galleryAnat.note; note.hidden = !galleryAnat.note; }
+  if (choice.wait) galleryAnatLoad();
+  if (was !== galleryAnat.view + galleryAnat.theme + galleryAnat.size || !galleryAnatOn()) for (const el of box.querySelectorAll('.mv-thumb[data-thumb]')) galleryAnatSync(el);
+  if (galleryAnatOn()) { galleryAnatWatch(box); galleryAnatKick(); }
+  if (!galleryAnat.cleaned && ThumbStore.on) { galleryAnat.cleaned = true; setTimeout(() => galleryIdle(() => ThumbStore.clean()), 3000); }
+}
+/* какие миниатюры у экрана (с запасом) и какие видны; корень — окно атласа (оно и прокручивается) */
+function galleryAnatWatch(box) {
+  const root = $('#motion-view');
+  if (!galleryAnat.io && typeof IntersectionObserver === 'function') {
+    galleryAnat.watched = new WeakSet();
+    /* у экрана: только отметка — поиск в кеше и отрисовка идут в простое (galleryAnatWork) */
+    galleryAnat.io = new IntersectionObserver(es => {
+      for (const e of es) { const id = e.target.dataset.thumb; if (e.isIntersecting) { galleryAnat.near.add(id); galleryAnat.fresh.add(id); } else { galleryAnat.near.delete(id); galleryAnat.fresh.delete(id); } }
+      galleryAnatKick();
+    }, {root, rootMargin:GALLERY_THUMBS.near});
+    galleryAnat.ioVis = new IntersectionObserver(es => { for (const e of es) { const id = e.target.dataset.thumb; if (e.isIntersecting) galleryAnat.vis.add(id); else galleryAnat.vis.delete(id); } }, {root});
+  }
+  if (!galleryAnat.io) return;
+  for (const el of box.querySelectorAll('.mv-thumb[data-thumb]')) if (!galleryAnat.watched.has(el)) { galleryAnat.watched.add(el); galleryAnat.io.observe(el); galleryAnat.ioVis.observe(el); }
+}
+/* витрина собрана заново (фильтр, поиск, возврат): прежние наблюдения — недействительны */
+function galleryAnatMount(box) {
+  galleryAnat.io?.disconnect(); galleryAnat.ioVis?.disconnect(); galleryAnat.io = galleryAnat.ioVis = null;
+  galleryAnat.near.clear(); galleryAnat.vis.clear(); galleryAnat.fresh.clear();
+  galleryAnatApply();
+}
+/* витрина закрыта или открыт разбор: очередь стоит, готовые кадры остаются в памяти */
+function galleryAnatStop() {
+  galleryAnat.io?.disconnect(); galleryAnat.ioVis?.disconnect(); galleryAnat.io = galleryAnat.ioVis = null;
+  galleryAnat.near.clear(); galleryAnat.vis.clear(); galleryAnat.fresh.clear();
+  if (galleryAnat.job) { galleryAnat.job.h.forget(); galleryAnat.job = null; }
+  for (const [k, v] of galleryAnat.state) if (v === 'lookup') galleryAnat.state.delete(k);
+  galleryAnat.pace.reset();
+  /* без карточек плана в «Анатомии» общий рендерер через несколько секунд отдаёт контекст WebGL и сцены */
+  clearTimeout(galleryAnat.freeTimer);
+  galleryAnat.freeTimer = setTimeout(() => { if (!gallery.on && !figs.some(F => F.av)) cardStage()?.dispose(); }, 4000);
+}
+/* для панели замера (?perf) и проверок: сколько миниатюр у экрана (near) и видимых (vis) уже в анатомии */
+function galleryAnatStats() {
+  const box = $('#mv-gallery'), count = set => { let n = 0, ready = 0; for (const id of set) { const el = box?.querySelector(`.mv-thumb[data-thumb="${id}"]`); if (!el || !galleryAnatBase(id)) continue; n++; if (el.classList.contains('anat')) ready++; } return [n, ready]; };
+  const [near, ready] = count(galleryAnat.near), [vis, visReady] = count(galleryAnat.vis);
+  let bytes = 0; for (const e of galleryAnat.mem.values()) bytes += e.bytes;
+  return {view:galleryAnat.view, render:galleryAnat.render, mode:galleryAnat.pace.mode, ready, near, vis, visReady, mem:galleryAnat.mem.size, bytes,
+    painted:galleryAnat.stats.painted, cached:galleryAnat.stats.cached, last:galleryAnat.lastMs ?? null, encode:galleryAnat.encodeMs ?? null, worker:ThumbEncoder.worker};
+}
+/* забыть готовые кадры в памяти страницы (замер «с нуля» в панели ?perf); кеш между сеансами не трогается */
+function galleryAnatForget() {
+  for (const e of galleryAnat.mem.values()) URL.revokeObjectURL(e.url);
+  galleryAnat.mem.clear(); galleryAnat.state.clear(); galleryAnat.fails.clear(); galleryAnat.stats = {painted:0, cached:0, chunks:0};
+}
+function setupGalleryAnatomy() {
+  const view = $('#motion-view'); if (!view) return;
+  /* прокрутка витрины: кадры подождут, пока листание не остановится */
+  view.addEventListener('scroll', () => { if (gallery.on) galleryAnat.scrollAt = performance.now(); }, {passive:true});
+  let raf = 0;
+  const again = () => { if (!gallery.on || raf) return; raf = requestAnimationFrame(() => { raf = 0; if (gallery.on) galleryAnatApply(); }); };
+  window.addEventListener('resize', again, {passive:true});
+  try { matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', again); } catch (e) {}
+  if (typeof MutationObserver === 'function' && document.documentElement) new MutationObserver(again).observe(document.documentElement, {attributes:true, attributeFilter:['data-theme']});
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && gallery.on) galleryAnatKick(); });
+  /* объёмная графика пришла после открытия витрины — миниатюры в выбранном виде */
+  window.addEventListener('gym-volume', () => { if (gallery.on) galleryAnatApply(); });
+}
 
 /* Режим тренировки использует тот же журнал, что и карточки плана. */
 let workout=null,workoutTimer=0,workoutReturn=null;
@@ -13498,11 +14446,14 @@ function restoreBackup(obj) {
      кадра: поза и поверхность тела), кожа (сетка кожи), кости (с рамками костей), мышцы, сцена, отрисовка (render);
    · src/volume/main.mjs, общий рендерер карточек «Анатомии» (GymVolume.cards): GymPerf.volume({card:true}) при сборке
      сцены упражнения — те же обёртки, GymPerf.card() — весь кадр карточки и копия в её холст. Ступень скорости и откат
-     на манекен панель читает сама: cardAnatomy (12-motion-player.js), workoutFigure (14-workout-mode.js).
+     на манекен панель читает сама: cardAnatomy (12-motion-player.js), workoutFigure (14-workout-mode.js);
+   · 13e-gallery-anatomy.js, миниатюры витрины атласа в «Анатомии»: GymPerf.thumb() — каждая задача миниатюры (сборка
+     сцены, кадр); сколько миниатюр у экрана уже готово — galleryAnatStats().
    Кадры считает свой requestAnimationFrame; «кадр» — от метки кадра до первой задачи после отрисовки страницы
    (MessageChannel): оценка всего времени главного потока на кадр, вместе со стилями и отрисовкой SVG браузером.
    «Замерить» — сценарий ≈2 мин без участия человека: карточка плана, разбор трёх упражнений и экран тренировки — каждый
-   в видах «Анатомия» и «Манекен». Журнал, настройки и планы не меняются: выбор вида, ракурса и раздела возвращается. */
+   в видах «Анатомия» и «Манекен», и витрина атласа в «Анатомии». Журнал, настройки и планы не меняются: выбор вида,
+   ракурса и раздела возвращается. */
 const PERF_KEY = 'podhod.perf', PERF_LIVE_MS = 2000;
 const PERF_T = {
   title:'Замер скорости', expand:'Развернуть панель замера скорости', collapse:'Свернуть панель', fps:'к/с',
@@ -13510,6 +14461,8 @@ const PERF_T = {
   anew:'заново', pose:'поза', skin:'кожа', bones:'кости', muscles:'мышцы', scene:'сцена', render:'отрисовка', total:'всего',
   figure:'фигура', ms:'мс', low:'облегчённое', noFrames:'нет кадров', anatCard:'анатомия', copyPart:'копия',
   pace:'ступень {fps} к/с, медиана {ms} мс', paceSlow:'откат на манекен (медиана {ms} мс)', paceTag:'откат',
+  thumbs:'миниатюры', thumbTask:'задача', thumbReady:'у экрана готово {n} из {m}', thumbVisible:'только видимые', thumbAnat:'анатомия у экрана за {n} мс',
+  galleryStep:'витрина',
   slowNever:'Откат «Анатомии» на манекен не включался.', slowAt:'Откат «Анатомии» на манекен включился на шаге {i}.',
   anatomy:'Анатомия', skeleton:'Скелет', mannequin:'Манекен', svg:'рисунок SVG',
   plan:'План', detail:'Разбор', workout:'Тренировка', gallery:'Атлас движений', card:'карточка',
@@ -13524,7 +14477,7 @@ const PERF_T = {
   noVolume:'объёмная графика недоступна', hidden:'страница уходила в фон — шаг неточный', skipped:'пропущен', error:'ошибка',
   head:'замер скорости', build:'сборка', memory:'память {n} ГБ', screenSize:'экран', windowSize:'окно',
   gpu:'Видеокарта', webgl2:'WebGL2 есть', noWebgl2:'WebGL2 нет', reduced:'уменьшение движения включено',
-  legend:'Пары чисел — медиана/95-й процентиль, мс главного потока на кадр. «Кадр» — весь кадр вместе с отрисовкой страницы (оценка); поза — расчёт позы и поверхности тела, кожа — запись её сетки, кости — с рамками костей; анатомия — весь кадр карточки в «Анатомии», копия — перенос кадра в её холст; ступень — частота костей и мышц (30, 15, 10 кадров в секунду), медиана — по которой она выбрана.',
+  legend:'Пары чисел — медиана/95-й процентиль, мс главного потока на кадр. «Кадр» — весь кадр вместе с отрисовкой страницы (оценка); поза — расчёт позы и поверхности тела, кожа — запись её сетки, кости — с рамками костей; анатомия — весь кадр карточки в «Анатомии», копия — перенос кадра в её холст; ступень — частота костей и мышц (30, 15, 10 кадров в секунду), медиана — по которой она выбрана; миниатюры — задачи витрины атласа (сборка сцены, кадр).',
   open:'открытие {n} мс', wait:'данные ещё {n} мс', lowAt:'Облегчённый режим объёма включился на шаге {i}.',
   lowBefore:'Облегчённый режим объёма был включён ещё до замера.', lowNever:'Облегчённый режим объёма не включался.',
   qNormal:'объём обычный', qLow:'объём облегчённый', qSwitch:'объём перешёл в облегчённый режим',
@@ -13545,19 +14498,21 @@ function perfFps(count, ms) { return ms > 0 ? count * 1000 / ms : null; }
    svgHit / svgMiss — расчёт кадра SVG из памяти / заново (nHit, nMiss — сколько фигур), svgDom — запись в DOM;
    pose, scene (с кожей skin, костями bones и мышцами muscles внутри), render — объём; anat — весь кадр карточки в
    «Анатомии» (nAnat — сколько карточек), copy — копия кадра в её холст (части кадра — те же pose, scene, render). */
-const PERF_PARTS = ['svgHit', 'svgMiss', 'svgDom', 'card', 'anat', 'copy', 'pose', 'skin', 'bones', 'muscles', 'sceneRest', 'render', 'volume'];
+const PERF_PARTS = ['svgHit', 'svgMiss', 'svgDom', 'card', 'anat', 'copy', 'thumb', 'pose', 'skin', 'bones', 'muscles', 'sceneRest', 'render', 'volume'];
 function perfSummary(frames, ms) {
-  const per = Object.fromEntries(PERF_PARTS.map(k => [k, []])), counts = {svgHit:0, svgMiss:0, anat:0};
+  const per = Object.fromEntries(PERF_PARTS.map(k => [k, []])), counts = {svgHit:0, svgMiss:0, anat:0, thumb:0};
   let fig = 0;
   for (const f of frames) {
     const b = f.b; if (!b) continue;
     for (const k of ['svgHit', 'svgMiss', 'svgDom', 'anat', 'copy', 'pose', 'skin', 'bones', 'muscles', 'render']) if (b[k] != null) per[k].push(b[k]);
-    counts.svgHit += b.nHit || 0; counts.svgMiss += b.nMiss || 0; counts.anat += b.nAnat || 0;
+    /* миниатюры витрины — каждая задача отдельно */
+    if (b.thumbs) per.thumb.push(...b.thumbs);
+    counts.svgHit += b.nHit || 0; counts.svgMiss += b.nMiss || 0; counts.anat += b.nAnat || 0; counts.thumb += b.thumbs ? b.thumbs.length : 0;
     if (b.scene != null) per.sceneRest.push(Math.max(0, b.scene - (b.skin || 0) - (b.bones || 0) - (b.muscles || 0)));
     const svg = (b.svgHit || 0) + (b.svgMiss || 0) + (b.svgDom || 0), vol = (b.pose || 0) + (b.scene || 0) + (b.render || 0);
     if (b.nHit || b.nMiss) per.card.push(svg);
     if (b.pose != null || b.scene != null || b.render != null) per.volume.push(vol);
-    if (b.nHit || b.nMiss || b.nAnat || b.scene != null || b.render != null) fig++;
+    if (b.nHit || b.nMiss || b.nAnat || b.thumbs || b.scene != null || b.render != null) fig++;
   }
   return {frames:frames.length, ms, fps:perfFps(frames.length, ms), figFps:fig ? perfFps(fig, ms) : null,
     cost:perfStat(frames.map(f => f.cost)), parts:Object.fromEntries(PERF_PARTS.map(k => [k, perfStat(per[k])])), counts};
@@ -13634,6 +14589,7 @@ function perfStepLine(s, i) {
     out.push(`SVG ${PERF_T.anew} ${perfPair(p.svgMiss)} (${n('svgMiss')}), ${PERF_T.fromMemory} ${perfPair(p.svgHit)} (${n('svgHit')}), DOM ${perfPair(p.svgDom)}`);
   }
   if (p.anat) out.push(`${PERF_T.anatCard} ${perfPair(p.anat)} (${PERF_T.copyPart} ${perfPair(p.copy)})`);
+  if (p.thumb) out.push(`${PERF_T.thumbs} ${perfPair(p.thumb)} (${u.counts.thumb} ${plural(u.counts.thumb, 'задача', 'задачи', 'задач')})` + (s.anatAt != null ? ', ' + perfSay('thumbAnat', {n:Math.round(s.anatAt)}) : ''));
   if (p.volume) {
     out.push([['pose', 'pose'], ['skin', 'skin'], ['bones', 'bones'], ['muscles', 'muscles'], ['sceneRest', 'scene'], ['render', 'render'], ['volume', 'total']]
       .filter(([k]) => p[k] || k === 'volume').map(([k, t]) => `${PERF_T[t]} ${perfPair(p[k])}`).join('; '));
@@ -13698,6 +14654,8 @@ function perfStart() {
   /* src/volume/main.mjs, общий рендерер карточек: весь кадр карточки в «Анатомии» и копия в её холст (кадр со сборкой
      сцены — не кадр анимации: как у фигур, до конца задачи не пишется) */
   P.card = (total, copy) => { if (P.creating) return; const b = B(); b.anat = (b.anat || 0) + total; b.copy = (b.copy || 0) + copy; b.nAnat = (b.nAnat || 0) + 1; };
+  /* 13e-gallery-anatomy.js: задача миниатюры витрины (сборка сцены или кадр), мс — сборка тоже в счёт: это работа миниатюры */
+  P.thumb = ms => { const b = B(); (b.thumbs || (b.thumbs = [])).push(ms); };
   /* первая задача после отрисовки кадра: сообщение самому себе с номером кадра (без MessageChannel — таймер) */
   const pending = new Map(); let seq = 0;
   const done = id => { const f = pending.get(id); if (f) { pending.delete(id); f.cost = performance.now() - f.t; } };
@@ -13756,7 +14714,12 @@ function perfPaceOf(place) {
   return {fps:src.pace.fps, median:src.pace.last ?? null, slow:!!src.slow};
 }
 function perfWhere() {
-  if ($('#motion-view')?.open) return typeof detailMotion !== 'undefined' && detailMotion ? {place:'detail', view:perfViewOf($('#mv-stage')?.firstElementChild)} : {place:'gallery', view:'svg'};
+  if ($('#motion-view')?.open) {
+    if (typeof detailMotion !== 'undefined' && detailMotion) return {place:'detail', view:perfViewOf($('#mv-stage')?.firstElementChild)};
+    /* витрина: миниатюры в «Анатомии» («Скелете») или SVG; сколько у экрана уже готово */
+    const g = typeof galleryAnatStats === 'function' ? galleryAnatStats() : null;
+    return {place:'gallery', view:g && g.view !== 'mannequin' ? g.view : 'svg', thumbs:g};
+  }
   if ($('#workout-view')?.open) return {place:'workout', view:perfViewOf($('#wv-stage')?.firstElementChild), pace:perfPaceOf('workout')};
   /* карточки плана: «Анатомия» или «Скелет» — кадры общего рендерера, иначе (выбран манекен, откат, нет WebGL) — SVG */
   const v = typeof cardAnatomy !== 'undefined' ? cardAnatomy.view : 'mannequin';
@@ -13825,7 +14788,9 @@ function perfPaint(P) {
   if (!running && !P.result) {
     const k = key => el.querySelector(`[data-perf-k="${key}"]`);
     perfSet(k('screen'), `${perfNum(sum.fps)} ${PERF_T.fps} · ${PERF_T.frame} ${perfPair(sum.cost)} ${PERF_T.ms}`);
-    perfSet(k('cards'), p.anat ? `${PERF_T.anatCard} ${perfPair(p.anat)} · ${PERF_T.copyPart} ${perfPair(p.copy)} ${PERF_T.ms}`
+    const th = where.thumbs;
+    perfSet(k('cards'), th && th.view !== 'mannequin' ? `${PERF_T.thumbs}: ${PERF_T.thumbTask} ${perfPair(p.thumb)} ${PERF_T.ms} · ${perfSay('thumbReady', {n:th.ready, m:th.near})}` + (th.mode === 'visible' ? ` · ${PERF_T.thumbVisible}` : '')
+      : p.anat ? `${PERF_T.anatCard} ${perfPair(p.anat)} · ${PERF_T.copyPart} ${perfPair(p.copy)} ${PERF_T.ms}`
       : p.card ? `${PERF_T.anew} ${perfPair(p.svgMiss)} · ${PERF_T.fromMemory} ${perfPair(p.svgHit)} · DOM ${perfPair(p.svgDom)} ${PERF_T.ms}` : PERF_T.noFrames);
     perfSet(k('volume'), p.volume ? `${PERF_T.total} ${perfPair(p.volume)} ${PERF_T.ms}, ${PERF_T.figure} ${perfNum(sum.figFps)} ${PERF_T.fps}\n${PERF_T.pose} ${perfPair(p.pose)} · ${PERF_T.skin} ${perfPair(p.skin)} · ${PERF_T.bones} ${perfPair(p.bones)} · ${PERF_T.muscles} ${perfPair(p.muscles)} · ${PERF_T.scene} ${perfPair(p.sceneRest)} · ${PERF_T.render} ${perfPair(p.render)}` : PERF_T.noFrames);
     const qv = where.place === 'plan' ? null : q;
@@ -13844,7 +14809,7 @@ function perfPaint(P) {
 function perfResultHtml(r) {
   if (r.notice) return `<p class="perf-warn">${r.notice}</p><div class="perf-actions"><button type="button" data-perf="close">${PERF_T.close}</button></div>`;
   const rows = r.steps.map((s, i) => {
-    const u = s.sum, fig = u && (u.parts.anat || u.parts.volume || u.parts.card);
+    const u = s.sum, fig = u && (u.parts.thumb || u.parts.anat || u.parts.volume || u.parts.card);
     const tag = (s.q1 === 'low' && s.kind !== 'plan' ? ` <span class="perf-low">${PERF_T.low}</span>` : '') + (s.pace?.slow ? ` <span class="perf-low">${PERF_T.paceTag}</span>` : '');
     return s.skip || s.error ? `<tr><th scope="row">${i + 1}. ${esc(s.label)}</th><td colspan="3">${esc(s.skip || s.error)}</td></tr>`
       : `<tr><th scope="row">${i + 1}. ${esc(s.label)}${tag}</th><td>${perfNum(u.fps)}${u.figFps ? '<small>' + perfNum(u.figFps) + '</small>' : ''}</td><td>${perfPair(u.cost)}</td><td>${perfPair(fig)}</td></tr>`;
@@ -13868,13 +14833,16 @@ function perfCopy(P) {
    прежний откат забыт; первый круг — матрицы костей считаются, дальше — из памяти) и в «Манекене» (SVG, память кадров
    сброшена так же); 3–8 — разбор latpulluh (верхний блок), legpress (тренажёр жима ногами), squat (штанга): по 8 с
    в «Анатомии» и в «Манекене», ракурс по умолчанию, один вид; 9–10 — экран тренировки 8 с в «Анатомии» и в «Манекене»
-   (если не идёт отдых). Перед каждым шагом — 1 с прогрева (сборка шейдеров, рамка кадра). У шагов «Анатомии» карточек
-   и тренировки в итоге — ступень (30, 15, 10 кадров в секунду или откат на манекен) и медиана, по которой она выбрана.
+   (если не идёт отдых); 11 — витрина атласа в «Анатомии»: открыть с пустой памятью миниатюр (кеш между сеансами на время
+   шага не читается и не стирается), дождаться анатомии у всех видимых миниатюр (не дольше двух третей шага), дальше
+   листать витрину вниз до конца шага. Перед каждым шагом — 1 с прогрева (сборка шейдеров, рамка кадра). У шагов
+   «Анатомии» карточек и тренировки в итоге — ступень (30, 15, 10 кадров в секунду или откат на манекен) и медиана, по
+   которой она выбрана; у витрины — задачи миниатюр и время до анатомии у всех видимых.
    Вид фигуры на время шага меняется без записи; выбор человека возвращается в конце. Длительности для проверок —
    perfRun({plan, step, warm}). */
 const PERF_STEPS = [{kind:'plan', view:'anatomy'}, {kind:'plan', view:'mannequin'},
   ...['latpulluh', 'legpress', 'squat'].flatMap(id => [{kind:'detail', id, view:'anatomy'}, {kind:'detail', id, view:'mannequin'}]),
-  {kind:'workout', view:'anatomy'}, {kind:'workout', view:'mannequin'}];
+  {kind:'workout', view:'anatomy'}, {kind:'workout', view:'mannequin'}, {kind:'gallery', view:'anatomy'}];
 const PERF_ABORT = {abort:true}, PERF_RESTORE_KEYS = ['podhod.motion.v2', 'podhod.workout.v3', 'podhod.settings.v1', 'podhod.planSeen.v1'];
 let perfRunSerial = 0;
 async function perfWait(ms, run) {
@@ -13943,6 +14911,7 @@ async function perfStepRun(P, run, step, T, ctx) {
     await perfWait(T.warm, run);
     return finish(await perfMeasure(P, run, T.step));
   }
+  if (step.kind === 'gallery') return perfGalleryStep(P, run, step, T, out, finish);
   /* тренировка: открыть без записи в журнал; сохранённое состояние тренировки вернётся из снимка. Вид фигуры — на время
      шага; каждое открытие тренировки — новая попытка «Анатомии» (ступень с 30 кадров) */
   out.label = PERF_T.workout; run.label = out.label;
@@ -13970,6 +14939,32 @@ async function perfStepRun(P, run, step, T, ctx) {
   finish(m);
   if (anat && (out.view === 'anatomy' || out.view === 'skeleton')) out.pace = {fps:workoutFigure.pace.fps, median:workoutFigure.pace.last ?? null, slow:!!workoutFigure.slow};
   closeWorkout(); ctx.workout = false;
+  return out;
+}
+/* витрина атласа: первые миниатюры, анатомия у всех видимых (заново, без памяти и кеша), прокрутка вниз */
+async function perfGalleryStep(P, run, step, T, out, finish) {
+  out.label = `${PERF_T.gallery}: ${PERF_T.galleryStep} — ${perfViewName(step.view)}`; run.label = out.label;
+  if ($('#motion-view')?.open) closeMotion();
+  await perfUntil(() => window.GymVolume, 6000, run);
+  motionPrefs.view = step.view;
+  galleryAnatForget(); galleryAnat.noStore = true;
+  const box = $('#motion-view');
+  let scrolling = false, done = false;
+  try {
+    const t0 = performance.now(); openGallery();
+    await perfUntil(() => document.querySelector('#mv-gallery .mv-thumb.ready'), 5000, run); out.open = performance.now() - t0;
+    out.view = galleryAnat.view === 'mannequin' ? 'svg' : galleryAnat.view;
+    if (out.view === 'svg') out.label = `${PERF_T.gallery}: ${PERF_T.galleryStep} — ${perfViewName('mannequin')}` + (step.view !== 'mannequin' ? ` (${PERF_T.noVolume})` : '');
+    run.label = out.label;
+    const visDone = () => { const g = galleryAnatStats(); return g.vis > 0 && g.visReady >= g.vis; };
+    const measure = perfMeasure(P, run, T.step);
+    perfUntil(() => visDone() || performance.now() - t0 > T.step * 2 / 3, T.step, run).then(() => {
+      if (done) return;
+      if (visDone()) out.anatAt = performance.now() - t0;
+      scrolling = true; const down = () => { if (!scrolling) return; box.scrollBy(0, 18); requestAnimationFrame(down); }; requestAnimationFrame(down);
+    }, () => {});
+    finish(await measure);
+  } finally { done = true; scrolling = false; galleryAnat.noStore = false; if ($('#motion-view')?.open) closeMotion(); }
   return out;
 }
 async function perfRun(opts = {}) {
@@ -14041,4 +15036,4 @@ renderPlan();
 prefetchStressIds();
 logInit();
 
-window.PODHOD_VERSION='4.50.0';window.PODHOD_BUILD='4.50.0-d41ada3a31d4';window.PODHOD_LANG='ru';
+window.PODHOD_VERSION='4.52.0';window.PODHOD_BUILD='4.52.0-4ea6f3d565ae';window.PODHOD_LANG='ru';
