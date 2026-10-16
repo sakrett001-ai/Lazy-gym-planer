@@ -278,7 +278,7 @@ test('muscle thickness: constant belly volume, thicker when shorter, flattened u
    трубки, той же, что по МРТ); нет щелей между соседними полосами; нет перекрута; под кожей; в костях не глубже трубок. */
 const EQR = require('../src/js/09bn-equipment.js'), POSES_R = require('../src/js/09bp-poses.js');
 const RSTART = Muscles.ringStarts(bound), RSIDES = Muscles.SIDES, RBUF = new Float64Array(RSTART[bound.length] * RSIDES * 3);
-const RIBBON_POSES = [['neutral', 0], ['ohp', 1], ['pullup', 0], ['ytw', 0], ['latpull', .5], ['bbbench', .5], ['pushup', 0], ['deadlift', 0], ['cablewood', 1], ['hipthrust', 1]];
+const RIBBON_POSES = [['neutral', 0], ['ohp', 1], ['pullup', 0], ['ytw', 0], ['latraise', 1], ['latpull', .5], ['bbbench', .5], ['pushup', 0], ['deadlift', 0], ['cablewood', 1], ['hipthrust', 1]];
 const rPose = (id, t) => { const R = id === 'neutral' ? L.M.catalogPose(L.M.neutral()) : EQR.rig(POSES_R[id])(t); return { R, m: L.Skeleton.frames(R, L.M.bodyData(R), skel.bones) }; };
 const rSub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], rDot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const rCross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -343,7 +343,8 @@ function ribbonStats(pos, fans = bound.fans) {
 
 test('ribbons: broad flat muscles are drawn as ribbons of neighbouring lines, in the order of their origins', () => {
   /* какие мышцы — ленты (README, «Ленты»: Gray's Anatomy, OpenStax A&P 2e — плоские, веерные, четырёхугольные пласты) */
-  const EXPECT = { pecmaj: 7, delt3: 3, lat: 6, trap: 13, infsp: 3, serrant: 12, rhomb: 4, eo: 8, glmax: 3, glmed: 3 };
+  /* задняя дельтовидная — трубки: её линии у головки плеча при отведении и руке над головой перекрещиваются (README) */
+  const EXPECT = { pecmaj: 7, lat: 6, trap: 13, infsp: 3, serrant: 12, rhomb: 4, eo: 8, glmax: 3, glmed: 3 };
   for (const side of ['R', 'L']) assert.deepEqual(Object.fromEntries(bound.fans.filter(f => f.side === side).map(f => [f.key, f.K])), EXPECT, side);
   const seen = new Set();
   for (const fan of bound.fans) {
@@ -380,7 +381,7 @@ test('ribbons keep the MRI volume of every part: cross-section polygons have the
       for (const l of st.lines) if (Math.abs(l.drawn / l.tube - 1) > worstLine) { worstLine = Math.abs(l.drawn / l.tube - 1); at = `${l.name} ${id} t=${t}`; }
     }
   }
-  /* у отдельной линии — до 12 % (сейчас до 6 % — зубцы наружной косой и задняя дельта у плеча): где линии перекрещиваются
+  /* у отдельной линии — до 12 % (сейчас до 6 % — зубцы наружной косой): где линии перекрещиваются
      или сходятся в пучок, полоса со своей кромкой перекрывает соседку; лента целиком — в пределах 3 % (сейчас до 2 %) */
   assert(worstLine < .12, `line volume off by ${(worstLine * 100).toFixed(0)} % (${at})`);
   /* площадь трубки по длине — объём части по МРТ (Muscles.body): та же сумма по кольцам на линиях лент даёт объём v с
@@ -397,8 +398,7 @@ test('ribbons: no gaps between neighbouring strips, no twist, rings wound like t
     const { m } = rPose(id, t); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
     for (const st of ribbonStats(RBUF)) {
       const where = `${st.key}${st.side} in ${id} t=${t}`;
-      /* общие швы — те же вершины у обеих полос; где шов не общий, между линиями нет непокрытого места больше 7 мм (сейчас
-         до 5,7 мм — задняя дельта при руке над головой, где её линии перекрещиваются) */
+      /* общие швы — те же вершины у обеих полос; где шов не общий, между линиями нет непокрытого места больше 7 мм */
       assert(st.hole <= .7, `${where}: gap ${st.hole.toFixed(2)} cm between strips (${st.holeAt})`);
       assert(st.twist > 0, `${where}: the strip turns over between rings (${st.twistAt}, cos ${st.twist.toFixed(2)})`);
       assert.equal(st.flips, 0, `${where}: rings wound inside out`);
@@ -420,8 +420,45 @@ test('ribbons: no gaps between neighbouring strips, no twist, rings wound like t
   assert(f.twist < 0 && f.flips > 0, 'a ring turned over is not detected');
 });
 
+/* Освещение ленты: изнанка (сторона от кожи) — с нормалями лицевой стороны (её видно только сквозь прозрачный силуэт кожи —
+   шея и затылок со стороны головы, — и там широкая изнанка, обращённая к полу, рисовалась тёмным клином); своя кромка внутри
+   ленты лежит на соседней полосе — её нормаль средняя у двух полос, без бокового блика (иначе — тёмные «ступеньки») */
+test('ribbons: the deep side is lit like the outer side, own edges inside a ribbon by the mean normal of the two strips', () => {
+  const NOR = new Float64Array(RBUF.length), near = (a, b) => rDot(rUnit(a), rUnit(b)) > .999;
+  const nV = (i, r, j) => { const v = ((RSTART[i] + r) * RSIDES + j) * 3; return [NOR[v], NOR[v + 1], NOR[v + 2]]; };
+  for (const [id, t] of [['neutral', 0], ['pushup', 1], ['latraise', 1], ['ohp', 1]]) {
+    const { m } = rPose(id, t); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, NOR, RSTART);
+    for (const fan of bound.fans) {
+      const where = `${fan.key}${fan.side} in ${id} t=${t}`;
+      /* лицевая сторона — по коже с весом доли пути u: у начала на туловище направление к коже надёжнее (у плеча кожа
+         нейтральной позы поворачивается вместе с плечевой костью) */
+      let vote = 0, rings = 0, toSkin = 0;
+      for (let k = 0; k < fan.K; k++) for (let q = 0; q < fan.n; q++) { const ri = Muscles.ribbonRing(fan, k, q); if (ri.skin) vote += q * rDot(ri.n, ri.skin); }
+      const so = vote < 0 ? -1 : 1;
+      for (let k = 0; k < fan.K; k++) {
+        const i = fan.lines[k], rev = fan.rev[k];
+        for (let r = 0; r < fan.n; r++) {
+          const q = rev ? fan.n - 1 - r : r, ri = Muscles.ribbonRing(fan, k, q), N = ri.n.map(x => x * so);
+          /* верх и низ полосы в центре — одна нормаль, лицевой стороны */
+          assert(near(nV(i, r, 0), N) && near(nV(i, r, 4), N), `${where}: ${bound[i].name} ring ${r}: the deep side is not lit like the outer one`);
+          if (ri.skin && q >= fan.n / 2) { rings++; if (rDot(N, ri.skin) > 0) toSkin++; }
+          /* своя кромка к соседу: вершины кромки — по средней нормали двух полос */
+          for (const [bit, j, verts] of [[2, k + 1, rev ? [7, 6, 5] : [1, 2, 3]], [1, k - 1, rev ? [1, 2, 3] : [7, 6, 5]]]) {
+            if (!(ri.own & bit) || j < 0 || j >= fan.K) continue;
+            const nb = Muscles.ribbonRing(fan, j, q).n, g = rDot(ri.n, nb) < 0 ? -1 : 1, M = ri.n.map((x, c) => (x + g * nb[c]) * so);
+            if (Math.hypot(...M) < 1e-6) continue;
+            for (const v of verts) assert(near(nV(i, r, v), M), `${where}: ${bound[i].name} ring ${r}: own edge vertex ${v} not lit by the mean normal`);
+          }
+        }
+      }
+      /* лицевая сторона смотрит к коже у колец половины ленты на туловище */
+      if (rings) assert(toSkin / rings > .8, `${where}: lit side faces the skin in ${(100 * toSkin / rings).toFixed(0)} % of rings`);
+    }
+  }
+});
+
 /* Под кожей и в костях — не хуже трубок: тело ленты не выше 2,6 см над кожей (вся проверка — npm run muscles:check,
-   исключений для широчайшей и задней дельты больше нет), а вершины тела ленты в костях (дальше 2 см от концов пути)
+   исключения для широчайшей больше нет), а вершины тела ленты в костях (дальше 2 см от концов пути)
    глубже 0,5 см — не чаще, чем у трубок тех же линий (Muscles.surface), с запасом 2 процентных пункта, и не глубже их
    больше чем на 0,3 см */
 test('ribbons stay under the skin and do not go into bones deeper than the tubes they replace', () => {
