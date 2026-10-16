@@ -88,3 +88,78 @@ function cardCanvasSize(w,h,dpr=1){
   if(!(w>0&&h>0))return null;const k=Math.min(CARD_DPR,Math.max(1,dpr||1));
   return{width:Math.round(w*k),height:Math.round(h*k)};
 }
+
+/* ---------- Миниатюры витрины атласа в «Анатомии» (этап 3) — правила без страницы ----------
+   Рисует их тот же общий рендерер, что карточки плана (GymVolume.cards), — неподвижный кадр той же фазы, что у
+   SVG-миниатюры, тем же ракурсом «Под углом»; рамка — по телу в показанной позе (человек крупнее, тренажёр может уйти за
+   край, как в карточках). Готовый кадр хранится сжатым (WebP, где браузер его не умеет, — JPEG; 7–12 КБ вместо 0,4 МБ
+   холста) — в памяти страницы и в Cache Storage между сеансами. Отрисовка и очередь — в 13e-gallery-anatomy.js.
+   Почему не заранее при сборке: 151 упражнение × варианты инвентаря × размеры — 2–5 МБ в сборке (и ещё раз в каждом
+   офлайн-файле, base64), сборка зависела бы от Chromium с WebGL, а кадры пришлось бы перерисовывать при каждой правке
+   поз, костей и мышц. На телефоне миниатюра рисуется один раз и дальше берётся из кеша; ключ кеша содержит номер
+   сборки (PODHOD_BUILD — хеш всех исходников, поз и данных костей и мышц), поэтому новая версия сама рисует новые кадры. */
+const GALLERY_THUMBS={
+  step:40,max:320,dpr:2,               /* холст: точки экрана, не больше ×2, ступенями по 40 точек (меньше разных ключей) */
+  near:'25% 0px 60% 0px',              /* «у экрана и чуть ниже»: четверть экрана сверху, 0,6 экрана снизу */
+  quiet:160,                           /* мс после прокрутки без новых кадров: при листании поток не тратится на пролетающее */
+  memory:3<<20,                        /* сжатые кадры в памяти страницы — до 3 МБ (≈300 миниатюр), дальше — давно не виденные */
+  cacheMax:600,cacheKeep:450,          /* записей в Cache Storage одной сборки: больше 600 — остаются 450 свежих */
+  window:3,warmup:1,visibleMs:90,svgMs:400,  /* скорость: медиана самой длинной задачи миниатюры за три последние (thumbPace);
+                                       первая миниатюра (сборка шейдеров) не считается */
+  quality:.82,camera:'angle'
+};
+/* размер холста миниатюры (квадрат, точки экрана) по её ширине на странице; 0 — миниатюры нет на странице */
+function thumbCanvasSize(cssWidth,dpr=1,G=GALLERY_THUMBS){
+  if(!(cssWidth>0))return 0;
+  const px=cssWidth*Math.min(G.dpr,Math.max(1,dpr||1));
+  return Math.min(G.max,Math.max(G.step,Math.ceil(px/G.step)*G.step));
+}
+/* ключ готового кадра: сборка, вид, тема, упражнение и его инвентарь (он задаёт вариант и видимые детали), фаза,
+   ракурс, размер */
+function thumbCacheKey({build='',view,theme,id,equip='',t,camera=GALLERY_THUMBS.camera,size}){
+  return ['t1',build,view,theme,id,equip,t,camera,size].join('|');
+}
+/* Cache Storage: одна корзина на сборку и место приложения (scope); корзины прежних сборок удаляются */
+const THUMB_CACHE_PREFIX='podhod-thumbs@';
+function thumbCacheName(scope,build){return THUMB_CACHE_PREFIX+scope+':'+build;}
+function thumbCachesStale(names,scope,build){
+  const mine=THUMB_CACHE_PREFIX+scope+':',now=mine+build;
+  return names.filter(n=>typeof n==='string'&&n.startsWith(mine)&&n!==now);
+}
+/* записи корзины по порядку добавления: больше cacheMax — удалить старые, оставить cacheKeep последних */
+function thumbCacheTrim(keys,G=GALLERY_THUMBS){return keys.length>G.cacheMax?keys.slice(0,keys.length-G.cacheKeep):[];}
+/* сжатые кадры в памяти: больше limit байт — отпустить давно не виденные (seenAt), кроме тех, что у экрана (near) */
+function thumbsToDrop(entries,limit=GALLERY_THUMBS.memory){
+  let total=entries.reduce((s,e)=>s+(e.bytes||0),0);const out=[];
+  for(const e of entries.filter(e=>!e.near).sort((a,b)=>a.seenAt-b.seenAt)){if(total<=limit)break;out.push(e.key);total-=e.bytes||0;}
+  return out;
+}
+/* следующая миниатюра для отрисовки: сначала видимые, потом ближние сверху вниз; only — только видимые */
+function thumbNext(tiles,only=false){
+  let best=null;
+  for(const c of tiles){if(only&&!c.visible)continue;if(!best||(c.visible&&!best.visible)||(c.visible===best.visible&&c.top<best.top))best=c;}
+  return best;
+}
+/* Скорость витрины. У миниатюры две задачи — сборка сцены и кадр (поза, кости, мышцы, отрисовка, копия); мерило —
+   самая длинная из них. Медиана за window миниатюр выше visibleMs — рисуются только видимые (без запаса ниже экрана),
+   выше svgMs — витрина возвращается к SVG-манекену с подписью «… не успевает — показан манекен», как карточки. Обратно
+   к запасу — когда медиана ниже 0,7 × visibleMs. Решение живёт до закрытия витрины. */
+function thumbPace(G=GALLERY_THUMBS){
+  const S={mode:'near',samples:[],last:null,skip:G.warmup,
+    sample(ms){
+      if(S.mode==='svg'||!(ms>=0))return null;
+      if(S.skip>0){S.skip--;return null;}
+      S.samples.push(ms);if(S.samples.length<G.window)return null;
+      const s=S.samples.slice().sort((a,b)=>a-b),m=s[s.length>>1];S.last=m;S.samples.length=0;
+      const next=m>G.svgMs?'svg':m>G.visibleMs||(S.mode==='visible'&&m>G.visibleMs*.7)?'visible':'near';
+      if(next===S.mode)return null;S.mode=next;return next;
+    },
+    reset(){S.mode='near';S.samples.length=0;S.last=null;S.skip=G.warmup;}};
+  return S;
+}
+/* вид миниатюр: как у карточек (figureViewFor); render — рисовать ли новые кадры. Пока грузятся кости и мышцы, вид —
+   выбранный (готовые кадры из памяти и кеша показываются), а новые не рисуются */
+function thumbViewFor(pref,{able=true,state='ready',slow=false,coarse=true}={}){
+  const c=figureViewFor(pref,{able,state,slow,coarse}),want=['anatomy','skeleton','mannequin'].includes(pref)?pref:'anatomy';
+  return{view:c.wait?want:c.view,render:c.view!=='mannequin',note:c.wait?'':c.note,wait:c.wait};
+}

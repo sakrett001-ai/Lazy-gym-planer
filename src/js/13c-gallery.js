@@ -5,7 +5,9 @@
    «Увеличить» в карточке плана по-прежнему открывает сразу разбор.
    Миниатюра — неподвижный SVG-кадр того же манекена, что в карточках плана (конечная точка движения), строится,
    когда подходит к экрану, — сколько успеется за ~8 мс кадра; готовые миниатюры переиспользуются при смене фильтра. Рамка — по самой
-   показанной позе (opts.still), а не по всем фазам: так миниатюра в 4–5 раз дешевле. */
+   показанной позе (opts.still), а не по всем фазам: так миниатюра в 4–5 раз дешевле.
+   В виде «Анатомия» (и «Скелет») поверх SVG встаёт кадр костей и мышц из общего рендерера карточек — в простое, сжатой
+   картинкой из памяти или кеша (13e-gallery-anatomy.js); до его готовности — SVG, как раньше. */
 const WORK_KINDS = [
   {id:'all', name:'Всё'}, {id:'free', name:'Свободные веса'}, {id:'mach', name:'Тренажёры и блоки'},
   {id:'band', name:'Резинки'}, {id:'body', name:'Свой вес'}
@@ -45,7 +47,7 @@ function galleryHtml() {
   return `<div class="mv-gtools"><div class="mv-gkinds" role="group" aria-label="Чем работать">${chips}</div>`
     /* «…» вокруг названия места — в одном шаблоне со следующей подписью: перевод закрывающей кавычки идёт вместе с ней */
     + `<div class="mv-gfilters"><label class="mv-ghere"><input type="checkbox" id="mv-ghere"${gallery.here ? ' checked' : ''}> Только то, что есть в месте «${esc(placeOf().name)}»</label><label class="mv-gsearch"><span class="vh">Найти упражнение</span><input type="search" id="mv-gq" value="${esc(gallery.q)}" placeholder="Найти: жим, тяга, присед…" autocomplete="off"></label></div></div>`
-    + `<p class="mv-gcount" aria-live="polite">${list.length} ${plural(list.length, 'упражнение', 'упражнения', 'упражнений')}</p>`
+    + `<p class="mv-gcount" aria-live="polite">${list.length} ${plural(list.length, 'упражнение', 'упражнения', 'упражнений')}</p><p class="mv-gnote" hidden></p>`
     + (sections || `<p class="mv-gempty">Ничего не найдено. Выберите «Всё» или измените поиск.</p>`);
 }
 function thumbKey(id) { return id + '|' + S.place + '|' + S.equip.join(','); }
@@ -60,32 +62,46 @@ function buildThumb(el) {
     catch (e) { console.error('Миниатюра', id, e); return; }
     galleryThumbs.set(key, svg);
   }
-  el.replaceChildren(svg); el.classList.add('ready');
+  /* кадр анатомии (если уже есть) остаётся поверх SVG */
+  el.prepend(svg); for (const x of [...el.children]) if (x.tagName.toLowerCase() === 'svg' && x !== svg) x.remove();
+  el.classList.add('ready');
 }
+const galleryNeedsSvg = el => el.isConnected && !el.classList.contains('anat') && !el.querySelector('svg');
 /* за кадр — сколько успеется за ~8 мс, но не меньше одной миниатюры: на быстром телефоне экран заполняется сразу */
 function pumpThumbs() {
   galleryRaf = 0;
   const end = performance.now() + 8;
   do {
     const el = galleryQueue.shift(); if (!el) return;
-    if (el.isConnected && !el.classList.contains('ready')) buildThumb(el);
+    if (galleryNeedsSvg(el)) buildThumb(el);
   } while (galleryQueue.length && performance.now() < end);
   if (galleryQueue.length) galleryRaf = requestAnimationFrame(pumpThumbs);
+}
+/* миниатюре на экране нужен SVG (кадра анатомии нет или он убран) */
+const gallerySeen = new WeakSet();
+function galleryNeedSvg(el) {
+  if (!gallerySeen.has(el) || !galleryNeedsSvg(el) || galleryQueue.includes(el)) return;
+  galleryQueue.push(el); if (!galleryRaf) galleryRaf = requestAnimationFrame(pumpThumbs);
 }
 function renderGallery() {
   const box = $('#mv-gallery'); box.innerHTML = galleryHtml();
   if (galleryIO) galleryIO.disconnect();
   galleryQueue = [];
   const thumbs = [...box.querySelectorAll('[data-thumb]')];
-  /* готовые миниатюры ставятся сразу, остальные — когда подходят к экрану */
-  for (const el of thumbs) { const svg = galleryThumbs.get(thumbKey(el.dataset.thumb)); if (svg) { el.replaceChildren(svg); el.classList.add('ready'); } }
+  /* готовые миниатюры ставятся сразу (кадр анатомии из памяти — без SVG), остальные — когда подходят к экрану */
+  for (const el of thumbs) { if (galleryAnatPlace(el)) continue; const svg = galleryThumbs.get(thumbKey(el.dataset.thumb)); if (svg) { el.replaceChildren(svg); el.classList.add('ready'); } }
   if (typeof IntersectionObserver === 'function') {
     galleryIO = new IntersectionObserver(es => {
-      for (const e of es) if (e.isIntersecting && !e.target.classList.contains('ready') && !galleryQueue.includes(e.target)) galleryQueue.push(e.target);
+      for (const e of es) {
+        if (e.isIntersecting) gallerySeen.add(e.target); else gallerySeen.delete(e.target);
+        /* кадр анатомии уже в памяти — SVG не нужен (или подождёт ответа кеша) */
+        if (e.isIntersecting && !e.target.classList.contains('ready') && !galleryQueue.includes(e.target) && !galleryAnatPeek(e.target)) galleryQueue.push(e.target);
+      }
       if (galleryQueue.length && !galleryRaf) galleryRaf = requestAnimationFrame(pumpThumbs);
     }, {rootMargin:'300px 0px'});
-    for (const el of thumbs) if (!el.classList.contains('ready')) galleryIO.observe(el);
+    for (const el of thumbs) galleryIO.observe(el);
   }
+  galleryAnatMount(box);
 }
 function showGallery(focusId) {
   disposeMotion(detailMotion); detailMotion = null;
@@ -99,10 +115,11 @@ function showGallery(focusId) {
   else $('#mv-gallery').querySelector('[data-gallery-kind].on')?.focus({preventScroll:true});
 }
 function showDetail() {
-  gallery.on = false;
+  const was = gallery.on; gallery.on = false;
   $('#motion-view').classList.remove('mv-mode-gallery');
   $('#mv-gallery').hidden = true; $('#mv-detail').hidden = false;
   if (galleryIO) galleryIO.disconnect(); cancelAnimationFrame(galleryRaf); galleryRaf = 0; galleryQueue = [];
+  if (was) galleryAnatStop();
 }
 function openGallery() {
   detailReturn = document.activeElement;
@@ -112,8 +129,9 @@ function openGallery() {
   scheduleMotionLoop();
 }
 function closeGallery() {
-  gallery.on = false;
+  const was = gallery.on; gallery.on = false;
   if (galleryIO) galleryIO.disconnect(); cancelAnimationFrame(galleryRaf); galleryRaf = 0; galleryQueue = [];
+  if (was) galleryAnatStop();
 }
 function setupGallery() {
   $('#mv-gallery').addEventListener('click', e => {
@@ -129,4 +147,5 @@ function setupGallery() {
     renderGallery(); const q = $('#mv-gq'); q.focus(); q.setSelectionRange(at, at);
   });
   $('#mv-back').addEventListener('click', () => showGallery(detailMotion?.it.ex.id));
+  setupGalleryAnatomy();
 }

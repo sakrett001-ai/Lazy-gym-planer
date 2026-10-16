@@ -85,12 +85,14 @@ test('offline: the cached language opens, a missing one gets an honest bilingual
   const data = await net.fetch(SCOPE + 'en/app.js?v=1', 'no-cors');
   assert.equal(data.type, 'error', 'a missing script is a network error, not a page');
 });
-test('activation removes old versions of this scope only and keeps the language marks', async () => {
+test('activation removes old versions of this scope only (shell and gallery thumbnails) and keeps the language marks', async () => {
   const w = worker({windows:[SCOPE]}); await w.install();
   const prefix = 'podhod@' + SCOPE + ':';
-  for (const k of [prefix + 'old', 'podhod@https://test.invalid/:4.1.8', 'other-project']) await w.api.open(k);
+  /* миниатюры витрины: корзина текущей сборки остаётся, прежних — удаляются, чужого места — не трогаются */
+  const thumbs = 'podhod-thumbs@' + SCOPE + ':';
+  for (const k of [prefix + 'old', 'podhod@https://test.invalid/:4.1.8', 'other-project', thumbs + '9.9.8-old', thumbs + '9.9.9-test', 'podhod-thumbs@https://test.invalid/:9.9.8-old']) await w.api.open(k);
   let p; w.handlers.activate({waitUntil:x => p = x}); await p;
-  assert.deepEqual((await w.api.keys()).sort(), [w.ctx.api.CACHE, w.ctx.api.LANGS_CACHE, 'other-project', 'podhod@https://test.invalid/:4.1.8'].sort());
+  assert.deepEqual((await w.api.keys()).sort(), [w.ctx.api.CACHE, w.ctx.api.LANGS_CACHE, 'other-project', 'podhod@https://test.invalid/:4.1.8', thumbs + '9.9.9-test', 'podhod-thumbs@https://test.invalid/:9.9.8-old'].sort());
 });
 
 /* pwa.js: страница сообщает свой язык; без сети ссылка на нескачанный язык показывает подсказку */

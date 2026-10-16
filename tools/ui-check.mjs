@@ -3,6 +3,7 @@
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import fs from 'node:fs';
+import http from 'node:http';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -559,9 +560,112 @@ await page.close();
   await n.close();
 }
 
+/* витрина атласа в «Анатомии» (этап 3) — настоящая объёмная графика (программный WebGL): сразу — SVG-миниатюры, потом у
+   видимых — кадры костей и мышц (картинки из общего рендерера карточек); клик открывает разбор, «← Все упражнения»
+   возвращает на то же место и кадры — сразу из памяти; фильтр и поиск работают; «Манекен» — снова SVG. Без WebGL — SVG.
+   Кеш между сеансами — по http (офлайн-файлу Cache Storage недоступен): после перезагрузки кадры берутся из кеша. */
+{
+  const thumbsState = page => page.evaluate(() => { const s = galleryAnatStats(); return { ...s, svg: document.querySelectorAll('#mv-gallery .mv-thumb.ready:not(.anat)').length, anat: document.querySelectorAll('#mv-gallery .mv-thumb.anat img.mv-anat').length }; });
+  const visAnat = (page, ms = 120000) => page.waitForFunction(() => { const s = galleryAnatStats(); return s.vis > 0 && s.visReady >= s.vis && [...document.querySelectorAll('#mv-gallery .mv-thumb.anat img.mv-anat')].some(i => i.complete && i.naturalWidth > 0); }, null, { timeout: ms, polling: 200 }).then(() => true, () => false);
+  const g = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  g.on('pageerror', e => errors.push(String(e)));
+  await g.goto('file://' + file); await g.waitForTimeout(400);
+  await g.evaluate(() => { motionPrefs.view = 'anatomy'; LOG.data = {}; });
+  await g.waitForFunction(() => window.GymVolume, null, { timeout: 30000 });
+  await g.click('#motion-atlas');
+  const first = await g.waitForFunction(() => document.querySelector('#mv-gallery .mv-thumb.ready svg'), null, { timeout: 10000 }).then(() => true, () => false);
+  check(first, 'витрина в «Анатомии»: первые миниатюры — сразу SVG, кадры анатомии их не задерживают');
+  check(await visAnat(g), 'витрина в «Анатомии»: у видимых миниатюр — кадры костей и мышц');
+  const pic = await g.evaluate(async () => {
+    const img = document.querySelector('#mv-gallery .mv-thumb.anat img.mv-anat'), c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const x = c.getContext('2d'); x.drawImage(img, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data;
+    let lo = 765, hi = 0, warm = 0; for (let i = 0; i < d.length; i += 16) { const v = d[i] + d[i + 1] + d[i + 2]; lo = Math.min(lo, v); hi = Math.max(hi, v); if (d[i] > d[i + 2] + 60 && d[i] > 120) warm++; }
+    const el = img.closest('.mv-thumb'), svg = el.querySelector('svg');
+    return { w: c.width, src: img.src.slice(0, 5), range: hi - lo, warm, svgHidden: !svg || getComputedStyle(svg).visibility === 'hidden', canvases: document.querySelectorAll('#mv-gallery canvas').length, stage: GymVolume.cards().stats() };
+  });
+  check(pic.w >= 200 && pic.src === 'blob:' && pic.range > 200 && pic.warm > 5 && pic.svgHidden, `миниатюра — сжатая картинка анатомии (${pic.w} точек, мышцы цветом), SVG под ней скрыт`);
+  check(pic.canvases === 0 && pic.stage.scenes <= 3, `у витрины нет своих холстов и WebGL: общий рендерер, сцен ${pic.stage.scenes} (не больше трёх)`);
+  /* миниатюра открывает разбор, возврат — на то же место, кадры — сразу из памяти */
+  const id = await g.evaluate(() => document.querySelector('#mv-gallery .mv-thumb.anat').closest('[data-gallery-open]').dataset.galleryOpen);
+  await g.click(`[data-gallery-open="${id}"]`); await g.waitForTimeout(150);
+  check(await g.evaluate(id => !$('#mv-detail').hidden && detailMotion?.it.ex.id === id && !gallery.on && !galleryAnat.io, id), 'миниатюра анатомии открывает разбор этого упражнения, очередь витрины стоит');
+  await g.click('#mv-back');
+  const back = await g.evaluate(id => ({ focus: document.activeElement?.dataset.galleryOpen, anat: !!document.querySelector(`[data-gallery-open="${id}"] .mv-thumb.anat img.mv-anat`), painted: galleryAnat.stats.painted }), id);
+  check(back.focus === id && back.anat, '«← Все упражнения» — на то же упражнение, его кадр анатомии сразу из памяти');
+  /* фильтр и поиск в «Анатомии» */
+  await g.click('[data-gallery-kind="band"]');
+  check(await g.evaluate(() => { const t = [...document.querySelectorAll('.mv-tile')]; return t.length > 0 && t.every(b => workKind(EXI[b.dataset.galleryOpen]) === 'band'); }), 'витрина в «Анатомии»: фильтр «Резинки» работает');
+  check(await visAnat(g), 'после фильтра видимые миниатюры — тоже анатомия');
+  await g.click('[data-gallery-kind="all"]');
+  await g.fill('#mv-gq', 'тяга верхнего');
+  check(await g.evaluate(() => { const t = [...document.querySelectorAll('.mv-tile')].map(b => b.dataset.galleryOpen); return t.includes('latpull') && t.every(id => EXI[id].name.toLowerCase().includes('тяга верхнего')) && document.activeElement.id === 'mv-gq'; }), 'поиск в «Анатомии» работает, курсор в поле');
+  check(await visAnat(g), 'найденные миниатюры — анатомия');
+  await g.fill('#mv-gq', '');
+  /* «Манекен» в разборе — витрина снова SVG; «Анатомия» — кадры из памяти */
+  await g.click('[data-gallery-open="latpull"]'); await g.waitForTimeout(100);
+  await g.evaluate(() => { const b = $('[data-mv-figure="mannequin"]'); b.disabled = false; b.click(); });
+  await g.click('#mv-back');
+  /* SVG видимых миниатюр строится, как раньше, в кадрах после возврата из разбора (на стенде — до нескольких секунд) */
+  const svgBack = await g.waitForFunction(() => (v => v.length > 0 && v.every(el => el.querySelector('svg') && !el.classList.contains('anat')))([...document.querySelectorAll('#mv-gallery .mv-thumb')].filter(el => { const r = el.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; })), null, { timeout: 20000 }).then(() => true, () => false);
+  const man = await thumbsState(g);
+  check(svgBack && man.view === 'mannequin' && man.anat === 0 && man.svg > 0, `«Манекен» — миниатюры снова SVG (${JSON.stringify({ view: man.view, anat: man.anat, svg: man.svg })})`);
+  await g.click('[data-gallery-open="latpull"]'); await g.waitForTimeout(100);
+  await g.evaluate(() => $('[data-mv-figure="anatomy"]').click()); await g.click('#mv-back');
+  check(await visAnat(g, 60000), 'снова «Анатомия» — кадры костей и мышц');
+  /* память: сжатые кадры, а не холсты */
+  const mem = await thumbsState(g);
+  check(mem.mem > 0 && mem.bytes / mem.mem < 40e3 && mem.bytes < 3 << 20, `кадры в памяти сжаты: ${mem.mem} шт., ${(mem.bytes / 1024).toFixed(0)} КБ`);
+  check(await g.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'витрина в «Анатомии» (390 px) без прокрутки вбок');
+  await g.keyboard.press('Escape'); await g.waitForTimeout(100);
+  check(await g.evaluate(() => !gallery.on && !galleryAnat.io && !galleryAnat.job), 'закрытая витрина — очередь кадров остановлена');
+  await g.close();
+}
+/* без WebGL — витрина как раньше: SVG-миниатюры, картинок анатомии нет */
+{
+  const n = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  n.on('pageerror', e => errors.push(String(e)));
+  await n.addInitScript(() => { delete window.WebGL2RenderingContext; });
+  await n.goto('file://' + file); await n.waitForTimeout(400);
+  await n.evaluate(() => { motionPrefs.view = 'anatomy'; });
+  await n.click('#motion-atlas'); await n.waitForTimeout(1500);
+  const r = await n.evaluate(() => ({ svg: document.querySelectorAll('#mv-gallery .mv-thumb.ready svg').length, img: document.querySelectorAll('#mv-gallery img.mv-anat').length, view: galleryAnat.view, note: document.querySelector('.mv-gnote')?.hidden }));
+  check(r.svg > 0 && r.img === 0 && r.view === 'mannequin' && r.note === true, `без WebGL витрина — SVG, как раньше (${JSON.stringify(r)})`);
+  await n.close();
+}
+/* кеш между сеансами: PWA по http (Cache Storage), после перезагрузки кадры — из кеша, без отрисовки */
+{
+  const dist = path.dirname(file), types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.bin': 'application/octet-stream', '.woff2': 'font/woff2', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
+  const srv = http.createServer((req, res) => {
+    let u = decodeURIComponent(new URL(req.url, 'http://x').pathname); if (u.endsWith('/')) u += 'index.html';
+    const f = path.join(dist, u); if (!f.startsWith(dist) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end(); return; }
+    res.writeHead(200, { 'Content-Type': types[path.extname(f)] || 'application/octet-stream' }); fs.createReadStream(f).pipe(res);
+  });
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, serviceWorkers: 'block' });
+  const c = await ctx.newPage(); c.on('pageerror', e => errors.push(String(e)));
+  const url = `http://127.0.0.1:${srv.address().port}/`;
+  const openGal = async () => { await c.goto(url); await c.waitForFunction(() => window.GymVolume && typeof galleryAnat === 'object', null, { timeout: 30000 }); await c.evaluate(() => { motionPrefs.view = 'anatomy'; }); await c.click('#motion-atlas'); };
+  await openGal();
+  const okFirst = await c.waitForFunction(() => { const s = galleryAnatStats(); return s.vis > 0 && s.visReady >= s.vis; }, null, { timeout: 120000, polling: 200 }).then(() => true, () => false);
+  await c.waitForTimeout(800);
+  const saved = await c.evaluate(async () => { const names = (await caches.keys()).filter(n => n.startsWith('podhod-thumbs@')); const c0 = names.length ? await caches.open(names[0]) : null; return { names, n: c0 ? (await c0.keys()).length : 0, build: window.PODHOD_BUILD, painted: galleryAnat.stats.painted }; });
+  check(okFirst && saved.names.length === 1 && saved.names[0].endsWith(':' + saved.build) && saved.n >= saved.painted && saved.n > 0, `кадры сохранены в Cache Storage этой сборки (${saved.n} шт., корзина ${saved.names.join()})`);
+  /* корзина прежней сборки удаляется при открытии витрины */
+  await c.evaluate(async () => { await caches.open('podhod-thumbs@' + thumbScope() + ':0.0.0-old'); });
+  await openGal();
+  const t0 = Date.now();
+  const okCache = await c.waitForFunction(() => { const s = galleryAnatStats(); return s.vis > 0 && s.visReady >= s.vis; }, null, { timeout: 30000, polling: 50 }).then(() => true, () => false);
+  const fromCache = await c.evaluate(() => ({ painted: galleryAnat.stats.painted, cached: galleryAnat.stats.cached, stage: !!GymVolume.cards().stats().context }));
+  check(okCache && fromCache.painted === 0 && fromCache.cached > 0, `после перезагрузки видимые кадры — из кеша, без отрисовки (${Date.now() - t0} мс, ${JSON.stringify(fromCache)})`);
+  await c.waitForTimeout(3600);
+  const left = await c.evaluate(async () => (await caches.keys()).filter(n => n.startsWith('podhod-thumbs@')));
+  check(left.length === 1 && !left[0].endsWith('0.0.0-old'), `корзина прежней сборки удалена (${left.join()})`);
+  await ctx.close(); srv.close();
+}
+
 /* скрытая панель замера скорости (?perf, 19-perf-panel.js): без флага панели нет, а крючки только читают флаг
    (globalThis.GymPerf); с флагом — плашка на телефоне, живые цифры карточек (в «Анатомии» — кадр карточки, копия,
-   ступень скорости) и объёма, панель переезжает в открытое окно; «Замерить» проходит все 10 шагов (карточка и
+   ступень скорости) и объёма, панель переезжает в открытое окно; «Замерить» проходит все 11 шагов (карточка и
    тренировка — в «Анатомии» и «Манекене»; короткие длительности, фигуры — заглушки) и не меняет журнал, настройки,
    планы и вид фигуры; «Остановить» прерывает и всё возвращает; «Скопировать результат» — текст или поле для ручного
    копирования; ?perf=0 выключает */
@@ -619,7 +723,7 @@ await page.close();
   });
   const before = await snap();
   await p.click('[data-perf="run"]'); await p.waitForTimeout(400);
-  check(/^Идёт замер… не трогайте экран, шаг 1 из 10$/.test(await p.evaluate(() => document.querySelector('[data-perf-runtext]').textContent)), '«Замерить»: надпись «Идёт замер… не трогайте экран, шаг 1 из 10»');
+  check(/^Идёт замер… не трогайте экран, шаг 1 из 11$/.test(await p.evaluate(() => document.querySelector('[data-perf-runtext]').textContent)), '«Замерить»: надпись «Идёт замер… не трогайте экран, шаг 1 из 11»');
   await p.click('[data-perf="stop"]');
   await p.waitForFunction(() => !GymPerf.run && GymPerf.result, null, { timeout: 5000 });
   check(await p.evaluate(() => GymPerf.result.aborted && /Замер остановлен/.test(document.querySelector('[data-perf-result]').textContent)) && await snap() === before, '«Остановить» прерывает замер и возвращает всё как было');
@@ -628,21 +732,22 @@ await page.close();
   const run = await p.evaluate(() => perfRun({ plan: 700, step: 500, warm: 150 }).then(r => ({ kinds: r.steps.map(s => s.kind + (s.id ? ':' + s.id : '')), labels: r.steps.map(s => s.label), bad: r.steps.filter(s => s.skip || s.error).map(s => s.label + ' ' + (s.skip || s.error)), text: perfReportText(r) })));
   await p.waitForTimeout(50);
   check(await p.evaluate(() => __wk.req >= 2 && __wk.rel === __wk.req), 'на время замера экран не гаснет: блокировка экрана взята и отпущена');
-  check(run.kinds.length === 10 && /^plan:\w+$/.test(run.kinds[0]) && run.kinds[1] === run.kinds[0] && /^workout:\w+$/.test(run.kinds[8]) && run.kinds[9] === run.kinds[8] && !run.bad.length
+  check(run.kinds.length === 11 && /^plan:\w+$/.test(run.kinds[0]) && run.kinds[1] === run.kinds[0] && /^workout:\w+$/.test(run.kinds[8]) && run.kinds[9] === run.kinds[8] && run.kinds[10] === 'gallery' && !run.bad.length
     && run.kinds.slice(2, 8).join() === 'detail:latpulluh,detail:latpulluh,detail:legpress,detail:legpress,detail:squat,detail:squat',
-    `«Замерить»: все 10 шагов — карточка и тренировка в двух видах, три разбора в двух видах (${run.kinds.join(', ')}${run.bad.length ? '; ' + run.bad.join('; ') : ''})`);
+    `«Замерить»: все 11 шагов — карточка и тренировка в двух видах, три разбора в двух видах, витрина атласа (${run.kinds.join(', ')}${run.bad.length ? '; ' + run.bad.join('; ') : ''})`);
+  check(/^Атлас движений: витрина — Манекен \(объёмная графика недоступна\)$/.test(run.labels[10]), `шаг витрины подписан по тому, что показано (${run.labels[10]})`);
   /* фигуры — заглушки (объёма нет): шаги «Анатомии» честно подписаны манекеном без объёмной графики */
   check(/ — Манекен \(объёмная графика недоступна\)$/.test(run.labels[0]) && / — Манекен$/.test(run.labels[1]) && /^Тренировка: .* \(объёмная графика недоступна\)$/.test(run.labels[8]) && /^Тренировка: /.test(run.labels[9]),
     `подписи шагов — по тому, что показано (${run.labels[0]} | ${run.labels[1]} | ${run.labels[8]} | ${run.labels[9]})`);
   const after = await snap();
   check(after === before, 'после замера журнал, настройки, планы, сохранённая тренировка, вид фигуры и прокрутка — как были');
-  check(await p.evaluate(() => document.querySelectorAll('#perf-panel .perf-table tbody tr').length === 10 && !document.querySelector('[data-perf-run]').offsetHeight), 'итог: таблица из 10 шагов');
+  check(await p.evaluate(() => document.querySelectorAll('#perf-panel .perf-table tbody tr').length === 11 && !document.querySelector('[data-perf-run]').offsetHeight), 'итог: таблица из 11 шагов');
   /* копирование: буфер обмена; не вышло — поле с выделенным текстом */
   await p.evaluate(() => { window.__copied = null; Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: t => { window.__copied = t; return Promise.resolve(); } } }); });
   await p.click('[data-perf="copy"]'); await p.waitForTimeout(100);
   const copied = await p.evaluate(() => ({ text: window.__copied, msg: document.querySelector('[data-perf-msg]').textContent }));
-  check(copied.text && /^Lazy Gym Planner .* — замер скорости, /.test(copied.text) && /\nУстройство: .*\nВидеокарта: /.test(copied.text) && (copied.text.match(/^\d+\. /gm) || []).length === 10 && /Скопировано/.test(copied.msg),
-    '«Скопировать результат»: устройство и 10 шагов в буфере обмена');
+  check(copied.text && /^Lazy Gym Planner .* — замер скорости, /.test(copied.text) && /\nУстройство: .*\nВидеокарта: /.test(copied.text) && (copied.text.match(/^\d+\. /gm) || []).length === 11 && /Скопировано/.test(copied.msg),
+    '«Скопировать результат»: устройство и 11 шагов в буфере обмена');
   await p.evaluate(() => { navigator.clipboard.writeText = () => Promise.reject(new Error('нет доступа')); });
   await p.click('[data-perf="copy"]'); await p.waitForTimeout(100);
   check(await p.evaluate(() => { const ta = document.querySelector('[data-perf-msg] textarea'); return !!ta && ta.value === window.__copied && document.activeElement === ta && ta.selectionEnd - ta.selectionStart === ta.value.length; }),
@@ -663,4 +768,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа, виды фигуры «Анатомия», «Скелет» и «Манекен», анатомия в карточках плана и на экране тренировки (откат на манекен, без WebGL — SVG), первый экран и разбор на телефоне, карточка, журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования, панель замера скорости ?perf работают на телефоне и компьютере.');
+console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа (в «Анатомии» — кадры из общего рендерера, кеш между сеансами, без WebGL — SVG), виды фигуры «Анатомия», «Скелет» и «Манекен», анатомия в карточках плана и на экране тренировки (откат на манекен, без WebGL — SVG), первый экран и разбор на телефоне, карточка, журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования, панель замера скорости ?perf работают на телефоне и компьютере.');

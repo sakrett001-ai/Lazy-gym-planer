@@ -9,6 +9,8 @@ const CACHE_PREFIX = 'podhod@' + SCOPE + ':';
 const CACHE = CACHE_PREFIX + VERSION;
 /* отметки языков — в своём кеше: он переживает обновления (старые кеши удаляются по CACHE_PREFIX) */
 const LANGS_CACHE = 'podhod-langs@' + SCOPE, LANGS_URL = SCOPE + '__podhod-langs.json', LANG_DAYS = 30;
+/* готовые миниатюры витрины атласа (13e-gallery-anatomy.js) — корзина на сборку: при обновлении прежние удаляются */
+const THUMBS_PREFIX = 'podhod-thumbs@' + SCOPE + ':', THUMBS = THUMBS_PREFIX + VERSION;
 const COMMON = ['./volume.js?v=' + VERSION,
   './icon.svg', './icon-192.png?v=' + VERSION, './icon-512.png?v=' + VERSION, './icon-maskable-512.png?v=' + VERSION,
   './apple-touch-icon.png?v=' + VERSION, './favicon-32.png?v=' + VERSION,
@@ -63,7 +65,7 @@ function notDownloaded(lang) {
   return new Response(html, {status:503, headers:{'Content-Type':'text/html; charset=utf-8', 'Cache-Control':'no-store'}});
 }
 self.addEventListener('install', e => { e.waitUntil(wantedLangs().then(langs => caches.open(CACHE).then(c => c.addAll(shellFor(langs))))); });
-self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith(CACHE_PREFIX) && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
+self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => (k.startsWith(CACHE_PREFIX) && k !== CACHE) || (k.startsWith(THUMBS_PREFIX) && k !== THUMBS)).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || !e.request.url.startsWith(self.location.origin)) return;
   e.respondWith(caches.open(CACHE).then(c => c.match(e.request, {ignoreSearch:false})).then(hit => hit || fetch(e.request).then(res => {

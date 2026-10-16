@@ -55,7 +55,7 @@ test('summary per frame: card frames from memory and computed, DOM; 3D parts, th
   assert.equal(s.frames, 5);
   assert.equal(s.fps, 50);
   assert.equal(s.figFps, 40, 'four frames drew a figure');
-  assert.deepEqual({ ...s.counts }, { svgHit: 1, svgMiss: 1, anat: 0 });
+  assert.deepEqual({ ...s.counts }, { svgHit: 1, svgMiss: 1, anat: 0, thumb: 0 });
   assert.equal(s.parts.card.n, 2); assert.equal(s.parts.card.med, 3.5, 'card frame = calc + DOM: 5 and 2');
   assert.equal(s.parts.svgMiss.med, 4); assert.equal(s.parts.svgHit.med, .5); assert.equal(s.parts.svgDom.n, 2);
   assert.equal(s.parts.volume.n, 2); assert.deepEqual([s.parts.volume.med, s.parts.volume.p95], [18, 18], '3D frame = pose + scene + render');
@@ -281,11 +281,20 @@ test('anatomy step lines: step and median, or the fallback; the closing line say
   assert.equal(perfReportText(r).split('\n').at(-1), 'Откат «Анатомии» на манекен не включался.');
 });
 
-test('the run measures the plan card and the workout in «Anatomy» and in «Mannequin»; the 3D detail — as before', () => {
+test('the run measures the plan card and the workout in «Anatomy» and in «Mannequin», the 3D detail — as before, and the atlas gallery in «Anatomy»', () => {
   const steps = JSON.parse(JSON.stringify(api.PERF_STEPS));
   assert.deepEqual(steps.map(s => s.kind + ':' + s.view + (s.id ? ':' + s.id : '')), ['plan:anatomy', 'plan:mannequin',
     'detail:anatomy:latpulluh', 'detail:mannequin:latpulluh', 'detail:anatomy:legpress', 'detail:mannequin:legpress', 'detail:anatomy:squat', 'detail:mannequin:squat',
-    'workout:anatomy', 'workout:mannequin']);
+    'workout:anatomy', 'workout:mannequin', 'gallery:anatomy']);
+});
+
+test('gallery thumbnails: each task is recorded on its own; the report line names them and the time to anatomy near the screen', () => {
+  const { perfSummary, perfStepLine } = api;
+  const frames = [{ t: 0, cost: 9, b: { thumbs: [30, 45] } }, { t: 16, cost: 8, b: null }, { t: 33, cost: 10, b: { thumbs: [60] } }];
+  const u = perfSummary(frames, 1000);
+  assert.deepEqual(JSON.parse(JSON.stringify([u.parts.thumb.med, u.parts.thumb.n, u.counts.thumb])), [45, 3, 3]);
+  const line = perfStepLine({ kind: 'gallery', label: 'Атлас движений: витрина — Анатомия', open: 120, sum: u, anatAt: 1830 }, 10);
+  assert.match(line, /^11\. Атлас движений: витрина — Анатомия: открытие 120 мс; экран 3,0 к\/с, фигура 2,0 к\/с; кадр 9,0\/10; миниатюры 45\/60 \(3 задачи\), анатомия у экрана за 1830 мс$/);
 });
 
 test('card hooks: GymPerf.card records the card frame (not while a scene is built); card scenes keep the 3D quality flag of the detail', async () => {
