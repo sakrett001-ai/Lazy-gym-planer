@@ -7199,6 +7199,7 @@ const Muscles = (() => {
       el: mu.el.map(e => e.s ? { s: pt(e.s) } : { w: { t: e.w.t, i: bone(e.w.bone), c: e.w.c, a: e.w.a, r: e.w.r, B: e.w.B, side: e.w.side ? pt(e.w.side) : null } })
     }));
     bound.fans = bindFans(md, bound, idx);
+    bound.caps = bindCaps(md, bound, idx);
     return bound;
   }
   const apply = (m, i, p) => { const o = i * 12; return [0, 1, 2].map(r => m[o + r * 4] * p[0] + m[o + r * 4 + 1] * p[1] + m[o + r * 4 + 2] * p[2] + m[o + r * 4 + 3]); };
@@ -7843,10 +7844,430 @@ const Muscles = (() => {
     return { s: B[o + 24], area: B[o + 13], h: B[o + 18], eta: B[o + 17], wl: B[o + 15], wr: B[o + 16], own: B[o + 23], shift: B[o + 19], t: [B[o + 3], B[o + 4], B[o + 5]],
       n: [B[o + 6], B[o + 7], B[o + 8]], skin: B[o + 12] < 1e8 ? [B[o + 9], B[o + 10], B[o + 11]] : null };
   }
-  /* все мышцы кадра: трубки (surface) и ленты (ribbon); start — номера первых колец мышц (длина bound.length + 1) */
+  /* ---------- дельтовидная: «колпак» над головкой плеча ----------
+     Пять линий действия дельтовидной (передняя DELT1, средняя DELT2, задние DELT3lat, DELT3, DELT3med) рисуются одним пластом,
+     а не трубками (почему — tools/muscles/README.md, «Колпак дельтовидной»). Пласт — сетка: 11 столбцов (край, центр части 1,
+     шов 1–2, центр 2, …, центр 5, край) по CAP_RINGS строк. Столбец — «нить» от прикрепления на плечевой кости к началу на
+     ключице, акромионе или ости лопатки, натянутая снаружи головки плеча и диафиза. Строки — поперёк нитей на общей «широте».
+     Часть k — кольца по строкам: центр части (наружу и на кости) и два шва; соседние части делят шов, поэтому пласт сплошной.
+     Линии действия (пути из данных) не меняются: из них берутся только концы, длина и тело мышцы (площади сечения). */
+  const CAP = ['DELT1', 'DELT2', 'DELT3lat', 'DELT3', 'DELT3med'];
+  /* CAP_RINGS — строк (колец у части); CAP_RH, CAP_GAP — радиус головки (см) и зазор до мышцы; CAP_SHAFT — наибольшее расстояние
+     пласта от оси диафиза у прикрепления (см); CAP_ROUTE, CAP_STR — точек маршрута и нити; CAP_LAM — пределы доли шва;
+     CAP_EDGE, CAP_EDGE_O — вынос края колпака за крайнюю часть у плеча и у начала (доля шага столбцов: у начала меньше — край
+     не уходит острым лоскутом вдоль ключицы и ости); CAP_EDGE_H, CAP_TIP — толщина края (доля центра) и скругление кромки;
+     CAP_INS, CAP_VOPEN — прикрепления задних пучков вдоль заднего края V бугристости (доли от вершины V) и раскрытие этого
+     края (рад); CAP_FIX — азимуты столбцов на диафизе (рад, спереди назад); CAP_FAN — полярный угол, до которого веер
+     раскрывается на диафизе (рад); CAP_BETA — вклад длины нити в «широту» строк; CAP_TMAX, CAP_WMAX, CAP_WTOT — толщина, по
+     которой считается нужная ширина части, наибольшая полуширина части и вся ширина колпака (см); CAP_AMAX — наибольший
+     поворот узла при раздвигании (рад); CAP_UEND — у концов нити (доля длины) ширина не добирается; CAP_DSMOOTH — проходы
+     сглаживания сдвигов вдоль столбца; CAP_HMAX, CAP_HMAX2 — наибольшая толщина части (см; у средней — вторая); CAP_SMOOTH —
+     проходы согласования толщин центров и швов; CAP_TSMOOTH, CAP_NSMOOTH — проходы сглаживания толщины и нормали вдоль
+     столбца */
+  const CAP_RINGS = 20, CAP_RH = 2.75, CAP_GAP = .2, CAP_SHAFT = 1.6, CAP_ROUTE = 48, CAP_STR = 40, CAP_LAM = .3, CAP_EDGE = .6, CAP_EDGE_O = .25,
+    CAP_EDGE_H = .5, CAP_TIP = .5, CAP_INS = [0, 0, 1 / 3, 2 / 3, 1], CAP_VOPEN = 40 * Math.PI / 180,
+    CAP_FIX = [100, 75, 40, 0, -30, -50, -65, -80, -90, -100, -110].map(x => x * Math.PI / 180), CAP_FAN = .45, CAP_BETA = .15,
+    CAP_TMAX = 3, CAP_WMAX = 4, CAP_WTOT = 18, CAP_AMAX = .45, CAP_UEND = .2, CAP_DSMOOTH = 4, CAP_HMAX = 3, CAP_HMAX2 = 3.5, CAP_SMOOTH = 3, CAP_TSMOOTH = 2, CAP_NSMOOTH = 2;
+  function bindCaps(md, bound, idx) {
+    const at = new Map(bound.map((mu, i) => [mu.name, i])), caps = [];
+    for (const s of ['r', 'l']) {
+      const lines = CAP.map(nm => at.get(nm + '_' + s));
+      if (lines.some(i => i === undefined)) continue;
+      const hum = idx.get('humerus|' + s.toUpperCase());
+      if (hum === undefined) continue;
+      const K = lines.length, C = 2 * K + 1, n = CAP_RINGS, f = c => new Float64Array(c);
+      /* rev — путь линии идёт от начала к плечу (у задней части); строки колпака — от плеча */
+      const rev = Uint8Array.from(lines.map(i => /^humerus/.test(md.muscles[i].el[0].s.bone[0]) ? 0 : 1));
+      /* швы — по доле объёмов λ соседних частей */
+      const v = lines.map(i => bound[i].v), lam = f(K + 1);
+      for (let k = 0; k + 1 < K; k++) lam[k + 1] = Math.min(1 - CAP_LAM, Math.max(CAP_LAM, v[k] / (v[k] + v[k + 1])));
+      const cap = { key: 'delt', side: s.toUpperCase(), lines, rev, K, C, n, hum, lam,
+        X: f(C * n * 3), NR: f(C * n * 3), B: f(C * n * 3), A: f(K * n), TH: f(C * n), WL: f(K * n), WR: f(K * n), U: f(C * n),
+        DT: f(C * n), AIM: f(2), E: f(C * 6), RT: f(CAP_ROUTE), ST: f(C * CAP_STR * 4), SL: f(C * CAP_STR), TS: f(C), AE: f(C), PL: new Uint8Array(C),
+        BODY: new Array(K), LN: f(K) };
+      lines.forEach((i, k) => { bound[i].cap = cap; bound[i].capK = k; bound[i].rings = n; });
+      caps.push(cap);
+    }
+    return caps;
+  }
+  /* рамка кадра: центр сустава H (0–2), ось плеча к локтю a (3–5), азимут 0 — e1 (к бугристости, 6–8), e2 = a × e1 (9–11) */
+  const CF = new Float64Array(12);
+  /* азимуты столбцов: прикрепления TI (настоящие) и T0 (по порядку), на диафизе TS, у начала T1; рабочие массивы */
+  const TI = new Float64Array(16), T0 = new Float64Array(16), T1 = new Float64Array(16), TO = new Float64Array(16), W = new Float64Array(16),
+    RS = new Float64Array(16), GP = new Float64Array(16);
+  const capWrap = d => { while (d > Math.PI) d -= 2 * Math.PI; while (d <= -Math.PI) d += 2 * Math.PI; return d; };
+  const capStep = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+  /* азимут точки p вокруг оси плеча (от e1 к e2) */
+  const capAzimuth = (p, i) => {
+    const dx = p[i] - CF[0], dy = p[i + 1] - CF[1], dz = p[i + 2] - CF[2];
+    return Math.atan2(dx * CF[9] + dy * CF[10] + dz * CF[11], dx * CF[6] + dy * CF[7] + dz * CF[8]);
+  };
+  /* полярный угол точки p (от оси плеча к локтю) */
+  const capPolar = (p, i) => {
+    const dx = p[i] - CF[0], dy = p[i + 1] - CF[1], dz = p[i + 2] - CF[2];
+    return Math.acos(Math.max(-1, Math.min(1, (dx * CF[3] + dy * CF[4] + dz * CF[5]) / (Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-9))));
+  };
+  /* Маршрут столбца — направления из центра сустава: полярный угол α растёт линейно от прикрепления aI до начала aE (через
+     верх головки — aE > π), азимут θ(α): от своего на прикреплении — к азимуту столбца на диафизе TS (веер раскрывается между
+     a0 и a1), затем к азимуту начала T1 (между a1 и aE); у прикрепления (1 − u)⁴ — поправка к настоящему азимуту TI. */
+  const RP = new Float64Array(8);
+  function capTheta(u, al) {
+    const v = 1 - u, v2 = v * v;
+    return RP[4] + (RP[3] - RP[4]) * capStep((al - RP[0]) / (RP[1] - RP[0])) + (RP[5] - RP[3]) * (RP[2] - RP[1] > 1e-6 ? capStep((al - RP[1]) / (RP[2] - RP[1])) : 1) +
+      (RP[6] - RP[4]) * v2 * v2;
+  }
+  /* Нить столбца c — кратчайший путь от прикрепления I до начала O по развёртке маршрута (конус направлений с вершиной в центре
+     сустава: точка — радиус r и угол развёртки ψ) снаружи препятствия — головки (радиус CAP_RH + CAP_GAP) и диафиза (расстояние
+     от оси rs, на маршруте это r ≥ rs / sin α). Препятствие звёздное, путь — выпуклая цепочка левых поворотов (обход Грэхема по
+     возрастанию ψ). Результат — CAP_STR точек нити в ST (x, y, z, «широта»): ниже центра сустава — минус высота вдоль оси, выше —
+     дуга по головке CAP_RH·(α − π/2); вдоль маршрута «широта» растёт. */
+  const HX = new Float64Array(CAP_ROUTE + 2), HY = new Float64Array(CAP_ROUTE + 2), HA = new Float64Array(CAP_ROUTE + 2), HL = new Float64Array(CAP_ROUTE + 2),
+    RX = new Float64Array(CAP_ROUTE), RY = new Float64Array(CAP_ROUTE), RZ = new Float64Array(CAP_ROUTE), CP = new Float64Array(CAP_ROUTE), SP = new Float64Array(CAP_ROUTE);
+  function capString(cap, c, E, iI, iO) {
+    const M = CAP_ROUTE, RT = cap.RT, ST = cap.ST, MS = CAP_STR, b0 = c * MS * 4, hx = CF[0], hy = CF[1], hz = CF[2];
+    const rA = Math.sqrt((E[iI] - hx) ** 2 + (E[iI + 1] - hy) ** 2 + (E[iI + 2] - hz) ** 2) || 1e-9, rB = Math.sqrt((E[iO] - hx) ** 2 + (E[iO + 1] - hy) ** 2 + (E[iO + 2] - hz) ** 2) || 1e-9;
+    const aI = Math.acos(Math.max(-1, Math.min(1, ((E[iI] - hx) * CF[3] + (E[iI + 1] - hy) * CF[4] + (E[iI + 2] - hz) * CF[5]) / rA))), aE = cap.AE[c];
+    RP[0] = Math.max(aI, cap.AIM[c < 3 ? 0 : 1]); RP[1] = RP[0] + Math.max(.15, Math.min(aE, Math.PI - .2, CAP_FAN) - RP[0]); RP[2] = Math.max(aE, RP[1]);
+    RP[3] = cap.TS[c]; RP[4] = T0[c]; RP[5] = T1[c]; RP[6] = TI[c];
+    /* маршрут: направления (вдоль оси, e1, e2) и угол развёртки ψ — накопленный угол между соседними направлениями */
+    /* шаг маршрута мал (доли радиана): угол между соседними направлениями — по хорде, поворот на развёртке (CP, SP —
+       косинус и синус ψ) — по рядам Тейлора; α растёт равномерно — его косинус и синус тоже поворотом */
+    let psi = 0, ca = Math.cos(aI), sa = Math.sin(aI), cp = 1, sp = 0;
+    const da = (aE - aI) / (M - 1), cd = Math.cos(da), sd = Math.sin(da);
+    for (let j = 0; j < M; j++) {
+      const u = j / (M - 1), th = capTheta(u, aI + da * j), x = ca, y = sa * Math.cos(th), z = sa * Math.sin(th);
+      if (j) {
+        const dx = x - RX[j - 1], dy = y - RY[j - 1], dz = z - RZ[j - 1], d = Math.sqrt(dx * dx + dy * dy + dz * dz), d2 = d * d;
+        const c1 = 1 - d2 / 2 + d2 * d2 / 24, s1 = d - d * d2 / 6, c0 = cp; psi += d; cp = c0 * c1 - sp * s1; sp = sp * c1 + c0 * s1;
+      }
+      RT[j] = psi; RX[j] = x; RY[j] = y; RZ[j] = z; CP[j] = cp; SP[j] = sp;
+      const c2 = ca * cd - sa * sd; sa = sa * cd + ca * sd; ca = c2;
+    }
+    const Rh = Math.min(CAP_RH + CAP_GAP, .97 * rA, .97 * rB), rs = Math.min(CAP_SHAFT, .97 * rA * Math.sin(aI), .97 * rB * Math.max(.05, Math.abs(Math.sin(aE))));
+    let h = 0;
+    for (let j = 0; j < M; j++) {
+      let x, y, a;
+      if (j === 0) { x = rA; y = 0; a = 0; }
+      else if (j === M - 1) { x = rB * CP[j]; y = rB * SP[j]; a = psi; }
+      else { const sa = Math.sqrt(RY[j] * RY[j] + RZ[j] * RZ[j]), ro = RX[j] > 0 ? Math.max(Rh, rs / Math.max(1e-3, sa)) : Rh; a = RT[j]; x = ro * CP[j]; y = ro * SP[j]; }
+      while (h >= 2 && (HX[h - 1] - HX[h - 2]) * (y - HY[h - 1]) - (HY[h - 1] - HY[h - 2]) * (x - HX[h - 1]) <= 1e-12) h--;
+      HX[h] = x; HY[h] = y; HA[h] = a; h++;
+    }
+    HL[0] = 0; for (let k = 1; k < h; k++) HL[k] = HL[k - 1] + Math.sqrt((HX[k] - HX[k - 1]) ** 2 + (HY[k] - HY[k - 1]) ** 2);
+    const L = HL[h - 1]; let k = 1, j = 1;
+    for (let q = 0; q < MS; q++) {
+      const s = L * q / (MS - 1); while (k < h - 1 && HL[k] < s) k++;
+      const d = HL[k] - HL[k - 1], t = d > 1e-12 ? Math.min(1, Math.max(0, (s - HL[k - 1]) / d)) : 0;
+      const x0 = HX[k - 1], y0 = HY[k - 1], x = x0 + (HX[k] - x0) * t, y = y0 + (HY[k] - y0) * t, r = Math.sqrt(x * x + y * y);
+      const an = Math.min(psi, Math.max(0, HA[k - 1] + Math.atan2(x0 * y - y0 * x, x0 * x + y0 * y)));
+      while (j < M - 1 && RT[j] < an) j++;
+      while (j > 1 && RT[j - 1] > an) j--;
+      /* направление — между соседними точками маршрута (их угол мал: маршрут густой) */
+      const f = RT[j] > RT[j - 1] ? (an - RT[j - 1]) / (RT[j] - RT[j - 1]) : 0, u = (j - 1 + f) / (M - 1);
+      let dx = RX[j - 1] + (RX[j] - RX[j - 1]) * f, dy = RY[j - 1] + (RY[j] - RY[j - 1]) * f, dz = RZ[j - 1] + (RZ[j] - RZ[j - 1]) * f; const dl = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+      dx /= dl; dy /= dl; dz /= dl;
+      const v = b0 + q * 4;
+      for (let e = 0; e < 3; e++) ST[v + e] = CF[e] + r * (dx * CF[3 + e] + dy * CF[6 + e] + dz * CF[9 + e]);
+      ST[v + 3] = r * dx > 0 ? -r * dx : CAP_RH * (aI + (aE - aI) * u - Math.PI / 2);
+    }
+    for (let e = 0; e < 3; e++) { ST[b0 + e] = E[iI + e]; ST[b0 + (MS - 1) * 4 + e] = E[iO + e]; }
+  }
+  /* изотоническая регрессия с шагами gap[c] между c и c + 1: ближайшие по сумме квадратов t, где t[c+1] − t[c] ≥ gap[c] */
+  const ISO = new Float64Array(16), ISW = new Float64Array(16), ISN = new Int32Array(16), ISC = new Float64Array(16);
+  function capSpread(t, gap, C) {
+    let b = 0, acc = 0;
+    for (let c = 0; c < C; c++) {
+      ISC[c] = acc; ISO[b] = t[c] - acc; ISW[b] = 1; ISN[b] = 1; b++; if (c + 1 < C) acc += gap[c];
+      while (b > 1 && ISO[b - 2] > ISO[b - 1]) { const w = ISW[b - 2] + ISW[b - 1]; ISO[b - 2] = (ISO[b - 2] * ISW[b - 2] + ISO[b - 1] * ISW[b - 1]) / w; ISW[b - 2] = w; ISN[b - 2] += ISN[b - 1]; b--; }
+    }
+    let c = 0; for (let j = 0; j < b; j++) for (let k = 0; k < ISN[j]; k++, c++) t[c] = ISO[j] + ISC[c];
+  }
+  /* колпак кадра: концы и рамка, азимуты, нити и строки, ширина, толщины, вершины колец частей */
+  function capSurface(cap, bound, paths, m, pos, nor, start) {
+    capEnds(cap, bound, paths, m);
+    capAzimuths(cap);
+    capRows(cap);
+    capWidth(cap);
+    capThickness(cap);
+    capVertices(cap, pos, nor, start);
+  }
+  function capEnds(cap, bound, paths, m) {
+    const K = cap.K, C = cap.C, lam = cap.lam, E = cap.E;
+    const o = cap.hum * 12, hx = m[o + 3], hy = m[o + 7], hz = m[o + 11];
+    let ax0 = -m[o + 1], ax1 = -m[o + 5], ax2 = -m[o + 9]; { const l = Math.sqrt(ax0 * ax0 + ax1 * ax1 + ax2 * ax2) || 1; ax0 /= l; ax1 /= l; ax2 /= l; }
+    CF[0] = hx; CF[1] = hy; CF[2] = hz; CF[3] = ax0; CF[4] = ax1; CF[5] = ax2;
+    /* 1. Концы столбцов: прикрепление на плече E[c·6 …] и начало E[c·6 + 3 …]. Задняя часть в модели прикрепляется одной точкой
+          (три линии); на рисунке её пучки — вдоль заднего края V-образной бугристости: от вершины V (прикрепление средней части)
+          к своему (доли CAP_INS), и этот край раскрыт назад вокруг оси плеча (CAP_VOPEN) — иначе задние пучки шли бы друг за
+          другом по одной линии. Швы — между соседними центрами (λ), края — вынос за крайние части (CAP_EDGE у плеча,
+          CAP_EDGE_O у начала). */
+    for (let k = 0; k < K; k++) {
+      const i = cap.lines[k], p = paths[i], pts = p.points, I = cap.rev[k] ? pts[pts.length - 1] : pts[0], O = cap.rev[k] ? pts[0] : pts[pts.length - 1];
+      cap.BODY[k] = body(bound[i], p.length); cap.LN[k] = p.length;
+      const c = 2 * k + 1; for (let j = 0; j < 3; j++) { E[c * 6 + j] = I[j]; E[c * 6 + 3 + j] = O[j]; }
+    }
+    {
+      /* назад — от передней части: знак поворота по взаимному положению прикреплений передней и средней частей */
+      const d2x = E[18] - hx, d2y = E[19] - hy, d2z = E[20] - hz, d1x = E[6] - hx, d1y = E[7] - hy, d1z = E[8] - hz;
+      const s1 = (d2y * d1z - d2z * d1y) * ax0 + (d2z * d1x - d2x * d1z) * ax1 + (d2x * d1y - d2y * d1x) * ax2 >= 0 ? -1 : 1;
+      for (let k = 2; k < K; k++) {
+        const c = 2 * k + 1, f = CAP_INS[k], a = s1 * CAP_VOPEN * f, ca = Math.cos(a), sa = Math.sin(a);
+        const px = E[18] + (E[c * 6] - E[18]) * f - hx, py = E[19] + (E[c * 6 + 1] - E[19]) * f - hy, pz = E[20] + (E[c * 6 + 2] - E[20]) * f - hz, dd = px * ax0 + py * ax1 + pz * ax2;
+        const cx = ax1 * pz - ax2 * py, cy = ax2 * px - ax0 * pz, cz = ax0 * py - ax1 * px;
+        E[c * 6] = hx + px * ca + cx * sa + ax0 * dd * (1 - ca); E[c * 6 + 1] = hy + py * ca + cy * sa + ax1 * dd * (1 - ca); E[c * 6 + 2] = hz + pz * ca + cz * sa + ax2 * dd * (1 - ca);
+      }
+    }
+    for (let k = 0; k + 1 < K; k++) { const c = 2 * k + 2, l = lam[k + 1]; for (let j = 0; j < 6; j++) E[c * 6 + j] = E[(c - 1) * 6 + j] + (E[(c + 1) * 6 + j] - E[(c - 1) * 6 + j]) * l; }
+    for (let j = 0; j < 6; j++) { const f = j < 3 ? CAP_EDGE : CAP_EDGE_O; E[j] = E[6 + j] + (E[6 + j] - E[12 + j]) * f; E[(C - 1) * 6 + j] = E[(C - 2) * 6 + j] + (E[(C - 2) * 6 + j] - E[(C - 3) * 6 + j]) * f; }
+    /* 2. Рамка: азимут 0 — к среднему прикреплению на плече (бугристость), поперёк оси */
+    {
+      let x = 0, y = 0, z = 0;
+      for (let c = 0; c < C; c++) { x += E[c * 6] - hx; y += E[c * 6 + 1] - hy; z += E[c * 6 + 2] - hz; }
+      const d = x * ax0 + y * ax1 + z * ax2; x -= d * ax0; y -= d * ax1; z -= d * ax2; const l = Math.sqrt(x * x + y * y + z * z) || 1;
+      CF[6] = x / l; CF[7] = y / l; CF[8] = z / l; CF[9] = ax1 * CF[8] - ax2 * CF[7]; CF[10] = ax2 * CF[6] - ax0 * CF[8]; CF[11] = ax0 * CF[7] - ax1 * CF[6];
+    }
+  }
+  function capAzimuths(cap) {
+    const C = cap.C, E = cap.E;
+    /* 3. Азимуты. На диафизе пучки лежат каждый на своём месте вокруг кости (CAP_FIX, спереди назад; для левой стороны — с
+          обратным знаком): дистальная половина мышцы движется вместе с плечом. Выше головки нить идёт к началу — поворотом вокруг
+          оси плеча в ту сторону, где ближе, или через верх головки (полярный угол за π), если начало над головкой с другой
+          стороны: стоимость пути — поворот, умноженный на sin α начала, плюс лишний полярный угол. Решает центр части; шов идёт
+          через верх, только если обе соседние части, край — как своя часть. Веер раскрывается выше самого высокого
+          прикрепления своего края V (AIM: передний — столбцы до средней части, задний — от неё): прикрепления на заднем
+          крае V не обгоняют друг друга, а передняя часть раскрывается сразу от своего. */
+    for (let c = 0; c < C; c++) { TI[c] = capAzimuth(E, c * 6); T0[c] = TI[c]; TO[c] = capAzimuth(E, c * 6 + 3); }
+    const sgI = TI[0] - TI[C - 1] >= 0 ? 1 : -1;
+    cap.AIM[0] = cap.AIM[1] = 0;
+    for (let c = 0; c < C; c++) { const a = capPolar(E, c * 6); if (c <= 3) cap.AIM[0] = Math.max(cap.AIM[0], a); if (c >= 3) cap.AIM[1] = Math.max(cap.AIM[1], a); }
+    for (let c = 0; c < C; c++) {
+      const ts = sgI * CAP_FIX[c], aO = capPolar(E, c * 6 + 3), sa = Math.sin(aO);
+      const dn = capWrap(TO[c] - ts), dp = capWrap(TO[c] + Math.PI - ts);
+      cap.TS[c] = ts; T1[c] = dn; W[c] = dp; RS[c] = aO;
+      cap.PL[c] = aO > Math.PI / 2 && Math.abs(dp) * sa + 2 * (Math.PI - aO) < Math.abs(dn) * sa ? 1 : 0;
+    }
+    for (let c = 0; c < C; c += 2) cap.PL[c] = c === 0 ? cap.PL[1] : c === C - 1 ? cap.PL[C - 2] : cap.PL[c - 1] & cap.PL[c + 1];
+    for (let c = 0; c < C; c++) { const pl = cap.PL[c]; T1[c] = cap.TS[c] + (pl ? W[c] : T1[c]); cap.AE[c] = pl ? 2 * Math.PI - RS[c] : RS[c]; }
+    /* азимуты прикреплений — по порядку столбцов (не ближе 0,0125 рад): маршруты у плеча не пересекаются */
+    for (let c = 0; c + 1 < C; c++) GP[c] = .0125;
+    if (sgI > 0) { for (let c = 0; c < C; c++) T0[c] = -T0[c]; capSpread(T0, GP, C); for (let c = 0; c < C; c++) T0[c] = -T0[c]; } else capSpread(T0, GP, C);
+  }
+  function capRows(cap) {
+    const K = cap.K, C = cap.C, n = cap.n, X = cap.X, A = cap.A, E = cap.E, ST = cap.ST, U = cap.U, MS = CAP_STR;
+    /* 4. Нити столбцов; «широта» вдоль нити — накопленный максимум */
+    for (let c = 0; c < C; c++) {
+      capString(cap, c, E, c * 6, c * 6 + 3);
+      const b0 = c * MS * 4; let mx = -Infinity;
+      for (let j = 0; j < MS; j++) { const v = b0 + j * 4 + 3; mx = Math.max(mx, ST[v]); ST[v] = mx; }
+    }
+    /* 5. Строки — поперёк нитей на общей «широте» Λ = широта + CAP_BETA·длина нити (строго растёт): от самого нижнего
+          прикрепления до самого высокого начала; столбец ниже своего прикрепления стоит в нём (сухожилие), у начала строки
+          подтягиваются к своему началу (смещение затухает как t³). U — доля длины нити (для площади сечения). */
+    const SL = cap.SL;
+    let lo = Infinity, hi = -Infinity;
+    for (let c = 0; c < C; c++) {
+      const b0 = c * MS * 4; let sl = 0;
+      for (let j = 0; j < MS; j++) {
+        const v = b0 + j * 4;
+        if (j) sl += Math.sqrt((ST[v] - ST[v - 4]) ** 2 + (ST[v + 1] - ST[v - 3]) ** 2 + (ST[v + 2] - ST[v - 2]) ** 2);
+        SL[c * MS + j] = ST[v + 3] + CAP_BETA * sl;
+      }
+      lo = Math.min(lo, SL[c * MS]); hi = Math.max(hi, SL[c * MS + MS - 1]);
+    }
+    for (let c = 0; c < C; c++) {
+      const b0 = c * MS * 4, s0 = c * MS, l0 = SL[s0], l1 = SL[s0 + MS - 1]; let j = 0, prev = -Infinity;
+      for (let q = 0; q < n; q++) {
+        const t = q / (n - 1), v = (q * C + c) * 3;
+        const tg = Math.max(prev, Math.max(l0, lo + (hi - lo) * t) + (l1 - hi) * t * t * t); prev = tg;
+        while (j < MS - 2 && SL[s0 + j + 1] < tg) j++;
+        const la = SL[s0 + j], lb = SL[s0 + j + 1], f = lb > la ? Math.min(1, Math.max(0, (tg - la) / (lb - la))) : 0, a = b0 + j * 4;
+        X[v] = ST[a] + (ST[a + 4] - ST[a]) * f; X[v + 1] = ST[a + 1] + (ST[a + 5] - ST[a + 1]) * f; X[v + 2] = ST[a + 2] + (ST[a + 6] - ST[a + 2]) * f;
+        U[q * C + c] = (j + f) / (MS - 1);
+      }
+    }
+    for (let k = 0; k < K; k++) for (let q = 0; q < n; q++) { const u = U[q * C + 2 * k + 1], r = radiusAt(cap.BODY[k], cap.LN[k] * (cap.rev[k] ? 1 - u : u)); A[k * n + q] = Math.PI * r * r; }
+  }
+  function capWidth(cap) {
+    const C = cap.C, n = cap.n, X = cap.X, NR = cap.NR, B = cap.B, A = cap.A, U = cap.U;
+    const hx = CF[0], hy = CF[1], hz = CF[2], ax0 = CF[3], ax1 = CF[4], ax2 = CF[5];
+    /* 6. Ширина. Где нити сходятся (у начал на одной прямой с головкой, при сильно поднятой руке), часть была бы уже, чем
+          позволяет её сечение при толщине CAP_TMAX. В каждой строке столбцы раздвигаются поперёк волокна b = N × t (положения
+          вдоль строки — изотоническая регрессия с шагами: половина нужной ширины части, не больше CAP_WMAX, всего не больше
+          CAP_WTOT); у концов нити — плавно до нуля (CAP_UEND), вдоль столбца сдвиги сглажены (CAP_DSMOOTH проходов). Сдвиг —
+          по поверхности: по сфере вокруг точки оси плеча на той же высоте (у головки — вокруг центра сустава), не больше
+          CAP_AMAX — у диафиза (близко к оси) большой сдвиг закрутил бы пучок вокруг кости */
+    capNormals(cap);
+    let sgb = 0;
+    for (let q = 0; q < n; q++) for (let c = 0; c < C; c++) {
+      const v = (q * C + c) * 3, a = (Math.max(0, q - 1) * C + c) * 3, b = (Math.min(n - 1, q + 1) * C + c) * 3;
+      let tx = X[b] - X[a], ty = X[b + 1] - X[a + 1], tz = X[b + 2] - X[a + 2]; const tl = Math.sqrt(tx * tx + ty * ty + tz * tz) || 1; tx /= tl; ty /= tl; tz /= tl;
+      const bx = NR[v + 1] * tz - NR[v + 2] * ty, by = NR[v + 2] * tx - NR[v] * tz, bz = NR[v] * ty - NR[v + 1] * tx, bl = Math.sqrt(bx * bx + by * by + bz * bz) || 1;
+      B[v] = bx / bl; B[v + 1] = by / bl; B[v + 2] = bz / bl;
+      if (c && q && q < n - 1) sgb += (X[v] - X[v - 3]) * (B[v] + B[v - 3]) + (X[v + 1] - X[v - 2]) * (B[v + 1] + B[v - 2]) + (X[v + 2] - X[v - 1]) * (B[v + 2] + B[v - 1]);
+    }
+    sgb = sgb >= 0 ? 1 : -1;
+    const DT = cap.DT; DT.fill(0);
+    for (let q = 1; q < n - 1; q++) {
+      W[0] = 0;
+      for (let c = 1; c < C; c++) {
+        const v = (q * C + c) * 3, bx = B[v] + B[v - 3], by = B[v + 1] + B[v - 2], bz = B[v + 2] + B[v - 1], bl = Math.sqrt(bx * bx + by * by + bz * bz) || 1;
+        W[c] = W[c - 1] + sgb * ((X[v] - X[v - 3]) * bx + (X[v + 1] - X[v - 2]) * by + (X[v + 2] - X[v - 1]) * bz) / bl;
+      }
+      let tot = 0;
+      for (let c = 0; c + 1 < C; c++) { GP[c] = Math.min(CAP_WMAX, A[(c >> 1) * n + q] / CAP_TMAX * .5 * (c === 0 || c === C - 2 ? CAP_EDGE : 1)); tot += GP[c]; }
+      if (tot > CAP_WTOT) for (let c = 0; c + 1 < C; c++) GP[c] *= CAP_WTOT / tot;
+      for (let c = 0; c < C; c++) RS[c] = W[c];
+      capSpread(RS, GP, C);
+      for (let c = 0; c < C; c++) { const u = U[q * C + c]; DT[q * C + c] = (RS[c] - W[c]) * Math.max(0, Math.min(1, u / CAP_UEND, (1 - u) / CAP_UEND)); }
+    }
+    for (let pass = 0; pass < CAP_DSMOOTH; pass++) for (let c = 0; c < C; c++) {
+      let prev = DT[c];
+      for (let q = 1; q < n - 1; q++) { const g = q * C + c, cur = DT[g]; DT[g] = .25 * prev + .5 * cur + .25 * DT[g + C]; prev = cur; }
+    }
+    const RM = CAP_RH + CAP_GAP;
+    for (let q = 1; q < n - 1; q++) for (let c = 0; c < C; c++) {
+      const g = q * C + c, v = g * 3, d = DT[g] * sgb;
+      if (!d) continue;
+      const hh = Math.max(0, (X[v] - hx) * ax0 + (X[v + 1] - hy) * ax1 + (X[v + 2] - hz) * ax2), cx = hx + hh * ax0, cy = hy + hh * ax1, cz = hz + hh * ax2;
+      let rx = X[v] - cx, ry = X[v + 1] - cy, rz = X[v + 2] - cz; const r = Math.sqrt(rx * rx + ry * ry + rz * rz) || 1; rx /= r; ry /= r; rz /= r;
+      const bd = B[v] * rx + B[v + 1] * ry + B[v + 2] * rz;
+      let bx = B[v] - bd * rx, by = B[v + 1] - bd * ry, bz = B[v + 2] - bd * rz; const bl = Math.sqrt(bx * bx + by * by + bz * bz) || 1; bx /= bl; by /= bl; bz /= bl;
+      const a = Math.max(-CAP_AMAX, Math.min(CAP_AMAX, d / Math.max(r, RM))), ca = Math.cos(a), sa = Math.sin(a), rr = hh > 0 ? r : Math.max(r, RM);
+      X[v] = cx + rr * (ca * rx + sa * bx); X[v + 1] = cy + rr * (ca * ry + sa * by); X[v + 2] = cz + rr * (ca * rz + sa * bz);
+    }
+    capNormals(cap);
+  }
+  function capThickness(cap) {
+    const K = cap.K, C = cap.C, n = cap.n, X = cap.X, A = cap.A, TH = cap.TH;
+    /* 7. Толщины: у центра части — из площади многоугольника сечения (тело мышцы — объём сохраняется), не больше CAP_HMAX
+          (у средней части — CAP_HMAX2); у шва — среднее соседних центров (CAP_SMOOTH проходов), у края колпака — CAP_EDGE_H
+          центра */
+    for (let q = 0; q < n; q++) {
+      for (let k = 0; k < K; k++) {
+        const c = (q * C + 2 * k + 1) * 3, e = k * n + q;
+        cap.WL[e] = Math.sqrt((X[c] - X[c - 3]) ** 2 + (X[c + 1] - X[c - 2]) ** 2 + (X[c + 2] - X[c - 1]) ** 2);
+        cap.WR[e] = Math.sqrt((X[c] - X[c + 3]) ** 2 + (X[c + 1] - X[c + 4]) ** 2 + (X[c + 2] - X[c + 5]) ** 2);
+        TH[q * C + 2 * k + 1] = Math.min(k === 1 ? CAP_HMAX2 : CAP_HMAX, A[e] / Math.max(.2, cap.WL[e] + cap.WR[e]));
+      }
+      for (let it = 0; it < CAP_SMOOTH; it++) {
+        for (let k = 0; k + 1 < K; k++) TH[q * C + 2 * k + 2] = .5 * (TH[q * C + 2 * k + 1] + TH[q * C + 2 * k + 3]);
+        for (let k = 0; k < K; k++) TH[q * C + 2 * k + 1] = capSolve(cap, k, q);
+      }
+      TH[q * C] = CAP_EDGE_H * TH[q * C + 1]; TH[q * C + C - 1] = CAP_EDGE_H * TH[q * C + C - 2];
+    }
+    /* вдоль волокна толщина сглажена (CAP_TSMOOTH проходов): переход сухожилия в брюшко и соседние строки разной ширины не
+       дают ступенек на наружной стороне */
+    for (let pass = 0; pass < CAP_TSMOOTH; pass++) for (let c = 0; c < C; c++) {
+      let prev = TH[c];
+      for (let q = 1; q < n - 1; q++) { const g = q * C + c, cur = TH[g]; TH[g] = .25 * prev + .5 * cur + .25 * TH[g + C]; prev = cur; }
+    }
+  }
+  function capVertices(cap, pos, nor, start) {
+    const K = cap.K, C = cap.C, n = cap.n, X = cap.X, NR = cap.NR, TH = cap.TH;
+    /* 8. Вершины кольца: 0 — наружу у центра части, 1–3 — шов справа (наружу, середина — у края колпака с кромкой, внутрь),
+          4 — внутрь у центра, 5–7 — шов слева; «справа» — по w = N × t, как у трубки */
+    for (let k = 0; k < K; k++) {
+      const i = cap.lines[k], rev = cap.rev[k], cc = 2 * k + 1;
+      let sgr = 0;
+      for (let q = 1; q < n - 1; q++) {
+        const v = (q * C + cc) * 3, vu = v + C * 3, vd = v - C * 3, g = rev ? -1 : 1, tx = (X[vu] - X[vd]) * g, ty = (X[vu + 1] - X[vd + 1]) * g, tz = (X[vu + 2] - X[vd + 2]) * g;
+        sgr += (NR[v + 1] * tz - NR[v + 2] * ty) * (X[v + 3] - X[v - 3]) + (NR[v + 2] * tx - NR[v] * tz) * (X[v + 4] - X[v - 2]) + (NR[v] * ty - NR[v + 1] * tx) * (X[v + 5] - X[v - 1]);
+      }
+      const cR = sgr >= 0 ? cc + 1 : cc - 1, cL = sgr >= 0 ? cc - 1 : cc + 1;
+      for (let q = 0; q < n; q++) {
+        const r = rev ? n - 1 - q : q, base = (start[i] + r) * SIDES * 3, v = (q * C + cc) * 3, h = TH[q * C + cc];
+        capPut(pos, nor, base, 0, X[v] + NR[v] * h, X[v + 1] + NR[v + 1] * h, X[v + 2] + NR[v + 2] * h, NR[v], NR[v + 1], NR[v + 2]);
+        capPut(pos, nor, base, 4, X[v], X[v + 1], X[v + 2], -NR[v], -NR[v + 1], -NR[v + 2]);
+        capSeam(pos, nor, base, X, NR, TH, q, C, cc, cR, 1, 2, 3);
+        capSeam(pos, nor, base, X, NR, TH, q, C, cc, cL, 7, 6, 5);
+      }
+    }
+  }
+  /* Нормаль пласта у узла сетки — наружу поперёк волокна: направление от оси «капсулы» (у головки — от центра сустава, ниже — от
+     оси плеча на той же высоте), без составляющей вдоль столбца */
+  function capNormals(cap) {
+    const X = cap.X, NR = cap.NR, C = cap.C, n = cap.n;
+    for (let q = 0; q < n; q++) for (let c = 0; c < C; c++) {
+      const v = (q * C + c) * 3, a = (Math.max(0, q - 1) * C + c) * 3, b = (Math.min(n - 1, q + 1) * C + c) * 3;
+      const tx = X[b] - X[a], ty = X[b + 1] - X[a + 1], tz = X[b + 2] - X[a + 2], tt = tx * tx + ty * ty + tz * tz;
+      let rx = X[v] - CF[0], ry = X[v + 1] - CF[1], rz = X[v + 2] - CF[2];
+      const hh = Math.max(0, rx * CF[3] + ry * CF[4] + rz * CF[5]); rx -= hh * CF[3]; ry -= hh * CF[4]; rz -= hh * CF[5];
+      const d = tt > 1e-12 ? (rx * tx + ry * ty + rz * tz) / tt : 0;
+      let nx = rx - d * tx, ny = ry - d * ty, nz = rz - d * tz, l = Math.sqrt(nx * nx + ny * ny + nz * nz);
+      if (l < 1e-6) { nx = rx; ny = ry; nz = rz; l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1; }
+      NR[v] = nx / l; NR[v + 1] = ny / l; NR[v + 2] = nz / l;
+    }
+    /* вдоль столбца нормаль сглажена (CAP_NSMOOTH проходов): излом нити на 20–30° не поворачивает толщину скачком */
+    for (let pass = 0; pass < CAP_NSMOOTH; pass++) for (let c = 0; c < C; c++) {
+      let px = NR[c * 3], py = NR[c * 3 + 1], pz = NR[c * 3 + 2];
+      for (let q = 1; q < n - 1; q++) {
+        const v = (q * C + c) * 3, w = v + C * 3, cx = NR[v], cy = NR[v + 1], cz = NR[v + 2];
+        const x = .25 * px + .5 * cx + .25 * NR[w], y = .25 * py + .5 * cy + .25 * NR[w + 1], z = .25 * pz + .5 * cz + .25 * NR[w + 2], l = Math.sqrt(x * x + y * y + z * z) || 1;
+        NR[v] = x / l; NR[v + 1] = y / l; NR[v + 2] = z / l; px = cx; py = cy; pz = cz;
+      }
+    }
+  }
+  function capPut(pos, nor, base, j, x, y, z, nx, ny, nz) { const w = base + j * 3; pos[w] = x; pos[w + 1] = y; pos[w + 2] = z; if (nor) { nor[w] = nx; nor[w + 1] = ny; nor[w + 2] = nz; } }
+  /* вершины шва (или края колпака) столбца cs у части с центром cc: наружу, середина (у края — с кромкой наружу), внутрь */
+  function capSeam(pos, nor, base, X, NR, TH, q, C, cc, cs, jt, jm, jb) {
+    const s = (q * C + cs) * 3, v = (q * C + cc) * 3, hs = TH[q * C + cs], edge = cs === 0 || cs === C - 1;
+    let lx = X[s] - X[v], ly = X[s + 1] - X[v + 1], lz = X[s + 2] - X[v + 2]; const ld = lx * NR[s] + ly * NR[s + 1] + lz * NR[s + 2]; lx -= ld * NR[s]; ly -= ld * NR[s + 1]; lz -= ld * NR[s + 2];
+    const ll = Math.sqrt(lx * lx + ly * ly + lz * lz) || 1; lx /= ll; ly /= ll; lz /= ll;
+    const e = edge ? CAP_TIP * hs : 0;
+    capPut(pos, nor, base, jt, X[s] + NR[s] * hs, X[s + 1] + NR[s + 1] * hs, X[s + 2] + NR[s + 2] * hs, NR[s], NR[s + 1], NR[s + 2]);
+    capPut(pos, nor, base, jm, X[s] + NR[s] * hs * .5 + lx * e, X[s + 1] + NR[s + 1] * hs * .5 + ly * e, X[s + 2] + NR[s + 2] * hs * .5 + lz * e, lx, ly, lz);
+    capPut(pos, nor, base, jb, X[s], X[s + 1], X[s + 2], -NR[s], -NR[s + 1], -NR[s + 2]);
+  }
+  /* Площадь многоугольника сечения части k в строке q как функция толщины h у центра: точки — в плоскости поперёк волокна
+     (вдоль строки, вдоль нормали центра): центр снаружи (0, h) и на кости (0, 0), швы — снаружи, середина, на кости (толщина
+     шва TH; у края колпака — доля CAP_EDGE_H от h и скруглённая кромка). Площадь квадратична по h; AR — её значения при
+     h = 0, 1, 2 (подготовка — один раз). */
+  const CSW = new Float64Array(10), AR = new Float64Array(3), PXY = new Float64Array(16);
+  function capArea3(cap, k, q) {
+    const C = cap.C, X = cap.X, NR = cap.NR, TH = cap.TH, cc = 2 * k + 1, v = (q * C + cc) * 3;
+    const nx = NR[v], ny = NR[v + 1], nz = NR[v + 2], ox = X[v], oy = X[v + 1], oz = X[v + 2];
+    let px = X[v + 3] - X[v - 3], py = X[v + 4] - X[v - 2], pz = X[v + 5] - X[v - 1]; const pd = px * nx + py * ny + pz * nz; px -= pd * nx; py -= pd * ny; pz -= pd * nz;
+    const pl = Math.sqrt(px * px + py * py + pz * pz) || 1; px /= pl; py /= pl; pz /= pl;
+    /* по стороне: su, sv — шов на кости, mu, mv — нормаль шва, край ли, толщина шва */
+    for (let side = 0; side < 2; side++) {
+      const cs = side ? cc - 1 : cc + 1, s = (q * C + cs) * 3, o = side * 5, sx = X[s] - ox, sy = X[s + 1] - oy, sz = X[s + 2] - oz;
+      CSW[o] = sx * px + sy * py + sz * pz; CSW[o + 1] = sx * nx + sy * ny + sz * nz;
+      CSW[o + 2] = NR[s] * px + NR[s + 1] * py + NR[s + 2] * pz; CSW[o + 3] = NR[s] * nx + NR[s + 1] * ny + NR[s + 2] * nz;
+      CSW[o + 4] = cs === 0 || cs === C - 1 ? -1 : TH[q * C + cs];
+    }
+    for (let i = 0; i < 3; i++) {
+      const h = i;
+      let j = 0;
+      PXY[j++] = 0; PXY[j++] = h;
+      for (let side = 0; side < 2; side++) {
+        const o = side * 5, su = CSW[o], sv = CSW[o + 1], mu = CSW[o + 2], mv = CSW[o + 3], edge = CSW[o + 4] < 0, hs = edge ? CAP_EDGE_H * h : CSW[o + 4], e = edge ? CAP_TIP * hs : 0;
+        const t0 = side ? 0 : hs, t2 = side ? hs : 0, sg = side ? -1 : 1;
+        PXY[j++] = su + mu * t0; PXY[j++] = sv + mv * t0;
+        PXY[j++] = su + mu * hs * .5 + sg * e; PXY[j++] = sv + mv * hs * .5;
+        PXY[j++] = su + mu * t2; PXY[j++] = sv + mv * t2;
+        if (!side) { PXY[j++] = 0; PXY[j++] = 0; }
+      }
+      let a = 0; for (let m = 0; m < 8; m++) { const m2 = (m + 1) & 7; a += PXY[m * 2] * PXY[m2 * 2 + 1] - PXY[m2 * 2] * PXY[m * 2 + 1]; }
+      AR[i] = Math.abs(a / 2);
+    }
+  }
+  /* толщина у центра части k в строке q: корень квадратного уравнения площади, в пределах 0,3…3 средней толщины
+     η = A / ширина и не больше CAP_HMAX (CAP_HMAX2 у средней части) */
+  function capSolve(cap, k, q) {
+    capArea3(cap, k, q);
+    const A = cap.A[k * cap.n + q], a0 = AR[0], a1 = AR[1], a2 = AR[2];
+    const c = (a2 - 2 * a1 + a0) / 2, b = a1 - a0 - c, r = A - a0;
+    let h = Math.abs(c) < 1e-9 ? r / (b || 1e-9) : (-b + Math.sqrt(Math.max(0, b * b + 4 * c * r))) / (2 * c);
+    const eta = A / Math.max(.2, cap.WL[k * cap.n + q] + cap.WR[k * cap.n + q]);
+    if (!(h > 0)) h = eta;
+    return Math.min(k === 1 ? CAP_HMAX2 : CAP_HMAX, Math.max(.3 * eta, Math.min(3 * eta, h)));
+  }
+  /* все мышцы кадра: трубки (surface), ленты (ribbon) и колпак дельтовидной (capSurface); start — номера первых колец мышц
+     (длина bound.length + 1) */
   function surfaceAll(bound, paths, m, pos, nor, start) {
-    for (let i = 0; i < bound.length; i++) if (!bound[i].fan) surface(bound[i], paths[i], m, pos, nor, start[i] * SIDES);
+    for (let i = 0; i < bound.length; i++) if (!bound[i].fan && !bound[i].cap) surface(bound[i], paths[i], m, pos, nor, start[i] * SIDES);
     for (const fan of bound.fans || []) ribbon(fan, bound, paths, m, pos, nor, start);
+    for (const cap of bound.caps || []) capSurface(cap, bound, paths, m, pos, nor, start);
   }
   function ringStarts(bound) { const st = new Uint32Array(bound.length + 1); for (let i = 0; i < bound.length; i++) st[i + 1] = st[i] + ringCount(bound[i]); return st; }
 
@@ -15036,4 +15457,4 @@ renderPlan();
 prefetchStressIds();
 logInit();
 
-window.PODHOD_VERSION='4.52.0';window.PODHOD_BUILD='4.52.0-4ea6f3d565ae';window.PODHOD_LANG='ru';
+window.PODHOD_VERSION='4.53.0';window.PODHOD_BUILD='4.53.0-6b6fd77c9104';window.PODHOD_LANG='ru';
