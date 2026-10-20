@@ -6,6 +6,7 @@
    penetration    — тело внутри инвентаря (мягкая обивка допускает поджатие);
    floor          — тело ниже пола;
    self-collision — сегменты тела друг в друге;
+   scapula        — лопатка в рёбрах: передняя поверхность тела лопатки глубже SCAP_RIB_DEPTH под оболочкой рёбер;
    contact        — заявленный контакт не выполнен (стопа над полом, хват мимо ручки, спина над скамьёй);
    hold           — кулак держит воздух (сжат, а ручки нет); снаряд в руках держится краем кулака или кончиками пальцев,
                     а не ручкой в кулаке или ладонью;
@@ -32,6 +33,8 @@ const LIM = {
   dorsi: [-62, 36], inversion: [-20, 32], mtp: [-40, 80]
 };
 const TOL = 10;
+/* лопатка в рёбрах: наибольший заход передней поверхности тела лопатки под оболочку рёбер, см (правило scapula, 4б) */
+const SCAP_RIB_DEPTH = 1;
 function romChecks(R, entry = {}) {
   const a = angles(R), out = [], contacts = entry.contacts || R.contacts || [];
   /* ладонь, опёртая на пол или опору, разгибается пассивно под весом тела (до ~90°, отжимания) */
@@ -292,6 +295,17 @@ function checkFrame(R, entry = {}) {
     }
     if (worst) push('self-collision', worst.depth - worst.tol > 3 ? 'error' : 'warn', `${worst.a} ⟂ ${worst.b}`, worst.depth);
   });
+  /* 4б. Лопатка в рёбрах (этап Д). Между рёберной поверхностью лопатки и рёбрами у человека лежат подлопаточная мышца
+     (толщина у взрослых ≈ 1,5–2 см по УЗИ и МРТ) и передняя зубчатая; кость лопатки на рёбра не заходит. Замер —
+     Mannequin.scapulaRibDepth: 40 точек передней поверхности тела лопатки против оболочки рёбер скелета (наибольший радиус
+     вершин грудной клетки MyoSim по слою 1 см и сектору 5°, с соседними — без межрёберных щелей). Оболочка грубее рёбер
+     (наибольшее по соседним клеткам — до 0,5–1 см наружу на изгибах), а в стойке лопатка манекена в 0,6 см от неё; поэтому
+     порог — 1 см захода. Выбран по данным: с ритмом пояса и скольжением по рёбрам (этап Д) худший кадр каталога — 0,96 см
+     (стойка −0,58), до этапа Д — до 2,1 см, 230 кадров из 1793 глубже 1 см (tools/mannequin/girdle-audit.js depth). */
+  if (M.scapulaRibDepth && R.frames.spL) for (const s of M.SIDES) {
+    const d = M.scapulaRibDepth(R, s).depth;
+    if (d > SCAP_RIB_DEPTH) push('scapula', 'error', `лопатка ${s} в рёбрах`, d);
+  }
   /* 5. Заявленные контакты */
   for (const k of contacts) {
     /* контакт может действовать только в части цикла: when [t0, t1] (прыжки, шаги) */
@@ -506,4 +520,4 @@ function checkClip(frameAt, entry = {}, { samples = 41 } = {}) {
   if (entry.loop) { const a = frameAt(0), b = frameAt(1); for (const k of keys) { const d = V.dist(a[k], b[k]); if (d > 1) { issues.set('loop|' + k, { rule: 'loop', severity: 'error', detail: `цикл не замкнут: ${k} в конце на ${d.toFixed(1)} см от начала`, t: 1, frames: 1 }); break; } } }
   return [...issues.values()];
 }
-module.exports = { checkFrame, checkClip, angles, romChecks, bodyPoints, collider, LIM };
+module.exports = { checkFrame, checkClip, angles, romChecks, bodyPoints, collider, LIM, SCAP_RIB_DEPTH };
