@@ -380,7 +380,7 @@ const Muscles = (() => {
       /* «шапки» (bodyData): над акромионом — в рамке плечевого пояса от центра плечевого сустава, плечо, локоть, запястье, колено
          (вперёд по биссектрисе передних осей бедра и голени), лодыжка */
       S.caps.push({ k: 'ac', r: MQ.AC_CAP.r }, { k: 'sh', r: MQ.CAPS.sh }, { k: 'el', r: MQ.CAPS.el }, { k: 'wr', r: MQ.CAPS.wr }, { k: 'kn', r: MQ.CAPS.kn }, { k: 'an', r: MQ.CAPS.an });
-      S.sides.push({ g, hum, uln, rad, fem, tib, clR: [g * B.ghRel[0], B.ghRel[1], B.ghRel[2]], sc: [g * B.sc[0], B.sc[1], B.sc[2]], rest: [g * (B.sc[0] + B.ghRel[0]), B.sc[1] + B.ghRel[1], B.sc[2] + B.ghRel[2]], ac: [g * MQ.AC_CAP.off[0], MQ.AC_CAP.off[1], MQ.AC_CAP.off[2]] });
+      S.sides.push({ g, hum, uln, rad, fem, tib, scap: bone('scapula', s), rest: [g * (B.sc[0] + B.ghRel[0]), B.sc[1] + B.ghRel[1], B.sc[2] + B.ghRel[2]], ac: [g * (B.ghRel[0] + MQ.AC_CAP.off[0]), B.ghRel[1] + MQ.AC_CAP.off[1], B.ghRel[2] + MQ.AC_CAP.off[2]] });
       for (const k of Object.keys(MQ.FOLDS)) { const F = MQ.FOLDS[k]; S.folds.push({ g, hum, tr: [g * F.tr[0], F.tr[1], F.tr[2]], ua: [g * F.ua[0], F.ua[1], F.ua[2]], a: F.a, s: F.s, kv: F.kv, L0: 0 }); }
     }
     S.capR = Float64Array.from(S.caps, c => c.r); S.tbones = [S.sac, S.l5, S.rib]; S.skull = bone('skull'); S.headC = B.headCenter.slice();
@@ -430,20 +430,15 @@ const Muscles = (() => {
       put(3, m[u + 3] - m[u + 1] * S.limb[k * 4 + 1].L, m[u + 7] - m[u + 5] * S.limb[k * 4 + 1].L, m[u + 11] - m[u + 9] * S.limb[k * 4 + 1].L);
       { let nx = m[f + 2] + m[t + 2], ny = m[f + 6] + m[t + 6], nz = m[f + 10] + m[t + 10]; const nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1; nx /= nl; ny /= nl; nz /= nl; put(4, m[t + 3] + nx * S.knz, m[t + 7] + ny * S.knz, m[t + 11] + nz * S.knz); }
       put(5, m[t + 3] - m[t + 1] * S.limb[k * 4 + 3].L, m[t + 7] - m[t + 5] * S.limb[k * 4 + 3].L, m[t + 11] - m[t + 9] * S.limb[k * 4 + 3].L);
-      /* плечевой пояс: поворот G = rz(α)·ry(β) рамки ключицы манекена в рамке грудной клетки (Mannequin.fk: F.cl) — по центру
-         плечевого сустава: gh − sc = G · ghRel; сдвиг кожи надплечий (girdleDelta) — gh − rest, в рамке грудной клетки */
+      /* сдвиг кожи надплечий (girdleDelta) — центр плечевого сустава от покоя, в рамке грудной клетки */
       toLocal(m, S.rib, m[h + 3], m[h + 7], m[h + 11]);
       const gx = LQ[0], gy = LQ[1], gz = LQ[2];
       SKN.gd[k * 3] = gx - sd.rest[0]; SKN.gd[k * 3 + 1] = gy - sd.rest[1]; SKN.gd[k * 3 + 2] = gz - sd.rest[2]; SKN.gk[k] = 0;
       /* наибольший сдвиг кожи надплечий этой стороны (доля — не больше 0,85) */
       SKN.gm[k] = .85 * Math.sqrt(SKN.gd[k * 3] ** 2 + SKN.gd[k * 3 + 1] ** 2 + SKN.gd[k * 3 + 2] ** 2);
-      const wx = gx - sd.sc[0], wy = gy - sd.sc[1], wz = gz - sd.sc[2], r0 = sd.clR, q = Math.sqrt(r0[0] * r0[0] + r0[2] * r0[2]), ph = Math.atan2(r0[0], r0[2]);
-      /* β: (ry(β)·ghRel)_z = q·cos(β + φ) = w_z — из двух корней тот, что ближе к нулю (у манекена поворот пояса — десятки градусов) */
-      const ac = Math.acos(Math.max(-1, Math.min(1, wz / q))), be = Math.abs(ac - ph) <= Math.abs(-ac - ph) ? ac - ph : -ac - ph;
-      const cb = Math.cos(be), sb = Math.sin(be), ux = cb * r0[0] + sb * r0[2], uy = r0[1], al = Math.atan2(wy, wx) - Math.atan2(uy, ux), ca = Math.cos(al), sa = Math.sin(al);
-      /* центр «шапки» над акромионом: gh + G · off — в рамке грудной клетки, затем в каталог */
-      const o = sd.ac, vx = cb * o[0] + sb * o[2], vy = o[1], vz = -sb * o[0] + cb * o[2], ex = gx + ca * vx - sa * vy, ey = gy + sa * vx + ca * vy, ez = gz + vz, rb = S.rib * 12;
-      put(0, m[rb + 3] + m[rb] * ex + m[rb + 1] * ey + m[rb + 2] * ez, m[rb + 7] + m[rb + 4] * ex + m[rb + 5] * ey + m[rb + 6] * ez, m[rb + 11] + m[rb + 8] * ex + m[rb + 9] * ey + m[rb + 10] * ez);
+      /* центр «шапки» над акромионом — точка лопатки (bodyData: в рамке лопатки от центра плечевого сустава) */
+      const sp = sd.scap * 12, o = sd.ac;
+      put(0, m[sp + 3] + m[sp] * o[0] + m[sp + 1] * o[1] + m[sp + 2] * o[2], m[sp + 7] + m[sp + 4] * o[0] + m[sp + 5] * o[1] + m[sp + 6] * o[2], m[sp + 11] + m[sp + 8] * o[0] + m[sp + 9] * o[1] + m[sp + 10] * o[2]);
     }
     /* складки подмышки (Mannequin.foldAxes): начало — в рамке грудной клетки, конец — в рамке плеча; k = (L/L0)^kv. Оси — в рамке
        грудной клетки: там же считается кожа корпуса (torsoPart) */

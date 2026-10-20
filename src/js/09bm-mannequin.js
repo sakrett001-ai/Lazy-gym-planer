@@ -237,28 +237,183 @@ const LIMITS={
  hipTwist:[-40,45],knee:[-4,145],ankle:[[-45,50],[-30,20]],mtp:[-80,40]
 };
 
+/* ---------- Плечевой пояс: ключица и лопатка (этап Д) ----------
+   Цепь: грудная клетка → грудино-ключичный сустав → ключица → акромиально-ключичный сустав (ac) → лопатка → плечевой сустав.
+   Ключица поворачивается вокруг грудино-ключичного сустава: подъём (вокруг передне-задней оси) и протракция (вокруг
+   вертикали) — рамка cl. Лопатка — твёрдое тело на конце ключицы: её ориентация относительно грудной клетки — углы ISB
+   (Wu et al., J Biomech 2005; 38: 981–992): внутренняя ротация, поворот вверх (суставная впадина вверх, нижний угол наружу),
+   наклон назад — приращения от покоя, поворот вокруг ac; рамка sp. Центр плечевого сустава — в суставной впадине лопатки,
+   поэтому плечо идёт за лопаткой. До этапа Д пояс был одной жёсткой рамкой с двумя степенями свободы, а лопатку скелет
+   поворачивал вокруг плечевого сустава сам, в обход кинематики, с ограничением по коже (поворот вверх ≈ 50 % от нормы).
+   Поза хранит решённый пояс: clav [подъём, протракция] и scap [внутр. ротация, поворот вверх, наклон назад], градусы от
+   покоя (так запечены ключи 09bp-poses.js — кадр приложения ничего не решает). Без них (авторинг, инструменты) пояс
+   решается — resolveGirdle:
+   - ритм по подъёму плеча θ и плоскости подъёма (RHYTHM) — цели для ключицы и лопатки;
+   - явные смещения girdle [поднимание +, протракция +] сверх ритма: опускание и сведение лопаток — минус (с ними
+     сдвигаются и цели лопатки: сведение — наружная ротация 0,8°/°, подъём — поворот вверх 0,3°/° и наклон вперёд 0,2°/°);
+   - лопатка скользит по рёбрам: медиальный конец ости (ts) и нижний угол (ai) остаются на своём расстоянии от гладкой
+     оболочки рёбер (как в покое — 1,6 и 1,7 см: между лопаткой и рёбрами подлопаточная и передняя зубчатая мышцы);
+   цели и контакт сводятся МНК (Левенберг — Марквардт): у контакта σ 0,3 см, у ключицы 5°, у поворота вверх 4°, у ротации
+   и наклона 6°. Кости манекена — MyoSim на фигуре ANSUR II, и средний ритм людей с этим контактом точно не совмещается:
+   чтобы ts и ai остались на рёбрах, ключице нужно подняться выше, а лопатке — сильнее наклониться назад (расхождения с
+   Ludewig печатает tools/mannequin/girdle-audit.js).
+   Спецификации до этапа Д задают girdle как углы ключицы (girdleMode 'abs' — так ставит C.base() в tools/mannequin/compose.js):
+   тогда цель ключицы — эти углы (σ 1,5°), лопатка — по ритму и контакту; C.rhythm(q, s, смещения) переводит сторону на
+   ритм со смещениями. Данные костей (ориентиры, передняя поверхность лопатки, оболочка рёбер) — tools/mannequin/girdle-data.js. */
+/* Ориентиры правой стороны в рамке ключицы покоя (начало — грудино-ключичный сустав, оси грудной клетки), см; левая —
+   зеркально по x. ac — акромиально-ключичный сустав, ts — медиальный конец ости, ai — нижний угол, aa — акромиальный угол;
+   front — 40 точек передней (рёберной) поверхности тела лопатки. */
+const GIRDLE={ac:[-16.37,0.47,-3.02],ts:[-4.91,-4.46,-12.65],ai:[-7.45,-11.79,-13.71],aa:[-17.37,0.35,-4.84],
+ front:[[-7.34,-11.5,-13.42],[-8.13,2.62,-7.67],[-13.85,-5.09,-8.06],[-4.91,-4.46,-12.65],[-11.96,-0.95,-3.49],[-13.13,0.99,-8.47],[-8.41,-1.67,-10.27],[-10.25,-7.78,-11.86],[-11.06,-4.69,-10.22],[-11.9,-2.02,-7.05],[-6.11,0.75,-10.71],[-13.52,-3.96,-5.09],[-10.41,0.72,-10.09],[-5.37,-9.31,-13.52],[-9.84,-0.06,-6.68],[-7.57,-4.06,-11.75],[-5.47,-1.9,-12.03],[-6.09,-6.88,-12.89],[-14.75,-0.32,-7.12],[-9.25,-10.11,-12.98],[-8.51,-6.17,-12.17],[-8.39,0.31,-8.39],[-10.04,-0.99,-8.78],[-11.72,-3.29,-8.86],[-13.4,-2.13,-4.51],[-11.25,-1.2,-5.24],[-8.33,-8.01,-12.54],[-12.73,-3.72,-6.78],[-10.11,-2.5,-9.83],[-12.12,-5.08,-8.78],[-12.29,-2.68,-3.11],[-7.16,1.26,-9.26],[-12.21,-1,-8.22],[-5.88,-10.76,-13.55],[-12.4,-2.61,-5.78],[-10.49,-5.7,-11.13],[-13.48,-1.06,-7.49],[-5.81,-0.45,-11.49],[-11.22,-1.92,-8.58],[-13.64,-4.8,-6.17]]};
+/* Оболочка рёбер: наибольший радиус вершин грудной клетки от оси (x = 0, z = zc) по слою 1 см (строки y0…y1, рамка
+   грудной клетки) и сектору 5° от передней линии (столбцы a0…a1; 36 — прямо назад), мм, обе стороны вместе; 0 — рёбер нет */
+const RIB_ENV={zc:1.04,y0:2,y1:36,a0:6,a1:36,mm:'0 0 0 0 0 0 0 120 115 119 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 111 117 117 119 124 116 122 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 110 0 121 125 128 128 0 119 122 118 0 0 110 110 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 115 118 122 129 133 125 125 0 121 0 120 0 114 113 115 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 105 112 0 0 0 0 133 129 127 0 0 123 121 118 117 116 117 0 99 99 0 0 0 0 0 0 0 0 0 95 100 109 116 122 129 127 0 0 0 134 128 0 0 123 118 122 119 121 119 0 98 98 0 0 0 0 0 0 0 0 0 91 110 117 124 132 130 130 0 0 0 133 130 0 0 125 120 123 0 122 122 97 97 96 92 0 0 0 0 0 0 0 104 106 117 0 0 0 134 135 0 0 132 128 130 0 0 0 125 125 122 123 123 121 92 92 87 0 0 0 0 0 0 0 112 0 123 122 0 135 137 136 135 0 132 0 127 129 0 124 0 123 126 122 117 0 84 84 78 75 0 0 0 97 106 107 119 126 118 126 0 135 137 0 137 0 131 129 126 128 0 127 0 123 125 121 115 104 69 62 0 0 0 0 97 101 0 0 0 0 130 0 131 136 0 135 136 0 0 130 0 127 0 128 126 123 124 115 108 103 89 0 69 0 0 100 96 108 115 118 0 0 133 0 134 136 135 135 135 0 0 129 126 125 126 0 127 121 120 115 101 94 85 76 0 0 0 102 108 117 121 0 125 0 0 135 135 134 135 135 0 0 0 126 128 0 125 120 126 122 114 0 82 0 0 0 0 96 92 102 112 122 0 128 130 0 131 136 0 135 133 136 136 0 0 125 127 124 120 122 115 117 106 85 0 73 0 0 84 90 97 105 0 0 127 129 127 132 133 135 136 0 134 133 136 0 0 0 0 125 123 117 108 106 101 101 0 0 0 0 99 106 112 111 114 0 0 130 132 135 0 0 134 0 132 133 135 134 133 0 0 0 115 107 96 0 87 0 0 0 0 0 0 111 106 117 0 123 0 0 134 136 0 136 131 133 132 132 130 126 130 124 0 0 105 105 95 86 72 0 0 86 91 96 100 0 115 123 119 127 0 0 135 0 135 135 0 132 0 0 129 120 127 123 110 0 93 0 83 0 0 0 87 92 100 0 108 0 121 0 127 130 129 0 134 0 134 131 132 126 129 125 122 123 118 106 101 87 71 0 0 0 0 0 0 0 96 108 0 116 122 0 131 0 130 0 130 132 131 0 129 0 124 0 119 0 99 96 94 83 0 0 0 0 84 88 84 0 92 116 0 122 0 125 129 131 129 0 0 128 0 127 123 0 119 0 108 0 0 0 85 0 0 0 0 81 87 82 94 92 99 0 118 118 123 126 125 130 127 127 123 124 120 123 0 117 104 107 89 94 80 63 64 0 0 0 0 0 0 94 99 101 0 105 0 0 125 0 125 127 123 124 119 117 120 114 116 104 104 93 77 79 64 0 0 0 0 73 74 0 0 0 0 105 0 110 0 114 119 125 123 121 0 119 0 115 0 104 105 91 90 75 54 61 0 0 0 0 73 71 77 79 0 83 0 106 108 111 114 115 0 119 118 120 0 114 114 103 109 98 0 76 76 62 52 0 0 0 0 0 0 0 0 80 84 87 0 89 0 109 115 112 112 0 116 116 0 0 107 93 96 84 79 70 53 0 0 0 0 0 58 52 53 54 0 0 83 86 88 92 0 96 109 0 109 0 111 109 110 0 0 0 83 68 0 46 0 0 0 0 0 0 58 59 59 56 61 0 0 0 89 97 0 99 105 96 104 0 105 0 103 88 90 0 61 40 49 0 0 0 0 0 54 53 52 47 62 65 68 0 0 0 84 98 94 0 98 99 97 98 0 96 85 90 77 63 44 0 0 0 0 0 0 0 0 0 0 48 49 70 72 0 0 0 82 93 88 0 0 92 83 91 0 0 48 36 37 39 0 0 0 0 0 0 0 0 0 0 0 0 0 50 72 51 0 0 0 88 0 82 0 0 84 78 76 62 52 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 70 67 53 0 0 81 64 73 0 38 44 60 31 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 66 62 63 59 42 71 61 63 52 42 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 58 56 38 52 41 48 28 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 40 50 46 0 0 0 0 0 0 0 0 0 0 0 0 0'};
+/* Ритм плечевого пояса — приращения от покоя (рука вдоль тела, θ 7°) при подъёме плеча θ, градусы. Средние по плоскостям
+   подъёма: Ludewig PM et al. Motion of the shoulder complex during multiplanar humeral elevation. J Bone Joint Surg Am
+   2009; 91: 378–389 (покой; 30° и 120° — по тексту статьи, 60° и 90° — линейно между ними: кривые рис. 5 почти прямые;
+   ключица: ретракция 19,2 → 23 → 39°, подъём 5,9 → 11 → 17°; лопатка: внутр. ротация 41,1 → 37 → 35°, поворот вверх
+   5,4 → 11 → 50°, наклон −13,5 → −13 → 8°); 150° — McClure PW et al. J Shoulder Elbow Surg 2001; 10: 269–277 (от покоя до
+   наибольшего подъёма в плоскости лопатки, 147°: поворот вверх 50°, наклон назад 30°, наружная ротация 24°, ретракция
+   ключицы 21°, подъём 10°); дальше — медленно. Плоскость (Ludewig 2009): ретракция больше при отведении и меньше при
+   сгибании (разница до 15°), внутренняя ротация при сгибании на 7° больше, при отведении на 7,5° меньше, чем в плоскости
+   лопатки (35° впереди фронтальной); при отведении поворот вверх на 3° больше с 90°. Рука позади фронтальной плоскости
+   (разгибание): ритм подъёма сходит на нет к плоскости −60°. */
+const RHYTHM={th:[7,30,60,90,120,150,180],
+ ce:[0,5.1,7.1,9.1,11.1,11.5,12],cr:[0,3.8,9.1,14.5,19.8,21,22],
+ ir:[0,-4.1,-4.8,-5.4,-6.1,-12,-18],ur:[0,5.6,18.6,31.6,44.6,50,54],pt:[0,.5,7.5,14.5,21.5,30,33]};
+const GSIG={c:.3,cl:5,abs:1.5,ur:4,st:6};
+const girdleMir=(p,g)=>[-g*p[0],p[1],p[2]];
+/* оболочка рёбер: таблица (raw), с закрытыми межрёберными щелями (dil — наибольшее ±1 строка и сектор; по ней валидатор
+   меряет заход лопатки в рёбра) и гладкая (sm — два прохода среднего 3×3, пустые клетки — ближайшим в строке; по ней
+   скользит лопатка) */
+const RIBS=(()=>{
+ const R=RIB_ENV,ny=R.y1-R.y0+1,na=R.a1-R.a0+1,raw=R.mm.split(' ').map(v=>+v/10);
+ const at=(a,i,j)=>i>=0&&i<ny&&j>=0&&j<na?a[i*na+j]:0;
+ const dil=raw.map((_,k)=>{const i=k/na|0,j=k%na;let m=0;for(let di=-1;di<=1;di++)for(let dj=-1;dj<=1;dj++)m=Math.max(m,at(raw,i+di,j+dj));return m;});
+ let sm=dil.slice();
+ for(let pass=0;pass<2;pass++){const src=sm;sm=src.map((v,k)=>{if(!v)return 0;const i=k/na|0,j=k%na;let s=0,n=0;for(let di=-1;di<=1;di++)for(let dj=-1;dj<=1;dj++){const w=at(src,i+di,j+dj);if(w){s+=w;n++;}}return s/n;});}
+ for(let i=0;i<ny;i++)for(let j=0;j<na;j++)if(!sm[i*na+j]){let d=1;while(d<na){const a=at(sm,i,j-d),b=at(sm,i,j+d);if(a||b){sm[i*na+j]=a||b;break;}d++;}}
+ return{ny,na,dil,sm};
+})();
+const crSpline=(p0,p1,p2,p3,t)=>p1+.5*t*(p2-p0+t*(2*p0-5*p1+4*p2-p3+t*(3*(p1-p2)+p3-p0)));
+/* радиус гладкой оболочки рёбер на высоте y (рамка грудной клетки), азимут a от передней линии (градусы) — бикубически */
+function ribSlide(y,a){
+ const R=RIB_ENV,ny=RIBS.ny,na=RIBS.na,fy=clamp(y-R.y0,0,ny-1),fa=clamp(a/5-R.a0,0,na-1),i=Math.min(ny-2,Math.floor(fy)),j=Math.min(na-2,Math.floor(fa)),u=fy-i,v=fa-j;
+ const g=(ii,jj)=>RIBS.sm[clamp(ii,0,ny-1)*na+clamp(jj,0,na-1)],row=k=>crSpline(g(i+k,j-1),g(i+k,j),g(i+k,j+1),g(i+k,j+2),v);
+ return crSpline(row(-1),row(0),row(1),row(2),u);
+}
+/* зазор точки (рамка грудной клетки) до гладкой оболочки рёбер вдоль луча от оси, см (+ снаружи) */
+function ribGap(p){const x=Math.abs(p[0]),z=p[2]-RIB_ENV.zc;return Math.hypot(x,z)-ribSlide(p[1],Math.atan2(x,z)*R2D);}
+/* ISB: оси грудной клетки правой стороны — X вперёд, Y вверх, Z вправо: (x, y, z) манекена → (z, y, −x) */
+const MI=[0,0,1,0,1,0,-1,0,0],MI_T=M3.T(MI);
+const SC_R=[-B.sc[0],B.sc[1],B.sc[2]];
+/* ISB-рамка лопатки (столбцы X, Y, Z в осях ISB грудной клетки) по ориентирам в рамке грудной клетки */
+function isbScapFrame(ts,ai,aa){
+ const I=v=>M3.v(MI,v),t=I(ts),a=I(ai),c=I(aa),Z=V.unit(V.sub(c,t));let X=V.unit(V.cross(V.sub(a,t),V.sub(c,t)));if(X[0]<0)X=V.scale(X,-1);
+ X=V.unit(V.perp(X,Z));return M3.cols(X,V.cross(Z,X),Z);
+}
+/* углы ISB Y-X'-Z'': внутренняя ротация, поворот вверх, наклон назад */
+const isbAngles=F=>[Math.atan2(F[2],F[8])*R2D,-Math.asin(clamp(-F[5],-1,1))*R2D,Math.atan2(F[3],F[4])*R2D];
+const isbMatrix=(ir,ur,pt)=>M3.mul(M3.ry(ir),M3.mul(M3.rx(-ur),M3.rz(pt)));
+const GIRDLE_REST=(()=>{
+ const T=p=>V.add(SC_R,p),F0=isbScapFrame(T(GIRDLE.ts),T(GIRDLE.ai),T(GIRDLE.aa)),a0=isbAngles(F0);
+ return{F0,a0,B:M3.mul(M3.T(F0),MI)};
+})();
+/* поворот лопатки относительно грудной клетки (оси манекена) по приращениям ISB [ir, ur, pt]; s — сторона */
+function scapRot(s,a){
+ const r=GIRDLE_REST.a0,Rd=M3.mul(MI_T,M3.mul(isbMatrix(r[0]+a[0],r[1]+a[1],r[2]+a[2]),GIRDLE_REST.B));
+ return s==='L'?[Rd[0],-Rd[1],-Rd[2],-Rd[3],Rd[4],Rd[5],-Rd[6],Rd[7],Rd[8]]:Rd; /* левая: S·Rd·S, S = diag(−1, 1, 1) */
+}
+/* ts и ai правой стороны (рамка грудной клетки) при поясе x = [подъём, ретракция ключицы, ir, ur, pt] */
+function girdleContactPts(x){
+ const Rc=M3.mul(M3.rz(-x[0]),M3.ry(-x[1])),Rd=scapRot('R',[x[2],x[3],x[4]]),o=V.add(SC_R,M3.v(Rc,GIRDLE.ac));
+ return[V.add(o,M3.v(Rd,V.sub(GIRDLE.ts,GIRDLE.ac))),V.add(o,M3.v(Rd,V.sub(GIRDLE.ai,GIRDLE.ac)))];
+}
+const GAP0=girdleContactPts([0,0,0,0,0]).map(ribGap);
+const rhythmPt=(key,th)=>{const T=RHYTHM.th,Y=RHYTHM[key];if(th<=T[0])return Y[0];for(let i=1;i<T.length;i++)if(th<=T[i])return Y[i-1]+(Y[i]-Y[i-1])*(th-T[i-1])/(T[i]-T[i-1]);return Y.at(-1);};
+/* ритм при подъёме плеча th и плоскости plane (0 — отведение во фронтальной плоскости, 90 — сгибание, минус — позади) */
+function rhythmAt(th,plane){
+ const w=smoothstep((plane+60)/50),m=clamp((th-RHYTHM.th[0])/53,0,1),kp=plane<=35?clamp((35-plane)/35,0,1):-clamp((plane-35)/55,0,1);
+ return{ce:w*rhythmPt('ce',th),cr:w*rhythmPt('cr',th)+7.5*kp*m,ir:w*rhythmPt('ir',th)+(kp>0?-7.5*kp:-7*kp)*m,
+  ur:w*(rhythmPt('ur',th)+3*Math.max(0,kp)*clamp((th-60)/30,0,1)),pt:w*rhythmPt('pt',th)};
+}
+const smoothstep=t=>{t=clamp(t,0,1);return t*t*(3-2*t);};
+/* подъём плеча и плоскость подъёма по углам плеча позы (относительно грудной клетки) */
+function humeralElevation(J,g){
+ const hum=M3.v(M3.mul(swing(-J.shoulder[0],g*J.shoulder[1]),M3.ry(g*J.shoulder[2])),[0,-1,0]);
+ return{th:Math.acos(clamp(-hum[1],-1,1))*R2D,plane:Math.atan2(hum[2],g*hum[0])*R2D};
+}
+/* цели пояса стороны s: ключица [подъём, ретракция], лопатка [ir, ur, pt] и σ ключицы */
+function girdleTargets(q,s){
+ const J=q[s],{th,plane}=humeralElevation(J,SIGN[s]),r=rhythmAt(th,plane),gi=J.girdle||[0,0],abs=q.girdleMode?.[s]==='abs';
+ const oe=abs?gi[0]-r.ce:gi[0],op=abs?gi[1]+r.cr:gi[1];
+ return{t:[abs?gi[0]:r.ce+gi[0],abs?-gi[1]:r.cr-gi[1],r.ir+.8*op,r.ur+.3*oe,r.pt-.2*oe],sCl:abs?GSIG.abs:GSIG.cl,th,plane};
+}
+const G_MEMO=new Map();
+/* МНК: контакт ts и ai с оболочкой рёбер + близость к целям; x = [подъём, ретракция ключицы, ir, ur, pt] */
+function solveGirdle(t,sCl){
+ if(t.every(v=>Math.abs(v)<1e-9))return[0,0,0,0,0];
+ const key=sCl+':'+t.map(v=>v.toFixed(6)).join(',');let hit=G_MEMO.get(key);if(hit)return hit;
+ const sig=[sCl,sCl,GSIG.st,GSIG.ur,GSIG.st],w=sig.map(v=>1/(v*v));
+ const cres=x=>{const p=girdleContactPts(x);return[(ribGap(p[0])-GAP0[0])/GSIG.c,(ribGap(p[1])-GAP0[1])/GSIG.c];};
+ const cost=(x,c)=>c[0]*c[0]+c[1]*c[1]+x.reduce((s,v,i)=>s+(v-t[i])*(v-t[i])*w[i],0);
+ let x=t.slice(),c=cres(x),F=cost(x,c),lam=1e-3;const h=.01;
+ for(let it=0;it<60;it++){
+  const J=[];for(let j=0;j<5;j++){const xp=x.slice();xp[j]+=h;const cp=cres(xp);J.push([(cp[0]-c[0])/h,(cp[1]-c[1])/h]);}
+  const A=[];for(let i=0;i<5;i++){const row=[];for(let j=0;j<5;j++)row.push((J[i][0]*J[j][0]+J[i][1]*J[j][1]+(i===j?w[i]:0))*(i===j?1+lam:1));row.push(-(J[i][0]*c[0]+J[i][1]*c[1]+(x[i]-t[i])*w[i]));A.push(row);}
+  for(let i=0;i<5;i++){let p=i;for(let k=i+1;k<5;k++)if(Math.abs(A[k][i])>Math.abs(A[p][i]))p=k;const tmp=A[i];A[i]=A[p];A[p]=tmp;for(let k=i+1;k<5;k++){const f=A[k][i]/A[i][i];for(let cc=i;cc<6;cc++)A[k][cc]-=f*A[i][cc];}}
+  const dx=new Array(5);for(let i=4;i>=0;i--){let sum=A[i][5];for(let cc=i+1;cc<5;cc++)sum-=A[i][cc]*dx[cc];dx[i]=sum/A[i][i];}
+  const xn=x.map((v,i)=>v+dx[i]),cn=cres(xn),Fn=cost(xn,cn),step=Math.max(...dx.map(Math.abs));
+  if(Fn<=F){x=xn;c=cn;F=Fn;lam*=.2;if(step<1e-6)break;}else{lam*=8;if(lam>1e8)break;}
+ }
+ if(G_MEMO.size>8000)G_MEMO.clear();
+ G_MEMO.set(key,x);return x;
+}
+/* решённый пояс стороны s: clav [подъём, протракция], scap [ir, ur, pt] — градусы от покоя */
+function resolveGirdle(q,s){
+ const{t,sCl}=girdleTargets(q,s),x=solveGirdle(t,sCl);
+ return{clav:[x[0],-x[1]],scap:[x[2],x[3],x[4]]};
+}
+/* Заход лопатки в рёбра в кадре каталога R, сторона s: наибольшая глубина точек передней поверхности тела лопатки
+   (GIRDLE.front) под оболочкой рёбер без межрёберных щелей (RIBS.dil), см; минус — зазор. at — номер точки. */
+function scapulaRibDepth(R,s){
+ const T=R.frames.thorax,S=R.frames['sp'+s],g=s==='L'?1:-1,RE=RIB_ENV,na=RIBS.na;let depth=-Infinity,at=-1;
+ GIRDLE.front.forEach((f0,i)=>{
+  const f=girdleMir(f0,g),d=V.sub(V.add(V.add(V.add(S.o,S.x,f[0]),S.y,f[1]),S.z,f[2]),T.o);
+  const x=Math.abs(V.dot(d,T.x)),y=Math.round(V.dot(d,T.y)),z=V.dot(d,T.z)-RE.zc,a=Math.round(Math.atan2(x,z)*36/Math.PI);
+  if(y<RE.y0||y>RE.y1||a<RE.a0||a>RE.a1)return;
+  const r=RIBS.dil[(y-RE.y0)*na+a-RE.a0];if(!r)return;
+  const dep=r-Math.hypot(x,z);if(dep>depth){depth=dep;at=i;}
+ });
+ return{depth,at};
+}
+
 /* ---------- Степени свободы ----------
  root.p — центр между тазобедренными суставами; root.q — ориентация таза (кватернион).
  lumbar/thoracic/neck: [сгибание вперёд +, боковой наклон вправо +, поворот влево +].
  Для каждой стороны:
-  girdle [поднимание +, протракция +];
+  girdle [поднимание +, протракция +] — плечевой пояс сверх ритма (сведение и опускание лопаток — минус; в старых
+   спецификациях — углы ключицы, girdleMode 'abs'); clav [подъём, протракция ключицы] и scap [внутренняя ротация,
+   поворот вверх, наклон назад лопатки] — решённый пояс, градусы от покоя (null — решить по girdle и ритму, resolveGirdle);
   shoulder [сгибание, отведение, наружная ротация +] — размах (экспонента) и закрутка;
   elbow сгибание +; pron пронация + (0 — большой палец вперёд);
   wrist [сгибание к ладони +, лучевое отведение +];
   hip [сгибание, отведение, наружная ротация +]; knee сгибание +;
   ankle [тыльное сгибание +, супинация (инверсия) +]; mtp разгибание пальцев (носок вверх) +. */
 const SIDES=['L','R'],SIGN={L:1,R:-1};
-function sideZero(){return{girdle:[0,0],shoulder:[0,7,0],elbow:6,pron:0,wrist:[0,0],hip:[0,0,4],knee:0,ankle:[0,0],mtp:0};}
+function sideZero(){return{girdle:[0,0],clav:null,scap:null,shoulder:[0,7,0],elbow:6,pron:0,wrist:[0,0],hip:[0,0,4],knee:0,ankle:[0,0],mtp:0};}
 function neutral(){
  return{root:{p:[0,B.hipHeight,0],q:[1,0,0,0]},lumbar:[0,0,0],thoracic:[0,0,0],neck:[0,0,0],L:sideZero(),R:sideZero(),hands:{L:'relaxed',R:'relaxed'}};
 }
 function clone(q){return JSON.parse(JSON.stringify(q));}
 const PACK=[['root.p',3],['root.q',4],['lumbar',3],['thoracic',3],['neck',3]];
-for(const s of SIDES)for(const[k,n]of [['girdle',2],['shoulder',3],['elbow',1],['pron',1],['wrist',2],['hip',3],['knee',1],['ankle',2],['mtp',1]])PACK.push([s+'.'+k,n]);
+for(const s of SIDES)for(const[k,n]of [['clav',2],['scap',3],['shoulder',3],['elbow',1],['pron',1],['wrist',2],['hip',3],['knee',1],['ankle',2],['mtp',1]])PACK.push([s+'.'+k,n]);
 const PACK_SIZE=PACK.reduce((s,[,n])=>s+n,0);
 function getPath(o,p){return p.split('.').reduce((a,k)=>a[k],o);}
 function setPath(o,p,v){const k=p.split('.'),last=k.pop();k.reduce((a,x)=>a[x],o)[last]=v;}
-function pack(q){const out=[];for(const[p,n]of PACK){const v=getPath(q,p);if(n===1)out.push(v);else out.push(...v);}return out;}
+/* пояс стороны: решённый (clav, scap) или решить по girdle и ритму */
+const girdleOf=(q,s)=>q[s].clav&&q[s].scap?q[s]:resolveGirdle(q,s);
+function pack(q){const G={L:girdleOf(q,'L'),R:girdleOf(q,'R')},out=[];for(const[p,n]of PACK){const k=p.split('.'),v=k[1]==='clav'||k[1]==='scap'?G[k[0]][k[1]]:getPath(q,p);if(n===1)out.push(v);else out.push(...v);}return out;}
 function unpack(a,hands){const q=neutral();let i=0;for(const[p,n]of PACK){setPath(q,p,n===1?a[i]:a.slice(i,i+n));i+=n;}if(hands)q.hands={...hands};return q;}
 
 /* ---------- Прямая кинематика ---------- */
@@ -277,10 +432,14 @@ function fk(q){
  P.head=at(F.head,B.headCenter);
  for(const s of SIDES){
   const g=SIGN[s],J=q[s];
-  const sc=at(F.thorax,[g*B.sc[0],B.sc[1],B.sc[2]]),gr=M3.mul(M3.rz(g*J.girdle[0]),M3.ry(-g*J.girdle[1]));
-  /* рамка плечевого пояса (ключица и лопатка): начало — грудино-ключичный шарнир, оси грудной клетки после поворота пояса */
+  const sc=at(F.thorax,[g*B.sc[0],B.sc[1],B.sc[2]]),G=girdleOf(q,s),gr=M3.mul(M3.rz(g*G.clav[0]),M3.ry(-g*G.clav[1]));
+  /* ключица: начало — грудино-ключичный сустав, оси грудной клетки после её поворота; лопатка — поворот Rd относительно
+     грудной клетки вокруг акромиально-ключичного сустава на конце ключицы (в покое обе рамки совпадают; кости пояса
+     заданы в рамке ключицы покоя) */
   F['cl'+s]={o:sc,R:M3.mul(F.thorax.R,gr)};
-  P['sc'+s]=sc;P['gh'+s]=V.add(sc,M3.v(F['cl'+s].R,[g*B.ghRel[0],B.ghRel[1],B.ghRel[2]]));
+  const ac=girdleMir(GIRDLE.ac,g),Rd=scapRot(s,G.scap);
+  F['sp'+s]={o:V.add(sc,M3.v(F.thorax.R,V.sub(M3.v(gr,ac),M3.v(Rd,ac)))),R:M3.mul(F.thorax.R,Rd)};
+  P['sc'+s]=sc;P['ac'+s]=at(F['cl'+s],ac);P['gh'+s]=at(F['sp'+s],[g*B.ghRel[0],B.ghRel[1],B.ghRel[2]]);
   F['ua'+s]={o:P['gh'+s],R:M3.mul(F.thorax.R,M3.mul(swing(-J.shoulder[0],g*J.shoulder[1]),M3.ry(g*J.shoulder[2])))};
   P['el'+s]=at(F['ua'+s],[0,-B.ua,0]);
   F['fa'+s]={o:P['el'+s],R:M3.mul(F['ua'+s].R,M3.rx(-J.elbow))};
@@ -324,7 +483,9 @@ function solveArm(q,s,grip,handleAxis,pole,opts={}){
  const g=SIGN[s];let fkr=fk(q),hx=V.unit(handleAxis),info={};
  const gripOff=[-g*B.grip[0],B.grip[1],B.grip[2]];
  let distal=V.unit(V.perp(V.sub(grip,fkr.P['gh'+s]),hx));
- for(let it=0;it<8;it++){
+ /* центр плечевого сустава идёт за лопаткой, а она — за подъёмом плеча (ритм пояса): повторяем, пока не встанут и
+    кисть, и плечевой сустав */
+ for(let it=0;it<16;it++){
   /* кисть: z — вдоль ручки, −y — дистально; ладонь (−g·x) обращена к ручке */
   let Rh=M3.frameYZ(V.scale(distal,-1),hx);
   if(opts.wristExt){Rh=M3.mul(Rh,M3.rz(g*opts.wristExt));}
@@ -334,15 +495,21 @@ function solveArm(q,s,grip,handleAxis,pole,opts={}){
   fkr=fk(q);
   const fore=V.unit(V.sub(fkr.P['wr'+s],fkr.P['el'+s])),nd=V.unit(V.perp(fore,hx));
   if(V.len(nd)<1e-6)break;
-  const change=V.angle(nd,distal);distal=nd;if(change<.05)break;
+  const change=V.angle(nd,distal),moved=V.dist(fkr.P['gh'+s],sh);distal=nd;if(change<.05&&moved<.002)break;
  }
  fkr=fk(q);info.gripError=V.dist(fkr.P['grip'+s],grip);info.axisError=V.angle(M3.col(fkr.F['hand'+s].R,2),hx);
  return info;
 }
 /* Свободная рука: запястье в точку, кисть — в продолжение предплечья (или заданная ориентация) */
 function solveArmWrist(q,s,wrist,pole,handR=null){
- const fkr=fk(q),tb=twoBone(fkr.P['gh'+s],wrist,B.ua,B.fa,pole);
- setArmFromPoints(q,s,fkr,tb.mid,tb.end,handR);return{reachError:tb.reachError};
+ /* плечевой сустав идёт за ритмом пояса — повторяем, пока он не встанет */
+ let fkr=fk(q),tb;
+ for(let it=0;it<12;it++){
+  const sh=fkr.P['gh'+s];tb=twoBone(sh,wrist,B.ua,B.fa,pole);
+  setArmFromPoints(q,s,fkr,tb.mid,tb.end,handR);fkr=fk(q);
+  if(V.dist(fkr.P['gh'+s],sh)<.002)break;
+ }
+ return{reachError:tb.reachError};
 }
 function setArmFromPoints(q,s,fkr,el,wr,handR){
  const g=SIGN[s],J=q[s],sh=fkr.P['gh'+s],T=fkr.F.thorax.R;
@@ -957,8 +1124,9 @@ function bodyData(R){
 
  for(const s of SIDES){
   const ua=fr['ua'+s],g=SIGN[s];
-  const cl=fr['cl'+s],o=AC_CAP.off;
-  caps.push({key:'ac'+s,c:V.add(V.add(V.add(R['sh'+s],cl.x,g*o[0]),cl.y,o[1]),cl.z,o[2]),r:AC_CAP.r});
+  /* «шапка» над акромионом — в рамке лопатки (акромион — её часть): идёт за поворотом лопатки */
+  const sp=fr['sp'+s],o=AC_CAP.off;
+  caps.push({key:'ac'+s,c:V.add(V.add(V.add(R['sh'+s],sp.x,g*o[0]),sp.y,o[1]),sp.z,o[2]),r:AC_CAP.r});
   caps.push({key:'sh'+s,c:V.add(V.add(R['sh'+s],ua.y,SH_CAP[0]),ua.x,g*SH_CAP[1]),r:CAPS.sh},{key:'el'+s,c:R['el'+s],r:CAPS.el},{key:'wr'+s,c:R['wr'+s],r:CAPS.wr},{key:'kn'+s,c:V.add(R['kn'+s],V.unit(V.add(fr['th'+s].z,fr['sk'+s].z)),KN_CAP_Z),r:CAPS.kn},{key:'an'+s,c:R['an'+s],r:CAPS.an});
  }
  const hands={},feet={};
@@ -1022,6 +1190,8 @@ return{V,M3,Q,B,TORSO,TORSO_H,TORSO_COLS,colAngle,TORSO_JOINTS,TORSO_BLEND,TORSO
  profileAt,sectionAt,spineFrame,torsoFrame,frontK,ramp,vertebraFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,neckSDF,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,
  FOLDS,FOLD_SP,foldAxes,foldSet,foldLift,noFolds,KN_CAP_Z,SEAT_K,
  headLocalSDF,headLocal,headWorld,headMesh,headSamples,HEAD_PARTS,HEAD_EAR,HEAD_EARS,ellipseRadius,centerOfMass,LIMB_DEF,
- handShape,footShape,footPoints,footPointWorld,footBlendW,FOOT_SECTIONS,TOES,malleoli,bodyData,jointAngles};
+ handShape,footShape,footPoints,footPointWorld,footBlendW,FOOT_SECTIONS,TOES,malleoli,bodyData,jointAngles,
+ GIRDLE,RIB_ENV,RHYTHM,GSIG,GIRDLE_REST,rhythmAt,humeralElevation,girdleTargets,resolveGirdle,solveGirdle,scapRot,ribGap,ribSlide,
+ isbScapFrame,isbAngles,scapulaRibDepth};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=Mannequin;

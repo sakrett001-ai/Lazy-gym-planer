@@ -172,11 +172,14 @@ const tiltBack = (C, q, a, face) => { const r = a * D2R; return C.root(q, q.root
    face — куда смотрит тело (±1 по Z), grip — 'over' (прямой) или 'under' (обратный), w — полуширина хвата. */
 function hangPose(C, q, { face = 1, grip = 'over', w = 30, drop = 60, pole }) {
   const { V } = C;
+  /* плечевые суставы идут за лопатками (ритм пояса): сначала руки к перекладине, потом плечи на место и руки ещё раз */
   const place = dz => {
-    C.rootAtShoulders(q, [0, BAR[1] - Math.sqrt(drop * drop - dz * dz), BAR[2] + dz]);
-    for (const s of S) {
-      const lat = C.lat(q, s), th = grip === 'over' ? V.scale(lat, -1) : lat;
-      C.grip(q, s, V.add(BAR, lat, w), th, pole ? pole(q, s, lat) : V.unit(V.add(V.add([0, -1, 0], lat, 1.0), [0, 0, face], .25)));
+    for (const pass of [0, 1]) {
+      C.rootAtShoulders(q, [0, BAR[1] - Math.sqrt(drop * drop - dz * dz), BAR[2] + dz]);
+      for (const s of S) {
+        const lat = C.lat(q, s), th = grip === 'over' ? V.scale(lat, -1) : lat;
+        C.grip(q, s, V.add(BAR, lat, w), th, pole ? pole(q, s, lat) : V.unit(V.add(V.add([0, -1, 0], lat, 1.0), [0, 0, face], .25)), { allowShort: !pass });
+      }
     }
   };
   const dz = C.solve1D(z => { place(z); return C.com(q)[2] - BAR[2]; }, -22, 22);

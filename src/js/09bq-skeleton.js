@@ -4,7 +4,8 @@
    «Скелет»; в офлайн-файле встроены (window.SKELETON_BIN, base64).
    Каждая кость — жёсткое тело своего сегмента (иногда с масштабом): frames() даёт для кадра аффинные матрицы 3×4
    «локальные см → каталог (см, Y вниз)». Особые случаи: позвонки L5–L1 — по рамке позвонка на своей высоте
-   (Mannequin.vertebraFrame: поворот поясницы делится по уровням, как в MyoSim); ключица и лопатка — по рамке плечевого пояса, лопатка поворачивается за рукой и скользит по рёбрам (scapulaRot); лучевая кость — поворот с пронацией вокруг оси
+   (Mannequin.vertebraFrame: поворот поясницы делится по уровням, как в MyoSim); ключица и лопатка — по рамкам ключицы и лопатки манекена (Mannequin.fk: лопатка на конце ключицы, ритм плечевого
+   пояса и скольжение по рёбрам; до этапа Д скелет поворачивал лопатку сам, в обход кинематики); лучевая кость — поворот с пронацией вокруг оси
    «головка лучевой — запястье»; надколенник — по углу колена (полиномы связи модели Rajagopal); фаланги — по линиям
    пальцев текущего хвата. */
 const Skeleton = (() => {
@@ -64,88 +65,6 @@ const Skeleton = (() => {
     return { lin, t };
   }
   const about = (lin, p) => ({ lin, t: [0, 1, 2].map(i => p[i] - (lin[i][0] * p[0] + lin[i][1] * p[1] + lin[i][2] * p[2])) }); /* поворот вокруг точки p */
-  const apply = (A, p) => [0, 1, 2].map(i => A.lin[i][0] * p[0] + A.lin[i][1] * p[1] + A.lin[i][2] * p[2] + A.t[i]);
-  /* поворот, переводящий направление a в b (кратчайший) */
-  function rotBetween(a, b) {
-    const u = V.unit(a), w = V.unit(b), k = V.cross(u, w), s = V.len(k), c = V.dot(u, w);
-    return s < 1e-9 ? [[1, 0, 0], [0, 1, 0], [0, 0, 1]] : rotAxis(V.scale(k, 1 / s), Math.atan2(s, c));
-  }
-  /* Плече-лопаточный ритм: при подъёме руки лопатка поворачивается вверх (суставная впадина смотрит выше, нижний угол
-     уходит наружу и вперёд по рёбрам) и наклоняется назад. Первые ≈25° подъёма плеча — без поворота, дальше лопатка
-     даёт около 0,4° на каждый градус (≈55° при руке над головой); вклад поднятия плечевого пояса (рамка ключицы
-     уже повёрнута во фронтальной плоскости) вычитается. Поворот — вокруг оси, перпендикулярной плоскости лопатки,
-     через центр плечевого сустава: головка плечевой кости остаётся во впадине; ключица следует за акромионом.
-     Inman et al., 1944; McClure et al., 2001; Ludewig et al., 2009. */
-  const deg = Math.PI / 180;
-  /* Кожа манекена у нижнего угла лопатки не растягивается за поднятой рукой (широчайшая и зубчатая мышцы не
-     смоделированы), поэтому поворот ограничен: нижний угол остаётся не ближе INSIDE см к коже корпуса. */
-  const INSIDE = .6;
-  /* Оболочка рёбер в рамке грудной клетки: наибольший радиус от оси по слоям высоты (1 см) и секторам (5°).
-     Передняя поверхность лопатки держится снаружи (между ними у живого человека — подлопаточная и зубчатая мышцы). */
-  const RIB_GAP = .3;
-  function ribShell(bones) {
-    const b = bones.find(x => x.name === 'ribcage'); if (!b) return null;
-    const p = b.pos, n = p.length / 3; let zc = 0; for (let i = 2; i < p.length; i += 3) zc += p[i]; zc /= n;
-    const sh = new Map();
-    for (let i = 0; i < p.length; i += 3) {
-      const x = p[i], z = p[i + 2] - zc, k = Math.round(p[i + 1]) * 1000 + Math.round(Math.atan2(x, z) * 36 / Math.PI), r = Math.hypot(x, z);
-      if (!(sh.get(k) >= r)) sh.set(k, r);
-    }
-    return { zc, sh };
-  }
-  /* зазор точки мира до оболочки рёбер: + снаружи, − внутри; Infinity — там, где рёбер нет */
-  function ribClear(rib, T, w) {
-    const d = V.sub(w, T.o), x = V.dot(d, T.x), y = Math.round(V.dot(d, T.y)), z = V.dot(d, T.z) - rib.zc, a = Math.round(Math.atan2(x, z) * 36 / Math.PI);
-    let s = 0; for (let k = -1; k <= 1; k++) s = Math.max(s, rib.sh.get(y * 1000 + a + k) || 0);
-    return s ? Math.hypot(x, z) - s : Infinity;
-  }
-  function scapulaRot(R, s, b, ctx) {
-    const F = R.frames, th = F.thorax, ua = F['ua' + s], cl = F['cl' + s], g = SIGN[s] || 1;
-    const elev = Math.acos(Math.max(-1, Math.min(1, V.dot(ua.y, th.y)))) / deg;
-    const eCl = g * Math.atan2(V.dot(cl.x, th.y), V.dot(cl.x, th.x)) / deg;
-    const up = Math.min(55, .4 * Math.max(0, elev - 25)), extra = Math.max(0, up - Math.max(0, eCl));
-    const tilt = Math.min(20, .15 * Math.max(0, elev - 30));
-    const gl = b.gl[0], n = V.unit(b.nrm[0]), ia = V.sub(b.ia[0], gl), ax = V.unit(V.sub(b.ac[0], gl));
-    const turn = (k, a, p = ia) => { const r = rotAxis(k, a); return [0, 1, 2].map(i => r[i][0] * p[0] + r[i][1] * p[1] + r[i][2] * p[2]); };
-    /* знаки: нижний угол уходит наружу (|x| растёт) при повороте вверх, к рёбрам (+z) — при наклоне назад
-       и при повороте внутрь (вокруг вертикали через впадину) */
-    const su = Math.abs(turn(n, deg)[0] + gl[0]) >= Math.abs(ia[0] + gl[0]) ? 1 : -1, st = turn(ax, deg)[2] >= ia[2] ? 1 : -1;
-    const sv = turn([0, 1, 0], deg)[2] >= ia[2] ? 1 : -1;
-    const rot = (lam, dl) => about(mul({ lin: rotAxis([0, 1, 0], sv * dl * deg), t: [0, 0, 0] },
-      mul({ lin: rotAxis(ax, st * lam * tilt * deg), t: [0, 0, 0] }, { lin: rotAxis(n, su * lam * extra * deg), t: [0, 0, 0] })).lin, gl);
-    const C = frameAff(cl), sdf = (R2, p) => M.torsoSDF(R, apply(mul(C, R2), p), ctx.cache());
-    /* 1) поворот вверх и наклон — наибольшая доля, при которой нижний угол внутри кожи корпуса */
-    let lam = 0;
-    if (extra >= .1 || tilt >= .1) {
-      const inside = l => sdf(rot(l, 0), b.ia[0]) <= -INSIDE;
-      if (inside(1)) lam = 1;
-      else if (inside(0)) { let lo = 0, hi = 1; for (let k = 0; k < 6; k++) { const m = (lo + hi) / 2; if (inside(m)) lo = m; else hi = m; } lam = lo; }
-    }
-    /* 2) лопатка скользит по рёбрам: поворотом вокруг вертикали через впадину держим заднюю поверхность под кожей
-       (пробные точки не ближе 0,3 см к коже) и переднюю — снаружи рёбер (не ближе RIB_GAP). Наименьший по модулю угол
-       от −10° (наружу) до 25° (внутрь), при котором выполнено и то и другое; если нельзя — наименьшее нарушение
-       (в протракции у края грудной клетки кожа ближе к рёбрам, чем толщина лопатки: мышц под ней манекен не имеет) */
-    const T = R.frames.thorax, rib = ctx.rib;
-    const viol = dl => {
-      const R2 = rot(lam, dl); let w = -Infinity, c = Infinity;
-      for (const p of b.probe) w = Math.max(w, sdf(R2, p));
-      if (rib && b.front) { const A = mul(C, R2); for (const p of b.front) c = Math.min(c, ribClear(rib, T, apply(A, p))); }
-      return Math.max(2 * (w + .3), RIB_GAP - c); /* выход из кожи заметнее захода в рёбра — вдвое строже */
-    };
-    let dl = 0;
-    if (b.probe && viol(0) > 0) {
-      let best = 0, bv = viol(0), okBest = null;
-      for (const a of [5, -5, 10, -10, 15, 20, 25]) { const v = viol(a); if (v <= 0 && (okBest === null || Math.abs(a) < Math.abs(okBest))) okBest = a; if (v < bv) { bv = v; best = a; } }
-      if (okBest !== null) {
-        /* уточняем к нулю: наименьший угол того же знака, при котором ещё всё в порядке */
-        let lo = 0, hi = okBest; for (let k = 0; k < 4; k++) { const m = (lo + hi) / 2; if (viol(m) <= 0) hi = m; else lo = m; } dl = hi;
-      } else {
-        for (const st2 of [2.5, 1.25]) for (const a of [best - st2, best + st2]) { if (a < -10 || a > 25) continue; const v = viol(a); if (v < bv) { bv = v; best = a; } }
-        dl = best;
-      }
-    }
-    return lam < .02 && Math.abs(dl) < .1 ? null : rot(lam, dl);
-  }
   function pointAt(pts, s) {
     let acc = 0;
     for (let i = 1; i < pts.length; i++) { const l = V.dist(pts[i - 1], pts[i]); if (acc + l >= s || i === pts.length - 1) return V.mix(pts[i - 1], pts[i], l < 1e-9 ? 0 : Math.min(1, (s - acc) / l)); acc += l; }
@@ -163,18 +82,12 @@ const Skeleton = (() => {
   /* матрицы всех костей кадра: Float32Array по 12 чисел (строки 3×4) — каталог = A·[x y z 1] */
   function frames(R, body, bones = data?.bones) {
     const out = new Float32Array(bones.length * 12), F = R.frames, cache = {};
-    let tc = null; const ctx = { cache: () => tc || (tc = M.torsoCache(R)), rib: bones._rib === undefined ? (bones._rib = ribShell(bones)) : bones._rib };
     bones.forEach((b, i) => {
       const s = b.side, g = SIGN[s] || 1; let A;
       if (b.seg === 'spine') A = frameAff(M.vertebraFrame(R, b.h));
-      else if (b.seg === 'girdle') {
-        /* лопатка держится под кожей без складок подмышки (Mannequin.FOLDS): складки поднимают кожу над мышцами, а не над
-           лопаткой, и поза скелета от них не зависит */
-        const C = frameAff(F['cl' + s]), key = 'st' + s, rot = key in cache ? cache[key] : (cache[key] = b.gl ? (M.noFolds ? M.noFolds(() => scapulaRot(R, s, b, ctx)) : scapulaRot(R, s, b, ctx)) : null);
-        if (!rot) A = C;
-        else if (b.name === 'scapula') A = mul(C, rot);
-        else A = mul(C, { lin: rotBetween(b.ac[0], apply(rot, b.ac[0])), t: [0, 0, 0] }); /* ключица — от грудино-ключичного к сдвинутому акромиону */
-      }
+      /* кости пояса заданы в рамке ключицы покоя: ключица — по рамке ключицы, лопатка — по рамке лопатки (Mannequin.fk:
+         лопатка на конце ключицы, поворот вокруг акромиально-ключичного сустава, ритм и скольжение по рёбрам) */
+      else if (b.seg === 'girdle') A = frameAff(F[(b.name === 'scapula' ? 'sp' : 'cl') + s]);
       else if (b.name === 'radius') {
         const fa = F['fa' + s], fd = F['fd' + s], phi = jointAngle(fa.z, fd.z, fa.y), [rh, w] = b.pivot;
         A = mul(frameAff(fa), about(rotAxis(V.unit(V.sub(rh, w)), phi), w));
