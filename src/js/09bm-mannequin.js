@@ -1020,7 +1020,7 @@ return{V,M3,Q,B,TORSO,TORSO_H,TORSO_COLS,colAngle,TORSO_JOINTS,TORSO_BLEND,TORSO
  neutral,clone,pack,unpack,PACK,PACK_SIZE,fk,solePoints,twoBone,solveArm,solveArmWrist,setArmFromPoints,footFrame,heelFrame,solveLeg,rootRot,rootFromAxes,
  swing,swingTwist,eulerXZY,eulerYZX,spineRot,makeTrack,monotone,toCat,dirCat,catalogPose,
  profileAt,sectionAt,spineFrame,torsoFrame,frontK,ramp,vertebraFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,neckSDF,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,
- FOLDS,FOLD_SP,foldAxes,foldSet,foldLift,noFolds,
+ FOLDS,FOLD_SP,foldAxes,foldSet,foldLift,noFolds,KN_CAP_Z,SEAT_K,
  headLocalSDF,headLocal,headWorld,headMesh,headSamples,HEAD_PARTS,HEAD_EAR,HEAD_EARS,ellipseRadius,centerOfMass,LIMB_DEF,
  handShape,footShape,footPoints,footPointWorld,footBlendW,FOOT_SECTIONS,TOES,malleoli,bodyData,jointAngles};
 })();

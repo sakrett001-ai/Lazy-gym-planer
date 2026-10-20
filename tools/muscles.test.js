@@ -676,6 +676,36 @@ test('muscle paths stay out of bones and under the skin in catalog poses', () =>
   }
 });
 
+/* ---------- кожа кадра (этап Г, Muscles.skinPart; README, «Тело мышцы между костью и кожей») ----------
+   Части кожи, посчитанные по матрицам костей, — та же кожа, что у манекена и проверок (G.skinSDF): у точек не дальше 3 см от
+   кожи части конечности, шея, голова и «шапки» суставов — до 0,1 мм; корпус (сдвиг надплечий — неподвижная точка до 0,3 мм,
+   сечения и рамки поясницы — по таблицам кадра) — в среднем до 0,2 мм, больше 1 мм — не чаще 2 % точек, наибольшее — до 1 см
+   (точки снаружи кожи над поднятыми надплечьями; сейчас — в среднем 0,05 мм, 0,47 % и 0,64 см). */
+test('frame skin: Muscles.skinPart equals the mannequin skin of the checks near the body surface in poses', () => {
+  const G = require('./muscles/geometry.js'), S = bound.skin;
+  assert(S, 'frame skin is bound (skp in the data)');
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const st = Array.from({ length: 23 }, () => ({ n: 0, sum: 0, big: 0, max: 0, at: '' }));
+  for (const [id, t] of [['neutral', 0], ['shrug', 1], ['ytw', 0], ['dbcurl', 1], ['squat', 1], ['bicycle', .5], ['ohp', 1], ['deadlift', 0]]) {
+    const { R, m } = rPose(id, t), sdf = G.skinSDF(R), surf = L.M.surface(R), pts = [];
+    Muscles.skinFrame(S, m);
+    const rows = [...surf.torso, ...Object.values(surf.limbs).flat(), ...surf.neck];
+    for (const row of rows) for (let k = 0; k < row.length; k += 3) pts.push(row[k]);
+    for (const c of L.M.bodyData(R).caps) for (let k = 0; k < 12; k++) { const u = [rnd() - .5, rnd() - .5, rnd() - .5], l = Math.hypot(...u); pts.push(c.c.map((x, j) => x + u[j] / l * c.r)); }
+    for (const p0 of pts) {
+      const p = p0.map(x => x + (rnd() - .5) * 6);
+      for (let code = 0; code < 23; code++) {
+        const ref = sdf.parts[code](p); if (!(Math.abs(ref) <= 3)) continue;
+        const e = Math.abs(Muscles.skinPart(S, m, code, p[0], p[1], p[2]) - ref), s = st[code];
+        s.n++; s.sum += e; if (e > .1) s.big++; if (e > s.max) { s.max = e; s.at = `${id} t=${t} (${p.map(x => x.toFixed(1)).join(', ')})`; }
+      }
+    }
+  }
+  for (let code = 1; code < 23; code++) assert(st[code].n > 100 && st[code].max < .01, `skin part ${code}: ${st[code].max.toFixed(4)} cm off the mannequin skin (${st[code].at}), ${st[code].n} points`);
+  const T = st[0];
+  assert(T.n > 2000 && T.sum / T.n < .02 && T.big <= .02 * T.n && T.max < 1, `torso skin: mean ${(T.sum / T.n * 10).toFixed(2)} mm, ${(100 * T.big / T.n).toFixed(2)} % > 1 mm, max ${T.max.toFixed(2)} cm (${T.at}), ${T.n} points`);
+});
+
 /* ---------- межрёберные мышцы — пласты (4.40.0, tools/muscles/intercostals.js; данные формата 3 — sheets) ---------- */
 const IC = require('./muscles/intercostals.js'), RCAGE = IC.ribcage(skel);
 const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
