@@ -355,5 +355,19 @@
     8
    ]
   }
+ },
+ "quadtendon": {
+  "about": "Сухожилие четырёхглавой мышцы бедра над надколенником — от конца мышечных волокон части до верхнего края надколенника (или её прикрепления к надколеннику), см, препараты. Путь мышц четырёхглавой в модели идёт через надколенник к бугристости большеберцовой кости: дистальное сухожилие на рисунке — не короче этого куска, надколенника и связки надколенника (volumes.js, QUAD_TENDON).",
+  "above": {
+   "recfem": 8.33,
+   "vasmed": 2.5,
+   "vaslat": 3.3,
+   "vasint": 3.3
+  },
+  "recfem": "Krebs N., Yaish A., O'Neill N. Anatomic evaluation of the quadriceps tendon in cadaveric specimens: application for anterior cruciate ligament reconstruction graft choice. Spartan Med Res J 4(1): 7961, 2019. doi:10.51894/001c.7961 — 10 препаратов: от верхнего края надколенника до конца волокон прямой мышцы бедра 83,3 ± 14,4 мм (63–108). Сверка: Strauss M. J. и др. Orthop J Sports Med 9(9): 23259671211037305, 2021. doi:10.1177/23259671211037305 — 18 препаратов (18–38 лет), медиана 86,9 мм (68,4–98,9).",
+  "vasmed": "Smith T. O., Nichols R., Gilding E., Donell S. T. Are location, proportion and length of VM patellar attachment aetiological factors in patellofemoral dysfunction? A systematic review. Eur J Orthop Surg Traumatol 19(2): 63–73, 2009. doi:10.1007/s00590-008-0373-y — 8 исследований (препараты и снимки): дистальное сухожилие медиальной широкой 1,4–3,5 см, прикрепление — к верхней половине надколенника; взята середина, 2,5 см.",
+  "vaslat": "Grob K., Manestar M., Filgueira L., Ackland T., Gilbey H., Kuster M. S. New insight in the architecture of the quadriceps tendon. J Exp Orthop 3: 32, 2016. doi:10.1186/s40634-016-0068-y — сухожилие латеральной широкой сливается с поверхностным апоневрозом промежуточной широкой в 33 мм (13–53) над надколенником: ниже — уже общее сухожилие. Для латеральной и промежуточной широких — 3,3 см.",
+  "ligament": [3.8, 4.9],
+  "ligamentSource": "Andrikoula S., Tokis A., Vasiliadis H. S. и др. The extensor mechanism of the knee joint: an anatomical study. Knee Surg Sports Traumatol Arthrosc 14: 214–220, 2006. doi:10.1007/s00167-005-0680-3 — 10 препаратов: связка надколенника 38–49 мм (сверка пути модели, tools/muscles.test.js)."
  }
 }
