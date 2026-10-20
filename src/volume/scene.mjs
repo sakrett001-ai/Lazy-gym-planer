@@ -276,7 +276,8 @@ export function createCatalogScene(first,{coarse=false}={}){
   /* матрицы костей кадра: готовые (data.boneFrames — память кадров карточек плана, main.mjs) или посчитанные здесь */
   const frames=musclesOn?data.boneFrames||globalThis.Skeleton.frames(R,data.body,options.anatomy.skeleton.bones):null;
   if(bonesOn)skeletonLayer.update(options.skeleton,R,data.body,frames&&options.anatomy.skeleton===options.skeleton?frames:data.boneFrames||undefined);else skeletonLayer.hide();
-  if(musclesOn)muscleLayer.update(options.anatomy,frames,options.color,{values:data.values,sideValues:data.sideValues,regions:data.regions,phases:options.muscles!==false,selected:options.selected});else muscleLayer.hide();
+  /* фаза и ключ позы (catalogVolumeData) — память кожи по фазе в слое мышц */
+  if(musclesOn)muscleLayer.update(options.anatomy,frames,options.color,{values:data.values,sideValues:data.sideValues,regions:data.regions,phases:options.muscles!==false,selected:options.selected},data.poseKey&&typeof data.phase==='number'?{t:data.phase,key:data.poseKey}:null);else muscleLayer.hide();
   if(mannequin&&(skeletonOn||ghosted))ghost(skeletonOn);
   if(skeletonOn||!data.surfaces.length)for(const o of regionMeshes.values())o.visible=false;
   if(!mannequin){

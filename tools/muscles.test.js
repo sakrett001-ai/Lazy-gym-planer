@@ -732,6 +732,53 @@ test('frame skin: Muscles.skinPart equals the mannequin skin of the checks near 
   assert(T.n > 2000 && T.sum / T.n < .02 && T.big <= .02 * T.n && T.max < 1, `torso skin: mean ${(T.sum / T.n * 10).toFixed(2)} mm, ${(100 * T.big / T.n).toFixed(2)} % > 1 mm, max ${T.max.toFixed(2)} cm (${T.at}), ${T.n} points`);
 });
 
+/* Память кожи по фазе (этап Г; Muscles.surfaceAll с memo, слой мышц сцены): запись ленты кадр не меняет; кадр из своей ленты —
+   тот же до округления Int16 (вершин дальше 1 мм — не больше 0,1 %: у переключений ветвей — кромка ленты на продолжении шва
+   или поперёк — округление может дать и больше); кадр между лентами соседних фаз (здесь — через 1/32 повторения: дальше
+   друг от друга слой мышц ленты не смешивает, PHASE_SPAN в src/volume/muscles.mjs) близок к точному расчёту: вершин дальше
+   5 мм в среднем по кадрам — не больше 0,1 %, в худшем кадре — не больше 0,5 % (сейчас 0,03 и 0,27 %: это кольца, у которых
+   сама точная поверхность переключает ветвь — надостная в тяге верхнего блока прыгает на 3,6 см за 1/512 повторения, а по
+   памяти переходит между лентами плавно; линейное смешение самих вершин соседних кадров дало бы до 5,9 %), и не выше допуска
+   тела над кожей; лента чужого упражнения даёт другой кадр (память действительно читается) */
+test('phase memory: recording keeps the frame, frames from tapes stay close to the exact ones and under the skin', () => {
+  const G = require('./muscles/geometry.js'), { BODY_LIMIT } = require('./muscles/check.js'), Q = 32, ref = new Float64Array(RBUF.length);
+  assert(bound.tapeN > 20000, `tape of ${bound.tapeN} numbers`);
+  const frac = (a, c, d) => { let k = 0, n = 0; for (let v = 0; v < a.length; v += 3) { n++; if (Math.max(Math.abs(a[v] - c[v]), Math.abs(a[v + 1] - c[v + 1]), Math.abs(a[v + 2] - c[v + 2])) > d) k++; } return k / n; };
+  let same = 0, mid = 0, midAt = '', midSum = 0, midN = 0, out = -9, outAt = '', other = null;
+  for (const id of ['latpull', 'squat']) {
+    const tapes = [];
+    for (let i = 0; i <= Q; i++) {
+      const { m } = rPose(id, i / Q), paths = Muscles.layoutDrawn(bound, m, 1.5), tape = new Int16Array(bound.tapeN);
+      Muscles.surfaceAll(bound, paths, m, ref, null, RSTART);
+      Muscles.surfaceAll(bound, paths, m, RBUF, null, RSTART, { rec: tape });
+      assert.equal(frac(RBUF, ref, 0), 0, `${id} t=${i / Q}: recording changed the frame`);
+      Muscles.surfaceAll(bound, paths, m, RBUF, null, RSTART, { a: tape, b: tape, w: 0 });
+      same = Math.max(same, frac(RBUF, ref, .1)); tapes.push(tape);
+    }
+    if (!other) other = tapes;
+    else {
+      const { m } = rPose(id, .5), paths = Muscles.layoutDrawn(bound, m, 1.5);
+      Muscles.surfaceAll(bound, paths, m, ref, null, RSTART);
+      Muscles.surfaceAll(bound, paths, m, RBUF, null, RSTART, { a: other[Q / 2], b: other[Q / 2], w: 0 });
+      assert(frac(RBUF, ref, .5) > .01, 'a tape of another exercise gives the same frame — the tape is not read');
+    }
+    for (let i = 0; i < Q; i += 2) {
+      const t = (i + .5) / Q, { R, m } = rPose(id, t), paths = Muscles.layoutDrawn(bound, m, 1.5), sdf = G.skinSDF(R);
+      Muscles.surfaceAll(bound, paths, m, ref, null, RSTART);
+      Muscles.surfaceAll(bound, paths, m, RBUF, null, RSTART, { a: tapes[i], b: tapes[i + 1], w: .5 });
+      const f = frac(RBUF, ref, .5); midSum += f; midN++; if (f > mid) { mid = f; midAt = `${id} t=${t}`; }
+      for (let k = 0; k < bound.length; k++) {
+        if (bound[k].wall) continue;
+        const o = G.skinOutPoints(sdf, RBUF.subarray(RSTART[k] * RSIDES * 3, RSTART[k + 1] * RSIDES * 3), R).out;
+        if (o > out) { out = o; outAt = `${bound[k].name} ${id} t=${t}`; }
+      }
+    }
+  }
+  assert(same <= .001, `frames from their own tape: ${(100 * same).toFixed(3)} % of vertices off by more than 1 mm`);
+  assert(midSum / midN <= .001 && mid <= .005, `frames between tapes: ${(100 * midSum / midN).toFixed(3)} % of vertices off by more than 5 mm on average, ${(100 * mid).toFixed(3)} % at worst (${midAt})`);
+  assert(out <= BODY_LIMIT, `frames between tapes: muscle body ${out.toFixed(2)} cm above the skin (${outAt})`);
+});
+
 /* ---------- межрёберные мышцы — пласты (4.40.0, tools/muscles/intercostals.js; данные формата 3 — sheets) ---------- */
 const IC = require('./muscles/intercostals.js'), RCAGE = IC.ribcage(skel);
 const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
