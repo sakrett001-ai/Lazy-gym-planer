@@ -258,8 +258,9 @@ const LIMITS={
    чтобы ts и ai остались на рёбрах, ключице нужно подняться выше, а лопатке — сильнее наклониться назад (расхождения с
    Ludewig печатает tools/mannequin/girdle-audit.js).
    Спецификации до этапа Д задают girdle как углы ключицы (girdleMode 'abs' — так ставит C.base() в tools/mannequin/compose.js):
-   тогда цель ключицы — эти углы (σ 1,5°), лопатка — по ритму и контакту; C.rhythm(q, s, смещения) переводит сторону на
-   ритм со смещениями. Данные костей (ориентиры, передняя поверхность лопатки, оболочка рёбер) — tools/mannequin/girdle-data.js. */
+   тогда цели ключицы — эти углы (σ 1,5°: в них авторы уже учли и подъём плеч при руке вверх), отличие от ритма — как явное
+   смещение для целей лопатки, сама лопатка — по ритму и контакту; C.rhythm(q, s, смещения) переводит сторону на ритм со
+   смещениями (так заданы ключевые упражнения этапа Д; остальные — следующим заходом). Данные костей (ориентиры, передняя поверхность лопатки, оболочка рёбер) — tools/mannequin/girdle-data.js. */
 /* Ориентиры правой стороны в рамке ключицы покоя (начало — грудино-ключичный сустав, оси грудной клетки), см; левая —
    зеркально по x. ac — акромиально-ключичный сустав, ts — медиальный конец ости, ai — нижний угол, aa — акромиальный угол;
    front — 40 точек передней (рёберной) поверхности тела лопатки. */
@@ -334,7 +335,7 @@ const rhythmPt=(key,th)=>{const T=RHYTHM.th,Y=RHYTHM[key];if(th<=T[0])return Y[0
 /* ритм при подъёме плеча th и плоскости plane (0 — отведение во фронтальной плоскости, 90 — сгибание, минус — позади) */
 function rhythmAt(th,plane){
  const w=smoothstep((plane+60)/50),m=clamp((th-RHYTHM.th[0])/53,0,1),kp=plane<=35?clamp((35-plane)/35,0,1):-clamp((plane-35)/55,0,1);
- return{ce:w*rhythmPt('ce',th),cr:w*rhythmPt('cr',th)+7.5*kp*m,ir:w*rhythmPt('ir',th)+(kp>0?-7.5*kp:-7*kp)*m,
+ return{ce:w*rhythmPt('ce',th),cr:w*(rhythmPt('cr',th)+7.5*kp*m),ir:w*(rhythmPt('ir',th)+(kp>0?-7.5*kp:-7*kp)*m),
   ur:w*(rhythmPt('ur',th)+3*Math.max(0,kp)*clamp((th-60)/30,0,1)),pt:w*rhythmPt('pt',th)};
 }
 const smoothstep=t=>{t=clamp(t,0,1);return t*t*(3-2*t);};
@@ -483,11 +484,10 @@ function solveArm(q,s,grip,handleAxis,pole,opts={}){
  const g=SIGN[s];let fkr=fk(q),hx=V.unit(handleAxis),info={};
  const gripOff=[-g*B.grip[0],B.grip[1],B.grip[2]];
  let distal=V.unit(V.perp(V.sub(grip,fkr.P['gh'+s]),hx));
- /* центр плечевого сустава идёт за лопаткой, а она — за подъёмом плеча (ритм пояса): повторяем, пока не встанут и
-    кисть, и плечевой сустав */
- for(let it=0;it<16;it++){
+ let Rh=null;
+ for(let it=0;it<8;it++){
   /* кисть: z — вдоль ручки, −y — дистально; ладонь (−g·x) обращена к ручке */
-  let Rh=M3.frameYZ(V.scale(distal,-1),hx);
+  Rh=M3.frameYZ(V.scale(distal,-1),hx);
   if(opts.wristExt){Rh=M3.mul(Rh,M3.rz(g*opts.wristExt));}
   const wr=V.sub(grip,M3.v(Rh,gripOff)),sh=fkr.P['gh'+s];
   const tb=twoBone(sh,wr,B.ua,B.fa,pole);info.reachError=tb.reachError;
@@ -495,7 +495,14 @@ function solveArm(q,s,grip,handleAxis,pole,opts={}){
   fkr=fk(q);
   const fore=V.unit(V.sub(fkr.P['wr'+s],fkr.P['el'+s])),nd=V.unit(V.perp(fore,hx));
   if(V.len(nd)<1e-6)break;
-  const change=V.angle(nd,distal),moved=V.dist(fkr.P['gh'+s],sh);distal=nd;if(change<.05&&moved<.002)break;
+  const change=V.angle(nd,distal);distal=nd;if(change<.05)break;
+ }
+ /* центр плечевого сустава идёт за лопаткой, а она — за подъёмом плеча (ритм пояса): с той же кистью руку ставим заново,
+    пока плечевой сустав не встанет */
+ for(let it=0;it<16&&Rh;it++){
+  const sh=fkr.P['gh'+s],tb=twoBone(sh,V.sub(grip,M3.v(Rh,gripOff)),B.ua,B.fa,pole);info.reachError=tb.reachError;
+  setArmFromPoints(q,s,fkr,tb.mid,tb.end,Rh);fkr=fk(q);
+  if(V.dist(fkr.P['gh'+s],sh)<.001)break;
  }
  fkr=fk(q);info.gripError=V.dist(fkr.P['grip'+s],grip);info.axisError=V.angle(M3.col(fkr.F['hand'+s].R,2),hx);
  return info;
@@ -682,13 +689,17 @@ function torsoPointIn(R,h,side,ang,extra,f,[w,a,b,n=2,nf=2]){
  const kf=f.front?frontK(ang):0;
  if(kf>0){const g=f.front;p=V.mix(p,V.add(V.add(g.c,g.z,dz),g.x,dx),kf);}
  if(h<0){const d=V.sub(p,f.c),rho=V.len(d);p=V.add(p,f.y,h*SEAT_K*seatW(rho<1e-9?0:V.dot(d,f.z)/rho));}
+ /* складки подмышки (ниже) поднимают кожу по лучу от оси сечения — до сдвига надплечий: так же расстояние до кожи
+    (torsoSDF, кожа мышц) сдвигает точку обратно и меряет подъём на том же луче; со сдвигом пояса (руки над головой —
+    центр плечевого сустава уходит на 5 см) направление от оси к сдвинутой точке расходилось с ним до 0,4 см */
+ const ray=h>20&&R.frames?V.unit(V.perp(V.sub(p,f.c),f.y)):null;
  /* надплечья следуют за поднятием и протракцией плечевого пояса */
  if(h>38.8&&R.girdle&&R.frames.thorax){
   /* основание шеи следует за лопаткой лишь частично (до 60 % у верхнего сечения): трапеция растягивается плавно, без складок */
   p=V.add(p,girdleShift(R,h,side,s));
  }
  /* складки подмышки (foldLift): подъём — по поверхности без отступа extra */
- if(h>20&&R.frames){const n=V.unit(V.perp(V.sub(p,f.c),f.y)),d=foldLift(R,extra?V.add(p,n,-extra):p);if(d)p=V.add(p,n,d);}
+ if(ray){const d=foldLift(R,extra?V.add(p,ray,-extra):p);if(d)p=V.add(p,ray,d);}
  return p;
 }
 /* сдвиг кожи надплечий за плечевым поясом: доля k от смещения центра плечевого сустава из нейтрального положения;
@@ -796,8 +807,9 @@ function torsoRing(R,h,cols){
   let p=[c[0]+z[0]*dz+x[0]*dx,c[1]+z[1]*dz+x[1]*dx,c[2]+z[2]*dz+x[2]*dx];
   if(g&&q.kf>0){const kf=q.kf,gc=g.c,gz=g.z,gx=g.x,r0=gc[0]+gz[0]*dz+gx[0]*dx,r1=gc[1]+gz[1]*dz+gx[1]*dx,r2=gc[2]+gz[2]*dz+gx[2]*dx;p=[p[0]+(r0-p[0])*kf,p[1]+(r1-p[1])*kf,p[2]+(r2-p[2])*kf];}
   if(h<0){const d=V.sub(p,c),rho=V.len(d);p=V.add(p,f.y,h*SEAT_K*seatW(rho<1e-9?0:V.dot(d,f.z)/rho));}
+  const nf=fs?V.unit(V.perp(V.sub(p,c),f.y)):null; /* луч складки — до сдвига надплечий (как torsoPointIn) */
   if(gd){const D=gd[q.side],k=q.gk;p=[p[0]+D[0]*k,p[1]+D[1]*k,p[2]+D[2]*k];}
-  if(fs){const d=liftIn(fs,p);if(d)p=V.add(p,V.unit(V.perp(V.sub(p,c),f.y)),d);}
+  if(fs){const d=liftIn(fs,p);if(d)p=V.add(p,nf,d);}
   out[i]=p;
  }
  return out;
@@ -918,9 +930,11 @@ function torsoSDF(R,p,cache,info){
 /* сдвиг кожи корпуса в точке p (по ближайшему сечению): нужен знаковому расстоянию, чтобы проверки видели ту же кожу */
 function torsoShiftAt(R,p,frames,hint){
  const best=nearestSection(frames,p,hint),hp=best.s.h+best.along;if(hp<=38.8)return[0,0,0];
- /* «боковитость» точки поверхности сечения — её боковое смещение в долях полуширины (как в torsoPointIn) */
- const lx=V.dot(V.sub(p,best.s.f.c),best.s.f.x),[w]=sectionAt(Math.min(hp,TORSO.at(-1)[0]));
- return girdleShift(R,hp,lx>=0?'L':'R',Math.min(1,Math.abs(lx)/w));
+ /* «боковитость» точки поверхности сечения на том же луче от оси — её боковое смещение в долях полуширины (как в
+    torsoPointIn): у точки над кожей (складка) или под ней сдвиг тот же, что у кожи на этом луче */
+ const f=best.s.f,d=V.sub(p,f.c),lx=V.dot(d,f.x),lz=V.dot(d,f.z),rho=Math.hypot(lx,lz),[w,a,b,n,nf]=sectionAt(Math.min(hp,TORSO.at(-1)[0]));
+ const r=rho<1e-9?0:ellipseRadius(lz,lx,a,b,w,w,n,nf);
+ return girdleShift(R,hp,lx>=0?'L':'R',rho<1e-9?0:Math.min(1,Math.abs(lx)*r/rho/w));
 }
 function torsoCache(R){return TORSO_SAMPLES.map(h=>({h,f:torsoFrame(R,h)}));}
 /* ---------- Голова: знаковое расстояние и сетка ---------- */

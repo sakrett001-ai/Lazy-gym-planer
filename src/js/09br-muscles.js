@@ -583,8 +583,9 @@ const Muscles = (() => {
       if (h > 38.8 && !deep) {
         let k = SKN.gk[sd];
         for (let it = 0; it < 8; it++) {
-          const qx = lx - gx * k, qy = ly - gy * k, hh = qy + S.segH[2], x0 = (Math.max(S.bot, Math.min(S.top, hh)) - S.th0) / .25, i0 = Math.min(S.ttab.length / 5 - 2, x0 | 0), w = S.ttab[i0 * 5] + (S.ttab[i0 * 5 + 5] - S.ttab[i0 * 5]) * (x0 - i0);
-          const sl = Math.min(1, Math.abs(qx) / w), u1 = Math.max(0, Math.min(1, (hh - 38.8) / 15)), u2 = Math.max(0, Math.min(1, (hh - 53.8) / 6));
+          const qx = lx - gx * k, qy = ly - gy * k, qz = lz - gz * k, hh = qy + S.segH[2], x0 = (Math.max(S.bot, Math.min(S.top, hh)) - S.th0) / .25, i0 = Math.min(S.ttab.length / 5 - 2, x0 | 0), w = S.ttab[i0 * 5] + (S.ttab[i0 * 5 + 5] - S.ttab[i0 * 5]) * (x0 - i0);
+          /* «боковитость» — у точки кожи на том же луче от оси (Mannequin.torsoShiftAt) */
+          const rq = Math.sqrt(qx * qx + qz * qz), sl = rq < 1e-9 ? 0 : Math.min(1, Math.abs(qx) * torsoR(S, hh, qz, qx) / rq / w), u1 = Math.max(0, Math.min(1, (hh - 38.8) / 15)), u2 = Math.max(0, Math.min(1, (hh - 53.8) / 6));
           const k1 = u1 * u1 * (3 - 2 * u1) * (1 - .4 * u2 * u2 * (3 - 2 * u2)) * sl * sl * .85, ch = Math.abs(k1 - k) * (Math.abs(gx) + Math.abs(gy) + Math.abs(gz));
           k = k1; if (ch < .03) break;
         }
