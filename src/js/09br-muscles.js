@@ -188,6 +188,7 @@ const Muscles = (() => {
       name: mu.name, side: mu.side, group: mu.group, part: mu.part, v: mu.v, t0: mu.t0, t1: mu.t1, l0: mu.l0, sk: mu.sk, x0: mu.x0,
       el: mu.el.map(e => e.s ? { s: pt(e.s) } : { w: { t: e.w.t, i: bone(e.w.bone), c: e.w.c, a: e.w.a, r: e.w.r, B: e.w.B, side: e.w.side ? pt(e.w.side) : null } })
     }));
+    bound.walls = bindWalls(md, bound, idx, skel);
     bound.fans = bindFans(md, bound, idx);
     bound.caps = bindCaps(md, bound, idx);
     return bound;
@@ -417,6 +418,7 @@ const Muscles = (() => {
     ['glmax', ['glmax1', 'glmax2', 'glmax3'], /^femur/],
     ['glmed', ['glmed1', 'glmed2', 'glmed3'], /^femur/],
   ];
+  const PEC_LOW = 7.5, PEC_U0 = .45;
   const BORDER = .35, BORDER_H = .5, TIP_IN = .25, TIP_OUT = .6, RIB_WMIN = .5, RIB_HMIN = .06, RIB_C0 = .3, RIB_C1 = 1, RIB_SPREAD = .8, RIB_STEER = .35, RIB_LAM = .3, RIB_AGREE = .5;
   /* поля записи линии в кольце (LW): 0–2 центр, 3–5 касательная в сторону u, 6–8 нормаль пласта, 9–11 направление к коже,
      12 глубина под кожей, 13 площадь сечения (как у трубки), 14 полупоперечник, 15–16 ширины до швов, 17 толщина η = A/(2w),
@@ -429,7 +431,8 @@ const Muscles = (() => {
     const at = new Map(bound.map((mu, i) => [mu.name, i])), fans = [];
     for (const [key, names, anchor] of FANS) for (const s of ['r', 'l']) {
       const lines = names.map(nm => at.get(nm + '_' + s));
-      if (lines.some(i => i === undefined)) continue;
+      /* линии, которые рисуются стенкой (bindWalls — данные с полем walls), лентой не становятся */
+      if (lines.some(i => i === undefined || bound[i].wall)) continue;
       const rev = new Uint8Array(lines.length);
       lines.forEach((i, k) => {
         const el = md.muscles[i].el, first = el[0].s.bone[0], last = el[el.length - 1].s.bone[0];
@@ -461,6 +464,19 @@ const Muscles = (() => {
       /* в рамке кости: центр, ось (у сферы — любая), поперечное к оси направление (масштаб радиуса), радиус, цилиндр ли */
       fan.wrapEls = wraps.flat().map(w => { const fr = frameFromAxis(w.a || [0, 0, 1]); return { i: w.i, c: w.c, a: w.a || [0, 0, 1], p: [fr[0], fr[3], fr[6]], r: w.r, cyl: w.t === 'c' }; });
       fan.WB = new Float64Array(fan.wrapEls.length * 8);
+      /* Нижний край большой грудной. Линия рёберной части PECM3b (от хряща 6-го ребра; 4.37.0) идёт к плечу через промежуточную
+         точку линии PECM3 на 5-м ребре (h 45,4 — на 7,6 см выше начала): нижний край ленты был ломаным — горизонталь от
+         подмышки до этой точки и крутой спуск к хрящу. У человека нижний край — плавная выпуклая книзу дуга от хряща 6-го
+         ребра к подмышке (передняя подмышечная складка; Gray's Anatomy, 1918, «Pectoralis major»: нижние волокна рёберной и
+         брюшной частей идут вверх и наружу и подворачиваются под верхние). Центр нижней полосы выносится вниз на PEC_LOW·b(u)
+         (u — доля длины от плеча; b = sin(π/2·v²), v = (u − 0,45)/0,25, от 0,45 длины до точки PECM3 на 0,7 и
+         cos(π/2·(u − 0,7)/0,3) после: у плеча и у хряща — на месте). Ближе к плечу (u < 0,45) край не сдвигается: там, у бока груди
+         под подмышкой, сдвинутая вниз полоса выходила из кожи (на четвереньках — до 2,9 см). Площадь сечения прежняя (solveH) —
+         объём части тот же. */
+      if (key === 'pecmaj') {
+        fan.rib = idx.get('ribcage|'); fan.low = new Float64Array(n);
+        for (let q = 0; q < n; q++) { const u = q / (n - 1), v = Math.max(0, (u - PEC_U0) / (.7 - PEC_U0)); fan.low[q] = PEC_LOW * (u <= .7 ? Math.sin(Math.PI / 2 * v * v) : Math.cos(Math.PI / 2 * (u - .7) / .3)); }
+      }
       fans.push(fan);
     }
     return fans;
@@ -548,6 +564,17 @@ const Muscles = (() => {
         let j = 0, acc = 0; while (j < K - 2 && acc + GAP[j] < c2) { acc += GAP[j]; j++; }
         const f = GAP[j] > 1e-9 ? Math.min(1, Math.max(0, (c2 - acc) / GAP[j])) : 0, a = (k * n + q) * LW;
         B[a] = PC[j * 3] + (PC[j * 3 + 3] - PC[j * 3]) * f; B[a + 1] = PC[j * 3 + 1] + (PC[j * 3 + 4] - PC[j * 3 + 1]) * f; B[a + 2] = PC[j * 3 + 2] + (PC[j * 3 + 5] - PC[j * 3 + 2]) * f;
+      }
+    }
+    /* 1в. Нижний край большой грудной (fan.low, bindFans): центр нижней полосы выносится вниз вдоль груди (−y грудной клетки
+       поперёк направления к коже) на fan.low — только рисунок, путь прежний */
+    if (fan.low) {
+      const o = fan.rib * 12, yx = -m[o + 1], yy = -m[o + 5], yz = -m[o + 9];
+      for (let q = 0; q < n; q++) {
+        const c = ((K - 1) * n + q) * LW; let gx = B[c + 9], gy = B[c + 10], gz = B[c + 11];
+        if (B[c + 12] > 1e8) { gx = B[c + 6]; gy = B[c + 7]; gz = B[c + 8]; }
+        const d = yx * gx + yy * gy + yz * gz; let dx = yx - d * gx, dy = yy - d * gy, dz = yz - d * gz; const dl = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (dl < 1e-6) continue; const s = fan.low[q] / dl; B[c] += dx * s; B[c + 1] += dy * s; B[c + 2] += dz * s;
       }
     }
     /* 2. поперечник D (от соседа слева к соседу справа) и нормаль пласта T × D */
@@ -1252,12 +1279,286 @@ const Muscles = (() => {
     if (!(h > 0)) h = eta;
     return Math.min(k === 1 ? CAP_HMAX2 : CAP_HMAX, Math.max(.3 * eta, Math.min(3 * eta, h)));
   }
-  /* все мышцы кадра: трубки (surface), ленты (ribbon) и колпак дельтовидной (capSurface); start — номера первых колец мышц
-     (длина bound.length + 1) */
+  /* ---------- стенки: пласты по поверхности тела (брюшная стенка и бок груди, формат данных 3, поле walls) ----------
+     Прямая, наружная и внутренняя косые живота, передняя зубчатая и малая грудная рисуются не по линиям действия (пути
+     MyoBack и DAS3 — хорды для силы, на 25–100 % внутри грудной клетки), а пластом по поверхности тела: форма — по анатомии
+     (tools/muscles/walls.js, README, «Стенки»), пути и работа мышц прежние. Пласт мышцы — полосы её линий (кольца по 8 вершин,
+     как у трубок и лент: слой мышц и проверки не меняются); полоса k в строке q — три узла: левый край, середина, правый
+     край; соседние полосы делят узел шва (общие вершины — щели нет), у зубцов и наружных краёв край свой.
+     Узел — точка «опорной» стороны пласта (datum: 0 — наружная, 1 — глубокая) и толщина (см) в нейтральной позе:
+     - 0 — у кожи корпуса: точка в рамке сечения кожи на высоте h (Mannequin.torsoPointIn: боковая и передняя схемы изгиба
+       у шарниров поясницы, доля передней kf) — движется вместе с кожей над ней;
+     - 1 — на кости (жёстко);
+     - 2 — смесь 0 и 1 с весом w (у лобка, гребня таза, рёберной дуги — живот гнётся, кости нет);
+     - 3 — «скольжение» по наружной поверхности рёбер (оболочка shells — радиус в рамке грудной клетки по азимуту и высоте):
+       между точкой на ребре и точкой на подвижной кости (лопатка) с долей f — по азимуту и высоте, радиус — оболочка плюс
+       зазор; у малой грудной у клювовидного отростка пласт поднимается к нему (lift);
+     - 4 — между кожей и рёбрами: «потолок» — точка у кожи (как 0), «пол» — точка на грудной клетке (жёстко); опорная сторона —
+       пол (pref 1: пласт лежит на рёбрах — наружная косая у зубцов) или потолок (pref 0: прямая над хрящами); в позах, где кожа
+       и рёбра сходятся (скручивание с поворотом — кожа гнётся плавно, грудная клетка — целиком), пласт сжимается между ними
+       (не тоньше 0,3 своей толщины), а не выходит из кожи или уходит в рёбра.
+     Толщина в кадре — нейтральная × σ: σ — отношение площади полосы у строки в нейтральной позе к нынешней (объём части
+     сохраняется: растянутая кожей полоса тоньше, сжатая — толще). Нормаль — по опорной поверхности (средняя четырёхугольников
+     вокруг узла), знак — наружу. */
+  const MQ = typeof Mannequin !== 'undefined' ? Mannequin : (typeof require === 'function' ? require('./09bm-mannequin.js') : null);
+  const WALL_ROUND = .5, WALL_SIG0 = .6, WALL_SIG1 = 1.7, WALL_FLOOR = .1, WALL_COS = .5, WALL_LIFT = .6;
+  /* рамки корпуса кадра: таз (крестец), поясница (L5, начало — на высоте шарнира 15 см), грудная клетка; шарниры 1 (L5/S1) и
+     2 (L2/L3): ось (в рамке нижнего сегмента) и половина угла поворота — как hingeTurn в 09bm-mannequin.js */
+  const WT = new Float64Array(3 * 12 + 2 * 4);
+  function wallTorso(T, m) {
+    for (let s = 0; s < 3; s++) {
+      const o = T.bones[s] * 12, b = s * 12;
+      for (let r = 0; r < 3; r++) { WT[b + r] = m[o + r * 4 + 3]; WT[b + 3 + r] = m[o + r * 4]; WT[b + 6 + r] = m[o + r * 4 + 1]; WT[b + 9 + r] = m[o + r * 4 + 2]; }
+    }
+    /* начало рамки поясницы — у шарника L5/S1: позвонок L5 стоит на своей высоте (Mannequin.vertebraFrame) */
+    for (let r = 0; r < 3; r++) WT[12 + r] -= WT[18 + r] * T.l5;
+    for (let j = 0; j < 2; j++) {
+      const a = j * 12, c = (j + 1) * 12, R = new Array(9);
+      for (let i = 0; i < 3; i++) for (let k = 0; k < 3; k++) R[i * 3 + k] = WT[a + 3 + i * 3] * WT[c + 3 + k * 3] + WT[a + 4 + i * 3] * WT[c + 4 + k * 3] + WT[a + 5 + i * 3] * WT[c + 5 + k * 3];
+      /* кватернион по матрице (Q.fromM3 манекена) */
+      const t = R[0] + R[4] + R[8]; let w, x, y, z;
+      if (t > 0) { const s = Math.sqrt(t + 1) * 2; w = .25 * s; x = (R[7] - R[5]) / s; y = (R[2] - R[6]) / s; z = (R[3] - R[1]) / s; }
+      else if (R[0] > R[4] && R[0] > R[8]) { const s = Math.sqrt(1 + R[0] - R[4] - R[8]) * 2; w = (R[7] - R[5]) / s; x = .25 * s; y = (R[1] + R[3]) / s; z = (R[2] + R[6]) / s; }
+      else if (R[4] > R[8]) { const s = Math.sqrt(1 + R[4] - R[0] - R[8]) * 2; w = (R[2] - R[6]) / s; x = (R[1] + R[3]) / s; y = .25 * s; z = (R[5] + R[7]) / s; }
+      else { const s = Math.sqrt(1 + R[8] - R[0] - R[4]) * 2; w = (R[3] - R[1]) / s; x = (R[2] + R[6]) / s; y = (R[5] + R[7]) / s; z = .25 * s; }
+      let l = Math.sqrt(w * w + x * x + y * y + z * z) || 1; w /= l; x /= l; y /= l; z /= l; if (w < 0) { w = -w; x = -x; y = -y; z = -z; }
+      const half = Math.acos(Math.max(-1, Math.min(1, w))), sn = Math.sin(half), o = 36 + j * 4;
+      if (sn < 1e-9) { WT[o] = 1; WT[o + 1] = 0; WT[o + 2] = 0; } else { WT[o] = x / sn; WT[o + 1] = y / sn; WT[o + 2] = z / sn; }
+      WT[o + 3] = half;
+    }
+  }
+  /* точка узла у кожи по схеме: код 0–2 — жёсткий сегмент (таз, поясница, грудная клетка), 3–4 — скругление у шарнира 1–2
+     с долей поворота w; V — вектор в рамке сегмента (у шарнира — от его оси) */
+  const WP = new Float64Array(3);
+  function wallSkinPoint(code, w, V, o, piv) {
+    if (code < 3) { const b = code * 12; for (let r = 0; r < 3; r++) WP[r] = WT[b + r] + WT[b + 3 + r] * V[o] + WT[b + 6 + r] * V[o + 1] + WT[b + 9 + r] * V[o + 2]; return; }
+    const j = code - 3, b = j * 12, q = 36 + j * 4, kx = WT[q], ky = WT[q + 1], kz = WT[q + 2], an = 2 * WT[q + 3] * w, c = Math.cos(an), s = Math.sin(an), vx = V[o], vy = V[o + 1], vz = V[o + 2];
+    const kv = (kx * vx + ky * vy + kz * vz) * (1 - c), rx = vx * c + (ky * vz - kz * vy) * s + kx * kv + piv[j * 3], ry = vy * c + (kz * vx - kx * vz) * s + ky * kv + piv[j * 3 + 1], rz = vz * c + (kx * vy - ky * vx) * s + kz * kv + piv[j * 3 + 2];
+    for (let r = 0; r < 3; r++) WP[r] = WT[b + r] + WT[b + 3 + r] * rx + WT[b + 6 + r] * ry + WT[b + 9 + r] * rz;
+  }
+  /* оболочка рёбер: радиус в рамке грудной клетки на азимуте th (°, 0 — вперёд, 90 — вбок) и высоте y; −1 — рёбер нет */
+  function shellR(S, th, y) {
+    const x = (th - S.th0) / S.dth, z = (y - S.y0) / S.dy, i = Math.floor(x), j = Math.floor(z); let s = 0, w = 0;
+    for (let dj = 0; dj < 2; dj++) for (let di = 0; di < 2; di++) {
+      const ii = i + di, jj = j + dj; if (ii < 0 || ii >= S.NT || jj < 0 || jj >= S.NY) continue;
+      const r = S.r[jj * S.NT + ii]; if (r < 0) continue;
+      const ww = (1 - Math.abs(x - ii)) * (1 - Math.abs(z - jj)); s += r * ww; w += ww;
+    }
+    return w > .2 ? s / w : -1;
+  }
+  function bindWalls(md, bound, idx, skel) {
+    const at = new Map(bound.map((mu, i) => [mu.name, i])), walls = [];
+    if (!md.walls || !md.walls.length || !MQ) return walls;
+    /* оболочка рёбер: радиусы — в 0,1 мм, −1 — рёбер нет */
+    const shells = {};
+    for (const [s, sh] of Object.entries(md.shells || {})) shells[s] = { ...sh, r: Float64Array.from(sh.r, v => (v < 0 ? -1 : v / 100)) };
+    const T = { bones: [idx.get('sacrum|'), idx.get('L5|'), idx.get('ribcage|')], l5: 0, rib: idx.get('ribcage|') };
+    if (T.bones.some(i => i === undefined)) return walls;
+    const B = MQ.B, PIV = [0, B.lumbar[1] + B.lumbarPivot[1], B.lumbarPivot[2], 0, B.thoracic[1] + B.thoracicPivot[1], B.thoracicPivot[2]];
+    const SEG_H = [0, B.lumbar[1], B.lumbar[1] + B.thoracic[1]];
+    /* начало рамки поясницы — на высоте шарнира L5/S1; позвонок L5 стоит выше на свою высоту (bones[].h, Mannequin.vertebraFrame) */
+    T.l5 = skel.bones[T.bones[1]].h - B.lumbar[1];
+    /* схема изгиба кожи на высоте h: код и доля (как spineFrame) */
+    const scheme = (h, zones) => {
+      for (const [j, hj, lo, hi, e = 0] of zones) if (h > hj - lo && h < hj + hi) return [2 + j, MQ.ramp((h - hj + lo) / (lo + hi), e)];
+      return [h < SEG_H[1] ? 0 : h < SEG_H[2] ? 1 : 2, 0];
+    };
+    for (const W of md.walls) {
+      const lines = W.lines.map(nm => at.get(nm));
+      if (lines.some(i => i === undefined)) continue;
+      const bones = W.bones.map(b => { const i = idx.get(b[0] + '|' + (b[1] || '')); if (i === undefined) throw Error('muscles: wall bone ' + b.join(' ')); return i; });
+      const N = W.nodes.length, K = lines.length, n = W.n, f = c => new Float64Array(c);
+      const wall = { key: W.key, side: W.side, lines, K, n, N, T, shell: shells[W.side] || null, flip: W.flip || 1, rev: Uint8Array.from(W.rev),
+        kind: new Uint8Array(N), datum: new Uint8Array(N), t0: f(N), code: new Uint8Array(N * 2), w: f(N * 2), V: f(N * 6), kf: f(N), bone: new Int32Array(N),
+        bp: f(N * 3), mix: f(N), g: f(N * 6), P: f(N * 3), NR: f(N * 3), TH: f(N), SG: f(K * n), AR: f(K * n), A0: f(K * n), CL: f(N * 3),
+        rows: Int32Array.from(W.strips.flat()), own: new Uint8Array(N), piv: PIV };
+      W.nodes.forEach((nd, v) => {
+        const k = nd[0]; wall.kind[v] = k;
+        if (k === 0 || k === 2 || k === 4) {
+          const [, h, kf, lx, lz] = nd;
+          for (const [s, zones] of [[0, MQ.TORSO_BLEND], [1, MQ.TORSO_BLEND_FRONT]]) {
+            const [code, w] = scheme(h, zones); wall.code[v * 2 + s] = code; wall.w[v * 2 + s] = w;
+            const o = (v * 2 + s) * 3;
+            if (code < 3) { wall.V[o] = lx; wall.V[o + 1] = h - SEG_H[code]; wall.V[o + 2] = lz; }
+            else { const j = code - 3; wall.V[o] = lx - PIV[j * 3]; wall.V[o + 1] = h - SEG_H[j] - PIV[j * 3 + 1]; wall.V[o + 2] = lz - PIV[j * 3 + 2]; }
+          }
+          wall.kf[v] = h > MQ.FRONT_H[0] && h < MQ.FRONT_H[1] ? kf : 0;
+        }
+        if (k === 1) { wall.bone[v] = bones[nd[1]]; wall.bp.set(nd.slice(2, 5), v * 3); }
+        if (k === 2) { wall.bone[v] = bones[nd[5]]; wall.bp.set(nd.slice(6, 9), v * 3); wall.mix[v] = nd[9]; }
+        if (k === 4) { wall.bone[v] = bones[nd[5]]; wall.bp.set(nd.slice(6, 9), v * 3); }
+        if (k === 3) { wall.g.set([nd[1], nd[2], nd[7], nd[8], nd[9], 0], v * 6); wall.bone[v] = bones[nd[3]]; wall.bp.set(nd.slice(4, 7), v * 3); }
+        wall.datum[v] = k === 3 ? 1 : nd[nd.length - 2]; wall.t0[v] = nd[nd.length - 1];
+      });
+      /* узел шва двух полос — общий: σ узла — среднее по его строкам; own — у скольких полос узел свой (1 — край) */
+      const cnt = new Uint8Array(N); for (const v of wall.rows) cnt[v]++;
+      for (let k = 0; k < K; k++) for (let q = 0; q < n; q++) for (const e of [0, 2]) { const v = wall.rows[(k * n + q) * 3 + e]; if (cnt[v] < 2) wall.own[v] = 1; }
+      W.a0.forEach((a, k) => wall.A0.set(a, k * n));
+      lines.forEach((i, k) => { bound[i].wall = wall; bound[i].wallK = k; bound[i].rings = n; });
+      walls.push(wall);
+    }
+    return walls;
+  }
+  /* опорная точка каждого узла кадра → wall.P */
+  function wallNodes(wall, m) {
+    const N = wall.N, P = wall.P, S = wall.shell, ri = wall.T.rib * 12;
+    for (let v = 0; v < N; v++) {
+      const k = wall.kind[v], o = v * 3;
+      if (k === 0 || k === 2 || k === 4) {
+        wallSkinPoint(wall.code[v * 2], wall.w[v * 2], wall.V, v * 6, wall.piv);
+        let x = WP[0], y = WP[1], z = WP[2]; const kf = wall.kf[v];
+        if (kf > 0) { wallSkinPoint(wall.code[v * 2 + 1], wall.w[v * 2 + 1], wall.V, v * 6 + 3, wall.piv); x += (WP[0] - x) * kf; y += (WP[1] - y) * kf; z += (WP[2] - z) * kf; }
+        if (k === 2) { const b = wall.bone[v] * 12, w = wall.mix[v], p = wall.bp; for (let r = 0; r < 3; r++) { const q = m[b + r * 4] * p[o] + m[b + r * 4 + 1] * p[o + 1] + m[b + r * 4 + 2] * p[o + 2] + m[b + r * 4 + 3]; if (r === 0) x += (q - x) * w; else if (r === 1) y += (q - y) * w; else z += (q - z) * w; } }
+        if (k === 4) {
+          /* потолок — у кожи, пол — на кости; опорная (P) — по pref (datum), другая — в CL */
+          const CL = wall.CL, b = wall.bone[v] * 12, p = wall.bp;
+          const fx = m[b] * p[o] + m[b + 1] * p[o + 1] + m[b + 2] * p[o + 2] + m[b + 3], fy = m[b + 4] * p[o] + m[b + 5] * p[o + 1] + m[b + 6] * p[o + 2] + m[b + 7], fz = m[b + 8] * p[o] + m[b + 9] * p[o + 1] + m[b + 10] * p[o + 2] + m[b + 11];
+          if (wall.datum[v]) { CL[o] = x; CL[o + 1] = y; CL[o + 2] = z; x = fx; y = fy; z = fz; } else { CL[o] = fx; CL[o + 1] = fy; CL[o + 2] = fz; }
+        }
+        P[o] = x; P[o + 1] = y; P[o + 2] = z;
+      } else if (k === 1) {
+        const b = wall.bone[v] * 12, p = wall.bp;
+        for (let r = 0; r < 3; r++) P[o + r] = m[b + r * 4] * p[o] + m[b + r * 4 + 1] * p[o + 1] + m[b + r * 4 + 2] * p[o + 2] + m[b + r * 4 + 3];
+      } else {
+        /* скольжение: подвижная точка → рамка грудной клетки (азимут, высота, радиус) */
+        const b = wall.bone[v] * 12, p = wall.bp, g = wall.g, gs = wall.side === 'R' ? -1 : 1;
+        let wx = 0, wy = 0, wz = 0;
+        for (let r = 0; r < 3; r++) { const q = m[b + r * 4] * p[o] + m[b + r * 4 + 1] * p[o + 1] + m[b + r * 4 + 2] * p[o + 2] + m[b + r * 4 + 3]; if (r === 0) wx = q; else if (r === 1) wy = q; else wz = q; }
+        const dx = wx - m[ri + 3], dy = wy - m[ri + 7], dz = wz - m[ri + 11];
+        const lx = m[ri] * dx + m[ri + 4] * dy + m[ri + 8] * dz, ly = m[ri + 1] * dx + m[ri + 5] * dy + m[ri + 9] * dz, lz = m[ri + 2] * dx + m[ri + 6] * dy + m[ri + 10] * dz - S.zc;
+        const thS = Math.atan2(gs * lx, lz) * 180 / Math.PI, rS = Math.sqrt(lx * lx + lz * lz), f = g[v * 6 + 2], th = g[v * 6] + (thS - g[v * 6]) * f, y = g[v * 6 + 1] + (ly - g[v * 6 + 1]) * f;
+        const rA = shellR(S, g[v * 6], g[v * 6 + 1]), shS = shellR(S, thS, ly), sh = shellR(S, th, y), c0 = g[v * 6 + 3], lift = g[v * 6 + 4];
+        let r = sh > 0 ? sh : (rA > 0 ? rA : rS) + ((shS > 0 ? shS : rS) - (rA > 0 ? rA : rS)) * f;
+        /* зазор над рёбрами c0; с lift > 0 (малая грудная) пласт идёт от ребра к подвижной точке по плавной кривой (доля
+           min(1, lift·s(f)) радиуса: низ пласта у клювовидного отростка — на t0 под ним) и не ниже оболочки рёбер под узлом.
+           Подъём считается от ребра, а не от оболочки под отростком: при поднятой лопатке (шраги) отросток выше верха грудной
+           клетки, оболочка под ним узкая — от неё пласт ушёл бы из кожи */
+        if (lift > 0) {
+          const s = f * f * (3 - 2 * f), rB = (rA > 0 ? rA : rS) + c0, rC = rB + (rS - wall.t0[v] - rB) * Math.min(1, lift * s);
+          r = sh > 0 ? Math.max(sh + c0, rC) : rC;
+        } else r += c0;
+        const a = th * Math.PI / 180, qx = gs * Math.sin(a) * r, qz = S.zc + Math.cos(a) * r;
+        for (let k2 = 0; k2 < 3; k2++) P[o + k2] = m[ri + k2 * 4] * qx + m[ri + k2 * 4 + 1] * y + m[ri + k2 * 4 + 2] * qz + m[ri + k2 * 4 + 3];
+      }
+    }
+  }
+  /* нормали узлов (средняя четырёхугольников полос вокруг узла, наружу) и σ строк полос */
+  function wallNormals(wall) {
+    const { N, K, n, P, NR, rows, SG, AR, A0 } = wall, fl = wall.flip;
+    NR.fill(0);
+    const quad = (a, b, c, d) => {
+      const ax = P[c * 3] - P[a * 3], ay = P[c * 3 + 1] - P[a * 3 + 1], az = P[c * 3 + 2] - P[a * 3 + 2], bx = P[d * 3] - P[b * 3], by = P[d * 3 + 1] - P[b * 3 + 1], bz = P[d * 3 + 2] - P[b * 3 + 2];
+      const nx = (ay * bz - az * by) * fl, ny = (az * bx - ax * bz) * fl, nz = (ax * by - ay * bx) * fl;
+      for (const v of [a, b, c, d]) { NR[v * 3] += nx; NR[v * 3 + 1] += ny; NR[v * 3 + 2] += nz; }
+      return .5 * Math.sqrt(nx * nx + ny * ny + nz * nz);
+    };
+    /* AR — площадь опорной поверхности полосы у строки (половины соседних четырёхугольников), SG — σ строки */
+    for (let k = 0; k < K; k++) {
+      const o = k * n; AR.fill(0, o, o + n);
+      for (let q = 0; q + 1 < n; q++) {
+        const r0 = (o + q) * 3, r1 = r0 + 3;
+        const s = quad(rows[r0], rows[r0 + 1], rows[r1 + 1], rows[r1]) + quad(rows[r0 + 1], rows[r0 + 2], rows[r1 + 2], rows[r1 + 1]);
+        AR[o + q] += s / 2; AR[o + q + 1] += s / 2;
+      }
+      for (let q = 0; q < n; q++) { const a = A0[o + q], s = AR[o + q]; SG[o + q] = a > 1e-6 && s > 1e-9 ? Math.min(WALL_SIG1, Math.max(WALL_SIG0, a / s)) : 1; }
+    }
+    for (let v = 0; v < N; v++) { const l = Math.sqrt(NR[v * 3] ** 2 + NR[v * 3 + 1] ** 2 + NR[v * 3 + 2] ** 2); if (l > 1e-12) { NR[v * 3] /= l; NR[v * 3 + 1] /= l; NR[v * 3 + 2] /= l; } else NR[v * 3 + 2] = 1; }
+    /* у узлов кожи (0, 2, 4) направление «наружу» известно: от оси корпуса (x = z = 0 в рамке сегмента схемы) к точке узла по
+       горизонтали сегмента. Там, где кожа складывается (бок живота при скручивании с поворотом, низ живота при глубоком
+       сгибании), четырёхугольники вокруг узла встают ребром и их нормаль уходит вбок или внутрь — тогда она доворачивается к
+       этому направлению (косинус не меньше WALL_COS) */
+    const V = wall.V, piv = wall.piv, Sh = wall.shell, mm = wall.m, ri0 = wall.T.rib * 12;
+    for (let v = 0; v < N; v++) {
+      const k = wall.kind[v]; if (k === 1 || (k === 3 && !(Sh && mm))) continue;
+      const o = v * 3;
+      let rx, ry, rz;
+      if (k === 3) {
+        /* скольжение по рёбрам: от оси оболочки рёбер (x = 0, z = zc в рамке грудной клетки) */
+        const dx = P[o] - mm[ri0 + 3], dy = P[o + 1] - mm[ri0 + 7], dz = P[o + 2] - mm[ri0 + 11];
+        const lx = mm[ri0] * dx + mm[ri0 + 4] * dy + mm[ri0 + 8] * dz, lz = mm[ri0 + 2] * dx + mm[ri0 + 6] * dy + mm[ri0 + 10] * dz - Sh.zc;
+        rx = mm[ri0] * lx + mm[ri0 + 2] * lz; ry = mm[ri0 + 4] * lx + mm[ri0 + 6] * lz; rz = mm[ri0 + 8] * lx + mm[ri0 + 10] * lz;
+      } else {
+        const code = wall.code[v * 2], j = code < 3 ? code : code - 3 + (wall.w[v * 2] > .5 ? 1 : 0), b = j * 12;
+        const lx = V[v * 6], lz = V[v * 6 + 2] + (code < 3 ? 0 : piv[(code - 3) * 3 + 2]);
+        rx = WT[b + 3] * lx + WT[b + 9] * lz; ry = WT[b + 4] * lx + WT[b + 10] * lz; rz = WT[b + 5] * lx + WT[b + 11] * lz;
+      }
+      const rl = Math.sqrt(rx * rx + ry * ry + rz * rz); if (rl < 1) continue; rx /= rl; ry /= rl; rz /= rl;
+      const cs = NR[o] * rx + NR[o + 1] * ry + NR[o + 2] * rz; if (cs >= WALL_COS) continue;
+      const a = 2 * (WALL_COS - cs); let nx = NR[o] + a * rx, ny = NR[o + 1] + a * ry, nz = NR[o + 2] + a * rz;
+      const l = Math.sqrt(nx * nx + ny * ny + nz * nz); NR[o] = nx / l; NR[o + 1] = ny / l; NR[o + 2] = nz / l;
+    }
+    /* толщина узла: нейтральная × σ его строк (у шва — среднее двух полос) */
+    const TH = wall.TH; TH.fill(0); const c = wall.cnt || (wall.cnt = new Uint8Array(N)); c.fill(0);
+    for (let k = 0; k < K; k++) for (let q = 0; q < n; q++) for (let e = 0; e < 3; e++) { const v = rows[((k * n + q) * 3) + e]; TH[v] += SG[k * n + q]; c[v]++; }
+    for (let v = 0; v < N; v++) TH[v] = wall.t0[v] * (c[v] ? TH[v] / c[v] : 1);
+    /* между кожей и рёбрами (узлы 4): толщина — не больше места между полом и потолком по нормали (не тоньше 0,3 своей) */
+    const CL = wall.CL;
+    for (let v = 0; v < N; v++) {
+      if (wall.kind[v] !== 4) continue;
+      const o = v * 3, s = wall.datum[v] ? 1 : -1, room = s * ((CL[o] - P[o]) * NR[o] + (CL[o + 1] - P[o + 1]) * NR[o + 1] + (CL[o + 2] - P[o + 2]) * NR[o + 2]);
+      TH[v] = Math.min(TH[v], Math.max(.3 * TH[v], room));
+    }
+    /* пол из оболочки рёбер для узлов у кожи (верх — опорный): в позах, где грудная клетка подходит под пласт (рёберная дуга при
+       скручивании с поворотом), низ пласта не уходит в рёбра — пласт сжимается (не тоньше 0,3), а если ребро выше и этого —
+       узел поднимается над ним */
+    const S = wall.shell; if (!S || !wall.m) return;
+    const m = wall.m, ri = wall.T.rib * 12, gs = wall.side === 'R' ? -1 : 1;
+    for (let v = 0; v < N; v++) {
+      if (wall.datum[v] || wall.kind[v] === 3) continue;
+      const o = v * 3, t = TH[v], bx = P[o] - NR[o] * t - m[ri + 3], by = P[o + 1] - NR[o + 1] * t - m[ri + 7], bz = P[o + 2] - NR[o + 2] * t - m[ri + 11];
+      const lx = m[ri] * bx + m[ri + 4] * by + m[ri + 8] * bz, ly = m[ri + 1] * bx + m[ri + 5] * by + m[ri + 9] * bz, lz = m[ri + 2] * bx + m[ri + 6] * by + m[ri + 10] * bz - S.zc;
+      const th = Math.atan2(gs * lx, lz) * 180 / Math.PI; if (th < S.th0 || th > S.th0 + S.dth * (S.NT - 1)) continue;
+      const rs = shellR(S, th, ly); if (rs < 0) continue;
+      const rr = Math.sqrt(lx * lx + lz * lz); let def = rs + WALL_FLOOR - rr; if (def <= 0) continue;
+      /* сдвиг — по нормали узла: радиус растёт на def · cos (нормаль к радиусу оболочки), поэтому def делится на него; узел
+         поднимается не больше чем на WALL_LIFT — дальше пласт только сжимается (толстая сжатая прямая при скручивании с
+         поворотом: низ уходит вбок под край хрящей, и подъём на всю глубину вывел бы её из кожи) */
+      const cr = ((m[ri] * NR[o] + m[ri + 4] * NR[o + 1] + m[ri + 8] * NR[o + 2]) * lx + (m[ri + 2] * NR[o] + m[ri + 6] * NR[o + 1] + m[ri + 10] * NR[o + 2]) * lz) / (rr || 1);
+      def /= Math.max(.3, cr);
+      const tn = Math.max(.3 * t, t - def); TH[v] = tn;
+      const lift = Math.min(WALL_LIFT, def - (t - tn)); if (lift > 0) { P[o] += NR[o] * lift; P[o + 1] += NR[o + 1] * lift; P[o + 2] += NR[o + 2] * lift; }
+    }
+  }
+  /* вершины колец полос (порядок — как у ленты: 0 — верх середины, 1–3 — правый край, 4 — низ середины, 5–7 — левый) */
+  const WV = new Float64Array(8 * 6);
+  function wallSurface(wall, m, pos, nor, start) {
+    wallTorso(wall.T, m);
+    wallNodes(wall, m);
+    wall.m = m; wallNormals(wall); wall.m = null;
+    const { K, n, P, NR, TH, rows, own, datum } = wall;
+    const top = (v, out, o) => { const d = datum[v] ? TH[v] : 0; out[o] = P[v * 3] + NR[v * 3] * d; out[o + 1] = P[v * 3 + 1] + NR[v * 3 + 1] * d; out[o + 2] = P[v * 3 + 2] + NR[v * 3 + 2] * d; };
+    for (let k = 0; k < K; k++) {
+      const i = wall.lines[k], order = wall.rev[k] ? ORDER_REV : ORDER;
+      for (let q = 0; q < n; q++) {
+        const r = (k * n + q) * 3, L = rows[r], C = rows[r + 1], Rn = rows[r + 2], v0 = (start[i] + q) * SIDES * 3;
+        /* WV: по 6 чисел на вершину e (позиция, нормаль) */
+        const put = (e, v, depth, nx, ny, nz) => { const o = e * 6; top(v, WV, o); WV[o] -= NR[v * 3] * depth; WV[o + 1] -= NR[v * 3 + 1] * depth; WV[o + 2] -= NR[v * 3 + 2] * depth; WV[o + 3] = nx; WV[o + 4] = ny; WV[o + 5] = nz; };
+        put(0, C, 0, NR[C * 3], NR[C * 3 + 1], NR[C * 3 + 2]); put(4, C, TH[C], NR[C * 3], NR[C * 3 + 1], NR[C * 3 + 2]);
+        for (const [v, e0, sgn] of [[Rn, 1, 1], [L, 7, -1]]) {
+          const nx = NR[v * 3], ny = NR[v * 3 + 1], nz = NR[v * 3 + 2], t = TH[v];
+          put(e0, v, 0, nx, ny, nz); put(e0 + 2 * sgn, v, t, nx, ny, nz); put(e0 + sgn, v, t / 2, nx, ny, nz);
+          if (own[v]) {
+            /* свой край: кромка наружу поперёк полосы (от середины к краю, по касательной к пласту), скруглена */
+            let ex = P[v * 3] - P[C * 3], ey = P[v * 3 + 1] - P[C * 3 + 1], ez = P[v * 3 + 2] - P[C * 3 + 2]; const d = ex * nx + ey * ny + ez * nz; ex -= d * nx; ey -= d * ny; ez -= d * nz;
+            const l = Math.sqrt(ex * ex + ey * ey + ez * ez);
+            if (l > 1e-6) { const o = (e0 + sgn) * 6, k2 = WALL_ROUND * t / 2 / l; WV[o] += ex * k2; WV[o + 1] += ey * k2; WV[o + 2] += ez * k2; WV[o + 3] = ex / l; WV[o + 4] = ey / l; WV[o + 5] = ez / l; }
+          }
+        }
+        for (let j = 0; j < SIDES; j++) {
+          const e = order[j], o = e * 6, w = v0 + j * 3;
+          pos[w] = WV[o]; pos[w + 1] = WV[o + 1]; pos[w + 2] = WV[o + 2];
+          if (nor) { nor[w] = WV[o + 3]; nor[w + 1] = WV[o + 4]; nor[w + 2] = WV[o + 5]; }
+        }
+      }
+    }
+  }
+  /* все мышцы кадра: трубки (surface), ленты (ribbon), колпак дельтовидной (capSurface) и стенки (wallSurface); start — номера
+     первых колец мышц (длина bound.length + 1) */
   function surfaceAll(bound, paths, m, pos, nor, start) {
-    for (let i = 0; i < bound.length; i++) if (!bound[i].fan && !bound[i].cap) surface(bound[i], paths[i], m, pos, nor, start[i] * SIDES);
+    for (let i = 0; i < bound.length; i++) if (!bound[i].fan && !bound[i].cap && !bound[i].wall) surface(bound[i], paths[i], m, pos, nor, start[i] * SIDES);
     for (const fan of bound.fans || []) ribbon(fan, bound, paths, m, pos, nor, start);
     for (const cap of bound.caps || []) capSurface(cap, bound, paths, m, pos, nor, start);
+    for (const wall of bound.walls || []) wallSurface(wall, m, pos, nor, start);
   }
   function ringStarts(bound) { const st = new Uint32Array(bound.length + 1); for (let i = 0; i < bound.length; i++) st[i + 1] = st[i] + ringCount(bound[i]); return st; }
 
@@ -1328,7 +1629,7 @@ const Muscles = (() => {
     pending = bytes.then(gunzip).then(decode).then(d => (data = d)).catch(e => { pending = null; throw e; });
     return pending;
   }
-  return { path, wrap, bind, place, layout, drawn, layoutDrawn, body, radiusAt, skinAt, section, surface, ribbon, ribbonRing, surfaceAll, ringCount, ringStarts, sheetNormals, sheetMesh, FANS, SIDES, SKIN_U, SKIN_GAP, FLAT, SPINDLE, SPINDLE_I, load, decode, get data() { return data; }, set data(d) { data = d; } };
+  return { path, wrap, bind, place, layout, drawn, layoutDrawn, body, radiusAt, skinAt, section, surface, ribbon, ribbonRing, wallSurface, shellR, surfaceAll, ringCount, ringStarts, sheetNormals, sheetMesh, FANS, SIDES, SKIN_U, SKIN_GAP, FLAT, SPINDLE, SPINDLE_I, load, decode, get data() { return data; }, set data(d) { data = d; } };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = Muscles;
 if (typeof window !== 'undefined') window.Muscles = Muscles;

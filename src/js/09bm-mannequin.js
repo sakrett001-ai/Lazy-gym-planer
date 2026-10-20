@@ -1019,7 +1019,7 @@ function centerOfMass(R,extra=[]){
 return{V,M3,Q,B,TORSO,TORSO_H,TORSO_COLS,colAngle,TORSO_JOINTS,TORSO_BLEND,TORSO_BLEND_FRONT,FRONT_W,FRONT_H,VERT_LEVELS,VERT_SHARE,LIMBS,NECK,CAPS,SH_CAP,AC_CAP,MASS,LIMITS,SIDES,SIGN,FLOOR,D2R,R2D,clamp,
  neutral,clone,pack,unpack,PACK,PACK_SIZE,fk,solePoints,twoBone,solveArm,solveArmWrist,setArmFromPoints,footFrame,heelFrame,solveLeg,rootRot,rootFromAxes,
  swing,swingTwist,eulerXZY,eulerYZX,spineRot,makeTrack,monotone,toCat,dirCat,catalogPose,
- profileAt,sectionAt,spineFrame,torsoFrame,frontK,vertebraFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,neckSDF,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,
+ profileAt,sectionAt,spineFrame,torsoFrame,frontK,ramp,vertebraFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,neckSDF,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,
  FOLDS,FOLD_SP,foldAxes,foldSet,foldLift,noFolds,
  headLocalSDF,headLocal,headWorld,headMesh,headSamples,HEAD_PARTS,HEAD_EAR,HEAD_EARS,ellipseRadius,centerOfMass,LIMB_DEF,
  handShape,footShape,footPoints,footPointWorld,footBlendW,FOOT_SECTIONS,TOES,malleoli,bodyData,jointAngles};
