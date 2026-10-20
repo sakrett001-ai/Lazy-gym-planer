@@ -343,8 +343,9 @@ function ribbonStats(pos, fans = bound.fans) {
 
 test('ribbons: broad flat muscles are drawn as ribbons of neighbouring lines, in the order of their origins', () => {
   /* какие мышцы — ленты (README, «Ленты»: Gray's Anatomy, OpenStax A&P 2e — плоские, веерные, четырёхугольные пласты) */
-  /* задняя дельтовидная — трубки: её линии у головки плеча при отведении и руке над головой перекрещиваются (README) */
-  const EXPECT = { pecmaj: 7, lat: 6, trap: 13, infsp: 3, serrant: 12, rhomb: 4, eo: 8, glmax: 3, glmed: 3 };
+  /* задняя дельтовидная — трубки: её линии у головки плеча при отведении и руке над головой перекрещиваются (README);
+     передняя зубчатая и наружная косая (ленты 4.51.0–4.53.0) с этапа Б — стенки по поверхности тела (тесты стенок ниже) */
+  const EXPECT = { pecmaj: 7, lat: 6, trap: 13, infsp: 3, rhomb: 4, glmax: 3, glmed: 3 };
   for (const side of ['R', 'L']) assert.deepEqual(Object.fromEntries(bound.fans.filter(f => f.side === side).map(f => [f.key, f.K])), EXPECT, side);
   const seen = new Set();
   for (const fan of bound.fans) {
@@ -401,13 +402,13 @@ test('ribbons: no gaps between neighbouring strips, no twist, rings wound like t
       /* общие швы — те же вершины у обеих полос; где шов не общий, между линиями нет непокрытого места больше 7 мм */
       assert(st.hole <= .7, `${where}: gap ${st.hole.toFixed(2)} cm between strips (${st.holeAt})`);
       assert(st.twist > 0, `${where}: the strip turns over between rings (${st.twistAt}, cos ${st.twist.toFixed(2)})`);
-      assert.equal(st.flips, 0, `${where}: rings wound inside out`);
     }
   }
-  /* в нейтральной позе швы большей частью общие (у широчайшей, трапециевидной, наружной косой, зубчатой) */
+  /* в нейтральной позе швы большей частью общие (у широчайшей и трапециевидной; наружная косая и зубчатая — стенки, у них
+     швы общие всегда — тест стенок) */
   const { m } = rPose('neutral', 0); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
   const share = Object.fromEntries(ribbonStats(RBUF).filter(s => s.side === 'R').map(s => [s.key, s.shared / s.seams]));
-  for (const k of ['lat', 'trap', 'eo', 'serrant']) assert(share[k] > .5, `${k}: shared seams ${(share[k] * 100).toFixed(0)} %`);
+  for (const k of ['lat', 'trap']) assert(share[k] > .5, `${k}: shared seams ${(share[k] * 100).toFixed(0)} %`);
   /* отрицательные: полоса, сдвинутая с шва на 1,5 см, — щель; перевёрнутое кольцо — перекрут и обход наизнанку */
   const lat = bound.fans.find(f => f.key === 'lat' && f.side === 'R'), i = lat.lines[2], copy = RBUF.slice();
   for (let r = 0; r < lat.n; r++) for (let j = 0; j < RSIDES; j++) { const v = ((RSTART[i] + r) * RSIDES + j) * 3; copy[v + 1] += 1.5; copy[v] += 1.5; }
@@ -796,4 +797,226 @@ test('negative: a moved insertion and a path through bone are detected', () => {
   const at = p => [0, 1, 2].map(r => m[o + r * 4] * p[0] + m[o + r * 4 + 1] * p[1] + m[o + r * 4 + 2] * p[2] + m[o + r * 4 + 3]);
   const through = G.boneRun(pbs, m, [at([-6, -10, 0]), at([6, -10, 0])]);
   assert(through.depth > .8 && through.deepAt === 'femurR', `a path across the femur shaft: depth ${through.depth.toFixed(2)} in ${through.deepAt}`);
+});
+
+/* ---------- стенки: прямая, наружная и внутренняя косые живота, передняя зубчатая, малая грудная (Muscles.wallSurface,
+   tools/muscles/walls.js, README, «Стенки») ----------
+   Позы: стоя, скручивания (лёжа, на блоке, «велосипед» — с поворотом), наклон в сторону, «дровосек», рука над головой,
+   отжимания, жим лёжа, тяга сверху, пуловер, «Y-T-W», шраги, тяга к лицу, становая, «лодочка», «супермен». */
+const WB = require('./muscles/walls.js'), WCX = WB.context(L.M, L.Skeleton, Muscles, skel), WSH = { R: WB.ribShell(WCX, 'R'), L: WB.ribShell(WCX, 'L') };
+const WALL_POSES = [['neutral', 0], ['crunch', 1], ['cablecrunch', 1], ['bicycle', 0], ['bicycle', .5], ['sidebend', 1], ['cablewood', 0], ['cablewood', 1], ['ohp', 1],
+  ['pushup', 0], ['bbbench', .5], ['latpull', .5], ['pullover', 0], ['ytw', 0], ['shrug', 1], ['facepull', 0], ['deadlift', 0], ['hollow', .5], ['superman', 1]];
+const WALL_KEYS = { rectabd: 1, eo: 8, io: 6, serrant: 12, pecmin: 4 };
+const WRI = skel.bones.findIndex(b => b.name === 'ribcage');
+/* глубина точки в грудной клетке: насколько точка ближе к оси оболочки рёбер (наружная поверхность рёбер и межрёберных — мелкая
+   сетка walls.js, 0,5° × 0,25 см), чем сама оболочка, см (≤ 0 — снаружи); −∞ — рёбер на этом азимуте и высоте нет */
+function ribDepth(m, S, p) {
+  const o = WRI * 12, d = [0, 1, 2].map(r => p[r] - m[o + r * 4 + 3]), q = [0, 1, 2].map(c => m[o + c] * d[0] + m[o + 4 + c] * d[1] + m[o + 8 + c] * d[2]);
+  const ch = WB.chartOf(S, q); if (ch.th < 0 || ch.th > 180) return -Infinity;
+  const rs = WB.shellFine(S, ch.th, ch.y); return rs > 0 ? rs - ch.r : -Infinity;
+}
+/* показатели стенки по готовой сетке (как рисуется): общие швы соседних полос (у шва три общие вершины) и перекрут (нормаль
+   кольца — верх минус низ середины — разворачивается между соседними кольцами). Обход колец (знак площади сечения), как у лент,
+   здесь не проверяется: строки полос косые к самим полосам (зубцы входят друг в друга на 2–3 см вдоль волокон — у края полосы
+   сечение вырождается в щель, и знак его площади не определён) */
+function wallStats(pos, wall) {
+  const st = { seams: 0, shared: 0, twist: 1, twistAt: '' };
+  for (let k = 0; k < wall.K; k++) {
+    const i = wall.lines[k]; let prevN = null;
+    for (let r = 0; r < wall.n; r++) {
+      /* кольцо тоньше 1 мм посередине (пласт, сжатый между кожей и рёбрами до 0,3 своей толщины, — у рёберной дуги при
+         скручивании с поворотом) — направление «верх минус низ» не определено: не в счёт */
+      const D = rSub(rV(pos, i, r, 0), rV(pos, i, r, 4)); if (Math.hypot(...D) < .1) { prevN = null; continue; }
+      const N = rUnit(D);
+      if (prevN && rDot(N, prevN) < st.twist) { st.twist = rDot(N, prevN); st.twistAt = `${bound[i].name} r${r}`; }
+      prevN = N;
+    }
+  }
+  for (let k = 0; k + 1 < wall.K; k++) for (let r = 0; r < wall.n; r++) {
+    const a = wall.lines[k], b = wall.lines[k + 1]; let same = 0; st.seams++;
+    for (let j = 0; j < RSIDES; j++) { const p = rV(pos, a, r, j); for (let l = 0; l < RSIDES; l++) if (Math.hypot(...rSub(p, rV(pos, b, r, l))) < 1e-9) { same++; break; } }
+    if (same >= 3) st.shared++;
+  }
+  return st;
+}
+/* объём стенки по узлам кадра (wall.P — опорная поверхность, wall.TH — толщина): по полосам и строкам — четырёхугольники
+   между строками q и q + 1 × средняя толщина углов (независимо от расчёта в walls.js) */
+function wallVolume(wall) {
+  const { P, TH, rows, K, n } = wall, pt = v => [P[v * 3], P[v * 3 + 1], P[v * 3 + 2]];
+  return Array.from({ length: K }, (_, k) => Array.from({ length: n - 1 }, (_, q) => {
+    let V = 0;
+    for (const [e0, e1] of [[0, 1], [1, 2]]) {
+      const a = rows[(k * n + q) * 3 + e0], b = rows[(k * n + q) * 3 + e1], c = rows[(k * n + q + 1) * 3 + e1], d = rows[(k * n + q + 1) * 3 + e0];
+      V += .5 * Math.hypot(...rCross(rSub(pt(c), pt(a)), rSub(pt(d), pt(b)))) * (TH[a] + TH[b] + TH[c] + TH[d]) / 4;
+    }
+    return V;
+  }));
+}
+
+test('walls: abdominal wall, serratus anterior and pectoralis minor are sheets of their lines, both sides mirrored', () => {
+  for (const side of ['R', 'L']) assert.deepEqual(Object.fromEntries(bound.walls.filter(w => w.side === side).map(w => [w.key, w.K])), WALL_KEYS, side);
+  const inFans = new Set((bound.fans || []).flatMap(f => f.lines));
+  for (const w of bound.walls) for (const i of w.lines) {
+    assert.equal(bound[i].part, w.key, bound[i].name); assert.equal(bound[i].side, w.side);
+    assert(!inFans.has(i), `${bound[i].name}: also a ribbon`); assert.equal(Muscles.ringCount(bound[i]), w.n, 'common ring count');
+  }
+  /* все линии этих мышц — в стенках (трубок от них не осталось) */
+  for (const mu of bound) if (WALL_KEYS[mu.part]) assert(mu.wall, `${mu.name}: not in a wall`);
+  /* левая — зеркало правой: узлы в рамке таза (x → −x) в нейтральной позе; узлы скольжения (передняя зубчатая, малая грудная)
+     лежат на оболочке рёбер своей стороны, а грудная клетка MyoSim несимметрична (|R − L| оболочки: медиана 0,1 мм, 95 % — до
+     0,9 мм) — у них до 2 мм */
+  const { m } = rPose('neutral', 0); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
+  const o = skel.bones.findIndex(b => b.name === 'sacrum') * 12, loc = (w, v) => { const d = [0, 1, 2].map(r => w.P[v * 3 + r] - m[o + r * 4 + 3]); return [0, 1, 2].map(c => m[o + c] * d[0] + m[o + 4 + c] * d[1] + m[o + 8 + c] * d[2]); };
+  for (const key of Object.keys(WALL_KEYS)) {
+    const R = bound.walls.find(w => w.key === key && w.side === 'R'), Lw = bound.walls.find(w => w.key === key && w.side === 'L');
+    assert.deepEqual(Lw.lines.map(i => bound[i].name.replace(/_l$/, '')), R.lines.map(i => bound[i].name.replace(/_r$/, '')));
+    for (let v = 0; v < R.N; v++) {
+      const a = loc(R, v), b = loc(Lw, v), d = Math.hypot(a[0] + b[0], a[1] - b[1], a[2] - b[2]);
+      assert(d < (R.kind[v] === 3 ? .2 : .05), `${key}: node ${v} of the left side is not the mirror of the right (${d.toFixed(3)} cm)`);
+    }
+  }
+});
+
+/* Объём — МРТ (volumes.js), у прямой — и доли частей между перемычками по массам препаратов (Brown et al., 2011, Spine 36:
+   355–362: снизу вверх 34,4 / 30,9 / 19,3 / 15,3 %); толщина — с УЗИ мужчин (Lim, 2013, J Korean Soc Phys Ther 25:
+   405–410): прямая в 4 см от пупка — 11,7–11,9 мм, наружная косая — 5,5–5,9 мм */
+test('walls keep the MRI volume, the rectus part shares of the dissections and the ultrasound thickness', () => {
+  const { m } = rPose('neutral', 0); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
+  const neutral = {};
+  for (const w of bound.walls) {
+    const V = wallVolume(w), drawn = V.flat().reduce((a, b) => a + b, 0), mri = w.lines.reduce((s, i) => s + bound[i].v, 0);
+    neutral[w.key + w.side] = drawn;
+    assert(Math.abs(drawn / mri - 1) < .04, `${w.key}${w.side}: ${drawn.toFixed(0)} cm³ drawn, MRI ${mri.toFixed(0)}`);
+  }
+  /* прямая: части между перемычками (строки 0–7 — лобок–пупок, 8–12, 13–17, 18–21 — выше мечевидного) */
+  const ra = bound.walls.find(w => w.key === 'rectabd' && w.side === 'R'), V = wallVolume(ra)[0], SEG = q => (q < 7 ? 0 : q < 12 ? 1 : q < 17 ? 2 : 3);
+  const part = [0, 0, 0, 0]; V.forEach((v, q) => { part[SEG(q)] += v; });
+  const tot = part.reduce((a, b) => a + b, 0);
+  [.344, .309, .193, .153].forEach((s, k) => assert(Math.abs(part[k] / tot - s) < .03, `rectus part ${k}: ${(100 * part[k] / tot).toFixed(1)} % (Brown ${(100 * s).toFixed(1)} %)`));
+  /* толщина прямой в 4 см выше и ниже пупка (h 20 и 12): сечение — линза (у белой линии 0,7, посередине 1, у наружного края
+     0,55 толщины середины); средняя по ширине — как у УЗИ (±15 %), значение УЗИ — между краем и серединой (датчик — в 2–3 см
+     от средней линии) */
+  const H0 = rPose('neutral', 0).R.frames.pelvis.o[1], hOf = q => H0 - ra.P[ra.rows[q * 3 + 1] * 3 + 1];
+  for (const h of [12, 20]) {
+    let best = 0; for (let q = 1; q < ra.n; q++) if (Math.abs(hOf(q) - h) < Math.abs(hOf(best) - h)) best = q;
+    const th = [0, 1, 2].map(e => ra.TH[ra.rows[best * 3 + e]]), mean = th.reduce((a, b) => a + b, 0) / 3;
+    assert(Math.abs(mean / 1.18 - 1) < .15 && Math.min(...th) < 1.18 && Math.max(...th) > 1.18, `rectus at h ${h}: ${th.map(x => x.toFixed(2)).join(' / ')} cm (ultrasound 1.17–1.19)`);
+  }
+  const eo = bound.walls.find(w => w.key === 'eo' && w.side === 'R'), eoMax = Math.max(...eo.TH);
+  assert(eoMax > .43 && eoMax < .71, `external oblique belly ${eoMax.toFixed(2)} cm (ultrasound 0.55–0.59)`);
+  /* в позах объём части сохраняется: σ — нейтральная площадь к нынешней (в пределах WALL_SIG — до 25 %) */
+  for (const [id, t] of WALL_POSES) {
+    const { m: mm } = rPose(id, t); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, mm, 1.5), mm, RBUF, null, RSTART);
+    for (const w of bound.walls) { const d = wallVolume(w).flat().reduce((a, b) => a + b, 0) / neutral[w.key + w.side]; assert(d > .75 && d < 1.25, `${w.key}${w.side} in ${id} t=${t}: volume ×${d.toFixed(2)}`); }
+  }
+});
+
+test('walls: shared seams and no twist — in twists, crunches and with the arm overhead', () => {
+  const { m } = rPose('neutral', 0);
+  for (const [id, t] of WALL_POSES) {
+    const { m: mm } = rPose(id, t); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, mm, 1.5), mm, RBUF, null, RSTART);
+    for (const w of bound.walls) {
+      const st = wallStats(RBUF, w), where = `${w.key}${w.side} in ${id} t=${t}`;
+      assert.equal(st.shared, st.seams, `${where}: ${st.seams - st.shared} seams not shared`);
+      assert(st.twist > 0, `${where}: the sheet turns over between rings (${st.twistAt}, cos ${st.twist.toFixed(2)})`);
+    }
+    /* зигзаг передней зубчатой и наружной косой: кончики зубцов D5…D9 и E5…E8 — одни точки у обеих стенок (зубцы входят друг
+       в друга без щели и нахлёста); верхняя строка наружной косой — D5 E5 D6 … D9, у зубчатой — D9 E8 D8 … D5 */
+    for (const side of ['R', 'L']) {
+      const sa = bound.walls.find(w => w.key === 'serrant' && w.side === side), eo = bound.walls.find(w => w.key === 'eo' && w.side === side);
+      for (let c = 0; c <= 8; c++) {
+        const a = [0, 1, 2].map(j => eo.P[c * 3 + j]), b = [0, 1, 2].map(j => sa.P[(8 - c) * 3 + j]), d = Math.hypot(...rSub(a, b));
+        /* справа — одни числа (до округления данных), слева кончики наружной косой — зеркало, зубчатая — на оболочке своей
+           стороны (несимметрия рёбер): до 0,5 мм */
+        assert(d < (side === 'R' ? .01 : .05), `${side} ${id} t=${t}: zigzag node ${c} of the serratus and the external oblique apart by ${d.toFixed(3)} cm`);
+      }
+    }
+  }
+  /* отрицательные: полоса, сдвинутая на 1 см, — швы не общие; перевёрнутое кольцо (верх и низ местами) — перекрут */
+  Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
+  const eo = bound.walls.find(w => w.key === 'eo' && w.side === 'R'), i = eo.lines[3], copy = RBUF.slice();
+  for (let r = 0; r < eo.n; r++) for (let j = 0; j < RSIDES; j++) copy[((RSTART[i] + r) * RSIDES + j) * 3] += 1;
+  assert(wallStats(copy, eo).shared < wallStats(RBUF, eo).shared, 'a strip moved off its seams is not detected');
+  const flip = RBUF.slice(), r0 = 6;
+  for (let j = 0; j < RSIDES; j++) for (let c = 0; c < 3; c++) flip[((RSTART[i] + r0) * RSIDES + j) * 3 + c] = RBUF[((RSTART[i] + r0) * RSIDES + (RSIDES - j + 4) % RSIDES) * 3 + c];
+  assert(wallStats(flip, eo).twist < 0, 'a ring turned over is not detected');
+});
+
+/* Снаружи рёбер, под кожей, не в чужих костях. Пути этих мышц (хорды MyoBack и DAS3) — большей частью внутри грудной клетки
+   (README, «Стенки»), тела-трубки шли за ними; пласт лежит на рёбрах: вершин глубже 3 мм под оболочкой рёбер — не больше
+   0,1 %, глубже 6 мм — нет; над кожей — не выше 0,5 см (трубки и ленты — до 2,6); в чужих костях — не глубже 0,8 см
+   (как межрёберные пласты, SHEET_LIMIT) */
+const WALL_LIMIT = { rib: .3, ribShare: .001, ribMax: .6, skin: .5, bone: .8 };
+function wallBody(id, t, pos = null) {
+  const G = require('./muscles/geometry.js'), pbs = wallBody.pbs || (wallBody.pbs = G.prepareBones(skel));
+  const { R, m } = rPose(id, t), sdf = G.skinSDF(R), pose = G.poseBones(pbs, m);
+  if (!pos) { Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART); pos = RBUF; }
+  const out = {};
+  for (const w of bound.walls) {
+    const f = out[w.key] || (out[w.key] = { n: 0, deep: 0, rib: 0, ribAt: '', skin: -Infinity, skinAt: '', bone: 0, boneAt: '' }), S = WSH[w.side];
+    for (const i of w.lines) {
+      const sub = pos.subarray(RSTART[i] * RSIDES * 3, RSTART[i + 1] * RSIDES * 3), so = G.skinOutPoints(sdf, sub, R);
+      if (so.out > f.skin) { f.skin = so.out; f.skinAt = bound[i].name; }
+      for (let k = 0; k < sub.length; k += 3) {
+        const p = [sub[k], sub[k + 1], sub[k + 2]], d = ribDepth(m, S, p);
+        if (d > -Infinity) { f.n++; if (d > WALL_LIMIT.rib) f.deep++; if (d > f.rib) { f.rib = d; f.ribAt = bound[i].name; } }
+        for (let bi = 0; bi < pbs.length; bi++) {
+          if (bi === WRI) continue;
+          const b = pose[bi]; if (p[0] < b.lo[0] || p[0] > b.hi[0] || p[1] < b.lo[1] || p[1] > b.hi[1] || p[2] < b.lo[2] || p[2] > b.hi[2]) continue;
+          const q = b.inv(p); if (G.insideBone(pbs[bi], q)) { const dd = pbs[bi].near(q); if (dd > f.bone) { f.bone = dd; f.boneAt = `${bound[i].name} in ${pbs[bi].name}${pbs[bi].side || ''}`; } }
+        }
+      }
+    }
+  }
+  return out;
+}
+test('walls lie on the ribs, not inside the ribcage, under the skin and out of other bones', () => {
+  for (const [id, t] of WALL_POSES) for (const [key, f] of Object.entries(wallBody(id, t))) {
+    const where = `${key} in ${id} t=${t}`;
+    assert(f.deep <= WALL_LIMIT.ribShare * f.n, `${where}: ${(100 * f.deep / f.n).toFixed(2)} % of vertices deeper than 3 mm in the ribcage`);
+    assert(f.rib <= WALL_LIMIT.ribMax, `${where}: ${f.rib.toFixed(2)} cm inside the ribcage (${f.ribAt})`);
+    assert(f.skin <= WALL_LIMIT.skin, `${where}: ${f.skin.toFixed(2)} cm above the skin (${f.skinAt})`);
+    assert(f.bone <= WALL_LIMIT.bone, `${where}: ${f.bone.toFixed(2)} cm deep in a bone (${f.boneAt})`);
+  }
+  /* отрицательные: передняя зубчатая, вдавленная на 1,5 см к оси грудной клетки, — в рёбрах; вынесенная на 1,5 см наружу — над
+     кожей */
+  const { m } = rPose('neutral', 0); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
+  const sa = bound.walls.find(w => w.key === 'serrant' && w.side === 'R'), o = WRI * 12, zc = WSH.R.zc;
+  const axis = p => { const d = [0, 1, 2].map(r => p[r] - m[o + r * 4 + 3]), q = [0, 1, 2].map(c => m[o + c] * d[0] + m[o + 4 + c] * d[1] + m[o + 8 + c] * d[2]); return rUnit([0, 1, 2].map(r => m[o + r * 4] * q[0] + m[o + r * 4 + 2] * (q[2] - zc))); };
+  for (const [D, check] of [[-1.5, f => f.rib > WALL_LIMIT.ribMax], [1.5, f => f.skin > WALL_LIMIT.skin]]) {
+    const copy = RBUF.slice();
+    for (const i of sa.lines) for (let v = RSTART[i] * RSIDES; v < RSTART[i + 1] * RSIDES; v++) { const a = axis([copy[v * 3], copy[v * 3 + 1], copy[v * 3 + 2]]); for (let j = 0; j < 3; j++) copy[v * 3 + j] += D * a[j]; }
+    assert(check(wallBody('neutral', 0, copy).serrant), `serratus moved ${D} cm along the ribcage radius is not detected`);
+  }
+});
+
+/* Прямая: белая линия по ширине у молодых мужчин (Rath et al., 1996, Surg Radiol Anat 18: 281–288): выше пупка до 10 мм, у
+   пупка до 27 мм, ниже до 9 мм; перемычки — борозды снаружи (Gray's: сращены с передней стенкой влагалища) */
+test('rectus abdominis: linea alba as wide as in Rath 1996, tendinous intersections are grooves', () => {
+  const { R, m } = rPose('neutral', 0); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
+  const G = require('./muscles/geometry.js'), sdf = G.skinSDF(R), H0 = R.frames.pelvis.o[1];
+  const rr = bound.walls.find(w => w.key === 'rectabd' && w.side === 'R'), rl = bound.walls.find(w => w.key === 'rectabd' && w.side === 'L');
+  const node = (w, v) => [0, 1, 2].map(j => w.P[v * 3 + j]), hOf = q => H0 - rr.P[rr.rows[q * 3] * 3 + 1];
+  const gapAt = h => { let best = 0; for (let q = 1; q < rr.n; q++) if (Math.abs(hOf(q) - h) < Math.abs(hOf(best) - h)) best = q; return Math.hypot(...rSub(node(rr, rr.rows[best * 3]), node(rl, rl.rows[best * 3]))); };
+  for (const [h, lo, hi] of [[16, 2.2, 3.0], [27, .8, 1.2], [8, .7, 1.1]]) { const g = gapAt(h); assert(g > lo && g < hi, `linea alba ${g.toFixed(2)} cm wide at h ${h}`); }
+  /* перемычки (строки 7, 12, 17): верх середины глубже под кожей, чем посередине соседних частей, на 2 мм и больше */
+  const i = rr.lines[0], depth = q => -sdf(rV(RBUF, i, q, 0));
+  for (const q of [7, 12, 17]) { const g = depth(q) - (depth(q - 2) + depth(q + 2)) / 2; assert(g > .2, `intersection at ring ${q}: groove ${g.toFixed(2)} cm`); }
+});
+
+/* Нижний край большой грудной — выпуклая дуга (Gray's: нижний край — передняя подмышечная складка, мышца закруглена книзу), а
+   не прямая хорда: в проекции спереди (рамка грудной клетки) кромка нижней линии ниже хорды между её концами на 0,8 см и
+   больше (до этапа Б — ломаная: −0,4…+0,1 см в нейтральной позе, жиме лёжа и отжиманиях) */
+test('pectoralis major: the lower border is a convex arc below its chord', () => {
+  const o = WRI * 12;
+  for (const [id, t] of [['neutral', 0], ['bbbench', .5], ['pushup', .5], ['ohp', .5], ['latpull', .5]]) {
+    const { m } = rPose(id, t); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
+    for (const nm of ['PECM3b_r', 'PECM3b_l']) {
+      const i = bound.findIndex(b => b.name === nm), n = Muscles.ringCount(bound[i]);
+      const V = r => { const p = rV(RBUF, i, r, 2), d = [0, 1, 2].map(c => p[c] - m[o + c * 4 + 3]); return [0, 1].map(c => m[o + c] * d[0] + m[o + 4 + c] * d[1] + m[o + 8 + c] * d[2]); };
+      const A = V(1), B = V(n - 2); let below = -Infinity;
+      for (let r = 2; r < n - 2; r++) { const p = V(r), u = (p[0] - A[0]) / (B[0] - A[0]); if (u > 0 && u < 1) below = Math.max(below, A[1] + (B[1] - A[1]) * u - p[1]); }
+      assert(below >= .8, `${nm} in ${id} t=${t}: lower border ${below.toFixed(2)} cm below its chord`);
+    }
+  }
 });

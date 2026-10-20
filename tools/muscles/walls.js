@@ -122,6 +122,8 @@ function ribShell(C, side) {
   const hw = Math.round(cth / fine.dth / 2), hy = Math.round(cdy / fine.dy / 2);
   for (let j = 0; j < CY; j++) for (let i = 0; i < CT; i++) {
     let mx = -1; const fi = Math.round((SH_TH[0] + i * cth) / fine.dth), fj = Math.round(j * cdy / fine.dy);
+    /* клетка без рёбер в своём центре — пустая: иначе оболочка «растекается» за край рёбер (рёберная дуга) на полклетки */
+    if (fi < 0 || fi >= NT || fj < 0 || fj >= NY || r[fj * NT + fi] < 0) continue;
     for (let dj = -hy; dj <= hy; dj++) for (let di = -hw; di <= hw; di++) { const ii = fi + di, jj = fj + dj; if (ii < 0 || ii >= NT || jj < 0 || jj >= NY) continue; mx = Math.max(mx, r[jj * NT + ii]); }
     cr[j * CT + i] = mx;
   }
@@ -469,7 +471,19 @@ function evaluate(out, walls, shells, C) {
   for (const W of walls) { W.flip = W.flip || 1; W.rev = W.rev || W.lines.map(() => 0); W.a0 = W.a0 || W.lines.map(() => new Array(W.n).fill(0)); }
   const md = { ...out, walls: walls.map(pick), shells }, bound = C.Muscles.bind(md, C.skel), start = C.Muscles.ringStarts(bound);
   const pos = new Float64Array(start[bound.length] * C.Muscles.SIDES * 3);
-  for (const wall of bound.walls) C.Muscles.wallSurface(wall, C.m, pos, null, start);
+  for (const wall of bound.walls) {
+    C.Muscles.wallSurface(wall, C.m, pos, null, start);
+    /* нормаль — наружу от оси корпуса (по большинству четырёхугольников): знак обхода зависит от порядка столбцов (у левой
+       стороны — зеркало — обратный). Считается по самим четырёхугольникам, а не по нормалям узлов: те приложение доворачивает
+       к направлению «наружу» (Muscles.wallSurface) — по ним неверный знак был бы не виден */
+    const { P, rows } = wall; let vote = 0;
+    for (let k = 0; k < wall.K; k++) for (let q = 0; q + 1 < wall.n; q++) for (const [e0, e1] of [[0, 1], [1, 2]]) {
+      const a = rows[(k * wall.n + q) * 3 + e0], b = rows[(k * wall.n + q) * 3 + e1], c = rows[(k * wall.n + q + 1) * 3 + e1], d = rows[(k * wall.n + q + 1) * 3 + e0];
+      const u = [P[c * 3] - P[a * 3], P[c * 3 + 1] - P[a * 3 + 1], P[c * 3 + 2] - P[a * 3 + 2]], w = [P[d * 3] - P[b * 3], P[d * 3 + 1] - P[b * 3 + 1], P[d * 3 + 2] - P[b * 3 + 2]], nq = cross(u, w);
+      vote += wall.flip * (nq[0] * (P[a * 3] + P[c * 3]) + nq[2] * (P[a * 3 + 2] + P[c * 3 + 2]));
+    }
+    if (vote < 0) { wall.flip = -wall.flip; walls.find(x => x.key === wall.key && x.side === wall.side).flip = wall.flip; C.Muscles.wallSurface(wall, C.m, pos, null, start); }
+  }
   return { bound, start, pos };
 }
 const pick = W => ({ key: W.key, side: W.side, lines: W.lines, n: W.n, bones: W.bones, nodes: W.nodes, strips: W.strips, flip: W.flip, rev: W.rev, a0: W.a0 });
@@ -530,13 +544,7 @@ function build(out, deps) {
    приложении (Muscles.wallSurface) */
 function finalize(out, walls, shells, C) {
   for (const W of walls) { W.flip = 1; W.rev = W.lines.map(() => 0); W.a0 = W.lines.map(() => new Array(W.n).fill(0)); }
-  let { bound } = evaluate(out, walls, shells, C);
-  for (const wall of bound.walls) {
-    const W = walls.find(x => x.key === wall.key && x.side === wall.side);
-    let vote = 0; for (let v = 0; v < wall.N; v++) vote += wall.NR[v * 3] * wall.P[v * 3] + wall.NR[v * 3 + 2] * wall.P[v * 3 + 2];
-    W.flip = vote < 0 ? -1 : 1;
-  }
-  ({ bound } = evaluate(out, walls, shells, C));
+  const { bound } = evaluate(out, walls, shells, C);   /* evaluate выставляет и знак нормали (flip) */
   for (const wall of bound.walls) {
     const W = walls.find(x => x.key === wall.key && x.side === wall.side);
     W.a0 = W.lines.map((_, k) => Array.from(wall.AR.subarray(k * wall.n, (k + 1) * wall.n), v => r2(v)));

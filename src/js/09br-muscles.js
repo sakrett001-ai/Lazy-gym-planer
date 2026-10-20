@@ -418,7 +418,7 @@ const Muscles = (() => {
     ['glmax', ['glmax1', 'glmax2', 'glmax3'], /^femur/],
     ['glmed', ['glmed1', 'glmed2', 'glmed3'], /^femur/],
   ];
-  const PEC_LOW = 4.5;
+  const PEC_LOW = 6;
   const BORDER = .35, BORDER_H = .5, TIP_IN = .25, TIP_OUT = .6, RIB_WMIN = .5, RIB_HMIN = .06, RIB_C0 = .3, RIB_C1 = 1, RIB_SPREAD = .8, RIB_STEER = .35, RIB_LAM = .3, RIB_AGREE = .5;
   /* поля записи линии в кольце (LW): 0–2 центр, 3–5 касательная в сторону u, 6–8 нормаль пласта, 9–11 направление к коже,
      12 глубина под кожей, 13 площадь сечения (как у трубки), 14 полупоперечник, 15–16 ширины до швов, 17 толщина η = A/(2w),
@@ -1299,7 +1299,7 @@ const Muscles = (() => {
      сохраняется: растянутая кожей полоса тоньше, сжатая — толще). Нормаль — по опорной поверхности (средняя четырёхугольников
      вокруг узла), знак — наружу. */
   const MQ = typeof Mannequin !== 'undefined' ? Mannequin : (typeof require === 'function' ? require('./09bm-mannequin.js') : null);
-  const WALL_ROUND = .5, WALL_SIG0 = .6, WALL_SIG1 = 1.7, WALL_FLOOR = .1;
+  const WALL_ROUND = .5, WALL_SIG0 = .6, WALL_SIG1 = 1.7, WALL_FLOOR = .1, WALL_COS = .5, WALL_LIFT = .6;
   /* рамки корпуса кадра: таз (крестец), поясница (L5, начало — на высоте шарнира 15 см), грудная клетка; шарниры 1 (L5/S1) и
      2 (L2/L3): ось (в рамке нижнего сегмента) и половина угла поворота — как hingeTurn в 09bm-mannequin.js */
   const WT = new Float64Array(3 * 12 + 2 * 4);
@@ -1425,11 +1425,16 @@ const Muscles = (() => {
         const dx = wx - m[ri + 3], dy = wy - m[ri + 7], dz = wz - m[ri + 11];
         const lx = m[ri] * dx + m[ri + 4] * dy + m[ri + 8] * dz, ly = m[ri + 1] * dx + m[ri + 5] * dy + m[ri + 9] * dz, lz = m[ri + 2] * dx + m[ri + 6] * dy + m[ri + 10] * dz - S.zc;
         const thS = Math.atan2(gs * lx, lz) * 180 / Math.PI, rS = Math.sqrt(lx * lx + lz * lz), f = g[v * 6 + 2], th = g[v * 6] + (thS - g[v * 6]) * f, y = g[v * 6 + 1] + (ly - g[v * 6 + 1]) * f;
-        const rA = shellR(S, g[v * 6], g[v * 6 + 1]), shS = shellR(S, thS, ly);
-        let r = shellR(S, th, y); if (r < 0) r = (rA > 0 ? rA : rS) + ((shS > 0 ? shS : rS) - (rA > 0 ? rA : rS)) * f;
-        /* зазор над рёбрами: c0, к подвижной точке пласт поднимается до её высоты над рёбрами (доля min(1, lift·s(f))) */
-        const c0 = g[v * 6 + 3], lift = g[v * 6 + 4], s = f * f * (3 - 2 * f), ex = shS > 0 ? rS - shS : 0;
-        r += c0 + Math.min(1, lift * s) * Math.max(0, ex - c0 - wall.t0[v]);
+        const rA = shellR(S, g[v * 6], g[v * 6 + 1]), shS = shellR(S, thS, ly), sh = shellR(S, th, y), c0 = g[v * 6 + 3], lift = g[v * 6 + 4];
+        let r = sh > 0 ? sh : (rA > 0 ? rA : rS) + ((shS > 0 ? shS : rS) - (rA > 0 ? rA : rS)) * f;
+        /* зазор над рёбрами c0; с lift > 0 (малая грудная) пласт идёт от ребра к подвижной точке по плавной кривой (доля
+           min(1, lift·s(f)) радиуса: низ пласта у клювовидного отростка — на t0 под ним) и не ниже оболочки рёбер под узлом.
+           Подъём считается от ребра, а не от оболочки под отростком: при поднятой лопатке (шраги) отросток выше верха грудной
+           клетки, оболочка под ним узкая — от неё пласт ушёл бы из кожи */
+        if (lift > 0) {
+          const s = f * f * (3 - 2 * f), rB = (rA > 0 ? rA : rS) + c0, rC = rB + (rS - wall.t0[v] - rB) * Math.min(1, lift * s);
+          r = sh > 0 ? Math.max(sh + c0, rC) : rC;
+        } else r += c0;
         const a = th * Math.PI / 180, qx = gs * Math.sin(a) * r, qz = S.zc + Math.cos(a) * r;
         for (let k2 = 0; k2 < 3; k2++) P[o + k2] = m[ri + k2 * 4] * qx + m[ri + k2 * 4 + 1] * y + m[ri + k2 * 4 + 2] * qz + m[ri + k2 * 4 + 3];
       }
@@ -1456,6 +1461,30 @@ const Muscles = (() => {
       for (let q = 0; q < n; q++) { const a = A0[o + q], s = AR[o + q]; SG[o + q] = a > 1e-6 && s > 1e-9 ? Math.min(WALL_SIG1, Math.max(WALL_SIG0, a / s)) : 1; }
     }
     for (let v = 0; v < N; v++) { const l = Math.sqrt(NR[v * 3] ** 2 + NR[v * 3 + 1] ** 2 + NR[v * 3 + 2] ** 2); if (l > 1e-12) { NR[v * 3] /= l; NR[v * 3 + 1] /= l; NR[v * 3 + 2] /= l; } else NR[v * 3 + 2] = 1; }
+    /* у узлов кожи (0, 2, 4) направление «наружу» известно: от оси корпуса (x = z = 0 в рамке сегмента схемы) к точке узла по
+       горизонтали сегмента. Там, где кожа складывается (бок живота при скручивании с поворотом, низ живота при глубоком
+       сгибании), четырёхугольники вокруг узла встают ребром и их нормаль уходит вбок или внутрь — тогда она доворачивается к
+       этому направлению (косинус не меньше WALL_COS) */
+    const V = wall.V, piv = wall.piv, Sh = wall.shell, mm = wall.m, ri0 = wall.T.rib * 12;
+    for (let v = 0; v < N; v++) {
+      const k = wall.kind[v]; if (k === 1 || (k === 3 && !(Sh && mm))) continue;
+      const o = v * 3;
+      let rx, ry, rz;
+      if (k === 3) {
+        /* скольжение по рёбрам: от оси оболочки рёбер (x = 0, z = zc в рамке грудной клетки) */
+        const dx = P[o] - mm[ri0 + 3], dy = P[o + 1] - mm[ri0 + 7], dz = P[o + 2] - mm[ri0 + 11];
+        const lx = mm[ri0] * dx + mm[ri0 + 4] * dy + mm[ri0 + 8] * dz, lz = mm[ri0 + 2] * dx + mm[ri0 + 6] * dy + mm[ri0 + 10] * dz - Sh.zc;
+        rx = mm[ri0] * lx + mm[ri0 + 2] * lz; ry = mm[ri0 + 4] * lx + mm[ri0 + 6] * lz; rz = mm[ri0 + 8] * lx + mm[ri0 + 10] * lz;
+      } else {
+        const code = wall.code[v * 2], j = code < 3 ? code : code - 3 + (wall.w[v * 2] > .5 ? 1 : 0), b = j * 12;
+        const lx = V[v * 6], lz = V[v * 6 + 2] + (code < 3 ? 0 : piv[(code - 3) * 3 + 2]);
+        rx = WT[b + 3] * lx + WT[b + 9] * lz; ry = WT[b + 4] * lx + WT[b + 10] * lz; rz = WT[b + 5] * lx + WT[b + 11] * lz;
+      }
+      const rl = Math.sqrt(rx * rx + ry * ry + rz * rz); if (rl < 1) continue; rx /= rl; ry /= rl; rz /= rl;
+      const cs = NR[o] * rx + NR[o + 1] * ry + NR[o + 2] * rz; if (cs >= WALL_COS) continue;
+      const a = 2 * (WALL_COS - cs); let nx = NR[o] + a * rx, ny = NR[o + 1] + a * ry, nz = NR[o + 2] + a * rz;
+      const l = Math.sqrt(nx * nx + ny * ny + nz * nz); NR[o] = nx / l; NR[o + 1] = ny / l; NR[o + 2] = nz / l;
+    }
     /* толщина узла: нейтральная × σ его строк (у шва — среднее двух полос) */
     const TH = wall.TH; TH.fill(0); const c = wall.cnt || (wall.cnt = new Uint8Array(N)); c.fill(0);
     for (let k = 0; k < K; k++) for (let q = 0; q < n; q++) for (let e = 0; e < 3; e++) { const v = rows[((k * n + q) * 3) + e]; TH[v] += SG[k * n + q]; c[v]++; }
@@ -1478,9 +1507,14 @@ const Muscles = (() => {
       const lx = m[ri] * bx + m[ri + 4] * by + m[ri + 8] * bz, ly = m[ri + 1] * bx + m[ri + 5] * by + m[ri + 9] * bz, lz = m[ri + 2] * bx + m[ri + 6] * by + m[ri + 10] * bz - S.zc;
       const th = Math.atan2(gs * lx, lz) * 180 / Math.PI; if (th < S.th0 || th > S.th0 + S.dth * (S.NT - 1)) continue;
       const rs = shellR(S, th, ly); if (rs < 0) continue;
-      const def = rs + WALL_FLOOR - Math.sqrt(lx * lx + lz * lz); if (def <= 0) continue;
+      const rr = Math.sqrt(lx * lx + lz * lz); let def = rs + WALL_FLOOR - rr; if (def <= 0) continue;
+      /* сдвиг — по нормали узла: радиус растёт на def · cos (нормаль к радиусу оболочки), поэтому def делится на него; узел
+         поднимается не больше чем на WALL_LIFT — дальше пласт только сжимается (толстая сжатая прямая при скручивании с
+         поворотом: низ уходит вбок под край хрящей, и подъём на всю глубину вывел бы её из кожи) */
+      const cr = ((m[ri] * NR[o] + m[ri + 4] * NR[o + 1] + m[ri + 8] * NR[o + 2]) * lx + (m[ri + 2] * NR[o] + m[ri + 6] * NR[o + 1] + m[ri + 10] * NR[o + 2]) * lz) / (rr || 1);
+      def /= Math.max(.3, cr);
       const tn = Math.max(.3 * t, t - def); TH[v] = tn;
-      const lift = def - (t - tn); if (lift > 0) { P[o] += NR[o] * lift; P[o + 1] += NR[o + 1] * lift; P[o + 2] += NR[o + 2] * lift; }
+      const lift = Math.min(WALL_LIFT, def - (t - tn)); if (lift > 0) { P[o] += NR[o] * lift; P[o + 1] += NR[o + 1] * lift; P[o + 2] += NR[o + 2] * lift; }
     }
   }
   /* вершины колец полос (порядок — как у ленты: 0 — верх середины, 1–3 — правый край, 4 — низ середины, 5–7 — левый) */
