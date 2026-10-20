@@ -472,7 +472,9 @@ function pecMinor(C, K, S, T, mus) {
    глубже), пол — огибающая костей под узлом (ближайшая кость в окрестности ±1 см по ширине и ±1,5 см по высоте: остистые и
    поперечные отростки, дуги, рёбра, крестец, таз; где кости нет — сбоку от поперечных отростков — задняя поверхность
    квадратной поясницы); толщина — доля f места между верхом и полом (по столбу одна, так что объём столба — МРТ, как
-   раньше: сумма объёмов его линий, volumes.js), у краёв и концов тоньше. Между столбами — неглубокая борозда (верх
+   раньше: сумма объёмов его линий, volumes.js; где МРТ в место между костями и кожей манекена не помещается — f = 1: у
+   многораздельных 54 %, у длиннейшей 88 % объёма), у краёв и концов тоньше. Пол лент спины (трапециевидная, ромбовидные,
+   широчайшая) — верх столбов (backTopMap). Между столбами — неглубокая борозда (верх
    границы на BK.groove глубже), у остистых отростков и наружного края — скруглённый край (BK.rim). */
 const BK = {
   H: Array.from({ length: 19 }, (_, i) => 3 + 3 * i),           /* общая сетка высот строк, см: 3…57 */
@@ -562,7 +564,7 @@ function backColumn(C, K, BT, name, mus) {
     const floor = add(x.ceil, x.P.n, -x.room), b = boneIdx(bones, x.bone), i = C.index(...x.bone);
     nodes.push([4, r3(C.H0 - x.ceil[1]), 0, r3(x.ceil[0]), r3(x.ceil[2]), b, ...C.toLocal(i, floor).map(r3), 0, r3(x.room * x.rel)]);
   }
-  return { key: BK.key[name], col: name, lines: names.map(nm => nm + '_r'), n, bones, nodes, strips: gridStrips(Kn, n), vol: names.map(nm => mus(nm + '_r').v), rows, raw };
+  return { key: BK.key[name], col: name, lines: names.map(nm => nm + '_r'), n, bones, nodes, strips: gridStrips(Kn, n), vol: names.map(nm => mus(nm + '_r').v), rows, raw, noRib: 1 };
 }
 /* Квадратная поясницы (18 линий MyoBack): пласт впереди поперечных отростков — от подвздошно-поясничной связки и задней
    части гребня подвздошной кости к нижнему краю 12-го ребра и вершинам поперечных отростков L1–L4 (Gray's, 1918, с. 413);
@@ -590,7 +592,7 @@ function quadratus(C, K, mus) {
       else nodes.push(skinNode(C, P, 0, 0, rel));
     }
   }
-  return { key: 'ql', lines: names.map(o => o.nm + '_r'), n, bones, nodes, strips: gridStrips(Kn, n), vol: names.map(o => mus(o.nm + '_r').v) };
+  return { key: 'ql', lines: names.map(o => o.nm + '_r'), n, bones, nodes, strips: gridStrips(Kn, n), vol: names.map(o => mus(o.nm + '_r').v), noRib: 1 };
 }
 /* объём стенки по толщинам кадра (узлы 4 ограничены местом между кожей и полом) — нейтральная поза */
 function thVolume(wall) {
@@ -636,19 +638,24 @@ function fillColumn(out, W, shells, C) {
    Как устроено: пласт — сетка «начало → прикрепление» (строки — доли длины волокна F, столбцы — доли линий начала и
    прикрепления; у линии модели 2–3 соседние полосы, lineOf: большая ягодичная — 7 полос, средняя — 6). Узлы — у сустава (5): в
    нейтральной позе — в рамке таза, в кадре поворачиваются вокруг центра головки бедра на долю w(F) поворота бедра (у начала
-   0 — с тазом, у прикрепления 1 — с бедром). Большая ягодичная: верх — под кожей ягодицы на GL.max.d (кожа — по лучу из
-   центра головки бедра через направляющую точку между началом и прикреплением; у начала верх уходит к кости), толщина внутрь —
-   по профилю вдоль волокна, но не толще места до средней ягодичной и костей; средняя и малая: низ — на кости (наружная
-   поверхность крыла, вертел), у средней над малой — на её верху, толщина наружу, верх средней не выше кожи и большой
-   ягодичной. Объём каждой мышцы — МРТ (сумма линий, volumes.js). */
+   0 — с тазом, у прикрепления 1 — с бедром). Большая ягодичная (узлы 6): верх — под кожей ягодицы на GL.max.d над
+   направляющей точкой между началом и прикреплением (по нормали кожи у ближайшей к ней точки кожи, сглаженной по сетке; у
+   начала верх уходит к кости); в кадре узел, вынесенный поворотом из тела, прижимается к коже по лучу из центра головки бедра
+   (карты кожи у сустава, hipMaps), прижатие сглажено по сетке (Muscles: hipPull). Толщина внутрь — по профилю вдоль волокна, не
+   толще места до средней ягодичной и костей, перепад между соседними узлами — не круче GL.max.slope; в кадре низ не ближе
+   6,5 см к центру головки (Muscles: WALL_HIPCORE). Средняя и малая: низ — на кости (наружная поверхность крыла, вертел; над
+   большой седалищной вырезкой — не глубже GL.bridge под хордой волокна), у средней над малой — на её верху, толщина наружу,
+   верх средней не выше кожи и большой ягодичной. Сдвиг на толщину у всех трёх в кадре сглажен по сетке (Muscles:
+   wallOffsets). Объём каждой мышцы — МРТ (сумма линий, volumes.js). */
 const GL = {
   cap: .6,                                                       /* верх средней и малой — не ближе 0,6 см к коже */
   smax: 4.5,                                                     /* толщина середины пласта — не больше 4,5 см */
+  bridge: .8,                                                    /* низ средней и малой — не глубже 0,8 см под хордой волокна */
   max: {
     O: [[-6.5, 14.6, -5.4], [-5.4, 12.6, -7.2], [-4.3, 10.2, -8.5], [-3.6, 7.0, -8.4], [-2.4, 4.0, -8.3], [-1.0, 1.5, -7.9], [-2.0, -1.5, -5.8], [-3.0, -3.8, -3.5]],
     I: [[-15.4, 1.0, -3.2], [-15.3, -2.5, -3.4], [-15.0, -5.5, -3.2], [-14.4, -8.0, -2.6], [-13.8, -10.0, -2.0]],
     F: [0, .06, .13, .22, .33, .45, .57, .69, .8, .9, 1], lineOf: [0, 0, 1, 1, 1, 2, 2], d: .6,
-    prof: [[0, .25], [.08, .6], [.22, 1], [.7, 1], [.88, .65], [1, .3]], w: [.2, .85], lead: .2, room: .9,
+    prof: [[0, .25], [.08, .6], [.22, 1], [.7, 1], [.88, .65], [1, .3]], w: [.2, .85], lead: .2, room: .9, slope: .6,
   },
   med: {
     O: [[-12.4, 12.0, 2.8], [-12.4, 14.0, .6], [-11.0, 15.8, -1.6], [-9.0, 16.4, -3.4], [-7.0, 15.2, -5.0], [-5.6, 11.0, -6.6]],
@@ -732,7 +739,9 @@ function glDeep(C, S, BT, under, sdf) {
        бы вдоль тонкого крыла и попадал в крышу вертлужной впадины) */
     const dir = unit([x.G[0], 0, x.G[2] + 1.5]), start = add(x.G, dir, 8);
     let t = Infinity; for (const o of BT) { const tt = rayTris([o], start, dir.map(v => -v)); if (tt < t) t = tt; }
-    x.start = start; x.t = Number.isFinite(t) ? t : 8; x.n = dir;
+    /* не глубже хорды «начало — прикрепление» больше чем на GL.bridge: волокна натянуты и перекидываются через вогнутость
+       (большая седалищная вырезка позади крыла — луч проходил в неё до крестца, и на верху пласта была борозда) */
+    x.start = start; x.t = Number.isFinite(t) ? Math.min(t, 8 + GL.bridge) : 8; x.n = dir;
   }
   /* низ — по сглаженной поверхности кости (кость крыла бугристая: иначе бугры кости проступали бы на верху пласта гребнями);
      сглаживание только наружу — не глубже самой кости */
@@ -755,20 +764,38 @@ function glDeep(C, S, BT, under, sdf) {
   }
   return g;
 }
-/* большая: верх под кожей (луч из центра головки бедра через направляющую точку), у начала — к кости */
+/* ближайшая точка кожи к точке p внутри тела и нормаль кожи там (наружу): шаги по градиенту знакового расстояния */
+function skinNear(sdf, p) {
+  const e = .05, grad = q => unit([0, 1, 2].map(k => { const a = q.slice(), b = q.slice(); a[k] += e; b[k] -= e; return sdf(a) - sdf(b); }));
+  let q = p.slice();
+  for (let it = 0; it < 30; it++) { const s = sdf(q); if (Math.abs(s) < 1e-3) break; q = add(q, grad(q), -s); }
+  return { p: q, n: grad(q) };
+}
+/* большая: верх под кожей над направляющей точкой, у начала — к кости. Направление к коже — нормаль кожи у ближайшей к точке
+   точки кожи, сглаженная по сетке (у глубоких точек ближайшая точка кожи перескакивает между ягодицей, складкой и боком —
+   соседние узлы расходились бы); верх — по лучу из направляющей точки вдоль этой нормали. Луч из центра головки бедра у краёв
+   мышцы шёл почти вдоль кожи и уводил верхний угол к талии (до h 22 см при начале на 12–15), нижний край — на 10–14 см вниз по
+   бедру. */
 function glMax(C, S, BT, medTop, sdf) {
-  const g = glGrid(C, S), hip = [C.m[C.index('femur', 'R') * 12 + 3], C.m[C.index('femur', 'R') * 12 + 7], C.m[C.index('femur', 'R') * 12 + 11]];
-  for (const x of g.nodes) {
-    const dir = unit(sub(x.G, hip)), s = rayRoot(sdf, hip, dir, 1, 30), S0 = s == null ? x.G : add(hip, dir, s - S.d);
+  const g = glGrid(C, S), N = g.nodes.map(x => skinNear(sdf, x.G).n);
+  for (let pass = 0; pass < 6; pass++) {
+    const prev = N.map(v => v.slice());
+    g.nodes.forEach((x, v) => {
+      const s = [0, 0, 0]; for (const [dq, dc] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) { const q = x.q + dq, c = x.c + dc; if (q < 0 || q >= g.n || c < 0 || c >= g.cols) continue; const n = prev[q * g.cols + c], k = dq || dc ? 1 : 2; s[0] += n[0] * k; s[1] += n[1] * k; s[2] += n[2] * k; }
+      N[v] = unit(s);
+    });
+  }
+  g.nodes.forEach((x, v) => {
+    const dir = N[v], s = rayRoot(sdf, x.G, dir, 0, 30), S0 = s == null ? x.G : add(x.G, dir, s - S.d);
     /* у начала верх пласта — у самой кости (начало мясистое, на кости), дальше по волокну — под кожей */
     const w = smooth(x.f / S.lead), O = add(x.O, dir, .3);
     x.top = lerpP(O, S0, w); x.n = dir;
-    /* место: до средней ягодичной или кости внутрь по лучу к центру головки */
+    /* место: до средней ягодичной или кости внутрь по нормали */
     let t = Infinity; for (const o of BT) { const tt = rayTris([o], x.top, dir.map(v => -v)); if (tt < t) t = tt; }
     const tm = rayTris(medTop, x.top, dir.map(v => -v)); if (tm < t) t = tm;
     x.room = Number.isFinite(t) ? Math.max(.3, t) : 6;
     x.rel = profile(S.prof, x.f) * glEdge(x.c, g.cols);
-  }
+  });
   return g;
 }
 /* стенка ягодичной из сетки: узлы 5 (в рамке таза), толщина — t0 = rel · масштаб (не толще места), уточняется по объёму */
@@ -789,7 +816,19 @@ function glWall(C, key, S, g, names, mus, datum) {
 /* толщина: rel · s, не толще места (room) — s по объёму (МРТ) */
 function glFill(out, W, shells, C) {
   const target = W.vol.reduce((a, b) => a + b, 0), g = W.g;
-  const vol = s => { W.nodes.forEach((nd, v) => { const x = g.nodes[v]; nd[nd.length - 1] = r3(Math.min(x.room * (x.cap || 1), x.rel * s)); }); return thVolume(evaluate(out, [W], shells, C).bound.walls[0]); };
+  /* толщина узлов: rel · s, не толще места; у большой ягодичной перепад между соседними узлами — не круче GL.max.slope (см на
+     см): где место резко меньше (верхний край у гребня), низ пласта иначе ступенькой выворачивался */
+  const P = g.nodes.map(x => x.top || x.base), th = new Float64Array(g.nodes.length), slope = W.key === 'glmax' ? GL.max.slope : Infinity;
+  const vol = s => {
+    g.nodes.forEach((x, v) => { th[v] = Math.min(x.room * (x.cap || 1), x.rel * s); });
+    for (let pass = 0; slope < Infinity && pass < 2 * (g.n + g.cols); pass++) {
+      let ch = false;
+      g.nodes.forEach((x, v) => { for (const [dq, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const q = x.q + dq, c = x.c + dc; if (q < 0 || q >= g.n || c < 0 || c >= g.cols) continue; const u = q * g.cols + c, lim = th[u] + slope * len(sub(P[u], P[v])); if (th[v] > lim + 1e-6) { th[v] = lim; ch = true; } } });
+      if (!ch) break;
+    }
+    W.nodes.forEach((nd, v) => { nd[nd.length - 1] = r3(th[v]); });
+    return thVolume(evaluate(out, [W], shells, C).bound.walls[0]);
+  };
   let a = .1, b = GL.smax;
   if (vol(b) < target) { const v = vol(b); return { target, drawn: v, s: b }; }
   for (let it = 0; it < 30; it++) { const m = (a + b) / 2; if (vol(m) < target) a = m; else b = m; }
@@ -814,6 +853,39 @@ function glutes(out, C, mus, shells, info) {
   gMax.nodes.forEach(x => { x.cap = GL.max.room; });
   info.glmax = glFill(out, mx, shells, C);
   return [mx, md, mn];
+}
+
+/* ---------- верх столбов выпрямителя: карта для пола лент спины (этап В; Muscles.floorNeed) ----------
+   В рамке грудной клетки нейтральной позы, правая сторона: сетка x (BTM.x0 … с шагом dx) × высота h над тазобедренными (h = y +
+   24, как в приложении); значение — z верха столбов (наибольшая задняя точка верха всех четырёх столбов над узлом сетки), 0,01 см;
+   −32768 — столбов нет. Трапециевидная, ромбовидные и широчайшая лежат поверх столбов — их верх не глубже этой поверхности. */
+const BTM = { x0: -12, dx: .5, NX: 26, h0: 0, dh: 1, NH: 61 };
+function backTopMap(out, cols, shells, C) {
+  const { bound } = evaluate(out, cols, shells, C), Z = new Float64Array(BTM.NX * BTM.NH).fill(Infinity);
+  for (const w of bound.walls) {
+    const C2 = 2 * w.K + 1; if (w.N !== w.n * C2) continue;
+    const L = v => { const p = C.toLocal(C.rib, [w.P[v * 3], w.P[v * 3 + 1], w.P[v * 3 + 2]]); return [p[0], p[1] + 24, p[2]]; };
+    const Q = Array.from({ length: w.N }, (_, v) => L(v));
+    for (let q = 0; q + 1 < w.n; q++) for (let c = 0; c + 1 < C2; c++) {
+      const a = Q[q * C2 + c], b = Q[q * C2 + c + 1], d = Q[(q + 1) * C2 + c], e = Q[(q + 1) * C2 + c + 1];
+      for (const [A, B, D] of [[a, b, e], [a, e, d]]) {
+        const x0 = Math.min(A[0], B[0], D[0]), x1 = Math.max(A[0], B[0], D[0]), h0 = Math.min(A[1], B[1], D[1]), h1 = Math.max(A[1], B[1], D[1]);
+        const det = (B[0] - A[0]) * (D[1] - A[1]) - (D[0] - A[0]) * (B[1] - A[1]); if (Math.abs(det) < 1e-9) continue;
+        for (let j = Math.max(0, Math.ceil((h0 - BTM.h0) / BTM.dh)); j < BTM.NH && BTM.h0 + j * BTM.dh <= h1; j++) for (let i = Math.max(0, Math.ceil((x0 - BTM.x0) / BTM.dx)); i < BTM.NX && BTM.x0 + i * BTM.dx <= x1; i++) {
+          const x = BTM.x0 + i * BTM.dx, h = BTM.h0 + j * BTM.dh;
+          const u = ((x - A[0]) * (D[1] - A[1]) - (D[0] - A[0]) * (h - A[1])) / det, v = ((B[0] - A[0]) * (h - A[1]) - (x - A[0]) * (B[1] - A[1])) / det;
+          if (u < -1e-6 || v < -1e-6 || u + v > 1 + 1e-6) continue;
+          const z = A[2] + (B[2] - A[2]) * u + (D[2] - A[2]) * v; if (z < Z[j * BTM.NX + i]) Z[j * BTM.NX + i] = z;
+        }
+      }
+    }
+  }
+  /* к середине — до остистых отростков (x = 0,5 см за середину): верх у медиального края столбов (вершины остистых отростков —
+     под кожей, на них — апоневроз широчайшей и сухожилие трапециевидной) */
+  for (let j = 0; j < BTM.NH; j++) {
+    let last = Infinity; for (let i = 0; i < BTM.NX; i++) { const v = Z[j * BTM.NX + i]; if (Number.isFinite(v)) last = v; else if (Number.isFinite(last) && BTM.x0 + i * BTM.dx > -1) Z[j * BTM.NX + i] = last; }
+  }
+  return { ...BTM, z: Array.from(Z, z => (Number.isFinite(z) ? Math.round(z * 100) : -32768)) };
 }
 
 /* ---------- лопатка: карта задней поверхности (пол лент спины, этап В; Muscles.floorNeed) ----------
@@ -883,7 +955,7 @@ function evaluate(out, walls, shells, C) {
   }
   return { bound, start, pos };
 }
-const pick = W => { const o = { key: W.key, side: W.side, lines: W.lines, n: W.n, bones: W.bones, nodes: W.nodes, strips: W.strips, flip: W.flip, rev: W.rev, a0: W.a0 }; for (const k of ['lineOf', 'hip']) if (W[k] && (!Array.isArray(W[k]) || W[k].length)) o[k] = W[k]; return o; };
+const pick = W => { const o = { key: W.key, side: W.side, lines: W.lines, n: W.n, bones: W.bones, nodes: W.nodes, strips: W.strips, flip: W.flip, rev: W.rev, a0: W.a0 }; for (const k of ['lineOf', 'hip', 'noRib']) if (W[k] && (!Array.isArray(W[k]) || W[k].length)) o[k] = W[k]; return o; };
 /* Объём полос: Σ по четырёхугольникам опорной поверхности (площадь × средняя толщина углов). Толщины узлов (кроме fixed —
    апоневроз) масштабируются одним множителем так, что объём мышцы — сумма объёмов её линий (МРТ, volumes.js): толщина
    ровная по всему пласту (доли объёма между линиями модели — оценки по силе × длине, а не замеры; по полосам рисунка
@@ -937,12 +1009,13 @@ function build(out, deps) {
   const BT = backTris(C), back = [];
   C.hips = hipMaps(C);
   for (const name of ['mf', 'sp', 'lt', 'il']) { const W = backColumn(C, K, BT, name, mus); W.side = 'R'; info[W.key] = fillColumn(out, W, shells, C); back.push(W); }
+  const backTop = backTopMap(out, back.slice(), shells, C);
   const ql = quadratus(C, K, mus); ql.side = 'R'; info.ql = normalize(out, ql, shells, C); back.push(ql);
   back.push(...glutes(out, C, mus, shells, info));
   const right = [ra, eo, io, sa, pm, ...back], walls = [];
   for (const W of right) { const R0 = { ...pick(W), side: 'R' }; walls.push(R0, pick(mirrorWall(R0, C))); }
   finalize(out, walls, shells, C);
-  return { walls, shells, hips: C.hips, scap: scapMaps(C), info: { ...info, ra: ra.info, tEO } };
+  return { walls, shells, hips: C.hips, scap: scapMaps(C), backTop, info: { ...info, ra: ra.info, tEO } };
 }
 /* Нормаль наружу (flip), обход колец как у трубок (rev) и площади строк в нейтральной позе (a0) — тем же расчётом, что в
    приложении (Muscles.wallSurface) */

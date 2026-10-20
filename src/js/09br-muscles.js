@@ -415,18 +415,16 @@ const Muscles = (() => {
     ['serrant', ['serr_ant_1', 'serr_ant_2', 'serr_ant_3', 'serr_ant_4', 'serr_ant_5', 'serr_ant_6', 'serr_ant_7', 'serr_ant_8', 'serr_ant_9', 'serr_ant10', 'serr_ant11', 'serr_ant12'], /^scapula/],
     ['rhomb', ['rhomboid_2', 'rhomboid_3', 'rhomboid_4', 'rhomboid_5'], /^scapula/],
     ['eo', ['EO7', 'EO8', 'EO1', 'EO2', 'EO3', 'EO4', 'EO5', 'EO6'], /^ribcage/],
-    ['glmax', ['glmax1', 'glmax2', 'glmax3'], /^femur/],
-    ['glmed', ['glmed1', 'glmed2', 'glmed3'], /^femur/],
   ];
   const PEC_LOW = 7.5, PEC_U0 = .45;
-  const BORDER = .35, BORDER_H = .5, TIP_IN = .25, TIP_OUT = .6, RIB_WMIN = .5, RIB_HMIN = .06, RIB_C0 = .3, RIB_C1 = 1, RIB_SPREAD = .8, RIB_STEER = .35, RIB_LAM = .3, RIB_AGREE = .5;
+  const BORDER = .35, BORDER_H = .5, TIP_IN = .25, TIP_OUT = .6, RIB_WMIN = .5, RIB_HMIN = .06, RIB_C0 = .3, RIB_C1 = 1, RIB_SPREAD = .8, RIB_STEER = .35, RIB_LAM = .3, RIB_AGREE = .5, RIB_HMAX = 3;
   /* поля записи линии в кольце (LW): 0–2 центр, 3–5 касательная в сторону u, 6–8 нормаль пласта, 9–11 направление к коже,
      12 глубина под кожей, 13 площадь сечения (как у трубки), 14 полупоперечник, 15–16 ширины до швов, 17 толщина η = A/(2w),
      18 полутолщина центра, 19 сдвиг вглубь, 20–22 нормаль по соседям, 23 флаги своей кромки, 24 расстояние по пути (см),
      25 радиус кривизны кожи поперёк линии;
      шва (SW): 0–2 точка, 3–5 нормаль, 6–8 поперёк (от линии k к k+1), 9 полутолщина, 10 вынос кромки, 11 доля λ */
   const LW = 26, SW = 12;
-  const GAP = new Float64Array(32), GAP2 = new Float64Array(32), PC = new Float64Array(96);
+  const GAP = new Float64Array(32), GAP2 = new Float64Array(32), PC = new Float64Array(96), LV = new Float64Array(96);
   function bindFans(md, bound, idx) {
     const at = new Map(bound.map((mu, i) => [mu.name, i])), fans = [];
     for (const [key, names, anchor] of FANS) for (const s of ['r', 'l']) {
@@ -481,8 +479,9 @@ const Muscles = (() => {
       const fl = FLOOR[key];
       if (fl && md.shells && md.shells[fan.side]) {
         const sh = md.shells[fan.side], sc = md.scap && md.scap[fan.side], si = idx.get('scapula|' + fan.side);
-        fan.floor = { ...fl, scap_c: fl.scap || 0, sideR: fan.side === 'R', rib: idx.get('ribcage|'), shell: { ...sh, r: Float64Array.from(sh.r, v => (v < 0 ? -1 : v / 100)) },
-          scap: fl.scap && sc && si !== undefined ? { i: si, o: sc.o, u: sc.u, v: sc.v, w: sc.w, u0: sc.u0, v0: sc.v0, du: sc.du, NU: sc.NU, NV: sc.NV, h: Float64Array.from(sc.h, x => x / 100), W: new Float64Array(12) } : null };
+        fan.floor = { ...fl, su0: fl.su0 ?? fl.u0, scap_c: fl.scap || 0, sideR: fan.side === 'R', rib: idx.get('ribcage|'), shell: { ...sh, r: Float64Array.from(sh.r, v => (v < 0 ? -1 : v / 100)) },
+          scap: fl.scap && sc && si !== undefined ? { i: si, o: sc.o, u: sc.u, v: sc.v, w: sc.w, u0: sc.u0, v0: sc.v0, du: sc.du, NU: sc.NU, NV: sc.NV, h: Float64Array.from(sc.h, x => x / 100), W: new Float64Array(12) } : null,
+          bt: fl.back && md.backTop ? { ...md.backTop, z: Float64Array.from(md.backTop.z, v => (v === -32768 ? NaN : v / 100)) } : null };
       }
       fans.push(fan);
     }
@@ -492,19 +491,32 @@ const Muscles = (() => {
      лопатке и плечу; в тягах (лопатки сведены) медиальный край и ость лопатки оказывались снаружи ленты — белые «окна», а в
      скручиваниях широчайшая и большая грудная уходили в рёбра до 3,4 см. Ленте, у которой есть пол, низ полосы (центр и швы)
      держится снаружи: задней поверхности лопатки (карта высоты по пластинке, md.scap; зазор scap), оболочки рёбер (зазор rib —
-     у широчайшей толщина передней зубчатой и наружной косой под ней) и, над спиной, — верха столбов выпрямителя (back: не
-     глубже BACK_DEPTH под кожей — трапециевидная и широчайшая лежат поверх выпрямителя, у человека — так же). Где низ ниже
+     у широчайшей толщина передней зубчатой и наружной косой под ней) и, над спиной, — верха столбов выпрямителя (back: верх
+     полосы не глубже верха столбов, карта md.backTop в рамке грудной клетки — трапециевидная и широчайшая лежат поверх
+     выпрямителя, у человека — так же). Где низ ниже
      пола, полоса поднимается к коже (по направлению к коже, как сдвиг вглубь у кожи — только наоборот); пол важнее кожи:
      над лопаткой в сведении лента может подойти к коже ближе обычного. Путь и работа мышцы прежние. */
   /* u0 — доля длины от кости конца (u = 0: лопатка у трапециевидной и ромбовидных, плечо у широчайшей и большой грудной), с
      которой пол действует: у самого прикрепления полоса лежит на кости, а у плеча идёт к нему над подмышкой — там пол только
      выбрасывал бы её в сторону; подъём над лопаткой и рёбрами — не больше FLOOR_MAX, над выпрямителем — FLOOR_BACK (у остистых
-     отростков C7–T4 путь трапециевидной на 4–4,5 см под кожей) */
-  const FLOOR = { trap: { scap: .25, ribc: .3, back: 1, u0: .25 }, rhomb: { scap: .25, ribc: .3, back: 1, u0: .25 }, lat: { scap: .25, ribc: .6, back: 1, u0: .3 }, pecmaj: { ribc: .3, u0: .45, max: .4 } }, FLOOR_MAX = 2, FLOOR_BACK = 4, FLOOR_SKIN = .6;
-  /* глубина верха столбов выпрямителя под кожей по высоте h над тазобедренными (tools/muscles/walls.js, BK.depth) и их наружный
-     край (BK.B3 + 0,5 см) — где широкие мышцы спины лежат поверх них */
-  const BACK_DEPTH = [[0, .45], [26, .45], [34, 1], [44, 1.2], [50, 1.8], [54, 2.6], [57, 3.2]], BACK_WIDTH = [[5, 6], [15, 7.1], [18, 8.9], [22, 9.7], [28, 9.5], [34, 8.7], [40, 8], [45, 7.3], [48, 6.1], [52, 4], [60, 2]];
-  const tabAt = (T, x) => { if (x <= T[0][0]) return T[0][1]; for (let i = 1; i < T.length; i++) if (x <= T[i][0]) return T[i - 1][1] + (T[i][1] - T[i - 1][1]) * (x - T[i - 1][0]) / (T[i][0] - T[i - 1][0]); return T[T.length - 1][1]; };
+     отростков C7–T4 путь трапециевидной на 4–4,5 см под кожей). Подъём — по нормали пола (не по направлению к коже g: у
+     остистых отростков оно у соседних линий разное — у гребня кожи над позвонками уходит вбок, — и подъём по нему перекашивал
+     полосы); шов поднимается вместе с соседними центрами и сам — только над выпрямителем, не больше чем на FLOOR_SEAM сверх них.
+     top — на сколько верх полосы снаружи верха выпрямителя: у трапециевидной больше, чем у широчайшей и ромбовидных (нижняя
+     часть трапециевидной лежит поверх верхнего медиального края широчайшей и ромбовидных — Gray's, с. 432–435) */
+  const FLOOR = { trap: { scap: .25, ribc: .3, back: 1, top: .7, u0: .25 }, rhomb: { scap: .25, ribc: .3, back: 1, top: .3, u0: .25 }, lat: { scap: .25, ribc: .6, back: 1, top: .2, u0: .3, su0: .5 }, pecmaj: { ribc: .3, u0: .45, max: .4 } }, FLOOR_MAX = 2, FLOOR_BACK = 4, FLOOR_SKIN = .2, FLOOR_SEAM = .5;
+  /* z верха столбов выпрямителя (рамка грудной клетки) в точке (x, h) карты md.backTop (правая сторона; у левой x — зеркально);
+     NaN — столбов там нет */
+  function backTopAt(T, x, h) {
+    const fx = (x - T.x0) / T.dx, fy = (h - T.h0) / T.dh, i = Math.floor(fx), j = Math.floor(fy);
+    if (i < 0 || j < 0 || i >= T.NX - 1 || j >= T.NH - 1) return NaN;
+    let s = 0, w = 0;
+    for (let dj = 0; dj < 2; dj++) for (let di = 0; di < 2; di++) {
+      const z = T.z[(j + dj) * T.NX + i + di]; if (z !== z) continue;
+      const ww = (1 - Math.abs(fx - i - di)) * (1 - Math.abs(fy - j - dj)); s += z * ww; w += ww;
+    }
+    return w > .25 ? s / w : NaN;
+  }
   /* оси карты лопатки кадра: начало и оси (u, v, w) в каталоге — fan.floor.scap.W */
   function floorFrame(F, m) {
     const S = F.scap; if (!S) return;
@@ -528,18 +540,21 @@ const Muscles = (() => {
     }
     return w > .5 ? s / w : best;
   }
-  /* насколько поднять к коже (по g) точку ленты p с полутолщиной h (нормаль пласта n), чтобы низ был над полом; depth — глубина
-     точки под кожей (нейтральная поза, sk); ≤ 0 — подъём не нужен */
-  function floorNeed(F, m, px, py, pz, nx, ny, nz, h, depth, gx, gy, gz) {
+  /* насколько поднять точку ленты p с полутолщиной h (нормаль пласта n, направление к коже g), чтобы низ был над полом (над
+     выпрямителем — верх над его верхом): подъём — по нормали самого пола (FD: ось w лопатки, радиус оболочки рёбер, «назад»
+     грудной клетки), у самого высокого из полов; depth — глубина точки под кожей (нейтральная поза, sk; ограничивает подъём над
+     лопаткой и рёбрами); u — доля длины; onlyBack — только над выпрямителем (швы); ≤ 0 — подъём не нужен */
+  const FD = new Float64Array(3);
+  function floorNeed(F, m, px, py, pz, nx, ny, nz, h, depth, gx, gy, gz, u, onlyBack) {
     const ng = nx * gx + ny * gy + nz * gz, sg = ng < 0 ? -1 : 1, bx = px - sg * nx * h, by = py - sg * ny * h, bz = pz - sg * nz * h;
     /* над лопаткой и рёбрами — не выше FLOOR_SKIN над кожей (глубина — по нейтральной позе, sk): где кость под самой кожей
        (ключица и верхние рёбра при сведённых лопатках), пласт лучше оставить чуть в кости, чем вынести из тела */
     const cap = Math.min(F.max || FLOOR_MAX, depth < 1e8 ? Math.max(0, depth - h * Math.abs(ng) + FLOOR_SKIN) : FLOOR_MAX);
     let need = -Infinity;
-    if (F.scap) {
+    if (F.scap && u >= F.su0 && !onlyBack) {
       const W = F.scap.W, dx = bx - W[0], dy = by - W[1], dz = bz - W[2], pu = dx * W[3] + dy * W[4] + dz * W[5], pv = dx * W[6] + dy * W[7] + dz * W[8], pw = dx * W[9] + dy * W[10] + dz * W[11];
       const hs = scapH(F.scap, pu, pv);
-      if (hs > -Infinity) { const gw = gx * W[9] + gy * W[10] + gz * W[11]; if (gw > .2) need = Math.max(need, Math.min(FLOOR_MAX, cap, (hs + F.scap_c - pw) / gw)); }
+      if (hs > -Infinity) { const L = Math.min(FLOOR_MAX, cap, hs + F.scap_c - pw); if (L > need) { need = L; FD[0] = W[9]; FD[1] = W[10]; FD[2] = W[11]; } }
     }
     const o = F.rib * 12, dx = bx - m[o + 3], dy = by - m[o + 7], dz = bz - m[o + 11];
     const lx = m[o] * dx + m[o + 4] * dy + m[o + 8] * dz, ly = m[o + 1] * dx + m[o + 5] * dy + m[o + 9] * dz, lz = m[o + 2] * dx + m[o + 6] * dy + m[o + 10] * dz;
@@ -547,17 +562,21 @@ const Muscles = (() => {
     if (r > 1e-6) {
       const gs = F.sideR ? -1 : 1, th = Math.atan2(gs * lx, zz) * 180 / Math.PI;
       if (th >= S.th0 && th <= S.th0 + S.dth * (S.NT - 1)) {
-        const rs = shellR(S, th, ly);
+        const rs = onlyBack ? -1 : shellR(S, th, ly);
         if (rs > 0) {
           const rx = (m[o] * lx + m[o + 2] * zz) / r, ry = (m[o + 4] * lx + m[o + 6] * zz) / r, rz = (m[o + 8] * lx + m[o + 10] * zz) / r;
-          need = Math.max(need, Math.min(FLOOR_MAX, cap, (rs + F.ribc - r) / Math.max(.3, rx * gx + ry * gy + rz * gz)));
+          const L = Math.min(FLOOR_MAX, cap, rs + F.ribc - r); if (L > need) { need = L; FD[0] = rx; FD[1] = ry; FD[2] = rz; }
         }
       }
-      /* над спиной — не глубже верха столбов выпрямителя: сзади (zz < −3) и не дальше их наружного края от середины */
-      if (F.back && depth < 1e8 && zz < -3) {
-        const hh = ly + 24;
-        if (hh > 2 && hh < 58 && Math.abs(lx) < tabAt(BACK_WIDTH, hh)) need = Math.max(need, Math.min(FLOOR_BACK, depth + h * Math.abs(ng) - tabAt(BACK_DEPTH, hh) + .05));
-      }
+    }
+    /* над спиной: верх полосы — снаружи верха столбов выпрямителя на F.top (столбы лежат под широкими мышцами спины). Верх
+       столбов — по карте в рамке грудной клетки (нейтральная поза), а не по глубине под кожей: та — по нейтральной позе и в
+       тягах с сведёнными лопатками ошибалась на 1–2 см (полоса выходила из кожи) */
+    if (F.bt) {
+      const tx = bx + 2 * sg * nx * h - m[o + 3], ty = by + 2 * sg * ny * h - m[o + 7], tz = bz + 2 * sg * nz * h - m[o + 11];
+      const qx = m[o] * tx + m[o + 4] * ty + m[o + 8] * tz, qy = m[o + 1] * tx + m[o + 5] * ty + m[o + 9] * tz, qz = m[o + 2] * tx + m[o + 6] * ty + m[o + 10] * tz;
+      const ze = backTopAt(F.bt, F.sideR ? qx : -qx, qy + 24);
+      if (ze === ze) { const L = Math.min(FLOOR_BACK, qz - ze + F.top); if (L > need) { need = L; FD[0] = -m[o + 2]; FD[1] = -m[o + 6]; FD[2] = -m[o + 10]; } }
     }
     return need;
   }
@@ -800,10 +819,11 @@ const Muscles = (() => {
           const ex = E[0] - B[o], ey = E[1] - B[o + 1], ez = E[2] - B[o + 2], up = ex * gx + ey * gy + ez * gz, x2 = Math.max(0, ex * ex + ey * ey + ez * ez - up * up);
           ext = Math.max(ext, up + E[9] * ng + Math.max(0, E[10] * (E[6] * gx + E[7] * gy + E[8] * gz)) - (B[o + 12] - SKIN_GAP - x2 / (2 * B[o + 25])));
         }
-        let sh0 = Math.max(0, ext);
-        /* пол (этап В): низ полосы — над лопаткой, рёбрами и выпрямителем; где ниже — подъём к коже */
-        if (FL && q >= FL.u0 * (n - 1)) { const L = floorNeed(FL, m, B[o] - gx * sh0, B[o + 1] - gy * sh0, B[o + 2] - gz * sh0, nx, ny, nz, h, B[o + 12] + sh0, gx, gy, gz); if (L > 0) sh0 -= L; }
+        const sh0 = Math.max(0, ext);
         B[o + 19] = sh0;
+        /* пол (этап В): низ полосы — над лопаткой, рёбрами и выпрямителем; где ниже — подъём от пола (вектор LV) */
+        LV[k * 3] = LV[k * 3 + 1] = LV[k * 3 + 2] = 0;
+        if (FL && q >= FL.u0 * (n - 1)) { const L = floorNeed(FL, m, B[o] - gx * sh0, B[o + 1] - gy * sh0, B[o + 2] - gz * sh0, nx, ny, nz, h, B[o + 12] + sh0, gx, gy, gz, q / (n - 1)); if (L > 0) { LV[k * 3] = FD[0] * L; LV[k * 3 + 1] = FD[1] * L; LV[k * 3 + 2] = FD[2] * L; } }
       }
       for (let j = 0; j <= K; j++) {
         const s = (j * n + q) * SW, a = ((j > 0 ? j - 1 : 0) * n + q) * LW, c = ((j < K ? j : K - 1) * n + q) * LW;
@@ -817,12 +837,30 @@ const Muscles = (() => {
         let x2 = 0; if (a === c) { const ex = S[s] - B[a], ey = S[s + 1] - B[a + 1], ez = S[s + 2] - B[a + 2], up = ex * gx + ey * gy + ez * gz; x2 = Math.max(0, ex * ex + ey * ey + ez * ez - up * up) / (2 * B[a + 25]); }
         /* и не меньше сдвига соседних центров по доле λ: иначе у полосы, ушедшей вглубь, швы оставались бы наверху (сечение «галочкой») */
         const room = B[a + 12] + (B[c + 12] - B[a + 12]) * lam - lift - SKIN_GAP - x2, skin = S[s + 9] * Math.abs(gx * S[s + 3] + gy * S[s + 4] + gz * S[s + 5]) - room, base = B[a + 19] + (B[c + 19] - B[a + 19]) * lam;
-        /* с полом сдвиг шва может быть и наружу (как у поднятых центров), и шов сам держится над полом */
-        let sh = FL ? Math.max(skin, base) : Math.max(0, skin, base);
-        if (FL && q >= FL.u0 * (n - 1)) { const L = floorNeed(FL, m, S[s] - gx * sh, S[s + 1] - gy * sh, S[s + 2] - gz * sh, S[s + 3], S[s + 4], S[s + 5], S[s + 9], room + SKIN_GAP + x2 + sh, gx, gy, gz); if (L > 0) sh -= L; }
+        const sh = Math.max(0, skin, base);
         S[s] -= gx * sh; S[s + 1] -= gy * sh; S[s + 2] -= gz * sh;
+        /* пол: шов поднимается вместе с соседними центрами (доля λ их подъёма) и сам держится над выпрямителем — не больше чем на
+           FLOOR_SEAM сверх них (свой пол над лопаткой и рёбрами поднимал шов отдельно от центра, полоса перекашивалась) */
+        if (FL) {
+          const ka = j > 0 ? j - 1 : 0, kc = j < K ? j : K - 1;
+          for (let r = 0; r < 3; r++) S[s + r] += LV[ka * 3 + r] + (LV[kc * 3 + r] - LV[ka * 3 + r]) * lam;
+          if (q >= FL.u0 * (n - 1)) { const L = floorNeed(FL, m, S[s], S[s + 1], S[s + 2], S[s + 3], S[s + 4], S[s + 5], S[s + 9], room + SKIN_GAP + x2 + sh, gx, gy, gz, q / (n - 1), true); if (L > 0) { const d = Math.min(L, FLOOR_SEAM); S[s] += FD[0] * d; S[s + 1] += FD[1] * d; S[s + 2] += FD[2] * d; } }
+        }
       }
-      for (let k = 0; k < K; k++) { const o = (k * n + q) * LW, sh = B[o + 19]; B[o] -= B[o + 9] * sh; B[o + 1] -= B[o + 10] * sh; B[o + 2] -= B[o + 11] * sh; }
+      for (let k = 0; k < K; k++) { const o = (k * n + q) * LW, sh = B[o + 19]; B[o] -= B[o + 9] * sh - LV[k * 3]; B[o + 1] -= B[o + 10] * sh - LV[k * 3 + 1]; B[o + 2] -= B[o + 11] * sh - LV[k * 3 + 2]; }
+      /* с полом соседние полосы подняты на разную высоту, и полоса между ними наклонена: нормаль центра — поперёк линии её швов
+         (иначе верх и низ центра шли бы по прежней нормали, сечение — «ромбом» наискось, без площади) */
+      if (FL) for (let k = 0; k < K; k++) {
+        const o = (k * n + q) * LW, lifted = j => j >= 0 && j < K && (LV[j * 3] || LV[j * 3 + 1] || LV[j * 3 + 2]); if (!lifted(k - 1) && !lifted(k) && !lifted(k + 1)) continue;
+        const sl = (k * n + q) * SW, sr = ((k + 1) * n + q) * SW, cx = S[sr] - S[sl], cy = S[sr + 1] - S[sl + 1], cz = S[sr + 2] - S[sl + 2];
+        let nx = B[o + 4] * cz - B[o + 5] * cy, ny = B[o + 5] * cx - B[o + 3] * cz, nz = B[o + 3] * cy - B[o + 4] * cx; const l = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        if (l < 1e-6) continue;
+        /* знак — по прежней нормали; где новая к ней почти поперёк (швы встали один над другим), — по нормали предыдущего кольца
+           (иначе кольцо перевернулось бы относительно соседних) */
+        let cs = (nx * B[o + 6] + ny * B[o + 7] + nz * B[o + 8]) / l;
+        if (Math.abs(cs) < .5 && q > 0) { const p = o - LW; cs = (nx * B[p + 6] + ny * B[p + 7] + nz * B[p + 8]) / l; }
+        const sg = cs < 0 ? -1 / l : 1 / l; B[o + 6] = nx * sg; B[o + 7] = ny * sg; B[o + 8] = nz * sg;
+      }
       /* после сдвигов центр и швы сместились по-разному — толщина центра заново, по сечению, которое будет нарисовано */
       for (let k = 0; k < K; k++) { const o = (k * n + q) * LW; B[o + 18] = solveH(B, S, o, (k * n + q) * SW, ((k + 1) * n + q) * SW, k, K); }
     }
@@ -898,7 +936,9 @@ const Muscles = (() => {
     const oL = fl & 1 && k > 0, oR = fl & 2 && k < K - 1, hL = oL ? eta : S[sl + 9], hR = oR ? eta : S[sr + 9];
     arm(B, S, o, sl, fl & 1, wl, -1); const aL = ARM[0], bL = ARM[1];
     arm(B, S, o, sr, fl & 2, wr, 1); const aR = ARM[0], bR = ARM[1];
-    return Math.max(RIB_HMIN, .3 * eta, (B[o + 13] - bL * hL - bR * hR - (oL ? TIP_IN * eta : S[sl + 10]) * hL - (oR ? TIP_IN * eta : S[sr + 10]) * hR) / (aL + aR));
+    /* не толще RIB_HMAX толщин η: где швы сдвинуты поперёк пласта почти по нормали центра (пол поднял шов, а центр рядом — нет),
+       плечо сечения мало, и площадь давала бы центр в 4–8 см толщиной — шип */
+    return Math.min(RIB_HMAX * eta, Math.max(RIB_HMIN, .3 * eta, (B[o + 13] - bL * hL - bR * hR - (oL ? TIP_IN * eta : S[sl + 10]) * hL - (oR ? TIP_IN * eta : S[sr + 10]) * hR) / (aL + aR)));
   }
   /* вклад половины сечения в площадь: ARM[0] — множитель при толщине центра, ARM[1] — при толщине шва (solveH) */
   const ARM = new Float64Array(2);
@@ -1395,7 +1435,7 @@ const Muscles = (() => {
      сохраняется: растянутая кожей полоса тоньше, сжатая — толще). Нормаль — по опорной поверхности (средняя четырёхугольников
      вокруг узла), знак — наружу. */
   const MQ = typeof Mannequin !== 'undefined' ? Mannequin : (typeof require === 'function' ? require('./09bm-mannequin.js') : null);
-  const WALL_ROUND = .5, WALL_SIG0 = .6, WALL_SIG1 = 1.7, WALL_FLOOR = .1, WALL_COS = .5, WALL_LIFT = .6, WALL_HIPMIN = 2;
+  const WALL_ROUND = .5, WALL_SIG0 = .6, WALL_SIG1 = 1.7, WALL_FLOOR = .1, WALL_COS = .5, WALL_LIFT = .6, WALL_HIPMIN = 2, WALL_HIPCORE = 6.5;
   /* рамки корпуса кадра: таз (крестец), поясница (L5, начало — на высоте шарнира 15 см), грудная клетка; шарниры 1 (L5/S1) и
      2 (L2/L3): ось (в рамке нижнего сегмента) и половина угла поворота — как hingeTurn в 09bm-mannequin.js */
   const WT = new Float64Array(3 * 12 + 2 * 4);
@@ -1471,7 +1511,7 @@ const Muscles = (() => {
       const r0 = new Uint16Array(K), dir = new Uint8Array(K), cntL = new Map();
       lineOf.forEach((j, k) => { const c = cntL.get(j) || 0; r0[k] = c * n; dir[k] = c & 1; cntL.set(j, c + 1); });
       const N = W.nodes.length, f = c => new Float64Array(c);
-      const wall = { key: W.key, side: W.side, lines, lineIdx, lineOf, r0, dir, K, n, N, T, shell: shells[W.side] || null, flip: W.flip || 1, rev: Uint8Array.from(W.rev),
+      const wall = { key: W.key, side: W.side, lines, lineIdx, lineOf, r0, dir, K, n, N, T, shell: W.noRib ? null : shells[W.side] || null, flip: W.flip || 1, rev: Uint8Array.from(W.rev),
         kind: new Uint8Array(N), datum: new Uint8Array(N), t0: f(N), code: new Uint8Array(N * 2), w: f(N * 2), V: f(N * 6), kf: f(N), bone: new Int32Array(N),
         bp: f(N * 3), mix: f(N), g: f(N * 6), P: f(N * 3), NR: f(N * 3), TH: f(N), SG: f(K * n), AR: f(K * n), A0: f(K * n), CL: f(N * 3),
         rows: Int32Array.from(W.strips.flat()), own: new Uint8Array(N), piv: PIV, hip: null };
@@ -1557,6 +1597,7 @@ const Muscles = (() => {
           let dx = P[o] - HC[0], dy = P[o + 1] - HC[1], dz = P[o + 2] - HC[2]; const dl = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1; dx /= dl; dy /= dl; dz /= dl;
           const r = Math.min(dl, Math.max(WALL_HIPMIN, hipSkin(wall, m, dx, dy, dz) - wall.g[v * 6]));
           P[o] = HC[0] + dx * r; P[o + 1] = HC[1] + dy * r; P[o + 2] = HC[2] + dz * r;
+          const HD = wall.HD || (wall.HD = new Float64Array(N * 5)); HD[v * 5] = dx; HD[v * 5 + 1] = dy; HD[v * 5 + 2] = dz; HD[v * 5 + 3] = dl; HD[v * 5 + 4] = dl - r;
         }
         continue;
       }
@@ -1597,6 +1638,30 @@ const Muscles = (() => {
         for (let k2 = 0; k2 < 3; k2++) P[o + k2] = m[ri + k2 * 4] * qx + m[ri + k2 * 4 + 1] * y + m[ri + k2 * 4 + 2] * qz + m[ri + k2 * 4 + 3];
       }
     }
+    if (wall.HD) hipPull(wall);
+  }
+  /* прижатие узлов 6 к коже (HD: направление из центра головки, радиус до прижатия, на сколько прижат) — по сетке без ступенек:
+     в глубоком сгибании соседние строки попадают одна в складку между ягодицей и бедром (прижатие до 6 см), другая — на бедро
+     (1–2 см), и верх пласта шёл волнами. Прижатие узла — не меньше среднего по соседям (два прохода), так что узел остаётся под
+     кожей, а перепад между соседями сглажен */
+  function hipPull(wall) {
+    const { N, n, K, P, HD } = wall, C2 = 2 * K + 1;
+    if (N !== n * C2) return;
+    const A = wall.HA || (wall.HA = new Float64Array(N)), B = wall.HB || (wall.HB = new Float64Array(N));
+    for (let v = 0; v < N; v++) A[v] = wall.kind[v] === 6 ? HD[v * 5 + 4] : 0;
+    for (let pass = 0; pass < 2; pass++) {
+      for (let q = 0; q < n; q++) for (let c = 0; c < C2; c++) {
+        const v = q * C2 + c; let s = 2 * A[v], w = 2;
+        if (q > 0) { s += A[v - C2]; w++; } if (q < n - 1) { s += A[v + C2]; w++; } if (c > 0) { s += A[v - 1]; w++; } if (c < C2 - 1) { s += A[v + 1]; w++; }
+        B[v] = s / w;
+      }
+      for (let v = 0; v < N; v++) A[v] = Math.max(A[v], B[v]);
+    }
+    for (let v = 0; v < N; v++) {
+      if (wall.kind[v] !== 6) continue;
+      const o = v * 3, r = Math.max(WALL_HIPMIN, Math.min(HD[v * 5 + 3] - HD[v * 5 + 4], HD[v * 5 + 3] - A[v]));
+      P[o] = HC[0] + HD[v * 5] * r; P[o + 1] = HC[1] + HD[v * 5 + 1] * r; P[o + 2] = HC[2] + HD[v * 5 + 2] * r;
+    }
   }
   /* нормали узлов (средняя четырёхугольников полос вокруг узла, наружу) и σ строк полос */
   function wallNormals(wall) {
@@ -1618,7 +1683,22 @@ const Muscles = (() => {
       }
       for (let q = 0; q < n; q++) { const a = A0[o + q], s = AR[o + q]; SG[o + q] = a > 1e-6 && s > 1e-9 ? Math.min(WALL_SIG1, Math.max(WALL_SIG0, a / s)) : 1; }
     }
-    for (let v = 0; v < N; v++) { const l = Math.sqrt(NR[v * 3] ** 2 + NR[v * 3 + 1] ** 2 + NR[v * 3 + 2] ** 2); if (l > 1e-12) { NR[v * 3] /= l; NR[v * 3 + 1] /= l; NR[v * 3 + 2] /= l; } else NR[v * 3 + 2] = 1; }
+    let none = 0;
+    for (let v = 0; v < N; v++) { const l = Math.sqrt(NR[v * 3] ** 2 + NR[v * 3 + 1] ** 2 + NR[v * 3 + 2] ** 2); if (l > 1e-12) { NR[v * 3] /= l; NR[v * 3 + 1] /= l; NR[v * 3 + 2] /= l; } else { NR[v * 3] = NR[v * 3 + 1] = NR[v * 3 + 2] = 0; none++; } }
+    /* узел, у которого все четырёхугольники вырождены (полоса квадратной поясницы, у которой линия кончилась ниже, — точка у
+       ребра), берёт нормаль соседей по строке и столбцу полосы */
+    for (let pass = 0; none && pass < 4; pass++) {
+      for (let k = 0; k < K; k++) for (let q = 0; q < n; q++) for (let e = 0; e < 3; e++) {
+        const v = rows[(k * n + q) * 3 + e]; if (NR[v * 3] || NR[v * 3 + 1] || NR[v * 3 + 2]) continue;
+        let x = 0, y = 0, z = 0;
+        for (const [dq, de] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+          const qq = q + dq, ee = e + de; if (qq < 0 || qq >= n || ee < 0 || ee > 2) continue;
+          const u = rows[(k * n + qq) * 3 + ee]; x += NR[u * 3]; y += NR[u * 3 + 1]; z += NR[u * 3 + 2];
+        }
+        const l = Math.sqrt(x * x + y * y + z * z); if (l > 1e-9) { NR[v * 3] = x / l; NR[v * 3 + 1] = y / l; NR[v * 3 + 2] = z / l; none--; }
+      }
+    }
+    for (let v = 0; none && v < N; v++) if (!NR[v * 3] && !NR[v * 3 + 1] && !NR[v * 3 + 2]) NR[v * 3 + 2] = 1;
     /* у узлов кожи (0, 2, 4) направление «наружу» известно: от оси корпуса (x = z = 0 в рамке сегмента схемы) к точке узла по
        горизонтали сегмента. Там, где кожа складывается (бок живота при скручивании с поворотом, низ живота при глубоком
        сгибании), четырёхугольники вокруг узла встают ребром и их нормаль уходит вбок или внутрь — тогда она доворачивается к
@@ -1668,6 +1748,16 @@ const Muscles = (() => {
         TH[v] = Math.max(.3 * t, t - (r - rs) / cr);
       }
     }
+    /* у кожи ягодицы (6, верх — опорный): низ не ближе WALL_HIPCORE к центру головки бедра (вертел, шейка, седалищный бугор лежат
+       в 4,5–6 см от него) — в глубоком сгибании кожа между ягодицей и бедром прижимает узлы к суставу, и пласт толщиной 3–5 см
+       уходил бы низом в сустав и выворачивался; там он тоньше (не тоньше 0,3 своей толщины) */
+    if (wall.hip && wall.m) {
+      for (let v = 0; v < N; v++) {
+        if (wall.kind[v] !== 6 || wall.datum[v]) continue;
+        const o = v * 3, r = Math.sqrt((P[o] - HC[0]) ** 2 + (P[o + 1] - HC[1]) ** 2 + (P[o + 2] - HC[2]) ** 2);
+        TH[v] = Math.min(TH[v], Math.max(.3 * TH[v], r - WALL_HIPCORE));
+      }
+    }
     /* между кожей и рёбрами (узлы 4): толщина — не больше места между полом и потолком по нормали (не тоньше 0,3 своей) */
     const CL = wall.CL;
     for (let v = 0; v < N; v++) {
@@ -1696,6 +1786,30 @@ const Muscles = (() => {
       const lift = Math.min(WALL_LIFT, def - (t - tn)); if (lift > 0) { P[o] += NR[o] * lift; P[o + 1] += NR[o + 1] * lift; P[o + 2] += NR[o + 2] * lift; }
     }
   }
+  /* сдвиг на толщину у ягодичных (wall.OF, по узлам): NR · TH, усреднённый WALL_OFF_PASS раз с соседями по сетке (узел — с весом 2),
+     длина — прежняя толщина узла. Сетка ягодичных — строки × (2K + 1) столбцов (tools/muscles/walls.js, glGrid) */
+  const WALL_OFF_PASS = 3;
+  function wallOffsets(wall) {
+    const { N, n, K, NR, TH } = wall, C2 = 2 * K + 1;
+    if (N !== n * C2) { wall.OF = null; return; }
+    const A = wall.OF || (wall.OF = new Float64Array(N * 3)), B = wall.OF2 || (wall.OF2 = new Float64Array(N * 3));
+    for (let v = 0; v < N * 3; v++) A[v] = NR[v] * TH[(v / 3) | 0];
+    for (let pass = 0; pass < WALL_OFF_PASS; pass++) {
+      for (let q = 0; q < n; q++) for (let c = 0; c < C2; c++) {
+        const v = q * C2 + c; let sx = 2 * A[v * 3], sy = 2 * A[v * 3 + 1], sz = 2 * A[v * 3 + 2], w = 2;
+        if (q > 0) { const u = v - C2; sx += A[u * 3]; sy += A[u * 3 + 1]; sz += A[u * 3 + 2]; w++; }
+        if (q < n - 1) { const u = v + C2; sx += A[u * 3]; sy += A[u * 3 + 1]; sz += A[u * 3 + 2]; w++; }
+        if (c > 0) { const u = v - 1; sx += A[u * 3]; sy += A[u * 3 + 1]; sz += A[u * 3 + 2]; w++; }
+        if (c < C2 - 1) { const u = v + 1; sx += A[u * 3]; sy += A[u * 3 + 1]; sz += A[u * 3 + 2]; w++; }
+        B[v * 3] = sx / w; B[v * 3 + 1] = sy / w; B[v * 3 + 2] = sz / w;
+      }
+      A.set(B);
+    }
+    for (let v = 0; v < N; v++) {
+      const o = v * 3, l = Math.sqrt(A[o] * A[o] + A[o + 1] * A[o + 1] + A[o + 2] * A[o + 2]);
+      if (l > 1e-9) { const s = TH[v] / l; A[o] *= s; A[o + 1] *= s; A[o + 2] *= s; } else { A[o] = NR[o] * TH[v]; A[o + 1] = NR[o + 1] * TH[v]; A[o + 2] = NR[o + 2] * TH[v]; }
+    }
+  }
   /* вершины колец полос (порядок — как у ленты: 0 — верх середины, 1–3 — правый край, 4 — низ середины, 5–7 — левый) */
   const WV = new Float64Array(8 * 6);
   function wallSurface(wall, m, pos, nor, start) {
@@ -1703,14 +1817,26 @@ const Muscles = (() => {
     wallNodes(wall, m);
     wall.m = m; wallNormals(wall); wall.m = null;
     const { K, n, P, NR, TH, rows, own, datum } = wall;
-    const top = (v, out, o) => { const d = datum[v] ? TH[v] : 0; out[o] = P[v * 3] + NR[v * 3] * d; out[o + 1] = P[v * 3 + 1] + NR[v * 3 + 1] * d; out[o + 2] = P[v * 3 + 2] + NR[v * 3 + 2] * d; };
+    /* у сустава (ягодичные): сдвиг на толщину (NR · TH) сглаживается по сетке — у толстого пласта (до 3–4 см), огибающего вертел,
+       крестец и вогнутую наружную поверхность крыла, нормали соседних узлов расходятся или сходятся сильнее, чем позволяет
+       толщина, и поверхность, сдвинутая на толщину, выворачивалась складками; опорная поверхность (у кожи или на кости) — прежняя */
+    if (wall.hip) wallOffsets(wall);
+    const OF = wall.OF;
+    const top = (v, out, o) => {
+      if (OF && datum[v]) { out[o] = P[v * 3] + OF[v * 3]; out[o + 1] = P[v * 3 + 1] + OF[v * 3 + 1]; out[o + 2] = P[v * 3 + 2] + OF[v * 3 + 2]; return; }
+      const d = datum[v] ? TH[v] : 0; out[o] = P[v * 3] + NR[v * 3] * d; out[o + 1] = P[v * 3 + 1] + NR[v * 3 + 1] * d; out[o + 2] = P[v * 3 + 2] + NR[v * 3 + 2] * d;
+    };
     for (let k = 0; k < K; k++) {
       const i = wall.lines[k], order = wall.rev[k] ? ORDER_REV : ORDER, r0 = wall.r0[k], dr = wall.dir[k];
       for (let q = 0; q < n; q++) {
         /* кольцо строки q полосы: у второй, третьей… полосы линии — после колец предыдущих, строки змейкой */
         const r = (k * n + q) * 3, L = rows[r], C = rows[r + 1], Rn = rows[r + 2], v0 = (start[i] + r0 + (dr ? n - 1 - q : q)) * SIDES * 3;
         /* WV: по 6 чисел на вершину e (позиция, нормаль) */
-        const put = (e, v, depth, nx, ny, nz) => { const o = e * 6; top(v, WV, o); WV[o] -= NR[v * 3] * depth; WV[o + 1] -= NR[v * 3 + 1] * depth; WV[o + 2] -= NR[v * 3 + 2] * depth; WV[o + 3] = nx; WV[o + 4] = ny; WV[o + 5] = nz; };
+        const put = (e, v, depth, nx, ny, nz) => {
+          const o = e * 6; top(v, WV, o);
+          if (OF) { const f = TH[v] > 1e-9 ? depth / TH[v] : 0; WV[o] -= OF[v * 3] * f; WV[o + 1] -= OF[v * 3 + 1] * f; WV[o + 2] -= OF[v * 3 + 2] * f; } else { WV[o] -= NR[v * 3] * depth; WV[o + 1] -= NR[v * 3 + 1] * depth; WV[o + 2] -= NR[v * 3 + 2] * depth; }
+          WV[o + 3] = nx; WV[o + 4] = ny; WV[o + 5] = nz;
+        };
         put(0, C, 0, NR[C * 3], NR[C * 3 + 1], NR[C * 3 + 2]); put(4, C, TH[C], NR[C * 3], NR[C * 3 + 1], NR[C * 3 + 2]);
         for (const [v, e0, sgn] of [[Rn, 1, 1], [L, 7, -1]]) {
           const nx = NR[v * 3], ny = NR[v * 3 + 1], nz = NR[v * 3 + 2], t = TH[v];
