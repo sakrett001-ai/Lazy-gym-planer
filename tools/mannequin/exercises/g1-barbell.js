@@ -94,7 +94,8 @@ function hangPose(C, o) {
   const { V } = C, q = C.base(), st = o.st, half = o.half, kg = o.kg, sa = o.sa ?? 0, el = o.elbow ?? 4;
   pelvisPitch(C, q, o.theta, [0, o.hy0 ?? 90, o.hz0 ?? -8]);
   q.lumbar = [o.spine[0], 0, 0]; q.thoracic = [o.spine[1], 0, 0]; q.neck = [o.spine[2], 0, 0];
-  for (const s of S) q[s].girdle = o.girdle || [0, 4];
+  /* rhythm — плечевой пояс по ритму со смещениями (этап Д), иначе girdle — прежние углы ключицы */
+  for (const s of S) { if (o.rhythm) C.rhythm(q, s, o.rhythm); else q[s].girdle = o.girdle || [0, 4]; }
   const D = Math.hypot(armLen(C, el) + 8, 2.6) - .25;
   const barAt0 = q => { const f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5), z = o.barZ ?? gh[2] - sa; return [0, o.barY ?? gh[1] - Math.sqrt(Math.max(0, D * D - (half - Math.abs(f.P.ghL[0])) ** 2 - (gh[2] - z) ** 2)), z]; };
   let dyBar = 0;
@@ -186,10 +187,13 @@ const RDL = memo(t => {
 
 /* ---------- Тяга штанги в наклоне ---------- */
 const ROW_ST = { ax: 11, az: 0, out: 8, kneeOut: 0 };
+/* плечевой пояс сверх ритма [поднимание, протракция]: внизу гриф тянет лопатки вперёд и вниз, вверху — «сведите лопатки»
+   (подсказка каталога) и чуть опустите */
+const BBROW_G = [[0, 8], [-3, -14]];
 const BBROW = once(() => {
   const C = ctx([]);
   /* исходное: корпус наклонён (таз 44°, грудной отдел ≈ 52° от вертикали), колени согнуты, гриф висит под плечами */
-  const q = hangPose(C, { half: 25, kg: 60, st: ROW_ST, theta: 44, knee: 24, spine: [3, 5, -10], sa: 0, girdle: [2, 10] });
+  const q = hangPose(C, { half: 25, kg: 60, st: ROW_ST, theta: 44, knee: 24, spine: [3, 5, -10], sa: 0, rhythm: BBROW_G[0] });
   const L = C.axes(q, 'lumbar'), belly = C.chestPoint(q, 13);
   return { q, bar0: q._bar, bar1: C.V.add(belly, L.z, 2.4) };
 });
@@ -215,7 +219,8 @@ function ohpStand(C, o) {
   const q = C.base();
   pelvisPitch(C, q, o.theta, [0, 89, 0]);
   q.lumbar = [o.spine[0], 0, 0]; q.thoracic = [o.spine[1], 0, 0]; q.neck = [o.spine[2], 0, 0];
-  for (const s of S) q[s].girdle = [...o.girdle];
+  /* плечевой пояс — по ритму со смещениями [поднимание, протракция] (этап Д) */
+  for (const s of S) C.rhythm(q, s, o.girdle);
   let bar;
   C.balanceOver(q, [0, 0, OHP_ST.az + 5], { loads: () => [[bar || [0, 150, 8], OHP_KG]], resolve: q => { q.root.p[1] = hipHeightFor(C, q, 3, OHP_ST); placeFeet(C, q, OHP_ST); bar = o.arms(q); } });
   q._bar = bar;
@@ -223,11 +228,13 @@ function ohpStand(C, o) {
 }
 const OHP = memo(t => {
   const C = ctx([]), { V } = C;
-  const start = ohpStand(C, { theta: 0, spine: [0, 0, 0], girdle: [6, 10], arms: q => rackArms(C, q) });
+  const start = ohpStand(C, { theta: 0, spine: [0, 0, 0], girdle: [0, 6], arms: q => rackArms(C, q) });
   if (t < 1e-6) return start;
   const Zb = start._bar[2], Yr = start._bar[1], half = Math.abs(C.fk(start).P.gripL[0]);
   /* t, высота грифа (null — локаут), наклон таза, [поясница, грудной, шея], плечевой пояс */
-  const K = [[.2, Yr + 11, -2, [-2, -2, -10], [10, 8]], [.4, Yr + 24, -3, [-3, -2, -12], [16, 6]], [.6, Yr + 37, -2, [-2, -1, -7], [22, 4]], [.8, Yr + 48, -1, [-1, 0, -2], [27, 2]], [1, null, 0, [0, 0, 4], [30, 0]]];
+  /* пояс — по ритму (поворот лопатки вверх, подъём и отведение ключицы растут с подъёмом плеча); сверх него у ключиц —
+     лёгкая протракция (локти впереди грифа), к локауту она сходит на нет */
+  const K = [[.2, Yr + 11, -2, [-2, -2, -10], [0, 5]], [.4, Yr + 24, -3, [-3, -2, -12], [0, 4]], [.6, Yr + 37, -2, [-2, -1, -7], [0, 2]], [.8, Yr + 48, -1, [-1, 0, -2], [0, 1]], [1, null, 0, [0, 0, 4], [0, 0]]];
   const k = K.find(p => Math.abs(p[0] - t) < 1e-6), a = C.lerp(32, 6, t) * C.D2R, distal = [0, Math.cos(a), -Math.sin(a)];
   const pole = s => V.unit(V.add(V.add([0, -1, 0], [C.M.SIGN[s], 0, 0], C.lerp(.5, 1.1, t)), [0, 0, 1], C.lerp(.6, 0, t)));
   const lockY = q => { const f = C.fk(q); return (f.P.ghL[1] + f.P.ghR[1]) / 2 + Math.sqrt(Math.max(0, (armLen(C, 4) + 8.1) ** 2 - (half - Math.abs(f.P.ghL[0])) ** 2 - (Zb - f.P.ghL[2]) ** 2)) - 1.5; };
@@ -632,7 +639,7 @@ module.exports = {
     contacts: [...FEET, ...GRIPS('bar')],
     pose(t, C) {
       const { V } = C, e = C.ease(t), L = BBROW(), q = C.M.clone(L.q);
-      for (const s of S) q[s].girdle = [C.lerp(2, -2, e), C.lerp(10, -16, e)];
+      for (const s of S) C.rhythm(q, s, [0, 1].map(i => C.lerp(BBROW_G[0][i], BBROW_G[1][i], e)));
       const bar = [0, C.lerp(L.bar0[1], L.bar1[1], Math.pow(e, .8)), C.lerp(L.bar0[2], L.bar1[2], Math.pow(e, 1.35))];
       for (const s of S) {
         const lat = [C.M.SIGN[s], 0, 0], pole = V.unit(V.mix(V.add(V.add([0, 0, -1], [0, 1, 0], .3), lat, .55), V.add(V.add([0, 1, 0], [0, 0, -1], .7), lat, .45), e));

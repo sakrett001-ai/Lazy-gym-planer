@@ -58,19 +58,25 @@ module.exports = {
       const { V } = C, q = C.base();
       C.root(q, [0, 62, -24], [0, 0, 1], [0, 1, 0]);
       q.lumbar = [-5, 0, 0]; q.thoracic = [-9, 0, 0];
-      for (const s of S) q[s].girdle = [-4, -14];
-      C.restOn2(q, 'upperBack', 'buttocks', [0, 44, 0], [0, 1, 0], -1.2);
-      C.neckTo(q, 'headBack', [0, 44, 0], [0, 1, 0], -.5);
-      for (const s of S) {
-        const lat = C.latP(q, s), fwd = V.unit(V.add([0, 0, -1], lat, .3));
-        C.foot(q, s, V.add([0, 0, -78], lat, 27), 0, V.unit(V.add([0, .5, -1], lat, .5)), { forward: fwd });
-      }
-      const f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5), chest = C.chestPoint(q, 33);
-      const top = [0, gh[1] + 57.5, gh[2] + 2], bottom = [0, chest[1] + 1.6, chest[2]];
-      const e = C.ease(t), bar = [0, C.lerp(top[1], bottom[1], e), C.lerp(top[2], bottom[2], Math.pow(e, .8))];
-      for (const s of S) {
-        const lat = C.lat(q, s), pole = V.unit(V.add(V.add([0, -1, 0], lat, 1.15), [0, 0, -1], .55));
-        C.grip(q, s, V.add(bar, lat, 40), V.scale(lat, -1), pole, { wristExt: 12 });
+      /* «сведите и прижмите лопатки к скамье»: пояс сверх ритма — опущен и сведён всё движение */
+      for (const s of S) C.rhythm(q, s, [-5, -14]);
+      /* верх — над плечевыми суставами на прямых руках. Плечевые суставы и кожа надплечий идут за лопатками (ритм пояса по
+         подъёму рук), поэтому спина на скамье, стопы и хват ставятся дважды — второй раз с руками у грифа */
+      const e = C.ease(t);
+      for (const pass of [0, 1]) {
+        C.restOn2(q, 'upperBack', 'buttocks', [0, 44, 0], [0, 1, 0], -1.2);
+        C.neckTo(q, 'headBack', [0, 44, 0], [0, 1, 0], -.5);
+        for (const s of S) {
+          const lat = C.latP(q, s), fwd = V.unit(V.add([0, 0, -1], lat, .3));
+          C.foot(q, s, V.add([0, 0, -78], lat, 27), 0, V.unit(V.add([0, .5, -1], lat, .5)), { forward: fwd });
+        }
+        const f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5), chest = C.chestPoint(q, 33);
+        const top = [0, gh[1] + 57.5, gh[2] + 2], bottom = [0, chest[1] + 1.6, chest[2]];
+        const bar = [0, C.lerp(top[1], bottom[1], e), C.lerp(top[2], bottom[2], Math.pow(e, .8))];
+        for (const s of S) {
+          const lat = C.lat(q, s), pole = V.unit(V.add(V.add([0, -1, 0], lat, 1.15), [0, 0, -1], .55));
+          C.grip(q, s, V.add(bar, lat, 40), V.scale(lat, -1), pole, { wristExt: 12, allowShort: !pass });
+        }
       }
       return q;
     }
@@ -150,15 +156,19 @@ module.exports = {
       const { V } = C, e = C.ease(t), bar = [0, 224, -67], q = C.base();
       C.root(q, [0, 100, bar[2] - 2], [0, 1, 0], [0, 0, 1]);
       q.thoracic = [C.lerp(0, -14, e), 0, 0]; q.lumbar = [C.lerp(-2, -4, e), 0, 0]; q.neck = [C.lerp(0, -16, e), 0, 0];
-      for (const s of S) { q[s].hip = [C.lerp(14, 22, e), 4, 4]; q[s].knee = C.lerp(20, 28, e); q[s].ankle = [-30, 0]; q[s].girdle = [C.lerp(28, -4, e), C.lerp(4, -12, e)]; }
-      /* корпус: плечевые суставы под перекладиной на высоте вытянутых рук; сверху — перекладина у верха груди */
-      const f0 = C.fk(q), ghMid = V.mix(f0.P.ghL, f0.P.ghR, .5);
+      /* «вис на прямых руках, лопатки опущены; начните с опускания лопаток» — пояс сверх ритма опущен всё движение,
+         к верху лопатки ещё и сведены */
+      for (const s of S) { q[s].hip = [C.lerp(14, 22, e), 4, 4]; q[s].knee = C.lerp(20, 28, e); q[s].ankle = [-30, 0]; C.rhythm(q, s, [C.lerp(-6, -8, e), C.lerp(0, -12, e)]); }
+      /* корпус: плечевые суставы под перекладиной на высоте вытянутых рук; сверху — перекладина у верха груди. Плечевые
+         суставы идут за лопатками (ритм пояса), поэтому руки к перекладине ставятся дважды */
       const hang = [0, bar[1] - 60.3, bar[2] - 1], top = [0, bar[1] - 12.5, bar[2] - 9];
-      /* по пути вверх корпус чуть уходит назад: лицо проходит перед перекладиной, не задевая её носом и подбородком */
-      C.rootAtShoulders(q, V.add(V.mix(hang, top, e), [0, 0, -1], 4 * Math.sin(Math.PI * e)));
-      for (const s of S) {
-        const lat = C.lat(q, s), pole = V.unit(V.add(V.add([0, -1, 0], lat, 1.0), [0, 0, 1], .25));
-        C.grip(q, s, V.add(bar, lat, 33), V.scale(lat, -1), pole);
+      for (const pass of [0, 1]) {
+        /* по пути вверх корпус чуть уходит назад: лицо проходит перед перекладиной, не задевая её носом и подбородком */
+        C.rootAtShoulders(q, V.add(V.mix(hang, top, e), [0, 0, -1], 8 * Math.sin(Math.PI * e)));
+        for (const s of S) {
+          const lat = C.lat(q, s), pole = V.unit(V.add(V.add([0, -1, 0], lat, 1.0), [0, 0, 1], .25));
+          C.grip(q, s, V.add(bar, lat, 33), V.scale(lat, -1), pole, { allowShort: !pass });
+        }
       }
       return q;
     }

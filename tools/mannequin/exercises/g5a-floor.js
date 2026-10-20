@@ -715,13 +715,17 @@ module.exports = {
       const bend = t < .5 ? 5 : C.lerp(5, 72, C.ease((t - .5) / .5));
       for (const s of S) {
         const g = C.M.SIGN[s], up = 1 - dip;
-        q[s].girdle = [C.lerp(0, -4, up), C.lerp(-4, -15, up)];
-        const gh = C.fk(q).P['gh' + s], ua = V.unit([g * Math.sin(ang) * Math.cos(lift), Math.sin(lift), Math.cos(ang) * Math.cos(lift)]);
-        const E = V.add(gh, ua, C.M.B.ua);
-        /* предплечье: от продолжения плеча поворачивается к голове (+Z) в горизонтальной плоскости на угол bend */
-        const fAng = ang - bend * C.D2R, fa = V.unit([g * Math.sin(fAng) * Math.cos(lift), Math.sin(lift) * (bend > 10 ? 0 : 1), Math.cos(fAng) * Math.cos(lift)]);
-        const pole = bend > 10 ? V.unit(V.add(V.scale(fa, -1), ua, 1)) : [0, 1, 0];
-        C.armTo(q, s, V.add(E, fa, C.M.B.fa), V.unit(V.add(pole, [0, 1, 0], bend > 10 ? 0 : 1)), { pron: 0, mode: 'fist' });
+        /* «лопатки сводите в каждом», плечи не к ушам: пояс сверх ритма сведён и опущен, когда руки подняты */
+        C.rhythm(q, s, [C.lerp(-2, -8, up), C.lerp(0, -8, up)]);
+        /* плечевой сустав идёт за лопаткой (ритм пояса): руку ставим дважды, от плечевого сустава поднятой руки */
+        for (const pass of [0, 1, 2, 3]) {
+          const gh = C.fk(q).P['gh' + s], ua = V.unit([g * Math.sin(ang) * Math.cos(lift), Math.sin(lift), Math.cos(ang) * Math.cos(lift)]);
+          const E = V.add(gh, ua, C.M.B.ua);
+          /* предплечье: от продолжения плеча поворачивается к голове (+Z) в горизонтальной плоскости на угол bend */
+          const fAng = ang - bend * C.D2R, fa = V.unit([g * Math.sin(fAng) * Math.cos(lift), Math.sin(lift) * (bend > 10 ? 0 : 1), Math.cos(fAng) * Math.cos(lift)]);
+          const pole = bend > 10 ? V.unit(V.add(V.scale(fa, -1), ua, 1)) : [0, 1, 0];
+          C.armTo(q, s, V.add(E, fa, C.M.B.fa), V.unit(V.add(pole, [0, 1, 0], bend > 10 ? 0 : 1)), { pron: 0, mode: 'fist', allowShort: pass < 3 });
+        }
       }
       return q;
     }
@@ -740,7 +744,8 @@ module.exports = {
       const ang = C.lerp(8, 168, t) * C.D2R, lift = SNOW.lift * C.D2R;
       for (const s of S) {
         const g = C.M.SIGN[s];
-        q[s].girdle = [-6, -10];
+        /* «лопатки опущены всё время»: пояс сверх ритма опущен и чуть сведён (руки над ковриком) */
+        C.rhythm(q, s, [-8, -6]);
         const dir = [g * Math.sin(ang) * Math.cos(lift), Math.sin(lift), -Math.cos(ang) * Math.cos(lift)];
         armPalmFacing(C, q, s, dir, [0, -1, 0], { el: 4 });
       }

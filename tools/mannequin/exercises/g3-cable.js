@@ -412,7 +412,8 @@ module.exports = {
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = C.M.clone(BFP().q);
-      for (const s of S) q[s].girdle = [C.lerp(4, 6, e), C.lerp(16, -16, e)];
+      /* пояс сверх ритма: в начале лопатки вытянуты к блоку, в конце «лопатки сведены» без подъёма плеч (ошибка в каталоге) */
+      for (const s of S) C.rhythm(q, s, [C.lerp(-2, -4, e), C.lerp(14, -8, e)]);
       q.neck = [C.lerp(-4, 2, e), 0, 0];
       const f = C.fk(q), head = f.P.head, ghm = V.mix(f.P.ghL, f.P.ghR, .5);
       const g0 = [0, ghm[1] + 9, ghm[2] + 53], g1 = [0, head[1] + 1, head[2] + 5];
@@ -822,7 +823,8 @@ module.exports = {
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = C.M.clone(FP().q), P = pulleyOf(FP_TOWER);
-      for (const s of S) q[s].girdle = [C.lerp(4, 6, e), C.lerp(16, -16, e)];
+      /* пояс сверх ритма: в начале лопатки вытянуты к блоку, в конце «лопатки сведены» без подъёма плеч (ошибка в каталоге) */
+      for (const s of S) C.rhythm(q, s, [C.lerp(-2, -4, e), C.lerp(14, -8, e)]);
       q.neck = [C.lerp(-4, 2, e), 0, 0];
       const f = C.fk(q), head = f.P.head, ghm = V.mix(f.P.ghL, f.P.ghR, .5);
       const g0 = [0, ghm[1] + 9, ghm[2] + 53], g1 = [0, head[1] + 1, head[2] + 4];
