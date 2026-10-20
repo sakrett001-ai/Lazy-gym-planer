@@ -4,10 +4,10 @@ const {loadModel}=require('./biomechanics-audit');
 const model=loadModel({fullApp:true});
 const {muscleFrame,muscleSurfaces,visibleMuscleSurfaces,motionFrame,muscleColor}=model.get('({muscleFrame,muscleSurfaces,visibleMuscleSurfaces,motionFrame,muscleColor})');
 /* три исходных профиля ригов (с поверхностями мышц на схеме rig3d) и профили прицельных упражнений каталога на манекене */
-const ORIGINAL=['bbbench','latpull','squat'],TARGETED=['bandextrot','cableadduct','cableextrot','copenhagen','copenhagenknee'];
+const ORIGINAL=['bbbench','latpull','squat'],TARGETED=['bandextrot','cableadduct','cableextrot','copenhagen','copenhagenknee'],ECCENTRIC=['nordic'];
 const authored=model.EX.filter(ex=>ex.anim.muscleProfile),pilot=authored.filter(ex=>ORIGINAL.includes(ex.id));
 test('three original hand-authored profiles remain intact alongside the catalog',()=>{
- assert.deepEqual(Array.from(authored,ex=>ex.id).sort(),[...ORIGINAL,...TARGETED].sort());
+ assert.deepEqual(Array.from(authored,ex=>ex.id).sort(),[...ORIGINAL,...TARGETED,...ECCENTRIC].sort());
  assert.deepEqual(Array.from(pilot,ex=>ex.id).sort(),ORIGINAL);
  for(const ex of pilot){
   const p=ex.anim.muscleProfile;
@@ -102,5 +102,20 @@ test('targeted adductor and rotator-cuff profiles drive the catalog colours',()=
   }
   const up=muscleFrame(ex.anim,.5,0).values,down=muscleFrame(ex.anim,.5,2).values,main=ex.pri[0];
   assert(up[main]>down[main]&&up[main]>.6,id+' main muscle is bright in the working phase');
+ }
+});
+/* уступающий акцент (этап А аудита анатомии): скандинавские сгибания — поза 0→1 поднимается толчком рук, главная работа
+   задней поверхности бедра — медленное опускание 1→0: ярче всего горит в нём, края фаз общие, источник — по DOI */
+test('the Nordic curl profile is brightest while lowering',()=>{
+ for(const id of ECCENTRIC){
+  const ex=model.EX.find(e=>e.id===id),p=ex.anim.muscleProfile,c=ex.anim.catalogProfile;
+  assert.equal(ex.anim.eccFirst,false,id+': the pose rises first, the lowering is the return');
+  assert(p.sources.length>0&&p.sources.every(([t,u])=>t.length>10&&/^https:\/\/doi\.org\//.test(u)),id+' cites the study by DOI');
+  for(const m of ex.pri){assert.equal(p.muscles[m].role,'primary');assert.equal(c.muscles[m].role,'primary');}
+  for(const m of ex.sec)assert(p.muscles[m],id+' profiles its helper '+m);
+  for(const v of Object.values(p.muscles)){assert.equal(v.concentric[0],v.eccentric[0]);assert.equal(v.concentric[2],v.eccentric[2]);}
+  const up=muscleFrame(ex.anim,.5,0),down=muscleFrame(ex.anim,.5,2),main=ex.pri[0];
+  assert.equal(up.phase,'concentric');assert.equal(down.phase,'eccentric');
+  assert(down.values[main]>up.values[main]+.2&&down.values[main]>.8,id+' main muscle is brightest while lowering');
  }
 });

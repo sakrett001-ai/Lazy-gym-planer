@@ -13,9 +13,16 @@ const ARC_STEP=1.5;   /* шаг дуг огибания, см */
 export const MUSCLE_REST='#b98c86';
 /* часть мышцы → учебная область профиля (src/js/09d-catalog-muscles.js, MUSCLE_REGIONS); прочие берут значение группы */
 export const PART_REGION={pecm1:'pec_clavicular',pecm2:'pec_sternal',pecm3:'pec_costal',trilong:'tri_long',trilat:'tri_lateral',trimed:'tri_medial',
- biclong:'bi_long',bicshort:'bi_short',recfem:'quad_rectus',vaslat:'quad_lateral',vasmed:'quad_medial',vasint:'quad_deep',bflh:'ham_lateral',bfsh:'ham_lateral',
+ biclong:'bi_long',bicshort:'bi_short',recfem:'quad_rectus',vaslat:'quad_lateral',vasmed:'quad_medial',vasint:'quad_deep',bflh:'ham_lateral',
  semimem:'ham_medial',semiten:'ham_medial',gasmed:'calf_medial',gaslat:'calf_lateral',soleus:'soleus',glmax:'glute_max',glmed:'glute_lateral',glmin:'glute_lateral',
  trapsup:'trap_upper',trapmid:'trap_mid'};
+/* этап А аудита анатомии 4.53.0 (цвет по фазам): части, которые в упражнении работают иначе, чем их группа, — свои области
+   (09d-catalog-muscles.js, MUSCLE_REGIONS, REGION_FACTORS): нижняя трапециевидная и поднимающая лопатку, короткая головка
+   двуглавой бедра, сгибатели и разгибатели предплечья и плечелучевая, наружная и внутренняя косые, части манжеты */
+Object.assign(PART_REGION,{trapinf:'trap_lower',levscap:'lev_scap',bfsh:'ham_short',eo:'obl_ext',io:'obl_int',pecmin:'pec_minor',
+ supsp:'cuff_sup',infsp:'cuff_ext',tmin:'cuff_ext',subsc:'cuff_int',brd:'brachiorad',
+ fcr:'forearm_flex',fcu:'forearm_flex',pl:'forearm_flex',fds:'forearm_flex',fdp:'forearm_flex',fpl:'forearm_flex',pt:'forearm_flex',pq:'forearm_flex',
+ ecrl:'forearm_ext',ecrb:'forearm_ext',ecu:'forearm_ext',edc:'forearm_ext',edm:'forearm_ext',eip:'forearm_ext',epl:'forearm_ext',epb:'forearm_ext',apl:'forearm_ext',sup:'forearm_ext'});
 const REGION_PARENTS=new WeakMap();
 function regionsOf(regions){
  if(!regions)return new Map();let m=REGION_PARENTS.get(regions);if(m)return m;m=new Map();

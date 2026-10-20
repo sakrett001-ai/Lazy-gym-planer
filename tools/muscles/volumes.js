@@ -128,11 +128,22 @@ const WARD_OF = { vaslat: 'vaslat', vasint: 'vasint', vasmed: 'vasmed', tibant: 
    латеральная головка трёхглавой — выше борозды лучевого нерва, медиальная — ниже. */
 const ORIGIN = { vaslat: -4, vasint: -9, vasmed: -9, soleus: -4, tibant: -4, edl: -4, perlong: -4, tibpost: -6, fdl: -10,
   perbrev: -16, fhl: -15, ehl: -14, BRA: -13, TRIlat: -5, TRImed: -11 };
+/* Дистальное сухожилие четырёхглавой (этап А аудита анатомии 4.53.0, находка 9). Путь прямой и широких мышц бедра в модели
+   ног идёт через надколенник к бугристости большеберцовой кости, а доля брюшка у широких — по длине мышцы у Ward (у
+   медиальной и промежуточной она длиннее пути, доля упиралась в B_MAX): сухожилие у колена было 2,8 см — брюшко ложилось
+   на надколенник и связку надколенника и в сгибании колена выходило «клювом» вперёд. Мышечных волокон в надколеннике и
+   связке нет (Gray's Anatomy: надколенник — сесамовидная кость в сухожилии четырёхглавой), а над надколенником у каждой
+   части своё сухожилие (fixtures/anatomy.json, quadtendon — препараты): прямая бедра — 8,3 см (Krebs и др., 2019;
+   Strauss и др., 2021 — 8,7), медиальная широкая — 2,5 (Smith и др., 2009: 1,4–3,5), латеральная и промежуточная — 3,3
+   (Grob и др., 2016). Поэтому дистальное сухожилие на рисунке не короче пути от первой точки на надколеннике до
+   прикрепления (надколенник и связка; pack.js считает в нейтральной позе) плюс сухожилие над надколенником. */
+const QUAD_TENDON = A.quadtendon.above;
 const B_MIN = .3, B_MAX = .92;
 const base = n => n.replace(/_[rl]$/, '');
 
-/* stature, mass — рост и масса манекена; lengths — длины путей в нейтральной позе (см) по имени линии */
-function volumes(names, fmax, lengths, { stature, mass }, ends = {}) {
+/* stature, mass — рост и масса манекена; lengths — длины путей в нейтральной позе (см) по имени линии; patella — у мышц
+   четырёхглавой длина пути от первой точки на надколеннике до прикрепления (см, QUAD_TENDON) */
+function volumes(names, fmax, lengths, { stature, mass }, ends = {}, patella = {}) {
   const k = stature * mass / (A.mri.height * A.mri.mass), kw = stature / A.ward2009.height, out = {};
   const belly = n => {
     const b0 = base(n), row = BELLY.find(([re]) => re.test(b0));
@@ -195,9 +206,14 @@ function volumes(names, fmax, lengths, { stature, mass }, ends = {}) {
   const missing = names.filter(n => !assigned.has(n));
   if (missing.length) throw Error('мышцы без объёма: ' + missing.join(', '));
   for (const n of names) {
-    const { b, s } = belly(n), L = lengths[n], t = L * (1 - b);
-    Object.assign(out[n], { t0: t * s, t1: t * (1 - s), b });
+    const { b, s } = belly(n), L = lengths[n], t = L * (1 - b), q = QUAD_TENDON[base(n)];
+    let t0 = t * s, t1 = t * (1 - s);
+    if (q !== undefined) {
+      if (!(patella[n] > 0)) throw Error('нет пути через надколенник: ' + n);
+      t1 = Math.max(t1, patella[n] + q);
+    }
+    Object.assign(out[n], { t0, t1, b: 1 - (t0 + t1) / L });
   }
   return out;
 }
-module.exports = { volumes, GROUPS, NECK, SPINALIS, PART_SHARE, FAN, BELLY, ORIGIN, source };
+module.exports = { volumes, GROUPS, NECK, SPINALIS, PART_SHARE, FAN, BELLY, ORIGIN, QUAD_TENDON, source };
