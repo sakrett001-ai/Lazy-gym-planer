@@ -23,7 +23,7 @@ const P = {
      пластинками у мужчин ≈ 90° (Gray's Anatomy, 1918, с. 1074; у Rawal — 74 ± 8°): берётся 90° — у манекена между
      позвонками и кожей шеи нет места для более глубокого (74° — на 0,35 см глубже). Верхняя вырезка — 0,9 см,
      толщина пластинки — 0,25; верхний рог — 1,5 см, нижний — 0,7 (Gray's: рога короткие, нижний — к перстневидному). */
-  thyroid: { height: 2.7, lamina: 3.7, angle: 90, notch: .9, thick: .25, crest: .25, supHorn: 1.5, infHorn: .7, hornR: .2 },
+  thyroid: { height: 2.7, lamina: 3.7, angle: 86, notch: .9, thick: .25, crest: .25, recess: .4, bulge: .1, supHorn: 1.5, infHorn: .7, hornR: .2 },
   /* Перстневидный хрящ. Kim I. S., Song C. H., Korean J Phys Anthropol 2017, 30(1): 15–20 (33 мужчины): высота пластинки
      22,3 мм, высота дуги 7,1 мм, переднезадний размер сверху 28,5 мм, внутренний поперечный сверху 17,2 мм, внутренний
      переднезадний снизу 18,8 мм. Стенка: дуга — 0,25 см, бока — 0,3, пластинка — 0,6 (переднезадний снаружи — 2,73). */
@@ -39,11 +39,11 @@ const P = {
 
 /* ---------- посадка в рамке шеи (см) ---------- */
 const POS = {
-  hyoid: { y: 1.9, zf: 11.0 },          // тело: середина по высоте, передняя поверхность
-  thyroid: { yn: 0, zp: 8.55, tilt: 0 },   // вершина вырезки на выступе (адамово яблоко)
-  cricoid: { y0: -3.25, z: 7.05, tilt: 0 },  // низ дуги спереди; центр кольца по глубине
+  hyoid: { y: 1.9, zf: 11.0, wh: +(process.env.AW_WHH || .92) },          // тело: середина по высоте, передняя поверхность
+  thyroid: { yn: 0, zp: 8.55, wh: +(process.env.AW_WHT || .15) },   // вершина вырезки на выступе (адамово яблоко)
+  cricoid: { y0: -3.25, z: 7.25, wh: +(process.env.AW_WHC || 0) },  // низ дуги спереди; центр кольца по глубине
   /* ось трахеи: от центра низа перстневидного хряща к бифуркации — опорные точки [y, z], между ними — сплайн */
-  axis: [[-3.25, 7.05], [-4.5, 7.25], [-6, 7.1], [-7.5, 6.75], [-9.5, 6.15], [-11.6, 5.55]],
+  axis: [[-3.25, 7.25], [-4.5, 7.35], [-6, 7.1], [-7.5, 6.75], [-9.5, 6.15], [-11.6, 5.55]],
   /* доля поворота к грудной клетке у сегментов трахеи: 0 выше y = -1, 1 ниже y = -6.5 */
   blend: [-1, -6.5],
 };
@@ -107,22 +107,33 @@ function hyoid() {
   return m;
 }
 
-/* ---------- щитовидный хрящ ---------- */
+/* ---------- щитовидный хрящ ----------
+   Две пластинки, сросшиеся спереди под углом angle (у вырезки) в гребень — выступ гортани; книзу угол раскрывается (гребень
+   уходит назад на recess: выступ — у верхнего края, Gray's). Верхний край: глубокая вырезка у гребня (notch), дальше выпуклый
+   к заднему краю; нижний край — неглубокая нижняя вырезка посередине и нижний бугорок на трети ширины. Задние края — вертикальны;
+   от верхнего угла — верхний рог (вверх и чуть назад), от нижнего — нижний (вниз, к суставу с перстневидным хрящом).
+   Пластинка чуть выпукла наружу (bulge). */
 function thyroid() {
-  const T = P.thyroid, { yn, zp } = POS.thyroid, m = Mesh(), h = T.angle / 2 * D2R, NU = 14, NV = 7;
-  /* пластинки — одна изогнутая пластина u ∈ [−lamina, lamina] (u < 0 — правая), скруглённая по гребню радиусом crest */
-  const au = u => Math.sqrt(u * u + T.crest * T.crest) - T.crest;
-  const at = (u, v) => [Math.sign(u) * au(u) * Math.sin(h) * (Math.abs(u) > 1e-9 ? 1 : 0) + (Math.abs(u) <= 1e-9 ? 0 : 0), yn + v, zp - au(u) * Math.cos(h)];
-  const X = (u, v) => { const p = at(u, v); p[0] = Math.sign(u) * au(u) * Math.sin(h); return p; };
-  const top = u => { const t = Math.abs(u) / 1.0; return T.notch * smooth(t) + .1 * smooth((Math.abs(u) - 2.5) / 1.2); };  // вырезка у гребня
-  const bot = u => -(T.height - T.notch) + .25 * smooth((Math.abs(u) - 2.6) / 1.1);                                     // нижний край, сзади чуть выше
-  const nrm = u => { const e = 1e-3, a = X(u - e, 0), b = X(u + e, 0); const du = unit(sub(b, a)); return unit(cross([0, 1, 0], du)); };
+  const T = P.thyroid, { yn, zp } = POS.thyroid, m = Mesh(), h = T.angle / 2 * D2R, NU = 10, NV = 6;
+  const xb = T.lamina * Math.sin(h), zb = zp - T.lamina * Math.cos(h);          /* задний край (у верхнего угла) */
+  const top = u => { const a = Math.abs(u); return T.notch * smooth(a / .9) + .2 * Math.sin(Math.PI * Math.min(1, a / T.lamina)) - .1 * smooth((a - 3.0) / .7); };
+  const bot = u => { const a = Math.abs(u); return -(T.height - T.notch) + .18 * (1 - smooth(a / .7)) - .08 * Math.sin(Math.PI * Math.min(1, a / 2.4)) + .3 * smooth((a - 2.6) / 1.1); };
+  /* гребень: на высоте v (0 — вершина вырезки) — уход назад от выступа */
+  const crestZ = v => zp - T.recess * smooth(-v / (T.height - T.notch));
+  const au = u => Math.sqrt(u * u + T.crest * T.crest) - T.crest, A0 = au(T.lamina);
+  const X = (u, v) => {
+    const f = au(u) / A0, g = Math.sign(u), cz = crestZ(v);
+    /* от гребня к заднему краю — по прямой; выпуклость наружу посередине пластинки */
+    const x = g * xb * f, z = cz + (zb - cz) * f, nx = g * Math.cos(h), nz = Math.sin(h), b = T.bulge * Math.sin(Math.PI * f);
+    return [x + nx * b, yn + v, z + nz * b];
+  };
+  const nrm = (u, v) => { const e = 1e-3, a = X(u - e, v), b = X(u + e, v), c = X(u, v + e), d = X(u, v - e); return unit(cross(sub(c, d), sub(b, a))); };
   part(m, () => {
     const us = Array.from({ length: 2 * NU + 1 }, (_, i) => -T.lamina + 2 * T.lamina * i / (2 * NU));
     const O = [], I = [];
     for (const u of us) {
-      const n = nrm(u), rowO = [], rowI = [];
-      for (let j = 0; j <= NV; j++) { const v = bot(u) + (top(u) - bot(u)) * j / NV, p = X(u, v); rowO.push(vtx(m, p)); rowI.push(vtx(m, sub(p, mul(n, T.thick)))); }
+      const rowO = [], rowI = [];
+      for (let j = 0; j <= NV; j++) { const v = bot(u) + (top(u) - bot(u)) * j / NV, p = X(u, v), n = nrm(u, v); rowO.push(vtx(m, p)); rowI.push(vtx(m, sub(p, mul(n, T.thick)))); }
       O.push(rowO); I.push(rowI);
     }
     const q = (a, b, c, d) => m.f.push(a, b, c, a, c, d);
@@ -130,20 +141,19 @@ function thyroid() {
     for (let i = 0; i < us.length - 1; i++) { q(O[i][0], I[i][0], I[i + 1][0], O[i + 1][0]); q(O[i][NV], O[i + 1][NV], I[i + 1][NV], I[i][NV]); }
     for (const i of [0, us.length - 1]) for (let j = 0; j < NV; j++) { if (i === 0) q(O[i][j], O[i][j + 1], I[i][j + 1], I[i][j]); else q(O[i][j], I[i][j], I[i][j + 1], O[i][j + 1]); }
   });
-  /* рога — от задних углов пластинки: верхний вверх и чуть назад, нижний вниз (к суставу с перстневидным) */
   for (const g of [1, -1]) {
-    const u = g * (T.lamina - .12), n = nrm(u), mid = t => sub(X(u, t), mul(n, T.thick / 2));
-    const s0 = mid(top(u) - .3), s1 = add(mid(top(u)), [0, T.supHorn, -.25]);
+    const u = g * (T.lamina - .1), mid = v => sub(X(u, v), mul(nrm(u, v), T.thick / 2));
+    const s0 = mid(top(u) - .25), s1 = add(mid(top(u)), [-g * .15, T.supHorn, -.3]);
     tube(m, [s0, mix(s0, s1, .5), s1], { rw: s => T.hornR * (1 - .35 * s), rh: s => T.hornR * (1 - .35 * s), K: 8 });
-    const i0 = mid(bot(u) + .3), i1 = add(mid(bot(u)), [0, -T.infHorn, -.1]);
-    tube(m, [i0, mix(i0, i1, .5), i1], { rw: s => T.hornR * (1 - .25 * s), rh: s => T.hornR * (1 - .25 * s), K: 8 });
+    const i0 = mid(bot(u) + .25), i1 = add(mid(bot(u)), [-g * .1, -T.infHorn, -.05]);
+    tube(m, [i0, mix(i0, i1, .5), i1], { rw: s => T.hornR * (1 - .2 * s), rh: s => T.hornR * (1 - .2 * s), K: 8 });
   }
   return m;
 }
 
 /* ---------- перстневидный хрящ ---------- */
 function cricoid() {
-  const C = P.cricoid, { y0, z } = POS.cricoid, m = Mesh(), N = 40;
+  const C = P.cricoid, { y0, z } = POS.cricoid, m = Mesh(), N = 32;
   part(m, () => {
     const rings = [];
     for (let i = 0; i < N; i++) {
@@ -188,14 +198,14 @@ function frameAt(A, s) {
 }
 const onFrame = (F, x, z) => add(F.o, add(mul(F.left, x), mul(F.fwd, z)));
 /* стенка трахеи между долями оси s0…s1 (замкнутая трубка) */
-function wall(m, A, s0, s1, K = 28) {
-  const n = Math.max(2, Math.ceil((s1 - s0) / .25)), rings = [];
+function wall(m, A, s0, s1, K = 18) {
+  const n = Math.max(2, Math.ceil((s1 - s0) / .3)), rings = [];
   for (let i = 0; i <= n; i++) { const F = frameAt(A, s0 + (s1 - s0) * i / n); rings.push(Array.from({ length: K }, (_, k) => { const [x, z] = contour(2 * Math.PI * k / K, -P.trachea.wall); return onFrame(F, x, z); })); }
   part(m, () => loft(m, rings));
 }
 /* хрящевое полукольцо с серединой на доле s (высота ring, толщина ringT, дуга ±arc°) */
 function ring(m, A, s, { h = P.trachea.ring, t = P.trachea.ringT, arc = P.trachea.arc } = {}) {
-  const N = 24, F0 = frameAt(A, s - h / 2), F1 = frameAt(A, s + h / 2), loops = [];
+  const N = 14, F0 = frameAt(A, s - h / 2), F1 = frameAt(A, s + h / 2), loops = [];
   for (let i = 0; i <= N; i++) {
     const f = (-arc + 2 * arc * i / N) * D2R, [xi, zi] = contour(f, -P.trachea.wall), [xo, zo] = contour(f, t);
     loops.push([onFrame(F0, xi, zi), onFrame(F0, xo, zo), onFrame(F1, xo, zo), onFrame(F1, xi, zi)]);
@@ -243,9 +253,9 @@ function trachea() {
 function build() {
   const out = [];
   const push = (name, m, extra) => out.push({ name, side: '', seg: 'airway', ...extra, v: m.v.map(x => Math.round(x * 100) / 100), f: m.f });
-  push('hyoid', hyoid(), { wh: .4 });
-  push('thyroid', thyroid(), { wh: .1 });
-  push('cricoid', cricoid(), {});
+  push('hyoid', hyoid(), { wh: POS.hyoid.wh });
+  push('thyroid', thyroid(), { wh: POS.thyroid.wh });
+  push('cricoid', cricoid(), POS.cricoid.wh ? { wh: POS.cricoid.wh } : {});
   for (const t of trachea()) push(t.name, t.m, t.wt ? { wt: t.wt } : {});
   return out;
 }
