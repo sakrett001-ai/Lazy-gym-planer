@@ -22,8 +22,9 @@ test('all poses and cameras satisfy declared geometry and contact constraints', 
   assert.equal(r.stats.exercises,151);
   assert.equal(r.stats.poses,151*101);
   assert.equal(r.stats.cameraPoses,29*101);
-  /* три исходных профиля ригов и пять профилей прицельных упражнений на приводящие и манжету (09b-muscle-profiles.js) */
-  assert.equal(r.stats.muscleProfiles,8);
+  /* три исходных профиля ригов, пять профилей прицельных упражнений на приводящие и манжету и уступающий акцент
+     скандинавских сгибаний (09b-muscle-profiles.js) */
+  assert.equal(r.stats.muscleProfiles,9);
   assert.equal(r.stats.musclePoses,3*101);
   assert.deepEqual(r.failures,[]);
   assert(r.warnings.some(f => f.exercise === 'invrow' && f.rule.startsWith('projected-elbow')));
