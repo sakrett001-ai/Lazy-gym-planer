@@ -379,7 +379,8 @@ test('ribbons: broad flat muscles are drawn as ribbons of neighbouring lines, in
   /* какие мышцы — ленты (README, «Ленты»: Gray's Anatomy, OpenStax A&P 2e — плоские, веерные, четырёхугольные пласты) */
   /* задняя дельтовидная — трубки: её линии у головки плеча при отведении и руке над головой перекрещиваются (README);
      передняя зубчатая и наружная косая (ленты 4.51.0–4.53.0) с этапа Б — стенки по поверхности тела (тесты стенок ниже) */
-  const EXPECT = { pecmaj: 7, lat: 6, trap: 13, infsp: 3, rhomb: 4, glmax: 3, glmed: 3 };
+  /* большая и средняя ягодичные с этапа В — пласты у сустава (стенки, тесты ниже) */
+  const EXPECT = { pecmaj: 7, lat: 6, trap: 13, infsp: 3, rhomb: 4 };
   for (const side of ['R', 'L']) assert.deepEqual(Object.fromEntries(bound.fans.filter(f => f.side === side).map(f => [f.key, f.K])), EXPECT, side);
   const seen = new Set();
   for (const fan of bound.fans) {
@@ -841,6 +842,12 @@ const WB = require('./muscles/walls.js'), WCX = WB.context(L.M, L.Skeleton, Musc
 const WALL_POSES = [['neutral', 0], ['crunch', 1], ['cablecrunch', 1], ['bicycle', 0], ['bicycle', .5], ['sidebend', 1], ['cablewood', 0], ['cablewood', 1], ['ohp', 1],
   ['pushup', 0], ['bbbench', .5], ['latpull', .5], ['pullover', 0], ['ytw', 0], ['shrug', 1], ['facepull', 0], ['deadlift', 0], ['hollow', .5], ['superman', 1]];
 const WALL_KEYS = { rectabd: 1, eo: 8, io: 6, serrant: 12, pecmin: 4 };
+/* этап В: спина (столбы выпрямителя, многораздельные, квадратная поясницы) и таз (ягодичные) — число полос; у длиннейшей в столбе и
+   грудная, и поясничная части, у ягодичных по 2–3 полосы на линию модели */
+const BACK_KEYS = { mf: 25, spinalis: 4, ltpt: 26, il: 12, ql: 18 }, HIP_KEYS = { glmax: 7, glmed: 6, glmin: 3 }, ALL_WALLS = { ...WALL_KEYS, ...BACK_KEYS, ...HIP_KEYS };
+const WALL_PARTS_OF = { ltpt: ['ltpt', 'ltpl'] }, partsOf = key => WALL_PARTS_OF[key] || [key];
+/* кольцо строки q полосы k стенки (у второй, третьей… полосы линии — после колец предыдущих, строки змейкой) */
+const wRing = (w, k, q) => w.r0[k] + (w.dir[k] ? w.n - 1 - q : q);
 const WRI = skel.bones.findIndex(b => b.name === 'ribcage');
 /* глубина точки в грудной клетке: насколько точка ближе к оси оболочки рёбер (наружная поверхность рёбер и межрёберных — мелкая
    сетка walls.js, 0,5° × 0,25 см), чем сама оболочка, см (≤ 0 — снаружи); −∞ — рёбер на этом азимуте и высоте нет */
@@ -857,7 +864,8 @@ function wallStats(pos, wall) {
   const st = { seams: 0, shared: 0, twist: 1, twistAt: '' };
   for (let k = 0; k < wall.K; k++) {
     const i = wall.lines[k]; let prevN = null;
-    for (let r = 0; r < wall.n; r++) {
+    for (let q = 0; q < wall.n; q++) {
+      const r = wRing(wall, k, q);
       /* кольцо тоньше 1 мм посередине (пласт, сжатый между кожей и рёбрами до 0,3 своей толщины, — у рёберной дуги при
          скручивании с поворотом) — направление «верх минус низ» не определено: не в счёт */
       const D = rSub(rV(pos, i, r, 0), rV(pos, i, r, 4)); if (Math.hypot(...D) < .1) { prevN = null; continue; }
@@ -866,9 +874,9 @@ function wallStats(pos, wall) {
       prevN = N;
     }
   }
-  for (let k = 0; k + 1 < wall.K; k++) for (let r = 0; r < wall.n; r++) {
-    const a = wall.lines[k], b = wall.lines[k + 1]; let same = 0; st.seams++;
-    for (let j = 0; j < RSIDES; j++) { const p = rV(pos, a, r, j); for (let l = 0; l < RSIDES; l++) if (Math.hypot(...rSub(p, rV(pos, b, r, l))) < 1e-9) { same++; break; } }
+  for (let k = 0; k + 1 < wall.K; k++) for (let q = 0; q < wall.n; q++) {
+    const a = wall.lines[k], b = wall.lines[k + 1], ra = wRing(wall, k, q), rb = wRing(wall, k + 1, q); let same = 0; st.seams++;
+    for (let j = 0; j < RSIDES; j++) { const p = rV(pos, a, ra, j); for (let l = 0; l < RSIDES; l++) if (Math.hypot(...rSub(p, rV(pos, b, rb, l))) < 1e-9) { same++; break; } }
     if (same >= 3) st.shared++;
   }
   return st;
@@ -888,20 +896,22 @@ function wallVolume(wall) {
 }
 
 test('walls: abdominal wall, serratus anterior and pectoralis minor are sheets of their lines, both sides mirrored', () => {
-  for (const side of ['R', 'L']) assert.deepEqual(Object.fromEntries(bound.walls.filter(w => w.side === side).map(w => [w.key, w.K])), WALL_KEYS, side);
+  for (const side of ['R', 'L']) assert.deepEqual(Object.fromEntries(bound.walls.filter(w => w.side === side).map(w => [w.key, w.K])), ALL_WALLS, side);
   const inFans = new Set((bound.fans || []).flatMap(f => f.lines));
-  for (const w of bound.walls) for (const i of w.lines) {
-    assert.equal(bound[i].part, w.key, bound[i].name); assert.equal(bound[i].side, w.side);
-    assert(!inFans.has(i), `${bound[i].name}: also a ribbon`); assert.equal(Muscles.ringCount(bound[i]), w.n, 'common ring count');
+  for (const w of bound.walls) for (const i of new Set(w.lines)) {
+    assert(partsOf(w.key).includes(bound[i].part), `${bound[i].name}: part ${bound[i].part} in wall ${w.key}`); assert.equal(bound[i].side, w.side);
+    /* у линии — n колец на каждую свою полосу */
+    assert(!inFans.has(i), `${bound[i].name}: also a ribbon`); assert.equal(Muscles.ringCount(bound[i]), w.n * w.lines.filter(j => j === i).length, 'common ring count');
   }
   /* все линии этих мышц — в стенках (трубок от них не осталось) */
-  for (const mu of bound) if (WALL_KEYS[mu.part]) assert(mu.wall, `${mu.name}: not in a wall`);
+  const wallParts = new Set(Object.keys(ALL_WALLS).flatMap(partsOf));
+  for (const mu of bound) if (wallParts.has(mu.part)) assert(mu.wall, `${mu.name}: not in a wall`);
   /* левая — зеркало правой: узлы в рамке таза (x → −x) в нейтральной позе; узлы скольжения (передняя зубчатая, малая грудная)
      лежат на оболочке рёбер своей стороны, а грудная клетка MyoSim несимметрична (|R − L| оболочки: медиана 0,1 мм, 95 % — до
      0,9 мм) — у них до 2 мм */
   const { m } = rPose('neutral', 0); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
   const o = skel.bones.findIndex(b => b.name === 'sacrum') * 12, loc = (w, v) => { const d = [0, 1, 2].map(r => w.P[v * 3 + r] - m[o + r * 4 + 3]); return [0, 1, 2].map(c => m[o + c] * d[0] + m[o + 4 + c] * d[1] + m[o + 8 + c] * d[2]); };
-  for (const key of Object.keys(WALL_KEYS)) {
+  for (const key of Object.keys(ALL_WALLS)) {
     const R = bound.walls.find(w => w.key === key && w.side === 'R'), Lw = bound.walls.find(w => w.key === key && w.side === 'L');
     assert.deepEqual(Lw.lines.map(i => bound[i].name.replace(/_l$/, '')), R.lines.map(i => bound[i].name.replace(/_r$/, '')));
     for (let v = 0; v < R.N; v++) {
@@ -918,9 +928,13 @@ test('walls keep the MRI volume, the rectus part shares of the dissections and t
   const { m } = rPose('neutral', 0); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
   const neutral = {};
   for (const w of bound.walls) {
-    const V = wallVolume(w), drawn = V.flat().reduce((a, b) => a + b, 0), mri = w.lines.reduce((s, i) => s + bound[i].v, 0);
+    const V = wallVolume(w), drawn = V.flat().reduce((a, b) => a + b, 0), mri = [...new Set(w.lines)].reduce((s, i) => s + bound[i].v, 0);
     neutral[w.key + w.side] = drawn;
-    assert(Math.abs(drawn / mri - 1) < .04, `${w.key}${w.side}: ${drawn.toFixed(0)} cm³ drawn, MRI ${mri.toFixed(0)}`);
+    /* столбы выпрямителя и многораздельные (этап В) заполняют всё место между огибающей костей и кожей, но объём МРТ в него не
+       помещается (walls.js, BK; README, «Спина»): у них — не меньше BACK_FILL от МРТ и не больше МРТ */
+    const lo = BACK_FILL[w.key];
+    if (lo) assert(drawn / mri > lo && drawn / mri < 1.04, `${w.key}${w.side}: ${drawn.toFixed(0)} cm³ drawn, MRI ${mri.toFixed(0)} (at least ×${lo})`);
+    else assert(Math.abs(drawn / mri - 1) < .04, `${w.key}${w.side}: ${drawn.toFixed(0)} cm³ drawn, MRI ${mri.toFixed(0)}`);
   }
   /* прямая: части между перемычками (строки 0–7 — лобок–пупок, 8–12, 13–17, 18–21 — выше мечевидного) */
   const ra = bound.walls.find(w => w.key === 'rectabd' && w.side === 'R'), V = wallVolume(ra)[0], SEG = q => (q < 7 ? 0 : q < 12 ? 1 : q < 17 ? 2 : 3);
@@ -938,10 +952,14 @@ test('walls keep the MRI volume, the rectus part shares of the dissections and t
   }
   const eo = bound.walls.find(w => w.key === 'eo' && w.side === 'R'), eoMax = Math.max(...eo.TH);
   assert(eoMax > .43 && eoMax < .71, `external oblique belly ${eoMax.toFixed(2)} cm (ultrasound 0.55–0.59)`);
-  /* в позах объём части сохраняется: σ — нейтральная площадь к нынешней (в пределах WALL_SIG — до 25 %) */
+  /* в позах объём части сохраняется: σ — нейтральная площадь к нынешней (в пределах WALL_SIG — до 25 %). Большая ягодичная в
+     глубоком сгибании бедра (становая внизу, присед, мах гирей, «велосипед») — до 30 % тоньше: кожа манекена между ягодицей и
+     бедром прижимает пласт к суставу, и низ пласта не ближе 6,5 см к центру головки бедра (Muscles, WALL_HIPCORE) — иначе он
+     уходил бы в сустав и седалищный бугор и выворачивался (README, «Ягодичные») */
+  const VOL_LO = { glmax: .68 };
   for (const [id, t] of WALL_POSES) {
     const { m: mm } = rPose(id, t); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, mm, 1.5), mm, RBUF, null, RSTART);
-    for (const w of bound.walls) { const d = wallVolume(w).flat().reduce((a, b) => a + b, 0) / neutral[w.key + w.side]; assert(d > .75 && d < 1.25, `${w.key}${w.side} in ${id} t=${t}: volume ×${d.toFixed(2)}`); }
+    for (const w of bound.walls) { const d = wallVolume(w).flat().reduce((a, b) => a + b, 0) / neutral[w.key + w.side], lo = VOL_LO[w.key] || .75; assert(d > lo && d < 1.25, `${w.key}${w.side} in ${id} t=${t}: volume ×${d.toFixed(2)}`); }
   }
 });
 
@@ -981,12 +999,17 @@ test('walls: shared seams and no twist — in twists, crunches and with the arm 
    0,1 %, глубже 6 мм — нет; над кожей — не выше 0,5 см (трубки и ленты — до 2,6); в чужих костях — не глубже 0,8 см
    (как межрёберные пласты, SHEET_LIMIT) */
 const WALL_LIMIT = { rib: .3, ribShare: .001, ribMax: .6, skin: .5, bone: .8 };
+/* доля объёма МРТ, которая помещается в столбы спины (место между огибающей костей и кожей манекена): многораздельные — желоб у
+   остистых отростков (вершины отростков — 2 см под кожей, крестец — 1 см), длиннейшая и подвздошно-рёберная — до поперечных
+   отростков, углов рёбер и квадратной поясницы */
+const BACK_FILL = { mf: .5, ltpt: .8, il: .85 };
 function wallBody(id, t, pos = null) {
   const G = require('./muscles/geometry.js'), pbs = wallBody.pbs || (wallBody.pbs = G.prepareBones(skel));
   const { R, m } = rPose(id, t), sdf = G.skinSDF(R), pose = G.poseBones(pbs, m);
   if (!pos) { Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART); pos = RBUF; }
   const out = {};
   for (const w of bound.walls) {
+    if (!WALL_KEYS[w.key]) continue;
     const f = out[w.key] || (out[w.key] = { n: 0, deep: 0, rib: 0, ribAt: '', skin: -Infinity, skinAt: '', bone: 0, boneAt: '' }), S = WSH[w.side];
     for (const i of w.lines) {
       const sub = pos.subarray(RSTART[i] * RSIDES * 3, RSTART[i + 1] * RSIDES * 3), so = G.skinOutPoints(sdf, sub, R);
@@ -1022,6 +1045,121 @@ test('walls lie on the ribs, not inside the ribcage, under the skin and out of o
     for (const i of sa.lines) for (let v = RSTART[i] * RSIDES; v < RSTART[i + 1] * RSIDES; v++) { const a = axis([copy[v * 3], copy[v * 3 + 1], copy[v * 3 + 2]]); for (let j = 0; j < 3; j++) copy[v * 3 + j] += D * a[j]; }
     assert(check(wallBody('neutral', 0, copy).serrant), `serratus moved ${D} cm along the ribcage radius is not detected`);
   }
+});
+
+/* ---------- этап В: спина и таз (README, «Спина», «Ягодичные», «Пол лент спины») ----------
+   Позы: стоя, становая (низ и верх), гиперэкстензия, «супермен», присед (середина и низ), выпад, ягодичный мост, тяга бедром,
+   скручивания на блоке, присед с гирей у груди, мах гирей, присед на одной ноге, тяги (сверху, к поясу, в наклоне, Т-гриф),
+   тяга к лицу, «велосипед», наклон в сторону, «дровосек». */
+const COVER = require('./muscles/cover.js');
+const BACK_POSES = [['neutral', 0], ['deadlift', 0], ['deadlift', 1], ['hyper', 1], ['superman', 1], ['squat', .5], ['squat', 1], ['lunge', 1], ['bridge', 1],
+  ['hipthrust', 1], ['cablecrunch', 1], ['goblet', 1], ['kbswing', 0], ['pistolbox', 1], ['latpull', 0], ['latpull', 1], ['cablerow', 1], ['bbrow', 1],
+  ['tbarrow', 1], ['facepull', 1], ['bicycle', .5], ['sidebend', 1], ['cablewood', 0]];
+/* части столбов выпрямителя, многораздельных и квадратной поясницы (не считаются «широкими» мышцами над лопаткой) */
+const ES_PARTS = new Set(['mf', 'spinalis', 'ltpt', 'ltpl', 'il', 'ql']);
+/* тело стенок спины и таза кадра: над кожей и в костях — у столбов спины и в грудной клетке (они лежат на рёбрах и поперечных
+   отростках, а не в них), у ягодичных — в тазе и бедре, на которых лежат */
+function backBody(id, t, pos = null) {
+  const G = require('./muscles/geometry.js'), pbs = wallBody.pbs || (wallBody.pbs = G.prepareBones(skel));
+  const { R, m } = rPose(id, t), sdf = G.skinSDF(R), pose = G.poseBones(pbs, m);
+  if (!pos) { Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART); pos = RBUF; }
+  const out = {};
+  for (const w of bound.walls) {
+    if (!BACK_KEYS[w.key] && !HIP_KEYS[w.key]) continue;
+    const f = out[w.key] || (out[w.key] = { skin: -Infinity, skinAt: '', bone: 0, boneAt: '' });
+    for (const i of new Set(w.lines)) {
+      const sub = pos.subarray(RSTART[i] * RSIDES * 3, RSTART[i + 1] * RSIDES * 3), so = G.skinOutPoints(sdf, sub, R);
+      if (so.out > f.skin) { f.skin = so.out; f.skinAt = bound[i].name; }
+      for (let k = 0; k < sub.length; k += 3) {
+        const p = [sub[k], sub[k + 1], sub[k + 2]];
+        for (let bi = 0; bi < pbs.length; bi++) {
+          const b = pose[bi]; if (p[0] < b.lo[0] || p[0] > b.hi[0] || p[1] < b.lo[1] || p[1] > b.hi[1] || p[2] < b.lo[2] || p[2] > b.hi[2]) continue;
+          const q = b.inv(p); if (G.insideBone(pbs[bi], q)) { const dd = pbs[bi].near(q); if (dd > f.bone) { f.bone = dd; f.boneAt = `${bound[i].name} in ${pbs[bi].name}${pbs[bi].side || ''}`; } }
+        }
+      }
+    }
+  }
+  return out;
+}
+test('back and hip walls: under the skin and out of the bones they lie on (the erector on the ribs, not in them)', () => {
+  for (const [id, t] of BACK_POSES) for (const [key, f] of Object.entries(backBody(id, t))) {
+    const where = `${key} in ${id} t=${t}`;
+    assert(f.skin <= WALL_LIMIT.skin, `${where}: ${f.skin.toFixed(2)} cm above the skin (${f.skinAt})`);
+    assert(f.bone <= WALL_LIMIT.bone, `${where}: ${f.bone.toFixed(2)} cm deep in a bone (${f.boneAt})`);
+  }
+  /* отрицательные: большая ягодичная, вынесенная на 2 см назад, — над кожей; столбы, вдавленные на 3 см вперёд, — в костях */
+  const { m } = rPose('neutral', 0); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
+  /* каталог: z — вперёд */
+  const fwd = [0, 0, 1];
+  for (const [keys, D, check] of [[['glmax'], -2, f => f.glmax.skin > WALL_LIMIT.skin], [['ltpt', 'il'], 3, f => f.ltpt.bone > WALL_LIMIT.bone || f.il.bone > WALL_LIMIT.bone]]) {
+    const copy = RBUF.slice();
+    for (const w of bound.walls.filter(w => keys.includes(w.key))) for (const i of new Set(w.lines)) for (let v = RSTART[i] * RSIDES; v < RSTART[i + 1] * RSIDES; v++) for (let j = 0; j < 3; j++) copy[v * 3 + j] += D * fwd[j];
+    assert(check(backBody('neutral', 0, copy)), `${keys.join(', ')} moved ${D} cm along the body axis is not detected`);
+  }
+});
+/* общее для покрытия: тела кадра в RBUF, коробки мышц (без частей skip) */
+const M0 = rPose('neutral', 0).m;
+function coverCtx(id, t, skip = null) {
+  const G = require('./muscles/geometry.js'), { R, m } = rPose(id, t);
+  Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
+  return { skel, bound, start: RSTART, pos: RBUF, sides: RSIDES, m, m0: M0, sdf: G.skinSDF(R), MB: COVER.muscleBoxes(bound, RSTART, RBUF, RSIDES, skip && (mu => skip.has(mu.part))) };
+}
+/* Лопатка в тягах: у медиального края и корня ости её закрывают трапециевидная, ромбовидные и широчайшая (Gray's: лопатка лежит
+   под ними, сквозь мышцы её край только прощупывается). Луч из задней поверхности кости наружу до кожи — по пути хоть одна из
+   широких мышц (столбы выпрямителя не в счёт: они глубже лопатки). До этапа В открыто 8–48 % точек (тяга к поясу и Т-гриф —
+   48 %, тяга сверху в конце — 14 %, к лицу — 9 %, в наклоне — 8 %); теперь — 0. Руки над головой (тяга сверху в начале,
+   подтягивания) — вне проверки: лопатка поворачивается вверх, её край выходит из-под широчайшей к подмышке (README). */
+test('back muscles cover the shoulder blade in rows: no bare medial border or spine root', () => {
+  for (const [id, t] of [['cablerow', 1], ['bbrow', 1], ['tbarrow', 1], ['facepull', 1], ['latpull', 1], ['ytw', 0], ['neutral', 0]]) {
+    const r = COVER.scapulaCover(coverCtx(id, t, ES_PARTS));
+    assert(r.open <= .02 * r.n, `${id} t=${t}: ${r.open} of ${r.n} points of the shoulder blade are bare`);
+  }
+  /* отрицательная: без трапециевидной, ромбовидных и широчайшей лопатка открыта */
+  const r = COVER.scapulaCover(coverCtx('cablerow', 1, new Set([...ES_PARTS, 'trapsup', 'trapmid', 'trapinf', 'rhomb', 'lat'])));
+  assert(r.open > .5 * r.n, `without the broad back muscles only ${r.open} of ${r.n} points are bare`);
+});
+/* Позвонки сбоку от остистых отростков (дуги, поперечные отростки L1–L5 и T8–T12, задняя поверхность крестца): их закрывают
+   многораздельные и столбы выпрямителя — на луче назад до кожи одна из них есть не меньше чем у 97 % точек (первой — у 94 % и
+   больше: где трапециевидная в приседе толще, её низ ниже верха длиннейшей, но длиннейшая под ней на месте), открыто не больше
+   2 % (до этапа В — 14 % открыто, первыми были широчайшая и трапециевидная у четверти точек) */
+test('the erector spinae and multifidus cover the vertebrae beside the spinous processes without gaps', () => {
+  for (const [id, t] of [['neutral', 0], ['deadlift', 0], ['hyper', 1], ['superman', 1], ['squat', 1], ['cablecrunch', 1], ['bicycle', .5], ['sidebend', 1], ['kbswing', 0]]) {
+    const r = COVER.spineCover(coverCtx(id, t), ES_PARTS), first = Object.entries(r.by).reduce((s, [k, v]) => s + (ES_PARTS.has(k) ? v : 0), 0);
+    assert(r.open <= .02 * r.n, `${id} t=${t}: ${r.open} of ${r.n} vertebral points are bare`);
+    assert(r.deep >= .97 * r.n, `${id} t=${t}: the erector and multifidus lie over ${r.deep} of ${r.n} points`);
+    assert(first >= .94 * r.n, `${id} t=${t}: the erector and multifidus are the first muscle at ${first} of ${r.n} points (${JSON.stringify(r.by)})`);
+  }
+  const r = COVER.spineCover(coverCtx('neutral', 0, ES_PARTS), ES_PARTS);
+  assert(r.open > .25 * r.n && r.deep === 0, `without the erector and multifidus only ${r.open} of ${r.n} vertebral points are bare`);
+});
+/* Ягодичные без складок: в глубоком приседе, выпадах, становой, мосту, махе гирей верх большой ягодичной выворачивается не больше
+   чем у 1 % четырёхугольников сетки (один из 140 — у верхнего края в глубоком выпаде в сторону), у средней — нигде в передней
+   части, которая лежит под кожей (Gray's: передняя треть не закрыта большой ягодичной; столбцы 0–5 из 12), а под большой
+   ягодичной — не больше 12 % (README, «Ягодичные»: у вертела в глубоком сгибании); малая — под средней. Низ (глубокая сторона, на
+   средней ягодичной и костях) у большой — не больше чем у 7 % (9 из 140 в глубоком выпаде в сторону; до сглаживания сдвига на толщину и ограничения у сустава — до
+   24 %) */
+const FOLD_LIMIT = { glmax: { top: .01, front: 0, bottom: .07 }, glmed: { top: .12, front: 6, bottom: .12 }, glmin: { top: .05, front: 0, bottom: .1 } };
+test('gluteal sheets without crumples in deep squats, lunges, deadlifts and bridges', () => {
+  for (const [id, t] of [['neutral', 0], ['squat', .5], ['squat', 1], ['goblet', 1], ['lunge', 1], ['deadlift', 0], ['deadlift', 1], ['bridge', 1], ['hipthrust', 1],
+    ['kbswing', 0], ['pistolbox', 1], ['cablecrunch', 1], ['bulgarian', 1], ['sidelunge', 0]]) {
+    const { m } = rPose(id, t); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
+    for (const w of bound.walls.filter(w => HIP_KEYS[w.key])) {
+      const f = COVER.wallFolds(w), lim = FOLD_LIMIT[w.key], where = `${w.key}${w.side} in ${id} t=${t}`;
+      assert(f.top <= lim.top * f.quads, `${where}: the outer surface folds over in ${f.top} of ${f.quads} quads (${f.at})`);
+      assert(!f.topQ.some(([, c]) => c < lim.front), `${where}: the subcutaneous front part folds over (${f.at})`);
+      assert(f.bottom <= lim.bottom * f.quads, `${where}: the deep surface folds in ${f.bottom} of ${f.quads} quads (${f.at})`);
+    }
+  }
+  /* отрицательные: строка узлов, сдвинутая за следующую вдоль волокон, — верх вывернут; сдвиг на толщину наружу у узла — низ */
+  const { m } = rPose('neutral', 0); Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
+  const w = bound.walls.find(w => w.key === 'glmax' && w.side === 'R'), C2 = 2 * w.K + 1, q = 5;
+  const bad = { ...w, P: Float64Array.from(w.P) };
+  for (let c = 0; c < C2; c++) for (let j = 0; j < 3; j++) bad.P[(q * C2 + c) * 3 + j] = w.P[((q + 2) * C2 + c) * 3 + j] + (w.P[((q + 2) * C2 + c) * 3 + j] - w.P[((q + 1) * C2 + c) * 3 + j]);
+  assert(COVER.wallFolds(bad).top > 0, 'a row of nodes pushed past its neighbour is not detected');
+  /* низ строки q (верх — опорный, низ = P − OF) — за низом строки q + 2 */
+  const flip = { ...w, OF: Float64Array.from(w.OF || w.NR.map((x, k) => x * w.TH[(k / 3) | 0])) }, bot = (v, j) => w.P[v * 3 + j] - flip.OF[v * 3 + j];
+  for (let c = 0; c < C2; c++) for (let j = 0; j < 3; j++) { const a = (q + 1) * C2 + c, b = (q + 2) * C2 + c, v = q * C2 + c; flip.OF[v * 3 + j] = w.P[v * 3 + j] - (2 * bot(b, j) - bot(a, j)); }
+  assert(COVER.wallFolds(flip).bottom > 0, 'a deep surface folded back along the fibres is not detected');
 });
 
 /* Прямая: белая линия по ширине у молодых мужчин (Rath et al., 1996, Surg Radiol Anat 18: 281–288): выше пупка до 10 мм, у

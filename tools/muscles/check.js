@@ -62,22 +62,29 @@ function sheetCheck(S, m, pose, sdf, R) {
      этапа Б — 39–87 % и 3,6–8,2 см);
    - над кожей — не выше 0,5 см (по каталогу — до 0,35; трубки и ленты — до 2,6);
    - в чужих костях (кроме грудной клетки — на ней пласт лежит) — не глубже 0,8 см, как межрёберные пласты. */
+/* Стенки этапа В (README, «Спина», «Ягодичные»): столбы выпрямителя, многораздельные, квадратная поясницы, большая, средняя и
+   малая ягодичные. Правило «снаружи рёбер» к ним не относится: столбы лежат в желобе между остистыми отростками и углами рёбер, а
+   оболочка рёбер сзади проходит над желобом (по ней столбы «в рёбрах» у 2–100 % вершин), квадратная поясницы — впереди поперечных
+   отростков, ягодичные — ниже рёбер. У них: тело над кожей — не выше WALL_LIMIT.body, в костях — не глубже WALL_LIMIT.bone, и
+   у столбов в счёт идёт и грудная клетка (рёбра — кость, на которой они лежат, но не в которой) */
 const WB = require('./walls.js'), WRIB = skel.bones.findIndex(b => b.name === 'ribcage');
-const WALL_PARTS = new Set((bound.walls || []).map(w => w.key));
+const WALL_RIB = new Set(['rectabd', 'eo', 'io', 'serrant', 'pecmin']);
+const WALL_PARTS = new Set(bound.filter(mu => mu.wall).map(mu => mu.part)), WALL_RIB_PARTS = new Set(bound.filter(mu => mu.wall && WALL_RIB.has(mu.wall.key)).map(mu => mu.part));
 const WSH = WALL_PARTS.size ? (() => { const C = WB.context(M, Skeleton, Muscles, skel); return { R: WB.ribShell(C, 'R'), L: WB.ribShell(C, 'L') }; })() : null;
 const WALL_LIMIT = { body: .5, rib: .3, ribShare: .001, ribMax: .6, bone: .8 };
-/* тело стенки кадра (вершины мышцы i в SURF): доля и глубина в грудной клетке, глубина в чужих костях */
+/* тело стенки кадра (вершины мышцы i в SURF): доля и глубина в грудной клетке (стенки на рёбрах), глубина в чужих костях (у стенок
+   этапа В — и в грудной клетке) */
 function wallCheck(i, m, pose, f, at) {
-  const mu = bound[i], S = WSH[mu.side === 'L' ? 'L' : 'R'], o = WRIB * 12;
+  const mu = bound[i], S = WSH[mu.side === 'L' ? 'L' : 'R'], o = WRIB * 12, onRibs = WALL_RIB.has(mu.wall.key);
   for (let v = START[i] * Muscles.SIDES; v < START[i + 1] * Muscles.SIDES; v++) {
     const p = [SURF[v * 3], SURF[v * 3 + 1], SURF[v * 3 + 2]], d = [0, 1, 2].map(r => p[r] - m[o + r * 4 + 3]);
-    const ch = WB.chartOf(S, [0, 1, 2].map(c => m[o + c] * d[0] + m[o + 4 + c] * d[1] + m[o + 8 + c] * d[2]));
+    const ch = onRibs ? WB.chartOf(S, [0, 1, 2].map(c => m[o + c] * d[0] + m[o + 4 + c] * d[1] + m[o + 8 + c] * d[2])) : { th: -1 };
     if (ch.th >= 0 && ch.th <= 180) {
       const rs = WB.shellFine(S, ch.th, ch.y);
       if (rs > 0) { f.ribN++; const dd = rs - ch.r; if (dd > WALL_LIMIT.rib) f.ribDeep++; if (dd > f.rib) { f.rib = dd; f.ribAt = `${at} ${mu.name}`; } }
     }
     for (let bi = 0; bi < pbs.length; bi++) {
-      if (bi === WRIB) continue;
+      if (bi === WRIB && onRibs) continue;
       const b = pose[bi]; if (p[0] < b.lo[0] || p[0] > b.hi[0] || p[1] < b.lo[1] || p[1] > b.hi[1] || p[2] < b.lo[2] || p[2] > b.hi[2]) continue;
       const q = b.inv(p); if (G.insideBone(pbs[bi], q)) { const dd = pbs[bi].near(q); if (dd > f.wbone) { f.wbone = dd; f.wboneAt = `${at} ${mu.name} в ${pbs[bi].name}${pbs[bi].side || ''}`; } }
     }
@@ -191,7 +198,7 @@ else if (require.main === module) (async () => {
   const t0 = Date.now(), { fam, byEx, n } = await runParallel(ids, ts);
   const rows = Object.entries(fam).sort((a, b) => Math.max(b[1].bone, b[1].skin, b[1].body) - Math.max(a[1].bone, a[1].skin, a[1].body));
   for (const [k, f] of rows) console.log(`${k.padEnd(9)} ${(md.parts[k] || '').padEnd(40)} кость ${f.bone.toFixed(2).padStart(5)}  кожа ${f.skin.toFixed(2).padStart(5)}  тело ${f.body.toFixed(2).padStart(5)}   ${f.bone > .8 ? f.boneAt : ''} ${f.skin > 1 ? '| кожа: ' + f.skinAt : ''} ${f.body > 1 ? '| тело: ' + f.bodyAt : ''}`);
-  for (const [k, f] of rows) if ('ribN' in f) console.log(`стенка ${k.padEnd(8)} в грудной клетке глубже ${WALL_LIMIT.rib * 10} мм — ${(100 * f.ribDeep / Math.max(1, f.ribN)).toFixed(3)} % вершин у рёбер, наибольшая глубина ${f.rib.toFixed(2)} см (${f.ribAt}); тело над кожей ${f.body.toFixed(2)} см; в чужих костях ${f.wbone.toFixed(2)} см ${f.wboneAt}`);
+  for (const [k, f] of rows) if ('ribN' in f) console.log(`стенка ${k.padEnd(8)} ${WALL_RIB_PARTS.has(k) ? `в грудной клетке глубже ${WALL_LIMIT.rib * 10} мм — ${(100 * f.ribDeep / Math.max(1, f.ribN)).toFixed(3)} % вершин у рёбер, наибольшая глубина ${f.rib.toFixed(2)} см (${f.ribAt}); ` : ''}тело над кожей ${f.body.toFixed(2)} см; в ${WALL_RIB_PARTS.has(k) ? 'чужих костях' : 'костях (и рёбрах)'} ${f.wbone.toFixed(2)} см ${f.wboneAt}`);
   console.log(`\n${n} упражнений × ${ts.length} поз, ${((Date.now() - t0) / 1000).toFixed(0)} с`);
   if (flag('--json')) { const f = path.resolve(root, flag('--json')); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, JSON.stringify({ fam, byEx }, null, 1)); }
   const maxBone = flag('--max-bone') != null ? +flag('--max-bone') : null, maxSkin = flag('--max-skin') != null ? +flag('--max-skin') : null;
@@ -204,12 +211,12 @@ else if (require.main === module) (async () => {
     if (lim != null && f.skin > lim) bad.push(`${k}: над кожей на ${f.skin.toFixed(1)} см (${f.skinAt})`);
     if (limBody != null && f.body > limBody) bad.push(`${k}: тело над кожей на ${f.body.toFixed(1)} см (${f.bodyAt})`);
     if (WALL_PARTS.has(k) && 'ribN' in f && (maxBone != null || maxBody != null)) {
-      if (f.ribDeep > WALL_LIMIT.ribShare * f.ribN) bad.push(`${k}: ${(100 * f.ribDeep / f.ribN).toFixed(2)} % вершин стенки глубже ${WALL_LIMIT.rib * 10} мм в грудной клетке`);
-      if (f.rib > WALL_LIMIT.ribMax) bad.push(`${k}: стенка в грудной клетке на ${f.rib.toFixed(2)} см (${f.ribAt})`);
+      if (WALL_RIB_PARTS.has(k) && f.ribDeep > WALL_LIMIT.ribShare * f.ribN) bad.push(`${k}: ${(100 * f.ribDeep / f.ribN).toFixed(2)} % вершин стенки глубже ${WALL_LIMIT.rib * 10} мм в грудной клетке`);
+      if (WALL_RIB_PARTS.has(k) && f.rib > WALL_LIMIT.ribMax) bad.push(`${k}: стенка в грудной клетке на ${f.rib.toFixed(2)} см (${f.ribAt})`);
       if (f.body > WALL_LIMIT.body) bad.push(`${k}: стенка над кожей на ${f.body.toFixed(2)} см (${f.bodyAt})`);
       if (f.wbone > WALL_LIMIT.bone) bad.push(`${k}: стенка в чужой кости на ${f.wbone.toFixed(2)} см (${f.wboneAt})`);
     }
   }
   if (bad.length) { console.error('\nМышцы вне допусков:\n' + bad.join('\n')); process.exit(1); }
-  if (maxBone != null || maxSkin != null) console.log(`Мышцы в допусках: путь в кости не глубже ${maxBone} см и над кожей не выше ${maxSkin} см, тело мышцы над кожей не выше ${maxBody} см (исключения — EXCEPT); пласты (межрёберные) — под кожей, в чужих костях не глубже ${SHEET_LIMIT.bone} см; стенки — снаружи рёбер (глубже ${WALL_LIMIT.rib * 10} мм — не больше ${WALL_LIMIT.ribShare * 100} % вершин, не глубже ${WALL_LIMIT.ribMax} см), над кожей не выше ${WALL_LIMIT.body} см, в чужих костях не глубже ${WALL_LIMIT.bone} см.`);
+  if (maxBone != null || maxSkin != null) console.log(`Мышцы в допусках: путь в кости не глубже ${maxBone} см и над кожей не выше ${maxSkin} см, тело мышцы над кожей не выше ${maxBody} см (исключения — EXCEPT); пласты (межрёберные) — под кожей, в чужих костях не глубже ${SHEET_LIMIT.bone} см; стенки — снаружи рёбер (глубже ${WALL_LIMIT.rib * 10} мм — не больше ${WALL_LIMIT.ribShare * 100} % вершин, не глубже ${WALL_LIMIT.ribMax} см), над кожей не выше ${WALL_LIMIT.body} см, в чужих костях не глубже ${WALL_LIMIT.bone} см (спина и таз — без правила рёбер, в костях с рёбрами).`);
 })();
