@@ -10,7 +10,7 @@
    не глубже --max-bone в чужих костях (своя кость, грудная клетка, — не в счёт).
    Печатает худшие семейства мышц и упражнения.
    С --max-bone / --max-skin / --max-body — проверка для npm run check: код выхода 1 при превышении (кроме известных исключений,
-   см. EXCEPT ниже). */
+   см. EXCEPT ниже); допуск тела над кожей — BODY_LIMIT ниже (npm run muscles:check передаёт его же). */
 const fs = require('node:fs'), path = require('node:path'), zlib = require('node:zlib');
 const root = path.resolve(__dirname, '../..');
 const M = require(path.join(root, 'src/js/09bm-mannequin.js')), EQ = require(path.join(root, 'src/js/09bn-equipment.js'));
@@ -106,6 +106,16 @@ function wallCheck(i, m, pose, f, at) {
    толщина откладывается от головки и диафиза, а не от линии действия; тело задней части — до 2,0 см над кожей (было 2,7):
    исключение снято, исключений нет. */
 const EXCEPT = { skin: {}, body: {} };
+/* Тело мышцы над кожей (этап Г): не выше BODY_LIMIT = 1,0 см (было 2,6 — пока глубина и направление к коже брались из кожи
+   нейтральной позы, тела у суставов и подмышки выходили из кожи до 2,59 см). Мышца лежит под кожей и подкожным жиром: по УЗИ у
+   молодых мужчин (10 человек, ИМТ 20–28) средняя толщина подкожного слоя по 216 точкам тела — 1,9–6,1 мм, по восьми
+   стандартным точкам — 2,9–10,2 мм, наибольшая средняя по участку тела — 12 мм (ягодицы), наименьшая — 0,3 мм (кисти)
+   (Störchle et al., 2018, Sci Rep 8: 16268). Кожа манекена — средняя форма (ANSUR II), под ней модель держит слой SKIN_GAP =
+   4 мм. Тело выше кожи манекена не больше чем на 1 см — в пределах подкожного слоя полных участков: у человека с таким слоем
+   кожа лежала бы на столько же дальше от мышцы; выше — мышца вышла бы из тела. С кожей кадра наибольший выход по каталогу —
+   0,90 см (ключичная часть трапециевидной у надплечья, t = 0; 0,5; 1; в промежуточных кадрах — 0,92). Отрицательная
+   проверка — в tools/muscles.test.js (тело, вынесенное на 1,5 см за кожу, не проходит). */
+const BODY_LIMIT = 1;
 
 /* только пласты (быстро — для тестов): по каждому пласту худший выход из кожи и глубина в чужих костях по позам */
 function sheetRun(ids, ts, sheets = SHEETS) {
@@ -189,7 +199,7 @@ async function runParallel(ids, ts, threads = Math.max(1, Math.min(4, os.cpus().
     const w = new Worker(__filename, { workerData: { ids: c, ts } }); w.once('message', ok); w.once('error', fail);
   }))));
 }
-module.exports = { run, runParallel, sheetRun, EXCEPT, SHEETS, SHEET_LIMIT, WALL_LIMIT };
+module.exports = { run, runParallel, sheetRun, EXCEPT, BODY_LIMIT, SHEETS, SHEET_LIMIT, WALL_LIMIT };
 
 if (!isMainThread) parentPort.postMessage(run(workerData.ids, workerData.ts));
 else if (require.main === module) (async () => {

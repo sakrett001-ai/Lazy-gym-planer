@@ -493,12 +493,12 @@ test('ribbons: the deep side is lit like the outer side, own edges inside a ribb
   }
 });
 
-/* Под кожей и в костях — не хуже трубок: тело ленты не выше 2,6 см над кожей (вся проверка — npm run muscles:check,
-   исключения для широчайшей больше нет), а вершины тела ленты в костях (дальше 2 см от концов пути)
+/* Под кожей и в костях — не хуже трубок: тело ленты не выше BODY_LIMIT (1 см, этап Г; было 2,6) над кожей (вся проверка —
+   npm run muscles:check, исключения для широчайшей больше нет), а вершины тела ленты в костях (дальше 2 см от концов пути)
    глубже 0,5 см — не чаще, чем у трубок тех же линий (Muscles.surface), с запасом 2 процентных пункта, и не глубже их
    больше чем на 0,3 см */
 test('ribbons stay under the skin and do not go into bones deeper than the tubes they replace', () => {
-  const G = require('./muscles/geometry.js'), pbs = G.prepareBones(skel), TUBE = new Float64Array(RBUF.length);
+  const G = require('./muscles/geometry.js'), pbs = G.prepareBones(skel), TUBE = new Float64Array(RBUF.length), { BODY_LIMIT } = require('./muscles/check.js');
   const fam = {};
   for (const id of ['ohp', 'pullup', 'ytw', 'latpull', 'bbbench', 'deadlift', 'hipthrust']) for (const t of [0, .5, 1]) {
     const { R, m } = rPose(id, t), paths = Muscles.layoutDrawn(bound, m, 1.5), pose = G.poseBones(pbs, m), sdf = G.skinSDF(R);
@@ -506,7 +506,7 @@ test('ribbons stay under the skin and do not go into bones deeper than the tubes
     for (const fan of bound.fans) for (const i of fan.lines) {
       Muscles.surface(bound[i], paths[i], m, TUBE, null, RSTART[i] * RSIDES);
       const out = G.skinOutPoints(sdf, RBUF.subarray(RSTART[i] * RSIDES * 3, RSTART[i + 1] * RSIDES * 3), R).out;
-      assert(out <= 2.6, `${bound[i].name} in ${id} t=${t}: ${out.toFixed(2)} cm above the skin`);
+      assert(out <= BODY_LIMIT, `${bound[i].name} in ${id} t=${t}: ${out.toFixed(2)} cm above the skin`);
       const f = fam[fan.key] || (fam[fan.key] = { rib: [0, 0, 0], tube: [0, 0, 0] }), a = paths[i].points[0], b = paths[i].points.at(-1);
       for (const [buf, acc] of [[RBUF, f.rib], [TUBE, f.tube]]) for (let v = RSTART[i] * RSIDES; v < RSTART[i + 1] * RSIDES; v++) {
         const p = [buf[v * 3], buf[v * 3 + 1], buf[v * 3 + 2]];
@@ -665,14 +665,40 @@ test('deltoid cap keeps the volume and the part shares of the dissections', () =
 });
 
 /* Геометрия на позах каталога (вся проверка — npm run muscles:check): несколько упражнений с крайними положениями
-   рук, ног и туловища — путь не глубже 2 см в костях и не выше 2,2 см над кожей (исключения — подмышечные складки). */
+   рук, ног и туловища — путь не глубже 2 см в костях и не выше 2,2 см над кожей, тело мышцы — не выше BODY_LIMIT (1 см, этап Г;
+   обоснование — в check.js; исключений нет). */
 test('muscle paths stay out of bones and under the skin in catalog poses', () => {
-  const { run, EXCEPT } = require('./muscles/check.js');
+  const { run, EXCEPT, BODY_LIMIT } = require('./muscles/check.js');
   const { fam } = run(['bbbench', 'squat', 'latpull', 'deadlift', 'dbcurl', 'crunch'], [0, .5, 1]);
   for (const [k, f] of Object.entries(fam)) {
     assert(f.bone <= 2, `${k}: ${f.bone.toFixed(2)} cm inside a bone (${f.boneAt})`);
     assert(f.skin <= (EXCEPT.skin[k] ?? 2.2), `${k}: ${f.skin.toFixed(2)} cm above the skin (${f.skinAt})`);
-    assert(f.body <= (EXCEPT.body[k] ?? 2.6), `${k}: muscle body ${f.body.toFixed(2)} cm above the skin (${f.bodyAt})`);
+    assert(f.body <= (EXCEPT.body[k] ?? BODY_LIMIT), `${k}: muscle body ${f.body.toFixed(2)} cm above the skin (${f.bodyAt})`);
+  }
+  /* полная проверка (npm run muscles:check) — с тем же допуском, исключений тела нет */
+  const pkg = require('../package.json').scripts['muscles:check'];
+  assert.equal(+pkg.match(/--max-body (\S+)/)[1], BODY_LIMIT, 'npm run muscles:check uses BODY_LIMIT');
+  assert.deepEqual(EXCEPT.body, {}, 'no body exceptions');
+});
+
+/* Отрицательная: тело мышцы, вынесенное за кожу на 1,5 см, допуском тела ловится (а прежним 2,6 — нет). Трубка (плечелучевая),
+   лента (широчайшая) и колпак (средняя часть дельтовидной) в нейтральной позе сдвигаются целиком по нормали кожи у своей
+   верхней вершины — так, что она на 1,5 см над кожей; мера — та же, что у npm run muscles:check (G.skinOutPoints). */
+test('negative: a muscle body moved 1.5 cm out of the skin is caught by the body tolerance', () => {
+  const G = require('./muscles/geometry.js'), { BODY_LIMIT } = require('./muscles/check.js');
+  const { R, m } = rPose('neutral', 0), sdf = G.skinSDF(R);
+  Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
+  for (const name of ['BRD_r', 'LAT3_r', 'DELT2_l']) {
+    const i = bound.findIndex(b => b.name === name), a = RSTART[i] * RSIDES * 3, z = RSTART[i + 1] * RSIDES * 3;
+    const ok = G.skinOutPoints(sdf, RBUF.subarray(a, z), R);
+    assert(ok.out <= BODY_LIMIT, `${name} as drawn: ${ok.out.toFixed(2)} cm`);
+    const p = [RBUF[a + ok.at * 3], RBUF[a + ok.at * 3 + 1], RBUF[a + ok.at * 3 + 2]], h = .05;
+    const g = rUnit([0, 1, 2].map(k => { const q = p.slice(), w = p.slice(); q[k] += h; w[k] -= h; return sdf(q) - sdf(w); }));
+    const moved = RBUF.slice(a, z), d = 1.5 - ok.out;
+    for (let v = 0; v < moved.length; v += 3) for (let k = 0; k < 3; k++) moved[v + k] += g[k] * d;
+    const bad = G.skinOutPoints(sdf, moved, R).out;
+    assert(bad > BODY_LIMIT && bad >= 1.3, `${name} moved 1.5 cm out: ${bad.toFixed(2)} cm is not caught`);
+    assert(bad < 2.6, `${name}: ${bad.toFixed(2)} cm — the old tolerance would have caught it too`);
   }
 });
 
