@@ -144,6 +144,9 @@ function withVolumes(out) {
       return [r1(d), ...lo.map(x => Math.round(x * 100) / 100), Math.round(rho)];
     });
   });
+  /* стенки (этап Б): прямая, косые живота, передняя зубчатая, малая грудная — пластами по поверхности тела (walls.js) */
+  const W = require('./walls.js').build(out, { M, Skeleton, Muscles, skel });
+  out.walls = W.walls; out.shells = W.shells;
   return out;
 }
 function pack(src) {
