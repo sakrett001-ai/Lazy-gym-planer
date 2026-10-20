@@ -91,7 +91,7 @@ function hyoid() {
   const H = P.hyoid, { y, zf } = POS.hyoid, m = Mesh();
   /* ось — подкова в плане: тело — дуга шириной bodyW, большие рога — от концов тела к концам на ширине width и длине len от
      передней поверхности, расходятся под углом hornAngle; концы рогов выше тела на rise */
-  const zc = zf - H.bodyT / 2, half = H.bodyW / 2, bend = .5, tipX = H.width / 2 - H.tip / 2, tipZ = zf - H.len + H.tip;
+  const zc = zf - H.bodyT / 2, half = H.bodyW / 2, bend = .5, tipX = H.width / 2 - H.tip / 2, tipZ = zf - H.len;
   /* начало рога: так, чтобы угол между рогами был hornAngle */
   const a = H.hornAngle / 2 * D2R, x0 = tipX - Math.tan(a) * (tipZ < zc - bend ? (zc - bend - tipZ) : 1);
   const pts = [];
@@ -127,7 +127,7 @@ function thyroid() {
     const x = g * xb * f, z = cz + (zb - cz) * f, nx = g * Math.cos(h), nz = Math.sin(h), b = T.bulge * Math.sin(Math.PI * f);
     return [x + nx * b, yn + v, z + nz * b];
   };
-  const nrm = (u, v) => { const e = 1e-3, a = X(u - e, v), b = X(u + e, v), c = X(u, v + e), d = X(u, v - e); return unit(cross(sub(c, d), sub(b, a))); };
+  const nrm = (u, v) => { const e = 1e-3, a = X(u - e, v), b = X(u + e, v), c = X(u, v + e), d = X(u, v - e); return unit(cross(sub(b, a), sub(c, d))); };   /* наружу */
   part(m, () => {
     const us = Array.from({ length: 2 * NU + 1 }, (_, i) => -T.lamina + 2 * T.lamina * i / (2 * NU));
     const O = [], I = [];

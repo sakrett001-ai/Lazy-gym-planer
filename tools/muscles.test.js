@@ -380,7 +380,7 @@ test('ribbons: broad flat muscles are drawn as ribbons of neighbouring lines, in
   /* задняя дельтовидная — трубки: её линии у головки плеча при отведении и руке над головой перекрещиваются (README);
      передняя зубчатая и наружная косая (ленты 4.51.0–4.53.0) с этапа Б — стенки по поверхности тела (тесты стенок ниже) */
   /* большая и средняя ягодичные с этапа В — пласты у сустава (стенки, тесты ниже) */
-  const EXPECT = { pecmaj: 7, lat: 6, trap: 13, infsp: 3, rhomb: 4 };
+  const EXPECT = { pecmaj: 7, lat: 6, trap: 13, infsp: 3, rhomb: 4, scm: 4 };
   for (const side of ['R', 'L']) assert.deepEqual(Object.fromEntries(bound.fans.filter(f => f.side === side).map(f => [f.key, f.K])), EXPECT, side);
   const seen = new Set();
   for (const fan of bound.fans) {

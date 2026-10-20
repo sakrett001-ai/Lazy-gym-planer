@@ -1086,6 +1086,7 @@ const Muscles = (() => {
     ['serrant', ['serr_ant_1', 'serr_ant_2', 'serr_ant_3', 'serr_ant_4', 'serr_ant_5', 'serr_ant_6', 'serr_ant_7', 'serr_ant_8', 'serr_ant_9', 'serr_ant10', 'serr_ant11', 'serr_ant12'], /^scapula/],
     ['rhomb', ['rhomboid_2', 'rhomboid_3', 'rhomboid_4', 'rhomboid_5'], /^scapula/],
     ['eo', ['EO7', 'EO8', 'EO1', 'EO2', 'EO3', 'EO4', 'EO5', 'EO6'], /^ribcage/],
+    ['scm', ['SCM1', 'SCM2', 'SCM3', 'SCM4'], /^skull/],
   ];
   const PEC_LOW = 7.5, PEC_U0 = .45;
   const BORDER = .35, BORDER_H = .5, TIP_IN = .25, TIP_OUT = .6, RIB_WMIN = .5, RIB_HMIN = .06, RIB_C0 = .3, RIB_C1 = 1, RIB_SPREAD = .8, RIB_STEER = .35, RIB_LAM = .3, RIB_AGREE = .5, RIB_HMAX = 3;
