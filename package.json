@@ -1,6 +1,6 @@
 {
   "name": "lazy-gym-planer",
-  "version": "4.56.0",
+  "version": "4.57.0",
   "private": true,
   "description": "Lazy Gym Planner — планировщик тренировок",
   "scripts": {
@@ -22,7 +22,7 @@
     "mannequin:bake": "node tools/mannequin/author.js",
     "mannequin:check": "node tools/mannequin/check.js",
     "skeleton:fit": "node tools/skeleton/fit.js all 0,0.5,1 --max 1.5",
-    "muscles:check": "node tools/muscles/check.js all 0,0.5,1 --max-bone 2 --max-skin 2.2 --max-body 2.6",
+    "muscles:check": "node tools/muscles/check.js all 0,0.5,1 --max-bone 2 --max-skin 2.2 --max-body 1",
     "muscles:compare": "node tools/muscles/compare.js",
     "mannequin:sheet": "node tools/mannequin/sheet.mjs",
     "mannequin:review": "node tools/mannequin/check.js --quiet --json qa/check-all.json; node tools/muscles/check.js all 0,0.5,1 --json qa/muscles/check-all.json; node tools/mannequin/viewer/build.mjs qa/mannequin-review.html --report qa/check-all.json --muscles qa/muscles/check-all.json"

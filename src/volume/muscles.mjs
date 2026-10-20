@@ -51,6 +51,37 @@ export function muscleTint(mu,level,look,color){
 /* последний расчёт вершин (на все сцены): данные мышц, матрицы костей кадра и вершины */
 const LAST={muscles:null,only:null,frames:null,pos:null,nor:null};
 const sameFrames=(a,b)=>{if(!a||!b||a.length!==b.length)return false;for(let i=0;i<a.length;i++)if(a[i]!==b[i])return false;return true;};
+/* Память кожи по фазе (этап Г; Muscles.surfaceAll, memo; раздел «память кожи по фазе» в 09br-muscles.js). Кожа кадра — самая
+   дорогая часть расчёта тел, а анимация циклическая: у каждой фигуры (ключ — функция позы упражнения с вариантом инвентаря,
+   data.poseKey) — PHASES ячеек на повторение, в ячейке — «лента» одного кадра с его фазой (Int16, ≈ 60 КБ). Кадр с фазой ленты —
+   из неё, кадр между двумя лентами не дальше PHASE_SPAN друг от друга (соседние ячейки; ищутся за PHASE_GAP ячеек в обе
+   стороны) — из двух лент линейно, иначе — полный расчёт с записью в свою ячейку, если она пуста. Первое повторение считается полностью, дальше кожа почти не стоит. Всего — не больше PHASE_MEM
+   байт на все фигуры страницы (разбор, тренировка, карточки): дольше всех не нужные фигуры забываются целиком. Смена упражнения
+   или варианта инвентаря — другой ключ; смена данных мышц или скелета (новый bound) — память фигуры заново. */
+const PHASES=64,PHASE_GAP=2,PHASE_SPAN=2/PHASES+1e-9,PHASE_MEM=16<<20,phaseMem=new Map();let phaseBytes=0,phaseMisses=0;
+function phaseEntry(key,data){
+ let e=phaseMem.get(key);
+ if(e&&e.data!==data){phaseBytes-=e.bytes;phaseMem.delete(key);e=null;}
+ if(e)phaseMem.delete(key);else e={data,bins:new Array(PHASES+1).fill(null),bytes:0};
+ phaseMem.set(key,e);return e;
+}
+function phaseStore(e,b,t,tape){
+ for(const[k,o]of phaseMem){if(phaseBytes+tape.byteLength<=PHASE_MEM||o===e)break;phaseMem.delete(k);phaseBytes-=o.bytes;}
+ if(phaseBytes+tape.byteLength>PHASE_MEM||e.bins[b])return;
+ e.bins[b]={t,tape};e.bytes+=tape.byteLength;phaseBytes+=tape.byteLength;
+}
+/* лента для кадра с фазой t: {memo, e, b, rec} — memo для surfaceAll; rec — новая лента (записать после расчёта) */
+function phaseMemo(e,t,n){
+ const b=Math.min(PHASES,Math.floor(t*PHASES));let lo=null,hi=null;
+ for(let j=Math.max(0,b-PHASE_GAP);j<=Math.min(PHASES,b+PHASE_GAP);j++){const s=e.bins[j];if(!s)continue;
+  if(Math.abs(s.t-t)<1e-7)return{memo:{a:s.tape,b:s.tape,w:0}};
+  if(s.t<t){if(!lo||s.t>lo.t)lo=s;}else if(!hi||s.t<hi.t)hi=s;}
+ if(lo&&hi&&hi.t-lo.t<=PHASE_SPAN)return{memo:{a:lo.tape,b:hi.tape,w:(t-lo.t)/(hi.t-lo.t)}};
+ if(e.bins[b])return null;
+ const rec=new Int16Array(n);return{memo:{rec},e,b,rec};
+}
+/* память кожи по фазе: байт на все фигуры, фигур, кадров с полным расчётом кожи (для замеров, проверок и ступеней скорости) */
+export function phaseMemory(){return{bytes:phaseBytes,figures:phaseMem.size,limit:PHASE_MEM,phases:PHASES,misses:phaseMisses};}
 const FLOOR=186;
 /* Пласты (межрёберные мышцы, данные формата 3 — sheets; Muscles.sheetMesh): жёсткие, каждый — в рамке своей кости.
    Сетки всех пластов одной кости сливаются в одну (один вызов отрисовки; у межрёберных — грудная клетка, 44 пласта,
@@ -116,7 +147,8 @@ export function createMuscleLayer(parent){
   });
   if(changed)geo.attributes.color.needsUpdate=true;
  }
- function update(anatomy,frames,color,look=null){
+ /* phase — {t, key}: фаза повторения 0…1 и ключ позы фигуры (память кожи по фазе); без неё — полный расчёт */
+ function update(anatomy,frames,color,look=null,phase=null){
   const M=globalThis.Muscles,k=anatomy.muscles;
   if(key!==k||bound?.skel!==anatomy.skeleton){bound=M.bind(k,anatomy.skeleton);bound.skel=anatomy.skeleton;key=k;build();}
   paint(anatomy.level,look,color);
@@ -128,7 +160,10 @@ export function createMuscleLayer(parent){
   /* второй вид разбора показывает ту же позу: вершины берутся из прошлого расчёта, если кости кадра те же */
   if(LAST.muscles===k&&!only&&!LAST.only&&LAST.pos?.length===pos.length&&sameFrames(LAST.frames,frames)){pos.set(LAST.pos);nor.set(LAST.nor);finish();return;}
   /* трубки и ленты (широкие плоские мышцы — полосы между соседними линиями, Muscles.ribbon) */
-  M.surfaceAll(bound,M.layoutDrawn(bound,frames,ARC_STEP),frames,pos,nor,start);
+  const pm=phase&&phase.key&&bound.tapeN&&phase.t>=0&&phase.t<=1?phaseMemo(phaseEntry(phase.key,bound),phase.t,bound.tapeN):null;
+  if(phase&&(!pm||pm.rec))phaseMisses++;
+  M.surfaceAll(bound,M.layoutDrawn(bound,frames,ARC_STEP),frames,pos,nor,start,pm?pm.memo:null);
+  if(pm&&pm.rec)phaseStore(pm.e,pm.b,phase.t,pm.rec);
   /* каталог (см, Y вниз, пол 186) → сцена (м, Y вверх): отражение по Y — у нормалей меняется знак y */
   for(let v=0;v<pos.length;v+=3){pos[v]/=100;pos[v+1]=(186-pos[v+1])/100;pos[v+2]/=100;nor[v+1]=-nor[v+1];}
   /* только выбранные мышцы (просмотрщик, контактные листы): остальные — в точку */

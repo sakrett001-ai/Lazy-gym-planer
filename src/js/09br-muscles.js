@@ -186,6 +186,8 @@ const Muscles = (() => {
     const pt = s => ({ i: bone(s.bone), p: s.p });
     const bound = md.muscles.map(mu => ({
       name: mu.name, side: mu.side, group: mu.group, part: mu.part, v: mu.v, t0: mu.t0, t1: mu.t1, l0: mu.l0, sk: mu.sk, x0: mu.x0,
+      /* части кожи у пути (этап Г, pack.js) и кожа кадра (bindSkin) */
+      skp: mu.skp || null, skm: null, sks: null, skb: 0,
       el: mu.el.map(e => e.s ? { s: pt(e.s) } : { w: { t: e.w.t, i: bone(e.w.bone), c: e.w.c, a: e.w.a, r: e.w.r, B: e.w.B, side: e.w.side ? pt(e.w.side) : null } }),
       /* стенка, лента или колпак линии и число колец (bindWalls, bindFans, bindCaps) — сразу в объекте: у всех линий одна форма
          объекта, и обращения к ним в циклах по линиям не замедляются */
@@ -194,6 +196,8 @@ const Muscles = (() => {
     bound.walls = bindWalls(md, bound, idx, skel);
     bound.fans = bindFans(md, bound, idx);
     bound.caps = bindCaps(md, bound, idx);
+    bound.skin = bindSkin(md, bound, idx, skel);
+    bindTape(bound);
     return bound;
   }
   const apply = (m, i, p) => { const o = i * 12; return [0, 1, 2].map(r => m[o + r * 4] * p[0] + m[o + r * 4 + 1] * p[1] + m[o + r * 4 + 2] * p[2] + m[o + r * 4 + 3]); };
@@ -255,33 +259,634 @@ const Muscles = (() => {
     const area = mu.v / lb, rt = Math.min(.5, Math.max(.12, .25 * Math.sqrt(area / Math.PI)));
     return { t0, lb, area, rt, L };
   }
+  /* ---------- память кожи по фазе (этап Г) ----------
+     Кожа кадра — около 14 тыс. расчётов частей кожи на кадр. Анимация в атласе и на карточках циклическая: позы повторяются
+     каждое повторение. Поэтому всё, что кадр взял у кожи кадра, можно запомнить по фазе («лента», bound.tapeN чисел Int16) и
+     потом брать из памяти, без самой кожи: у трубок — кожа у центра кольца (есть ли, глубина, направление, складка), сдвиг
+     центра у сустава (settle) и сжатие кольца в складке; у лент — кожа у центров полос и итог проверки верха (сдвиг центра,
+     сдвиг швов, опускание своих кромок); у колпака — сдвиг узлов к головке и срез толщины. Всё прочее (пути, сечения, вершины)
+     считается в кадре как обычно. surfaceAll(…, memo): memo.rec — записать ленту кадра; memo.a, memo.b, memo.w — взять из
+     двух лент соседних фаз, линейно с долей w (поза между ними меняется плавно). Где у двух лент кольцо или полоса считались
+     по-разному (кожа кадра — в одной, записи sk — в другой), кожа считается заново. Хранит и ищет ленты слой мышц сцены
+     (src/volume/muscles.mjs). */
+  let TMODE = 0, TP = null, TA = null, TB = null, TW = 0;
+  /* поля ленты: у кольца трубки TPR — [есть ли кожа: 0 нет, 1 по записям sk, 2 кожа кадра; глубина; направление ×3; складка;
+     сдвиг центра ×3; сжатие кольца], у полосы ленты TPL — [есть ли; направление ×3; глубина; сдвиг центра; опускание левой и
+     правой кромок], у шва — сдвиг, у узла колпака — сдвиг к головке и срез; масштабы Int16: глубина — T_D (0,01 мм),
+     направление и доли — T_O, сдвиги — T_X (0,01 мм) */
+  const TPR = 10, TPL = 8, T_D = 1000, T_O = 32767, T_X = 1000;
+  function tput(i, v, sc) { const x = Math.round(v * sc); TP[i] = x > 32767 ? 32767 : x < -32767 ? -32767 : x; }
+  function tget(i, sc) { return (TA[i] + (TB[i] - TA[i]) * TW) / sc; }
+  /* направление из ленты (поля i…i+2) — в TDR, единичное */
+  const TDR = new Float64Array(3);
+  function tdir(i) { const x = tget(i, T_O), y = tget(i + 1, T_O), z = tget(i + 2, T_O), l = Math.sqrt(x * x + y * y + z * z) || 1; TDR[0] = x / l; TDR[1] = y / l; TDR[2] = z / l; }
+  function bindTape(bound) {
+    let n = 0;
+    for (const mu of bound) { mu.tp = -1; if (bound.skin && mu.skp && !mu.fan && !mu.cap && !mu.wall) { mu.tp = n; n += ringCount(mu) * TPR; } }
+    for (const fan of bound.fans || []) { fan.tp = n; n += fan.K * fan.n * TPL + (fan.K + 1) * fan.n; }
+    for (const cap of bound.caps || []) { cap.tp = -1; if (cap.skin) { cap.tp = n; n += cap.n * cap.C * 2; } }
+    bound.tapeN = bound.skin ? n : 0;
+  }
+  /* кожа у кольца r трубки mu — из ленты (поле tb): null — кожи нет, иначе SK (как skinAt; сдвиг у сустава и складка — из ленты,
+     поэтому bits = 0) */
+  function ringReplay(mu, b, s, m, tb) {
+    const fl = TA[tb];
+    if (fl === 0) return null;
+    const sk = skinAt(mu, b, s, m);
+    if (fl === 2) { tdir(tb + 2); SK.d = tget(tb + 1, T_D); SK.o[0] = TDR[0]; SK.o[1] = TDR[1]; SK.o[2] = TDR[2]; SK.k = tget(tb + 5, T_O); SK.bits = 0; SK.risky = 0; }
+    return sk;
+  }
+  function ringRecord(tb, sk) {
+    if (!sk) { TP[tb] = 0; return; }
+    TP[tb] = sk.bits ? 2 : 1; tput(tb + 1, sk.d, T_D); tput(tb + 2, sk.o[0], T_O); tput(tb + 3, sk.o[1], T_O); tput(tb + 4, sk.o[2], T_O); tput(tb + 5, sk.k, T_O);
+    TP[tb + 6] = TP[tb + 7] = TP[tb + 8] = 0; tput(tb + 9, 1, T_O);
+  }
   /* кожа над брюшком в точке s пути: глубина d (см) и направление к коже o (каталог, единичный) — по записям sk
      (нейтральная поза), линейно между ними. Направление записано в рамке кости: у первой половины брюшка — кости начала
-     пути, у второй — конца; m — матрицы костей кадра (Skeleton.frames) */
-  function skinAt(mu, b, s, m) {
+     пути, у второй — конца; m — матрицы костей кадра (Skeleton.frames).
+     Этап Г: у мышцы под кожей (skp — части кожи у её пути, pack.js) глубина и направление — по коже кадра в центре кольца
+     (px, py, pz; skinLive ниже), кривизна ρ — по записям sk. */
+  function skinAt(mu, b, s, m, px, py, pz) {
     const sk = mu.sk; if (!sk) return null;
     const u = (s - b.t0) / b.lb, n = SKIN_U.length;
     let k = 0; while (k < n - 2 && u > SKIN_U[k + 1]) k++;
     const w = Math.max(0, Math.min(1, (u - SKIN_U[k]) / (SKIN_U[k + 1] - SKIN_U[k]))), A = sk[k], C = sk[k + 1];
+    SK.rho = (A[4] || 200) + ((C[4] || 200) - (A[4] || 200)) * w; SK.k = 0; SK.bits = 0; SK.risky = 0;
+    /* у колец глубже LIVE_DEEP под кожей в нейтральной позе (по обеим соседним записям) кожа кадра не считается: до кожи и в позах
+       далеко, а кадр дешевле */
+    if (mu.skp && px !== undefined && (A[0] < LIVE_DEEP || C[0] < LIVE_DEEP) && skinLive(mu, m, px, py, pz, (1 << k) | (1 << (k + 1)))) { SK.bits = (1 << k) | (1 << (k + 1)); return SK; }
     /* направления двух соседних записей — линейной частью матриц их костей; без промежуточных массивов (кадр — сотни колец) */
     const ia = (SKIN_U[k] < .5 ? mu.el[0].s.i : mu.el[mu.el.length - 1].s.i) * 12, ic = (SKIN_U[k + 1] < .5 ? mu.el[0].s.i : mu.el[mu.el.length - 1].s.i) * 12;
     const ax = m[ia] * A[1] + m[ia + 1] * A[2] + m[ia + 2] * A[3], ay = m[ia + 4] * A[1] + m[ia + 5] * A[2] + m[ia + 6] * A[3], az = m[ia + 8] * A[1] + m[ia + 9] * A[2] + m[ia + 10] * A[3];
     const cx = m[ic] * C[1] + m[ic + 1] * C[2] + m[ic + 2] * C[3], cy = m[ic + 4] * C[1] + m[ic + 5] * C[2] + m[ic + 6] * C[3], cz = m[ic + 8] * C[1] + m[ic + 9] * C[2] + m[ic + 10] * C[3];
     let ox = ax + (cx - ax) * w, oy = ay + (cy - ay) * w, oz = az + (cz - az) * w; const ol = Math.sqrt(ox * ox + oy * oy + oz * oz) || 1;
     SK.o[0] = ox / ol; SK.o[1] = oy / ol; SK.o[2] = oz / ol;
-    SK.d = A[0] + (C[0] - A[0]) * w; SK.rho = (A[4] || 200) + ((C[4] || 200) - (A[4] || 200)) * w;
+    SK.d = A[0] + (C[0] - A[0]) * w;
     return SK;
   }
+  /* ---------- кожа кадра (этап Г: тело мышцы между костью и кожей) ----------
+     Запись sk — кожа нейтральной позы в рамках костей начала и конца пути. Она верна в позе, только если брюшко лежит на этой
+     кости и кожа над ним движется вместе с ней. У двусуставных мышц брюшко лежит на третьей кости (икроножная — на голени,
+     её путь — от бедра к пятке; задняя поверхность бедра, прямая бедра — на бедре, путь — от таза к голени; длинная головка
+     трёхглавой, плечелучевая), у односуставных половина брюшка записана в рамке кости по ту сторону сустава (медиальная и
+     латеральная головки трёхглавой — в рамке локтевой, латеральная широкая — большеберцовой): при сгибании направление к коже
+     поворачивалось вместе с ней на 60–150°, и сплющенное сечение вставало ребром к коже. Кроме того, у сустава в позе кожа
+     двух сегментов сходится, у подмышки поднимается складками, а линия действия местами идёт над кожей. В 4.56.0 тела трубок,
+     лент и колпака выходили из кожи до 2,59 см (плечелучевая в тяге Т-грифа), у 70 линий — больше 1 см.
+     Поэтому у мышц под кожей глубина и направление к коже берутся в кадре в центре кольца — по той же коже, что у манекена и
+     проверок (Mannequin.limbSDF, torsoSDF, neckSDF и «шапки» суставов в bodyData), но по матрицам костей: суставы и рамки
+     сегментов манекена в рамках костей постоянны (плечевая кость — рамка плеча, начало — центр плечевого сустава, локоть —
+     (0, −B.ua, 0); так же предплечье, бедро, голень, грудная клетка, поясница (L5), таз (крестец), шея, голова), закрутка
+     предплечья — по повороту лучевой кости относительно локтевой. Части кожи (коды — как у G.skinSDF в проверках): 0 — корпус,
+     1 — голова, 2 — шея, 3–10 — плечо, предплечье, бедро, голень (левая, правая
+     сторона), 11–22 — «шапки» над акромионом, плечом, локтем, запястьем, коленом, лодыжкой. Кожа — объединение частей мышцы
+     (skp): глубина — наибольшая, направление — от той части, в которой центр глубже всего. В кистях и стопах (там у манекена
+     своя форма — кисть и стопа, проверки их не меряют) и дальше LIVE_OUT от кожи частей — как раньше, по записям sk. */
+  /* LIVE_OUT — дальше от кожи частей (снаружи, см) кожа кадра не считается; LIVE_DEEP — кольца глубже в нейтральной позе (skinAt);
+     SKIN_DEEP — глубже точное расстояние до кожи корпуса не нужно; RIB_TOPCHK — верх полосы ленты ближе к коже (по плоскости)
+     проверяется по коже кадра; BEYOND_H — кисть дальше запястья (skinBeyond); ESC_T, ESC_M, ESC_G — уход под кожу соседней части,
+     когда направление к коже почти вдоль пути (skinLive); CREASE_W — складка: две части ближе этой разницы глубин */
+  const LIVE_OUT = 3, LIVE_DEEP = 3.5, SKIN_DEEP = 4.5, RIB_TOPCHK = 1.5, BEYOND_H = 2, ESC_T = .5, ESC_M = 1.5, ESC_G = .1, CREASE_W = 1.5;
+  /* результат skinPart — направление наружу (каталог); NODIR — направление не нужно (skinDepth) */
+  const SD = new Float64Array(3);
+  let NODIR = 0;
+  /* состояние кожи кадра: матрицы, закрутка предплечий, центры «шапок», плечевой пояс, складки подмышки, шея */
+  const SKN = { S: null, m: null, tw: new Float64Array(4), cap: new Float64Array(36), gd: new Float64Array(6), gk: new Float64Array(2), gm: new Float64Array(2), fold: new Float64Array(6 * 10), tsl: new Float64Array(2), neck: new Float64Array(18), hand: new Int32Array(2), foot: new Int32Array(2) };
+  function bindSkin(md, bound, idx, skel) {
+    if (!MQ || !md.muscles.some(mu => mu.skp)) return null;
+    const bone = (n, s = '') => { const i = idx.get(n + '|' + s); if (i === undefined) throw Error('muscles: skin bone ' + n + ' ' + s); return i; };
+    const B = MQ.B, prof = P => { const out = new Float64Array(101 * 4); for (let i = 0; i <= 100; i++) { const t = i / 100; let j = 1; while (j < P.length - 1 && P[j][0] < t) j++; const a = P[j - 1], c = P[j], u = Math.max(0, Math.min(1, (t - a[0]) / (c[0] - a[0]))); for (let k = 0; k < 4; k++) out[i * 4 + k] = a[k + 1] + (c[k + 1] - a[k + 1]) * u; } return out; };
+    const S = { limb: [], caps: [], neck: { cerv: bone('cervical'), skull: bone('skull'), tab: (() => { const P = MQ.NECK, out = new Float64Array(101 * 4); for (let i = 0; i <= 100; i++) { const t = i / 100; let j = 1; while (j < P.length - 1 && P[j][0] < t) j++; const a = P[j - 1], c = P[j], u = Math.max(0, Math.min(1, (t - a[0]) / (c[0] - a[0]))); for (let k = 0; k < 3; k++) out[i * 4 + k] = a[k + 1] + (c[k + 1] - a[k + 1]) * u; } return out; })() }, rib: bone('ribcage'), l5: bone('L5'), sac: bone('sacrum'), L5h: 0,
+      torso: MQ.TORSO, top: MQ.TORSO.at(-1)[0], bot: MQ.TORSO[0][0], ttab: null, rtab: null, ftab: null, capR: null, pelvisTop: null, tbones: null, skull: 0, headC: null, headR: 0, th0: 0, l5off: 0, knz: 0, hand: null, foot: null, folds: [], foldSp: MQ.FOLD_SP, seat: MQ.SEAT_K, piv: [0, B.lumbar[1] + B.lumbarPivot[1], B.lumbarPivot[2], 0, B.thoracic[1] + B.thoracicPivot[1], B.thoracicPivot[2]],
+      blend: MQ.TORSO_BLEND, blendF: MQ.TORSO_BLEND_FRONT, frontH: MQ.FRONT_H, frontW: MQ.FRONT_W, rigid: [0, 0], segH: [0, B.lumbar[1], B.lumbar[1] + B.thoracic[1]], ramp: MQ.ramp, sides: [] };
+    /* сечения корпуса — через 0,25 см: [w, a, b, nb, nf] (profileAt — линейно между строками TORSO) */
+    const T = MQ.TORSO, H0 = T[0][0], NH = Math.ceil((S.top - H0) / .25) + 1; S.ttab = new Float64Array(NH * 5); S.th0 = H0;
+    for (let i = 0; i < NH; i++) { const h = Math.min(S.top, H0 + i * .25); let j = 1; while (j < T.length - 1 && T[j][0] < h) j++; const a = T[j - 1], c = T[j], u = Math.max(0, Math.min(1, (h - a[0]) / (c[0] - a[0]))); for (let k = 0; k < 5; k++) S.ttab[i * 5 + k] = a[k + 1] + (c[k + 1] - a[k + 1]) * u; }
+    /* начало рамки поясницы — на высоте шарнира L5/S1, позвонок L5 стоит выше на свою высоту (как у стенок, wallTorso) */
+    S.l5off = skel.bones[S.l5].h - B.lumbar[1];
+    S.rtab = new Float64Array(NH * 2 * (RT_N + 1));
+    for (let i = 0; i < NH; i++) for (let half = 0; half < 2; half++) for (let j = 0; j <= RT_N; j++) {
+      const t = j / RT_N, u = 1 - t, v = t, l = Math.sqrt(u * u + v * v), o = i * 5, T5 = S.ttab;
+      S.rtab[(i * 2 + half) * (RT_N + 1) + j] = torsoR0(half ? T5[o + 2] : T5[o + 1], T5[o], half ? T5[o + 3] : T5[o + 4], u / l, v / l);
+    }
+    /* высоты, выше которых кожа корпуса жёстко с грудной клеткой: по боковой схеме и по передней (конец скругления у грудного шарнира) */
+    S.pelvisTop = [S.blend[0][1] - S.blend[0][2], Math.min(S.blend[0][1] - S.blend[0][2], S.blendF[0][1] - S.blendF[0][2], MQ.FRONT_H[0])];
+    S.rigid = [S.blend[1][1] + S.blend[1][3], Math.max(S.blend[1][1] + S.blend[1][3], S.blendF[1][1] + S.blendF[1][3], MQ.FRONT_H[1])];
+    for (const s of ['L', 'R']) {
+      const g = s === 'L' ? 1 : -1, hum = bone('humerus', s), uln = bone('ulna', s), rad = bone('radius', s), fem = bone('femur', s), tib = bone('tibia', s);
+      /* сегменты конечностей — объекты одной формы (обращения к полям в limbPart не замедляются) */
+      const sideI = s === 'L' ? 0 : 1, seg = (b, L, P, fa) => ({ bone: b, L, g, prof: prof(P), fa, side: sideI });
+      S.limb.push(seg(hum, B.ua, MQ.LIMBS.ua, 0), seg(uln, B.fa, MQ.LIMBS.fa, 1), seg(fem, B.th, MQ.LIMBS.th, 0), seg(tib, B.sk, MQ.LIMBS.sk, 0));
+      /* «шапки» (bodyData): над акромионом — в рамке плечевого пояса от центра плечевого сустава, плечо, локоть, запястье, колено
+         (вперёд по биссектрисе передних осей бедра и голени), лодыжка */
+      S.caps.push({ k: 'ac', r: MQ.AC_CAP.r }, { k: 'sh', r: MQ.CAPS.sh }, { k: 'el', r: MQ.CAPS.el }, { k: 'wr', r: MQ.CAPS.wr }, { k: 'kn', r: MQ.CAPS.kn }, { k: 'an', r: MQ.CAPS.an });
+      S.sides.push({ g, hum, uln, rad, fem, tib, clR: [g * B.ghRel[0], B.ghRel[1], B.ghRel[2]], sc: [g * B.sc[0], B.sc[1], B.sc[2]], rest: [g * (B.sc[0] + B.ghRel[0]), B.sc[1] + B.ghRel[1], B.sc[2] + B.ghRel[2]], ac: [g * MQ.AC_CAP.off[0], MQ.AC_CAP.off[1], MQ.AC_CAP.off[2]] });
+      for (const k of Object.keys(MQ.FOLDS)) { const F = MQ.FOLDS[k]; S.folds.push({ g, hum, tr: [g * F.tr[0], F.tr[1], F.tr[2]], ua: [g * F.ua[0], F.ua[1], F.ua[2]], a: F.a, s: F.s, kv: F.kv, L0: 0 }); }
+    }
+    S.capR = Float64Array.from(S.caps, c => c.r); S.tbones = [S.sac, S.l5, S.rib]; S.skull = bone('skull'); S.headC = B.headCenter.slice();
+    /* радиус шара с головой вокруг центра — по точкам поверхности головы с ушами (Mannequin.headSamples, их строят и силуэты
+       каталога) и 1 см запаса между точками (headPart) */
+    { let R = 0; for (const p of MQ.headSamples()) R = Math.max(R, Math.hypot(p[0], p[1], p[2])); S.headR = R + 1; }
+    S.hand = [bone('lunate', 'L'), bone('lunate', 'R')]; S.foot = [bone('foot', 'L'), bone('foot', 'R')]; S.knz = MQ.KN_CAP_Z;
+    /* длины осей складок стоя (Mannequin.foldAxes, FOLD_L0): грудная клетка и плечо в нейтральной позе — сами рамки манекена */
+    const R0 = MQ.catalogPose(MQ.neutral()), F0 = R0.frames;
+    for (const f of S.folds) {
+      const Tf = F0.thorax, U = F0[f.g > 0 ? 'uaL' : 'uaR'], A = [0, 1, 2].map(r => Tf.o[r] + Tf.x[r] * f.tr[0] + Tf.y[r] * f.tr[1] + Tf.z[r] * f.tr[2]), Bp = [0, 1, 2].map(r => U.o[r] + U.x[r] * f.ua[0] + U.y[r] * f.ua[1] + U.z[r] * f.ua[2]);
+      f.L0 = Math.hypot(Bp[0] - A[0], Bp[1] - A[1], Bp[2] - A[2]);
+    }
+    /* колпак дельтовидной: части кожи всех его линий (capSkin) — «мышца» с полями кожи */
+    for (const cap of bound.caps || []) {
+      const codes = new Set(); for (const i of cap.lines) for (const e of bound[i].skp || []) codes.add(e >> 5);
+      if (codes.size) cap.skin = { skp: Uint8Array.from([...codes].sort((a, b) => a - b)), skm: new Uint8Array(codes.size).fill(31), sks: S, skb: 0 };
+    }
+    for (const mu of bound) if (mu.skp) {
+      /* запись skp — код части · 32 + маска записей sk, у которых часть рядом (pack.js) */
+      const codes = mu.skp.map(e => e >> 5);
+      mu.skm = Uint8Array.from(mu.skp, e => e & 31); mu.skp = Uint8Array.from(codes); mu.sks = S;
+      /* skb — у мышцы есть части у кисти или стопы (предплечье и запястье, голень и лодыжка; биты: кисть L, R, стопа L, R) —
+         проверка «в кисти или стопе» только для них: в выпаде в сторону кисть у стопы, и «стопа» (шар 30 см) накрывала
+         предплечье — кожа кадра там не считалась, и плечелучевая выходила из кожи на 1,8 см */
+      mu.skb = 0;
+      for (const c of codes) mu.skb |= c === 4 || c === 14 ? 1 : c === 8 || c === 20 ? 2 : c === 6 || c === 16 ? 4 : c === 10 || c === 22 ? 8 : 0;
+    }
+    return S;
+  }
+  /* точка p в рамке кости i (рамки скелета — ортонормированные, кроме фаланг): в LQ[0..2] */
+  const LQ = new Float64Array(3);
+  function toLocal(m, i, x, y, z) { const o = i * 12, dx = x - m[o + 3], dy = y - m[o + 7], dz = z - m[o + 11]; LQ[0] = m[o] * dx + m[o + 4] * dy + m[o + 8] * dz; LQ[1] = m[o + 1] * dx + m[o + 5] * dy + m[o + 9] * dz; LQ[2] = m[o + 2] * dx + m[o + 6] * dy + m[o + 10] * dz; }
+  function skinFrame(S, m) {
+    SKN.S = S; SKN.m = m;
+    for (let k = 0; k < 2; k++) {
+      const sd = S.sides[k], u = sd.uln * 12, r = sd.rad * 12, g = sd.g;
+      /* закрутка предплечья: ось z лучевой кости в рамке локтевой — (−sin φ, ·, cos φ) (fd — поворот рамки fa вокруг её оси y) */
+      const zx = m[u] * m[r + 2] + m[u + 4] * m[r + 6] + m[u + 8] * m[r + 10], zz = m[u + 2] * m[r + 2] + m[u + 6] * m[r + 6] + m[u + 10] * m[r + 10], zl = Math.sqrt(zx * zx + zz * zz) || 1;
+      SKN.tw[k * 2] = zz / zl; SKN.tw[k * 2 + 1] = -zx / zl;
+      /* «шапки»: центры в каталоге */
+      const h = sd.hum * 12, f = sd.fem * 12, t = sd.tib * 12, c = SKN.cap, b = k * 18;
+      const put = (j, x, y, z) => { c[b + j * 3] = x; c[b + j * 3 + 1] = y; c[b + j * 3 + 2] = z; };
+      /* плечо: центр сустава + x плеча · g · SH_CAP[1] (+ y · SH_CAP[0]) */
+      put(1, m[h + 3] + m[h] * g * MQ.SH_CAP[1] + m[h + 1] * MQ.SH_CAP[0], m[h + 7] + m[h + 4] * g * MQ.SH_CAP[1] + m[h + 5] * MQ.SH_CAP[0], m[h + 11] + m[h + 8] * g * MQ.SH_CAP[1] + m[h + 9] * MQ.SH_CAP[0]);
+      put(2, m[u + 3], m[u + 7], m[u + 11]);
+      put(3, m[u + 3] - m[u + 1] * S.limb[k * 4 + 1].L, m[u + 7] - m[u + 5] * S.limb[k * 4 + 1].L, m[u + 11] - m[u + 9] * S.limb[k * 4 + 1].L);
+      { let nx = m[f + 2] + m[t + 2], ny = m[f + 6] + m[t + 6], nz = m[f + 10] + m[t + 10]; const nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1; nx /= nl; ny /= nl; nz /= nl; put(4, m[t + 3] + nx * S.knz, m[t + 7] + ny * S.knz, m[t + 11] + nz * S.knz); }
+      put(5, m[t + 3] - m[t + 1] * S.limb[k * 4 + 3].L, m[t + 7] - m[t + 5] * S.limb[k * 4 + 3].L, m[t + 11] - m[t + 9] * S.limb[k * 4 + 3].L);
+      /* плечевой пояс: поворот G = rz(α)·ry(β) рамки ключицы манекена в рамке грудной клетки (Mannequin.fk: F.cl) — по центру
+         плечевого сустава: gh − sc = G · ghRel; сдвиг кожи надплечий (girdleDelta) — gh − rest, в рамке грудной клетки */
+      toLocal(m, S.rib, m[h + 3], m[h + 7], m[h + 11]);
+      const gx = LQ[0], gy = LQ[1], gz = LQ[2];
+      SKN.gd[k * 3] = gx - sd.rest[0]; SKN.gd[k * 3 + 1] = gy - sd.rest[1]; SKN.gd[k * 3 + 2] = gz - sd.rest[2]; SKN.gk[k] = 0;
+      /* наибольший сдвиг кожи надплечий этой стороны (доля — не больше 0,85) */
+      SKN.gm[k] = .85 * Math.sqrt(SKN.gd[k * 3] ** 2 + SKN.gd[k * 3 + 1] ** 2 + SKN.gd[k * 3 + 2] ** 2);
+      const wx = gx - sd.sc[0], wy = gy - sd.sc[1], wz = gz - sd.sc[2], r0 = sd.clR, q = Math.sqrt(r0[0] * r0[0] + r0[2] * r0[2]), ph = Math.atan2(r0[0], r0[2]);
+      /* β: (ry(β)·ghRel)_z = q·cos(β + φ) = w_z — из двух корней тот, что ближе к нулю (у манекена поворот пояса — десятки градусов) */
+      const ac = Math.acos(Math.max(-1, Math.min(1, wz / q))), be = Math.abs(ac - ph) <= Math.abs(-ac - ph) ? ac - ph : -ac - ph;
+      const cb = Math.cos(be), sb = Math.sin(be), ux = cb * r0[0] + sb * r0[2], uy = r0[1], al = Math.atan2(wy, wx) - Math.atan2(uy, ux), ca = Math.cos(al), sa = Math.sin(al);
+      /* центр «шапки» над акромионом: gh + G · off — в рамке грудной клетки, затем в каталог */
+      const o = sd.ac, vx = cb * o[0] + sb * o[2], vy = o[1], vz = -sb * o[0] + cb * o[2], ex = gx + ca * vx - sa * vy, ey = gy + sa * vx + ca * vy, ez = gz + vz, rb = S.rib * 12;
+      put(0, m[rb + 3] + m[rb] * ex + m[rb + 1] * ey + m[rb + 2] * ez, m[rb + 7] + m[rb + 4] * ex + m[rb + 5] * ey + m[rb + 6] * ez, m[rb + 11] + m[rb + 8] * ex + m[rb + 9] * ey + m[rb + 10] * ez);
+    }
+    /* складки подмышки (Mannequin.foldAxes): начало — в рамке грудной клетки, конец — в рамке плеча; k = (L/L0)^kv. Оси — в рамке
+       грудной клетки: там же считается кожа корпуса (torsoPart) */
+    const rb = S.rib * 12;
+    S.folds.forEach((f, j) => {
+      const h = f.hum * 12, F = SKN.fold, o = j * 10, ax = f.tr[0], ay = f.tr[1], az = f.tr[2];
+      toLocal(m, S.rib, m[h + 3] + m[h] * f.ua[0] + m[h + 1] * f.ua[1] + m[h + 2] * f.ua[2], m[h + 7] + m[h + 4] * f.ua[0] + m[h + 5] * f.ua[1] + m[h + 6] * f.ua[2], m[h + 11] + m[h + 8] * f.ua[0] + m[h + 9] * f.ua[1] + m[h + 10] * f.ua[2]);
+      const bx = LQ[0], by = LQ[1], bz = LQ[2];
+      const L = Math.sqrt((bx - ax) ** 2 + (by - ay) ** 2 + (bz - az) ** 2) || 1;
+      const ak = f.a * Math.pow(L / f.L0, f.kv);
+      F[o] = ax; F[o + 1] = ay; F[o + 2] = az; F[o + 3] = (bx - ax) / L; F[o + 4] = (by - ay) / L; F[o + 5] = (bz - az) / L; F[o + 6] = L; F[o + 7] = ak;
+      /* дальше от оси, чем на s·√ln(ak/0,01), подъём меньше 0,1 мм — не считается (у манекена — дальше 3s) */
+      F[o + 8] = f.s * f.s * Math.min(9, Math.max(0, Math.log(ak / .01)));
+      F[o + 9] = f.s;
+    });
+    /* наибольшее приближение кожи корпуса сдвигом надплечий (двойной сдвиг: сечение под сдвинутой точкой другое) и складками
+       (подъём не больше амплитуды) — для оценки снизу в torsoPart */
+    { let ak = 0; for (let j = 0; j < 6; j++) ak = Math.max(ak, SKN.fold[j * 10 + 7]); for (let k = 0; k < 2; k++) SKN.tsl[k] = 2 * SKN.gm[k] + ak + .3; }
+    /* шея (Mannequin.neckSDF): ось — от основания (рамка шеи: −1 по y, +2,5 по z) к точке в черепе (+1,5 по y рамки головы) */
+    { const n = S.neck.cerv * 12, hd = S.neck.skull * 12, N = SKN.neck;
+      const lx = m[n + 3] - m[n + 1] + m[n + 2] * 2.5, ly = m[n + 7] - m[n + 5] + m[n + 6] * 2.5, lz = m[n + 11] - m[n + 9] + m[n + 10] * 2.5;
+      const hx = m[hd + 3] + m[hd + 1] * 1.5, hy = m[hd + 7] + m[hd + 5] * 1.5, hz = m[hd + 11] + m[hd + 9] * 1.5;
+      N[0] = lx; N[1] = ly; N[2] = lz; N[3] = hx - lx; N[4] = hy - ly; N[5] = hz - lz;
+      for (let r = 0; r < 3; r++) { N[6 + r] = m[n + r * 4 + 2]; N[9 + r] = m[n + r * 4]; N[12 + r] = m[hd + r * 4 + 2]; N[15 + r] = m[hd + r * 4]; } }
+    SKN.hand[0] = S.hand[0]; SKN.hand[1] = S.hand[1]; SKN.foot[0] = S.foot[0]; SKN.foot[1] = S.foot[1];
+    if (!S.ftab) S.ftab = new Float64Array(2 * FT_N * 12);
+    for (let front = 0; front < 2; front++) for (let i = 0; i < FT_N; i++) { torsoFrameAt(S, m, i * FT_STEP, front ? S.blendF : S.blend); S.ftab.set(TF, (front * FT_N + i) * 12); }
+  }
+  /* таблицы skinFold: exp(−e²) при e² от 0 до FX_MAX (дальше — отсечка складки, F[o + 8]) и sin²(πt) при t от 0 до 1 */
+  const FX_N = 1024, FX_MAX = 9, FX_K = FX_N / FX_MAX, FX = Float64Array.from({ length: FX_N + 2 }, (_, i) => Math.exp(-i / FX_K)), FS = Float64Array.from({ length: FX_N + 2 }, (_, i) => Math.sin(Math.PI * Math.min(1, i / FX_N)) ** 2);
+  /* подъём кожи корпуса складками подмышки в точке (x, y, z) рамки грудной клетки — Mannequin.liftIn по осям кадра */
+  function skinFold(x, y, z) {
+    const F = SKN.fold, sp = SKN.S.foldSp; let h = 0;
+    for (let j = 0; j < 6; j++) {
+      const o = j * 10, ak = F[o + 7]; if (ak <= h) continue;
+      const ox = x - F[o], oy = y - F[o + 1], oz = z - F[o + 2], L = F[o + 6], s = F[o + 9];
+      let u = ox * F[o + 3] + oy * F[o + 4] + oz * F[o + 5]; u = u < 0 ? 0 : u > L ? L : u;
+      const qx = ox - F[o + 3] * u, qy = oy - F[o + 4] * u, qz = oz - F[o + 5] * u, q2 = qx * qx + qy * qy + qz * qz; if (q2 > F[o + 8]) continue;
+      const e2 = q2 / (s * s); if (ak <= h * (1 + e2)) continue;   /* exp(−e²) ≤ 1/(1 + e²) */
+      /* exp(−e²) и sin²(πu/L) — по таблицам (линейно между строками; ошибка подъёма — меньше 0,01 мм): в кадре это тысячи вызовов,
+         Math.exp был самым дорогим местом кожи корпуса */
+      const xe = e2 * FX_K, ie = xe | 0, ex = ak * (ie < FX_N ? FX[ie] + (FX[ie + 1] - FX[ie]) * (xe - ie) : 0); if (ex <= h) continue;
+      let v;
+      if (sp === 2) { const xs = u / L * FX_N, is = xs | 0; v = ex * (is < FX_N ? FS[is] + (FS[is + 1] - FS[is]) * (xs - is) : 0); }
+      else v = ex * Math.pow(Math.sin(Math.PI * u / L), sp);
+      if (v > h) h = v;
+    }
+    return h;
+  }
+  /* сечение корпуса на высоте h: [w, a, b, nb, nf] в TS */
+  const TS = new Float64Array(5);
+  function torsoSec(S, h) {
+    const x = (Math.max(S.bot, Math.min(S.top, h)) - S.th0) / .25, i = Math.min(S.ttab.length / 5 - 2, x | 0), f = x - i, T = S.ttab;
+    for (let k = 0; k < 5; k++) TS[k] = T[i * 5 + k] + (T[i * 5 + 5 + k] - T[i * 5 + k]) * f;
+  }
+  /* радиус сечения корпуса вдоль направления (lz, lx) (Mannequin.ellipseRadius с суперэллипсом сзади nb и спереди nf) */
+  function torsoR0(A, W, ne, u, v) {
+    if (ne === 2) return 1 / Math.sqrt((u / A) * (u / A) + (v / W) * (v / W));
+    return Math.pow(Math.pow(u / A, ne) + Math.pow(v / W, ne), -1 / ne);
+  }
+  /* то же по таблице (bindSkin, rtab): строки через 0,25 см, передняя и задняя половины, 64 шага по t = |lx| / (|lx| + |lz|) —
+     без Math.pow в кадре; ошибка — доли миллиметра */
+  const RT_N = 64;
+  function torsoR(S, h, lz, lx) {
+    const az = Math.abs(lz), ax = Math.abs(lx), t = ax / (ax + az || 1) * RT_N, j = Math.min(RT_N - 1, t | 0), f = t - j;
+    const x = (Math.max(S.bot, Math.min(S.top, h)) - S.th0) / .25, i = Math.min(S.ttab.length / 5 - 2, x | 0), g = x - i, T = S.rtab, W = 2 * (RT_N + 1);
+    const o0 = i * W + (lz >= 0 ? 0 : RT_N + 1) + j, o1 = o0 + W;
+    const r0 = T[o0] + (T[o0 + 1] - T[o0]) * f, r1 = T[o1] + (T[o1 + 1] - T[o1]) * f;
+    return r0 + (r1 - r0) * g;
+  }
+  /* рамка сечения корпуса на высоте h (Mannequin.spineFrame, боковая схема): центр и оси — в TF (c, x, y, z) */
+  const TF = new Float64Array(12);
+  /* рамки сечений корпуса кадра у шарниров поясницы — таблица через FT_STEP по высоте от 0 до 32 см (боковая и передняя схемы,
+     skinFrame): в кадре — линейно между строками, без тригонометрии */
+  const FT_STEP = .5, FT_N = 65;
+  function torsoFrameLook(S, h, front) {
+    const x = h / FT_STEP, i = x <= 0 ? 0 : Math.min(FT_N - 2, x | 0), f = x <= 0 ? 0 : Math.min(1, x - i), T = S.ftab, o = (front * FT_N + i) * 12;
+    for (let r = 0; r < 12; r++) TF[r] = T[o + r] + (T[o + 12 + r] - T[o + r]) * f;
+  }
+  function torsoFrameAt(S, m, h, zones = S.blend) {
+    let seg = h < S.segH[1] ? 0 : h < S.segH[2] ? 1 : 2, j = -1, w = 0;
+    for (let q = 0; q < zones.length; q++) { const Z = zones[q], hj = Z[1], lo = Z[2], hi = Z[3]; if (h > hj - lo && h < hj + hi) { j = Z[0]; w = S.ramp((h - hj + lo) / (lo + hi), Z[4] || 0); break; } }
+    const bones = S.tbones;
+    if (j < 0) {
+      const o = bones[seg] * 12, dy = h - S.segH[seg] - (seg === 1 ? S.l5off : 0);
+      for (let r = 0; r < 3; r++) { TF[r] = m[o + r * 4 + 3] + m[o + r * 4 + 1] * dy; TF[3 + r] = m[o + r * 4]; TF[6 + r] = m[o + r * 4 + 1]; TF[9 + r] = m[o + r * 4 + 2]; }
+      return;
+    }
+    /* у шарнира j: рамка нижнего сегмента, повёрнутая на долю w поворота шарнира вокруг его оси (через точку piv) */
+    const A = bones[j - 1] * 12, Bn = bones[j] * 12, aoff = j - 1 === 1 ? S.l5off : 0;
+    /* поворот шарнира в рамке A: Rrel = A^T·B, ось и угол */
+    const R = TR;
+    for (let i = 0; i < 3; i++) for (let k = 0; k < 3; k++) R[i * 3 + k] = m[A + i] * m[Bn + k] + m[A + 4 + i] * m[Bn + 4 + k] + m[A + 8 + i] * m[Bn + 8 + k];
+    const tr = R[0] + R[4] + R[8], ang = Math.acos(Math.max(-1, Math.min(1, (tr - 1) / 2)));
+    let kx = R[7] - R[5], ky = R[2] - R[6], kz = R[3] - R[1]; const kl = Math.sqrt(kx * kx + ky * ky + kz * kz);
+    if (kl < 1e-9) { kx = 1; ky = 0; kz = 0; } else { kx /= kl; ky /= kl; kz /= kl; }
+    const an = ang * w, c = Math.cos(an), s = Math.sin(an), C1 = 1 - c;
+    /* Rw = rot(k, an) в рамке A */
+    const r00 = c + kx * kx * C1, r01 = kx * ky * C1 - kz * s, r02 = kx * kz * C1 + ky * s, r10 = ky * kx * C1 + kz * s, r11 = c + ky * ky * C1, r12 = ky * kz * C1 - kx * s, r20 = kz * kx * C1 - ky * s, r21 = kz * ky * C1 + kx * s, r22 = c + kz * kz * C1;
+    const px = S.piv[(j - 1) * 3], py = S.piv[(j - 1) * 3 + 1], pz = S.piv[(j - 1) * 3 + 2], vy = h - S.segH[j - 1];
+    /* центр: P + Rw·(−piv + (0, h − h0, 0)), всё в рамке A (Mannequin.turnAbout) */
+    const lx0 = -px, ly0 = vy - py, lz0 = -pz, cx = px + r00 * lx0 + r01 * ly0 + r02 * lz0, cy = py + r10 * lx0 + r11 * ly0 + r12 * lz0 - aoff, cz = pz + r20 * lx0 + r21 * ly0 + r22 * lz0;
+    for (let r = 0; r < 3; r++) {
+      const ax = m[A + r * 4], ay = m[A + r * 4 + 1], az = m[A + r * 4 + 2];
+      TF[r] = m[A + r * 4 + 3] + ax * cx + ay * cy + az * cz;
+      TF[3 + r] = ax * r00 + ay * r10 + az * r20; TF[6 + r] = ax * r01 + ay * r11 + az * r21; TF[9 + r] = ax * r02 + ay * r12 + az * r22;
+    }
+  }
+  const TR = new Float64Array(9), TF2 = new Float64Array(12);
+  /* рамка сечения боковой схемы на высоте h: у шарниров — по таблице кадра, ниже и выше — жёстко с тазом или грудной клеткой */
+  function torsoLat(S, m, h) { if (h > 0 && h < (FT_N - 1) * FT_STEP) torsoFrameLook(S, h, 0); else torsoFrameAt(S, m, h); }
+  /* смесь боковой и передней рамок сечения на высоте h с долей передней kf (Mannequin.mixFrame): центр, x, z — линейно, y — по
+     направлению */
+  function torsoMix(S, m, h, kf) {
+    if (h > 0 && h < (FT_N - 1) * FT_STEP) torsoFrameLook(S, h, 1); else torsoFrameAt(S, m, h, S.blendF);
+    TF2.set(TF);
+    torsoLat(S, m, h);
+    for (let r = 0; r < 12; r++) TF[r] += (TF2[r] - TF[r]) * kf;
+    const l = Math.sqrt(TF[6] * TF[6] + TF[7] * TF[7] + TF[8] * TF[8]) || 1; TF[6] /= l; TF[7] /= l; TF[8] /= l;
+  }
+  /* знаковое расстояние до кожи корпуса (Mannequin.torsoSDF) и направление наружу. Выше скругления у грудного шарнира (боковая
+     схема — 28 см, передняя — 32) сечение жёстко с грудной клеткой: всё — в её рамке (складки подмышки тоже, skinFrame); ниже
+     колена таза — жёстко с тазом; между ними — рамки сечений по таблице кадра (torsoLat, torsoMix) */
+  function torsoPart(S, m, x, y, z, best) {
+    const rb = S.rib * 12, ex = x - m[rb + 3], ey = y - m[rb + 7], ez = z - m[rb + 11];
+    let lx = m[rb] * ex + m[rb + 4] * ey + m[rb + 8] * ez, ly = m[rb + 1] * ex + m[rb + 5] * ey + m[rb + 9] * ez, lz = m[rb + 2] * ex + m[rb + 6] * ey + m[rb + 10] * ez;
+    let h = ly + S.segH[2];
+    if (h >= S.rigid[1] || (h >= S.rigid[0] && lz <= 0)) {
+      let sx = 0, sy = 0, sz = 0;
+      /* глубже SKIN_DEEP под кожей точное расстояние не нужно (сечение не сплющивается и не сдвигается): сдвиг надплечий и складки
+         не считаются, если без них точка глубже SKIN_DEEP с запасом на сдвиг */
+      const sd = lx >= 0 ? 0 : 1, gx = SKN.gd[sd * 3], gy = SKN.gd[sd * 3 + 1], gz = SKN.gd[sd * 3 + 2];
+      let deep = false;
+      { const r0 = Math.sqrt(lx * lx + lz * lz), q0 = r0 - (r0 < 1e-9 ? 0 : torsoR(S, h, lz, lx)); if (q0 < -SKIN_DEEP - (h > 38.8 ? SKN.gm[sd] : 0) && h < S.top - SKIN_DEEP) deep = true;
+        /* точка далеко снаружи корпуса (на руке, над плечом): без сдвига надплечий и складок расстояние — не меньше q0 (и выхода за
+           верх), они приближают кожу не больше чем на SKN.tsl; если и так дальше лучшей части (с запасом HEAD_SKIP, как у
+           головы), корпус дальше не считается */
+        if (best < Infinity) { const lb = Math.max(q0, h - S.top) - SKN.tsl[sd]; if (lb > best + (NODIR ? 0 : HEAD_SKIP)) return lb; } }
+      /* надплечья: кожа сдвинута за плечевым поясом (girdleShift) — расстояние от точки, сдвинутой обратно: неподвижная точка
+         q = p − сдвиг(q) (Mannequin.torsoSDF: до 10 шагов), до 0,3 мм; начало — с доли сдвига прошлой точки этой стороны (кольца
+         одной мышцы идут подряд) */
+      if (h > 38.8 && !deep) {
+        let k = SKN.gk[sd];
+        for (let it = 0; it < 8; it++) {
+          const qx = lx - gx * k, qy = ly - gy * k, hh = qy + S.segH[2], x0 = (Math.max(S.bot, Math.min(S.top, hh)) - S.th0) / .25, i0 = Math.min(S.ttab.length / 5 - 2, x0 | 0), w = S.ttab[i0 * 5] + (S.ttab[i0 * 5 + 5] - S.ttab[i0 * 5]) * (x0 - i0);
+          const sl = Math.min(1, Math.abs(qx) / w), u1 = Math.max(0, Math.min(1, (hh - 38.8) / 15)), u2 = Math.max(0, Math.min(1, (hh - 53.8) / 6));
+          const k1 = u1 * u1 * (3 - 2 * u1) * (1 - .4 * u2 * u2 * (3 - 2 * u2)) * sl * sl * .85, ch = Math.abs(k1 - k) * (Math.abs(gx) + Math.abs(gy) + Math.abs(gz));
+          k = k1; if (ch < .03) break;
+        }
+        SKN.gk[sd] = k; sx = gx * k; sy = gy * k; sz = gz * k; lx -= sx; ly -= sy; lz -= sz; h = ly + S.segH[2];
+      }
+      const rho = Math.sqrt(lx * lx + lz * lz), r = rho < 1e-9 ? 0 : torsoR(S, h, lz, lx), ux = rho > 1e-9 ? lx / rho : 1, uz = rho > 1e-9 ? lz / rho : 0;
+      let radial = rho - r;
+      /* складки подмышки: подъём кожи в точке поверхности на луче от оси (со сдвигом плечевого пояса обратно) — в рамке грудной клетки */
+      if (rho > 1e-9 && !deep && radial > -SKIN_DEEP) radial -= skinFold(ux * r + sx, ly + sy, uz * r + sz);
+      const axial = h - S.top, d = axial > 0 ? (radial > 0 ? Math.sqrt(radial * radial + axial * axial) : axial) : Math.max(radial, axial);
+      if (!(d < best) || NODIR) return d;
+      /* направление наружу — нормаль кожи: суперэллипс сечения в точке луча и наклон образующей по высоте (у груди под ключицей и
+         у надплечий кожа идёт вверх-внутрь, радиальное направление ошибалось на 25–45°) */
+      torsoNormal(S, h, lz, lx, ux, uz, r, rho);
+      let dx = TN[0], dy = TN[1], dz = TN[2];
+      if (axial > 0) { const rp = Math.max(0, radial); dx = ux * rp; dz = uz * rp; dy = axial; const l = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1; dx /= l; dy /= l; dz /= l; }
+      SD[0] = m[rb] * dx + m[rb + 1] * dy + m[rb + 2] * dz; SD[1] = m[rb + 4] * dx + m[rb + 5] * dy + m[rb + 6] * dz; SD[2] = m[rb + 8] * dx + m[rb + 9] * dy + m[rb + 10] * dz;
+      return d;
+    }
+    let cx, cy, cz, Xx, Xy, Xz, Zx, Zy, Zz, Yx, Yy, Yz;
+    const sb = S.sac * 12, px = x - m[sb + 3], py = y - m[sb + 7], pz = z - m[sb + 11], hp = m[sb + 1] * px + m[sb + 5] * py + m[sb + 9] * pz, pzl = m[sb + 2] * px + m[sb + 6] * py + m[sb + 10] * pz;
+    if (hp <= S.pelvisTop[pzl > 0 ? 1 : 0]) {
+      /* ниже скругления у поясничного шарнира — жёстко с тазом (сечение — в рамке таза, высота — над тазобедренными) */
+      h = hp; lx = m[sb] * px + m[sb + 4] * py + m[sb + 8] * pz; lz = pzl;
+      Xx = m[sb]; Xy = m[sb + 4]; Xz = m[sb + 8]; Yx = m[sb + 1]; Yy = m[sb + 5]; Yz = m[sb + 9]; Zx = m[sb + 2]; Zy = m[sb + 6]; Zz = m[sb + 10];
+      cx = m[sb + 3] + Yx * h; cy = m[sb + 7] + Yy * h; cz = m[sb + 11] + Yz * h;
+    } else {
+      h = hp;
+      for (let it = 0; it < 6; it++) {
+        torsoLat(S, m, h);
+        const along = (x - TF[0]) * TF[6] + (y - TF[1]) * TF[7] + (z - TF[2]) * TF[8];
+        if (Math.abs(along) < .02) break;
+        h += along;
+      }
+      torsoLat(S, m, h);
+      let dx = x - TF[0], dy = y - TF[1], dz = z - TF[2], al = dx * TF[6] + dy * TF[7] + dz * TF[8];
+      lx = dx * TF[3] + dy * TF[4] + dz * TF[5]; lz = dx * TF[9] + dy * TF[10] + dz * TF[11];
+      /* живот спереди — по передней схеме (Mannequin.torsoSDF): рамка сечения — смесь боковой и передней с долей kf по углу точки
+         на сечении (frontK), высота уточняется по смешанной рамке */
+      if (lz > 0 && h + al > S.frontH[0] && h + al < S.frontH[1]) {
+        let kf = 0;
+        for (let it = 0; it < 3; it++) {
+          torsoSec(S, h + al);
+          const an = Math.atan2(Math.abs(lx) / TS[0], lz / TS[1]), uu = Math.max(0, Math.min(1, (an - S.frontW[0]) / (S.frontW[1] - S.frontW[0]))), k1 = 1 - uu * uu * (3 - 2 * uu);
+          if (it && Math.abs(k1 - kf) < .01) break;
+          kf = k1; if (kf <= 0) break;
+          h += al;
+          for (let jt = 0; jt < 3; jt++) {
+            torsoMix(S, m, h, kf);
+            const a2 = (x - TF[0]) * TF[6] + (y - TF[1]) * TF[7] + (z - TF[2]) * TF[8];
+            if (Math.abs(a2) < .02) break;
+            h += a2;
+          }
+          torsoMix(S, m, h, kf);
+          dx = x - TF[0]; dy = y - TF[1]; dz = z - TF[2]; al = dx * TF[6] + dy * TF[7] + dz * TF[8];
+          lx = dx * TF[3] + dy * TF[4] + dz * TF[5]; lz = dx * TF[9] + dy * TF[10] + dz * TF[11];
+        }
+      }
+      h += al; cx = TF[0] + TF[6] * al; cy = TF[1] + TF[7] * al; cz = TF[2] + TF[8] * al;
+      Xx = TF[3]; Xy = TF[4]; Xz = TF[5]; Yx = TF[6]; Yy = TF[7]; Yz = TF[8]; Zx = TF[9]; Zy = TF[10]; Zz = TF[11];
+    }
+    const rho = Math.sqrt(lx * lx + lz * lz);
+    /* ниже тазобедренных — скошенный низ (Mannequin.SEAT_K): сечение с высоты h/k, торец — на высоте низа · k */
+    const kb = h < 0 ? Math.max(0, Math.min(1, (1 - (rho > 1e-9 ? lz / rho : 0)) / 2)) : 0, k = h < 0 ? 1 + S.seat * kb * kb * Math.sqrt(kb) : 1, hs = h < 0 ? h / k : h;
+    const r = rho < 1e-9 ? 0 : torsoR(S, hs, lz, lx);
+    let radial = rho - r;
+    const ux = rho > 1e-9 ? lx / rho : 1, uz = rho > 1e-9 ? lz / rho : 0;
+    /* складки подмышки — у точки поверхности на луче от оси, в рамке грудной клетки */
+    if (h > 20 && rho > 1e-9) {
+      const qx = cx + Xx * ux * r + Zx * uz * r - m[rb + 3], qy = cy + Xy * ux * r + Zy * uz * r - m[rb + 7], qz = cz + Xz * ux * r + Zz * uz * r - m[rb + 11];
+      radial -= skinFold(m[rb] * qx + m[rb + 4] * qy + m[rb + 8] * qz, m[rb + 1] * qx + m[rb + 5] * qy + m[rb + 9] * qz, m[rb + 2] * qx + m[rb + 6] * qy + m[rb + 10] * qz);
+    }
+    const axial = S.bot * k - h, d = axial > 0 ? (radial > 0 ? Math.sqrt(radial * radial + axial * axial) : axial) : Math.max(radial, axial);
+    if (!(d < best) || NODIR) return d;
+    torsoNormal(S, hs, lz, lx, ux, uz, r, rho);
+    let dx = Xx * TN[0] + Yx * TN[1] + Zx * TN[2], dy = Xy * TN[0] + Yy * TN[1] + Zy * TN[2], dz = Xz * TN[0] + Yz * TN[1] + Zz * TN[2];
+    if (axial > 0) { const rp = Math.max(0, radial); dx = (Xx * ux + Zx * uz) * rp - Yx * axial; dy = (Xy * ux + Zy * uz) * rp - Yy * axial; dz = (Xz * ux + Zz * uz) * rp - Yz * axial; const l = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1; dx /= l; dy /= l; dz /= l; }
+    SD[0] = dx; SD[1] = dy; SD[2] = dz;
+    return d;
+  }
+  /* нормаль кожи корпуса в рамке сечения (x, y — вдоль оси, z): в плоскости сечения — нормаль суперэллипса в точке луча (ux, uz)
+     на радиусе r, поделённая на косинус с лучом; вдоль оси — минус наклон радиуса по высоте (∇(ρ − r(θ, h))) */
+  const TN = new Float64Array(3);
+  function torsoNormal(S, h, lz, lx, ux, uz, r, rho) {
+    if (!(rho > 1e-9) || !(r > 1e-9)) { TN[0] = ux; TN[1] = 0; TN[2] = uz; return; }
+    torsoSec(S, h);
+    const A = uz >= 0 ? TS[1] : TS[2], W = TS[0], ne = uz >= 0 ? TS[4] : TS[3], zs = Math.abs(uz) * r / A, xs = Math.abs(ux) * r / W;
+    /* zs^(ne−1) — через exp и log: Math.pow в V8 вдвое медленнее (≈ 80 нс) */
+    let nz = (uz >= 0 ? 1 : -1) * (ne === 2 ? zs : zs > 0 ? Math.exp((ne - 1) * Math.log(zs)) : 0) / A, nx = (ux >= 0 ? 1 : -1) * (ne === 2 ? xs : xs > 0 ? Math.exp((ne - 1) * Math.log(xs)) : 0) / W;
+    const nl = Math.sqrt(nx * nx + nz * nz) || 1; nx /= nl; nz /= nl;
+    const cs = Math.max(.3, nx * ux + nz * uz), rh = torsoR(S, h + .5, lz, lx) - torsoR(S, h - .5, lz, lx);
+    let tx = nx / cs, ty = -rh, tz = nz / cs; const l = Math.sqrt(tx * tx + ty * ty + tz * tz) || 1;
+    TN[0] = tx / l; TN[1] = ty / l; TN[2] = tz / l;
+  }
+  const SHX = new Float64Array(3);
+  /* конечность (Mannequin.limbSDF): ось — от центра сустава (начало рамки кости) по −y на длину сегмента; предплечье —
+     с закруткой рамки сечения от локтевой к лучевой (tw) */
+  function limbPart(P, m, x, y, z, best) {
+    const mo = P.bone * 12, ex = x - m[mo + 3], ey = y - m[mo + 7], ez = z - m[mo + 11];
+    const qx = m[mo] * ex + m[mo + 4] * ey + m[mo + 8] * ez, qy = m[mo + 1] * ex + m[mo + 5] * ey + m[mo + 9] * ez, qz = m[mo + 2] * ex + m[mo + 6] * ey + m[mo + 10] * ez;
+    const L = P.L, t = -qy / L, tc = t < 0 ? 0 : t > 1 ? 1 : t, axial = t < 0 ? -t * L : t > 1 ? (t - 1) * L : 0;
+    let lx, ly;
+    if (P.fa) {
+      const c = SKN.tw[P.side * 2], s = SKN.tw[P.side * 2 + 1], ux = 1 - tc + tc * c, uz = tc * s, un = Math.sqrt(ux * ux + uz * uz) || 1;
+      lx = -P.g * (qx * ux + qz * uz) / un; ly = (-qx * uz + qz * ux) / un;
+    } else { lx = qz; ly = P.g * qx; }
+    const fi = tc * 100, i = Math.min(99, fi | 0), f = fi - i, T = P.prof, o = i * 4;
+    const rf = T[o] + (T[o + 4] - T[o]) * f, rb = T[o + 1] + (T[o + 5] - T[o + 1]) * f, rl = T[o + 2] + (T[o + 6] - T[o + 2]) * f, rm = T[o + 3] + (T[o + 7] - T[o + 3]) * f;
+    const rho = Math.sqrt(lx * lx + ly * ly), a = lx >= 0 ? rf : rb, b = ly >= 0 ? rl : rm;
+    const r = rho < 1e-9 ? Math.min(rf, rb, rl, rm) : rho / Math.sqrt((lx / a) * (lx / a) + (ly / b) * (ly / b)), radial = rho - r;
+    const d = axial > 0 ? (radial > 0 ? Math.sqrt(radial * radial + axial * axial) : axial) : radial;
+    if (!(d < best) || NODIR) return d;
+    /* направление наружу (только у части, которая пока ближе всех): радиально от оси (в рамке кости — (qx, 0, qz)), за концом — и
+       вдоль оси */
+    let dx = rho > 1e-9 ? qx / rho : 1, dy = 0, dz = rho > 1e-9 ? qz / rho : 0;
+    if (axial > 0) { const rp = Math.max(0, radial); dx *= rp; dz *= rp; dy = (t < 0 ? 1 : -1) * axial; const l = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1; dx /= l; dy /= l; dz /= l; }
+    else if (rho > 1e-9) {
+      /* нормаль кожи: эллипс сечения в точке луча (поделённая на косинус с лучом) и сужение сегмента вдоль оси (∇(ρ − R(θ, s)),
+         s — вдоль оси к дальнему суставу, по −y кости) */
+      let nf = lx / (a * a), nl = ly / (b * b); const nn = Math.sqrt(nf * nf + nl * nl) || 1; nf /= nn; nl /= nn;
+      const cs = Math.max(.3, (nf * lx + nl * ly) / rho), j0 = Math.max(0, i - 1), j1 = Math.min(99, i + 1), o0 = j0 * 4, o1 = j1 * 4 + 4;
+      const a0 = lx >= 0 ? T[o0] : T[o0 + 1], b0 = ly >= 0 ? T[o0 + 2] : T[o0 + 3], a1 = lx >= 0 ? T[o1] : T[o1 + 1], b1 = ly >= 0 ? T[o1 + 2] : T[o1 + 3];
+      const r0 = rho / Math.sqrt((lx / a0) * (lx / a0) + (ly / b0) * (ly / b0)), r1 = rho / Math.sqrt((lx / a1) * (lx / a1) + (ly / b1) * (ly / b1)), dr = (r1 - r0) / ((j1 + 1 - j0) / 100 * L);
+      let fx, fz, wx, wz;
+      if (P.fa) { const c = SKN.tw[P.side * 2], s = SKN.tw[P.side * 2 + 1], ux = 1 - tc + tc * c, uz = tc * s, un = Math.sqrt(ux * ux + uz * uz) || 1; fx = -P.g * ux / un; fz = -P.g * uz / un; wx = -uz / un; wz = ux / un; }
+      else { fx = 0; fz = 1; wx = P.g; wz = 0; }
+      dx = (fx * nf + wx * nl) / cs; dz = (fz * nf + wz * nl) / cs; dy = dr;
+      const l = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1; dx /= l; dy /= l; dz /= l;
+    }
+    SD[0] = m[mo] * dx + m[mo + 1] * dy + m[mo + 2] * dz; SD[1] = m[mo + 4] * dx + m[mo + 5] * dy + m[mo + 6] * dz; SD[2] = m[mo + 8] * dx + m[mo + 9] * dy + m[mo + 10] * dz;
+    return d;
+  }
+  /* шея (Mannequin.neckSDF) */
+  function neckPart(S, x, y, z, best) {
+    const N = SKN.neck, abx = N[3], aby = N[4], abz = N[5], L2 = abx * abx + aby * aby + abz * abz, L = Math.sqrt(L2);
+    const u = ((x - N[0]) * abx + (y - N[1]) * aby + (z - N[2]) * abz) / L2, t = u < 0 ? 0 : u > 1 ? 1 : u;
+    const cx = N[0] + abx * t, cy = N[1] + aby * t, cz = N[2] + abz * t;
+    let zx = N[6] + (N[12] - N[6]) * t, zy = N[7] + (N[13] - N[7]) * t, zz = N[8] + (N[14] - N[8]) * t; const zl = Math.sqrt(zx * zx + zy * zy + zz * zz) || 1; zx /= zl; zy /= zl; zz /= zl;
+    let xx = N[9] + (N[15] - N[9]) * t, xy = N[10] + (N[16] - N[10]) * t, xz = N[11] + (N[17] - N[11]) * t; const xl = Math.sqrt(xx * xx + xy * xy + xz * xz) || 1; xx /= xl; xy /= xl; xz /= xl;
+    const fi = t * 100, i = Math.min(99, fi | 0), f = fi - i, T = S.neck.tab, o = i * 4;
+    const rf = T[o] + (T[o + 4] - T[o]) * f, rb = T[o + 1] + (T[o + 5] - T[o + 1]) * f, rl = T[o + 2] + (T[o + 6] - T[o + 2]) * f;
+    const dx = x - cx, dy = y - cy, dz = z - cz, lz = dx * zx + dy * zy + dz * zz, lx = dx * xx + dy * xy + dz * xz, rho = Math.sqrt(lz * lz + lx * lx);
+    const a = lz >= 0 ? rf : rb, r = rho < 1e-9 ? rl : rho / Math.sqrt((lz / a) * (lz / a) + (lx / rl) * (lx / rl)), radial = rho - r, axial = Math.max(-u, u - 1) * L;
+    const d = axial > 0 ? (radial > 0 ? Math.sqrt(radial * radial + axial * axial) : axial) : Math.max(radial, axial);
+    if (!(d < best) || NODIR) return d;
+    let ox = rho > 1e-9 ? (zx * lz + xx * lx) / rho : zx, oy = rho > 1e-9 ? (zy * lz + xy * lx) / rho : zy, oz = rho > 1e-9 ? (zz * lz + xz * lx) / rho : zz;
+    if (axial > 0) { const sg = u > 1 ? 1 : -1, rp = Math.max(0, radial); ox = ox * rp + abx / L * sg * axial; oy = oy * rp + aby / L * sg * axial; oz = oz * rp + abz / L * sg * axial; const l = Math.sqrt(ox * ox + oy * oy + oz * oz) || 1; ox /= l; oy /= l; oz /= l; }
+    SD[0] = ox; SD[1] = oy; SD[2] = oz;
+    return d;
+  }
+  /* знаковое расстояние части кожи code в точке (каталог) и направление наружу в SD; NaN — часть не считается (голова) */
+  function skinPart(S, m, code, x, y, z, best = Infinity) {
+    if (code >= 11) {
+      const c = SKN.cap, o = (code - 11) * 3, dx = x - c[o], dy = y - c[o + 1], dz = z - c[o + 2], l = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-9, d = l - S.capR[code - 11];
+      if (d < best && !NODIR) { SD[0] = dx / l; SD[1] = dy / l; SD[2] = dz / l; }
+      return d;
+    }
+    if (code >= 3) return limbPart(S.limb[code - 3], m, x, y, z, best);
+    if (code === 0) return torsoPart(S, m, x, y, z, best);
+    if (code === 2) return neckPart(S, x, y, z, best);
+    if (code === 1) return headPart(S, m, x, y, z, best);
+    return NaN;
+  }
+  /* голова (Mannequin.headLocalSDF — форма головы манекена в её рамке от центра головы B.headCenter): у затылка и сосцевидного
+     отростка начинаются мышцы шеи и трапециевидная — без головы кожа над ними считалась бы тоньше, и лента уходила бы в череп.
+     Дороже прочих частей (≈ 1 мкс), но колец у головы — единицы; направление — по разностям (только у ближайшей части) */
+  const HQ = [0, 0, 0], HEAD_SKIP = Math.max(CREASE_W, ESC_M);
+  function headAt(a, b, e) { HQ[0] = a; HQ[1] = b; HQ[2] = e; return MQ.headLocalSDF(HQ); }
+  function headPart(S, m, x, y, z, best) {
+    const o = S.skull * 12, ex = x - m[o + 3], ey = y - m[o + 7], ez = z - m[o + 11], c = S.headC;
+    const qx = m[o] * ex + m[o + 4] * ey + m[o + 8] * ez - c[0], qy = m[o + 1] * ex + m[o + 5] * ey + m[o + 9] * ez - c[1], qz = m[o + 2] * ex + m[o + 6] * ey + m[o + 10] * ez - c[2];
+    /* голова — в шаре радиуса S.headR вокруг центра: дальше лучшей части больше чем на HEAD_SKIP (складка и уход под кожу соседней
+       части — ближе) голова не считается, расстояние — до шара (не больше настоящего) */
+    const rb = Math.sqrt(qx * qx + qy * qy + qz * qz) - S.headR;
+    if (rb > best + (NODIR ? 0 : HEAD_SKIP)) return rb;
+    const d = headAt(qx, qy, qz);
+    if (!(d < best) || NODIR) return d;
+    /* направление — разностями вперёд (три расчёта формы, а не шесть) */
+    const h = .3; let gx = headAt(qx + h, qy, qz) - d, gy = headAt(qx, qy + h, qz) - d, gz = headAt(qx, qy, qz + h) - d; const l = Math.sqrt(gx * gx + gy * gy + gz * gz) || 1;
+    gx /= l; gy /= l; gz /= l;
+    SD[0] = m[o] * gx + m[o + 1] * gy + m[o + 2] * gz; SD[1] = m[o + 4] * gx + m[o + 5] * gy + m[o + 6] * gz; SD[2] = m[o + 8] * gx + m[o + 9] * gy + m[o + 10] * gz;
+    return d;
+  }
+  /* в кисти или стопе (G.beyondLimbs в проверках): кисть — дальше запястья по оси кисти, стопа — ниже голеностопа по оси стопы
+     или впереди него больше чем на 2 см; bits — какие кисти и стопы проверять (mu.skb) */
+  function skinBeyond(m, x, y, z, bits) {
+    for (let k = 0; k < 2; k++) {
+      if (bits & 1 << k) {
+        const h = SKN.hand[k] * 12, hx = x - m[h + 3], hy = y - m[h + 7], hz = z - m[h + 11];
+        if (hx * m[h + 1] + hy * m[h + 5] + hz * m[h + 9] < -BEYOND_H && hx * hx + hy * hy + hz * hz < 625) return true;
+      }
+      if (bits & 4 << k) {
+        const f = SKN.foot[k] * 12, fx = x - m[f + 3], fy = y - m[f + 7], fz = z - m[f + 11], fyy = fx * m[f + 1] + fy * m[f + 5] + fz * m[f + 9], fzz = fx * m[f + 2] + fy * m[f + 6] + fz * m[f + 10];
+        if ((fyy < -.5 || fzz > 2) && fx * fx + fy * fy + fz * fz < 900 && fyy < 6) return true;
+      }
+    }
+    return false;
+  }
+  /* глубина точки под кожей кадра по частям мышцы mu (записи bits); NaN — кожа кадра здесь не считается (кисть, стопа, далеко
+     снаружи частей) */
+  function skinDepth(mu, m, x, y, z, bits) {
+    const S = mu.sks; if (!S) return NaN;
+    if (SKN.S !== S || SKN.m !== m) skinFrame(S, m);
+    let best = Infinity;
+    const P = mu.skp, K = mu.skm;
+    /* только глубина: направление частям не нужно (NODIR), голова дальше лучшей части не считается */
+    NODIR = 1;
+    for (let j = 0; j < P.length; j++) if (K[j] & bits) { const d = skinPart(S, m, P[j], x, y, z, best); if (d < best) best = d; }
+    NODIR = 0;
+    if (!(best < LIVE_OUT) || (mu.skb && skinBeyond(m, x, y, z, mu.skb))) return NaN;
+    return -best;
+  }
+  /* записи sk у точки пути s (доля брюшка) — биты соседних записей, как в skinAt */
+  function skinBits(b, s) { const u = (s - b.t0) / b.lb; let k = 0; while (k < SKIN_U.length - 2 && u > SKIN_U[k + 1]) k++; return (1 << k) | (1 << (k + 1)); }
+  /* глубина под кожей кадра (объединение частей мышцы) и направление к коже — в SK; false — как раньше, по записям sk */
+  function skinLive(mu, m, x, y, z, bits) {
+    const S = mu.sks; if (!S) return false;
+    if (SKN.S !== S || SKN.m !== m) skinFrame(S, m);
+    /* часть пишет направление в SD, только если ближе прежних: в SD — направление самой близкой */
+    let best = Infinity, second = Infinity;
+    const P = mu.skp, K = mu.skm;
+    for (let j = 0; j < P.length; j++) {
+      if (!(K[j] & bits)) { DJ[j] = Infinity; continue; }
+      const d = skinPart(S, m, P[j], x, y, z, best); DJ[j] = d;
+      if (d < best) { second = best; best = d; } else if (d < second) second = d;
+    }
+    if (!(best < LIVE_OUT) || (mu.skb && skinBeyond(m, x, y, z, mu.skb))) return false;
+    let gx = SD[0], gy = SD[1], gz = SD[2], dd = best;
+    /* Направление ухода под кожу. Сдвиг сечения — в плоскости кольца (поперёк пути): если направление к коже ближайшей части почти
+       вдоль пути (путь выходит из сегмента — у локтя линия действия плечелучевой уходит от плеча вперёд к предплечью, у пятки
+       ахиллово сухожилие — за торец голени), такой сдвиг кольцо под кожу не уведёт. Тогда из частей не дальше ESC_M от
+       ближайшей берётся та, под кожу которой уйти ближе всего: недостача глубины / |g⊥| — наименьшая (плечелучевая — под кожу
+       предплечья, ахиллово сухожилие — под «шапку» лодыжки) */
+    const tx = SKQ[0], ty = SKQ[1], tz = SKQ[2], need = SKQ[3];
+    SK.risky = 0;
+    if (best > -need) {
+      const gt = gx * tx + gy * ty + gz * tz;
+      if (gt * gt > ESC_T * ESC_T || second - best < CREASE_W) SK.risky = 1;
+      if (gt * gt > ESC_T * ESC_T) {
+        let score = (best + need) / Math.max(ESC_G, Math.sqrt(Math.max(0, 1 - gt * gt)));
+        for (let j = 0; j < P.length; j++) {
+          const d = DJ[j]; if (!(d < best + ESC_M) || d === best) continue;
+          skinPart(S, m, P[j], x, y, z);
+          const g2 = SD[0] * tx + SD[1] * ty + SD[2] * tz, sc = (d + need) / Math.max(ESC_G, Math.sqrt(Math.max(0, 1 - g2 * g2)));
+          if (sc < score) { score = sc; gx = SD[0]; gy = SD[1]; gz = SD[2]; dd = d; }
+        }
+      }
+    }
+    SK.d = -dd; SK.o[0] = gx; SK.o[1] = gy; SK.o[2] = gz;
+    /* складка: кожа двух частей рядом (у сгиба локтя и колена, у подмышки) — поверхность вогнута, плоская широкая лента вышла бы
+       краями из кожи соседней части: сечение там не сплющивается, место — сдвигом вглубь */
+    SK.k = second - best < CREASE_W ? 1 - (second - best) / CREASE_W : 0;
+    return true;
+  }
   /* результат skinAt — один объект на модуль (перезаписывается при каждом вызове) */
-  const SK = { d: 0, o: [0, 0, 0], rho: 200 };
+  const SK = { d: 0, o: [0, 0, 0], rho: 200, k: 0, bits: 0, risky: 0 };
+  /* касательная пути у кольца и нужная глубина центра (радиус сечения и подкожный слой) — задаёт вызывающий skinAt (surface,
+     ribbon); DJ — расстояния частей кожи у точки */
+  const SKQ = new Float64Array(4), DJ = new Float64Array(32), NEAR = new Uint8Array(32), MV = new Uint8Array(32), BITS = new Int32Array(32), RIB_TOPIT = 3;
+  /* проход проверки верха ленты: проверить центр, шов, свои кромки (биты); кромки, опущенные в этом проходе */
+  const CC = new Uint8Array(32), CS = new Uint8Array(33), CE = new Uint8Array(32), DM = new Uint8Array(32);
+  /* память по фазе у ленты: сдвиг центра до проверки верха, сдвиги швов */
+  const P19 = new Float64Array(32), SDD = new Float64Array(33);
+  /* итог проверки верха ленты (кольцо q) — в ленту: сдвиг центра вглубь, опускание своих кромок, сдвиг швов */
+  function topRecord(fan, B, n, q, K) {
+    for (let k = 0; k < K; k++) {
+      const o = (k * n + q) * LW, t0 = fan.tp + (k * n + q) * TPL;
+      tput(t0 + 5, B[o + 19] - P19[k], T_X); tput(t0 + 6, B[o + 26], T_X); tput(t0 + 7, B[o + 27], T_X);
+    }
+    for (let j = 0; j <= K; j++) tput(fan.tp + K * n * TPL + j * n + q, SDD[j], T_X);
+  }
+  /* то же из ленты: центр и швы — вглубь по направлениям к коже (как в проверке), толщина центра — заново по площади */
+  function topReplay(fan, B, S, n, q, K) {
+    for (let k = 0; k < K; k++) {
+      const o = (k * n + q) * LW, t0 = fan.tp + (k * n + q) * TPL, dd = tget(t0 + 5, T_X);
+      MV[k] = 0;
+      if (dd > 0) { B[o] -= B[o + 9] * dd; B[o + 1] -= B[o + 10] * dd; B[o + 2] -= B[o + 11] * dd; B[o + 19] += dd; MV[k] = 1; }
+      const dl = tget(t0 + 6, T_X), dr = tget(t0 + 7, T_X); B[o + 26] = dl > 0 ? dl : 0; B[o + 27] = dr > 0 ? dr : 0;
+    }
+    for (let j = 0; j <= K; j++) {
+      const dd = tget(fan.tp + K * n * TPL + j * n + q, T_X); if (!(dd > 0)) continue;
+      const ka = j > 0 ? j - 1 : 0, kc = j < K ? j : K - 1, s = (j * n + q) * SW, a = (ka * n + q) * LW, c = (kc * n + q) * LW;
+      let gx = B[a + 9] + B[c + 9], gy = B[a + 10] + B[c + 10], gz = B[a + 11] + B[c + 11]; const gl = Math.sqrt(gx * gx + gy * gy + gz * gz); if (gl < 1e-6) continue;
+      S[s] -= gx / gl * dd; S[s + 1] -= gy / gl * dd; S[s + 2] -= gz / gl * dd; MV[ka] = MV[kc] = 1;
+    }
+    for (let k = 0; k < K; k++) if (MV[k]) { const o = (k * n + q) * LW; B[o + 18] = solveH(B, S, o, (k * n + q) * SW, ((k + 1) * n + q) * SW, k, K); MV[k] = 0; }
+  }
   /* Сечение у кожи: круг радиуса r, если до кожи (за вычетом подкожного слоя SKIN_GAP) хватает места; иначе мышца
      сплющивается вдоль кожи — эллипс с полуосями ao (к коже) и aw (вдоль кожи), площадь та же (ao · aw = r²), но не
      тоньше FLAT · r: остаток — сдвигом центра вглубь (shift, см). Так широкие поверхностные мышцы (широкая бедра,
-     дельтовидная, большая ягодичная) лежат пластом под кожей, а не выпирают из неё. */
-  const SKIN_GAP = .4, FLAT = .4;
+     дельтовидная, большая ягодичная) лежат пластом под кожей, а не выпирают из неё. С кожей кадра (этап Г) FLAT — 0,6 (было
+     0,4: эллипс 6 : 1 вставал ребром там, где кожа над ним выпуклая, и выходил из неё краем); в складке (sk.k > 0) сечение
+     сплющивается тем меньше, чем ближе кожа второй части, — место там только сдвигом вглубь. */
+  const SKIN_GAP = .4, FLAT = .6;
   function section(r, sk) {
     if (!sk) { SEC1.ao = SEC1.aw = r; SEC1.shift = 0; return SEC1; }
-    const room = sk.d - SKIN_GAP, ao = Math.min(r, Math.max(FLAT * r, room));
+    const fl = sk.k > 0 ? FLAT + (1 - FLAT) * sk.k : FLAT, room = sk.d - SKIN_GAP, ao = Math.min(r, Math.max(fl * r, room));
     SEC1.ao = ao; SEC1.aw = r * r / ao; SEC1.shift = Math.max(0, ao - room);
     return SEC1;
   }
@@ -294,9 +899,10 @@ const Muscles = (() => {
      берётся тем знаком, что ближе к текущей (путь над гребнем кожи — у шеи, над лопаткой — меняет сторону, к которой ближе
      кожа). Сдвиг вглубь — по настоящему направлению от кожи; сечение изгибается вдоль кожи по её кривизне (ρ из sk).
      Здесь Math.sqrt вместо Math.hypot: hypot в V8 в разы медленнее, а кадр — около 40 тысяч вершин.
-     Кожа — нейтральной позы, в рамках костей: глубину по позе пробовали (Mannequin.skinDistance в трёх точках брюшка) —
-     выход из кожи у плеча не уменьшился (кожа там уходит вбок, а сечение сплющивается к ней), а кадр дорожал на 10 мс.
-     Координаты — каталога (см, Y вниз). */
+     Кожа — кадра (этап Г, «кожа кадра» выше): глубина и направление к коже в центре каждого кольца по частям кожи мышцы;
+     у глубоких колец и в кистях и стопах — нейтральной позы, в рамках костей (записи sk). Глубину по позе пробовали и раньше
+     (Mannequin.skinDistance в трёх точках брюшка) — тогда выход из кожи у плеча не уменьшился: направление к коже бралось из
+     записей, а кадр дорожал на 10 мс. Координаты — каталога (см, Y вниз). */
   const RING = 2.5, SIDES = 8, MAX_RINGS = 40, STEER = .25;
   const COS = Array.from({ length: SIDES }, (_, j) => Math.cos(2 * Math.PI * j / SIDES)), SIN = Array.from({ length: SIDES }, (_, j) => Math.sin(2 * Math.PI * j / SIDES));
   /* у линий ленты (ниже, «ленты») число колец общее на всю ленту — mu.rings */
@@ -326,13 +932,24 @@ const Muscles = (() => {
       let tx = T3[3] - T3[0], ty = T3[4] - T3[1], tz = T3[5] - T3[2], tl = Math.sqrt(tx * tx + ty * ty + tz * tz);
       if (tl < 1e-9) { const k = Math.min(pts.length - 1, 1); tx = pts[k][0] - pts[0][0]; ty = pts[k][1] - pts[0][1]; tz = pts[k][2] - pts[0][2]; tl = Math.sqrt(tx * tx + ty * ty + tz * tz) || 1; }
       RB[q + 3] = tx / tl; RB[q + 4] = ty / tl; RB[q + 5] = tz / tl;
-      const sk = skinAt(mu, b, s, m), sec = section(radiusAt(b, s), sk);
+      const rad = radiusAt(b, s), tb = TMODE && mu.tp >= 0 ? mu.tp + r * TPR : -1;
+      let sk;
+      /* память по фазе: кольцо из ленты, если в обеих лентах оно считалось одинаково */
+      if (TMODE === 2 && tb >= 0 && TA[tb] === TB[tb]) { sk = ringReplay(mu, b, s, m, tb); RPL[r] = tb; }
+      else {
+        RPL[r] = -1; SKQ[0] = RB[q + 3]; SKQ[1] = RB[q + 4]; SKQ[2] = RB[q + 5]; SKQ[3] = rad + SKIN_GAP;
+        sk = skinAt(mu, b, s, m, RB[q], RB[q + 1], RB[q + 2]);
+        if (TMODE === 1 && tb >= 0) ringRecord(tb, sk);
+      }
+      const sec = section(rad, sk);
       /* в ячейках кольца: 0–2 центр, 3–5 касательная, 6–8 направление на кожу; сечение — отдельно */
       if (sk) { RB[q + 6] = sk.o[0]; RB[q + 7] = sk.o[1]; RB[q + 8] = sk.o[2]; } else RB[q + 6] = RB[q + 7] = RB[q + 8] = 0;
       SEC[r * 3] = sec.ao; SEC[r * 3 + 1] = sec.aw; SEC[r * 3 + 2] = sec.shift;
       /* расстояние от центра сечения до центра кривизны кожи: сечение изгибается вдоль кожи (у круглого бедра и плеча
          плоская пластина выходила бы краями из кожи) */
       BEND[r] = sk ? Math.max(.5, sk.rho - sk.d - sec.shift) : 1e6;
+      CRB[r] = sk && sk.k > 0 ? sk.bits : 0;
+      RSK[r] = sk && sk.risky && sec.shift > 0 ? sk.bits : 0; RNEED[r] = sec.ao + SKIN_GAP;
     }
     const mid = n >> 1;
     let ox = 0, oy = 0, oz = 0;
@@ -352,8 +969,27 @@ const Muscles = (() => {
       if (dir === -1 && r === mid) continue;
       /* w = o × t: в каталоге (Y вниз) это левая тройка; в сцене (Y вверх) кольцо идёт от o к w против часовой снаружи */
       let wx = oy * tz - oz * ty, wy = oz * tx - ox * tz, wz = ox * ty - oy * tx; const wl = Math.sqrt(wx * wx + wy * wy + wz * wz) || 1; wx /= wl; wy /= wl; wz /= wl;
+      /* сдвиг вглубь — в плоскости кольца, по проекции направления к коже (как в 4.56.0); где направление к коже почти вдоль пути,
+         центр доводится до нужной глубины ниже (RSK) */
       const gd = gx0 * tx + gy0 * ty + gz0 * tz, gx = gx0 - gd * tx, gy = gy0 - gd * ty, gz = gz0 - gd * tz, sh = SEC[r * 3 + 2] / (Math.sqrt(gx * gx + gy * gy + gz * gz) || 1);
-      const cx = RB[q] - gx * sh, cy = RB[q + 1] - gy * sh, cz = RB[q + 2] - gz * sh, ao = SEC[r * 3], aw = SEC[r * 3 + 1];
+      let cx = RB[q] - gx * sh, cy = RB[q + 1] - gy * sh, cz = RB[q + 2] - gz * sh;
+      const ao = SEC[r * 3], aw = SEC[r * 3 + 1], cx0 = cx, cy0 = cy, cz0 = cz, tb = RPL[r];
+      /* сдвиг центра у сустава — из ленты */
+      if (tb >= 0) { cx += tget(tb + 6, T_X); cy += tget(tb + 7, T_X); cz += tget(tb + 8, T_X); }
+      /* у сустава и в складке (кожа частей не плоская, направление к коже почти вдоль пути) сдвиг по плоскости кожи мог не увести
+         центр под кожу: глубина центра проверяется, и центр доводится до нужной — шагом по направлению к коже в новой точке
+         (два шага) */
+      if (RSK[r]) for (let it = 0; it < 2; it++) {
+        const d1 = skinDepth(mu, m, cx, cy, cz, RSK[r]), def = RNEED[r] - d1;
+        if (!(def > .05)) break;
+        SKQ[0] = tx; SKQ[1] = ty; SKQ[2] = tz; SKQ[3] = RNEED[r];
+        if (!skinLive(mu, m, cx, cy, cz, RSK[r])) break;
+        const hd = SK.o[0] * tx + SK.o[1] * ty + SK.o[2] * tz, hx = SK.o[0] - hd * tx, hy = SK.o[1] - hd * ty, hz = SK.o[2] - hd * tz, hl = Math.sqrt(hx * hx + hy * hy + hz * hz);
+        if (hl < .2) break;
+        const st = Math.min(SETTLE_MAX, (RNEED[r] - SK.d) / (hl * hl));
+        cx -= hx * st; cy -= hy * st; cz -= hz * st;
+      }
+      if (TMODE === 1 && mu.tp >= 0 && RSK[r]) { const t0 = mu.tp + r * TPR; tput(t0 + 6, cx - cx0, T_X); tput(t0 + 7, cy - cy0, T_X); tput(t0 + 8, cz - cz0, T_X); }
       /* центр кривизны — вглубь по оси сечения на rc; вершина эллипса (co, si) — на окружности радиуса rc + co под углом si / rc */
       const rc = BEND[r], kx = cx - ox * rc, ky = cy - oy * rc, kz = cz - oz * rc;
       for (let j = 0; j < SIDES; j++) {
@@ -369,8 +1005,40 @@ const Muscles = (() => {
           nor[v] = nx / nl; nor[v + 1] = ny / nl; nor[v + 2] = nz / nl;
         }
       }
+      if (CRB[r]) { const f = creaseRing(mu, m, pos, (v0 + r * SIDES) * 3, CRB[r]); if (TMODE === 1 && mu.tp >= 0) tput(mu.tp + r * TPR + 9, f, T_O); }
+      else if (tb >= 0) { const f = tget(tb + 9, T_O); if (f < .9999) shrinkRing(pos, (v0 + r * SIDES) * 3, f); }
     }
     return n;
+  }
+  /* Кольцо в складке (кожа двух частей рядом — между плечом и корпусом у подмышки, у сгиба локтя; SK.k > 0): поверхность там
+     вогнута, и кольцо, ушедшее под кожу одной части, краем выходит в промежуток к другой (малая круглая в подъёме руки вперёд — до
+     1,3 см). Вершины такого кольца проверяются по коже кадра, и, если какая-то выше подкожного слоя, кольцо сжимается к своему
+     центру (не меньше CREASE_F) — так, чтобы она легла под кожу (глубина между центром и вершиной — линейно). Площадь сечения
+     здесь меньше (тело тоньше в складке), объём мышцы — почти тот же: таких колец единицы. */
+  const CREASE_F = .4, LIP_K = 1.25, CRB = new Int32Array(MAX_RINGS), RPL = new Int32Array(MAX_RINGS), RSK = new Int32Array(MAX_RINGS), RNEED = new Float64Array(MAX_RINGS), SETTLE_MAX = 3;
+  function creaseRing(mu, m, pos, v, bits) {
+    let dmin = Infinity, cx = 0, cy = 0, cz = 0;
+    for (let j = 0; j < SIDES; j++) { const w = v + j * 3; cx += pos[w]; cy += pos[w + 1]; cz += pos[w + 2]; }
+    cx /= SIDES; cy /= SIDES; cz /= SIDES;
+    const dc = skinDepth(mu, m, cx, cy, cz, bits); if (!(dc > SKIN_GAP)) return 1;
+    /* вершина ближе к центру, чем LIP_K · (глубина центра − подкожный слой), — под кожей (глубина меняется не быстрее
+       расстояния, с запасом LIP_K): её кожа не считается */
+    for (let j = 0; j < SIDES; j++) {
+      const w = v + j * 3, ex = pos[w] - cx, ey = pos[w + 1] - cy, ez = pos[w + 2] - cz;
+      if (LIP_K * Math.sqrt(ex * ex + ey * ey + ez * ez) <= dc - SKIN_GAP) continue;
+      const d = skinDepth(mu, m, pos[w], pos[w + 1], pos[w + 2], bits); if (d < dmin) dmin = d;
+    }
+    if (!(dmin < SKIN_GAP)) return 1;
+    const f = Math.max(CREASE_F, Math.min(1, (dc - SKIN_GAP) / (dc - dmin)));
+    shrinkRing(pos, v, f);
+    return f;
+  }
+  /* сжать кольцо (вершины с v) к его центру в f раз */
+  function shrinkRing(pos, v, f) {
+    let cx = 0, cy = 0, cz = 0;
+    for (let j = 0; j < SIDES; j++) { const w = v + j * 3; cx += pos[w]; cy += pos[w + 1]; cz += pos[w + 2]; }
+    cx /= SIDES; cy /= SIDES; cz /= SIDES;
+    for (let j = 0; j < SIDES; j++) { const w = v + j * 3; pos[w] = cx + (pos[w] - cx) * f; pos[w + 1] = cy + (pos[w + 1] - cy) * f; pos[w + 2] = cz + (pos[w + 2] - cz) * f; }
   }
   const SEC = new Float64Array(MAX_RINGS * 3), OW = new Float64Array(MAX_RINGS * 3), BEND = new Float64Array(MAX_RINGS), BEND_MAX = 1.3;
   /* радиус сечения на расстоянии s от начала пути (см) */
@@ -424,9 +1092,9 @@ const Muscles = (() => {
   /* поля записи линии в кольце (LW): 0–2 центр, 3–5 касательная в сторону u, 6–8 нормаль пласта, 9–11 направление к коже,
      12 глубина под кожей, 13 площадь сечения (как у трубки), 14 полупоперечник, 15–16 ширины до швов, 17 толщина η = A/(2w),
      18 полутолщина центра, 19 сдвиг вглубь, 20–22 нормаль по соседям, 23 флаги своей кромки, 24 расстояние по пути (см),
-     25 радиус кривизны кожи поперёк линии;
+     25 радиус кривизны кожи поперёк линии, 26–27 опускание своей левой и правой кромки вглубь (этап Г, по коже кадра);
      шва (SW): 0–2 точка, 3–5 нормаль, 6–8 поперёк (от линии k к k+1), 9 полутолщина, 10 вынос кромки, 11 доля λ */
-  const LW = 26, SW = 12;
+  const LW = 28, SW = 12;
   const GAP = new Float64Array(32), GAP2 = new Float64Array(32), PC = new Float64Array(96), LV = new Float64Array(96);
   function bindFans(md, bound, idx) {
     const at = new Map(bound.map((mu, i) => [mu.name, i])), fans = [];
@@ -642,8 +1310,6 @@ const Muscles = (() => {
         if (tl < 1e-9) { const e = pts.length - 1; tx = pts[e][0] - pts[0][0]; ty = pts[e][1] - pts[0][1]; tz = pts[e][2] - pts[0][2]; tl = Math.sqrt(tx * tx + ty * ty + tz * tz) || 1; }
         B[o + 3] = sg * tx / tl; B[o + 4] = sg * ty / tl; B[o + 5] = sg * tz / tl;
         const rr = radiusAt(b, s); B[o + 13] = Math.PI * rr * rr; B[o + 24] = s;
-        const sk = skinAt(mu, b, s, m);
-        if (sk) { B[o + 9] = sk.o[0]; B[o + 10] = sk.o[1]; B[o + 11] = sk.o[2]; B[o + 12] = sk.d; B[o + 25] = sk.rho; } else { B[o + 9] = B[o + 10] = B[o + 11] = 0; B[o + 12] = 1e9; B[o + 25] = 200; }
       }
     }
     /* 1б. Линии веера, добавленные по площадке начала (большая грудная, подостная; LAT4 у нижнего угла
@@ -672,6 +1338,29 @@ const Muscles = (() => {
         let j = 0, acc = 0; while (j < K - 2 && acc + GAP[j] < c2) { acc += GAP[j]; j++; }
         const f = GAP[j] > 1e-9 ? Math.min(1, Math.max(0, (c2 - acc) / GAP[j])) : 0, a = (k * n + q) * LW;
         B[a] = PC[j * 3] + (PC[j * 3 + 3] - PC[j * 3]) * f; B[a + 1] = PC[j * 3 + 1] + (PC[j * 3 + 4] - PC[j * 3 + 1]) * f; B[a + 2] = PC[j * 3 + 2] + (PC[j * 3 + 5] - PC[j * 3 + 2]) * f;
+      }
+    }
+    /* 1+. Кожа у центров полос — после раздвижки (этап Г: кожа кадра считается в самой точке центра). Память по фазе — вся
+       лента из памяти, если в обеих лентах каждая полоса считалась одинаково (иначе — заново) */
+    let FRP = TMODE === 2 && fan.tp >= 0;
+    if (FRP) for (let e = 0; e < K * n; e++) { const t0 = fan.tp + e * TPL; if (TA[t0] !== TB[t0]) { FRP = false; break; } }
+    for (let k = 0; k < K; k++) {
+      const mu = bound[fan.lines[k]], b = body(mu, paths[fan.lines[k]].length);
+      for (let q = 0; q < n; q++) {
+        const o = (k * n + q) * LW, s = B[o + 24], t0 = fan.tp + (k * n + q) * TPL;
+        let sk;
+        if (FRP) {
+          sk = TA[t0] === 0 ? null : skinAt(mu, b, s, m);
+          if (sk && TA[t0] === 2) { tdir(t0 + 1); SK.o[0] = TDR[0]; SK.o[1] = TDR[1]; SK.o[2] = TDR[2]; SK.d = tget(t0 + 4, T_D); }
+        } else {
+          SKQ[0] = B[o + 3]; SKQ[1] = B[o + 4]; SKQ[2] = B[o + 5]; SKQ[3] = Math.sqrt(B[o + 13] / Math.PI) + SKIN_GAP;
+          sk = skinAt(mu, b, s, m, B[o], B[o + 1], B[o + 2]);
+          if (TMODE === 1 && fan.tp >= 0) {
+            TP[t0] = !sk ? 0 : sk.bits ? 2 : 1;
+            if (sk) { tput(t0 + 1, sk.o[0], T_O); tput(t0 + 2, sk.o[1], T_O); tput(t0 + 3, sk.o[2], T_O); tput(t0 + 4, sk.d, T_D); }
+          }
+        }
+        if (sk) { B[o + 9] = sk.o[0]; B[o + 10] = sk.o[1]; B[o + 11] = sk.o[2]; B[o + 12] = sk.d; B[o + 25] = sk.rho; } else { B[o + 9] = B[o + 10] = B[o + 11] = 0; B[o + 12] = 1e9; B[o + 25] = 200; }
       }
     }
     /* 1в. Нижний край большой грудной (fan.low, bindFans): центр нижней полосы выносится вниз вдоль груди (−y грудной клетки
@@ -815,6 +1504,7 @@ const Muscles = (() => {
          глубине двух линий (иначе швы линий, лежащих у самой кожи, уходили бы вслед за центром в кость) */
       for (let k = 0; k < K; k++) {
         const o = (k * n + q) * LW, sl = (k * n + q) * SW, sr = ((k + 1) * n + q) * SW, wl = B[o + 15], wr = B[o + 16], fl = B[o + 23], eta = B[o + 17];
+        B[o + 26] = B[o + 27] = 0;
         const h = B[o + 18] = solveH(B, S, o, sl, sr, k, K);
         const gx = B[o + 9], gy = B[o + 10], gz = B[o + 11], nx = B[o + 6], ny = B[o + 7], nz = B[o + 8], tx = B[o + 3], ty = B[o + 4], tz = B[o + 5];
         const ng = Math.abs(gx * nx + gy * ny + gz * nz), wg = gx * (ny * tz - nz * ty) + gy * (nz * tx - nx * tz) + gz * (nx * ty - ny * tx);
@@ -823,7 +1513,7 @@ const Muscles = (() => {
            x²/(2ρ) — x — отход кромки вбок, ρ — радиус кривизны кожи поперёк линии (sk, как у трубок) */
         for (let side = -1; side <= 1; side += 2) {
           if (!(fl & (side < 0 ? 1 : 2))) continue;
-          const E = edge(S, side < 0 ? sl : sr, 1, B[o], B[o + 1], B[o + 2], nx, ny, nz, ny * tz - nz * ty, nz * tx - nx * tz, nx * ty - ny * tx, side < 0 ? wl : wr, side, (side < 0 ? k > 0 : k < K - 1) ? eta : -1);
+          const E = edge(S, side < 0 ? sl : sr, 1, B[o], B[o + 1], B[o + 2], nx, ny, nz, ny * tz - nz * ty, nz * tx - nx * tz, nx * ty - ny * tx, side < 0 ? wl : wr, side, (side < 0 ? k > 0 : k < K - 1) ? eta : -1, B, o);
           const ex = E[0] - B[o], ey = E[1] - B[o + 1], ez = E[2] - B[o + 2], up = ex * gx + ey * gy + ez * gz, x2 = Math.max(0, ex * ex + ey * ey + ez * ez - up * up);
           ext = Math.max(ext, up + E[9] * ng + Math.max(0, E[10] * (E[6] * gx + E[7] * gy + E[8] * gz)) - (B[o + 12] - SKIN_GAP - x2 / (2 * B[o + 25])));
         }
@@ -871,6 +1561,82 @@ const Muscles = (() => {
       }
       /* после сдвигов центр и швы сместились по-разному — толщина центра заново, по сечению, которое будет нарисовано */
       for (let k = 0; k < K; k++) { const o = (k * n + q) * LW; B[o + 18] = solveH(B, S, o, (k * n + q) * SW, ((k + 1) * n + q) * SW, k, K); }
+      /* этап Г: верх полосы — по коже кадра в самой точке верха (центр + нормаль · h, как его нарисует шаг 5). Плоскость кожи у
+         центра врала там, где полоса толстая, а кожа рядом круто уходит вниз (большая грудная у передней подмышечной складки,
+         трапециевидная у надплечья, подостная у задней складки): верх выходил из кожи до 1,6 см. Где по плоскости до кожи меньше
+         RIB_TOPCHK, верх проверяется, и центр полосы уходит вглубь на недостачу; так же — верх общих швов таких полос (вершины
+         обеих соседних полос и наружные края ленты), по среднему направлению к коже двух линий. Шов, у которого с какой-то стороны
+         своя кромка (линии сошлись), не двигается: эту кромку ставит центр полосы, а сдвиг шва открыл бы щель между полосами.
+         После сдвигов толщина центра — заново по сечению (solveH: площадь та же), и проверка повторяется (кожа над верхом не
+         плоская, а толщина после сдвига другая) — до RIB_TOPIT раз. Пол остаётся под полосой: если места нет, низ заходит в
+         кость на столько же, но мышца не выходит из тела */
+      if (FRP) topReplay(fan, B, S, n, q, K);
+      else {
+        if (TMODE === 1) { for (let k = 0; k < K; k++) P19[k] = B[(k * n + q) * LW + 19]; SDD.fill(0, 0, K + 1); }
+        for (let it = 0; it < RIB_TOPIT; it++) {
+          let any = 0;
+          for (let k = 0; k < K; k++) {
+            const o = (k * n + q) * LW, mu = bound[fan.lines[k]], fl = B[o + 23];
+            const gx = B[o + 9], gy = B[o + 10], gz = B[o + 11], nx = B[o + 6], ny = B[o + 7], nz = B[o + 8], h = B[o + 18], ng = gx * nx + gy * ny + gz * nz, sg = ng < 0 ? -1 : 1;
+            if (it === 0) {
+              MV[k] = DM[k] = 0; CC[k] = CE[k] = 0;
+              if (!mu.skp || !(B[o + 12] < 1e8)) { NEAR[k] = 0; continue; }
+              /* глубина верха по плоскости кожи у центра: у самого центра и у своих кромок (кромка отходит вбок, по направлению на
+                 шов — у сошедшихся линий и вверх) */
+              const dc = B[o + 12] + B[o + 19] - (LV[k * 3] * gx + LV[k * 3 + 1] * gy + LV[k * 3 + 2] * gz);
+              let dp = dc - h * Math.abs(ng);
+              if (fl) for (let side = -1; side <= 1; side += 2) {
+                if (!(fl & (side < 0 ? 1 : 2))) continue;
+                const tx = B[o + 3], ty = B[o + 4], tz = B[o + 5];
+                const E = edge(S, ((side < 0 ? k : k + 1) * n + q) * SW, 1, B[o], B[o + 1], B[o + 2], nx, ny, nz, ny * tz - nz * ty, nz * tx - nx * tz, nx * ty - ny * tx, side < 0 ? B[o + 15] : B[o + 16], side, (side < 0 ? k > 0 : k < K - 1) ? B[o + 17] : -1, B, o);
+                dp = Math.min(dp, dc - (E[0] - B[o]) * gx - (E[1] - B[o + 1]) * gy - (E[2] - B[o + 2]) * gz - E[9] * Math.abs(E[3] * gx + E[4] * gy + E[5] * gz));
+              }
+              NEAR[k] = dp < RIB_TOPCHK ? 1 : 0;
+              if (!NEAR[k]) continue;
+              BITS[k] = skinBits(body(mu, paths[fan.lines[k]].length), B[o + 24]); CC[k] = 1; CE[k] = fl & 3;
+            }
+            if (!CC[k]) continue;
+            const dt = skinDepth(mu, m, B[o] + sg * nx * h, B[o + 1] + sg * ny * h, B[o + 2] + sg * nz * h, BITS[k]);
+            if (!(dt < SKIN_GAP)) continue;
+            const dd = SKIN_GAP - dt; B[o] -= gx * dd; B[o + 1] -= gy * dd; B[o + 2] -= gz * dd; B[o + 19] += dd; MV[k] = any = 1;
+          }
+          for (let j = 0; j <= K; j++) {
+            const ka = j > 0 ? j - 1 : 0, kc = j < K ? j : K - 1, s = (j * n + q) * SW, a = (ka * n + q) * LW, c = (kc * n + q) * LW;
+            /* шов, у которого с какой-то стороны своя кромка, не двигается: по направлению на него ставится та кромка, и сдвиг шва
+               открыл бы щель между полосами (её верх проверяется ниже) */
+            if (it === 0) CS[j] = (NEAR[ka] || NEAR[kc]) && !(j > 0 && B[a + 23] & 2 || j < K && B[c + 23] & 1) ? 1 : 0;
+            if (!CS[j]) continue;
+            const kk = NEAR[ka] ? ka : kc, mu = bound[fan.lines[kk]];
+            let gx = B[a + 9] + B[c + 9], gy = B[a + 10] + B[c + 10], gz = B[a + 11] + B[c + 11]; const gl = Math.sqrt(gx * gx + gy * gy + gz * gz);
+            CS[j] = 0; if (gl < 1e-6) continue;
+            gx /= gl; gy /= gl; gz /= gl;
+            const hs = S[s + 9], sg = gx * S[s + 3] + gy * S[s + 4] + gz * S[s + 5] < 0 ? -1 : 1;
+            const dt = skinDepth(mu, m, S[s] + sg * S[s + 3] * hs, S[s + 1] + sg * S[s + 4] * hs, S[s + 2] + sg * S[s + 5] * hs, BITS[kk]);
+            if (!(dt < SKIN_GAP)) continue;
+            const dd = SKIN_GAP - dt; S[s] -= gx * dd; S[s + 1] -= gy * dd; S[s + 2] -= gz * dd; MV[ka] = MV[kc] = any = 1; CS[j] = 1; SDD[j] += dd;
+          }
+          /* свои кромки таких полос: верх кромки (как его нарисует шаг 5) — под кожей, иначе кромка опускается вглубь */
+          for (let k = 0; k < K; k++) {
+            if (!CE[k]) continue;
+            const o = (k * n + q) * LW, fl = CE[k], mu = bound[fan.lines[k]], nx = B[o + 6], ny = B[o + 7], nz = B[o + 8], tx = B[o + 3], ty = B[o + 4], tz = B[o + 5], sg = B[o + 9] * nx + B[o + 10] * ny + B[o + 11] * nz < 0 ? -1 : 1;
+            for (let side = -1; side <= 1; side += 2) {
+              const bit = side < 0 ? 1 : 2; if (!(fl & bit)) continue;
+              const E = edge(S, ((side < 0 ? k : k + 1) * n + q) * SW, 1, B[o], B[o + 1], B[o + 2], nx, ny, nz, ny * tz - nz * ty, nz * tx - nx * tz, nx * ty - ny * tx, side < 0 ? B[o + 15] : B[o + 16], side, (side < 0 ? k > 0 : k < K - 1) ? B[o + 17] : -1, B, o);
+              const dt = skinDepth(mu, m, E[0] + sg * E[3] * E[9], E[1] + sg * E[4] * E[9], E[2] + sg * E[5] * E[9], BITS[k]);
+              if (dt < SKIN_GAP) { B[o + (side < 0 ? 26 : 27)] += SKIN_GAP - dt; DM[k] |= bit; any = 1; }
+            }
+          }
+          if (!any) break;
+          /* следующий проход — только то, что сдвинулось: центр и кромки полос, у которых сдвинулся центр или шов (толщина заново),
+             сдвинутые швы, опущенные кромки */
+          for (let k = 0; k < K; k++) {
+            const o = (k * n + q) * LW;
+            if (MV[k]) B[o + 18] = solveH(B, S, o, (k * n + q) * SW, ((k + 1) * n + q) * SW, k, K);
+            CC[k] = MV[k]; CE[k] = NEAR[k] ? B[o + 23] & (MV[k] ? 3 : DM[k]) : 0; MV[k] = DM[k] = 0;
+          }
+        }
+        if (TMODE === 1) topRecord(fan, B, n, q, K);
+      }
     }
     /* 5. вершины: порядок кольца — как у трубки (от нормали к w = N × t своей линии).
        Изнанка пласта (сторона, обращённая от кожи) освещается как лицевая: нормали её вершин — нормали лицевой стороны
@@ -889,7 +1655,7 @@ const Muscles = (() => {
         const cx = B[o], cy = B[o + 1], cz = B[o + 2], nx = B[o + 6], ny = B[o + 7], nz = B[o + 8], h = B[o + 18], fl = B[o + 23];
         const tx = B[o + 3], ty = B[o + 4], tz = B[o + 5], wx = ny * tz - nz * ty, wy = nz * tx - nx * tz, wz = nx * ty - ny * tx;
         /* правый шов (к линии k+1) и левый (к k−1): общие вершины — или своя кромка, если полоса шире шва (линии сходятся) */
-        const R = edge(S, sr, fl & 2, cx, cy, cz, nx, ny, nz, wx, wy, wz, B[o + 16], 1, k < K - 1 ? B[o + 17] : -1), Lf = edge(S, sl, fl & 1, cx, cy, cz, nx, ny, nz, wx, wy, wz, B[o + 15], -1, k > 0 ? B[o + 17] : -1);
+        const R = edge(S, sr, fl & 2, cx, cy, cz, nx, ny, nz, wx, wy, wz, B[o + 16], 1, k < K - 1 ? B[o + 17] : -1, B, o), Lf = edge(S, sl, fl & 1, cx, cy, cz, nx, ny, nz, wx, wy, wz, B[o + 15], -1, k > 0 ? B[o + 17] : -1, B, o);
         /* своя кромка внутри ленты лежит на соседней полосе (они перекрываются): её вершины освещаются по средней нормали двух
            полос, без бокового блика кромки — иначе край каждой полосы на соседке рисовался тёмной линией («ступеньки») */
         smoothEdge(B, n, q, k, K, fl, so);
@@ -973,14 +1739,21 @@ const Muscles = (() => {
   const ER = new Float64Array(11), EL = new Float64Array(11);
   /* шов для вершин полосы: [точка, нормаль, направление кромки (наружу полосы), толщина, вынос кромки]. Своя кромка — на
      ширине w от центра, когда шов ближе (линии сходятся или перекрещиваются) */
-  function edge(S, s, own, cx, cy, cz, nx, ny, nz, wx, wy, wz, w, side, eta) {
+  function edge(S, s, own, cx, cy, cz, nx, ny, nz, wx, wy, wz, w, side, eta, B, o) {
     const E = side > 0 ? ER : EL;
     if (own) {
       /* своя кромка — на продолжении направления на шов (полоса заходит за шов на соседа, без щели по кривизне пласта);
-         если шов сбоку или с другой стороны (линии перекрещиваются) — поперёк, по W */
+         если шов сбоку или с другой стороны (линии перекрещиваются) — поперёк, по W; опущена вглубь по направлению к коже линии
+         на B[o + 26 | 27] (этап Г: верх кромки — под кожей кадра) — без составляющей поперёк полосы (по W), чтобы ширина и площадь
+         сечения не менялись */
       const dx = S[s] - cx, dy = S[s + 1] - cy, dz = S[s + 2] - cz, ws = (dx * wx + dy * wy + dz * wz) * side;
       if (ws > .5 * w) { const k = w / ws; E[0] = cx + dx * k; E[1] = cy + dy * k; E[2] = cz + dz * k; }
       else { E[0] = cx + wx * w * side; E[1] = cy + wy * w * side; E[2] = cz + wz * w * side; }
+      const dr = B[o + (side < 0 ? 26 : 27)];
+      if (dr > 0) {
+        const gx = B[o + 9], gy = B[o + 10], gz = B[o + 11], gw = gx * wx + gy * wy + gz * wz, f = dr / Math.max(.3, 1 - gw * gw);
+        E[0] -= (gx - gw * wx) * f; E[1] -= (gy - gw * wy) * f; E[2] -= (gz - gw * wz) * f;
+      }
       E[3] = nx; E[4] = ny; E[5] = nz;
       E[6] = wx * side; E[7] = wy * side; E[8] = wz * side;
     }
@@ -1036,7 +1809,7 @@ const Muscles = (() => {
       const cap = { key: 'delt', side: s.toUpperCase(), lines, rev, K, C, n, hum, lam,
         X: f(C * n * 3), NR: f(C * n * 3), B: f(C * n * 3), A: f(K * n), TH: f(C * n), WL: f(K * n), WR: f(K * n), U: f(C * n),
         DT: f(C * n), AIM: f(2), E: f(C * 6), RT: f(CAP_ROUTE), ST: f(C * CAP_STR * 4), SL: f(C * CAP_STR), TS: f(C), AE: f(C), PL: new Uint8Array(C),
-        BODY: new Array(K), LN: f(K) };
+        BODY: new Array(K), LN: f(K), skin: null };
       lines.forEach((i, k) => { bound[i].cap = cap; bound[i].capK = k; bound[i].rings = n; });
       caps.push(cap);
     }
@@ -1141,7 +1914,85 @@ const Muscles = (() => {
     capRows(cap);
     capWidth(cap);
     capThickness(cap);
+    if (cap.skin) capSkin(cap, m);
     capVertices(cap, pos, nor, start);
+  }
+  /* Этап Г: колпак под кожей кадра. Толщина колпака — по площади сечения (объём МРТ) и не больше CAP_HMAX от головки и диафиза;
+     кожа ему не была указом, и в крайних положениях плеча (рука за спиной — отжимания на брусьях, руки над головой — пуловер,
+     «Y-T-W») верх задней и средней частей выходил из кожи до 2 см. Теперь узлы колпака проверяются по коже кадра (части кожи
+     всех пяти линий, cap.skin):
+     1) узел на кости сам у кожи (за спиной у ости лопатки, когда рука отведена назад) уходит вглубь к головке — не больше
+        CAP_IN, чтобы под кожей поместился хотя бы слой CAP_TMIN толщины;
+     2) верх узла (X + N·TH) глубже кожи меньше чем на CAP_SKIN — толщина уменьшается на недостачу (не тоньше CAP_TMIN исходной):
+        у сжатой кожи дельтовидная тоньше — как средняя часть при руке над головой (README, «Колпак дельтовидной»).
+     Сдвиги и срезы вдоль столбца (волокна) сглажены — огибающая с наклоном не круче CAP_SLOPE и один проход [¼ ½ ¼], не меньше
+     нужного в узле: иначе срез одного узла давал излом волокна до 100° (подъём плеч, тяга в наклоне). Срез — два прохода (кожа
+     над верхом не плоская). CAP_SKIN меньше подкожного слоя трубок (SKIN_GAP): колпак над головкой плеча — самая толстая
+     поверхностная мышца (до 3,5 см), и в нейтральной позе его верх у средней части лежит у самой кожи манекена; срез на полный
+     SKIN_GAP отнимал бы у колпака 10 % объёма МРТ и в покое. */
+  const CAP_TMIN = .25, CAP_IN = 1.5, CAP_SKIN = .2, CAP_SLOPE = .3, CTR = new Float64Array(1024), CEN = new Float64Array(64);
+  function capSkin(cap, m) {
+    const C = cap.C, n = cap.n, X = cap.X, NR = cap.NR, TH = cap.TH, mu = cap.skin;
+    /* память по фазе: сдвиг узла к головке и срез толщины — из ленты */
+    if (TMODE === 2 && cap.tp >= 0) {
+      for (let g = C; g < (n - 1) * C; g++) {
+        const v = g * 3, d = tget(cap.tp + g * 2, T_X), tr = tget(cap.tp + g * 2 + 1, T_X);
+        if (d > 0) { X[v] -= NR[v] * d; X[v + 1] -= NR[v + 1] * d; X[v + 2] -= NR[v + 2] * d; }
+        if (tr > 0) TH[g] = Math.max(CAP_TMIN * TH[g], TH[g] - tr);
+      }
+      return;
+    }
+    /* 1. узлы на кости у кожи. Вдоль столбца кожа считается не в каждом узле: узел ближе к последнему посчитанному, чем
+       (его глубина − нужная) / LIP_K, — заведомо глубже нужного (как в creaseRing) */
+    let any = 0;
+    CTR.fill(0, 0, n * C);
+    for (let c = 0; c < C; c++) {
+      let ld = NaN, lx = 0, ly = 0, lz = 0;
+      for (let q = 1; q < n - 1; q++) {
+        const g = q * C + c, v = g * 3, need0 = SKIN_GAP + CAP_TMIN * TH[g];
+        if (ld === ld && LIP_K * Math.sqrt((X[v] - lx) ** 2 + (X[v + 1] - ly) ** 2 + (X[v + 2] - lz) ** 2) <= ld - need0) continue;
+        const d0 = skinDepth(mu, m, X[v], X[v + 1], X[v + 2], 31);
+        ld = d0; lx = X[v]; ly = X[v + 1]; lz = X[v + 2];
+        if (d0 < need0) { CTR[g] = Math.min(CAP_IN, need0 - d0); any = 1; }
+      }
+    }
+    if (any) { capEnvelope(cap, CTR); for (let g = C; g < (n - 1) * C; g++) if (CTR[g] > 0) { const v = g * 3, d = CTR[g]; X[v] -= NR[v] * d; X[v + 1] -= NR[v + 1] * d; X[v + 2] -= NR[v + 2] * d; } }
+    if (TMODE === 1 && cap.tp >= 0) for (let g = 0; g < n * C; g++) tput(cap.tp + g * 2, any ? CTR[g] : 0, T_X);
+    /* 2. верх узлов: срез толщины, два прохода; tmin — от толщины до среза */
+    for (let g = 0; g < n * C; g++) CTR[n * C + g] = CAP_TMIN * TH[g];
+    for (let it = 0; it < 2; it++) {
+      any = 0;
+      CTR.fill(0, 0, n * C);
+      for (let c = 0; c < C; c++) {
+        let ld = NaN, lx = 0, ly = 0, lz = 0;
+        for (let q = 1; q < n - 1; q++) {
+          const g = q * C + c, v = g * 3, t = TH[g], px = X[v] + NR[v] * t, py = X[v + 1] + NR[v + 1] * t, pz = X[v + 2] + NR[v + 2] * t;
+          if (ld === ld && LIP_K * Math.sqrt((px - lx) ** 2 + (py - ly) ** 2 + (pz - lz) ** 2) <= ld - CAP_SKIN) continue;
+          const dt = skinDepth(mu, m, px, py, pz, 31);
+          ld = dt; lx = px; ly = py; lz = pz;
+          if (dt < CAP_SKIN) { CTR[g] = CAP_SKIN - dt; any = 1; }
+        }
+      }
+      if (!any) break;
+      capEnvelope(cap, CTR);
+      for (let g = C; g < (n - 1) * C; g++) if (CTR[g] > 0) TH[g] = Math.max(CTR[n * C + g], TH[g] - CTR[g]);
+    }
+    if (TMODE === 1 && cap.tp >= 0) for (let g = 0; g < n * C; g++) tput(cap.tp + g * 2 + 1, CTR[n * C + g] / CAP_TMIN - TH[g], T_X);
+  }
+  /* огибающая сдвигов D вдоль каждого столбца: не меньше своего значения, наклон к соседним узлам не круче CAP_SLOPE на см пути,
+     затем один проход [¼ ½ ¼] (и снова не меньше своего); концы столбца (строки 0 и n − 1) не двигаются */
+  function capEnvelope(cap, D) {
+    const C = cap.C, n = cap.n, X = cap.X;
+    for (let c = 0; c < C; c++) {
+      for (let q = 1; q < n - 1; q++) CEN[q] = D[q * C + c];
+      CEN[0] = CEN[n - 1] = 0;
+      for (let dir = 1; dir >= -1; dir -= 2) for (let q = dir > 0 ? 2 : n - 3; q >= 1 && q <= n - 2; q += dir) {
+        const a = ((q - dir) * C + c) * 3, b = (q * C + c) * 3, L = Math.sqrt((X[b] - X[a]) ** 2 + (X[b + 1] - X[a + 1]) ** 2 + (X[b + 2] - X[a + 2]) ** 2);
+        CEN[q] = Math.max(CEN[q], CEN[q - dir] - CAP_SLOPE * L);
+      }
+      let prev = 0;
+      for (let q = 1; q < n - 1; q++) { const cur = CEN[q], s = .25 * prev + .5 * cur + .25 * (q + 1 < n - 1 ? CEN[q + 1] : 0); prev = cur; D[q * C + c] = Math.max(D[q * C + c], s); }
+    }
   }
   function capEnds(cap, bound, paths, m) {
     const K = cap.K, C = cap.C, lam = cap.lam, E = cap.E;
@@ -1883,13 +2734,23 @@ const Muscles = (() => {
   }
   /* все мышцы кадра: трубки (surface), ленты (ribbon), колпак дельтовидной (capSurface) и стенки (wallSurface); start — номера
      первых колец мышц (длина bound.length + 1) */
-  function surfaceAll(bound, paths, m, pos, nor, start) {
-    for (let i = 0; i < bound.length; i++) if (!bound[i].fan && !bound[i].cap && !bound[i].wall) surface(bound[i], paths[i], m, pos, nor, start[i] * SIDES);
-    for (const fan of bound.fans || []) ribbon(fan, bound, paths, m, pos, nor, start);
-    for (const cap of bound.caps || []) capSurface(cap, bound, paths, m, pos, nor, start);
-    const walls = bound.walls || [];
-    if (walls.length) wallTorso(walls[0].T, m);
-    for (const wall of walls) wallSurface(wall, m, pos, nor, start, wall.T === walls[0].T);
+  /* memo — память кожи по фазе (раздел «память кожи по фазе» выше): { rec } или { a, b, w }; без неё кожа считается в кадре */
+  function surfaceAll(bound, paths, m, pos, nor, start, memo = null) {
+    TMODE = 0;
+    if (memo && bound.tapeN) {
+      if (memo.rec && memo.rec.length === bound.tapeN) { TMODE = 1; TP = memo.rec; }
+      else if (memo.a && memo.b && memo.a.length === bound.tapeN && memo.b.length === bound.tapeN) { TMODE = 2; TA = memo.a; TB = memo.b; TW = memo.w || 0; }
+    }
+    try {
+      /* по памяти кожа кадра нужна только там, где ленты расходятся (skinDepth и skinLive сами готовят кадр кожи) */
+      if (bound.skin && TMODE !== 2) skinFrame(bound.skin, m); else SKN.m = null;
+      for (let i = 0; i < bound.length; i++) if (!bound[i].fan && !bound[i].cap && !bound[i].wall) surface(bound[i], paths[i], m, pos, nor, start[i] * SIDES);
+      for (const fan of bound.fans || []) ribbon(fan, bound, paths, m, pos, nor, start);
+      for (const cap of bound.caps || []) capSurface(cap, bound, paths, m, pos, nor, start);
+      const walls = bound.walls || [];
+      if (walls.length) wallTorso(walls[0].T, m);
+      for (const wall of walls) wallSurface(wall, m, pos, nor, start, wall.T === walls[0].T);
+    } finally { TMODE = 0; TP = TA = TB = null; }
   }
   function ringStarts(bound) { const st = new Uint32Array(bound.length + 1); for (let i = 0; i < bound.length; i++) st[i + 1] = st[i] + ringCount(bound[i]); return st; }
 
@@ -1960,7 +2821,7 @@ const Muscles = (() => {
     pending = bytes.then(gunzip).then(decode).then(d => (data = d)).catch(e => { pending = null; throw e; });
     return pending;
   }
-  return { path, wrap, bind, place, layout, drawn, layoutDrawn, body, radiusAt, skinAt, section, surface, ribbon, ribbonRing, wallSurface, shellR, surfaceAll, ringCount, ringStarts, sheetNormals, sheetMesh, FANS, SIDES, SKIN_U, SKIN_GAP, FLAT, SPINDLE, SPINDLE_I, load, decode, get data() { return data; }, set data(d) { data = d; } };
+  return { path, wrap, bind, place, layout, drawn, layoutDrawn, body, radiusAt, skinAt, skinPart, skinFrame, section, surface, ribbon, ribbonRing, wallSurface, shellR, surfaceAll, ringCount, ringStarts, sheetNormals, sheetMesh, FANS, SIDES, SKIN_U, SKIN_GAP, FLAT, SPINDLE, SPINDLE_I, load, decode, get data() { return data; }, set data(d) { data = d; } };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = Muscles;
 if (typeof window !== 'undefined') window.Muscles = Muscles;

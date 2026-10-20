@@ -160,6 +160,33 @@ function withVolumes(out) {
   /* стенки (этап Б): прямая, косые живота, передняя зубчатая, малая грудная — пластами по поверхности тела (walls.js) */
   const W = require('./walls.js').build(out, { M, Skeleton, Muscles, skel });
   out.walls = W.walls; out.shells = W.shells; out.hips = W.hips; out.scap = W.scap; out.backTop = W.backTop;
+  /* этап Г: части кожи у пути мышцы (skp; коды — как у частей G.skinSDF: 0 корпус, 1 голова, 2 шея, 3–10 сегменты конечностей,
+     11–22 «шапки» суставов). Тело мышцы в кадре ложится под кожу этих частей (Muscles.skinAt, «кожа кадра»). Часть — если путь
+     в нейтральной позе проходит в ней или ближе SKP_NEAR снаружи (в позах сегменты сходятся: у локтя, колена, подмышки).
+     Запись — код · 32 + маска записей sk (бит j — участок пути у записи j: от середины между записями j − 1 и j до середины
+     между j и j + 1): кольцо считает только части своих записей. Мышцы глубже SKP_DEEP под кожей на всём брюшке (большая
+     поясничная, подвздошная, грушевидная, большая приводящая у бедра) и стенки — без частей: им кожа кадра не нужна. */
+  const SKP_NEAR = 2, SKP_DEEP = 4, wallLines = new Set(W.walls.flatMap(w => w.lines)), partSDF = sdf0.parts.map(f => p => M.noFolds(() => f(p)));
+  out.muscles.forEach((m, i) => {
+    if (wallLines.has(m.name) || Math.min(...m.sk.map(e => e[0])) > SKP_DEEP) return;
+    const pts = fine[i].points, cum = [0];
+    for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1] + Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1], pts[k][2] - pts[k - 1][2]));
+    const L = cum.at(-1), lb = L - m.t0 - m.t1, sj = Muscles.SKIN_U.map(u => m.t0 + u * lb), cut = sj.slice(1).map((x, j) => (x + sj[j]) / 2);
+    const near = Array.from({ length: Muscles.SKIN_U.length }, () => new Float64Array(partSDF.length).fill(Infinity));
+    for (let k = 0; k < pts.length; k++) {
+      const a = pts[k], b = pts[Math.min(pts.length - 1, k + 1)], d = cum[Math.min(pts.length - 1, k + 1)] - cum[k], n = Math.max(1, Math.ceil(d / .5));
+      for (let j = 0; j < n; j++) {
+        const p = a.map((x, c) => x + (b[c] - x) * j / n), sp = cum[k] + d * j / n; let q = 0; while (q < cut.length && sp > cut[q]) q++;
+        partSDF.forEach((f, c) => { near[q][c] = Math.min(near[q][c], f(p)); });
+      }
+    }
+    /* по порядку — сначала части, в которых путь глубже (обычно они и ближе всех к центру кольца: остальные части считаются
+       без направления) */
+    const deepest = c => Math.min(...near.map(nr => nr[c]));
+    m.skp = [];
+    for (let c = 0; c < partSDF.length; c++) { let mask = 0; near.forEach((nr, q) => { if (nr[c] < SKP_NEAR) mask |= 1 << q; }); if (mask) m.skp.push(c * 32 + mask); }
+    m.skp.sort((a, b) => deepest(a >> 5) - deepest(b >> 5) || a - b);
+  });
   if (process.env.WALLS_INFO) console.error(JSON.stringify(W.info, (k, v) => (typeof v === 'number' ? Math.round(v * 1000) / 1000 : v)));
   return out;
 }

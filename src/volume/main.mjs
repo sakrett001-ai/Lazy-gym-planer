@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {createCatalogScene,world} from './scene.mjs';
+import {phaseMemory} from './muscles.mjs';
 
 let rendererUnavailable=false;
 /* Слабая графика: если кадры анимации идут реже ~20 в секунду, тени выключаются — до конца сеанса и для следующих фигур. */
@@ -240,5 +241,6 @@ function cards(){
  if(!rendererUnavailable&&typeof window.WebGL2RenderingContext==='undefined')rendererUnavailable=true;
  if(rendererUnavailable)return null;if(!cardStage)cardStage=createCardStage();return cardStage;
 }
-/* boneMisses — сколько раз скелет раскладывался заново (кадр «с холодной памятью»: его время — не мерило скорости устройства) */
-window.GymVolume={create:createVolumeFigure,cards,get boneMisses(){return boneMisses;}};
+/* boneMisses — сколько раз скелет раскладывался заново или кожа мышц считалась без памяти по фазе (кадр «с холодной памятью»:
+   его время — не мерило скорости устройства; первое повторение в «Анатомии» дороже) */
+window.GymVolume={create:createVolumeFigure,cards,get boneMisses(){return boneMisses+phaseMemory().misses;}};

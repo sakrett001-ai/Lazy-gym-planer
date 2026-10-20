@@ -493,12 +493,12 @@ test('ribbons: the deep side is lit like the outer side, own edges inside a ribb
   }
 });
 
-/* Под кожей и в костях — не хуже трубок: тело ленты не выше 2,6 см над кожей (вся проверка — npm run muscles:check,
-   исключения для широчайшей больше нет), а вершины тела ленты в костях (дальше 2 см от концов пути)
+/* Под кожей и в костях — не хуже трубок: тело ленты не выше BODY_LIMIT (1 см, этап Г; было 2,6) над кожей (вся проверка —
+   npm run muscles:check, исключения для широчайшей больше нет), а вершины тела ленты в костях (дальше 2 см от концов пути)
    глубже 0,5 см — не чаще, чем у трубок тех же линий (Muscles.surface), с запасом 2 процентных пункта, и не глубже их
    больше чем на 0,3 см */
 test('ribbons stay under the skin and do not go into bones deeper than the tubes they replace', () => {
-  const G = require('./muscles/geometry.js'), pbs = G.prepareBones(skel), TUBE = new Float64Array(RBUF.length);
+  const G = require('./muscles/geometry.js'), pbs = G.prepareBones(skel), TUBE = new Float64Array(RBUF.length), { BODY_LIMIT } = require('./muscles/check.js');
   const fam = {};
   for (const id of ['ohp', 'pullup', 'ytw', 'latpull', 'bbbench', 'deadlift', 'hipthrust']) for (const t of [0, .5, 1]) {
     const { R, m } = rPose(id, t), paths = Muscles.layoutDrawn(bound, m, 1.5), pose = G.poseBones(pbs, m), sdf = G.skinSDF(R);
@@ -506,7 +506,7 @@ test('ribbons stay under the skin and do not go into bones deeper than the tubes
     for (const fan of bound.fans) for (const i of fan.lines) {
       Muscles.surface(bound[i], paths[i], m, TUBE, null, RSTART[i] * RSIDES);
       const out = G.skinOutPoints(sdf, RBUF.subarray(RSTART[i] * RSIDES * 3, RSTART[i + 1] * RSIDES * 3), R).out;
-      assert(out <= 2.6, `${bound[i].name} in ${id} t=${t}: ${out.toFixed(2)} cm above the skin`);
+      assert(out <= BODY_LIMIT, `${bound[i].name} in ${id} t=${t}: ${out.toFixed(2)} cm above the skin`);
       const f = fam[fan.key] || (fam[fan.key] = { rib: [0, 0, 0], tube: [0, 0, 0] }), a = paths[i].points[0], b = paths[i].points.at(-1);
       for (const [buf, acc] of [[RBUF, f.rib], [TUBE, f.tube]]) for (let v = RSTART[i] * RSIDES; v < RSTART[i + 1] * RSIDES; v++) {
         const p = [buf[v * 3], buf[v * 3 + 1], buf[v * 3 + 2]];
@@ -665,15 +665,118 @@ test('deltoid cap keeps the volume and the part shares of the dissections', () =
 });
 
 /* Геометрия на позах каталога (вся проверка — npm run muscles:check): несколько упражнений с крайними положениями
-   рук, ног и туловища — путь не глубже 2 см в костях и не выше 2,2 см над кожей (исключения — подмышечные складки). */
+   рук, ног и туловища — путь не глубже 2 см в костях и не выше 2,2 см над кожей, тело мышцы — не выше BODY_LIMIT (1 см, этап Г;
+   обоснование — в check.js; исключений нет). */
 test('muscle paths stay out of bones and under the skin in catalog poses', () => {
-  const { run, EXCEPT } = require('./muscles/check.js');
+  const { run, EXCEPT, BODY_LIMIT } = require('./muscles/check.js');
   const { fam } = run(['bbbench', 'squat', 'latpull', 'deadlift', 'dbcurl', 'crunch'], [0, .5, 1]);
   for (const [k, f] of Object.entries(fam)) {
     assert(f.bone <= 2, `${k}: ${f.bone.toFixed(2)} cm inside a bone (${f.boneAt})`);
     assert(f.skin <= (EXCEPT.skin[k] ?? 2.2), `${k}: ${f.skin.toFixed(2)} cm above the skin (${f.skinAt})`);
-    assert(f.body <= (EXCEPT.body[k] ?? 2.6), `${k}: muscle body ${f.body.toFixed(2)} cm above the skin (${f.bodyAt})`);
+    assert(f.body <= (EXCEPT.body[k] ?? BODY_LIMIT), `${k}: muscle body ${f.body.toFixed(2)} cm above the skin (${f.bodyAt})`);
   }
+  /* полная проверка (npm run muscles:check) — с тем же допуском, исключений тела нет */
+  const pkg = require('../package.json').scripts['muscles:check'];
+  assert.equal(+pkg.match(/--max-body (\S+)/)[1], BODY_LIMIT, 'npm run muscles:check uses BODY_LIMIT');
+  assert.deepEqual(EXCEPT.body, {}, 'no body exceptions');
+});
+
+/* Отрицательная: тело мышцы, вынесенное за кожу на 1,5 см, допуском тела ловится (а прежним 2,6 — нет). Трубка (плечелучевая),
+   лента (широчайшая) и колпак (средняя часть дельтовидной) в нейтральной позе сдвигаются целиком по нормали кожи у своей
+   верхней вершины — так, что она на 1,5 см над кожей; мера — та же, что у npm run muscles:check (G.skinOutPoints). */
+test('negative: a muscle body moved 1.5 cm out of the skin is caught by the body tolerance', () => {
+  const G = require('./muscles/geometry.js'), { BODY_LIMIT } = require('./muscles/check.js');
+  const { R, m } = rPose('neutral', 0), sdf = G.skinSDF(R);
+  Muscles.surfaceAll(bound, Muscles.layoutDrawn(bound, m, 1.5), m, RBUF, null, RSTART);
+  for (const name of ['BRD_r', 'LAT3_r', 'DELT2_l']) {
+    const i = bound.findIndex(b => b.name === name), a = RSTART[i] * RSIDES * 3, z = RSTART[i + 1] * RSIDES * 3;
+    const ok = G.skinOutPoints(sdf, RBUF.subarray(a, z), R);
+    assert(ok.out <= BODY_LIMIT, `${name} as drawn: ${ok.out.toFixed(2)} cm`);
+    const p = [RBUF[a + ok.at * 3], RBUF[a + ok.at * 3 + 1], RBUF[a + ok.at * 3 + 2]], h = .05;
+    const g = rUnit([0, 1, 2].map(k => { const q = p.slice(), w = p.slice(); q[k] += h; w[k] -= h; return sdf(q) - sdf(w); }));
+    const moved = RBUF.slice(a, z), d = 1.5 - ok.out;
+    for (let v = 0; v < moved.length; v += 3) for (let k = 0; k < 3; k++) moved[v + k] += g[k] * d;
+    const bad = G.skinOutPoints(sdf, moved, R).out;
+    assert(bad > BODY_LIMIT && bad >= 1.3, `${name} moved 1.5 cm out: ${bad.toFixed(2)} cm is not caught`);
+    assert(bad < 2.6, `${name}: ${bad.toFixed(2)} cm — the old tolerance would have caught it too`);
+  }
+});
+
+/* ---------- кожа кадра (этап Г, Muscles.skinPart; README, «Тело мышцы между костью и кожей») ----------
+   Части кожи, посчитанные по матрицам костей, — та же кожа, что у манекена и проверок (G.skinSDF): у точек не дальше 3 см от
+   кожи части конечности, шея, голова и «шапки» суставов — до 0,1 мм; корпус (сдвиг надплечий — неподвижная точка до 0,3 мм,
+   сечения и рамки поясницы — по таблицам кадра) — в среднем до 0,2 мм, больше 1 мм — не чаще 2 % точек, наибольшее — до 1 см
+   (точки снаружи кожи над поднятыми надплечьями; сейчас — в среднем 0,05 мм, 0,47 % и 0,64 см). */
+test('frame skin: Muscles.skinPart equals the mannequin skin of the checks near the body surface in poses', () => {
+  const G = require('./muscles/geometry.js'), S = bound.skin;
+  assert(S, 'frame skin is bound (skp in the data)');
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const st = Array.from({ length: 23 }, () => ({ n: 0, sum: 0, big: 0, max: 0, at: '' }));
+  for (const [id, t] of [['neutral', 0], ['shrug', 1], ['ytw', 0], ['dbcurl', 1], ['squat', 1], ['bicycle', .5], ['ohp', 1], ['deadlift', 0]]) {
+    const { R, m } = rPose(id, t), sdf = G.skinSDF(R), surf = L.M.surface(R), pts = [];
+    Muscles.skinFrame(S, m);
+    const rows = [...surf.torso, ...Object.values(surf.limbs).flat(), ...surf.neck];
+    for (const row of rows) for (let k = 0; k < row.length; k += 3) pts.push(row[k]);
+    for (const c of L.M.bodyData(R).caps) for (let k = 0; k < 12; k++) { const u = [rnd() - .5, rnd() - .5, rnd() - .5], l = Math.hypot(...u); pts.push(c.c.map((x, j) => x + u[j] / l * c.r)); }
+    for (const p0 of pts) {
+      const p = p0.map(x => x + (rnd() - .5) * 6);
+      for (let code = 0; code < 23; code++) {
+        const ref = sdf.parts[code](p); if (!(Math.abs(ref) <= 3)) continue;
+        const e = Math.abs(Muscles.skinPart(S, m, code, p[0], p[1], p[2]) - ref), s = st[code];
+        s.n++; s.sum += e; if (e > .1) s.big++; if (e > s.max) { s.max = e; s.at = `${id} t=${t} (${p.map(x => x.toFixed(1)).join(', ')})`; }
+      }
+    }
+  }
+  for (let code = 1; code < 23; code++) assert(st[code].n > 100 && st[code].max < .01, `skin part ${code}: ${st[code].max.toFixed(4)} cm off the mannequin skin (${st[code].at}), ${st[code].n} points`);
+  const T = st[0];
+  assert(T.n > 2000 && T.sum / T.n < .02 && T.big <= .02 * T.n && T.max < 1, `torso skin: mean ${(T.sum / T.n * 10).toFixed(2)} mm, ${(100 * T.big / T.n).toFixed(2)} % > 1 mm, max ${T.max.toFixed(2)} cm (${T.at}), ${T.n} points`);
+});
+
+/* Память кожи по фазе (этап Г; Muscles.surfaceAll с memo, слой мышц сцены): запись ленты кадр не меняет; кадр из своей ленты —
+   тот же до округления Int16 (вершин дальше 1 мм — не больше 0,1 %: у переключений ветвей — кромка ленты на продолжении шва
+   или поперёк — округление может дать и больше); кадр между лентами соседних фаз (здесь — через 1/32 повторения: дальше
+   друг от друга слой мышц ленты не смешивает, PHASE_SPAN в src/volume/muscles.mjs) близок к точному расчёту: вершин дальше
+   5 мм в среднем по кадрам — не больше 0,1 %, в худшем кадре — не больше 0,5 % (сейчас 0,03 и 0,27 %: это кольца, у которых
+   сама точная поверхность переключает ветвь — надостная в тяге верхнего блока прыгает на 3,6 см за 1/512 повторения, а по
+   памяти переходит между лентами плавно; линейное смешение самих вершин соседних кадров дало бы до 5,9 %), и не выше допуска
+   тела над кожей; лента чужого упражнения даёт другой кадр (память действительно читается) */
+test('phase memory: recording keeps the frame, frames from tapes stay close to the exact ones and under the skin', () => {
+  const G = require('./muscles/geometry.js'), { BODY_LIMIT } = require('./muscles/check.js'), Q = 32, ref = new Float64Array(RBUF.length);
+  assert(bound.tapeN > 20000, `tape of ${bound.tapeN} numbers`);
+  const frac = (a, c, d) => { let k = 0, n = 0; for (let v = 0; v < a.length; v += 3) { n++; if (Math.max(Math.abs(a[v] - c[v]), Math.abs(a[v + 1] - c[v + 1]), Math.abs(a[v + 2] - c[v + 2])) > d) k++; } return k / n; };
+  let same = 0, mid = 0, midAt = '', midSum = 0, midN = 0, out = -9, outAt = '', other = null;
+  for (const id of ['latpull', 'squat']) {
+    const tapes = [];
+    for (let i = 0; i <= Q; i++) {
+      const { m } = rPose(id, i / Q), paths = Muscles.layoutDrawn(bound, m, 1.5), tape = new Int16Array(bound.tapeN);
+      Muscles.surfaceAll(bound, paths, m, ref, null, RSTART);
+      Muscles.surfaceAll(bound, paths, m, RBUF, null, RSTART, { rec: tape });
+      assert.equal(frac(RBUF, ref, 0), 0, `${id} t=${i / Q}: recording changed the frame`);
+      Muscles.surfaceAll(bound, paths, m, RBUF, null, RSTART, { a: tape, b: tape, w: 0 });
+      same = Math.max(same, frac(RBUF, ref, .1)); tapes.push(tape);
+    }
+    if (!other) other = tapes;
+    else {
+      const { m } = rPose(id, .5), paths = Muscles.layoutDrawn(bound, m, 1.5);
+      Muscles.surfaceAll(bound, paths, m, ref, null, RSTART);
+      Muscles.surfaceAll(bound, paths, m, RBUF, null, RSTART, { a: other[Q / 2], b: other[Q / 2], w: 0 });
+      assert(frac(RBUF, ref, .5) > .01, 'a tape of another exercise gives the same frame — the tape is not read');
+    }
+    for (let i = 0; i < Q; i += 2) {
+      const t = (i + .5) / Q, { R, m } = rPose(id, t), paths = Muscles.layoutDrawn(bound, m, 1.5), sdf = G.skinSDF(R);
+      Muscles.surfaceAll(bound, paths, m, ref, null, RSTART);
+      Muscles.surfaceAll(bound, paths, m, RBUF, null, RSTART, { a: tapes[i], b: tapes[i + 1], w: .5 });
+      const f = frac(RBUF, ref, .5); midSum += f; midN++; if (f > mid) { mid = f; midAt = `${id} t=${t}`; }
+      for (let k = 0; k < bound.length; k++) {
+        if (bound[k].wall) continue;
+        const o = G.skinOutPoints(sdf, RBUF.subarray(RSTART[k] * RSIDES * 3, RSTART[k + 1] * RSIDES * 3), R).out;
+        if (o > out) { out = o; outAt = `${bound[k].name} ${id} t=${t}`; }
+      }
+    }
+  }
+  assert(same <= .001, `frames from their own tape: ${(100 * same).toFixed(3)} % of vertices off by more than 1 mm`);
+  assert(midSum / midN <= .001 && mid <= .005, `frames between tapes: ${(100 * midSum / midN).toFixed(3)} % of vertices off by more than 5 mm on average, ${(100 * mid).toFixed(3)} % at worst (${midAt})`);
+  assert(out <= BODY_LIMIT, `frames between tapes: muscle body ${out.toFixed(2)} cm above the skin (${outAt})`);
 });
 
 /* ---------- межрёберные мышцы — пласты (4.40.0, tools/muscles/intercostals.js; данные формата 3 — sheets) ---------- */
