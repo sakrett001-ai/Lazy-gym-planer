@@ -220,6 +220,40 @@ test('muscle volumes: each MRI muscle is split over its lines, totals equal the 
   }
 });
 
+/* Колено (аудит анатомии 4.53.0, находка 9; volumes.js, QUAD_TENDON): путь прямой и широких мышц бедра идёт через
+   надколенник к бугристости большеберцовой кости, и дистальное сухожилие не короче надколенника, связки надколенника и
+   сухожилия над надколенником по препаратам — брюшко кончается выше надколенника и в глубоком сгибании колена не ложится на
+   него «клювом» (до правки у медиальной и промежуточной широких сухожилие было 2,8 см — брюшко заходило за первую точку на
+   надколеннике на 7 см). Связка надколенника в пути модели — в пределах препаратов (Andrikoula и др., 2006: 38–49 мм). */
+test('quadriceps: the distal tendon covers the patella, the patellar ligament and the quadriceps tendon by dissections', () => {
+  const A = require('./muscles/fixtures/anatomy.json'), { QUAD_TENDON } = require('./muscles/volumes.js');
+  const EQ = require('../src/js/09bn-equipment.js');
+  for (const f of fs.readdirSync(path.join(__dirname, '../src/js')).filter(f => /^09bo.*\.js$/.test(f)).sort()) require('../src/js/' + f);
+  const POSES = require('../src/js/09bp-poses.js'), d3 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  const first = i => md.muscles[i].el.findIndex(e => e.s && e.s.bone[0] === 'patella');
+  const lines = Object.keys(QUAD_TENDON).flatMap(b => ['_r', '_l'].map(s => md.muscles.findIndex(m => m.name === b + s)));
+  assert.equal(lines.length, 8); assert(lines.every(i => i >= 0 && first(i) > 0), 'four quadriceps parts on both sides reach the patella');
+  const { m } = pose();
+  for (const i of lines) {
+    const mu = md.muscles[i], s = Muscles.place(bound[i], m).slice(first(i)).map(e => e.s), q = QUAD_TENDON[mu.name.replace(/_[rl]$/, '')];
+    const seg = s.slice(1).reduce((a, p, j) => a + d3(p, s[j]), 0), lig = d3(s.at(-1), s.at(-2));
+    assert(lig >= A.quadtendon.ligament[0] && lig <= A.quadtendon.ligament[1], `${mu.name}: patellar ligament ${lig.toFixed(1)} cm`);
+    assert(mu.t1 >= seg + q - .06, `${mu.name}: distal tendon ${mu.t1} cm, patella and ligament ${seg.toFixed(1)} + above the patella ${q}`);
+  }
+  /* глубокое сгибание колена: брюшко кончается выше первой точки на надколеннике не меньше чем на 1 см (связка в позе
+     манекена чуть длиннее — до 1,1 см) */
+  for (const [id, t] of [['squat', 1], ['seatedcalf', .5], ['legpress', 1], ['hacksquat', 1], ['legext', 0]]) {
+    const R = EQ.rig(POSES[id])(t), fr = L.Skeleton.frames(R, L.M.bodyData(R), skel.bones);
+    for (const i of lines) {
+      const p = Muscles.drawn(bound[i], fr, .5), site = Muscles.place(bound[i], fr)[first(i)].s, cum = [0];
+      for (let j = 1; j < p.points.length; j++) cum.push(cum[j - 1] + d3(p.points[j], p.points[j - 1]));
+      const k = p.points.reduce((b, x, j) => d3(x, site) < d3(p.points[b], site) ? j : b, 0), b = Muscles.body(bound[i], p.length);
+      assert(d3(p.points[k], site) < .01, 'the patella point lies on the drawn path');
+      assert(cum[k] - (b.t0 + b.lb) >= 1, `${id} t=${t} ${bound[i].name}: belly ends ${(cum[k] - b.t0 - b.lb).toFixed(1)} cm above the patella`);
+    }
+  }
+});
+
 /* Исходные модели согласуются с МРТ — независимая проверка данных: у модели ног Rajagopal объёмы взяты из МРТ
    Handsfield et al. (2014) для человека 170 см, 75 кг (сила = 60 Н/см² · объём / длина волокон); пересчитанные обратно,
    они совпадают с МРТ Riem et al. в пределах 30 % (медиана — в 10 %). У MoBL-ARMS и DAS3 удельное напряжение не

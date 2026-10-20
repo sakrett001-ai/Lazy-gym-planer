@@ -89,7 +89,10 @@ const PARTS = [
   [/^trap_scap_[6-8]$/, 'trapmid', 'Трапециевидная, средняя часть', ['traps', 'midback']],
   [/^trap_scap(_9|1\d)$/, 'trapinf', 'Трапециевидная, нижняя часть', ['traps']],
   [/^rhomboid_/, 'rhomb', 'Ромбовидные', ['midback']],
-  [/^lev_scap_/, 'levscap', 'Поднимающая лопатку', []],
+  /* поднимающая лопатку (этап А аудита анатомии 4.53.0): вместе с верхней частью трапециевидной поднимает лопатку — в
+     шрагах основная (Neumann, Kinesiology of the Musculoskeletal System, 3-е изд., 2017, гл. 5); в группе «Трапеции», в
+     профиле — своя область (lev_scap, 09d-catalog-muscles.js) */
+  [/^lev_scap_/, 'levscap', 'Поднимающая лопатку', ['traps']],
   /* мышцы шеи (4.35.0, anatomy.js) — без группы приложения: упражнений на шею в каталоге нет */
   [/^SCM\d$/, 'scm', 'Грудино-ключично-сосцевидная', []],
   [/^SPLcap\d$/, 'splcap', 'Ременная мышца головы', []], [/^SPLcerv\d$/, 'splcerv', 'Ременная мышца шеи', []],
@@ -116,7 +119,17 @@ function withVolumes(out) {
   out.muscles.forEach((m, i) => { lengths[m.name] = paths[i].length; fmax[m.name] = m.fmax; });
   /* кости концов пути — чтобы сухожилие рисовалось у своей кости при любом порядке точек (volumes.js, BELLY: at) */
   const ends = Object.fromEntries(out.muscles.map(m => { const ss = m.el.filter(e => e.s).map(e => e.s.bone[0]); return [m.name, [ss[0], ss.at(-1)]]; }));
-  const vol = volumes(out.muscles.map(m => m.name), fmax, lengths, { stature: M.B.stature, mass: M.B.mass }, ends);
+  /* четырёхглавая: путь от первой точки на надколеннике до прикрепления — надколенник и связка надколенника, без огибающих
+     тел (прямые отрезки между точками); сухожилие на рисунке не короче его (volumes.js, QUAD_TENDON) */
+  const frames0 = Skeleton.frames(R, M.bodyData(R), skel.bones), patella = {};
+  out.muscles.forEach((m, i) => {
+    const k = m.el.findIndex(e => e.s && e.s.bone[0] === 'patella');
+    if (k < 0) return;
+    if (m.el.slice(k).some(e => !e.s)) throw Error('огибающее тело после надколенника: ' + m.name);
+    const pl = Muscles.place(bound[i], frames0).slice(k).map(e => e.s);
+    patella[m.name] = pl.slice(1).reduce((s, p, j) => s + Math.hypot(p[0] - pl[j][0], p[1] - pl[j][1], p[2] - pl[j][2]), 0);
+  });
+  const vol = volumes(out.muscles.map(m => m.name), fmax, lengths, { stature: M.B.stature, mass: M.B.mass }, ends, patella);
   const r1 = x => Math.round(x * 10) / 10;
   for (const m of out.muscles) { const v = vol[m.name]; m.v = r1(v.v); m.t0 = r1(v.t0); m.t1 = r1(v.t1); m.l0 = r1(lengths[m.name]); delete m.fmax; }
   /* кожа над брюшком (Muscles.SKIN_U): глубина пути под кожей d (см), направление к коже o — перпендикуляр к пути,
