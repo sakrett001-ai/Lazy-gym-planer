@@ -295,7 +295,7 @@ const LIMITS={
    зеркально по x. ac — акромиально-ключичный сустав, ts — медиальный конец ости, ai — нижний угол, aa — акромиальный угол;
    front — 40 точек передней (рёберной) поверхности тела лопатки; back — 16 точек задней поверхности у медиального края и
    корня ости (мягкие ткани над лопаткой, cushLift). */
-const GIRDLE={ac:[-16.28,0.47,-3.09],ts:[-6.06,-4.33,-13.96],ai:[-8.52,-11.79,-14.65],aa:[-17.46,0.35,-4.79],
+const GIRDLE={ac:[-16.28,0.47,-3.09],ts:[-6.06,-4.33,-13.96],ai:[-8.52,-11.79,-14.65],aa:[-17.46,0.35,-4.79],as:[-7.4,1.87,-11.03],
  front:[[-8.52,-11.79,-14.65],[-8.56,2.62,-8.58],[-14.38,-4.97,-6.45],[-8.43,-4.06,-12.69],[-14.23,0.64,-8.06],[-11.7,-1.54,-3.77],[-11.11,-7.78,-12.52],[-6.01,-7.14,-14.51],[-10.58,-0.99,-9.48],[-6.87,0.75,-11.82],[-12.48,-5.36,-9.69],[-6.38,-1.9,-13.19],[-12.6,-2.51,-8.01],[-5.88,-4.46,-13.87],[-13.43,-2.74,-5.37],[-10.23,-10.11,-13.74],[-8.27,-1.66,-11.6],[-11.12,-5.21,-11.71],[-9.77,0.3,-7.65],[-11.52,-1.51,-6.12],[-9.41,-6.17,-13.01],[-10.33,0.52,-11.25],[-7.61,-9.74,-14.17],[-8.46,0.78,-9.64],[-11.44,-2.79,-10.11],[-14.29,-5.09,-8.37],[-13.1,0.96,-9.56],[-9.27,-8.01,-13.4],[-13.87,-1.06,-7.83],[-12.84,-4.07,-8.5],[-10.78,-0.8,-7.35],[-15.08,-0.32,-7.33],[-12.68,-1,-8.7],[-6.65,-0.45,-12.62],[-13.32,-4.01,-6.68],[-12.03,-6.08,-10.85],[-7.19,-11.29,-14.74],[-11.74,-0.62,-4.84],[-9.44,-0.04,-9.07],[-6.43,-9.31,-14.68]],
  back:[[-8.1,2.76,-9.58],[-8.44,-11.74,-14.81],[-11.81,-5.15,-11.11],[-6.06,-4.33,-13.96],[-12.33,0.37,-10.32],[-6.82,-0.14,-12.59],[-9.41,-7.73,-13.57],[-6.43,-8.92,-14.8],[-8.99,-3.66,-12.65],[-9.83,-0.17,-8.63],[-9.7,0.23,-11.78],[-12.29,-6.91,-12.63],[-10.23,-9.83,-14.05],[-11.61,-1.65,-9.54],[-6.77,-2.25,-13.13],[-7.83,0.98,-10.99]]};
 /* Оболочка рёбер: наибольший радиус вершин грудной клетки от оси (x = 0, z = zc) по слою 1 см (строки y0…y1, рамка
@@ -361,7 +361,7 @@ function scapRot(s,a){
 /* ts и ai правой стороны (рамка грудной клетки) при поясе x = [подъём, ретракция ключицы, ir, ur, pt] */
 function girdleContactPts(x){
  const Rc=M3.mul(M3.rz(-x[0]),M3.ry(-x[1])),Rd=scapRot('R',[x[2],x[3],x[4]]),o=V.add(SC_R,M3.v(Rc,GIRDLE.ac));
- return[V.add(o,M3.v(Rd,V.sub(GIRDLE.ts,GIRDLE.ac))),V.add(o,M3.v(Rd,V.sub(GIRDLE.ai,GIRDLE.ac)))];
+ return[GIRDLE.ts,GIRDLE.ai,GIRDLE.as].map(p=>V.add(o,M3.v(Rd,V.sub(p,GIRDLE.ac))));
 }
 const GAP0=girdleContactPts([0,0,0,0,0]).map(ribGap);
 const rhythmPt=(key,th)=>{const T=RHYTHM.th,Y=RHYTHM[key];if(th<=T[0])return Y[0];for(let i=1;i<T.length;i++)if(th<=T[i])return Y[i-1]+(Y[i]-Y[i-1])*(th-T[i-1])/(T[i]-T[i-1]);return Y.at(-1);};
@@ -398,12 +398,14 @@ function solveGirdle(t,sCl){
  if(t.every(v=>Math.abs(v)<1e-9))return[0,0,0,0,0];
  const key=sCl+':'+t.map(v=>v.toFixed(6)).join(',');let hit=G_MEMO.get(key);if(hit)return hit;
  const sig=[sCl,sCl,GSIG.st,GSIG.ur,GSIG.st],w=sig.map(v=>1/(v*v));
- const cres=x=>{const p=girdleContactPts(x);return[(ribGap(p[0])-GAP0[0])/GSIG.c,(ribGap(p[1])-GAP0[1])/GSIG.c];};
- const cost=(x,c)=>c[0]*c[0]+c[1]*c[1]+x.reduce((s,v,i)=>s+(v-t[i])*(v-t[i])*w[i],0);
+ /* ts и ai — на своём расстоянии от оболочки; верхний угол (as) — не ближе, чем в покое (отходить от рёбер может) */
+ const cres=x=>{const p=girdleContactPts(x);return[(ribGap(p[0])-GAP0[0])/GSIG.c,(ribGap(p[1])-GAP0[1])/GSIG.c,Math.min(0,ribGap(p[2])-GAP0[2])/GSIG.c];};
+ const dot=(a,b)=>a.reduce((s,v,k)=>s+v*b[k],0);
+ const cost=(x,c)=>dot(c,c)+x.reduce((s,v,i)=>s+(v-t[i])*(v-t[i])*w[i],0);
  let x=t.slice(),c=cres(x),F=cost(x,c),lam=1e-3;const h=.01;
  for(let it=0;it<60;it++){
-  const J=[];for(let j=0;j<5;j++){const xp=x.slice();xp[j]+=h;const cp=cres(xp);J.push([(cp[0]-c[0])/h,(cp[1]-c[1])/h]);}
-  const A=[];for(let i=0;i<5;i++){const row=[];for(let j=0;j<5;j++)row.push((J[i][0]*J[j][0]+J[i][1]*J[j][1]+(i===j?w[i]:0))*(i===j?1+lam:1));row.push(-(J[i][0]*c[0]+J[i][1]*c[1]+(x[i]-t[i])*w[i]));A.push(row);}
+  const J=[];for(let j=0;j<5;j++){const xp=x.slice();xp[j]+=h;const cp=cres(xp);J.push(cp.map((v,k)=>(v-c[k])/h));}
+  const A=[];for(let i=0;i<5;i++){const row=[];for(let j=0;j<5;j++)row.push((dot(J[i],J[j])+(i===j?w[i]:0))*(i===j?1+lam:1));row.push(-(dot(J[i],c)+(x[i]-t[i])*w[i]));A.push(row);}
   for(let i=0;i<5;i++){let p=i;for(let k=i+1;k<5;k++)if(Math.abs(A[k][i])>Math.abs(A[p][i]))p=k;const tmp=A[i];A[i]=A[p];A[p]=tmp;for(let k=i+1;k<5;k++){const f=A[k][i]/A[i][i];for(let cc=i;cc<6;cc++)A[k][cc]-=f*A[i][cc];}}
   const dx=new Array(5);for(let i=4;i>=0;i--){let sum=A[i][5];for(let cc=i+1;cc<5;cc++)sum-=A[i][cc]*dx[cc];dx[i]=sum/A[i][i];}
   const xn=x.map((v,i)=>v+dx[i]),cn=cres(xn),Fn=cost(xn,cn),step=Math.max(...dx.map(Math.abs));

@@ -49,6 +49,8 @@ function girdleData(bones = SK.decode(zlib.gunzipSync(fs.readFileSync(path.join(
   const k = band.reduce((s, i) => s + (U[i] - mu) * (Vv[i] - mv), 0) / band.reduce((s, i) => s + (U[i] - mu) ** 2, 0), b0 = mv - k * mu;
   const uq = U.slice().sort((a, b) => a - b)[Math.floor(.12 * U.length)], umin = Math.min(...U);
   let ts = -1, best = Infinity; V.forEach((_, i) => { if (U[i] < uq) { const f = Math.abs(Vv[i] - (k * U[i] + b0)) + .3 * (U[i] - umin); if (f < best) { best = f; ts = i; } } });
+  /* верхний угол (4.62.0): самая верхняя вершина у медиального края (не дальше 4 см латеральнее самой медиальной) */
+  let as = -1; V.forEach((_, i) => { if (U[i] < umin + 4 && (as < 0 || Vv[i] > Vv[as])) as = i; });
   /* передняя поверхность тела лопатки */
   const fwd = n.map(x => -x), frontAll = V.filter((p, i) => len(sub(p, gl)) > 3.5 && len(sub(p, ac)) > 3.5 && U[i] < U[aa] - 2.5 && dot(N[i], fwd) > .35);
   const sel = [frontAll.reduce((m, p, i) => p[1] < frontAll[m][1] ? i : m, 0)];
@@ -67,7 +69,7 @@ function girdleData(bones = SK.decode(zlib.gunzipSync(fs.readFileSync(path.join(
     const j = (y - Y0) * na + (a - A0), r = Math.round(Math.hypot(x, z) * 10); if (r > env[j]) env[j] = r;
   }
   return {
-    GIRDLE: { ac: ac.map(r2), ts: V[ts].map(r2), ai: ai.map(r2), aa: V[aa].map(r2), front: sel.map(i => frontAll[i].map(r2)), back: selB.map(i => backAll[i].map(r2)) },
+    GIRDLE: { ac: ac.map(r2), ts: V[ts].map(r2), ai: ai.map(r2), aa: V[aa].map(r2), as: V[as].map(r2), front: sel.map(i => frontAll[i].map(r2)), back: selB.map(i => backAll[i].map(r2)) },
     RIB_ENV: { zc: r2(zc), y0: Y0, y1: Y1, a0: A0, a1: A1, mm: env.join(' ') }
   };
 }
@@ -77,7 +79,7 @@ if (require.main === module) {
   if (process.argv.includes('--json')) console.log(JSON.stringify(d));
   else {
     const G = d.GIRDLE, s = p => '[' + p.join(',') + ']';
-    console.log(`const GIRDLE={ac:${s(G.ac)},ts:${s(G.ts)},ai:${s(G.ai)},aa:${s(G.aa)},\n front:[${G.front.map(s).join(',')}],\n back:[${G.back.map(s).join(',')}]};`);
+    console.log(`const GIRDLE={ac:${s(G.ac)},ts:${s(G.ts)},ai:${s(G.ai)},aa:${s(G.aa)},as:${s(G.as)},\n front:[${G.front.map(s).join(',')}],\n back:[${G.back.map(s).join(',')}]};`);
     console.log(`const RIB_ENV={zc:${d.RIB_ENV.zc},y0:${d.RIB_ENV.y0},y1:${d.RIB_ENV.y1},a0:${d.RIB_ENV.a0},a1:${d.RIB_ENV.a1},mm:'${d.RIB_ENV.mm}'};`);
   }
 }
