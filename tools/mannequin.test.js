@@ -233,7 +233,7 @@ test('ось нижнего шарнира шеи — через тела поз
      центр диска C7/T1 по скелету (tools/skeleton/build_bones.py печатает его в рамке шеи), на 2,46 см ниже и 4,6 см впереди
      начала рамки шеи. При сгибании, наклоне и повороте точка оси остаётся на месте, начало рамки шеи в нейтральной позе —
      прежнее (по нему посажены шейные позвонки и кожа шеи). */
-  assert.deepEqual(M.B.neckPivot, [0, -3.71, 0.77]);
+  assert.deepEqual(M.B.neckPivot, [0, -3.69, 0.69]);
   {
     const zlib = require('node:zlib'), Skeleton = require('../src/js/09bq-skeleton.js');
     const { bones } = Skeleton.decode(zlib.gunzipSync(require('node:fs').readFileSync(require('node:path').join(__dirname, '../src/data/skeleton.bin'))));

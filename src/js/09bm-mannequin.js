@@ -102,7 +102,7 @@ const B={
     наклоне (голова в пределах 0,1–0,5 см), при 0,5 — 0,1–0,9 см (разгибание 45°); для поворота путь головы от доли почти не
     зависит. Доли оставлены по 0,5: разница — в пределах точности двухшарнирной шеи (tools/muscles/README.md, «Шея: посадка
     4.60.0»). */
- c7:[0,37.2,-4],neckPivot:[0,-3.71,0.77],headJoint:[0,9.5,3.5],headCenter:[0,2.9,2],
+ c7:[0,37.2,-4],neckPivot:[0,-3.69,0.69],headJoint:[0,9.5,3.5],headCenter:[0,2.9,2],
  sc:[2,28.5,4],ghRel:[17,-3.1,-6.7],               // грудино-ключичный шарнир и центр плечевого сустава от него
  head:[7.65,11.4,10.3],                          // габарит головы от её центра: ширина, высота (до макушки), глубина; форма — HEAD_PARTS
  grip:[2.6,-8.0,0],knuckle:[0,-9.8,0],           // центр хвата: 8 см дистальнее и 2,6 см ладоннее запястья
@@ -363,11 +363,11 @@ function scapRot(s,a){
  return s==='L'?[Rd[0],-Rd[1],-Rd[2],-Rd[3],Rd[4],Rd[5],-Rd[6],Rd[7],Rd[8]]:Rd; /* левая: S·Rd·S, S = diag(−1, 1, 1) */
 }
 /* ts и ai правой стороны (рамка грудной клетки) при поясе x = [подъём, ретракция ключицы, ir, ur, pt] */
-function girdleContactPts(x){
+function girdleContactPts(x,front=false){
  const Rc=M3.mul(M3.rz(-x[0]),M3.ry(-x[1])),Rd=scapRot('R',[x[2],x[3],x[4]]),o=V.add(SC_R,M3.v(Rc,GIRDLE.ac));
- return[GIRDLE.ts,GIRDLE.ai,GIRDLE.as].map(p=>V.add(o,M3.v(Rd,V.sub(p,GIRDLE.ac))));
+ return(front?[GIRDLE.ts,GIRDLE.ai,GIRDLE.as,...GIRDLE.front]:[GIRDLE.ts,GIRDLE.ai,GIRDLE.as]).map(p=>V.add(o,M3.v(Rd,V.sub(p,GIRDLE.ac))));
 }
-const GAP0=girdleContactPts([0,0,0,0,0]).map(ribGap);
+const GAP0=girdleContactPts([0,0,0,0,0]).map(ribGap),FRONT_IN=-.5;
 const rhythmPt=(key,th)=>{const T=RHYTHM.th,Y=RHYTHM[key];if(th<=T[0])return Y[0];for(let i=1;i<T.length;i++)if(th<=T[i])return Y[i-1]+(Y[i]-Y[i-1])*(th-T[i-1])/(T[i]-T[i-1]);return Y.at(-1);};
 /* ритм при подъёме плеча th и плоскости plane (0 — отведение во фронтальной плоскости, 90 — сгибание, минус — позади) */
 function rhythmAt(th,plane){
@@ -402,8 +402,12 @@ function solveGirdle(t,sCl){
  if(t.every(v=>Math.abs(v)<1e-9))return[0,0,0,0,0];
  const key=sCl+':'+t.map(v=>v.toFixed(6)).join(',');let hit=G_MEMO.get(key);if(hit)return hit;
  const sig=[sCl,sCl,GSIG.st,GSIG.ur,GSIG.st],w=sig.map(v=>1/(v*v));
- /* ts и ai — на своём расстоянии от оболочки; верхний угол (as) — не ближе, чем в покое (отходить от рёбер может) */
- const cres=x=>{const p=girdleContactPts(x);return[(ribGap(p[0])-GAP0[0])/GSIG.c,(ribGap(p[1])-GAP0[1])/GSIG.c,Math.min(0,ribGap(p[2])-GAP0[2])/GSIG.c];};
+ /* ts и ai — на своём расстоянии от оболочки; верхний угол (as) — не ближе, чем в покое (отходить от рёбер может); точки передней
+    поверхности тела (GIRDLE.front, 4.62.0) — не ближе 0,5 см к гладкой оболочке (−FRONT_IN; гладкая оболочка у рёбер ниже
+    их вершин — по ней 0,5 см ≈ касание рёбер; в покое ближайшая точка — в 0,55 см): с ключицей, отведённой назад по ритму
+    (Ludewig 2009), в сведении лопаток (тяги, гриф на спине) тело лопатки иначе заходило наружным краем в рёбра до 1,5 см */
+ const cres=x=>{const p=girdleContactPts(x,true),r=[(ribGap(p[0])-GAP0[0])/GSIG.c,(ribGap(p[1])-GAP0[1])/GSIG.c,Math.min(0,ribGap(p[2])-GAP0[2])/GSIG.c];
+  for(let i=3;i<p.length;i++)r.push(Math.min(0,ribGap(p[i])+FRONT_IN)/GSIG.c);return r;};
  const dot=(a,b)=>a.reduce((s,v,k)=>s+v*b[k],0);
  const cost=(x,c)=>dot(c,c)+x.reduce((s,v,i)=>s+(v-t[i])*(v-t[i])*w[i],0);
  let x=t.slice(),c=cres(x),F=cost(x,c),lam=1e-3;const h=.01;
@@ -1008,10 +1012,12 @@ function reliefAt(tab,h){const H=BACK_RELIEF.h;if(h<=H[0]||h>=H.at(-1))return 0;
 function backLift(R,p,ray){
  const T=R.frames.thorax;if(!T)return 0;
  const d=V.sub(p,T.o),h=V.dot(d,T.y)+B.lumbar[1]+B.thoracic[1];if(h<=BACK_RELIEF.h[0]||h>=BACK_RELIEF.h.at(-1))return 0;
- const back=-V.dot(ray,T.z);if(back<=.2)return 0;
- const x=Math.abs(V.dot(d,T.x)),w=smooth((back-.2)/.4);
- const r=reliefAt(BACK_RELIEF.ridge,h)*smooth((x-1)/2)*(1-smooth((x-6.5)/2.5)),s=reliefAt(BACK_RELIEF.scap,h)*smooth((x-5.5)/3)*(1-smooth((x-12.5)/3));
- return w*Math.max(r,s);
+ const back=-V.dot(ray,T.z);if(back<=0)return 0;
+ const x=Math.abs(V.dot(d,T.x)),w=smooth(back/.8);
+ /* профиль поперёк: от средней линии (0) плавно к валику и лопатке (наибольший подъём — 7–11 см), к бокам — на нет; склоны
+    ≥ 8 см (по косинусу): сетку корпуса (48 столбцов, шаг на спине ≈ 3,4 см) рельеф не ломает — хорда ≤ 1 мм */
+ const q=x<7?(1-Math.cos(Math.PI*x/7))/2:x<10?1:x<18?(1+Math.cos(Math.PI*(x-10)/8))/2:0;
+ return w*q*Math.max(reliefAt(BACK_RELIEF.ridge,h),reliefAt(BACK_RELIEF.scap,h));
 }
 /* подъём кожи над лопаткой в точке поверхности p (каталог), см */
 function cushLift(R,p){
