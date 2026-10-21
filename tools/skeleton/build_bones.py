@@ -45,12 +45,13 @@ TOR=chain('torso/assets/myotorso_chain.xml','torso/assets/myotorso_assets.xml','
 hjR,hjL=P(LEG,'femur_r'),P(LEG,'femur_l'); mid=(hjR+hjL)/2; sx=B['hipHalf']/abs(hjL[0]-mid[0])
 CFG=json.load(open(os.environ['SKEL_CFG'])) if os.environ.get('SKEL_CFG') else {}
 OUT=sys.argv[1] if len(sys.argv)>1 else os.path.join(os.path.dirname(os.path.abspath(__file__)),'../../qa/skeleton/bones.json')
-TH_PITCH=CFG.get('th_pitch',12.0); TH_DY=CFG.get('th_dy',0.0); TH_DZ=CFG.get('th_dz',1.0); RIB_X=CFG.get('rib_x',.96)
+TH_PITCH=CFG.get('th_pitch',2.0); TH_DY=TH_DZ=None; RIB_X=CFG.get('rib_x',.96)   # сдвиг TH_DY, TH_DZ — по шее (ниже)
 PIV=np.array([0,24.,-12.])   # ось наклона грудного блока: на уровне шарнира грудного отдела, у задней поверхности
-def thoraxFit(q,w):
-    a=np.radians(TH_PITCH*w); c,s_=np.cos(a),np.sin(a); d=np.asarray(q)-PIV
+def pitchFit(q,a_deg,dy,dz):
+    a=np.radians(a_deg); c,s_=np.cos(a),np.sin(a); d=np.asarray(q)-PIV
     y=d[:,1]*c-d[:,2]*s_; z=d[:,1]*s_+d[:,2]*c
-    return np.stack([d[:,0],y,z],-1)+PIV+np.array([0,TH_DY*w,TH_DZ*w])
+    return np.stack([d[:,0],y,z],-1)+PIV+np.array([0,dy,dz])
+def thoraxFit(q,w): return pitchFit(q,TH_PITCH*w,TH_DY*w,TH_DZ*w)
 # Таз: по ширине ×sx у тазобедренных суставов (центры ±8,8 см), к крыльям подвздошных костей — ×1,0: у модели Rajagopal
 # таз узкий в суставах, а гребни при общем ×1,14 давали межгребневую ширину 30 см при 27 у людей (ANSUR II).
 SX_CREST=CFG.get('sx_crest',1.0)
@@ -64,22 +65,28 @@ def trunkMap(v,w):
     """w — доля смещения грудного блока (0 у крестца, 1 у Th12 и выше)"""
     return thoraxFit((np.asarray(v)-mid)*np.array([S_T,S_T,S_T]),w)
 yS=float(pelvisMap(mesh(TOR,'sacrum_geom_1_sacrum')[0])[:,1].max()); yT12=float(trunkMap(mesh(TOR,'torso_geom_1_thoracic12_s')[0],0)[:,1].mean())
-for i in (5,4,3,2,1):
-    v,f=mesh(TOR,f'lumbar{i}_geom_1_lumbar{i}'); yc=float(trunkMap(v,0)[:,1].mean()); w=float(np.clip((yc-yS)/(yT12-yS),0,1))
-    q=trunkMap(v,w); h=float(q[:,1].mean()); add(f'L{i}','','spine',q-np.array([0,h,0]),f,260,h=round(h,2),xf=lambda p,w=w,h=h:trunkMap(p,w)-np.array([0,h,0]))
 TH0=np.array([0,24.,0])   # начало рамки грудной клетки манекена в рамке таза (нейтральная поза)
-for (b,m,file,Rg,pg) in TOR['meshes']:
-    if b!='torso': continue
-    v,f=load(file,Rg,pg); q=trunkMap(M(v),1)
-    if 'ribcage' in m:
-        q=q*np.array([RIB_X,1,1])
-        add('ribcage','','thorax',q-TH0,f,5200,xf=lambda p:trunkMap(p,1)*np.array([RIB_X,1,1])-TH0)
-    else: add(m.split('_')[-2],'','thorax',q-TH0,f,240,xf=lambda p:trunkMap(p,1)-TH0)
+def buildTrunk():
+    """поясничные позвонки (доля w сдвига грудного блока) и грудной блок — после того, как шея задала TH_DY, TH_DZ"""
+    for i in (5,4,3,2,1):
+        v,f=mesh(TOR,f'lumbar{i}_geom_1_lumbar{i}'); yc=float(trunkMap(v,0)[:,1].mean()); w=float(np.clip((yc-yS)/(yT12-yS),0,1))
+        q=trunkMap(v,w); h=float(q[:,1].mean()); add(f'L{i}','','spine',q-np.array([0,h,0]),f,260,h=round(h,2),xf=lambda p,w=w,h=h:trunkMap(p,w)-np.array([0,h,0]))
+    for (b,m,file,Rg,pg) in TOR['meshes']:
+        if b!='torso': continue
+        v,f=load(file,Rg,pg); q=trunkMap(M(v),1)
+        if 'ribcage' in m:
+            q=q*np.array([RIB_X,1,1])
+            add('ribcage','','thorax',q-TH0,f,5200,xf=lambda p:trunkMap(p,1)*np.array([RIB_X,1,1])-TH0)
+        else: add(m.split('_')[-2],'','thorax',q-TH0,f,240,xf=lambda p:trunkMap(p,1)-TH0)
 
 # ---------- шея и череп (геометрия HAT в рамке туловища Rajagopal: начало в (−10,07; 8,15; 0) см от таза) ----------
 HD=chain('head/assets/myohead_rigid_chain.xml','head/assets/myohead_simple_assets.xml','neck')
 off=np.array([-10.07,8.15,0.])
-def hat(m): v,f=mesh(HD,m); return trunkMap(v+M(off),1),f
+# Череп и сетка шейного отдела HAT — в своей посадке, независимо от наклона грудного блока: поворот на HAT_PITCH (12°, как
+# до 4.62.0, когда грудной блок и голова наклонялись вместе) — по этому черепу подогнаны кожа головы и лица (сдвиг не важен:
+# череп ставится центром в центр головы, позвонки — цепочкой ниже)
+HAT_PITCH=CFG.get('hat_pitch',12.0)
+def hat(m): v,f=mesh(HD,m); return pitchFit((np.asarray(v+M(off))-mid)*S_T,HAT_PITCH,0.,1.),f
 # начала рамок шеи и головы и центр головы в рамке таза (нейтральная поза): 24 + B.c7, + B.headJoint, + B.headCenter
 neckO=np.array([0,61.2,-4]); headO=np.array([0,70.7,-0.5]); headC=np.array([0,73.6,1.5])
 vc,fc=hat('hat_cervical')
@@ -115,7 +122,6 @@ def skullP(v):                                    # череп — в рамке
 # с дисками, C1 + C2 от ямок до нижней пластинки C2 — ≈3,5). Тела C3–C7 и диски оставлены в натуральную величину, а нехватка
 # ушла в блок C2 + атлас (1,8 см): поэтому позвонки, а с ними и гортань на своих уровнях (C3–C6), стоят относительно
 # подбородка на ≈2 см выше, чем у живого (подъязычная — между половинами нижней челюсти, а не под подбородком).
-LORD=CFG.get('cerv_lord',[10.,4.,1.,0.,0.])
 def ccomp(f,n):                                       # компоненты связности сетки: метка на вершину
     par=np.arange(n)
     def find(x):
@@ -152,26 +158,45 @@ RAW[2]=dict(inf=DI[0][0]+DI[0][1]*DI[0][2]/2,th=tilt(DI[0][1]))
 c1v=vc[VG[0]]; lm=c1v[(np.abs(c1v[:,0])>1.1)&(np.abs(c1v[:,0])<2.6)]; fac=lm[lm[:,1]>np.percentile(lm[:,1],75)]
 FAC=np.array([0,fac[:,1].mean(),lm[:,2].mean()])
 PC=skullP(FAC[None])[0]                               # там же под черепом манекена
-# верхняя пластинка T1: центр тела T1 и ось T2 → T1 (наклон грудного блока у шейно-грудного перехода)
+# нижние суставные ямки атласа (на верхних суставных отростках C2): нижняя четверть боковых масс
+ATL_INF=np.array([0,lm[lm[:,1]<np.percentile(lm[:,1],25)][:,1].mean(),lm[:,2].mean()])
+# верхняя пластинка T1: центр тела T1 и ось T2 → T1 (наклон грудного блока у шейно-грудного перехода) — по сеткам MyoSim при
+# наклоне TH_PITCH, без сдвига (сдвиг грудного блока TH_DY, TH_DZ подбирается ниже — по шее)
 def tbody(n):
-    v=np.array([b for b in bones if b['name']==n][0]['v']).reshape(-1,3)+TH0; return v[(v[:,2]>np.median(v[:,2]))&(np.abs(v[:,0])<1.6)]
+    v,_=next(load(file,Rg,pg) for (b,m,file,Rg,pg) in TOR['meshes'] if m.endswith('_'+n+'_s'))
+    v=pitchFit((M(v)-mid)*S_T,TH_PITCH,0.,0.); return v[(v[:,2]>np.median(v[:,2]))&(np.abs(v[:,0])<1.6)]
 b1,b2=tbody('thoracic1'),tbody('thoracic2'); u1=unit(b1.mean(0)-b2.mean(0)); TH_T1=tilt(u1)
-E0=b1.mean(0)+u1*np.percentile((b1-b1.mean(0))@u1,90); E0[0]=0
+E00=b1.mean(0)+u1*np.percentile((b1-b1.mean(0))@u1,90); E00[0]=0
 # масштаб позвонка: поперёк — S_T (как у всех костей MyoSim), вдоль своей оси — S_T·k (высоты под длину шеи манекена)
 def scaleAlong(th,k): a=sag(th); return S_T*np.eye(3)+S_T*(k-1)*np.outer(a,a)
 TD=float(np.mean([d[2] for d in DI]))                 # толщина диска HAT
-def cchain(J,k):
-    """цепочка C7…C2 от верхней пластинки T1: нижние пластинки и оси; возвращает и середину ямок атласа"""
-    pos=E0.copy(); th=TH_T1; t=TD*S_T*k; out={}
-    pos=pos+sag(th-J/2)*t; th-=J                      # диск C7/T1
+K_C=CFG.get('k_c',1.074)                              # тела C3–C7 и диски вдоль оси (шаг тел C3→C6 ≈ 1,8 см)
+# Клинья: в HAT ось позвонка (от центра нижней к центру верхней пластинки) и нормали дисков не совпадают (тела шейных позвонков
+# в профиль — параллелограммы), поэтому «угол» между осями соседних позвонков HAT (HATA, C6/7…C2/3; у C2 — ось по нормали
+# диска C2/3) — это форма самих позвонков, а не клин диска. Цепочка повторяет форму HAT и меняет клинья дисков (C7/T1 и
+# C6/7…C2/3) на S_W·CW: так, чтобы блок C2 + атлас встал к черепу так же, как в HAT (сустав атлант — затылок конгруэнтен).
+HATA=[RAW[i]['th']-RAW[i-1]['th'] for i in (7,6,5,4,3)]
+CW=np.array(CFG.get('cerv_w',[1,1,1,1,1,1]),float); CW=CW/CW.sum()
+S_W=TH_T1-RAW[2]['th']-sum(HATA)
+JW=[S_W*w for w in CW]; J_CT=JW[0]; LORD=[HATA[j]+JW[j+1] for j in range(5)]
+def cchain(k2,E0,kc=None):
+    """цепочка C7…C2 от верхней пластинки T1: нижние пластинки и оси; возвращает и середину ямок атласа.
+       k2 — масштаб тела C2 вдоль оси (атлас — твёрдый, едет на суставных отростках C2), kc — тел C3–C7 и дисков"""
+    kc=K_C if kc is None else kc; pos=E0.copy(); th=TH_T1; t=TD*S_T*kc; out={}
+    pos=pos+sag(th-J_CT/2)*t; th-=J_CT                # диск C7/T1
     for j,i in enumerate((7,6,5,4,3)):
-        out[i]=dict(inf=pos.copy(),th=th); pos=pos+sag(th)*RAW[i]['H']*S_T*k; out[i]['sup']=pos.copy()
+        out[i]=dict(inf=pos.copy(),th=th); pos=pos+sag(th)*RAW[i]['H']*S_T*kc; out[i]['sup']=pos.copy()
         a=LORD[j]; pos=pos+sag(th-a/2)*t; th-=a
     out[2]=dict(inf=pos.copy(),th=th)
-    return out,pos+rotX(th-RAW[2]['th'])@(scaleAlong(RAW[2]['th'],k)@(FAC-RAW[2]['inf']))
-from scipy.optimize import least_squares
-sol=least_squares(lambda p:(cchain(*p)[1]-PC)[1:],[15.,1.05]); J_CT,K_C=sol.x; CH,fend=cchain(J_CT,K_C)
-assert np.linalg.norm((fend-PC)[1:])<1e-3, fend-PC
+    return out,pos+rotX(th-RAW[2]['th'])@(S_T*(FAC-RAW[2]['inf'])+atlShift(k2))
+def atlShift(k2): a=sag(RAW[2]['th']); return S_T*(k2-1)*a*(a@(ATL_INF-RAW[2]['inf']))
+from scipy.optimize import brentq
+K2=CFG.get('k2',1.6)
+if 'neck_len' in CFG: K_C=brentq(lambda k:np.linalg.norm((cchain(K2,E00,k)[1]-E00)[1:])-CFG['neck_len'],.5,3.)   # проба: длину шеи добирают тела C3–C7
+_,f0=cchain(K2,E00); TH_DY,TH_DZ=float(PC[1]-f0[1]),float(PC[2]-f0[2])   # грудной блок — под шею, подвешенную к черепу
+E0=E00+np.array([0,TH_DY,TH_DZ]); CH,fend=cchain(K2,E0)
+assert np.linalg.norm((fend-PC)[1:])<1e-6, fend-PC
+buildTrunk()
 # Тела позвонков HAT глубже человеческих: от передней поверхности до позвоночного канала ≈1,85 см (×S_T — 1,9) при 1,5–1,75
 # у взрослых (глубина замыкательных пластинок C3–C7: Panjabi и др., Spine 1991, 16: 861–869), а канал — 0,8 см при ≈1,4.
 # Переднюю часть тела (и диска) поджимаем к задней поверхности тела до глубины BODY_D: дуга, отростки и бугорки не меняются.
@@ -182,25 +207,31 @@ def shallow(v,o,th,front=None):
     if front is None: front=f[np.abs(v[:,0])<.8].max()
     fp=front-BODY_RAW; k=BODY_D/S_T/BODY_RAW; d=np.where(f>fp,(f-fp)*(k-1),0.)
     return v+np.outer(d,fw)
-def place(i):                                         # преобразование позвонка i (2 — блок C2 с атласом)
-    r=RAW[i]; T=CH[i]; Rr=rotX(T['th']-r['th']); A=scaleAlong(r['th'],K_C); return lambda v,Rr=Rr,A=A,r=r,T=T:(Rr@A@(np.asarray(v)-r['inf']).T).T+T['inf']
+def place(i):                                         # преобразование позвонка i (2 — C2, 1 — атлас на суставных отростках C2)
+    r=RAW[max(i,2)]; T=CH[max(i,2)]; Rr=rotX(T['th']-r['th'])
+    if i==1: d=atlShift(K2); return lambda v,Rr=Rr,r=r,T=T,d=d:(Rr@(S_T*(np.asarray(v)-r['inf'])+d).T).T+T['inf']
+    A=scaleAlong(r['th'],K2 if i==2 else K_C); return lambda v,Rr=Rr,A=A,r=r,T=T:(Rr@A@(np.asarray(v)-r['inf']).T).T+T['inf']
 vnew=np.empty_like(vc); owner={}
-for i,g in zip((1,2,3,4,5,6,7),VG): owner.update({k_:(2 if i<=2 else i) for k_ in g})
+for i,g in zip((1,2,3,4,5,6,7),VG): owner.update({k_:i for k_ in g})
 FRONT={i:((vc[g]-RAW[i]['inf'])@np.array([0,-np.sin(np.radians(RAW[i]['th'])),np.cos(np.radians(RAW[i]['th']))]))[np.abs(vc[g][:,0])<.8].max() for i,g in zip(range(2,8),VG[1:])}
-for j,g in enumerate(DG):                             # диск C(j+2)/C(j+3): между верхней пластинкой нижнего и нижней верхнего
-    lo,hi=j+3,j+2; o,n,_=DI[j]; ctr=(CH[lo]['sup']+CH[hi]['inf'])/2; Rr=rotX((CH[lo]['th']+CH[hi]['th'])/2-tilt(n))
+for j,g in enumerate(DG):                             # диск C(j+2)/C(j+3): между верхней пластинкой нижнего и нижней верхнего, повёрнут
+    lo,hi=j+3,j+2; o,n,_=DI[j]; ctr=(CH[lo]['sup']+CH[hi]['inf'])/2   # как его позвонки относительно HAT (в среднем)
+    Rr=rotX(((CH[lo]['th']-RAW[lo]['th'])+(CH[hi]['th']-RAW[hi]['th']))/2)
     vnew[g]=(Rr@scaleAlong(tilt(n),K_C)@(shallow(vc[g],o,tilt(n))-o).T).T+ctr
 cent={i:vc[g].mean(0) for i,g in zip((1,2,3,4,5,6,7),VG)}
 for g in G:                                           # позвонки и мелкие обломки сетки (к ближайшему позвонку)
     if 20<len(g)<=100: continue
-    i=owner.get(g[0]) or (lambda m:2 if m<=2 else m)(min(cent,key=lambda k_:np.linalg.norm(vc[g].mean(0)-cent[k_])))
+    i=owner.get(g[0]) or min(cent,key=lambda k_:np.linalg.norm(vc[g].mean(0)-cent[k_]))
     own=next((k_ for k_,gg in zip(range(1,8),VG) if gg is g),None)   # сам позвонок C2…C7 (не атлас и не обломок)
     v=shallow(vc[g],RAW[own]['inf'],RAW[own]['th'],FRONT[own]) if own and own>=2 else vc[g]
     vnew[g]=place(i)(v)
 DISC_CT=(E0+CH[7]['inf'])/2                           # центр диска C7/T1 — ось нижнего шарнира шеи (B.neckPivot)
 bc={i:(CH[i]['inf']+CH[i]['sup'])/2 for i in range(3,8)}
 print('шея: T1 — пластинка',np.round(E0,2),'наклон %.1f°'%TH_T1,'; ямки атласа',np.round(PC,2),'; угол C7/T1 %.1f°, масштаб позвонков вдоль оси %.3f'%(J_CT,S_T*K_C))
-print('  шаг тел C3→C6:',' '.join('%.2f'%np.linalg.norm(bc[i+1]-bc[i]) for i in (3,4,5)),'; центр диска C7/T1 (рамка шеи)',np.round(DISC_CT-neckO,2))
+print('  клинья дисков к HAT %.1f° (C7/T1 %.1f°); C2 + атлас к черепу %.1f°; тело C2 ×%.3f вдоль оси, C2 + атлас %.2f см; T1 → атлас %.2f см, атлас впереди T1 на %.2f см; грудной блок: наклон %.1f°, сдвиг %.2f / %.2f см'%(
+    S_W,J_CT,CH[2]['th']-RAW[2]['th'],K2,np.linalg.norm((PC-CH[2]['inf'])[1:]),np.linalg.norm((PC-E0)[1:]),PC[2]-E0[2],TH_PITCH,TH_DY,TH_DZ))
+_c2=vnew[VG[1]]; _ax=sag(CH[2]['th']); _h=(_c2[np.abs(_c2[:,0])<1.]-CH[2]['inf'])@_ax
+print('  шаг тел C3→C6:',' '.join('%.2f'%np.linalg.norm(bc[i+1]-bc[i]) for i in (3,4,5)),'; центр диска C7/T1 (рамка шеи)',np.round(DISC_CT-neckO,2),'; высота C2 (от нижней пластинки до верхушки зуба вдоль оси) %.2f см'%_h.max())
 # в данных кости: центр диска C7/T1 (ось нижнего шарнира шеи, B.neckPivot) и тела C7…C2 — центры нижней и верхней пластинок
 # (рамка шеи; у C2 верхняя — середина ямок атласа) — для проверок посадки гортани и оси
 bodies=[[*np.round(CH[i]['inf'][1:]-neckO[1:],2).tolist(),*np.round(CH[i]['sup'][1:]-neckO[1:],2).tolist()] for i in (7,6,5,4,3)]
