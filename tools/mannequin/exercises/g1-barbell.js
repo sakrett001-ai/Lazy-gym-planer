@@ -306,13 +306,19 @@ function backBarPose(C, o) {
   return q;
 }
 
+/* плечевой пояс с грифом на спине: лопатки сведены и приподняты (углы ключицы от покоя, girdleMode 'abs'). Сведение — до того же
+   отведения ключицы назад, что и в 4.61.0 (30,5°): в покое ключица теперь отведена на 19,2° (Ludewig 2009; было 10,5°),
+   поэтому сверх покоя — 11,3° вместо 20°. Наибольшее среднее отведение в упражнениях на сведение — 31–34° (Oyama и др.,
+   J Orthop Sports Phys Ther 2010; 40: 169–179); с 20° сверх нового покоя (39°) медиальный конец ости подходил к остистым
+   отросткам ближе 0,5 см, а лента трапециевидной над ним выворачивалась за кожу шеи (1,7 см) */
+const BACKBAR_GIRDLE = [12, -11.3];
 /* ---------- Приседания со штангой ---------- */
 const SQ_ST = { ax: 15, az: 0, out: 15, kneeOut: 0 };
 const SQ = memo(t => {
   const C = ctx([]), e = t;
   /* опускание: таз и колени сгибаются одновременно; внизу бёдра около параллели, гриф над серединой стопы */
   const th = 45 * Math.pow(e, .5), hy = e < 1e-6 ? null : C.lerp(89, 53, Math.pow(e, 1.1));
-  return backBarPose(C, { theta: th, hy: hy ?? 94, knee: hy == null ? 3 : null, spine: [8 * e, 3 * e, -14 * e], st: SQ_ST, kg: SQ_KG, half: 49, girdle: [12, -20] });
+  return backBarPose(C, { theta: th, hy: hy ?? 94, knee: hy == null ? 3 : null, spine: [8 * e, 3 * e, -14 * e], st: SQ_ST, kg: SQ_KG, half: 49, girdle: BACKBAR_GIRDLE });
 });
 
 /* ---------- Наклоны со штангой на плечах ---------- */
@@ -322,7 +328,7 @@ const GM = memo(t => {
   /* t, наклон таза, колени, [поясница, грудной, шея] */
   const K = [[0, 0, 4, [0, 0, 0]], [.25, 20, 10, [1, 1, -5]], [.5, 39, 15, [3, 2, -11]], [.75, 51, 20, [4, 4, -16]], [1, 60, 25, [6, 6, -21]]];
   const k = K.find(p => Math.abs(p[0] - t) < 1e-6);
-  return backBarPose(C, { theta: k[1], hy: 85.2, knee: k[2], spine: k[3], st: GM_ST, kg: GM_KG, half: 49, girdle: [12, -20] });
+  return backBarPose(C, { theta: k[1], hy: 85.2, knee: k[2], spine: k[3], st: GM_ST, kg: GM_KG, half: 49, girdle: BACKBAR_GIRDLE });
 });
 
 /* ---------- Приседания в машине Смита ---------- */
@@ -334,7 +340,7 @@ const SSQ = memo(t => {
      Локти чуть дальше назад (0,95 вместо 0,9): с формой груди 4.41.0 гриф на трапециевидной лёг на 1,5 мм дальше назад,
      и наружная ротация плеча вышла за предел на 0,1–0,2°; теперь 94,8° (предел 95°), отведение кисти 21,7° (22°) */
   const th = 30 * Math.pow(e, .6), hy = e < 1e-6 ? null : C.lerp(89, 53.5, Math.pow(e, 1.1));
-  return backBarPose(C, { theta: th, hy: hy ?? 94, knee: hy == null ? 4 : null, spine: [6 * e, 2 * e, -8 * e], st: SSQ_ST, half: 49, girdle: [12, -20], barZ: 0, elbowBack: .95 });
+  return backBarPose(C, { theta: th, hy: hy ?? 94, knee: hy == null ? 4 : null, spine: [6 * e, 2 * e, -8 * e], st: SSQ_ST, half: 49, girdle: BACKBAR_GIRDLE, barZ: 0, elbowBack: .95 });
 });
 
 /* ---------- Лёжа на горизонтальной скамье ---------- */

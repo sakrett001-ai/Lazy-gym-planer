@@ -328,15 +328,22 @@ def main():
     # он в 3,3 см позади рёбер), и начала DAS3, перенесённые с рёбрами, оказывались почти под верхним углом: линии 10–12 —
     # 2,1–3,7 см, и при протракции лопатки верхний угол уходил за них — линии удлинялись. Поэтому начала линий к верхнему
     # углу (DAS3 9–12, все — от рёбер 1–2) сдвигаются по рёбрам вперёд на той же высоте, пока прямая до прикрепления не
-    # станет той же длины, что у DAS3 (с масштабом совмещения грудной клетки); точка — на поверхности рёбер.
+    # станет нужной длины; точка — на поверхности рёбер. Длина: соотношение линий — как у DAS3 (с масштабом совмещения
+    # грудной клетки), средняя — 6,9 см, как на препаратах Smith 2003. До 4.62.0 (ветка осанки, промежуточно) — длины DAS3
+    # (8,9–11,3 см, выше диапазона Smith): начала уходили далеко вперёд по рёбрам, и при сведении лопаток (поворот наружу
+    # подводит верхний угол к рёбрам) верхние зубцы укорачивались, а в жиме над головой часть удлинялась сверх профиля.
     SERR_UPPER = ('serr_ant_9', 'serr_ant10', 'serr_ant11', 'serr_ant12')
+    SMITH_UPPER = 6.9
     s_thor = float(np.cbrt(np.linalg.det(XF['thorax'][0])))
     rv, rf = ov['ribcage'], of['ribcage']
+    def das3_len(mu):
+        i_d, o_d = (to_thorax(pose, b, p) for b, p in mu['pts'])
+        return float(np.linalg.norm(o_d - i_d)) * s_thor
+    k_smith = SMITH_UPPER / float(np.mean([das3_len(mu) for mu in muscles if mu['name'] in SERR_UPPER]))
     def serr_upper(mu, pl):
         """начало линии на рёбрах: (кость, точка в рамке кости, сдвиг, расстояние, точка в рамке груди); pl — place() точек"""
         assert [b for b, _ in mu['pts']] == ['scapula_r', 'thorax'], mu['name']
-        i_d, o_d = (to_thorax(pose, b, p) for b, p in mu['pts'])
-        target = float(np.linalg.norm(o_d - i_d)) * s_thor
+        target = das3_len(mu) * k_smith
         xi, xo = pl[0][4], pl[1][4]
         band = rv[np.abs(rv[:, 1] - xo[1]) < .8]; zc = (band[:, 2].min() + band[:, 2].max()) / 2
         r0, a0, g = np.hypot(xo[0], xo[2] - zc), np.arctan2(abs(xo[0]), xo[2] - zc), np.sign(xo[0])
@@ -348,7 +355,7 @@ def main():
             c = np.array([g * r0 * np.sin(a), xo[1], zc + r0 * np.cos(a)]); x = closest_on_mesh(rv, rf, c)[0]; L = float(np.linalg.norm(x - xi))
             if L >= target and closest_on_mesh(rv, rf, x * np.array([-1., 1., 1.]))[1] <= .15: break
         T = np.array(ours['ribcage']['T']); q = T[:, :3] @ x + T[:, 3]
-        print(f'  {mu["name"]}: длина {np.linalg.norm(xo - xi):.1f} → {L:.1f} см (DAS3 {target:.1f}), начало сдвинуто вперёд на {np.linalg.norm(x - xo):.1f} см')
+        print(f'  {mu["name"]}: длина {np.linalg.norm(xo - xi):.1f} → {L:.1f} см (цель {target:.1f}: DAS3 {target / k_smith:.1f} × {k_smith:.3f}), начало сдвинуто вперёд на {np.linalg.norm(x - xo):.1f} см')
         return ['ribcage', ''], q, float(np.linalg.norm(x - xo)), 0.0, x
     out, worst = [], []
     print('начала на позвоночнике (уровень DAS3 → по анатомии); верхняя часть передней зубчатой:')
