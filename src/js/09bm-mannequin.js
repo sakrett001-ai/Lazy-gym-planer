@@ -353,9 +353,16 @@ function humeralElevation(J,g){
  const hum=M3.v(M3.mul(swing(-J.shoulder[0],g*J.shoulder[1]),M3.ry(g*J.shoulder[2])),[0,-1,0]);
  return{th:Math.acos(clamp(-hum[1],-1,1))*R2D,plane:Math.atan2(hum[2],g*hum[0])*R2D};
 }
+/* Подъём плеча для ритма при запекании (tools/mannequin/author.js): спецификации читают плечевой сустав (fk) до того, как
+   поставят руку, и задают от него цель кисти («гантель над плечом на длину руки»); с ритмом сустав уходит вслед за рукой
+   (лопатка поворачивается вверх, ключица поднимается), и цель, отмеренная от сустава при опущенной руке, оказывается ближе —
+   локоть в верхней точке жима сгибался на 30°. Поэтому поза печётся в несколько проходов: ритм каждого следующего — по
+   подъёму плеча готовой позы предыдущего (RH_HINT[s] = {th, plane}); null — по руке самой позы. */
+let RH_HINT=null;
+function rhythmHint(h){const was=RH_HINT;RH_HINT=h||null;return was;}
 /* цели пояса стороны s: ключица [подъём, ретракция], лопатка [ir, ur, pt] и σ ключицы */
 function girdleTargets(q,s){
- const J=q[s],{th,plane}=humeralElevation(J,SIGN[s]),r=rhythmAt(th,plane),gi=J.girdle||[0,0],abs=q.girdleMode?.[s]==='abs';
+ const J=q[s],{th,plane}=RH_HINT?.[s]||humeralElevation(J,SIGN[s]),r=rhythmAt(th,plane),gi=J.girdle||[0,0],abs=q.girdleMode?.[s]==='abs';
  const oe=abs?gi[0]-r.ce:gi[0],op=gi[1];
  return{t:[abs?gi[0]:r.ce+gi[0],abs?-gi[1]:r.cr-gi[1],r.ir+.8*op,r.ur+.3*oe,r.pt-.2*oe],sCl:abs?GSIG.abs:GSIG.cl,th,plane};
 }
@@ -914,41 +921,48 @@ function liftIn(set,p){
    Лопатка скользит по рёбрам и при руке над головой, в тягах и разведениях подходит к коже: верх и медиальный край у
    манекена — до 0,1–0,7 см (в покое — 2,7–3,9 см). У человека над ними трапециевидная, ромбовидные, поднимающая лопатку и
    надостная (Standring S., ed. Gray's Anatomy, 42nd ed., 2020, гл. «Плечевой пояс»): кожа идёт за лопаткой, а сокращённые
-   мышцы выступают. Поэтому вокруг точек задней поверхности лопатки у медиального края и корня ости (GIRDLE.back)
-   — шары радиусом «до кожи в покое минус CUSH_GAP»; где шар выходит из кожи кадра, кожа корпуса поднимается по своей нормали
-   (как складками: в сетке и в расстояниях одинаково, по точке кожи на луче от оси сечения) на выход шара, плавно у начала
-   (CUSH_W). В покое шары внутри кожи — она та же до бита. */
-const CUSH=GIRDLE.back,CUSH_GAP=.3,CUSH_W=1;
-let CUSH_R=null,CUSH_OFF=false;
+   мышцы выступают. Поэтому у точек задней поверхности лопатки у медиального края и корня ости (GIRDLE.back) — шары,
+   центры которых на CUSH_DEEP см глубже точки (по направлению к ближайшей коже в покое, в рамке лопатки), а радиус — «до
+   кожи в покое минус CUSH_GAP»: большой шар даёт пологий бугор, а не «шишку» (участки мышц на коже и швы лент её
+   не переносят). Где шар выходит из кожи кадра, кожа корпуса поднимается по своей нормали (как складками: в сетке и в
+   расстояниях одинаково, по точке кожи на луче от оси сечения) на выход шара, плавно у начала (CUSH_W). В покое шары
+   внутри кожи — она та же до бита. */
+const CUSH_GAP=.3,CUSH_W=1,CUSH_DEEP=5;
+let CUSH=null,CUSH_OFF=false;
 const CUSH_AX=new WeakMap();
+const spPoint=(S,g,f)=>V.add(V.add(V.add(S.o,S.x,-g*f[0]),S.y,f[1]),S.z,f[2]);
+/* шары в рамке лопатки (правая сторона, как GIRDLE) и радиусы — по коже покоя, один раз */
+function cushData(){
+ if(CUSH)return CUSH;
+ CUSH_OFF=true;
+ try{
+  const R0=catalogPose(neutral()),S=R0.frames.spR,rows=TORSO_H.filter(h=>h>20).map(h=>torsoRing(R0,h,TORSO_COLS)),near=c=>{let d=Infinity,q=null;for(const row of rows)for(const p of row){const e=V.dist(p,c);if(e<d){d=e;q=p;}}return{d,q};};
+  const pts=[],r=[];
+  for(const f of GIRDLE.back){
+   const c=spPoint(S,-1,f),n=V.unit(V.sub(near(c).q,c)),nl=[V.dot(n,S.x),V.dot(n,S.y),V.dot(n,S.z)],fl=[f[0]-nl[0]*CUSH_DEEP,f[1]-nl[1]*CUSH_DEEP,f[2]-nl[2]*CUSH_DEEP];
+   pts.push(fl);r.push(near(spPoint(S,-1,fl)).d-CUSH_GAP);
+  }
+  CUSH={pts,r:Float64Array.from(r)};
+ }finally{CUSH_OFF=false;}
+ return CUSH;
+}
 function cushCenters(R){
  let c=CUSH_AX.get(R.frames);
- if(!c){
+ if(c===undefined){
   c=null;
   if(R.frames.spL&&R.frames.spR){
-   c=new Float64Array(SIDES.length*CUSH.length*3);let k=0;
-   for(const s of SIDES){const S=R.frames['sp'+s],g=SIGN[s];for(const f of CUSH){const w=V.add(V.add(V.add(S.o,S.x,-g*f[0]),S.y,f[1]),S.z,f[2]);c[k++]=w[0];c[k++]=w[1];c[k++]=w[2];}}
+   const P=cushData().pts;c=new Float64Array(SIDES.length*P.length*3);let k=0;
+   for(const s of SIDES){const S=R.frames['sp'+s],g=SIGN[s];for(const f of P){const w=spPoint(S,g,f);c[k++]=w[0];c[k++]=w[1];c[k++]=w[2];}}
   }
   CUSH_AX.set(R.frames,c);
  }
  return c;
 }
-/* радиусы шаров: наименьшее расстояние до сетки кожи корпуса в покое минус CUSH_GAP */
-function cushRadii(){
- if(CUSH_R)return CUSH_R;
- CUSH_OFF=true;
- try{
-  const R0=catalogPose(neutral()),c=cushCenters(R0),rows=TORSO_H.filter(h=>h>20).map(h=>torsoRing(R0,h,TORSO_COLS)),n=CUSH.length,r=new Float64Array(n);
-  for(let i=0;i<n;i++){let d=Infinity;for(const row of rows)for(const p of row)d=Math.min(d,Math.hypot(p[0]-c[i*3],p[1]-c[i*3+1],p[2]-c[i*3+2]));r[i]=d-CUSH_GAP;}
-  CUSH_R=r;
- }finally{CUSH_OFF=false;}
- return CUSH_R;
-}
 /* подъём кожи над лопаткой в точке поверхности p (каталог), см */
 function cushLift(R,p){
  if(CUSH_OFF)return 0;
  const c=cushCenters(R);if(!c)return 0;
- const r=cushRadii(),n=CUSH.length;let h=0;
+ const r=cushData().r,n=r.length;let h=0;
  for(let k=0;k<c.length/3;k++){
   const rr=r[k%n],dx=p[0]-c[k*3],dy=p[1]-c[k*3+1],dz=p[2]-c[k*3+2],d2=dx*dx+dy*dy+dz*dz;if(d2>=rr*rr)continue;
   const pen=rr-Math.sqrt(d2),v=pen<CUSH_W?pen*pen/(2*CUSH_W):pen-CUSH_W/2;if(v>h)h=v;
@@ -1265,10 +1279,10 @@ return{V,M3,Q,B,TORSO,TORSO_H,TORSO_COLS,colAngle,TORSO_JOINTS,TORSO_BLEND,TORSO
  neutral,clone,pack,unpack,PACK,PACK_SIZE,fk,solePoints,twoBone,solveArm,solveArmWrist,setArmFromPoints,footFrame,heelFrame,solveLeg,rootRot,rootFromAxes,
  swing,swingTwist,eulerXZY,eulerYZX,spineRot,makeTrack,monotone,toCat,dirCat,catalogPose,
  profileAt,sectionAt,spineFrame,torsoFrame,frontK,ramp,vertebraFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,neckSDF,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,
- FOLDS,FOLD_SP,foldAxes,foldSet,foldLift,noFolds,KN_CAP_Z,SEAT_K,CUSH,CUSH_W,cushRadii,cushLift,
+ FOLDS,FOLD_SP,foldAxes,foldSet,foldLift,noFolds,KN_CAP_Z,SEAT_K,CUSH_W,cushData,cushLift,
  headLocalSDF,headLocal,headWorld,headMesh,headSamples,HEAD_PARTS,HEAD_EAR,HEAD_EARS,ellipseRadius,centerOfMass,LIMB_DEF,
  handShape,footShape,footPoints,footPointWorld,footBlendW,FOOT_SECTIONS,TOES,malleoli,bodyData,jointAngles,
- GIRDLE,RIB_ENV,RHYTHM,GSIG,GIRDLE_REST,rhythmAt,humeralElevation,girdleTargets,resolveGirdle,solveGirdle,scapRot,ribGap,ribSlide,
+ GIRDLE,RIB_ENV,RHYTHM,GSIG,GIRDLE_REST,rhythmAt,humeralElevation,rhythmHint,girdleTargets,resolveGirdle,solveGirdle,scapRot,ribGap,ribSlide,
  isbScapFrame,isbAngles,scapulaRibDepth};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=Mannequin;

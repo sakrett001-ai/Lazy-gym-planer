@@ -70,7 +70,7 @@ function pikeLayout(C, { phi0, phi1, opts, handX = 22, headGap = 4, floorY = 0, 
   const psi1 = C.solve1D(ps => headTop(body(ps, phi1, 1)) - floorY - headGap, -30, 80), head = C.fk(body(psi1, phi1, 1)).P.head;
   const wz = head[2] - headAhead, palm = S.map(s => [SG[s] * handX, floorY, wz + 5.6]), wrist = [handX - .5, floorY + 1.8, wz];
   /* верх: руки выпрямлены */
-  const psi0 = C.solve1D(ps => V.dist(C.fk(body(ps, phi0, 0)).P.ghL, wrist) - 54.9, psi1, 85);
+  const psi0 = C.solve1D(ps => V.dist(C.ghToward(body(ps, phi0, 0), 'L', wrist), wrist) - 54.9, psi1, 85);
   return { psi0, phi0, psi1, phi1, palm, opts };
 }
 /* Хват за ребро опоры (край скамьи, сиденья, столешницы): центр хвата внутри ребра, большой палец вдоль ребра (thumb),
@@ -119,7 +119,7 @@ const INC = once(() => {
   const a0 = C.solve1D(a => chestLow(a)[1] - (padY + 4), 2, 45), cl = chestLow(a0), edge = cl[2] - 1.5;
   const palm = S.map(s => [SG[s] * 24, padY, edge + 6.5]);
   /* верх: руки выпрямлены (плечевой пояс в протракции, как в позе) */
-  const reach = a => { const q = plankBody(C, a, opts); for (const s of S) q[s].girdle = [3, 12]; const f = C.fk(q); return V.dist(f.P.ghL, V.add(V.sub(palm[0], [0, 0, 5.6]), [0, 1, 0], 1.8)) - 55.05; };
+  const reach = a => { const q = plankBody(C, a, opts); for (const s of S) q[s].girdle = [3, 12]; const w = V.add(V.sub(palm[0], [0, 0, 5.6]), [0, 1, 0], 1.8); return V.dist(C.ghToward(q, 'L', w), w) - 55.05; };
   const a1 = C.solve1D(reach, a0, 70);
   return { a0, a1, palm, edge, zb: edge + 14.5, opts };
 });
@@ -135,7 +135,7 @@ const DEC = once(() => {
   const low = a => { const q = plankBody(C, a, opts); q.neck = [-12, 0, 0]; return Math.min(lowestFront(C, q)[1], ...C.region(q, 'headAll').map(p => p[1])); };
   const ab = C.solve1D(a => low(a) - 3.5, -45, 15), fb = C.fk(plankBody(C, ab, opts));
   const palm = S.map(s => [SG[s] * 24, 0, fb.P['gh' + s][2] + DECP.ahead + 5.6]);
-  const reach = a => { const q = plankBody(C, a, opts); for (const s of S) q[s].girdle = [2, 12]; return V.dist(C.fk(q).P.ghL, V.add(V.sub(palm[0], [0, 0, 5.6]), [0, 1, 0], 1.8)) - 55.05; };
+  const reach = a => { const q = plankBody(C, a, opts); for (const s of S) q[s].girdle = [2, 12]; const w = V.add(V.sub(palm[0], [0, 0, 5.6]), [0, 1, 0], 1.8); return V.dist(C.ghToward(q, 'L', w), w) - 55.05; };
   const at = C.solve1D(reach, ab, 40);
   return { ab, at, palm, opts };
 });
@@ -600,7 +600,7 @@ module.exports = {
       const body = (th, e) => { const q = leanBody(C, th, C.M.B.ankle, 0); for (const s of S) q[s].girdle = [C.lerp(3, 7, e), C.lerp(-10, 10, e)]; return q; };
       const wristOf = s => [SG[s] * (palmX - .5), palmY - 5.6, Zw - 1.8];
       const L = this._layout || (this._layout = (() => {
-        const reach = (th, e, k) => { const q = body(th, e), f = C.fk(q); return V.dist(f.P.ghL, wristOf('L')) - k; };
+        const reach = (th, e, k) => { const q = body(th, e); return V.dist(C.ghToward(q, 'L', wristOf('L')), wristOf('L')) - k; };
         return { th0: C.solve1D(th => reach(th, 0, WP.r0), 0, 45), th1: C.solve1D(th => reach(th, 1, WP.r1), 0, 45) };
       })());
       const e = C.ease(t), q = body(C.lerp(L.th0, L.th1, e), e);

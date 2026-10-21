@@ -14,16 +14,23 @@ function loadSpecs() {
   }
   return all;
 }
-const round = (v, k) => Math.round(v * k) / k;
+const round = (v, k) => Math.round(v * k) / k, RHYTHM_PASSES = 2;
 /* variants: ['kb'] — поза зависит от необязательного инвентаря: pose(t, C, 'kb') печётся в variants.kb.keys
    (GymEquipment.variantEntry выбирает ключи по инвентарю пользователя, как видимость деталей) */
 function bakeOne(id, spec) {
   const C = ctx(spec.equipment || []), ts = spec.keys || [0, .25, .5, .75, 1];
+  /* ритм плечевого пояса — по подъёму плеча готовой позы (Mannequin.rhythmHint): первый проход — по руке, как её ставит
+     спецификация, следующие — по руке предыдущего прохода, чтобы цели, отмеренные от плечевого сустава, считались от того
+     места, где сустав окажется при поставленной руке */
+  const hint = q => ({ L: M.humeralElevation(q.L, M.SIGN.L), R: M.humeralElevation(q.R, M.SIGN.R) });
   const bake = variant => ts.map(t => {
     let q;
-    try { q = spec.pose(t, C, variant); } catch (e) { e.message = `${id}${variant ? ' [' + variant + ']' : ''} t=${t}: ${e.message}`; throw e; }
-    const v = M.pack(q).map((x, i) => i >= 3 && i < 7 ? round(x, 1e5) : round(x, 100));
-    return { t, v, hands: { L: q.hands?.L || 'relaxed', R: q.hands?.R || 'relaxed' } };
+    try {
+      M.rhythmHint(null); q = spec.pose(t, C, variant);
+      for (let k = 0; k < RHYTHM_PASSES; k++) { const h = hint(q); M.rhythmHint(h); q = spec.pose(t, C, variant); }
+      const v = M.pack(q).map((x, i) => i >= 3 && i < 7 ? round(x, 1e5) : round(x, 100));
+      return { t, v, hands: { L: q.hands?.L || 'relaxed', R: q.hands?.R || 'relaxed' } };
+    } catch (e) { e.message = `${id}${variant ? ' [' + variant + ']' : ''} t=${t}: ${e.message}`; throw e; } finally { M.rhythmHint(null); }
   });
   const out = { keys: bake(), equipment: spec.equipment || [], contacts: spec.contacts || [] };
   if (spec.variants) out.variants = Object.fromEntries(spec.variants.map(v => [v, { keys: bake(v) }]));

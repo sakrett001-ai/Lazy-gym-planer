@@ -243,10 +243,18 @@ function pushLayout(o) {
     return q;
   };
   L.fingers = s => { const a = L.get('out', s) * C.D2R * C.M.SIGN[s]; return [Math.sin(a), 0, Math.cos(a)]; };
-  const palmAt = th => { const f = C.fk(L.body(C, th, 0)); return S.reduce((o, s) => ({ ...o, [s]: [C.M.SIGN[s] * L.get('x', s), MAT, f.P['gh' + s][2] + L.get('ahead', s)] }), {}); };
-  const reachTop = th => { const f = C.fk(L.body(C, th, 0)), P = palmAt(th); return Math.max(...S.filter(s => L.slide?.s !== s).map(s => V.dist(f.P['gh' + s], palmWrist(C, s, P[s], L.fingers(s), [0, 1, 0])) - armSpan(C, L.get('elTop', s)))); };
-  L.thTop = C.solve1D(reachTop, 5, 60);
-  L.palms = palmAt(L.thTop);
+  /* плечевые суставы вверху при ладонях P на коврике: с этапа Д сустав идёт за рукой по ритму пояса (лопатка поворачивается
+     вверх и уходит вперёд), поэтому его место — при поставленных руках, а не при опущенных (иначе вверху локти согнуты на 20–30°) */
+  const ghTop = (th, P) => {
+    const q = L.body(C, th, 0);
+    if (P) { const { up } = proneAxes(th); for (const s of S) { const lat = C.lat(q, s), p = L.get('pole0', s); try { C.palm(q, s, P[s], L.fingers(s), [0, 1, 0], V.unit(V.add(V.add(V.scale(lat, p[0]), [0, 1, 0], p[1]), up, -p[2]))); } catch { /* не дотянулась — рука вытянута к ладони, сустав по ней */ } } }
+    return C.fk(q).P;
+  };
+  const palmsBy = G => S.reduce((o, s) => ({ ...o, [s]: [C.M.SIGN[s] * L.get('x', s), MAT, G['gh' + s][2] + L.get('ahead', s)] }), {});
+  const palmAt = th => { let P = palmsBy(ghTop(th)); for (let k = 0; k < 2; k++) P = palmsBy(ghTop(th, P)); return P; };
+  const reachTop = th => { const P = palmAt(th), G = ghTop(th, P); return Math.max(...S.filter(s => L.slide?.s !== s).map(s => V.dist(G['gh' + s], palmWrist(C, s, P[s], L.fingers(s), [0, 1, 0])) - armSpan(C, L.get('elTop', s)))); };
+  L.thTop = C.unhinted(() => C.solve1D(reachTop, 5, 60));
+  L.palms = C.unhinted(() => palmAt(L.thTop));
   L.thBot = C.solve1D(th => lowest(C, L.body(C, th, 1), 'chest') - L.low, -15, L.thTop);
   return L;
 }
@@ -267,7 +275,10 @@ function pushPose(C, L, e) {
   }
   return q;
 }
-const PUSH = once(() => pushLayout({ x: 29, ahead: 12.7, out: 13.3, elTop: 12, pole0: [.39, -.02, 1.13], pole1: [.54, .57, 1.13], g0: [-6.5, 3.2], g1: [9.3, -13] }));
+/* вверху локти смотрят назад, к стопам (pole0 наружу .1): плечо чуть повёрнуто внутрь, как при локтях под 30–45° к корпусу
+   в опускании; с поясом этапа Д при локтях, развёрнутых наружу (.39), нижний угол лопатки и плечо разводили пучки широчайшей
+   у подмышки — между полосами открывалась щель 0,73 см */
+const PUSH = once(() => pushLayout({ x: 29, ahead: 12.7, out: 13.3, elTop: 12, pole0: [.1, -.02, 1.13], pole1: [.54, .57, 1.13], g0: [-6.5, 3.2], g1: [9.3, -13] }));
 /* Узкий хват: ладони на ширине плеч (уже — пронация предплечья за пределом при прижатых локтях), пальцы внутрь */
 const DIAMOND = once(() => pushLayout({ x: 16.5, ahead: 12, out: -35, elTop: 10.8, low: 5, pole0: [1.22, .94, 1.32], pole1: [.38, 1.97, 1.5], g0: [-8.2, 6.3], g1: [0, -15] }));
 const KNEEPUSH = once(() => pushLayout({ base: 'knees', kneeZ: -22, x: 26, ahead: 14.7, out: 4.7, low: 5.5, elTop: 8.6, pole0: [.28, 1.24, 1.43], pole1: [.12, 1.21, .51], g0: [-.8, 9.9], g1: [10, -3.7] }));
@@ -308,8 +319,11 @@ const QUAD = once(() => {
     return q;
   };
   const fing = s => { const a = 8 * C.D2R * C.M.SIGN[s]; return [Math.sin(a), 0, Math.cos(a)]; };
-  const palmAt = q => { const f = C.fk(q); return S.reduce((o, s) => ({ ...o, [s]: [f.P['gh' + s][0] + C.M.SIGN[s] * 2, MAT, f.P['gh' + s][2] + ahead] }), {}); };
-  const th = C.solve1D(th => { const q = body(th), f = C.fk(q), P = palmAt(q); return V.dist(f.P.ghL, palmWrist(C, 'L', P.L, fing('L'), [0, 1, 0])) - armSpan(C, el); }, -10, 30);
+  /* плечевые суставы при руках, поставленных к ладоням P (с этапа Д сустав идёт за рукой — C.ghToward); без P — при опущенных */
+  const ghAt = (q, P) => S.reduce((o, s) => ({ ...o, [s]: P ? C.ghToward(q, s, palmWrist(C, s, P[s], fing(s), [0, 1, 0])) : C.fk(q).P['gh' + s] }), {});
+  const palmBy = G => S.reduce((o, s) => ({ ...o, [s]: [G[s][0] + C.M.SIGN[s] * 2, MAT, G[s][2] + ahead] }), {});
+  const palmAt = q => { let P = palmBy(ghAt(q)); for (let k = 0; k < 2; k++) P = palmBy(ghAt(q, P)); return P; };
+  const th = C.solve1D(th => { const q = body(th), P = palmAt(q); return V.dist(ghAt(q, P).L, palmWrist(C, 'L', P.L, fing('L'), [0, 1, 0])) - armSpan(C, el); }, -10, 30);
   return { th, body, palms: palmAt(body(th)), fing, kneeZ, knees };
 });
 /* Ролик с колен: колени неподвижны на коврике (голени назад, носки оттянуты), бёдра наклоняются вперёд на phi,

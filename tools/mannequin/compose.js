@@ -176,6 +176,14 @@ function ctx(equipment) {
     solve1D(f, lo, hi, it = 40) { let a = lo, b = hi, fa = f(a); for (let i = 0; i < it; i++) { const m = (a + b) / 2, fm = f(m); if (fa * fm <= 0) b = m; else { a = m; fa = fm; } } return (a + b) / 2; },
     /* точка передней поверхности корпуса по средней линии на высоте h */
     chestPoint(q, h, ang = 0) { const R = M.catalogPose(q); return fromCat(M.noFolds(() => M.torsoPoint(R, h, 'L', ang))); },
+    /* f без подсказки ритма запекания (Mannequin.rhythmHint): раскладки (once) считают пояс по своим рукам */
+    unhinted(f) { const h = M.rhythmHint(null); try { return f(); } finally { M.rhythmHint(h); } },
+    /* Плечевой сустав стороны s, когда рука тянется запястьем к точке p: с этапа Д сустав идёт за рукой по ритму пояса
+       (лопатка поворачивается вверх, ключица поднимается), и раскладкам, которые подбирают корпус по досягаемости опоры,
+       нужен сустав при поставленной руке, а не при опущенной. Рука ставится на копии позы (не дотянувшись — вытянута к p). */
+    ghToward(q, s, p, pole = [0, -1, 0]) {
+      return C.unhinted(() => { const t = M.clone(q); for (let k = 0; k < 2; k++) M.solveArmWrist(t, s, p, pole, null); return M.fk(t).P['gh' + s]; });
+    },
     /* Свободная рука: запястье в точку, кисть продолжает предплечье (pron — пронация, wrist — [сгиб., откл.]) */
     armTo(q, s, wrist, pole, opts = {}) {
       const r = M.solveArmWrist(q, s, wrist, pole, null);

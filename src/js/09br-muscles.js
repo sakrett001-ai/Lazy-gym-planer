@@ -385,7 +385,7 @@ const Muscles = (() => {
     }
     /* мягкие ткани над лопаткой (Mannequin.cushLift): точки задней поверхности лопатки в её рамке (кость лопатки скелета — рамка
        лопатки манекена, Skeleton.frames), радиусы — у манекена (по коже покоя) */
-    if (MQ.CUSH) { S.cushPts = S.sides.map(sd => MQ.CUSH.map(f => [-sd.g * f[0], f[1], f[2]])); S.cushR = Float64Array.from(MQ.cushRadii()); S.cushW = MQ.CUSH_W; }
+    if (MQ.cushData) { const cd = MQ.cushData(); S.cushPts = S.sides.map(sd => cd.pts.map(f => [-sd.g * f[0], f[1], f[2]])); S.cushR = Float64Array.from(cd.r); S.cushW = MQ.CUSH_W; }
     S.capR = Float64Array.from(S.caps, c => c.r); S.tbones = [S.sac, S.l5, S.rib]; S.skull = bone('skull'); S.headC = B.headCenter.slice();
     /* радиус шара с головой вокруг центра — по точкам поверхности головы с ушами (Mannequin.headSamples, их строят и силуэты
        каталога) и 1 см запаса между точками (headPart) */
@@ -1178,7 +1178,7 @@ const Muscles = (() => {
       if (fl && md.shells && md.shells[fan.side]) {
         const sh = md.shells[fan.side], sc = md.scap && md.scap[fan.side], si = idx.get('scapula|' + fan.side);
         /* все поля — явно (у полов всех лент одна форма объекта) */
-        fan.floor = { u0: fl.u0, su0: fl.su0 ?? fl.u0, scap_c: fl.scap || 0, ribc: fl.ribc || 0, top: fl.top || 0, max: fl.max || 0, scapMax: fl.scapMax || 0, sideR: fan.side === 'R', rib: idx.get('ribcage|'), shell: { ...sh, r: Float64Array.from(sh.r, v => (v < 0 ? -1 : v / 100)) },
+        fan.floor = { u0: fl.u0, ua: fl.ua ?? fl.u0, su0: fl.su0 ?? fl.ua ?? fl.u0, scap_c: fl.scap || 0, ribc: fl.ribc || 0, top: fl.top || 0, max: fl.max || 0, scapMax: fl.scapMax || 0, sideR: fan.side === 'R', rib: idx.get('ribcage|'), shell: { ...sh, r: Float64Array.from(sh.r, v => (v < 0 ? -1 : v / 100)) },
           scap: fl.scap && sc && si !== undefined ? { i: si, o: sc.o, u: sc.u, v: sc.v, w: sc.w, u0: sc.u0, v0: sc.v0, du: sc.du, NU: sc.NU, NV: sc.NV, h: Float64Array.from(sc.h, x => x / 100), W: new Float64Array(12) } : null,
           bt: fl.back && md.backTop ? { ...md.backTop, z: Float64Array.from(md.backTop.z, v => (v === -32768 ? NaN : v / 100)) } : null };
       }
@@ -1207,7 +1207,7 @@ const Muscles = (() => {
      полосы); шов поднимается вместе с соседними центрами и сам — только над выпрямителем, не больше чем на FLOOR_SEAM сверх них.
      top — на сколько верх полосы снаружи верха выпрямителя: у трапециевидной больше, чем у широчайшей и ромбовидных (нижняя
      часть трапециевидной лежит поверх верхнего медиального края широчайшей и ромбовидных — Gray's, с. 432–435) */
-  const FLOOR = { trap: { scap: .25, ribc: .3, back: 1, top: .7, u0: .1, scapMax: 3 }, rhomb: { scap: .25, ribc: .3, back: 1, top: .3, u0: .25 }, lat: { scap: .25, ribc: .6, back: 1, top: .2, u0: .3, su0: .5, scapMax: 4 }, pecmaj: { ribc: .3, u0: .45, max: .4 } }, FLOOR_MAX = 2, FLOOR_BACK = 4, FLOOR_SKIN = .2, FLOOR_SEAM = .5;
+  const FLOOR = { trap: { scap: .25, ribc: .3, back: 1, top: .7, u0: .1, ua: .05, scapMax: 3 }, rhomb: { scap: .25, ribc: .3, back: 1, top: .3, u0: .25 }, lat: { scap: .25, ribc: .6, back: 1, top: .2, u0: .3, su0: .5, scapMax: 4 }, pecmaj: { ribc: .3, u0: .45, max: .4 } }, FLOOR_MAX = 2, FLOOR_BACK = 4, FLOOR_SKIN = .2, FLOOR_SEAM = .5;
   /* z верха столбов выпрямителя (рамка грудной клетки) в точке (x, h) карты md.backTop (правая сторона; у левой x — зеркально);
      NaN — столбов там нет */
   function backTopAt(T, x, h) {
@@ -1550,7 +1550,7 @@ const Muscles = (() => {
         B[o + 19] = sh0;
         /* пол (этап В): низ полосы — над лопаткой, рёбрами и выпрямителем; где ниже — подъём от пола (вектор LV) */
         LV[k * 3] = LV[k * 3 + 1] = LV[k * 3 + 2] = 0;
-        if (FL && q >= FL.u0 * (n - 1)) { const L = floorNeed(FL, m, B[o] - gx * sh0, B[o + 1] - gy * sh0, B[o + 2] - gz * sh0, nx, ny, nz, h, B[o + 12] + sh0, gx, gy, gz, q / (n - 1)); if (L > 0) { LV[k * 3] = FD[0] * L; LV[k * 3 + 1] = FD[1] * L; LV[k * 3 + 2] = FD[2] * L; } }
+        if (FL && q >= FL.ua * (n - 1)) { let L = floorNeed(FL, m, B[o] - gx * sh0, B[o + 1] - gy * sh0, B[o + 2] - gz * sh0, nx, ny, nz, h, B[o + 12] + sh0, gx, gy, gz, q / (n - 1)); if (L > 0 && q < FL.u0 * (n - 1)) { const r = (q / (n - 1) - FL.ua) / (FL.u0 - FL.ua); L *= r * r * (3 - 2 * r); } if (L > 0) { LV[k * 3] = FD[0] * L; LV[k * 3 + 1] = FD[1] * L; LV[k * 3 + 2] = FD[2] * L; } }
       }
       for (let j = 0; j <= K; j++) {
         const s = (j * n + q) * SW, a = ((j > 0 ? j - 1 : 0) * n + q) * LW, c = ((j < K ? j : K - 1) * n + q) * LW;
