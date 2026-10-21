@@ -406,11 +406,16 @@ function solveGirdle(t,sCl){
     поверхности тела (GIRDLE.front, 4.62.0) — не ближе 0,5 см к гладкой оболочке (−FRONT_IN; гладкая оболочка у рёбер ниже
     их вершин — по ней 0,5 см ≈ касание рёбер; в покое ближайшая точка — в 0,55 см): с ключицей, отведённой назад по ритму
     (Ludewig 2009), в сведении лопаток (тяги, гриф на спине) тело лопатки иначе заходило наружным краем в рёбра до 1,5 см */
- const cres=x=>{const p=girdleContactPts(x,true),r=[(ribGap(p[0])-GAP0[0])/GSIG.c,(ribGap(p[1])-GAP0[1])/GSIG.c,Math.min(0,ribGap(p[2])-GAP0[2])/GSIG.c];
+ let front=false;
+ const cres=x=>{const p=girdleContactPts(x,front),r=[(ribGap(p[0])-GAP0[0])/GSIG.c,(ribGap(p[1])-GAP0[1])/GSIG.c,Math.min(0,ribGap(p[2])-GAP0[2])/GSIG.c];
   for(let i=3;i<p.length;i++)r.push(Math.min(0,ribGap(p[i])+FRONT_IN)/GSIG.c);return r;};
  const dot=(a,b)=>a.reduce((s,v,k)=>s+v*b[k],0);
  const cost=(x,c)=>dot(c,c)+x.reduce((s,v,i)=>s+(v-t[i])*(v-t[i])*w[i],0);
- let x=t.slice(),c=cres(x),F=cost(x,c),lam=1e-3;const h=.01;
+ let x=t.slice(),c,F,lam;const h=.01;
+ /* сначала без передней поверхности (её ограничения односторонние: если решение их не нарушает, с ними оно то же самое) */
+ for(let pass=0;pass<2;pass++){
+ if(pass){front=girdleContactPts(x,true).slice(3).some(p=>ribGap(p)<-FRONT_IN);if(!front)break;}
+ c=cres(x);F=cost(x,c);lam=1e-3;
  for(let it=0;it<60;it++){
   const J=[];for(let j=0;j<5;j++){const xp=x.slice();xp[j]+=h;const cp=cres(xp);J.push(cp.map((v,k)=>(v-c[k])/h));}
   const A=[];for(let i=0;i<5;i++){const row=[];for(let j=0;j<5;j++)row.push((dot(J[i],J[j])+(i===j?w[i]:0))*(i===j?1+lam:1));row.push(-(dot(J[i],c)+(x[i]-t[i])*w[i]));A.push(row);}
@@ -418,6 +423,7 @@ function solveGirdle(t,sCl){
   const dx=new Array(5);for(let i=4;i>=0;i--){let sum=A[i][5];for(let cc=i+1;cc<5;cc++)sum-=A[i][cc]*dx[cc];dx[i]=sum/A[i][i];}
   const xn=x.map((v,i)=>v+dx[i]),cn=cres(xn),Fn=cost(xn,cn),step=Math.max(...dx.map(Math.abs));
   if(Fn<=F){x=xn;c=cn;F=Fn;lam*=.2;if(step<1e-6)break;}else{lam*=8;if(lam>1e8)break;}
+ }
  }
  if(G_MEMO.size>8000)G_MEMO.clear();
  G_MEMO.set(key,x);return x;
