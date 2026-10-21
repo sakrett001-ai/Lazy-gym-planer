@@ -497,12 +497,20 @@ function solveArm(q,s,grip,handleAxis,pole,opts={}){
   if(V.len(nd)<1e-6)break;
   const change=V.angle(nd,distal);distal=nd;if(change<.05)break;
  }
- /* центр плечевого сустава идёт за лопаткой, а она — за подъёмом плеча (ритм пояса): с той же кистью руку ставим заново,
-    пока плечевой сустав не встанет */
- for(let it=0;it<16&&Rh;it++){
-  const sh=fkr.P['gh'+s],tb=twoBone(sh,V.sub(grip,M3.v(Rh,gripOff)),B.ua,B.fa,pole);info.reachError=tb.reachError;
-  setArmFromPoints(q,s,fkr,tb.mid,tb.end,Rh);fkr=fk(q);
-  if(V.dist(fkr.P['gh'+s],sh)<.001)break;
+ /* центр плечевого сустава идёт за лопаткой, а она — за подъёмом плеча (ритм пояса): с той же кистью руку ставим заново
+    от оценки плечевого сустава g, пока он не встанет. g сдвигается к получившемуся суставу на долю (релаксация): у почти
+    сложенной руки с полюсом вдоль линии «плечо — запястье» поворот плеча резко меняется от миллиметров, и простой повтор
+    ходит по кругу */
+ if(Rh){
+  const wr=V.sub(grip,M3.v(Rh,gripOff));let g0=fkr.P['gh'+s],k=1;
+  for(let it=0;it<40;it++){
+   const tb=twoBone(g0,wr,B.ua,B.fa,pole),sh=fkr.P['gh'+s],d=V.sub(sh,g0);info.reachError=tb.reachError;
+   setArmFromPoints(q,s,fkr,V.add(tb.mid,d),V.add(tb.end,d),Rh);fkr=fk(q);
+   const e=V.sub(fkr.P['gh'+s],g0),err=V.len(e);if(err<.001)break;
+   if(it>3)k=Math.max(.25,k*.8);g0=V.add(g0,e,k);
+  }
+  /* последний шаг — от настоящего плечевого сустава: кисть точно в хвате */
+  const tb=twoBone(fkr.P['gh'+s],wr,B.ua,B.fa,pole);info.reachError=tb.reachError;setArmFromPoints(q,s,fkr,tb.mid,tb.end,Rh);fkr=fk(q);
  }
  fkr=fk(q);info.gripError=V.dist(fkr.P['grip'+s],grip);info.axisError=V.angle(M3.col(fkr.F['hand'+s].R,2),hx);
  return info;
