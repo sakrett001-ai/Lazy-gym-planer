@@ -174,8 +174,15 @@ function instepOn(C, q, s, x, ankleZ, top, phi, pole, squash = 1) {
   return r;
 }
 
-/* Разгибание из-за головы: поза одного ключа; prev — варианты хвата предыдущего ключа */
-function ohextKey(t, C, prev) {
+/* Разгибание из-за головы: поза одного ключа; prev — {chosen, q}: варианты хвата и поза предыдущего ключа.
+   Рука почти над головой — у полюса углов плеча: близкие положения руки дают углы, разные на десятки градусов, а между
+   ключами углы интерполируются по отдельности — гантель в серединах между ключами уходила от дуги на 5,7 см (4.62.0,
+   ключица отведена назад по Ludewig 2009). Поэтому вариант хвата выбирается и по близости углов плеча и предплечья
+   к предыдущему ключу (ANG — штраф за градус², как штраф границ подвижности в cup). */
+const OHEXT_ANG = .05;
+function ohextKey(t, C, prevKey) {
+  const prev = prevKey && prevKey.chosen, pq = prevKey && prevKey.q;
+  const angGap = (q, s) => { if (!pq) return 0; const a = q[s], b = pq[s]; let v = (a.elbow - b.elbow) ** 2 + (a.pron - b.pron) ** 2; for (let i = 0; i < 3; i++) v += (a.shoulder[i] - b.shoulder[i]) ** 2; return OHEXT_ANG * v; };
   const { V } = C, q = C.base(), e = C.ease(t);
   C.root(q, [0, 89.2, 0], [0, 1, 0], [0, 0, 1]); q.lumbar = [1, 0, 0]; q.thoracic = [0, 0, 0]; q.neck = [C.lerp(4, 10, e), 0, 0];
   const feet = q => { for (const s of S) plant(C, q, s, [C.M.SIGN[s] * 11, 0, -1]); };
@@ -191,7 +198,7 @@ function ohextKey(t, C, prev) {
     const E = [0, gh[1] + 25, head[2] + 1.9], th = C.lerp(-15.6, 96, Math.pow(e, .8)) * C.D2R, r = e < .5 ? 26 + 2 * Math.sin(Math.PI * e) : C.lerp(26, 20, (e - .5) * 2);
     const P = V.add(E, [0, Math.cos(th), -Math.sin(th)], r), tilt = C.lerp(18, 12, e) * C.D2R;
     chosen = cup(C, q, P, [0, Math.cos(tilt), Math.sin(tilt)], [0, 0, -1], { w: 5.8, stag: 3.8, cands: () => cands, prev, lam: 25,
-      prefer: (q, s) => { const el = C.fk(q).P['el' + s]; return 1.2 * Math.max(0, Math.abs(el[0]) - 12) ** 2; } });
+      prefer: (q, s) => { const el = C.fk(q).P['el' + s]; return 1.2 * Math.max(0, Math.abs(el[0]) - 12) ** 2 + angGap(q, s); } });
   };
   settle(C, q, { lo: 1, hi: 7, loads: q => [[C.fk(q).P.gripL, 12]], resolve: q => { feet(q); arms(q); } });
   return { q, chosen };
@@ -605,7 +612,7 @@ module.exports = {
     contacts: [{ body: 'soleL', prop: 'step:top' }, { body: 'soleR', prop: 'step:top' }, { body: 'gripL', prop: 'dbL', optional: true }, { body: 'gripR', prop: 'dbR', optional: true }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C, variant) {
-      const { V, M } = C, q = C.base(), e = C.ease(t), H = C.point('step', 'top')[1], heel = C.lerp(-5.5, 36, e), ballZ = -15;
+      const { V, M } = C, q = C.base(), e = C.ease(t), H = C.point('step', 'top')[1], heel = C.lerp(-5, 36, e), ballZ = -15;   /* 4.62.0: плечи по ритму с ключицей, отведённой назад, — центр масс позади, корпус наклонён вперёд чуть больше: пятки внизу на 0,5 см выше (икроножная — в пределе разгибания при прямом колене) */
       C.root(q, [0, 100, -20], [0, 1, 0], [0, 0, 1]);
       q.neck = [2, 0, 0];
       for (const s of S) { q[s].girdle = [-2, -4]; armAngles(q, s, [-2, 13, 0], 8, 0, [0, 0], dbHand(variant)); }
@@ -713,7 +720,7 @@ module.exports = {
       /* ключи считаются цепочкой: вариант хвата выбирается с учётом предыдущего ключа (без скачков между ключами) */
       const chain = this._chain || (this._chain = (() => {
         const out = new Map(); let prev = null;
-        for (const tk of this.keys) { const r = ohextKey(tk, C, prev); out.set(tk, r.q); prev = r.chosen; }
+        for (const tk of this.keys) { const r = ohextKey(tk, C, prev); out.set(tk, r.q); prev = { chosen: r.chosen, q: C.M.clone(r.q) }; }
         return out;
       })());
       const q = chain.get(t) || ohextKey(t, C, null).q;
