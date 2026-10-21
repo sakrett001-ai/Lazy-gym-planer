@@ -173,17 +173,17 @@ const tiltBack = (C, q, a, face) => { const r = a * D2R; return C.root(q, q.root
 function hangPose(C, q, { face = 1, grip = 'over', w = 30, drop = 60, pole }) {
   const { V } = C;
   /* плечевые суставы идут за лопатками (ритм пояса): сначала руки к перекладине, потом плечи на место и руки ещё раз */
-  const place = dz => {
-    for (const pass of [0, 1]) {
+  const place = (dz, strict) => {
+    for (const pass of [0, 1, 2, 3]) {
       C.rootAtShoulders(q, [0, BAR[1] - Math.sqrt(drop * drop - dz * dz), BAR[2] + dz]);
       for (const s of S) {
         const lat = C.lat(q, s), th = grip === 'over' ? V.scale(lat, -1) : lat;
-        C.grip(q, s, V.add(BAR, lat, w), th, pole ? pole(q, s, lat) : V.unit(V.add(V.add([0, -1, 0], lat, 1.0), [0, 0, face], .25)), { allowShort: !pass });
+        C.grip(q, s, V.add(BAR, lat, w), th, pole ? pole(q, s, lat) : V.unit(V.add(V.add([0, -1, 0], lat, 1.0), [0, 0, face], .25)), { allowShort: !strict || pass < 3 });
       }
     }
   };
   const dz = C.solve1D(z => { place(z); return C.com(q)[2] - BAR[2]; }, -22, 22);
-  place(dz);
+  place(dz, true);
   return q;
 }
 
@@ -840,8 +840,9 @@ module.exports = {
       const q = C.base();
       C.root(q, [0, 100, BAR[2] - 2], [0, 1, 0], [0, 0, 1]);
       q.lumbar = [-2, 0, 0]; q.neck = [-2, 0, 0];
-      for (const s of S) { q[s].hip = [6, 3, 4]; q[s].knee = 14; q[s].ankle = [-25, 0]; q[s].girdle = [10, 2]; }
-      return hangPose(C, q, { face: 1, grip: 'over', w: 29, drop: 62.2 });
+      /* «активный вис: плечи слегка опущены от ушей» — пояс по ритму, опущен */
+      for (const s of S) { q[s].hip = [6, 3, 4]; q[s].knee = 14; q[s].ankle = [-25, 0]; C.rhythm(q, s, [-6, 0]); }
+      return hangPose(C, q, { face: 1, grip: 'over', w: 29, drop: 61.8 });
     }
   },
 
@@ -856,8 +857,8 @@ module.exports = {
       C.root(q, [0, 100, BAR[2]], [0, 1, 0], [0, 0, -1]);
       tiltBack(C, q, C.lerp(0, 32, e), -1);
       q.lumbar = [C.lerp(-2, 20, e), 0, 0]; q.thoracic = [C.lerp(0, 10, e), 0, 0]; q.neck = [C.lerp(-2, 8, e), 0, 0];
-      for (const s of S) { q[s].hip = [C.lerp(4, 62, e), 3, 3]; q[s].knee = C.lerp(8, 10, e); q[s].ankle = [C.lerp(-25, -20, e), 0]; q[s].girdle = [C.lerp(10, 16, e), 4]; }
-      return hangPose(C, q, { face: -1, grip: 'over', w: 29, drop: 62 });
+      for (const s of S) { q[s].hip = [C.lerp(4, 62, e), 3, 3]; q[s].knee = C.lerp(8, 10, e); q[s].ankle = [C.lerp(-25, -20, e), 0]; C.rhythm(q, s, [-6, 0]); } /* «вис, лопатки опущены» — пояс по ритму, опущен */
+      return hangPose(C, q, { face: -1, grip: 'over', w: 29, drop: 61.6 });
     }
   },
 
@@ -871,8 +872,8 @@ module.exports = {
       C.root(q, [0, 100, BAR[2]], [0, 1, 0], [0, 0, -1]);
       tiltBack(C, q, C.lerp(0, 42, e), -1);
       q.lumbar = [C.lerp(-2, 24, e), 0, 0]; q.thoracic = [C.lerp(0, 12, e), 0, 0]; q.neck = [C.lerp(-2, 10, e), 0, 0];
-      for (const s of S) { q[s].hip = [C.lerp(6, 92, e), 4, 4]; q[s].knee = C.lerp(14, 112, e); q[s].ankle = [C.lerp(-25, -15, e), 0]; q[s].girdle = [C.lerp(10, 16, e), 4]; }
-      return hangPose(C, q, { face: -1, grip: 'over', w: 29, drop: 62 });
+      for (const s of S) { q[s].hip = [C.lerp(6, 92, e), 4, 4]; q[s].knee = C.lerp(14, 112, e); q[s].ankle = [C.lerp(-25, -15, e), 0]; C.rhythm(q, s, [-6, 0]); } /* «вис, лопатки опущены» — пояс по ритму, опущен */
+      return hangPose(C, q, { face: -1, grip: 'over', w: 29, drop: 61.6 });
     }
   },
 

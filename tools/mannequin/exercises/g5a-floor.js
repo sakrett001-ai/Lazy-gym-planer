@@ -810,9 +810,12 @@ module.exports = {
       const { V } = C, e = C.ease(t), L = ROLL();
       const q = rolloutBody(C, C.lerp(0, ROLLOUT.phi1, e), C.lerp(L.hip0, ROLLOUT.hip1, e), { lumbar: C.lerp(10, 3, e), thoracic: C.lerp(8, 2, e) });
       for (const s of S) q[s].girdle = [C.lerp(0, 14, e), C.lerp(8, 4, e)];
-      /* ролик: впереди, на расстоянии почти прямой руки от плеча */
-      const f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5), y = MAT + WHEEL_R, reach = armSpan(C, C.lerp(L.el0, 4, e)) + 7.6;
-      const z = gh[2] + Math.sqrt(Math.max(0, reach * reach - (gh[1] - y) ** 2 - (Math.abs(f.P.ghL[0]) - GRIP_X) ** 2));
+      /* ролик: впереди, на расстоянии почти прямой руки от плеча. Плечевой сустав идёт за лопаткой (ритм пояса по подъёму
+         руки), поэтому сначала руки вытягиваются к ролику, потом по плечевым суставам вытянутых рук ставится ролик */
+      const y = MAT + WHEEL_R, reach = armSpan(C, C.lerp(L.el0, 4, e)) + 7.6;
+      const wheelZ = () => { const f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5); return gh[2] + Math.sqrt(Math.max(0, reach * reach - (gh[1] - y) ** 2 - (Math.abs(f.P.ghL[0]) - GRIP_X) ** 2)); };
+      for (let k = 0; k < 2; k++) { const z0 = wheelZ(); for (const s of S) C.armTo(q, s, [C.M.SIGN[s] * GRIP_X, y + 3, z0 - 8], [0, 1, 0], { allowShort: true }); }
+      const z = wheelZ();
       for (const s of S) {
         const lat = C.lat(q, s), prefer = V.add(V.add([0, 1, 0], [0, 0, -1], C.lerp(1.2, .2, e)), lat, 1);
         gripAuto(C, q, s, [C.M.SIGN[s] * GRIP_X, y, z], V.scale([C.M.SIGN[s], 0, 0], -1), prefer);
