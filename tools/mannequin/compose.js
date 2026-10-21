@@ -29,9 +29,10 @@ function ctx(equipment) {
        offsets [поднимание +, протракция +] сверх ритма: опускание и сведение лопаток — минус. Ритм считается в кинематике
        манекена по углам плеча, поэтому порядок вызова (до или после постановки руки) не важен. */
     rhythm(q, s, offsets = [0, 0]) { q.girdleMode = { ...(q.girdleMode || {}), [s]: 'rhythm' }; q[s].girdle = [...offsets]; return q; },
-    /* точки поверхности тела по областям — во внутренних координатах. Кожа — без складок подмышки (Mannequin.FOLDS):
-       складка — мягкая ткань над широчайшей и большой грудной, на опоре она сминается, тело опирается на лопатки и рёбра */
-    region(q, name) { return M.noFolds(() => C.regionOf(q, name)); },
+    /* точки поверхности тела по областям — во внутренних координатах. Кожа — без складок подмышки (Mannequin.FOLDS) и мягких
+       тканей над лопаткой (Mannequin.cushLift, 4.62.0): складка — мягкая ткань над широчайшей и большой грудной, ткани над
+       лопаткой — трапециевидная и жир; на опоре они сминаются, тело опирается на лопатки и рёбра (Mannequin.noSoft) */
+    region(q, name) { return M.noSoft(() => C.regionOf(q, name)); },
     regionOf(q, name) {
       const R = M.catalogPose(q), out = [];
       const torso = (h0, h1, a0, a1) => { for (let h = h0; h <= h1; h += 2) for (let a = a0; a <= a1 + 1e-9; a += Math.PI / 16) for (const s of ['L', 'R']) out.push(fromCat(M.torsoPoint(R, h, s, a))); };

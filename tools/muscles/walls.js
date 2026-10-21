@@ -149,12 +149,17 @@ function ribAt(S, k, th, w = 2) {
 /* точка в рамке грудной клетки → (θ, y, r) стороны оболочки и обратно */
 const chartOf = (S, q) => { const g = S.side === 'R' ? -1 : 1; return { th: Math.atan2(g * q[0], q[2] - S.zc) / DEG, y: q[1], r: Math.hypot(q[0], q[2] - S.zc) }; };
 const fromChart = (S, th, y, r) => { const g = S.side === 'R' ? -1 : 1; return [g * Math.sin(th * DEG) * r, y, S.zc + Math.cos(th * DEG) * r]; };
-/* глубина рёбер под точкой кожи P (мир) по нормали n внутрь: ∞ — рёбер нет (до 8 см) */
+/* глубина рёбер под точкой кожи P (мир) по нормали n внутрь: ∞ — рёбер нет (до 8 см). S.other — оболочка другой стороны
+   (build): грудная клетка MyoSim несимметрична, и зазор берётся по ближней из оболочек (точка — зеркально по x рамки грудной
+   клетки), иначе зеркальная левая стенка в покое ложилась на свои рёбра и пол её поднимал (наружная косая у 12-го ребра,
+   4.62.0: узел левой стороны — в 2,6 мм от зеркала правой) */
 function ribGap(C, S, P, n) {
   for (let t = 0; t < 8; t += .02) {
-    const q = C.toLocal(C.rib, add(P, n, -t)), ch = chartOf(S, q);
-    if (ch.th < 0 || ch.th > 180) continue;
-    const rs = shellFine(S, ch.th, ch.y); if (rs > 0 && ch.r <= rs) return t;
+    const q = C.toLocal(C.rib, add(P, n, -t));
+    for (const [Sx, qx] of S.other ? [[S, q], [S.other, [-q[0], q[1], q[2]]]] : [[S, q]]) {
+      const ch = chartOf(Sx, qx); if (ch.th < 0 || ch.th > 180) continue;
+      const rs = shellFine(Sx, ch.th, ch.y); if (rs > 0 && ch.r <= rs) return t;
+    }
   }
   return Infinity;
 }
@@ -371,6 +376,24 @@ function obliqueExt(C, K, S, T, mus) {
   }
   return { key: 'eo', names, n, Kn, raw, O3, ins3, vol: names.map(nm => mus(nm).v) };
 }
+/* Узел у кожи (верх опорный) над рёбрами: в кадре пол из оболочки рёбер своей стороны (Muscles.wallSurface, WALL_FLOOR 1 мм
+   над оболочкой) поднимает узел, если низ (Q − n·t) под полом. Грудная клетка MyoSim несимметрична, и у 12-го ребра пол
+   поднимал в покое узел только одной стороны (4.62.0: задний край наружной косой — левая в 2,5 мм от зеркала правой). Поэтому
+   узел ставится над полом обеих оболочек (K.rt, K.lt — оболочки приложения; точка левой — зеркально по x рамки грудной клетки) */
+const WALL_FLOOR_APP = .1;
+function clearShells(C, K, Q, n, t) {
+  let lift = 0;
+  for (const [S, g] of [[K.rt, 1], [K.lt, -1]]) {
+    if (!S) continue;
+    const b = C.toLocal(C.rib, add(Q, n, -t)), lx = g * b[0], lz = b[2] - S.zc, gs = S === K.rt ? -1 : 1;
+    const th = Math.atan2(gs * lx, lz) / DEG; if (th < S.th0 || th > S.th0 + S.dth * (S.NT - 1)) continue;
+    const rs = C.Muscles.shellR(S, th, b[1]); if (rs < 0) continue;
+    const rr = Math.hypot(lx, lz), def = rs + WALL_FLOOR_APP - rr; if (def <= 0) continue;
+    const nl = sub(C.toLocal(C.rib, add(Q, n, 1)), C.toLocal(C.rib, Q)), cr = Math.abs((g * nl[0] * lx + nl[2] * lz) / (rr || 1));
+    lift = Math.max(lift, def / Math.max(.3, cr));
+  }
+  return lift > 0 ? add(Q, n, lift + .01) : Q;
+}
 /* узлы наружной косой при номинальной толщине мышечной части tNom (уточняется по объёмам — build) */
 function obliqueExtNodes(C, K, S, W, tNom) {
   const { raw, O3, ins3, n, Kn } = W, bones = [], nodes = [], fixed = [];
@@ -407,6 +430,7 @@ function obliqueExtNodes(C, K, S, W, tNom) {
       /* нижняя строка (свободный задний край у гребня) — не больше EO.blendLast: узел, жёсткий с грудной клеткой на 0,6, в
          скручивании (велосипед) выходил из кожи на 0,8 см */
       const k = x.q - lastRib[x.c], w = k >= 1 && k <= EO.blend.length ? Math.min(EO.blend[k - 1], x.q === n - 1 ? EO.blendLast : 1) : 0;
+      Q = clearShells(C, K, Q, x.P.n, x.t);
       nodes.push(w > 0 ? mixNode(C, bones, ['ribcage', ''], Q, x.P.kf, w, 0, x.t) : skinNode(C, Q, x.P.kf, 0, x.t));
     }
   }
@@ -419,8 +443,8 @@ function obliqueExtNodes(C, K, S, W, tNom) {
    внутрь), где наружной косой нет — IO.depth под кожей. */
 const IO = { F: [0, .1, .22, .36, .5, .64, .78, .88, .95, 1], depth: .5, blend: [.15, .05], names: ['IO1', 'IO2', 'IO3', 'IO4', 'IO5', 'IO6'],
   orig: [0, .06, .12, .2, .28, .36, .45, .55, .64, .73, .82, .91, 1], ins: [0, .08, .16, .24, .32, .4, .5, .58, .66, .75, .84, .92, 1] };
-function obliqueInt(C, K, S, T, mus, eoBottom) {
-  const { skin, LM } = K, names = IO.names.map(x => x + '_r'), Kn = names.length, n = IO.F.length, bones = [], nodes = [], fixed = [], { E } = T;
+function obliqueInt(C, K, S, T, mus, eoBottom, tIO = 0) {
+  const { skin, LM } = K, names = IO.names.map(x => x + '_r'), Kn = names.length, n = IO.F.length, bones = [], nodes = [], fixed = [], rels = [], { E } = T;
   const cs = LM.crestC, tub = [3.3, 1.6], ingMid = [lerp(tub[0], cs[0][0], .5), lerp(tub[1], cs[0][1], .5)];
   const Op = [ingMid, cs[0], cs[1], cs[2], cs[3], cs[4], cs[5]];
   /* конец: край прямой (на 0,3 см латеральнее) от h 5 до рёберной дуги, затем по нижним краям хрящей 10–12 к концу 12-го ребра */
@@ -432,9 +456,15 @@ function obliqueInt(C, K, S, T, mus, eoBottom) {
     let rel = q === 0 ? .4 : q === 1 ? .8 : 1; if (f > .9) rel *= .55; if (c === 0 || c === 2 * Kn) rel *= .6;
     /* верх — под наружной косой; над рёбрами (у хрящей 10–12) — не глубже рёбер, пол — рёбра */
     const hit = rayTris(eoBottom, P.p, P.n.map(x => -x)), gap = ribGap(C, S, P.p, P.n);
-    let d = Number.isFinite(hit) && hit < 6 ? hit + .05 : IO.depth; if (Number.isFinite(gap)) d = Math.min(d, Math.max(.3, gap - .5 * rel - .1));
+    /* над рёбрами верх — так, чтобы низ (верх + толщина) остался над рёбрами. Первый проход — толщина 0,5 rel; второй (tIO — см
+       толщины на единицу rel после подгонки объёма по МРТ) — по толщине первого прохода, пол — TEETH.c0 над рёбрами (как у
+       зубцов), и где места меньше толщины, пласт тоньше (объём по МРТ добирается остальным пластом). У заднего края над 12-м
+       ребром (4.62.0: нижние рёбра ближе к гребню) низ толщиной первого прохода уходил в рёбра на 0,3 см */
+    let d = Number.isFinite(hit) && hit < 6 ? hit + .05 : IO.depth;
+    if (Number.isFinite(gap)) d = Math.min(d, Math.max(.3, tIO > 0 ? gap - TEETH.c0 - rel * tIO : gap - .5 * rel - .1));
+    if (tIO > 0 && Number.isFinite(gap)) rel = Math.min(rel, Math.max(.05, (gap - TEETH.c0 - d) / tIO));
     let Q = add(P.p, P.n, -d);
-    fixed.push(false);
+    fixed.push(false); rels.push(rel);
     const onCrest = q <= 1 && IO.orig[c] >= .12;
     if (onCrest) {
       /* у гребня — к кости (начало) */
@@ -448,7 +478,7 @@ function obliqueInt(C, K, S, T, mus, eoBottom) {
     } else if (Number.isFinite(gap)) nodes.push(sandwichNode(C, bones, Q, P.kf, add(P.p, P.n, -(gap - .1)), 0, rel));
     else nodes.push(skinNode(C, Q, P.kf, 0, rel));
   }
-  return { key: 'io', lines: names, n, bones, nodes, strips: gridStrips(Kn, n), vol: names.map(nm => mus(nm).v), fixed };
+  return { key: 'io', lines: names, n, bones, nodes, strips: gridStrips(Kn, n), vol: names.map(nm => mus(nm).v), fixed, rels };
 }
 
 /* Малая грудная (DAS3, 4 линии сверху вниз). Начало — три зубца на рёбрах 3, 4, 5 у хрящей (верхние края и наружные
@@ -1007,7 +1037,9 @@ function build(out, deps) {
   const shells = {};
   for (const s of ['R', 'L']) { const c = SH[s].coarse; shells[s] = { th0: c.th0, dth: c.dth, y0: c.y0, dy: c.dy, NT: c.NT, NY: c.NY, zc: r3(c.zc), r: Array.from(c.r, v => (v < 0 ? -1 : Math.round(v * 100))) }; }
   const S = SH.R, T = teeth(S), info = {};
+  S.other = SH.L;
   K.rt = { ...shells.R, r: Float64Array.from(shells.R.r, v => (v < 0 ? -1 : v / 100)) };
+  K.lt = { ...shells.L, r: Float64Array.from(shells.L.r, v => (v < 0 ? -1 : v / 100)) };
   const ra = rectus(C, K, S, mus('rect_abd_r'));
   const sa = serratus(C, K, S, T, mus); sa.side = 'R'; info.serrant = normalize(out, sa, shells, C);
   const pm = pecMinor(C, K, S, T, mus); pm.side = 'R'; info.pecmin = normalize(out, pm, shells, C);
@@ -1021,7 +1053,10 @@ function build(out, deps) {
   const ev = evaluate(out, [eo], shells, C).bound.walls[0], tris = [];
   { const P = i => [ev.P[i * 3] - ev.NR[i * 3] * ev.TH[i], ev.P[i * 3 + 1] - ev.NR[i * 3 + 1] * ev.TH[i], ev.P[i * 3 + 2] - ev.NR[i * 3 + 2] * ev.TH[i]];
     for (let k = 0; k < ev.K; k++) for (let q = 0; q + 1 < ev.n; q++) { const r0 = (k * ev.n + q) * 3, r1 = r0 + 3; for (const [a, b] of [[0, 1], [1, 2]]) { const A = P(ev.rows[r0 + a]), B = P(ev.rows[r0 + b]), Cc = P(ev.rows[r1 + b]), D = P(ev.rows[r1 + a]); tris.push([A, B, Cc], [A, Cc, D]); } } }
-  const io = obliqueInt(C, K, S, T, mus, tris); io.side = 'R'; info.io = normalize(out, io, shells, C);
+  /* два прохода, как у наружной косой: толщина над рёбрами — по месту между пластом и рёбрами при толщине первого прохода */
+  let io = obliqueInt(C, K, S, T, mus, tris); io.side = 'R'; normalize(out, io, shells, C);
+  const tIO = io.nodes.reduce((a, nd, v) => a + nd[nd.length - 1] / io.rels[v], 0) / io.nodes.length;
+  io = obliqueInt(C, K, S, T, mus, tris, tIO); io.side = 'R'; info.io = normalize(out, io, shells, C);
   ra.side = 'R';
   /* спина (этап В): столбы выпрямителя, многораздельные, квадратная поясницы */
   K.bound = C.Muscles.bind({ ...out, walls: [] }, C.skel); K.at = new Map(K.bound.map((b, i) => [b.name, i]));

@@ -984,7 +984,7 @@ const spPoint=(S,g,f)=>V.add(V.add(V.add(S.o,S.x,-g*f[0]),S.y,f[1]),S.z,f[2]);
 /* шары в рамке лопатки (правая сторона, как GIRDLE) и радиусы — по коже покоя, один раз */
 function cushData(){
  if(CUSH)return CUSH;
- CUSH_OFF=true;
+ const co=CUSH_OFF;CUSH_OFF=true;
  try{
   /* кожа покоя — и со складками, и без (noFolds): шары внутри обеих, в покое подъёма нет ни там, ни там (до 4.62.0 радиусы
      зависели от того, в каком режиме складок подушку впервые спросили) */
@@ -1003,9 +1003,13 @@ function cushData(){
    pts.push(fl);r.push(V.dist(f,GIRDLE.ai)<1?r0:Math.max(r0,CUSH_DEEP+CUSH_MIN));
   }
   CUSH={pts,r:Float64Array.from(r)};
- }finally{CUSH_OFF=false;}
+ }finally{CUSH_OFF=co;}
  return CUSH;
 }
+/* без мягких тканей поверх костей — складок подмышки и тканей над лопаткой: на опоре (скамья, пол) они сминаются, и тело
+   ложится лопатками и рёбрами (tools/mannequin/compose.js, region). С мягкими тканями над лопаткой не тоньше CUSH_MIN тело
+   на скамье иначе поднималось на 1,1 см — середина спины и затылок отходили от обивки */
+function noSoft(f){const o=FOLD_OFF,c=CUSH_OFF;FOLD_OFF=true;CUSH_OFF=true;try{return f();}finally{FOLD_OFF=o;CUSH_OFF=c;}}
 /* центры шаров кадра (обе стороны подряд) и шар каждой стороны, в котором все её шары (cx, cy, cz, R²): точки вне него по
    шарам стороны не проверяются — для скорости, подъём тот же */
 function cushCenters(R){
@@ -1382,7 +1386,7 @@ return{V,M3,Q,B,TORSO,TORSO_H,TORSO_COLS,colAngle,TORSO_JOINTS,TORSO_BLEND,TORSO
  neutral,clone,pack,unpack,PACK,PACK_SIZE,fk,solePoints,twoBone,solveArm,solveArmWrist,setArmFromPoints,footFrame,heelFrame,solveLeg,rootRot,rootFromAxes,
  swing,swingTwist,eulerXZY,eulerYZX,spineRot,makeTrack,monotone,toCat,dirCat,catalogPose,
  profileAt,sectionAt,spineFrame,torsoFrame,frontK,ramp,vertebraFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,neckSDF,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,
- FOLDS,FOLD_SP,foldAxes,foldSet,foldLift,noFolds,BACK_RELIEF,backRelief,backLift,KN_CAP_Z,SEAT_K,CUSH_W,cushData,cushLift,
+ FOLDS,FOLD_SP,foldAxes,foldSet,foldLift,noFolds,noSoft,BACK_RELIEF,backRelief,backLift,KN_CAP_Z,SEAT_K,CUSH_W,cushData,cushLift,
  headLocalSDF,headLocal,headWorld,headMesh,headSamples,HEAD_PARTS,HEAD_EAR,HEAD_EARS,ellipseRadius,centerOfMass,LIMB_DEF,
  handShape,footShape,footPoints,footPointWorld,footBlendW,FOOT_SECTIONS,TOES,malleoli,bodyData,jointAngles,
  GIRDLE,RIB_ENV,RHYTHM,GSIG,GIRDLE_REST,rhythmAt,humeralElevation,rhythmHint,girdleTargets,resolveGirdle,solveGirdle,scapRot,ribGap,ribSlide,
