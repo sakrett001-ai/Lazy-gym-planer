@@ -612,7 +612,10 @@ module.exports = {
       for (const s of S) q[s].girdle = [C.lerp(10, 4, e), 10];
       const f = C.fk(q), H = C.axes(q, 'head'), head = f.P.head, T = C.axes(q, 'thorax');
       for (const s of S) {
-        const g = V.add(V.add(V.add(head, H.x, C.M.SIGN[s] * 12.5), H.z, 3), H.y, 1.5);
+        /* кулаки у лба; в скрученном положении (t=1) голова наклонена вниз и её ось «вперёд» смотрит вниз — кулаки на 1,5 см
+           ближе по ней (выше у лба), чтобы канат от кулаков к тросу шёл над головой, а не сквозь неё (4.62.0: шея подвешена
+           к черепу, голова в наклоне стоит иначе) */
+        const g = V.add(V.add(V.add(head, H.x, C.M.SIGN[s] * 12.5), H.z, C.lerp(3, 1.5, e)), H.y, 1.5);
         const pole = V.unit(V.add(V.add(V.scale(T.y, -1), T.z, .7), C.lat(q, s), .4));
         C.hold(q, s, g, pole, { pron: 20, flex: -10 });
       }

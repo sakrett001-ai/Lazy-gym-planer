@@ -837,9 +837,11 @@ function neckPoint(R,t,ang,top){
    нормированный полярный угол точки — tg ψ = tg^k φ, k = 2/n + (1 − 2/n)·COL_MIX (k = 2/n — прежний шаг по ang, k = 1 —
    равный шаг по углу). При n = 2 ничего не меняется. 48 столбцов (было 32): шаг не больше 3,3 см, хорда стоя — не больше
    0,8 мм; при 40 в позах с рукой над головой подъём боковой складки сетка проходила под мышечной зоной передней зубчатой
-   на 1,9 мм (аудит отрисовки tools/catalog-render-audit.mjs, допуск 1,6). Точки — те же torsoPointIn: области тела,
+   на 1,9 мм (аудит отрисовки tools/catalog-render-audit.mjs, допуск 1,6). 52 столбца (4.62.0): рельеф спины и мягкие ткани над
+   лопаткой (BACK_RELIEF, CUSH_MIN) дают коже спины изгиб поперёк, и при 48 хорда стоя доходила до 1,06 мм у корня ости
+   (h 44–47); при 52 — 0,94, шаг — не больше 3,2 см. Точки — те же torsoPointIn: области тела,
    мышечные зоны и проверки задаются углами ang, как раньше. */
-const TORSO_COLS=48,COL_MIX=.6;
+const TORSO_COLS=52,COL_MIX=.6;
 /* угол ang столбца по углу φ ∈ [0, π] (от передней линии); sec — сечение ряда (показатели nb, nf) */
 function colAngle(phi,sec){
  const c=Math.cos(phi),n=(c>=0?sec[4]:sec[3])??2;if(n===2)return phi;
@@ -967,9 +969,15 @@ function liftIn(set,p){
    центры которых на CUSH_DEEP см глубже точки (по нормали кожи покоя, в рамке лопатки), а радиус — «до
    кожи в покое минус CUSH_GAP»: большой шар даёт пологий бугор, а не «шишку» (участки мышц на коже и швы лент её
    не переносят). Где шар выходит из кожи кадра, кожа корпуса поднимается по своей нормали (как складками: в сетке и в
-   расстояниях одинаково, по точке кожи на луче от оси сечения) на выход шара, плавно у начала (CUSH_W). В покое шары
-   внутри кожи — она та же до бита. */
-const CUSH_GAP=.3,CUSH_W=2,CUSH_DEEP=5;
+   расстояниях одинаково, по точке кожи на луче от оси сечения) на выход шара, плавно у начала (CUSH_W). До 4.62.0 в покое
+   шары были внутри кожи (кожа покоя та же до бита). С осанкой 4.62.0 (грудной блок прямее, лопатка за ключицей, отведённой
+   назад по Ludewig 2009) лопатка в покое легла к коже ближе: над корнем ости и медиальным краем — 0,1–1,2 см (было 2,2–4),
+   и в тягах к лицу, «супермене», Y-T-W кость выходила к коже, трапециевидная оказывалась под ней. У человека от кожи до
+   ромбовидной (кожа, жир, трапециевидная) — 14 ± 2 мм при ИМТ 23–25 и 18 ± 3 мм при ИМТ ≥ 25 (УЗИ, 62 взрослых: Seol S. J.
+   и др., Ann Rehabil Med 2014; 38: 72–76; у манекена ИМТ ≈ 25,6). Поэтому шар не меньше, чем на CUSH_MIN выше точки кости
+   (радиус — не меньше CUSH_DEEP + CUSH_MIN): где мягких тканей в покое меньше, кожа покоя поднимается. Кроме нижнего угла:
+   его закрывает только широчайшая (Gray's Anatomy, 1918), и там — как в покое (выше — глубина груди по ANSUR II). */
+const CUSH_GAP=.3,CUSH_W=2,CUSH_DEEP=5,CUSH_MIN=1.5;
 let CUSH=null,CUSH_OFF=false;
 const CUSH_AX=new WeakMap();
 const spPoint=(S,g,f)=>V.add(V.add(V.add(S.o,S.x,-g*f[0]),S.y,f[1]),S.z,f[2]);
@@ -991,19 +999,26 @@ function cushData(){
   for(const f of GIRDLE.back){
    const c=spPoint(S,-1,f),g=[0,1,2].map(k=>{const a=c.slice(),b=c.slice();a[k]+=e;b[k]-=e;return sdfAt(a)-sdfAt(b);}),n=V.unit(g);
    const nl=[V.dot(n,S.x),V.dot(n,S.y),V.dot(n,S.z)],fl=[f[0]-nl[0]*CUSH_DEEP,f[1]-nl[1]*CUSH_DEEP,f[2]-nl[2]*CUSH_DEEP],cl=spPoint(S,-1,fl);
-   pts.push(fl);r.push(Math.min(near(cl).d,-sdfAt(cl))-CUSH_GAP);
+   const r0=Math.min(near(cl).d,-sdfAt(cl))-CUSH_GAP;
+   pts.push(fl);r.push(V.dist(f,GIRDLE.ai)<1?r0:Math.max(r0,CUSH_DEEP+CUSH_MIN));
   }
   CUSH={pts,r:Float64Array.from(r)};
  }finally{CUSH_OFF=false;}
  return CUSH;
 }
+/* центры шаров кадра (обе стороны подряд) и шар каждой стороны, в котором все её шары (cx, cy, cz, R²): точки вне него по
+   шарам стороны не проверяются — для скорости, подъём тот же */
 function cushCenters(R){
  let c=CUSH_AX.get(R.frames);
  if(c===undefined){
   c=null;
   if(R.frames.spL&&R.frames.spR){
-   const P=cushData().pts;c=new Float64Array(SIDES.length*P.length*3);let k=0;
-   for(const s of SIDES){const S=R.frames['sp'+s],g=SIGN[s];for(const f of P){const w=spPoint(S,g,f);c[k++]=w[0];c[k++]=w[1];c[k++]=w[2];}}
+   const P=cushData().pts,r=cushData().r,n=P.length,ctr=new Float64Array(SIDES.length*n*3),bs=new Float64Array(SIDES.length*4);let k=0;
+   SIDES.forEach((s,si)=>{const S=R.frames['sp'+s],g=SIGN[s];for(const f of P){const w=spPoint(S,g,f);ctr[k++]=w[0];ctr[k++]=w[1];ctr[k++]=w[2];}
+    let cx=0,cy=0,cz=0,Rm=0;for(let i=0;i<n;i++){const o=(si*n+i)*3;cx+=ctr[o]/n;cy+=ctr[o+1]/n;cz+=ctr[o+2]/n;}
+    for(let i=0;i<n;i++){const o=(si*n+i)*3;Rm=Math.max(Rm,Math.hypot(ctr[o]-cx,ctr[o+1]-cy,ctr[o+2]-cz)+r[i]);}
+    bs[si*4]=cx;bs[si*4+1]=cy;bs[si*4+2]=cz;bs[si*4+3]=Rm*Rm;});
+   c={c:ctr,bs,n};
   }
   CUSH_AX.set(R.frames,c);
  }
@@ -1027,11 +1042,14 @@ function reliefAt(tab,h){const H=BACK_RELIEF.h;if(h<=H[0]||h>=H.at(-1))return 0;
    от оси сечения назад (−z рамки грудной клетки). Профиль поперёк: валик (ridge) — от средней линии (0, борозда) к 7,5 см,
    над лопаткой — ещё scap − ridge, с 5 до 13 см; к бокам (13–22 см) — на нет; склоны по косинусу ≥ 7,5 см: сетку корпуса
    (48 столбцов, шаг на спине ≈ 3,4 см) рельеф не ломает — хорда ≤ 1 мм. Та же функция — у кожи кадра мышц (Muscles.skinPart). */
+/* валик и подъём над лопаткой по высоте — таблицей через 0,05 см (линейно между строками; от reliefAt — меньше 0,01 мм): кожа
+   кадра мышц спрашивает рельеф в каждой точке корпуса */
+const RELIEF_DH=.05,RELIEF_H0=BACK_RELIEF.h[0],RELIEF_N=Math.ceil((BACK_RELIEF.h.at(-1)-RELIEF_H0)/RELIEF_DH)+2,RELIEF_T=(()=>{
+ const t=new Float64Array(RELIEF_N*2);for(let i=0;i<RELIEF_N;i++){const h=RELIEF_H0+i*RELIEF_DH;t[i*2]=reliefAt(BACK_RELIEF.ridge,h);t[i*2+1]=reliefAt(BACK_RELIEF.scap,h);}return t;})();
 function backRelief(h,x,back){
- if(back<=-.1||h<=BACK_RELIEF.h[0]||h>=BACK_RELIEF.h.at(-1))return 0;
- if(x>=22)return 0;
+ if(back<=-.1||x>=22||h<=RELIEF_H0||h>=BACK_RELIEF.h.at(-1))return 0;
  const out=x<13?1:(1+Math.cos(Math.PI*(x-13)/9))/2,q1=x<7.5?(1-Math.cos(Math.PI*x/7.5))/2:1,q2=x<5?0:x<13?(1-Math.cos(Math.PI*(x-5)/8))/2:1;
- const r=reliefAt(BACK_RELIEF.ridge,h),sc=reliefAt(BACK_RELIEF.scap,h);
+ const u=(h-RELIEF_H0)/RELIEF_DH,i=u|0,f=u-i,T=RELIEF_T,r=T[i*2]+(T[i*2+2]-T[i*2])*f,sc=T[i*2+1]+(T[i*2+3]-T[i*2+1])*f;
  return smooth((back+.1)/1.1)*out*(r*q1+Math.max(0,sc-r)*q2);
 }
 /* подъём кожи спины в точке поверхности p по лучу ray от оси сечения, см */
@@ -1043,11 +1061,14 @@ function backLift(R,p,ray){
 /* подъём кожи над лопаткой в точке поверхности p (каталог), см */
 function cushLift(R,p){
  if(CUSH_OFF)return 0;
- const c=cushCenters(R);if(!c)return 0;
- const r=cushData().r,n=r.length;let h=0;
- for(let k=0;k<c.length/3;k++){
-  const rr=r[k%n],dx=p[0]-c[k*3],dy=p[1]-c[k*3+1],dz=p[2]-c[k*3+2],d2=dx*dx+dy*dy+dz*dz;if(d2>=rr*rr)continue;
-  const pen=rr-Math.sqrt(d2),v=pen<CUSH_W?pen*pen/(2*CUSH_W):pen-CUSH_W/2;if(v>h)h=v;
+ const cc=cushCenters(R);if(!cc)return 0;
+ const r=cushData().r,n=cc.n,c=cc.c,bs=cc.bs;let h=0;
+ for(let s=0;s<bs.length/4;s++){
+  const bx=p[0]-bs[s*4],by=p[1]-bs[s*4+1],bz=p[2]-bs[s*4+2];if(bx*bx+by*by+bz*bz>=bs[s*4+3])continue;
+  for(let i=0;i<n;i++){
+   const k=s*n+i,rr=r[i],dx=p[0]-c[k*3],dy=p[1]-c[k*3+1],dz=p[2]-c[k*3+2],d2=dx*dx+dy*dy+dz*dz;if(d2>=rr*rr)continue;
+   const pen=rr-Math.sqrt(d2),v=pen<CUSH_W?pen*pen/(2*CUSH_W):pen-CUSH_W/2;if(v>h)h=v;
+  }
  }
  return h;
 }

@@ -319,12 +319,42 @@ def main():
         name_lv = lambda v: LEVELS[int(v)] + ('' if v == int(v) else f'.{round((v - int(v)) * 100):02d}')
         print(f'  {name}: DAS3 {name_lv(L0)} → {name_lv(L)}{" (поперечный отросток)" if how == "tp" else ""}')
         return bone, q
+    # ---------- верхняя часть передней зубчатой (SERR_UPPER) ----------
+    # Первый зубец начинается от 1-го и 2-го рёбер и фасции первого межрёберья и прикрепляется к рёберной поверхности
+    # верхнего угла лопатки; волокна идут назад, прилегая к стенке груди (Gray's Anatomy, 1918, «Serratus anterior»). Длина
+    # верхней части на препаратах — 6,9 ± 1,2 см (4,8–9,0; Smith R. и др., J Orthop Sports Phys Ther 2003; 33: 449–454),
+    # у DAS3 (препарат Klein Breteler 1999) — 8,0–9,6 см (линии 10–12) и 11,2 (9). Лопатка манекена лежит на рёбрах
+    # глубже и дальше в сторону, чем у DAS3 в его позе (верхний угол — в 8,5 см от средней линии, у DAS3 — в 5,3; у DAS3
+    # он в 3,3 см позади рёбер), и начала DAS3, перенесённые с рёбрами, оказывались почти под верхним углом: линии 10–12 —
+    # 2,1–3,7 см, и при протракции лопатки верхний угол уходил за них — линии удлинялись. Поэтому начала линий к верхнему
+    # углу (DAS3 9–12, все — от рёбер 1–2) сдвигаются по рёбрам вперёд на той же высоте, пока прямая до прикрепления не
+    # станет той же длины, что у DAS3 (с масштабом совмещения грудной клетки); точка — на поверхности рёбер.
+    SERR_UPPER = ('serr_ant_9', 'serr_ant10', 'serr_ant11', 'serr_ant12')
+    s_thor = float(np.cbrt(np.linalg.det(XF['thorax'][0])))
+    rv, rf = ov['ribcage'], of['ribcage']
+    def serr_upper(mu, pl):
+        """начало линии на рёбрах: (кость, точка в рамке кости, сдвиг, расстояние, точка в рамке груди); pl — place() точек"""
+        assert [b for b, _ in mu['pts']] == ['scapula_r', 'thorax'], mu['name']
+        i_d, o_d = (to_thorax(pose, b, p) for b, p in mu['pts'])
+        target = float(np.linalg.norm(o_d - i_d)) * s_thor
+        xi, xo = pl[0][4], pl[1][4]
+        band = rv[np.abs(rv[:, 1] - xo[1]) < .8]; zc = (band[:, 2].min() + band[:, 2].max()) / 2
+        r0, a0, g = np.hypot(xo[0], xo[2] - zc), np.arctan2(abs(xo[0]), xo[2] - zc), np.sign(xo[0])
+        x, L = xo, float(np.linalg.norm(xo - xi))
+        for a in np.radians(np.arange(np.degrees(a0), 0, -.5)):
+            c = np.array([g * r0 * np.sin(a), xo[1], zc + r0 * np.cos(a)]); x = closest_on_mesh(rv, rf, c)[0]; L = float(np.linalg.norm(x - xi))
+            if L >= target: break
+        T = np.array(ours['ribcage']['T']); q = T[:, :3] @ x + T[:, 3]
+        print(f'  {mu["name"]}: длина {np.linalg.norm(xo - xi):.1f} → {L:.1f} см (DAS3 {target:.1f}), начало сдвинуто вперёд на {np.linalg.norm(x - xo):.1f} см')
+        return ['ribcage', ''], q, float(np.linalg.norm(x - xo)), 0.0, x
     out, worst = [], []
-    print('начала на позвоночнике (уровень DAS3 → по анатомии):')
+    print('начала на позвоночнике (уровень DAS3 → по анатомии); верхняя часть передней зубчатой:')
     for mu in muscles:
         el = []
+        pl = [place(body, p, REGION.get((mu['name'], k))) for k, (body, p) in enumerate(mu['pts'])]
+        if mu['name'] in SERR_UPPER: pl[1] = serr_upper(mu, pl)
         for k, (body, p) in enumerate(mu['pts']):
-            bone, q, snap, dist, _ = place(body, p, REGION.get((mu['name'], k)))
+            bone, q, snap, dist, _ = pl[k]
             fx = fixed(mu['name'], p) if k == 0 and body == 'thorax' else None
             if fx: bone, q, snap = fx[0], fx[1], 0.0
             else: worst.append((dist, mu['name'], k, bone[0]))

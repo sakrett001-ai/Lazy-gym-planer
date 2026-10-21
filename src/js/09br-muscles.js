@@ -393,7 +393,7 @@ const Muscles = (() => {
   const SD = new Float64Array(3);
   let NODIR = 0;
   /* состояние кожи кадра: матрицы, закрутка предплечий, центры «шапок», плечевой пояс, складки подмышки, шея */
-  const SKN = { S: null, m: null, tw: new Float64Array(4), cap: new Float64Array(36), gd: new Float64Array(6), gk: new Float64Array(2), gm: new Float64Array(2), fold: new Float64Array(6 * 10), cush: null, cushB: 0, tsl: new Float64Array(2), neck: new Float64Array(18), hand: new Int32Array(2), foot: new Int32Array(2) };
+  const SKN = { S: null, m: null, tw: new Float64Array(4), cap: new Float64Array(36), gd: new Float64Array(6), gk: new Float64Array(2), gm: new Float64Array(2), fold: new Float64Array(6 * 10), cush: null, cushS: null, cushB: 0, tsl: new Float64Array(2), rm: 0, neck: new Float64Array(18), hand: new Int32Array(2), foot: new Int32Array(2) };
   function bindSkin(md, bound, idx, skel) {
     if (!MQ || !md.muscles.some(mu => mu.skp)) return null;
     const bone = (n, s = '') => { const i = idx.get(n + '|' + s); if (i === undefined) throw Error('muscles: skin bone ' + n + ' ' + s); return i; };
@@ -503,7 +503,7 @@ const Muscles = (() => {
        подъёмов не больше, чем на радиус минус глубину центра под ней) */
     SKN.cushB = 0;
     if (S.cushPts) {
-      const n = S.cushR.length, C = SKN.cush || (SKN.cush = new Float64Array(2 * n * 3));
+      const n = S.cushR.length, C = SKN.cush || (SKN.cush = new Float64Array(2 * n * 3)), CB = SKN.cushS || (SKN.cushS = new Float64Array(8));
       for (let k = 0; k < 2; k++) {
         const sp = S.sides[k].scap * 12;
         S.cushPts[k].forEach((q, i) => {
@@ -512,13 +512,19 @@ const Muscles = (() => {
           const hh = LQ[1] + S.segH[2], rr = Math.sqrt(LQ[0] * LQ[0] + LQ[2] * LQ[2]), dep = rr < 1e-9 ? 0 : torsoR(S, hh, LQ[2], LQ[0]) - rr;
           SKN.cushB = Math.max(SKN.cushB, S.cushR[i] - Math.max(0, dep - 2 * SKN.gm[k]) + .1);
         });
+        /* шар, в котором все шары стороны: точки вне обоих не проверяются по шарам (результат тот же — для скорости) */
+        let cx = 0, cy = 0, cz = 0, R = 0;
+        for (let i = 0; i < n; i++) { const o = (k * n + i) * 3; cx += C[o] / n; cy += C[o + 1] / n; cz += C[o + 2] / n; }
+        for (let i = 0; i < n; i++) { const o = (k * n + i) * 3; R = Math.max(R, Math.hypot(C[o] - cx, C[o + 1] - cy, C[o + 2] - cz) + S.cushR[i]); }
+        CB[k * 4] = cx; CB[k * 4 + 1] = cy; CB[k * 4 + 2] = cz; CB[k * 4 + 3] = R * R;
       }
     }
     /* наибольшее приближение кожи корпуса сдвигом надплечий (двойной сдвиг: сечение под сдвинутой точкой другое), складками
        (подъём не больше амплитуды) и мягкими тканями над лопаткой — для оценки снизу в torsoPart */
-    { let ak = 0; for (let j = 0; j < 6; j++) ak = Math.max(ak, SKN.fold[j * 10 + 7]); /* + наибольший подъём кожи спины (Mannequin.BACK_RELIEF) */
-      const bm = Math.max(...MQ.BACK_RELIEF.ridge, ...MQ.BACK_RELIEF.scap);
-      for (let k = 0; k < 2; k++) SKN.tsl[k] = 2 * SKN.gm[k] + ak + SKN.cushB + bm + .3; }
+    { let ak = 0; for (let j = 0; j < 6; j++) ak = Math.max(ak, SKN.fold[j * 10 + 7]);
+      for (let k = 0; k < 2; k++) SKN.tsl[k] = 2 * SKN.gm[k] + ak + SKN.cushB + .3;
+      /* наибольший подъём кожи спины (Mannequin.BACK_RELIEF) — к оценке добавляется только у точек сзади (torsoPart) */
+      SKN.rm = Math.max(...MQ.BACK_RELIEF.ridge, ...MQ.BACK_RELIEF.scap); }
     /* шея (Mannequin.neckSDF): ось — от основания (рамка шеи: −1 по y, +2,5 по z) к точке в черепе (+1,5 по y рамки головы) */
     { const n = S.neck.cerv * 12, hd = S.neck.skull * 12, N = SKN.neck;
       const lx = m[n + 3] - m[n + 1] + m[n + 2] * 2.5, ly = m[n + 7] - m[n + 5] + m[n + 6] * 2.5, lz = m[n + 11] - m[n + 9] + m[n + 10] * 2.5;
@@ -553,10 +559,13 @@ const Muscles = (() => {
   /* подъём кожи корпуса над лопаткой в точке (x, y, z) рамки грудной клетки — Mannequin.cushLift */
   function skinCush(x, y, z) {
     const C = SKN.cush; if (!C || !SKN.cushB) return 0;
-    const S = SKN.S, r = S.cushR, n = r.length, W = S.cushW; let h = 0;
-    for (let k = 0; k < 2 * n; k++) {
-      const rr = r[k % n], dx = x - C[k * 3], dy = y - C[k * 3 + 1], dz = z - C[k * 3 + 2], d2 = dx * dx + dy * dy + dz * dz; if (d2 >= rr * rr) continue;
-      const pen = rr - Math.sqrt(d2), v = pen < W ? pen * pen / (2 * W) : pen - W / 2; if (v > h) h = v;
+    const S = SKN.S, r = S.cushR, n = r.length, W = S.cushW, CB = SKN.cushS; let h = 0;
+    for (let s = 0; s < 2; s++) {
+      const bx = x - CB[s * 4], by = y - CB[s * 4 + 1], bz = z - CB[s * 4 + 2]; if (bx * bx + by * by + bz * bz >= CB[s * 4 + 3]) continue;
+      for (let i = 0; i < n; i++) {
+        const k = s * n + i, rr = r[i], dx = x - C[k * 3], dy = y - C[k * 3 + 1], dz = z - C[k * 3 + 2], d2 = dx * dx + dy * dy + dz * dz; if (d2 >= rr * rr) continue;
+        const pen = rr - Math.sqrt(d2), v = pen < W ? pen * pen / (2 * W) : pen - W / 2; if (v > h) h = v;
+      }
     }
     return h;
   }
@@ -648,7 +657,8 @@ const Muscles = (() => {
         /* точка далеко снаружи корпуса (на руке, над плечом): без сдвига надплечий и складок расстояние — не меньше q0 (и выхода за
            верх), они приближают кожу не больше чем на SKN.tsl; если и так дальше лучшей части (с запасом HEAD_SKIP, как у
            головы), корпус дальше не считается */
-        if (best < Infinity) { const lb = Math.max(q0, h - S.top) - SKN.tsl[sd]; if (lb > best + (NODIR ? 0 : HEAD_SKIP)) return lb; } }
+        /* рельеф спины (Mannequin.backRelief) поднимает кожу только сзади (луч назад, доля больше −0,1) — не больше RELIEF_MAX */
+        if (best < Infinity) { const lb = Math.max(q0, h - S.top) - SKN.tsl[sd] - (lz < .1 * r0 + 2 * SKN.gm[sd] ? SKN.rm : 0); if (lb > best + (NODIR ? 0 : HEAD_SKIP)) return lb; } }
       /* надплечья: кожа сдвинута за плечевым поясом (girdleShift) — расстояние от точки, сдвинутой обратно: неподвижная точка
          q = p − сдвиг(q) (Mannequin.torsoSDF: до 10 шагов), до 0,3 мм; начало — с доли сдвига прошлой точки этой стороны (кольца
          одной мышцы идут подряд) */
