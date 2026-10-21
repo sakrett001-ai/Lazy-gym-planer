@@ -516,7 +516,9 @@ const Muscles = (() => {
     }
     /* наибольшее приближение кожи корпуса сдвигом надплечий (двойной сдвиг: сечение под сдвинутой точкой другое), складками
        (подъём не больше амплитуды) и мягкими тканями над лопаткой — для оценки снизу в torsoPart */
-    { let ak = 0; for (let j = 0; j < 6; j++) ak = Math.max(ak, SKN.fold[j * 10 + 7]); for (let k = 0; k < 2; k++) SKN.tsl[k] = 2 * SKN.gm[k] + ak + SKN.cushB + .3; }
+    { let ak = 0; for (let j = 0; j < 6; j++) ak = Math.max(ak, SKN.fold[j * 10 + 7]); /* + наибольший подъём кожи спины (Mannequin.BACK_RELIEF) */
+      const bm = Math.max(...MQ.BACK_RELIEF.ridge, ...MQ.BACK_RELIEF.scap);
+      for (let k = 0; k < 2; k++) SKN.tsl[k] = 2 * SKN.gm[k] + ak + SKN.cushB + bm + .3; }
     /* шея (Mannequin.neckSDF): ось — от основания (рамка шеи: −1 по y, +2,5 по z) к точке в черепе (+1,5 по y рамки головы) */
     { const n = S.neck.cerv * 12, hd = S.neck.skull * 12, N = SKN.neck;
       const lx = m[n + 3] - m[n + 1] + m[n + 2] * 2.5, ly = m[n + 7] - m[n + 5] + m[n + 6] * 2.5, lz = m[n + 11] - m[n + 9] + m[n + 10] * 2.5;
@@ -664,7 +666,7 @@ const Muscles = (() => {
       const rho = Math.sqrt(lx * lx + lz * lz), r = rho < 1e-9 ? 0 : torsoR(S, h, lz, lx), ux = rho > 1e-9 ? lx / rho : 1, uz = rho > 1e-9 ? lz / rho : 0;
       let radial = rho - r;
       /* складки подмышки: подъём кожи в точке поверхности на луче от оси (со сдвигом плечевого пояса обратно) — в рамке грудной клетки */
-      if (rho > 1e-9 && !deep && radial > -SKIN_DEEP) { const px = ux * r + sx, py = ly + sy, pz = uz * r + sz; radial -= skinFold(px, py, pz) + skinCush(px, py, pz); }
+      if (rho > 1e-9 && !deep && radial > -SKIN_DEEP) { const px = ux * r + sx, py = ly + sy, pz = uz * r + sz; radial -= skinFold(px, py, pz) + skinCush(px, py, pz) + MQ.backRelief(py + S.segH[2], Math.abs(px), -uz); }
       const axial = h - S.top, d = axial > 0 ? (radial > 0 ? Math.sqrt(radial * radial + axial * axial) : axial) : Math.max(radial, axial);
       if (!(d < best) || NODIR) return d;
       /* направление наружу — нормаль кожи: суперэллипс сечения в точке луча и наклон образующей по высоте (у груди под ключицей и
@@ -727,7 +729,9 @@ const Muscles = (() => {
     if (h > 20 && rho > 1e-9) {
       const qx = cx + Xx * ux * r + Zx * uz * r - m[rb + 3], qy = cy + Xy * ux * r + Zy * uz * r - m[rb + 7], qz = cz + Xz * ux * r + Zz * uz * r - m[rb + 11];
       const fx = m[rb] * qx + m[rb + 4] * qy + m[rb + 8] * qz, fy = m[rb + 1] * qx + m[rb + 5] * qy + m[rb + 9] * qz, fz = m[rb + 2] * qx + m[rb + 6] * qy + m[rb + 10] * qz;
-      radial -= skinFold(fx, fy, fz) + skinCush(fx, fy, fz);
+      /* луч от оси сечения — в рамке грудной клетки (рельеф спины, Mannequin.backRelief: доля луча назад) */
+      const bz = m[rb + 2] * (Xx * ux + Zx * uz) + m[rb + 6] * (Xy * ux + Zy * uz) + m[rb + 10] * (Xz * ux + Zz * uz);
+      radial -= skinFold(fx, fy, fz) + skinCush(fx, fy, fz) + MQ.backRelief(fy + S.segH[2], Math.abs(fx), -bz);
     }
     const axial = S.bot * k - h, d = axial > 0 ? (radial > 0 ? Math.sqrt(radial * radial + axial * axial) : axial) : Math.max(radial, axial);
     if (!(d < best) || NODIR) return d;

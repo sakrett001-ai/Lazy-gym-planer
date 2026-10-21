@@ -1014,16 +1014,20 @@ function cushCenters(R){
    подъём не больше 0,15 см: глубина груди по ANSUR II — не больше 25,2 (tools/mannequin.test.js); у основания шеи — 0. */
 const BACK_RELIEF={h:[27,31,35,38.7,42,46,50,54,57.5],ridge:[0,.4,.4,.15,.8,1.1,1.1,.8,0],scap:[0,0,0,0,.8,1.1,1.1,.8,0]};
 function reliefAt(tab,h){const H=BACK_RELIEF.h;if(h<=H[0]||h>=H.at(-1))return 0;let i=0;while(h>H[i+1])i++;return tab[i]+(tab[i+1]-tab[i])*smooth((h-H[i])/(H[i+1]-H[i]));}
+/* подъём кожи спины, см: h — высота над тазобедренными в рамке грудной клетки, x — от средней линии (|x|), back — доля луча
+   от оси сечения назад (−z рамки грудной клетки). Профиль поперёк: от средней линии (0) плавно к валику и лопатке
+   (наибольший подъём — 7–10 см), к бокам — на нет; склоны ≥ 7–8 см (по косинусу): сетку корпуса (48 столбцов, шаг на спине
+   ≈ 3,4 см) рельеф не ломает — хорда ≤ 1 мм. Та же функция — у кожи кадра мышц (Muscles.skinPart). */
+function backRelief(h,x,back){
+ if(back<=0||h<=BACK_RELIEF.h[0]||h>=BACK_RELIEF.h.at(-1))return 0;
+ const q=x<7?(1-Math.cos(Math.PI*x/7))/2:x<10?1:x<18?(1+Math.cos(Math.PI*(x-10)/8))/2:0;
+ return q?smooth(back/.8)*q*Math.max(reliefAt(BACK_RELIEF.ridge,h),reliefAt(BACK_RELIEF.scap,h)):0;
+}
 /* подъём кожи спины в точке поверхности p по лучу ray от оси сечения, см */
 function backLift(R,p,ray){
  const T=R.frames.thorax;if(!T)return 0;
- const d=V.sub(p,T.o),h=V.dot(d,T.y)+B.lumbar[1]+B.thoracic[1];if(h<=BACK_RELIEF.h[0]||h>=BACK_RELIEF.h.at(-1))return 0;
- const back=-V.dot(ray,T.z);if(back<=0)return 0;
- const x=Math.abs(V.dot(d,T.x)),w=smooth(back/.8);
- /* профиль поперёк: от средней линии (0) плавно к валику и лопатке (наибольший подъём — 7–11 см), к бокам — на нет; склоны
-    ≥ 8 см (по косинусу): сетку корпуса (48 столбцов, шаг на спине ≈ 3,4 см) рельеф не ломает — хорда ≤ 1 мм */
- const q=x<7?(1-Math.cos(Math.PI*x/7))/2:x<10?1:x<18?(1+Math.cos(Math.PI*(x-10)/8))/2:0;
- return w*q*Math.max(reliefAt(BACK_RELIEF.ridge,h),reliefAt(BACK_RELIEF.scap,h));
+ const d=V.sub(p,T.o);
+ return backRelief(V.dot(d,T.y)+B.lumbar[1]+B.thoracic[1],Math.abs(V.dot(d,T.x)),-V.dot(ray,T.z));
 }
 /* подъём кожи над лопаткой в точке поверхности p (каталог), см */
 function cushLift(R,p){
@@ -1346,7 +1350,7 @@ return{V,M3,Q,B,TORSO,TORSO_H,TORSO_COLS,colAngle,TORSO_JOINTS,TORSO_BLEND,TORSO
  neutral,clone,pack,unpack,PACK,PACK_SIZE,fk,solePoints,twoBone,solveArm,solveArmWrist,setArmFromPoints,footFrame,heelFrame,solveLeg,rootRot,rootFromAxes,
  swing,swingTwist,eulerXZY,eulerYZX,spineRot,makeTrack,monotone,toCat,dirCat,catalogPose,
  profileAt,sectionAt,spineFrame,torsoFrame,frontK,ramp,vertebraFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,neckSDF,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,
- FOLDS,FOLD_SP,foldAxes,foldSet,foldLift,noFolds,KN_CAP_Z,SEAT_K,CUSH_W,cushData,cushLift,
+ FOLDS,FOLD_SP,foldAxes,foldSet,foldLift,noFolds,BACK_RELIEF,backRelief,backLift,KN_CAP_Z,SEAT_K,CUSH_W,cushData,cushLift,
  headLocalSDF,headLocal,headWorld,headMesh,headSamples,HEAD_PARTS,HEAD_EAR,HEAD_EARS,ellipseRadius,centerOfMass,LIMB_DEF,
  handShape,footShape,footPoints,footPointWorld,footBlendW,FOOT_SECTIONS,TOES,malleoli,bodyData,jointAngles,
  GIRDLE,RIB_ENV,RHYTHM,GSIG,GIRDLE_REST,rhythmAt,humeralElevation,rhythmHint,girdleTargets,resolveGirdle,solveGirdle,scapRot,ribGap,ribSlide,
