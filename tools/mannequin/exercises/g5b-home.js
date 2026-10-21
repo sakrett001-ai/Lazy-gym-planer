@@ -69,8 +69,8 @@ function pikeLayout(C, { phi0, phi1, opts, handX = 22, headGap = 4, floorY = 0, 
   /* низ: макушка в headGap см над опорой ладоней, голова чуть впереди кистей */
   const psi1 = C.solve1D(ps => headTop(body(ps, phi1, 1)) - floorY - headGap, -30, 80), head = C.fk(body(psi1, phi1, 1)).P.head;
   const wz = head[2] - headAhead, palm = S.map(s => [SG[s] * handX, floorY, wz + 5.6]), wrist = [handX - .5, floorY + 1.8, wz];
-  /* верх: руки выпрямлены */
-  const psi0 = C.solve1D(ps => V.dist(C.ghToward(body(ps, phi0, 0), 'L', wrist), wrist) - 54.9, psi1, 85);
+  /* верх: руки почти прямые (локоть ≈ 10°; сустав плеча — при поставленной руке, C.ghToward) */
+  const psi0 = C.solve1D(ps => V.dist(C.ghToward(body(ps, phi0, 0), 'L', wrist), wrist) - 54.6, psi1, 85);
   return { psi0, phi0, psi1, phi1, palm, opts };
 }
 /* Хват за ребро опоры (край скамьи, сиденья, столешницы): центр хвата внутри ребра, большой палец вдоль ребра (thumb),
@@ -475,7 +475,7 @@ module.exports = {
       for (const pass of [0, 1]) S.forEach((s, i) => {
         C.rhythm(q, s, PIKE_GIRDLE(C, e));
         const lat = C.lat(q, s), pole = V.unit(V.add(V.add([0, 0, -1], lat, .55), [0, 1, 0], .7));
-        C.palm(q, s, L.palm[i], V.unit([-SG[s] * .05, 0, 1]), [0, 1, 0], pole);
+        C.palm(q, s, L.palm[i], [0, 0, 1], [0, 1, 0], pole);   /* пальцы прямо вперёд: вверху запястье без лучевого отведения сверх 22°, внизу — без локтевого сверх 30° */
       });
       return q;
     }
@@ -531,8 +531,9 @@ module.exports = {
       const a = C.lerp(L.a0, L.a1, e) * D, ax = [0, Math.sin(a), Math.cos(a)];
       S.forEach((s, i) => {
         q[s].girdle = [C.lerp(-2, 3, e), C.lerp(-14, 12, e)];
-        const lat = C.lat(q, s), pole = V.unit(V.add(V.add(V.scale(ax, -1), lat, .4), [0, 1, 0], .3));
-        C.palm(q, s, L.palm[i], V.unit([-SG[s] * .17, 0, 1]), [0, 1, 0], pole);
+        /* вверху локоть чуть наружу (запястье без лучевого отведения сверх 22°: с этапа Д сустав плеча вверху выше и впереди) */
+        const lat = C.lat(q, s), pole = V.unit(V.add(V.add(V.scale(ax, -1), lat, .4 + .5 * e ** 3), [0, 1, 0], .3));
+        C.palm(q, s, L.palm[i], V.unit([-SG[s] * .15, 0, 1]), [0, 1, 0], pole);
       });
       return q;
     }

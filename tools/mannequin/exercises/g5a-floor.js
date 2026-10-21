@@ -356,7 +356,7 @@ const PLANKUP = once(() => {
   const body = (th, roll = 0, yaw = 0) => { const q = proneOnToes(C, { theta: th, yaw, roll: roll * .25, ...base }); q.thoracic[2] = roll * .75 * .78; q.lumbar[2] = roll * .75 * .22; return q; };
   const thF = plankTheta(C, { ...base, arms: plankArms(C) }), qF = body(thF);
   const fore = {}; for (const s of S) { const t = C.M.clone(qF); t[s].girdle = [-2, 8]; for (const pass of [0, 1]) fore[s] = forearmOnMat(C, t, s); }
-  const top = pushLayout({ x: 24.5, ahead: 15, out: 5, elTop: 11, feet, pole0: [.39, -.02, 1.13], pole1: [.39, -.02, 1.13], g0: [-6.5, 3.2], g1: [-6.5, 3.2] });
+  const top = pushLayout({ x: 24.5, ahead: 16.5, out: 5, elTop: 11, feet, pole0: [.39, -.02, 1.13], pole1: [.39, -.02, 1.13], g0: [-6.5, 3.2], g1: [-6.5, 3.2] });
   const palmW = s => palmWrist(C, s, top.palms[s], top.fingers(s), [0, 1, 0]);
   /* опорная рука стороны s в состоянии F (предплечье) или P (ладонь); плечевой сустав идёт за лопаткой (этап Д: ритм
      пояса по подъёму руки), поэтому невязка опоры меряется с поставленной рукой */
