@@ -7,11 +7,13 @@
    (или в --start; с 4.41.0 — три: задняя, передняя и боковая):
    - цель: тела мышц подмышки (широчайшая, большая и малая круглые, подостная, подлопаточная, большая грудная, дельтовидная,
      длинная головка трёхглавой, клювовидно-плечевая, короткая головка двуглавой; этап М2) выходят из кожи не выше 1,5 см,
-     и худший выход каждого семейства — не выше допуска проверки мышц (2,6 см; tools/muscles/check.js);
+     и худший выход каждого семейства — не выше FAM_MAX = 0,9 см: допуск тела над кожей в проверке мышц — 1 см (BODY_LIMIT в
+     tools/muscles/check.js, с этапа Г; до него — 2,6 см, и подгонка держала худший выход под 2,6), запас 0,1 см;
    - кожа в ключевых позах не поднимается над прежней выше, чем на 0,6 см над мышцами под ней (стоя — не выше 1,2 см);
    - стоя ширина груди не растёт (без складок она уже подогнана к ANSUR II), глубина — не больше чем на 0,3 см,
      обхват — не больше ANSUR II (101,7 см) и не меньше нижней границы средней половины людей (99,2 см, как проверка в
-     tools/mannequin.test.js) (замеры — tools/mannequin/anthro.js);
+     tools/mannequin.test.js) с запасом 0,1 см на разницу замеров (здесь — 180 точек сечения сетки, в проверке — 360 лучей)
+     (замеры — tools/mannequin/anthro.js);
    - соседние точки сетки кожи сдвинуты почти одинаково (без зубцов; и стоя с руками, отведёнными на 90° и 160°, — как
      проверка плавности в tools/mannequin.test.js); ось — от точки у корпуса своей стороны к точке
      у плеча ниже центра сустава, высота не больше 5 см, ширина — не больше 8.
@@ -119,6 +121,8 @@ function chest(set) {
 function prep() { if (!KP) { KP = keyPoses(); ANS = standing(); CH0 = chest(null); } }
 
 /* ---------- цель ---------- */
+/* худший выход семейства и его вес (см. шапку); нижняя граница обхвата груди стоя — 99,2 + 0,1 */
+const FAM_MAX = .9, FAM_W = 5000, CHEST_MIN = 99.3;
 /* семейство: линии веера и пучки — вместе со своей мышцей (PECM2a, PECM2c → pecm; DELT3lat → delt; LAT5 → lat) */
 const fam = n => n.replace(/_[lr]$/, '').replace(/(med|lat|sup|inf|[abc])$/, '').replace(/\d$/, '').toLowerCase();
 function evaluate(D, P) {
@@ -134,9 +138,9 @@ function evaluate(D, P) {
     }
     for (const [f, d] of Object.entries(pm)) { if (!(famMax[f] >= d)) { famMax[f] = d; famAt[f] = `${r.id} t=${r.t}`; } loss += Math.max(0, d - 1.5) ** 2; }
   }
-  /* худший выход семейства — то, что проверяет npm run muscles:check: выше допуска 2,6 см штраф круче (4.41.0; без него
+  /* худший выход семейства — то, что проверяет npm run muscles:check: выше FAM_MAX штраф круче (4.41.0; без него
      подгонка улучшает сотни умеренных выходов, а худший — тело широчайшей при руке над головой — остаётся на 4 см) */
-  for (const d of Object.values(famMax)) loss += 150 * Math.max(0, d - 2.6) ** 2;
+  for (const d of Object.values(famMax)) loss += FAM_W * Math.max(0, d - FAM_MAX) ** 2;
   const muscleOut = {}; for (const r of D) { const m = { L: 0, R: 0 }; for (const v of r.v) m[v.side] = Math.max(m[v.side], v.d); muscleOut[r.id + ':' + r.t] = m; }
   for (const kp of KP) {
     const set = setsFor(P, kp.T, kp.U, L0), mx = { L: 0, R: 0 };
@@ -152,7 +156,7 @@ function evaluate(D, P) {
     if (!kp.k.startsWith('arms:')) for (const s of ['L', 'R']) { const lim = kp.k === 'neutral' ? 1.2 : Math.max(1.2, (muscleOut[kp.k]?.[s] ?? 0) + .6); pen += 50 * Math.max(0, mx[s] - lim) ** 2; }
   }
   { const set = setsFor(P, NR.frames.thorax, { L: NR.frames.uaL, R: NR.frames.uaR }, L0), c = chest(set);
-    pen += 5000 * (Math.max(0, c.br - CH0.br) ** 2 + Math.max(0, c.dp - CH0.dp - .3) ** 2 + Math.max(0, c.per - 101.7) ** 2 + Math.max(0, 99.2 - c.per) ** 2); }
+    pen += 5000 * (Math.max(0, c.br - CH0.br) ** 2 + Math.max(0, c.dp - CH0.dp - .3) ** 2 + Math.max(0, c.per - 101.7) ** 2 + Math.max(0, CHEST_MIN - c.per) ** 2); }
   for (const F of Object.values(P)) {
     pen += 50 * (Math.max(0, F.a - 5) ** 2 + Math.max(0, F.s - 8) ** 2 + Math.max(0, 1.5 - F.s) ** 2 + Math.max(0, F.ua[1] + 3) ** 2 + Math.max(0, 3 - F.tr[0]) ** 2);
     const ax = axes(F, NR.frames.thorax, NR.frames.uaL, 'L', 0), B = V.add(ax.A, ax.d, ax.L);
