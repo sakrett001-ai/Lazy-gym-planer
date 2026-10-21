@@ -144,6 +144,42 @@ test('larynx and trachea: present, sized as in an adult man', () => {
   const tr = awPts('trachea1'); assert(span(tr, 0) >= 2 && span(tr, 0) <= 2.5, `trachea width ${span(tr, 0).toFixed(2)} cm`);
 });
 
+/* Шейный отдел и уровни гортани (4.60.0). Тела C7…C2 — из данных кости cervical (build_bones.py, поле bodies: центры нижней и
+   верхней пластинок, у C2 верхняя — середина ямок атласа; рамка шеи — та же, что у хрящей гортани). Уровни — Gray's Anatomy
+   (1918, с. 1074–1083): подъязычная кость — C3, щитовидный хрящ — C4–C5, перстневидный — C6, трахея от C6 до бифуркации у T5,
+   ≈ 11 см. До 4.60.0 отдел стоял под твёрдым нёбом (ямки атласа на 7,6 см впереди мыщелков), а гортань — на 1–2 позвонка ниже. */
+test('cervical spine seated on the condyles; larynx and trachea at their vertebral levels', () => {
+  const cv = data.bones.find(b => b.name === 'cervical'), [C7, C6, C5, C4, C3, C2] = cv.bodies;   // [y низ, z, y верх, z]
+  /* атлас — под суставом головы (B.headJoint: ось через мыщелки): ямки не дальше 2,5 см от оси, ниже неё и не впереди */
+  const fac = [0, C2[2], C2[3]], hj = M.B.headJoint;
+  assert(M.V.dist(fac, hj) < 2.5 && fac[1] < hj[1] && fac[2] < hj[2] + .5, `atlas facets ${fac.slice(1)} vs head joint ${hj.slice(1)}`);
+  /* шаг тел C3→C6 (центры тел) — 1,6–2 см, у взрослых ≈ 1,8 (тело 1,4 + диск 0,45) */
+  const mid = r => [r[0] + r[2], r[1] + r[3]].map(v => v / 2);
+  for (const [a, b] of [[C3, C4], [C4, C5], [C5, C6]]) { const s = Math.hypot(...mid(a).map((v, k) => v - mid(b)[k])); assert(s > 1.6 && s < 2, `body step ${s.toFixed(2)} cm`); }
+  const ys = n => awPts(n).map(p => p[1]);
+  /* перстневидный: низ дуги — у нижней пластинки C6, верх пластинки — не выше верха C5 */
+  const clo = Math.min(...ys('cricoid')), chi = Math.max(...ys('cricoid'));
+  assert(Math.abs(clo - C6[0]) < .3 && chi < C5[2], `cricoid ${clo.toFixed(2)}…${chi.toFixed(2)}, C6 ${C6[0]}…${C6[2]}`);
+  /* щитовидный (пластинки без рогов): заходит и на C5, и на C4; не ниже C6 и не выше C3 */
+  const th = awPts('thyroid', p => Math.abs(p[0]) > 1.2 && Math.abs(p[0]) < 2).map(p => p[1]), tlo = Math.min(...th), thi = Math.max(...th);
+  assert(tlo < C5[2] && thi > C4[0] && tlo > C6[2] - .3 && thi < C3[0] + .3, `thyroid lamina ${tlo.toFixed(2)}…${thi.toFixed(2)}`);
+  /* подъязычная: середина тела у средней линии — на уровне C3 (между верхом C4 и низом C2) */
+  const hb = awPts('hyoid', p => Math.abs(p[0]) < 1).map(p => p[1]), hc = (Math.min(...hb) + Math.max(...hb)) / 2;
+  assert(hc > C4[2] && hc < C2[0], `hyoid body ${hc.toFixed(2)}, C3 ${C3[0]}…${C3[2]}`);
+  /* трахея — 10–12 см по оси */
+  assert(AW.axis().L >= 10 && AW.axis().L <= 12, `trachea ${AW.axis().L.toFixed(1)} cm`);
+  /* тела C3–C6 — не ближе 3,2 см к коже шеи спереди (у живого 4–5; было 0–1,9): от передней поверхности тела у средней
+     линии вперёд до кожи шеи в нейтральной позе */
+  const R = M.catalogPose(M.neutral()), m = Skeleton.frames(R, M.bodyData(R), data.bones), i = data.bones.indexOf(cv), w = Skeleton.worldPoints(cv, m, i);
+  const N = R.frames.neck, toW = (y, z) => M.V.add(M.V.add(N.o, N.y, y), N.z, z);
+  for (const [name, r] of [['C3', C3], ['C4', C4], ['C5', C5], ['C6', C6]]) {
+    const c = toW(...mid(r)); let front = -Infinity;
+    for (let j = 0; j < w.length; j += 3) { const p = [w[j], w[j + 1], w[j + 2]], d = M.V.sub(p, c); if (Math.abs(d[0]) < .8 && Math.abs(M.V.dot(d, N.y)) < .5) front = Math.max(front, M.V.dot(d, N.z)); }
+    let s = front; while (M.neckSDF(R, M.V.add(c, N.z, s)) < 0 && s < 15) s += .02;
+    assert(s - front >= 3.2, `${name}: body ${(s - front).toFixed(2)} cm from the skin of the neck`);
+  }
+});
+
 test('larynx and trachea: inside the neck, clear of the vertebrae and the jaw, follow the head and the neck', () => {
   const G = require('./muscles/geometry.js'), pbs = G.prepareBones(data);
   const other = data.bones.map((b, i) => /^(cervical|thoracic[1-6]|jaw|skull|ribcage|clavicle)$/.test(b.name) ? i : -1).filter(i => i >= 0);
