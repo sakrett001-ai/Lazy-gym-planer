@@ -17,6 +17,14 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.abspath(os.path.join(HERE, '../..'))
+# Кости манекена в памяти (как в build_muscles.py): грудная клетка до выноса передней стенки (RIB_RAW) и сам вынос (ribDeform).
+# DAS3 совмещается с грудной клеткой до выноса: вынос (4.62.0, грудина к коже) — не аффинный, и аффинное совмещение с уже
+# вынесенной клеткой растягивало DAS3 спереди назад на 21 % и уводило начала верхних зубцов передней зубчатой на рёбрах 1–2
+# на 0,8 см назад. Точки грудной клетки после совмещения проходят тот же вынос, что сетка рёбер.
+sys.path.insert(0, os.path.join(HERE, '../skeleton'))
+_argv = sys.argv; sys.argv = sys.argv[:1]
+import build_bones as BB  # noqa: E402
+sys.argv = _argv
 DAS3 = os.environ.get('DAS3', os.path.join(ROOT, '../das3'))
 IN = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, 'qa/muscles/muscles.json')
 OUT = sys.argv[2] if len(sys.argv) > 2 else IN
@@ -213,7 +221,7 @@ def main():
 
     # 1) грудная клетка: рёбра + грудные позвонки DAS3 → наши рёбра + Th1–Th12. Начало — совмещение центров
     src = np.vstack([surf_samples(rib_v, rib_f, 6000), surf_samples(*thor_spine, 2000)])
-    dst = np.vstack([osamp['ribcage']] + [osamp[f'thoracic{i}'] for i in range(1, 13)])
+    dst = np.vstack([surf_samples(BB.RIB_RAW[0], np.asarray(BB.RIB_RAW[1]).reshape(-1, 3), 4000)] + [osamp[f'thoracic{i}'] for i in range(1, 13)])
     A, t, res = icp(src, dst, np.eye(3), dst.mean(0) - src.mean(0), 'sim')
     A, t, res = icp(src, dst, A, t, 'aff')
     U, S, Vt = np.linalg.svd(A); Rpol = U @ Vt; P = Vt.T @ np.diag(S) @ Vt
@@ -252,6 +260,7 @@ def main():
             region = 'skull' if reg == 'skull' else 'cervical' if reg == 'spine' and lv[kd_sp.query(p)[1]].startswith('C') else 'thorax'
             region = override or region
             A_, t_ = XF[region]; x = A_ @ p + t_
+            if region == 'thorax': x = BB.ribDeform(x[None])[0]
             cand = {'skull': ['skull'], 'cervical': ['cervical'], 'thorax': ['ribcage'] + [f'thoracic{i}' for i in range(1, 13)]}[region]
         else:
             A_, t_ = XF[body]; x = A_ @ p + t_; cand = ['scapulaR' if body == 'scapula_r' else 'clavicleR']
@@ -322,7 +331,7 @@ def main():
             el.append({'s': {'bone': bone, 'p': np.round(q, 3).tolist(), 'site': f"{mu['name']}-P{k + 1}", **({'snap': round(snap, 2)} if snap else {})}})
         if mu['wrap']:
             assert mu['wrap'] == ['serr_ant'] and len(el) == 2
-            A_, t_ = XF['thorax']; c = A_ @ ell['c'] + t_; B = A_ @ np.diag(ell['r'])
+            A_, t_ = XF['thorax']; c = BB.ribDeform((A_ @ ell['c'] + t_)[None])[0]; B = A_ @ np.diag(ell['r'])
             el.insert(1, {'w': {'t': 'e', 'bone': ['ribcage', ''], 'c': np.round(c, 3).tolist(), 'B': np.round(B, 4).ravel().tolist(), 'side': None, 'geom': 'serr_ant'}})
         out.append({'name': mu['name'] + '_r', 'side': 'R', 'fmax': round(mu['fmax'], 2), 'L0': round(mu['L0'], 3), 'LT': round(mu['LT'], 3), 'src': 'DAS3', 'el': el})
     worst.sort(reverse=True)
