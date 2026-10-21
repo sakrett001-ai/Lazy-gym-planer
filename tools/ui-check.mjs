@@ -144,11 +144,12 @@ await page.close();
     $('[data-mv-figure="anatomy"]').click();
     return { anat, skel, man, back: { last: calls.at(-1), pref: motionPrefs.view }, thanks: $('#mv-detail').textContent };
   });
-  /* костей 111: 102 — MyoSim, 9 — гортань и трахея (подъязычная, щитовидный, перстневидный и 6 отрезков трахеи: с 4.60.0 трахея
-     от C6 до бифуркации — 11,6 см, 18 полуколец; до того — 8,6 см, 4 отрезка) */
-  check(fig.anat.last?.bones === 111 && fig.anat.last.muscles === 530 && fig.anat.pri.every(m => fig.anat.last.level[m] === 1) && fig.anat.pressed === 'anatomy' && !fig.anat.busy && /О демонстрациях/.test(fig.anat.note) && fig.anat.note.length < 260,
-    '«Анатомия» по умолчанию: 530 мышц на 111 костях (102 — MyoSim, 9 — гортань и трахея), основные мышцы выделены, короткая подпись');
-  check(fig.skel.last?.bones === 111 && fig.skel.last.muscles === 0 && fig.skel.pressed === 'skeleton' && fig.skel.pref === 'skeleton' && /MyoSim/.test(fig.skel.note), '«Скелет» — только кости');
+  /* костей 108: 102 — MyoSim, 6 — гортань и трахея (подъязычная, щитовидный, перстневидный и 3 отрезка трахеи: отрезок —
+     пара полуколец со своей долей поворота к грудной клетке; с осанкой 4.62.0 зона поворота у шейно-грудного перехода
+     короче — 3,5 см вместо 5,5, и отрезков 3, а не 6; трахея от C6 до бифуркации, 18 полуколец, как с 4.60.0) */
+  check(fig.anat.last?.bones === 108 && fig.anat.last.muscles === 530 && fig.anat.pri.every(m => fig.anat.last.level[m] === 1) && fig.anat.pressed === 'anatomy' && !fig.anat.busy && /О демонстрациях/.test(fig.anat.note) && fig.anat.note.length < 260,
+    '«Анатомия» по умолчанию: 530 мышц на 108 костях (102 — MyoSim, 6 — гортань и трахея), основные мышцы выделены, короткая подпись');
+  check(fig.skel.last?.bones === 108 && fig.skel.last.muscles === 0 && fig.skel.pressed === 'skeleton' && fig.skel.pref === 'skeleton' && /MyoSim/.test(fig.skel.note), '«Скелет» — только кости');
   check(fig.man.last?.bones === 0 && fig.man.last.muscles === 0 && fig.man.hidden && fig.man.pressed === 'mannequin' && fig.man.saved === 'mannequin', '«Манекен» убирает кости и мышцы, выбор запоминается');
   check(fig.back.last?.muscles === 530 && fig.back.pref === 'anatomy', 'возврат к «Анатомии»');
   check(/Укорачиваясь, мышца утолщается/.test(fig.thanks) && /DAS3/.test(fig.thanks), 'источники костей и мышц — в «О демонстрациях»');

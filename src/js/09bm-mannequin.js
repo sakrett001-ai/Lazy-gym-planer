@@ -1050,9 +1050,15 @@ function reliefAt(tab,h){const H=BACK_RELIEF.h;if(h<=H[0]||h>=H.at(-1))return 0;
    кадра мышц спрашивает рельеф в каждой точке корпуса */
 const RELIEF_DH=.05,RELIEF_H0=BACK_RELIEF.h[0],RELIEF_N=Math.ceil((BACK_RELIEF.h.at(-1)-RELIEF_H0)/RELIEF_DH)+2,RELIEF_T=(()=>{
  const t=new Float64Array(RELIEF_N*2);for(let i=0;i<RELIEF_N;i++){const h=RELIEF_H0+i*RELIEF_DH;t[i*2]=reliefAt(BACK_RELIEF.ridge,h);t[i*2+1]=reliefAt(BACK_RELIEF.scap,h);}return t;})();
+/* профили поперёк (спад к бокам out, валик q1, подъём над лопаткой q2) — тоже таблицей через 0,05 см (от косинусов — меньше
+   0,001 мм): кожа кадра мышц спрашивает рельеф в каждой точке корпуса у кожи */
+const RELIEF_H1=BACK_RELIEF.h.at(-1),RELIEF_DX=.05,RELIEF_X=(()=>{
+ const n=Math.ceil(22/RELIEF_DX)+2,t=new Float64Array(n*3);
+ for(let i=0;i<n;i++){const x=i*RELIEF_DX;t[i*3]=x<13?1:x<22?(1+Math.cos(Math.PI*(x-13)/9))/2:0;t[i*3+1]=x<7.5?(1-Math.cos(Math.PI*x/7.5))/2:1;t[i*3+2]=x<5?0:x<13?(1-Math.cos(Math.PI*(x-5)/8))/2:1;}
+ return t;})();
 function backRelief(h,x,back){
- if(back<=-.1||x>=22||h<=RELIEF_H0||h>=BACK_RELIEF.h.at(-1))return 0;
- const out=x<13?1:(1+Math.cos(Math.PI*(x-13)/9))/2,q1=x<7.5?(1-Math.cos(Math.PI*x/7.5))/2:1,q2=x<5?0:x<13?(1-Math.cos(Math.PI*(x-5)/8))/2:1;
+ if(back<=-.1||x>=22||h<=RELIEF_H0||h>=RELIEF_H1)return 0;
+ const v=x/RELIEF_DX,j=v|0,g=v-j,X=RELIEF_X,o=j*3,out=X[o]+(X[o+3]-X[o])*g,q1=X[o+1]+(X[o+4]-X[o+1])*g,q2=X[o+2]+(X[o+5]-X[o+2])*g;
  const u=(h-RELIEF_H0)/RELIEF_DH,i=u|0,f=u-i,T=RELIEF_T,r=T[i*2]+(T[i*2+2]-T[i*2])*f,sc=T[i*2+1]+(T[i*2+3]-T[i*2+1])*f;
  return smooth((back+.1)/1.1)*out*(r*q1+Math.max(0,sc-r)*q2);
 }

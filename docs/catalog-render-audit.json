@@ -4,5 +4,314 @@
     "drawnPoses": 3322,
     "cameraPoses": 16610
   },
-  "failures": []
+  "failures": [
+    {
+      "exercise": "latpull",
+      "rule": "drawn-region-skin:trap_mid:L",
+      "t": 0.4,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "latpull",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0.5,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "latpullv",
+      "rule": "drawn-region-skin:trap_mid:L",
+      "t": 0,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "latpulluh",
+      "rule": "drawn-region-skin:trap_mid:L",
+      "t": 0.5,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "latpulluh",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0.5,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "cablerowwide",
+      "rule": "drawn-region-skin:trap_mid:L",
+      "t": 0.5,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "cablerowwide",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0.5,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "deadlift",
+      "rule": "drawn-region-skin:trap_mid:L",
+      "t": 0.1,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "deadlift",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0.5,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "shrug",
+      "rule": "drawn-region-skin:trap_mid:L",
+      "t": 0.4,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "shrug",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0.8,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "dbpress",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0.4,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "dbpress",
+      "rule": "drawn-region-skin:trap_mid:L",
+      "t": 0.5,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "ohp",
+      "rule": "drawn-region-skin:trap_upper:L",
+      "t": 0,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "ohp",
+      "rule": "drawn-region-skin:trap_upper:R",
+      "t": 0,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "ohp",
+      "rule": "drawn-region-skin:trap_mid:L",
+      "t": 0.2,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "ohp",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0.2,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "latraise",
+      "rule": "drawn-region-skin:trap_mid:L",
+      "t": 0.4,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "latraise",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0.4,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "bandlatraise",
+      "rule": "drawn-region-skin:trap_mid:L",
+      "t": 0.4,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "bandlatraise",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0.4,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "facepull",
+      "rule": "drawn-region-skin:trap_mid:L",
+      "t": 0.2,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "facepull",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0.4,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "pikepush",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0.1,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "pikepush",
+      "rule": "drawn-region-skin:trap_mid:L",
+      "t": 0.3,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "chinup",
+      "rule": "drawn-region-skin:trap_mid:L",
+      "t": 0,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "chinup",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0.6,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "arnold",
+      "rule": "drawn-region-skin:trap_mid:L",
+      "t": 0.3,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "arnold",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0.3,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "cablelat",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0.4,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "reversefly",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0.6,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "bandfacepull",
+      "rule": "drawn-region-skin:trap_mid:L",
+      "t": 0.2,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "bandfacepull",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0.4,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "declinepike",
+      "rule": "drawn-region-skin:trap_mid:L",
+      "t": 0,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "declinepike",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "ytw",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0.2,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "reversesnow",
+      "rule": "drawn-region-skin:trap_mid:L",
+      "t": 0.1,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "reversesnow",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0.1,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "assistpull",
+      "rule": "drawn-region-skin:trap_mid:L",
+      "t": 0,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "assistpull",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0.7,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "shoulderpressm",
+      "rule": "drawn-region-skin:trap_mid:L",
+      "t": 0,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "shoulderpressm",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "smithohp",
+      "rule": "drawn-region-skin:trap_mid:L",
+      "t": 0,
+      "width": 900,
+      "height": 650
+    },
+    {
+      "exercise": "smithohp",
+      "rule": "drawn-region-skin:trap_mid:R",
+      "t": 0,
+      "width": 900,
+      "height": 650
+    }
+  ]
 }

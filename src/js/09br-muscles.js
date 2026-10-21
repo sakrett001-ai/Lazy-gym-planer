@@ -393,7 +393,7 @@ const Muscles = (() => {
   const SD = new Float64Array(3);
   let NODIR = 0;
   /* состояние кожи кадра: матрицы, закрутка предплечий, центры «шапок», плечевой пояс, складки подмышки, шея */
-  const SKN = { S: null, m: null, tw: new Float64Array(4), cap: new Float64Array(36), gd: new Float64Array(6), gk: new Float64Array(2), gm: new Float64Array(2), fold: new Float64Array(6 * 10), cush: null, cushS: null, cushB: 0, tsl: new Float64Array(2), rm: 0, neck: new Float64Array(18), hand: new Int32Array(2), foot: new Int32Array(2) };
+  const SKN = { S: null, m: null, tw: new Float64Array(4), cap: new Float64Array(36), gd: new Float64Array(6), gk: new Float64Array(2), gm: new Float64Array(2), fold: new Float64Array(6 * 10), cush: null, cushS: null, cushB: 0, tsl: new Float64Array(2), rm: 0, rh0: 0, rh1: 0, neck: new Float64Array(18), hand: new Int32Array(2), foot: new Int32Array(2) };
   function bindSkin(md, bound, idx, skel) {
     if (!MQ || !md.muscles.some(mu => mu.skp)) return null;
     const bone = (n, s = '') => { const i = idx.get(n + '|' + s); if (i === undefined) throw Error('muscles: skin bone ' + n + ' ' + s); return i; };
@@ -524,7 +524,7 @@ const Muscles = (() => {
     { let ak = 0; for (let j = 0; j < 6; j++) ak = Math.max(ak, SKN.fold[j * 10 + 7]);
       for (let k = 0; k < 2; k++) SKN.tsl[k] = 2 * SKN.gm[k] + ak + SKN.cushB + .3;
       /* наибольший подъём кожи спины (Mannequin.BACK_RELIEF) — к оценке добавляется только у точек сзади (torsoPart) */
-      SKN.rm = Math.max(...MQ.BACK_RELIEF.ridge, ...MQ.BACK_RELIEF.scap); }
+      SKN.rm = Math.max(...MQ.BACK_RELIEF.ridge, ...MQ.BACK_RELIEF.scap); SKN.rh0 = MQ.BACK_RELIEF.h[0] - .5; SKN.rh1 = MQ.BACK_RELIEF.h.at(-1) + .5; }
     /* шея (Mannequin.neckSDF): ось — от основания (рамка шеи: −1 по y, +2,5 по z) к точке в черепе (+1,5 по y рамки головы) */
     { const n = S.neck.cerv * 12, hd = S.neck.skull * 12, N = SKN.neck;
       const lx = m[n + 3] - m[n + 1] + m[n + 2] * 2.5, ly = m[n + 7] - m[n + 5] + m[n + 6] * 2.5, lz = m[n + 11] - m[n + 9] + m[n + 10] * 2.5;
@@ -658,7 +658,8 @@ const Muscles = (() => {
            верх), они приближают кожу не больше чем на SKN.tsl; если и так дальше лучшей части (с запасом HEAD_SKIP, как у
            головы), корпус дальше не считается */
         /* рельеф спины (Mannequin.backRelief) поднимает кожу только сзади (луч назад, доля больше −0,1) — не больше RELIEF_MAX */
-        if (best < Infinity) { const lb = Math.max(q0, h - S.top) - SKN.tsl[sd] - (lz < .1 * r0 + 2 * SKN.gm[sd] ? SKN.rm : 0); if (lb > best + (NODIR ? 0 : HEAD_SKIP)) return lb; } }
+        /* рельеф — только на высотах таблицы (с запасом на сдвиг надплечий) */
+        if (best < Infinity) { const gm2 = 2 * SKN.gm[sd], lb = Math.max(q0, h - S.top) - SKN.tsl[sd] - (lz < .1 * r0 + gm2 && h > SKN.rh0 - gm2 && h < SKN.rh1 + gm2 ? SKN.rm : 0); if (lb > best + (NODIR ? 0 : HEAD_SKIP)) return lb; } }
       /* надплечья: кожа сдвинута за плечевым поясом (girdleShift) — расстояние от точки, сдвинутой обратно: неподвижная точка
          q = p − сдвиг(q) (Mannequin.torsoSDF: до 10 шагов), до 0,3 мм; начало — с доли сдвига прошлой точки этой стороны (кольца
          одной мышцы идут подряд) */
