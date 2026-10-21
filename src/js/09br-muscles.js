@@ -192,6 +192,8 @@ const Muscles = (() => {
       /* стенка, лента или колпак линии и число колец (bindWalls, bindFans, bindCaps) — сразу в объекте: у всех линий одна форма
          объекта, и обращения к ним в циклах по линиям не замедляются */
       wall: null, wallK: 0, fan: null, fanK: 0, cap: null, capK: 0, rings: 0,
+      /* точка на лопатке, за которой рисованный путь огибает нижний угол (sling), −1 — нет */
+      sling: SLING.has(mu.name.replace(/_[rl]$/, '')) ? mu.el.findIndex(e => e.s && e.s.bone[0] === 'scapula') : -1,
       /* соседние брюшки (CONTACT): номера линий-соседей своей стороны */
       contact: null
     }));
@@ -241,8 +243,41 @@ const Muscles = (() => {
   function layout(bound, m, step = Infinity) { return bound.map(mu => path(place(mu, m), step)); }
   /* путь для рисования тела мышцы: у мышц с широким мясистым началом вдоль кости — продлён до начала брюшка x0
      (точка в рамке первой кости пути, tools/muscles/volumes.js, ORIGIN); длина и сухожилия (body) — по нему же */
+  /* нижний угол лопатки под широчайшей: поясничный пучок LAT4 ложится на нижний угол (tools/muscles/anatomy.js), но его
+     точка на лопатке (P3 пути MoBL-ARMS) — у латерального края, в 4–5 см от угла кости скелета. В нейтральной позе пучок
+     от неё к L3 проходит ниже угла (на 4 см), а с поворотом лопатки вверх при руке выше головы (ритм этапа Д) угол выходит
+     за пучок (на 0,6–1 см), и край ленты открывал его. Широчайшая проходит над нижним углом лопатки (Gray's Anatomy, 1918:
+     мышца идёт над нижним углом и часто получает от него несколько волокон) и скользит по нему, поэтому рисованный путь
+     пучка огибает угол: где отрезок от точки на лопатке к следующей точке пересекает ось «корень ости → нижний угол» ближе
+     к корню, чем сам угол, в путь добавляется точка этой оси у угла (в плоскости лопатки; глубину дают пол и кожа ленты),
+     полоса пучка закрывает угол и край над ним. Запас за углом не нужен: с ним пучок уходил от соседнего LAT3, и над
+     подвздошно-рёберной открывалась щель. На пороге точка лежит на самом отрезке — путь меняется непрерывно. Длина и работа
+     мышцы (layout) не меняются — только рисунок. Ориентиры лопатки — Mannequin.GIRDLE (09bm-mannequin.js), рамка кости
+     лопатки скелета, правая сторона. */
+  const SLING = new Set(['LAT4']), SCAP_TS = [-4.91, -4.46, -12.65], SCAP_AI = [-7.45, -11.79, -13.71], SCAP_AA = [-17.37, 0.35, -4.84];
+  const SL_E1 = (() => { const a = [0, 1, 2].map(k => SCAP_AI[k] - SCAP_TS[k]); normalize(a); return a; })();
+  const SL_E2 = (() => { const a = [0, 1, 2].map(k => SCAP_AI[k] - SCAP_TS[k]), b = [0, 1, 2].map(k => SCAP_AA[k] - SCAP_TS[k]), n = cross3(a, b); normalize(n); const e = cross3(n, SL_E1); normalize(e); return e; })();
+  const SL_A = Math.hypot(SCAP_AI[0] - SCAP_TS[0], SCAP_AI[1] - SCAP_TS[1], SCAP_AI[2] - SCAP_TS[2]);
+  function sling(mu, m, pl) {
+    const j = mu.sling, nx = pl[j + 1];
+    if (!nx || !nx.s) return pl;
+    const i = mu.el[j].s.i, o = i * 12, g = mu.side === 'L' ? -1 : 1, S = mu.el[j].s.p;
+    /* следующая точка — в рамку лопатки */
+    const R = inv3([m[o], m[o + 1], m[o + 2], m[o + 4], m[o + 5], m[o + 6], m[o + 8], m[o + 9], m[o + 10]]);
+    const d = [nx.s[0] - m[o + 3], nx.s[1] - m[o + 7], nx.s[2] - m[o + 11]];
+    const Q = [R[0] * d[0] + R[1] * d[1] + R[2] * d[2], R[3] * d[0] + R[4] * d[1] + R[5] * d[2], R[6] * d[0] + R[7] * d[1] + R[8] * d[2]];
+    const e2 = (p) => g * (p[0] - g * SCAP_TS[0]) * SL_E2[0] + (p[1] - SCAP_TS[1]) * SL_E2[1] + (p[2] - SCAP_TS[2]) * SL_E2[2];
+    const bS = e2(S), bQ = e2(Q);
+    if (bS * bQ > 0 || bS === bQ) return pl;
+    const s = bS / (bS - bQ), X = [0, 1, 2].map(k => S[k] + s * (Q[k] - S[k]));
+    const need = SL_A - (g * (X[0] - g * SCAP_TS[0]) * SL_E1[0] + (X[1] - SCAP_TS[1]) * SL_E1[1] + (X[2] - SCAP_TS[2]) * SL_E1[2]);
+    if (need <= 0) return pl;
+    const V = [X[0] + g * SL_E1[0] * need, X[1] + SL_E1[1] * need, X[2] + SL_E1[2] * need];
+    const out = pl.slice(); out.splice(j + 1, 0, { s: apply(m, i, V) });
+    return out;
+  }
   function drawn(mu, m, step = Infinity) {
-    const p = path(place(mu, m), step);
+    const pl = place(mu, m), p = path(mu.sling >= 0 ? sling(mu, m, pl) : pl, step);
     if (!mu.x0) return p;
     const a = apply(m, mu.el[0].s.i, mu.x0);
     return { length: p.length + dist3(a, p.points[0]), points: [a, ...p.points] };
@@ -2913,7 +2948,7 @@ const Muscles = (() => {
     pending = bytes.then(gunzip).then(decode).then(d => (data = d)).catch(e => { pending = null; throw e; });
     return pending;
   }
-  return { path, wrap, bind, place, layout, drawn, layoutDrawn, body, radiusAt, skinAt, skinPart, skinFrame, section, surface, ribbon, ribbonRing, wallSurface, shellR, surfaceAll, ringCount, ringStarts, sheetNormals, sheetMesh, FANS, SIDES, SKIN_U, SKIN_GAP, FLAT, SPINDLE, SPINDLE_I, load, decode, get data() { return data; }, set data(d) { data = d; } };
+  return { path, wrap, bind, place, layout, drawn, layoutDrawn, SCAP_LM: { ts: SCAP_TS, ai: SCAP_AI, aa: SCAP_AA }, body, radiusAt, skinAt, skinPart, skinFrame, section, surface, ribbon, ribbonRing, wallSurface, shellR, surfaceAll, ringCount, ringStarts, sheetNormals, sheetMesh, FANS, SIDES, SKIN_U, SKIN_GAP, FLAT, SPINDLE, SPINDLE_I, load, decode, get data() { return data; }, set data(d) { data = d; } };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = Muscles;
 if (typeof window !== 'undefined') window.Muscles = Muscles;
