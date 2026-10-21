@@ -14,7 +14,9 @@ function ctx(equipment) {
     lerp: (a, b, t) => a + (b - a) * t,
     mixV: (a, b, t) => V.mix(a, b, t),
     ease: t => .5 - .5 * Math.cos(Math.PI * Math.max(0, Math.min(1, t))),
-    base() { return M.neutral(); },
+    /* нейтральная стойка. Плечевой пояс в спецификациях до этапа Д — углы ключицы (girdleMode 'abs', см. Mannequin.resolveGirdle):
+       лопатка идёт по ритму и рёбрам, ключица — по заданным углам. C.rhythm переводит сторону на ритм со смещениями. */
+    base() { const q = M.neutral(); q.girdleMode = { L: 'abs', R: 'abs' }; return q; },
     fk: q => M.fk(q),
     /* корень: положение таза и оси (up — вдоль позвоночника к голове, fwd — вперёд от живота) */
     root(q, p, up, fwd) { q.root.p = [...p]; q.root.q = M.rootFromAxes(up, fwd); return q; },
@@ -23,12 +25,10 @@ function ctx(equipment) {
     trunk(q, flex = 0, lat = 0, rot = 0, lumbarShare = .55) {
       q.lumbar = [flex * lumbarShare, lat * .5, rot * .3]; q.thoracic = [flex * (1 - lumbarShare), lat * .5, rot * .7]; return q;
     },
-    /* лопаточно-плечевой ритм: поднимание пояса растёт с высотой руки (≈1:2 выше 30°) */
-    rhythm(q, s, extra = [0, 0]) {
-      const f = M.fk(q), hum = V.unit(V.sub(f.P['el' + s], f.P['gh' + s])), down = V.scale(M3.col(f.F.thorax.R, 1), -1);
-      const elev = V.angle(hum, down), fwd = V.dot(hum, M3.col(f.F.thorax.R, 2));
-      q[s].girdle = [M.clamp(Math.max(0, elev - 30) * .22 + extra[0], -10, 38), M.clamp(fwd * 8 + extra[1], -20, 26)]; return q;
-    },
+    /* плечевой пояс стороны s по ритму (Mannequin.RHYTHM: ключица и лопатка идут за подъёмом плеча) со смещениями
+       offsets [поднимание +, протракция +] сверх ритма: опускание и сведение лопаток — минус. Ритм считается в кинематике
+       манекена по углам плеча, поэтому порядок вызова (до или после постановки руки) не важен. */
+    rhythm(q, s, offsets = [0, 0]) { q.girdleMode = { ...(q.girdleMode || {}), [s]: 'rhythm' }; q[s].girdle = [...offsets]; return q; },
     /* точки поверхности тела по областям — во внутренних координатах. Кожа — без складок подмышки (Mannequin.FOLDS):
        складка — мягкая ткань над широчайшей и большой грудной, на опоре она сминается, тело опирается на лопатки и рёбра */
     region(q, name) { return M.noFolds(() => C.regionOf(q, name)); },
@@ -176,6 +176,14 @@ function ctx(equipment) {
     solve1D(f, lo, hi, it = 40) { let a = lo, b = hi, fa = f(a); for (let i = 0; i < it; i++) { const m = (a + b) / 2, fm = f(m); if (fa * fm <= 0) b = m; else { a = m; fa = fm; } } return (a + b) / 2; },
     /* точка передней поверхности корпуса по средней линии на высоте h */
     chestPoint(q, h, ang = 0) { const R = M.catalogPose(q); return fromCat(M.noFolds(() => M.torsoPoint(R, h, 'L', ang))); },
+    /* f без подсказки ритма запекания (Mannequin.rhythmHint): раскладки (once) считают пояс по своим рукам */
+    unhinted(f) { const h = M.rhythmHint(null); try { return f(); } finally { M.rhythmHint(h); } },
+    /* Плечевой сустав стороны s, когда рука тянется запястьем к точке p: с этапа Д сустав идёт за рукой по ритму пояса
+       (лопатка поворачивается вверх, ключица поднимается), и раскладкам, которые подбирают корпус по досягаемости опоры,
+       нужен сустав при поставленной руке, а не при опущенной. Рука ставится на копии позы (не дотянувшись — вытянута к p). */
+    ghToward(q, s, p, pole = [0, -1, 0]) {
+      return C.unhinted(() => { const t = M.clone(q); for (let k = 0; k < 2; k++) M.solveArmWrist(t, s, p, pole, null); return M.fk(t).P['gh' + s]; });
+    },
     /* Свободная рука: запястье в точку, кисть продолжает предплечье (pron — пронация, wrist — [сгиб., откл.]) */
     armTo(q, s, wrist, pole, opts = {}) {
       const r = M.solveArmWrist(q, s, wrist, pole, null);

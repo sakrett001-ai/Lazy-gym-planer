@@ -63,7 +63,7 @@ function plankBody(C, theta = PLANK.theta) {
   C.rootAtShoulders(q, [0, MAT + 55.6, PLANK.handZ - 8]);
   return q;
 }
-function plankHands(C, q, hx = PLANK.handX, turn = -.18, hz = PLANK.handZ) {
+function plankHands(C, q, hx = PLANK.handX, turn = -.22, hz = PLANK.handZ) {
   const { V } = C;
   for (const s of S) {
     const lat = C.lat(q, s), fingers = V.unit([sgn(s) * turn, 0, 1]);
@@ -129,7 +129,9 @@ const burpeeLayout = C => BURPEE.layout || (BURPEE.layout = (() => {
   let q = burpeeSquatBody(C, [0, 40, -50]);
   /* опора на подушечки стоп: высота таза — по нижней точке подушечки */
   const ball0 = C.fk(q).P.ballL, y = 40 - (ball0[1] - (MAT + 2));
-  const zH = C.solve1D(z => BURPEE.reach - V.dist(C.fk(burpeeSquatBody(C, [0, y, z])).P.ghL, wr), -95, -20);
+  /* плечевой сустав идёт за лопаткой (этап Д: ритм пояса по подъёму руки) — длина руки меряется с ладонями на коврике */
+  const withHands = q => { try { plankHands(C, q, BURPEE.handX, BURPEE.turn, BURPEE.handZ); } catch (e) { /* не дотягивается */ } return q; };
+  const zH = C.solve1D(z => BURPEE.reach - V.dist(C.fk(withHands(burpeeSquatBody(C, [0, y, z]))).P.ghL, wr), -95, -20);
   q = burpeeSquatBody(C, [0, y, zH]);
   const b = C.fk(q).P.ballL;
   return { root: [0, y, zH], ball: [b[0], MAT, b[2]], plank: plankLayout(C) };
@@ -209,7 +211,15 @@ function burpeePose(C, t) {
   /* кисти подходят к коврику сверху и разворачиваются ладонями вниз */
   const v = t / T.hands, W = C.lerp(156, aS, trap(v, .2)), reach = C.lerp(54, rS, smooth(v)), hand = smooth((v - .6) / .4);
   const o = { lift: 14 * (1 - smooth((v - .76) / .24)), pron: 75 * hand, ext: -62 * hand };
-  for (const s of S) { armWorld(C, q, s, W, reach, o); C.rhythm(q, s); armWorld(C, q, s, W, reach, o); }
+  /* к касанию коврика пояс переходит к поясу приседа (углы ключицы [4, 12], как в burpeeSquatBody): по ритму у руки,
+     поднятой вперёд на 115–130°, ключица сведена на 15–17°, а в приседе с ладонями на коврике — вынесена вперёд на 12°;
+     без перехода между ключами 0,6 и 0,64 она уходила вперёд на 28°, и ладони между ключами не доставали коврика */
+  const k = smooth((v - .7) / .3);
+  for (const s of S) {
+    armWorld(C, q, s, W, reach, o); C.rhythm(q, s);
+    if (k > 0) { const c = C.M.resolveGirdle(q, s).clav; q.girdleMode = { ...q.girdleMode, [s]: 'abs' }; q[s].girdle = [C.lerp(c[0], 4, k), C.lerp(c[1], 12, k)]; }
+    armWorld(C, q, s, W, reach, o);
+  }
   return q;
 }
 

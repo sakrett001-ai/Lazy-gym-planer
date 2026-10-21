@@ -172,15 +172,18 @@ const tiltBack = (C, q, a, face) => { const r = a * D2R; return C.root(q, q.root
    face — куда смотрит тело (±1 по Z), grip — 'over' (прямой) или 'under' (обратный), w — полуширина хвата. */
 function hangPose(C, q, { face = 1, grip = 'over', w = 30, drop = 60, pole }) {
   const { V } = C;
-  const place = dz => {
-    C.rootAtShoulders(q, [0, BAR[1] - Math.sqrt(drop * drop - dz * dz), BAR[2] + dz]);
-    for (const s of S) {
-      const lat = C.lat(q, s), th = grip === 'over' ? V.scale(lat, -1) : lat;
-      C.grip(q, s, V.add(BAR, lat, w), th, pole ? pole(q, s, lat) : V.unit(V.add(V.add([0, -1, 0], lat, 1.0), [0, 0, face], .25)));
+  /* плечевые суставы идут за лопатками (ритм пояса): сначала руки к перекладине, потом плечи на место и руки ещё раз */
+  const place = (dz, strict) => {
+    for (const pass of [0, 1, 2, 3]) {
+      C.rootAtShoulders(q, [0, BAR[1] - Math.sqrt(drop * drop - dz * dz), BAR[2] + dz]);
+      for (const s of S) {
+        const lat = C.lat(q, s), th = grip === 'over' ? V.scale(lat, -1) : lat;
+        C.grip(q, s, V.add(BAR, lat, w), th, pole ? pole(q, s, lat) : V.unit(V.add(V.add([0, -1, 0], lat, 1.0), [0, 0, face], .25)), { allowShort: !strict || pass < 3 });
+      }
     }
   };
   const dz = C.solve1D(z => { place(z); return C.com(q)[2] - BAR[2]; }, -22, 22);
-  place(dz);
+  place(dz, true);
   return q;
 }
 
@@ -435,6 +438,16 @@ function scsPose(C, heel, shZ = null) {
 }
 /* рукояти на каретке: вперёд от плеч dz, ниже плеч dy, ось — вверх с наклоном назад */
 const SCS_HD = { x: 26, dz: 28, dy: -12 };
+/* кисти на рукоятях. Плечевой пояс идёт за подъёмом рук (этап Д: лопатка поворачивается вверх, плечевые суставы и кожа
+   надплечий — за ней), поэтому упоры подгоняются по плечам с руками на рукоятях */
+function scsArms(C, q) {
+  const { V } = C, f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5);
+  for (const s of S) {
+    const lat = C.lat(q, s), g = [C.M.SIGN[s] * SCS_HD.x, gh[1] + SCS_HD.dy, gh[2] + SCS_HD.dz];
+    C.grip(q, s, g, V.unit([0, .9, -.4]), V.unit(V.add(V.add([0, -1, 0], lat, .3), [0, 0, 1], .3)));
+  }
+  return q;
+}
 const SCS_Z = once(() => { const C = ctx([]), f = C.fk(scsPose(C, 0)); return (f.P.ghL[2] + f.P.ghR[2]) / 2; });
 /* профиль верха плеч: наибольшая высота поверхности корпуса над полосой |x| ≈ x0 (до h = 50 — зона упора) */
 function shoulderTopAt(C, q, x0, hMax = 53.8) {
@@ -445,14 +458,16 @@ function shoulderTopAt(C, q, x0, hMax = 53.8) {
   return best;
 }
 const SCS_L = once(() => {
-  const C = ctx([]), { V } = C, q = scsPose(C, 0), f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5);
+  const C = ctx([]), { V } = C, q = scsArms(C, scsPose(C, 0)), f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5);
   /* упор наклонён по трапециевидной: прямая через верх плеч на |x| = 9 и 16 см */
   /* наклон — по верху плеч от |x| = 9 до 19,5 см (наружный край упора над дельтовидной), высота — в середине упора (|x| = 12,5) */
   const y9 = shoulderTopAt(C, q, 9, 56.8), yOut = shoulderTopAt(C, q, 19.5);
   const th = Math.atan2(y9 - yOut, 10.5), yc = y9 + (yOut - y9) * 3.5 / 10.5 - gh[1];
-  /* упоры вдавливаются в верх плеч на 0,8 см (до 4.41.0 — на 1 см), как у гакк-машины: с валиком трапециевидной 4.41.0
-     внутренний край упора уходил в кожу на 3,9 см при допуске мягкой опоры 4 см */
-  return { dz: gh[2] - SCS.zr, padZ: yc - .8, th };
+  /* упоры вдавливаются в верх плеч на 0,3 см (до этапа Д — на 0,8, до 4.41.0 — на 1 см), как у гакк-машины: с валиком
+     трапециевидной 4.41.0 внутренний край упора уходил в кожу на 3,9 см при допуске мягкой опоры 4 см; с этапа Д кожа
+     надплечий у точки на луче от оси сечения сдвигается так же, как кожа на этом луче, и знаковое расстояние в толще
+     валика у основания шеи глубже на 0,5 см (по вертикали до кожи — те же 3,6 см) */
+  return { dz: gh[2] - SCS.zr, padZ: yc - .3, th };
 });
 
 /* ================= Гакк-машина ================= */
@@ -600,12 +615,7 @@ module.exports = {
     contacts: [{ body: 'soleL', prop: 'cs:stepTop' }, { body: 'soleR', prop: 'cs:stepTop' }, { body: 'upperBack', prop: 'csSled:padL' }, { body: 'upperBack', prop: 'csSled:padR' },
       { body: 'gripL', prop: 'csSled:handleL' }, { body: 'gripR', prop: 'csSled:handleR' }],
     pose(t, C) {
-      const { V } = C, L = SCS_L(), e = C.ease(t), q = scsPose(C, C.lerp(-6.5, 30, e), SCS_Z()), f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5);
-      for (const s of S) {
-        const lat = C.lat(q, s), g = [C.M.SIGN[s] * SCS_HD.x, gh[1] + SCS_HD.dy, gh[2] + SCS_HD.dz];
-        C.grip(q, s, g, V.unit([0, .9, -.4]), V.unit(V.add(V.add([0, -1, 0], lat, .3), [0, 0, 1], .3)));
-      }
-      return q;
+      return scsArms(C, scsPose(C, C.lerp(-6.5, 30, C.ease(t)), SCS_Z()));
     }
   },
 
@@ -702,7 +712,7 @@ module.exports = {
     pose(t, C) {
       const { V } = C, L = SPM(), e = C.ease(t), q = C.M.clone(L.q), th = C.lerp(L.th0, L.th1, e);
       for (const s of S) {
-        q[s].girdle = [C.lerp(4, 9, e), C.lerp(0, 3, e)];
+        C.rhythm(q, s, [0, C.lerp(0, 2, e)]); /* пояс по ритму (этап Д: подъём плеч и поворот лопатки — от подъёма руки), сверх него — лёгкая протракция */
         const lat = C.lat(q, s), g = arcPt(L.P, L.R, th, C.M.SIGN[s] * L.hx);
         const pole = V.unit(V.add(V.add(V.scale(lat, C.lerp(.5, 1, e)), [0, -1, 0], C.lerp(1, .3, e)), [0, 0, 1], C.lerp(.6, .3, e)));
         C.grip(q, s, g, V.scale(lat, -1), pole, { wristExt: C.lerp(10, 2, e) });
@@ -766,7 +776,7 @@ module.exports = {
       for (const s of S) {
         q[s].girdle = [C.lerp(18, -6, e), C.lerp(4, -10, e)];
         const lat = C.lat(q, s);
-        C.grip(q, s, [C.M.SIGN[s] * 30, g.y, g.z], V.scale(lat, -1), V.unit(V.add(V.add([0, -1, 0], lat, 0.8), [0, 0, 1], .2)));
+        C.grip(q, s, [C.M.SIGN[s] * 30, g.y, g.z], V.scale(lat, -1), V.unit(V.add(V.add([0, -1, 0], lat, 0.65), [0, 0, 1], .2)));
       }
       return q;
     }
@@ -837,8 +847,9 @@ module.exports = {
       const q = C.base();
       C.root(q, [0, 100, BAR[2] - 2], [0, 1, 0], [0, 0, 1]);
       q.lumbar = [-2, 0, 0]; q.neck = [-2, 0, 0];
-      for (const s of S) { q[s].hip = [6, 3, 4]; q[s].knee = 14; q[s].ankle = [-25, 0]; q[s].girdle = [10, 2]; }
-      return hangPose(C, q, { face: 1, grip: 'over', w: 29, drop: 62.2 });
+      /* «активный вис: плечи слегка опущены от ушей» — пояс по ритму, опущен */
+      for (const s of S) { q[s].hip = [6, 3, 4]; q[s].knee = 14; q[s].ankle = [-25, 0]; C.rhythm(q, s, [-6, 0]); }
+      return hangPose(C, q, { face: 1, grip: 'over', w: 29, drop: 61.8 });
     }
   },
 
@@ -853,8 +864,8 @@ module.exports = {
       C.root(q, [0, 100, BAR[2]], [0, 1, 0], [0, 0, -1]);
       tiltBack(C, q, C.lerp(0, 32, e), -1);
       q.lumbar = [C.lerp(-2, 20, e), 0, 0]; q.thoracic = [C.lerp(0, 10, e), 0, 0]; q.neck = [C.lerp(-2, 8, e), 0, 0];
-      for (const s of S) { q[s].hip = [C.lerp(4, 62, e), 3, 3]; q[s].knee = C.lerp(8, 10, e); q[s].ankle = [C.lerp(-25, -20, e), 0]; q[s].girdle = [C.lerp(10, 16, e), 4]; }
-      return hangPose(C, q, { face: -1, grip: 'over', w: 29, drop: 62 });
+      for (const s of S) { q[s].hip = [C.lerp(4, 62, e), 3, 3]; q[s].knee = C.lerp(8, 10, e); q[s].ankle = [C.lerp(-25, -20, e), 0]; C.rhythm(q, s, [-6, 0]); } /* «вис, лопатки опущены» — пояс по ритму, опущен */
+      return hangPose(C, q, { face: -1, grip: 'over', w: 29, drop: 61.6 });
     }
   },
 
@@ -868,8 +879,8 @@ module.exports = {
       C.root(q, [0, 100, BAR[2]], [0, 1, 0], [0, 0, -1]);
       tiltBack(C, q, C.lerp(0, 42, e), -1);
       q.lumbar = [C.lerp(-2, 24, e), 0, 0]; q.thoracic = [C.lerp(0, 12, e), 0, 0]; q.neck = [C.lerp(-2, 10, e), 0, 0];
-      for (const s of S) { q[s].hip = [C.lerp(6, 92, e), 4, 4]; q[s].knee = C.lerp(14, 112, e); q[s].ankle = [C.lerp(-25, -15, e), 0]; q[s].girdle = [C.lerp(10, 16, e), 4]; }
-      return hangPose(C, q, { face: -1, grip: 'over', w: 29, drop: 62 });
+      for (const s of S) { q[s].hip = [C.lerp(6, 92, e), 4, 4]; q[s].knee = C.lerp(14, 112, e); q[s].ankle = [C.lerp(-25, -15, e), 0]; C.rhythm(q, s, [-6, 0]); } /* «вис, лопатки опущены» — пояс по ритму, опущен */
+      return hangPose(C, q, { face: -1, grip: 'over', w: 29, drop: 61.6 });
     }
   },
 

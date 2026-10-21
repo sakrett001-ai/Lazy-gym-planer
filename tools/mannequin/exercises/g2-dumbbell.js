@@ -188,9 +188,9 @@ function ohextKey(t, C, prev) {
     const f = C.fk(q), head = f.P.head, gh = V.mix(f.P.ghL, f.P.ghR, .5);
     /* верхний диск идёт по дуге вокруг локтей: над головой → за затылок. Центр дуги — на 1,9 см впереди центра головы
        (до 4.38.0 — 2 см: с осью шеи у тел позвонков голова при наклоне 4–10° стоит на 0,1–0,2 см впереди, дуга — на месте) */
-    const E = [0, gh[1] + 26, head[2] + 1.9], th = C.lerp(-15.6, 96, Math.pow(e, .8)) * C.D2R, r = e < .5 ? 26 + 2 * Math.sin(Math.PI * e) : C.lerp(26, 20, (e - .5) * 2);
+    const E = [0, gh[1] + 25, head[2] + 1.9], th = C.lerp(-15.6, 96, Math.pow(e, .8)) * C.D2R, r = e < .5 ? 26 + 2 * Math.sin(Math.PI * e) : C.lerp(26, 20, (e - .5) * 2);
     const P = V.add(E, [0, Math.cos(th), -Math.sin(th)], r), tilt = C.lerp(18, 12, e) * C.D2R;
-    chosen = cup(C, q, P, [0, Math.cos(tilt), Math.sin(tilt)], [0, 0, -1], { w: 5.8, cands: () => cands, prev, lam: 25,
+    chosen = cup(C, q, P, [0, Math.cos(tilt), Math.sin(tilt)], [0, 0, -1], { w: 5.8, stag: 3.8, cands: () => cands, prev, lam: 25,
       prefer: (q, s) => { const el = C.fk(q).P['el' + s]; return 1.2 * Math.max(0, Math.abs(el[0]) - 12) ** 2; } });
   };
   settle(C, q, { lo: 1, hi: 7, loads: q => [[C.fk(q).P.gripL, 12]], resolve: q => { feet(q); arms(q); } });
@@ -319,11 +319,15 @@ module.exports = {
       const along = q => { const f = C.fk(q), a = f.P.hipL, b = f.P.knL, ab = V.sub(b, a); return V.dot(V.sub(elbowOf(q), a), ab) / V.dot(ab, ab); };
       const lean = C.solve1D(l => along(seat(l)) - .8, 15, 60);
       const q = seat(lean);
-      const f = C.fk(q), gh = f.P.ghL, E = elbowOf(q);
-      const u = V.unit(V.add(V.sub(E, gh), [-1, 0, 0], 6)), w = V.unit(V.perp(V.sub(V.add(gh, [3, 0, 16]), E), u)), phi = C.lerp(10, 114, e) * C.D2R;
-      const d = V.unit(V.add(V.scale(u, Math.cos(phi)), w, Math.sin(phi))), grip = V.add(E, d, 35.6);
       q.L.girdle = [0, 8];
-      C.hold(q, 'L', grip, V.unit(V.add(V.sub(E, V.mix(gh, grip, .5)), [1, 0, 0], .3)), { pron: C.lerp(-45, -86, e * e) });
+      /* плечевой сустав идёт за лопаткой (этап Д: поворот лопатки — от подъёма руки), поэтому локоть и гантель ставятся
+         дважды — второй раз от плечевого сустава опущенной руки */
+      for (const pass of [0, 1]) {
+        const f = C.fk(q), gh = f.P.ghL, E = elbowOf(q);
+        const u = V.unit(V.add(V.sub(E, gh), [-1, 0, 0], 6)), w = V.unit(V.perp(V.sub(V.add(gh, [3, 0, 16]), E), u)), phi = C.lerp(13, 114, e) * C.D2R;
+        const d = V.unit(V.add(V.scale(u, Math.cos(phi)), w, Math.sin(phi))), grip = V.add(E, d, 35.6);
+        C.hold(q, 'L', grip, V.unit(V.add(V.sub(E, V.mix(gh, grip, .5)), [1, 0, 0], .3)), { pron: C.lerp(-45, -86, e * e), allowShort: !pass });
+      }
       /* правая рука: ладонь на правом бедре над коленом — на верхней поверхности бедра (кожа сверху в этом месте, поджатие
          0,2 см). Прежде ладонь ставилась на 7,6 см над осью колена и висела над округлым коленом на 1,4 см, касаясь краем */
       const g2 = C.fk(q), knR = g2.P.knR, hipR = g2.P.hipR, tR = V.unit(V.sub(knR, hipR)), at = V.add(hipR, tR, 36);
@@ -345,11 +349,13 @@ module.exports = {
     pose(t, C) {
       const { V } = C, q = lieOnBench(C, C.base(), { arch: .9 }), e = C.ease(t);
       for (const s of S) q[s].girdle = [C.lerp(-2, 10, e), C.lerp(6, -4, e)];
-      const f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5), th = C.lerp(14, 84, e) * C.D2R;
-      const P = V.add(gh, [0, Math.cos(th), Math.sin(th)], 50);
       /* плавная раскладка: локти от «наружу» к «наружу-вниз-к ногам», пальцы от «к середине» к диагонали */
-      const k = Math.min(1, e / .35), m = Math.max(0, (e - .65) / .35), yw = C.lerp(80, 45, k);
-      cup(C, q, P, [0, 1, 0], [0, 0, 1], { w: 4.8, yaw: [yw, yw], poles: [(s, lat) => V.unit(V.add(V.add(lat, [0, 1, 0], -.6 * k * (1 - (s === 'L' ? 1 : .3) * m)), [0, 0, 1], -.6 * k - .4 * m))] });
+      const k = Math.min(1, e / .35), m = Math.max(0, (e - .65) / .35), yw = C.lerp(80, 45, k), th = C.lerp(14, 84, e) * C.D2R;
+      /* дуга гантели — от плечевых суставов; они идут за лопатками (ритм пояса), поэтому руки ставятся дважды */
+      for (const pass of [0, 1]) {
+        const f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5), P = V.add(gh, [0, Math.cos(th), Math.sin(th)], 50);
+        cup(C, q, P, [0, 1, 0], [0, 0, 1], { w: 4.8, yaw: [yw, yw], poles: [(s, lat) => V.unit(V.add(V.add(lat, [0, 1, 0], -.6 * k * (1 - (s === 'L' ? 1 : .3) * m)), [0, 0, 1], -.6 * k - .4 * m))] });
+      }
       return q;
     }
   },
@@ -364,7 +370,7 @@ module.exports = {
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'gripR', prop: 'dbR', optional: true }],
     gripRadius: { L: 1.4, R: 1.6 },
     pose(t, C, variant) {
-      const { V, M } = C, q = C.base(), e = C.ease(t), lean = C.lerp(2, 76, e), ankL = [4, 0, 0];
+      const { V, M } = C, q = C.base(), e = C.ease(t), lean = C.lerp(2, 75, e), ankL = [4, 0, 0];
       pelvisLean(C, q, [-4, C.lerp(88.3, 86.1, e), C.lerp(0, -16, e)], lean * .9); q.lumbar = [lean * .03, 0, 0]; q.thoracic = [lean * .05, 0, 0]; q.neck = [-lean * .45, 0, 0];
       for (const s of S) q[s].girdle = [0, C.lerp(0, 6, e)];
       const pose2 = q => {
@@ -726,13 +732,15 @@ module.exports = {
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = sitOnAdj(C, C.base(), { lumbar: 2, thoracic: -2, hip: 84, feetZ: -23 });
       q.neck = [2, 0, 0];
-      for (const s of S) q[s].girdle = [C.lerp(4, 18, e), C.lerp(2, 6, e)];
+      /* пояс по ритму без смещений (этап Д: подъём плеч, сведение ключицы и поворот лопатки — от подъёма руки); локти
+         чуть впереди корпуса — «локти уходят назад за корпус» в каталоге ошибка */
+      for (const s of S) C.rhythm(q, s, [0, 0]);
       const f = C.fk(q), T = C.axes(q, 'thorax');
       for (const s of S) {
         const lat = C.lat(q, s), gh = f.P['gh' + s], up = [0, 1, 0], fwd = V.unit(V.perp(T.z, up));
         const bot = V.add(V.add(V.add(gh, lat, 25), up, 21), fwd, 5), top = V.add(V.add(V.add(gh, lat, -1), up, 62.6), fwd, 3);
         const g = V.add(V.mix(bot, top, e), lat, 4 * Math.sin(Math.PI * e));
-        const pole = V.unit(V.add(V.add([0, -1, 0], lat, C.lerp(.9, .6, e)), fwd, -.15));
+        const pole = V.unit(V.add(V.add([0, -1, 0], lat, C.lerp(.9, .6, e)), fwd, .2));
         holdDir(C, q, s, g, pole, lat);
       }
       return q;
@@ -749,7 +757,8 @@ module.exports = {
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = sitOnAdj(C, C.base(), { lumbar: 2, thoracic: -2, hip: 84, feetZ: -23 });
       q.neck = [2, 0, 0];
-      for (const s of S) q[s].girdle = [C.lerp(2, 18, e), C.lerp(10, 6, e)];
+      /* пояс по ритму (этап Д: подъём плеч и поворот лопатки — от подъёма руки), сверх него — лёгкая протракция */
+      for (const s of S) C.rhythm(q, s, [0, C.lerp(8, 4, e)]);
       const f = C.fk(q), T = C.axes(q, 'thorax');
       for (const s of S) {
         const lat = C.lat(q, s), gh = f.P['gh' + s], up = [0, 1, 0], fwd = V.unit(V.perp(T.z, up)), back = V.scale(fwd, -1);

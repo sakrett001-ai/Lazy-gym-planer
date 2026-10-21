@@ -83,6 +83,22 @@ function phaseMemo(e,t,n){
 /* память кожи по фазе: байт на все фигуры, фигур, кадров с полным расчётом кожи (для замеров, проверок и ступеней скорости) */
 export function phaseMemory(){return{bytes:phaseBytes,figures:phaseMem.size,limit:PHASE_MEM,phases:PHASES,misses:phaseMisses};}
 const FLOOR=186;
+/* Слой поверх (этап Д): средняя и нижняя части трапециевидной лежат поверх широчайшей и ромбовидных (Gray's, с. 432–435:
+   широчайшая подкожна, кроме верхней части, которую закрывает трапециевидная). С ритмом пояса при руке над головой корень ости уходит наружу
+   и вверх, пучки трапециевидной ложатся поперёк верха широчайшей, и ленты двух мышц, посчитанные каждая по своему полу, местами
+   заходят одна в другую на 1–2 см — в «Анатомии» оранжевые пятна широчайшей в красной трапециевидной. Сдвигать ленты друг
+   от друга нельзя без перекоса полос (места до кожи мало, тесты лент), поэтому порядок слоёв задаётся рисунком: вершины этих
+   частей при отрисовке смещаются к камере на LAYER_M вдоль луча зрения — на экране они на месте, а в буфере глубины ближе
+   любой мышцы и кости, лежащей под ними не глубже LAYER_M. Геометрия (Muscles.surfaceAll) и проверки — без изменений. */
+const LAYER_PARTS=new Set(['trapmid','trapinf']),LAYER_M=.02;
+function layered(material){
+ material.onBeforeCompile=sh=>{
+  sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute float layer;')
+   .replace('#include <project_vertex>','#include <project_vertex>\n if(layer>0.){vec3 toCam=isOrthographic?vec3(0.,0.,1.):normalize(-mvPosition.xyz);mvPosition.xyz+=toCam*layer*'+LAYER_M.toFixed(3)+';gl_Position=projectionMatrix*mvPosition;}');
+ };
+ material.customProgramCacheKey=()=>'muscle-layer';
+ return material;
+}
 /* Пласты (межрёберные мышцы, данные формата 3 — sheets; Muscles.sheetMesh): жёсткие, каждый — в рамке своей кости.
    Сетки всех пластов одной кости сливаются в одну (один вызов отрисовки; у межрёберных — грудная клетка, 44 пласта,
    ≈ 4 тыс. вершин) и строятся один раз; в кадре меняется только матрица кости — как у слоя костей (skeleton.mjs).
@@ -132,8 +148,10 @@ export function createMuscleLayer(parent){
   geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(nv*3),3).setUsage(THREE.DynamicDrawUsage));
   geo.setAttribute('normal',new THREE.BufferAttribute(new Float32Array(nv*3),3).setUsage(THREE.DynamicDrawUsage));
   geo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(nv*3),3));
+  const layer=new Float32Array(nv);for(let i=0;i<bound.length;i++)if(LAYER_PARTS.has(bound[i].part))layer.fill(1,start[i]*SIDES,start[i+1]*SIDES);
+  geo.setAttribute('layer',new THREE.BufferAttribute(layer,1));
   geo.setIndex(nv>65535?new THREE.Uint32BufferAttribute(idx,1):new THREE.Uint16BufferAttribute(idx,1));
-  if(!material)material=new THREE.MeshStandardMaterial({roughness:.55,metalness:0,vertexColors:true});
+  if(!material)material=layered(new THREE.MeshStandardMaterial({roughness:.55,metalness:0,vertexColors:true}));
   if(mesh){group.remove(mesh);}
   mesh=new THREE.Mesh(geo,material);mesh.name='muscle-bodies';mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=false;group.add(mesh);
   tint=new Array(bound.length).fill(null);

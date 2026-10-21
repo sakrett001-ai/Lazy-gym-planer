@@ -64,10 +64,13 @@ function forearmOnMat(C, q, s, { inward = 14, pron = 15, wristFlex = 0, mode = '
   C.armTo(q, s, W, V.unit(V.sub(E, V.mix(gh, W, .5))), { pron, wrist: [wristFlex, 0], mode });
   return { E, W };
 }
-/* Тело в планке на предплечьях: угол подобран так, чтобы плечо было вертикально над локтем */
-function plankTheta(C, o = {}) {
-  return C.solve1D(th => { const q = proneOnToes(C, { theta: th, ...o }), f = C.fk(q); return (f.P.ghL[1] + f.P.ghR[1]) / 2 - (MAT + ELBOW_H + C.M.B.ua); }, -10, 40);
+/* Тело в планке на предплечьях: угол подобран так, чтобы плечо было вертикально над локтем. Плечевой сустав идёт за
+   лопаткой (этап Д: ритм пояса по подъёму руки), поэтому его высота меряется с руками на коврике (arms — постановка рук) */
+function plankTheta(C, { arms, ...o } = {}) {
+  return C.solve1D(th => { const q = proneOnToes(C, { theta: th, ...o }); if (arms) arms(q); const f = C.fk(q); return (f.P.ghL[1] + f.P.ghR[1]) / 2 - (MAT + ELBOW_H + C.M.B.ua); }, -10, 40);
 }
+/* предплечья на коврике в планке: пояс — старые углы ключицы, руки ставятся дважды (сустав идёт за лопаткой) */
+const plankArms = C => q => { for (const s of S) q[s].girdle = [-2, 8]; for (const pass of [0, 1]) for (const s of S) forearmOnMat(C, q, s); return q; };
 
 /* ---------- Лёжа на спине ----------
    Голова к +Z, живот вверх; левая сторона тела — −X. tilt — задний наклон таза (поясница прижимается), град. */
@@ -240,10 +243,18 @@ function pushLayout(o) {
     return q;
   };
   L.fingers = s => { const a = L.get('out', s) * C.D2R * C.M.SIGN[s]; return [Math.sin(a), 0, Math.cos(a)]; };
-  const palmAt = th => { const f = C.fk(L.body(C, th, 0)); return S.reduce((o, s) => ({ ...o, [s]: [C.M.SIGN[s] * L.get('x', s), MAT, f.P['gh' + s][2] + L.get('ahead', s)] }), {}); };
-  const reachTop = th => { const f = C.fk(L.body(C, th, 0)), P = palmAt(th); return Math.max(...S.filter(s => L.slide?.s !== s).map(s => V.dist(f.P['gh' + s], palmWrist(C, s, P[s], L.fingers(s), [0, 1, 0])) - armSpan(C, L.get('elTop', s)))); };
-  L.thTop = C.solve1D(reachTop, 5, 60);
-  L.palms = palmAt(L.thTop);
+  /* плечевые суставы вверху при ладонях P на коврике: с этапа Д сустав идёт за рукой по ритму пояса (лопатка поворачивается
+     вверх и уходит вперёд), поэтому его место — при поставленных руках, а не при опущенных (иначе вверху локти согнуты на 20–30°) */
+  const ghTop = (th, P) => {
+    const q = L.body(C, th, 0);
+    if (P) { const { up } = proneAxes(th); for (const s of S) { const lat = C.lat(q, s), p = L.get('pole0', s); try { C.palm(q, s, P[s], L.fingers(s), [0, 1, 0], V.unit(V.add(V.add(V.scale(lat, p[0]), [0, 1, 0], p[1]), up, -p[2]))); } catch { /* не дотянулась — рука вытянута к ладони, сустав по ней */ } } }
+    return C.fk(q).P;
+  };
+  const palmsBy = G => S.reduce((o, s) => ({ ...o, [s]: [C.M.SIGN[s] * L.get('x', s), MAT, G['gh' + s][2] + L.get('ahead', s)] }), {});
+  const palmAt = th => { let P = palmsBy(ghTop(th)); for (let k = 0; k < 2; k++) P = palmsBy(ghTop(th, P)); return P; };
+  const reachTop = th => { const P = palmAt(th), G = ghTop(th, P); return Math.max(...S.filter(s => L.slide?.s !== s).map(s => V.dist(G['gh' + s], palmWrist(C, s, P[s], L.fingers(s), [0, 1, 0])) - armSpan(C, L.get('elTop', s)))); };
+  L.thTop = C.unhinted(() => C.solve1D(reachTop, 5, 60));
+  L.palms = C.unhinted(() => palmAt(L.thTop));
   L.thBot = C.solve1D(th => lowest(C, L.body(C, th, 1), 'chest') - L.low, -15, L.thTop);
   return L;
 }
@@ -264,16 +275,23 @@ function pushPose(C, L, e) {
   }
   return q;
 }
-const PUSH = once(() => pushLayout({ x: 29, ahead: 12.7, out: 13.3, elTop: 12, pole0: [.39, -.02, 1.13], pole1: [.54, .57, 1.13], g0: [-6.5, 3.2], g1: [9.3, -13] }));
-/* Узкий хват: ладони на ширине плеч (уже — пронация предплечья за пределом при прижатых локтях), пальцы внутрь */
-const DIAMOND = once(() => pushLayout({ x: 16.5, ahead: 12, out: -35, elTop: 10.8, low: 5, pole0: [1.22, .94, 1.32], pole1: [.38, 1.97, 1.5], g0: [-8.2, 6.3], g1: [0, -15] }));
+/* вверху локти смотрят назад, к стопам (pole0 наружу .1): плечо чуть повёрнуто внутрь, как при локтях под 30–45° к корпусу
+   в опускании; ключица вверху опущена и без протракции (g0 [−6,5; 0]), лопатка — по ритму сгибания (с внутренней ротацией).
+   С поясом этапа Д при локтях наружу (.39) и ключице, выведенной вперёд на 3°, пучки широчайшей у подмышки и ромбовидные
+   у медиального края расходились — между полосами открывались щели 0,73 и 0,80 см (лента не растягивается без щелей) */
+const PUSH = once(() => pushLayout({ x: 29, ahead: 12.7, out: 13.3, elTop: 12, pole0: [.1, -.02, 1.13], pole1: [.54, .57, 1.13], g0: [-6.5, 0], g1: [9.3, -13] }));
+/* Узкий хват: ладони на ширине плеч (уже — пронация предплечья за пределом при прижатых локтях), пальцы внутрь; вверху
+   ключица опущена на 6° (при 8,2° с поясом этапа Д кожа надплечья ложилась на первые межрёберные) */
+const DIAMOND = once(() => pushLayout({ x: 16.5, ahead: 12, out: -35, elTop: 10.8, low: 5, pole0: [1.22, .94, 1.32], pole1: [.38, 1.97, 1.5], g0: [-6, 6.3], g1: [0, -15] }));
 const KNEEPUSH = once(() => pushLayout({ base: 'knees', kneeZ: -22, x: 26, ahead: 14.7, out: 4.7, low: 5.5, elTop: 8.6, pole0: [.28, 1.24, 1.43], pole1: [.12, 1.21, .51], g0: [-.8, 9.9], g1: [10, -3.7] }));
-const WIDEPUSH = once(() => pushLayout({ x: 40, ahead: 18, out: 25, low: 4.2, elTop: 10.9, pole0: [.81, -.22, 1.1], pole1: [.16, 1.32, 1.42], g0: [-9.4, 6.2], g1: [3.8, -15] }));
+/* вверху ключица опущена на 7° (при 9,4° с поясом этапа Д первые межрёберные под ключицей выходили над кожей на 1 мм) */
+const WIDEPUSH = once(() => pushLayout({ x: 40, ahead: 18, out: 25, low: 4.2, elTop: 10.9, pole0: [.81, -.22, 1.1], pole1: [.16, 1.32, 1.42], g0: [-7, 6.2], g1: [3.8, -15] }));
 /* «Лучник»: работает правая рука (ладонь неподвижна, локоть вдоль корпуса), левая выпрямляется и ладонь скользит в сторону;
-   внизу корпус смещён к правой ладони поворотом тела вокруг стоп */
+   внизу корпус смещён к правой ладони поворотом тела вокруг стоп; вверху правая ключица опущена на 7° (при 9,8° с поясом
+   этапа Д первые межрёберные под ключицей выходили над кожей на 1–2 мм) */
 const ARCHER = once(() => pushLayout({ low: 4, slide: { s: 'L', el: 8 }, x: 48.9, ahead: -.3, elTop: 11.2, outL: 82.8, outR: 65, yaw: -7, roll: 2,
-  pole0L: [.25, 1.45, .34], pole1L: [1.62, -.2, .69], g0L: [-.6, 7.8], g1L: [.8, -2.7], pole0R: [-.13, -.5, 1.46], pole1R: [0, 0, 1.14], g0R: [-9.8, 8.8], g1R: [10, -7] }));
-const PLANK = once(() => ({ theta: plankTheta(ctx([]), { ballZ: -72 }) }));
+  pole0L: [.25, 1.45, .34], pole1L: [1.62, -.2, .69], g0L: [-.6, 7.8], g1L: [.8, -2.7], pole0R: [-.13, -.5, 1.46], pole1R: [0, 0, 1.14], g0R: [-7, 8.8], g1R: [10, -7] }));
+const PLANK = once(() => { const C = ctx([]); return { theta: plankTheta(C, { ballZ: -72, arms: plankArms(C) }) }; });
 /* Боковая планка на правом предплечье: правый бок к коврику (живот смотрит в +X), тело — прямая линия от стоп до макушки,
    стопы одна на другой (правая — ребром на коврике), правое плечо вертикально над локтем, левая рука поднята вверх. */
 function sidePlankBody(C, theta) {
@@ -305,8 +323,11 @@ const QUAD = once(() => {
     return q;
   };
   const fing = s => { const a = 8 * C.D2R * C.M.SIGN[s]; return [Math.sin(a), 0, Math.cos(a)]; };
-  const palmAt = q => { const f = C.fk(q); return S.reduce((o, s) => ({ ...o, [s]: [f.P['gh' + s][0] + C.M.SIGN[s] * 2, MAT, f.P['gh' + s][2] + ahead] }), {}); };
-  const th = C.solve1D(th => { const q = body(th), f = C.fk(q), P = palmAt(q); return V.dist(f.P.ghL, palmWrist(C, 'L', P.L, fing('L'), [0, 1, 0])) - armSpan(C, el); }, -10, 30);
+  /* плечевые суставы при руках, поставленных к ладоням P (с этапа Д сустав идёт за рукой — C.ghToward); без P — при опущенных */
+  const ghAt = (q, P) => S.reduce((o, s) => ({ ...o, [s]: P ? C.ghToward(q, s, palmWrist(C, s, P[s], fing(s), [0, 1, 0])) : C.fk(q).P['gh' + s] }), {});
+  const palmBy = G => S.reduce((o, s) => ({ ...o, [s]: [G[s][0] + C.M.SIGN[s] * 2, MAT, G[s][2] + ahead] }), {});
+  const palmAt = q => { let P = palmBy(ghAt(q)); for (let k = 0; k < 2; k++) P = palmBy(ghAt(q, P)); return P; };
+  const th = C.solve1D(th => { const q = body(th), P = palmAt(q); return V.dist(ghAt(q, P).L, palmWrist(C, 'L', P.L, fing('L'), [0, 1, 0])) - armSpan(C, el); }, -10, 30);
   return { th, body, palms: palmAt(body(th)), fing, kneeZ, knees };
 });
 /* Ролик с колен: колени неподвижны на коврике (голени назад, носки оттянуты), бёдра наклоняются вперёд на phi,
@@ -337,19 +358,26 @@ const PLANKUP = once(() => {
      поворота позвоночника проходят через позвонки: при крене одним позвоночником грудная клетка уходила к опорной руке
      и упиралась в плечо); yaw — перенос веса поворотом тела вокруг стоп */
   const body = (th, roll = 0, yaw = 0) => { const q = proneOnToes(C, { theta: th, yaw, roll: roll * .25, ...base }); q.thoracic[2] = roll * .75 * .78; q.lumbar[2] = roll * .75 * .22; return q; };
-  const thF = plankTheta(C, base), qF = body(thF);
-  const fore = {}; for (const s of S) { const t = C.M.clone(qF); fore[s] = forearmOnMat(C, t, s, { lift: .8 }); }
-  const top = pushLayout({ x: 24.5, ahead: 15, out: 5, elTop: 11, feet, pole0: [.39, -.02, 1.13], pole1: [.39, -.02, 1.13], g0: [-6.5, 3.2], g1: [-6.5, 3.2] });
+  const thF = plankTheta(C, { ...base, arms: plankArms(C) }), qF = body(thF);
+  const fore = {}; for (const s of S) { const t = C.M.clone(qF); t[s].girdle = [-2, 8]; for (const pass of [0, 1]) fore[s] = forearmOnMat(C, t, s); }
+  const top = pushLayout({ x: 24.5, ahead: 16.5, out: 5, elTop: 11, feet, pole0: [.39, -.02, 1.13], pole1: [.39, -.02, 1.13], g0: [-6.5, 3.2], g1: [-6.5, 3.2] });
   const palmW = s => palmWrist(C, s, top.palms[s], top.fingers(s), [0, 1, 0]);
+  /* опорная рука стороны s в состоянии F (предплечье) или P (ладонь); плечевой сустав идёт за лопаткой (этап Д: ритм
+     пояса по подъёму руки), поэтому невязка опоры меряется с поставленной рукой */
+  const place = (q, s, st, th) => {
+    if (st === 'F') { q[s].girdle = [-2, 8]; const f = fore[s]; C.armTo(q, s, f.W, V.unit(V.sub(f.E, V.mix(C.fk(q).P['gh' + s], f.W, .5))), { pron: 15, wrist: [0, 0], mode: 'fist' }); }
+    else if (st === 'P') { const lat = C.lat(q, s), { up } = proneAxes(th); q[s].girdle = [-6.5, 7];   /* рука прямая — лопатка вперёд («отталкиваться от пола») */ palmAuto(C, q, s, top.palms[s], top.fingers(s), [0, 1, 0], V.unit(V.add(V.add(V.scale(lat, 2), [0, 1, 0], .2), up, -1.13)), .9); }
+  };
   /* невязка опоры стороны s в состоянии F/P */
-  const res = (q, s, st) => { const gh = C.fk(q).P['gh' + s]; return st === 'F' ? V.dist(gh, fore[s].E) - C.M.B.ua : V.dist(gh, palmW(s)) - armSpan(C, 12); };
+  /* вне досягаемости (крайние углы подбора) рука не ставится — невязка по суставу без руки */
+  const res = (q, s, st, th) => { try { place(q, s, st, th); } catch (e) { /* рука не дотягивается */ } const gh = C.fk(q).P['gh' + s]; return st === 'F' ? V.dist(gh, fore[s].E) - C.M.B.ua : V.dist(gh, palmW(s)) - armSpan(C, 12); };
   /* подбор корпуса: две опоры — угол и крен; одна опора — угол при заданном крене */
   const solve = (st, yaw, roll0) => {
     const sup = S.filter(s => st[s] !== 'A');
-    if (sup.length === 1) { const s = sup[0]; return { th: C.solve1D(x => res(body(x, roll0, yaw), s, st[s]), thF - 12, top.thTop + 12), roll: roll0, yaw }; }
+    if (sup.length === 1) { const s = sup[0]; return { th: C.solve1D(x => res(body(x, roll0, yaw), s, st[s], x), thF - 12, top.thTop + 12), roll: roll0, yaw }; }
     let x = [(thF + top.thTop) / 2, roll0];
     for (let i = 0; i < 40; i++) {
-      const err = y => { const q = body(y[0], y[1], yaw); return S.map(s => res(q, s, st[s])); }, e0 = err(x), h = .05, j = [[0, 0], [0, 0]];
+      const err = y => { const q = body(y[0], y[1], yaw); return S.map(s => res(q, s, st[s], y[0])); }, e0 = err(x), h = .05, j = [[0, 0], [0, 0]];
       if (Math.hypot(...e0) < 1e-3) break;
       for (let k = 0; k < 2; k++) { const y = x.slice(); y[k] += h; const e1 = err(y); j[0][k] = (e1[0] - e0[0]) / h; j[1][k] = (e1[1] - e0[1]) / h; }
       const det = j[0][0] * j[1][1] - j[0][1] * j[1][0]; if (Math.abs(det) < 1e-9) break;
@@ -357,7 +385,7 @@ const PLANKUP = once(() => {
     }
     return { th: x[0], roll: x[1], yaw };
   };
-  return { thF, fore, top, palmW, body, solve };
+  return { thF, fore, top, palmW, body, solve, place };
 });
 const PLANKUP_SHIFT = 2.2, PLANKUP_ROLL = 14;
 const PUSH_MAT = [{ type: 'mat', id: 'mat', len: 200, width: 75, at: [0, 0, 8] }];
@@ -621,7 +649,8 @@ module.exports = {
       for (const s of S) q[s].girdle = [10, 10];
       const T = C.axes(q, 'thorax'), a = C.lerp(HOLLOW_LEG, HOLLOW_LEG - 1.5, e) * C.D2R;
       for (const s of S) legAngle(C, q, s, a / C.D2R, { dorsi: -30 });
-      for (const s of S) armDir(C, q, s, V.add(V.add(T.y, T.z, .1), T.x, C.M.SIGN[s] * .12), V.scale(T.z, -1), { el: 6, pron: 10, mode: 'flat' });
+      /* плечевой сустав идёт за лопаткой (ритм пояса): руку ставим дважды — второй раз от сустава поднятой руки */
+      for (const pass of [0, 1]) for (const s of S) armDir(C, q, s, V.add(V.add(T.y, T.z, .1), T.x, C.M.SIGN[s] * .12), V.scale(T.z, -1), { el: 6, pron: 10, mode: 'flat' });
       return q;
     }
   },
@@ -670,7 +699,7 @@ module.exports = {
         const th = (C.lerp(BIKE.hipOut, BIKE.hipIn, k) + 6 * lift) * C.D2R, kn = C.lerp(6, 112, k);
         legBent(C, q, s, [C.M.SIGN[s] * C.lerp(-.06, .08, k), Math.sin(th), -Math.cos(th)], kn, V.unit([0, -1, -1]), { dorsi: -20 });
       }
-      for (const s of S) handBehindHead(C, q, s, { fwd: .6 });
+      for (const s of S) handBehindHead(C, q, s, { fwd: .9, open: .1 });
       return q;
     }
   },
@@ -689,8 +718,9 @@ module.exports = {
       proneLegs(C, q, C.lerp(-6, 12, e));
       /* руки: впереди головы, ладони вниз; внизу кисти лежат на коврике, вверху подняты вместе с грудью */
       const T = C.axes(q, 'thorax');
-      for (const s of S) {
-        const lift = C.lerp(-.15, .1, e), dir = V.unit([C.M.SIGN[s] * .12, lift, 1]);
+      /* плечевой сустав идёт за лопаткой (ритм пояса): руки ставятся дважды — второй раз от сустава поднятой руки */
+      for (const pass of [0, 1]) for (const s of S) {
+        const lift = C.lerp(-.105, .1, e), dir = V.unit([C.M.SIGN[s] * .12, lift, 1]);
         armDir(C, q, s, dir, V.unit(V.add(T.z, V.scale(T.x, C.M.SIGN[s]), 1)), { el: 6, pron: 45, mode: 'flat' });
       }
       return q;
@@ -715,13 +745,17 @@ module.exports = {
       const bend = t < .5 ? 5 : C.lerp(5, 72, C.ease((t - .5) / .5));
       for (const s of S) {
         const g = C.M.SIGN[s], up = 1 - dip;
-        q[s].girdle = [C.lerp(0, -4, up), C.lerp(-4, -15, up)];
-        const gh = C.fk(q).P['gh' + s], ua = V.unit([g * Math.sin(ang) * Math.cos(lift), Math.sin(lift), Math.cos(ang) * Math.cos(lift)]);
-        const E = V.add(gh, ua, C.M.B.ua);
-        /* предплечье: от продолжения плеча поворачивается к голове (+Z) в горизонтальной плоскости на угол bend */
-        const fAng = ang - bend * C.D2R, fa = V.unit([g * Math.sin(fAng) * Math.cos(lift), Math.sin(lift) * (bend > 10 ? 0 : 1), Math.cos(fAng) * Math.cos(lift)]);
-        const pole = bend > 10 ? V.unit(V.add(V.scale(fa, -1), ua, 1)) : [0, 1, 0];
-        C.armTo(q, s, V.add(E, fa, C.M.B.fa), V.unit(V.add(pole, [0, 1, 0], bend > 10 ? 0 : 1)), { pron: 0, mode: 'fist' });
+        /* «лопатки сводите в каждом», плечи не к ушам: пояс сверх ритма сведён и опущен, когда руки подняты */
+        C.rhythm(q, s, [C.lerp(-2, -8, up), C.lerp(0, -8, up)]);
+        /* плечевой сустав идёт за лопаткой (ритм пояса): руку ставим дважды, от плечевого сустава поднятой руки */
+        for (const pass of [0, 1, 2, 3]) {
+          const gh = C.fk(q).P['gh' + s], ua = V.unit([g * Math.sin(ang) * Math.cos(lift), Math.sin(lift), Math.cos(ang) * Math.cos(lift)]);
+          const E = V.add(gh, ua, C.M.B.ua);
+          /* предплечье: от продолжения плеча поворачивается к голове (+Z) в горизонтальной плоскости на угол bend */
+          const fAng = ang - bend * C.D2R, fa = V.unit([g * Math.sin(fAng) * Math.cos(lift), Math.sin(lift) * (bend > 10 ? 0 : 1), Math.cos(fAng) * Math.cos(lift)]);
+          const pole = bend > 10 ? V.unit(V.add(V.scale(fa, -1), ua, 1)) : [0, 1, 0];
+          C.armTo(q, s, V.add(E, fa, C.M.B.fa), V.unit(V.add(pole, [0, 1, 0], bend > 10 ? 0 : 1)), { pron: 0, mode: 'fist', allowShort: pass < 3 });
+        }
       }
       return q;
     }
@@ -740,7 +774,9 @@ module.exports = {
       const ang = C.lerp(8, 168, t) * C.D2R, lift = SNOW.lift * C.D2R;
       for (const s of S) {
         const g = C.M.SIGN[s];
-        q[s].girdle = [-6, -10];
+        /* «лопатки опущены всё время»: пояс сверх ритма опущен и чуть сведён (руки над ковриком); опущен на 6°, а не на 8°:
+           у кистей у бёдер ключица ниже ложилась кожей надплечья на первые межрёберные */
+        C.rhythm(q, s, [-6, -6]);
         const dir = [g * Math.sin(ang) * Math.cos(lift), Math.sin(lift), -Math.cos(ang) * Math.cos(lift)];
         armPalmFacing(C, q, s, dir, [0, -1, 0], { el: 4 });
       }
@@ -779,14 +815,17 @@ module.exports = {
         /* рука вперёд: от вертикали к линии корпуса, большой палец вверх (ладонь внутрь) */
         /* сначала кисть поднимается от коврика ладонью вниз (локоть сгибается назад), затем рука выпрямляется вперёд
            до линии корпуса и поворачивается большим пальцем вверх */
-        const gh = C.fk(q).P['gh' + s], g = C.M.SIGN[s], Wfloor = palmWrist(C, s, V.add(L.palms[s], [(w.R - w.L) * BIRD.shift, 0, 0]), L.fing(s), [0, 1, 0]);
-        const a = (90 + L.th - 3) * C.D2R, line = [0, -Math.cos(a), Math.sin(a)], Wf = V.add(gh, line, armSpan(C, 5));
-        const lift = Math.min(1, k / .12), u = Math.max(0, (k - .12) / .88);
-        const W = V.mix(V.add(Wfloor, [0, 1, 0], 9 * lift), Wf, u);
-        const fingers = V.unit(V.mix(L.fing(s), line, u)), palm = V.unit(V.mix([0, -1, 0], [-g, 0, 0], u));
-        const M3 = C.M.M3, d = fingers, upn = V.scale(V.unit(V.perp(palm, d)), -1), x = V.scale(upn, g), y = V.scale(d, -1);
-        const pole = V.unit(V.mix(V.unit(V.add(V.add(V.scale(up, -1), [g, 0, 0], .5), [0, 1, 0], .3)), [g * .3, -1, 0], u));
-        C.M.solveArmWrist(q, s, W, pole, M3.cols(x, y, V.cross(x, y)));
+        /* плечевой сустав идёт за лопаткой (ритм пояса): руку ставим дважды — второй раз от сустава поднятой руки */
+        for (const pass of [0, 1]) {
+          const gh = C.fk(q).P['gh' + s], g = C.M.SIGN[s], Wfloor = palmWrist(C, s, V.add(L.palms[s], [(w.R - w.L) * BIRD.shift, 0, 0]), L.fing(s), [0, 1, 0]);
+          const a = (90 + L.th - 3) * C.D2R, line = [0, -Math.cos(a), Math.sin(a)], Wf = V.add(gh, line, armSpan(C, 5));
+          const lift = Math.min(1, k / .12), u = Math.max(0, (k - .12) / .88);
+          const W = V.mix(V.add(Wfloor, [0, 1, 0], 9 * lift), Wf, u);
+          const fingers = V.unit(V.mix(L.fing(s), line, u)), palm = V.unit(V.mix([0, -1, 0], [-g, 0, 0], u));
+          const M3 = C.M.M3, d = fingers, upn = V.scale(V.unit(V.perp(palm, d)), -1), x = V.scale(upn, g), y = V.scale(d, -1);
+          const pole = V.unit(V.mix(V.unit(V.add(V.add(V.scale(up, -1), [g, 0, 0], .5), [0, 1, 0], .3)), [g * .3, -1, 0], u));
+          C.M.solveArmWrist(q, s, W, pole, M3.cols(x, y, V.cross(x, y)));
+        }
         q.hands[s] = 'flat';
       }
       return q;
@@ -805,9 +844,12 @@ module.exports = {
       const { V } = C, e = C.ease(t), L = ROLL();
       const q = rolloutBody(C, C.lerp(0, ROLLOUT.phi1, e), C.lerp(L.hip0, ROLLOUT.hip1, e), { lumbar: C.lerp(10, 3, e), thoracic: C.lerp(8, 2, e) });
       for (const s of S) q[s].girdle = [C.lerp(0, 14, e), C.lerp(8, 4, e)];
-      /* ролик: впереди, на расстоянии почти прямой руки от плеча */
-      const f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5), y = MAT + WHEEL_R, reach = armSpan(C, C.lerp(L.el0, 4, e)) + 7.6;
-      const z = gh[2] + Math.sqrt(Math.max(0, reach * reach - (gh[1] - y) ** 2 - (Math.abs(f.P.ghL[0]) - GRIP_X) ** 2));
+      /* ролик: впереди, на расстоянии почти прямой руки от плеча. Плечевой сустав идёт за лопаткой (ритм пояса по подъёму
+         руки), поэтому сначала руки вытягиваются к ролику, потом по плечевым суставам вытянутых рук ставится ролик */
+      const y = MAT + WHEEL_R, reach = armSpan(C, C.lerp(L.el0, 4, e)) + 7.6;
+      const wheelZ = () => { const f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5); return gh[2] + Math.sqrt(Math.max(0, reach * reach - (gh[1] - y) ** 2 - (Math.abs(f.P.ghL[0]) - GRIP_X) ** 2)); };
+      for (let k = 0; k < 2; k++) { const z0 = wheelZ(); for (const s of S) C.armTo(q, s, [C.M.SIGN[s] * GRIP_X, y + 3, z0 - 8], [0, 1, 0], { allowShort: true }); }
+      const z = wheelZ();
       for (const s of S) {
         const lat = C.lat(q, s), prefer = V.add(V.add([0, 1, 0], [0, 0, -1], C.lerp(1.2, .2, e)), lat, 1);
         gripAuto(C, q, s, [C.M.SIGN[s] * GRIP_X, y, z], V.scale([C.M.SIGN[s], 0, 0], -1), prefer);
@@ -842,8 +884,7 @@ module.exports = {
       const sol = L.solve(st, K.yaw, r0), q = L.body(sol.th, sol.roll, sol.yaw);
       for (const s of S) {
         const lat = C.lat(q, s), { up } = proneAxes(sol.th);
-        if (st[s] === 'F') { q[s].girdle = [-2, 8]; const f = L.fore[s]; C.armTo(q, s, f.W, V.unit(V.sub(f.E, V.mix(C.fk(q).P['gh' + s], f.W, .5))), { pron: 15, wrist: [0, 0], mode: 'fist' }); }
-        else if (st[s] === 'P') { q[s].girdle = [-6.5, 7];   /* рука прямая — лопатка вперёд («отталкиваться от пола») */ palmAuto(C, q, s, L.top.palms[s], L.top.fingers(s), [0, 1, 0], V.unit(V.add(V.add(V.scale(lat, 2), [0, 1, 0], .2), up, -1.13)), .9); }
+        if (st[s] !== 'A') L.place(q, s, st[s], sol.th);
         else {
           /* перенос: кисть над ковриком между кулаком предплечья и местом ладони; локоть вверх-назад-наружу */
           const u = (s === 'R' ? K.R : K.L)[1];
@@ -863,9 +904,7 @@ module.exports = {
     equipment: PUSH_MAT,
     contacts: [{ body: 'faL', prop: 'mat' }, { body: 'faR', prop: 'mat' }, { body: 'footL', prop: 'mat' }, { body: 'footR', prop: 'mat' }],
     pose(t, C) {
-      const q = proneOnToes(C, { theta: PLANK().theta, ballZ: -72 });
-      for (const s of S) { q[s].girdle = [-2, 8]; forearmOnMat(C, q, s); }
-      return q;
+      return plankArms(C)(proneOnToes(C, { theta: PLANK().theta, ballZ: -72 }));
     }
   },
 

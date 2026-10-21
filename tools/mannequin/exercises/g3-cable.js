@@ -359,7 +359,7 @@ module.exports = {
         const d0 = V.unit(V.add(V.add([0, -1, 0], lat, .2), T.z, .14)), d1 = V.unit(V.add(V.add(lat, [0, 1, 0], .04), T.z, .3));
         const g = V.add(gh, slerpDir(V, d0, d1, e), 60);
         C.hold(q, s, g, V.unit(V.mix(V.add([0, 0, -1], lat, .5), V.add([0, 1, -.6], lat, .2), e)), { pron: C.lerp(5, 25, e) });
-        q[s].girdle = [C.lerp(0, 8, e), C.lerp(4, 6, e)];
+        C.rhythm(q, s, [0, 3]); /* пояс по ритму (этап Д: подъём плеч и поворот лопатки — от подъёма руки), сверх него — лёгкая протракция */
         C.hold(q, s, g, V.unit(V.mix(V.add([0, 0, -1], lat, .5), V.add([0, 1, -.6], lat, .2), e)), { pron: C.lerp(5, 25, e) });
       }
       return q;
@@ -412,7 +412,8 @@ module.exports = {
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = C.M.clone(BFP().q);
-      for (const s of S) q[s].girdle = [C.lerp(4, 6, e), C.lerp(16, -16, e)];
+      /* пояс сверх ритма: в начале лопатки вытянуты к блоку, в конце «лопатки сведены» без подъёма плеч (ошибка в каталоге) */
+      for (const s of S) C.rhythm(q, s, [C.lerp(-2, -4, e), C.lerp(14, -8, e)]);
       q.neck = [C.lerp(-4, 2, e), 0, 0];
       const f = C.fk(q), head = f.P.head, ghm = V.mix(f.P.ghL, f.P.ghR, .5);
       const g0 = [0, ghm[1] + 9, ghm[2] + 53], g1 = [0, head[1] + 1, head[2] + 5];
@@ -589,7 +590,7 @@ module.exports = {
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = C.M.clone(CL().q), grab = C.point('col', 'grabL');
-      q.R.girdle = [C.lerp(0, 8, e), C.lerp(6, 2, e)];
+      C.rhythm(q, 'R', [0, C.lerp(4, 1, e)]); /* пояс по ритму (этап Д: подъём плеч и поворот лопатки — от подъёма руки), сверх него — лёгкая протракция */
       const f = C.fk(q), gh = f.P.ghR;
       C.grip(q, 'L', [grab[0], 128, grab[2]], [0, 1, 0], V.unit([.4, -1, -.3]));
       const d0 = V.unit(V.sub([4, 86, 34], gh)), d1 = V.unit([-.92, .04, .4]), d = slerpDir(V, d0, d1, e);
@@ -776,16 +777,17 @@ module.exports = {
     equipment: [CC_TOWER, cable(CC_TOWER, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 11, rest: 62 })],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     pose(t, C) {
-      const { V } = C, e = C.ease(t), q = C.M.clone(CC().q), f = C.fk(q);
-      for (const s of S) {
-        const gh = f.P['gh' + s], lat = C.lat(q, s), down = [0, -1, 0], up = [0, 1, 0], fwd = [0, 0, 1];
+      const { V } = C, e = C.ease(t), q = C.M.clone(CC().q);
+      /* плечевой сустав идёт за лопаткой (ритм пояса): рукоять — от него, поэтому хват ставится дважды */
+      for (const pass of [0, 1]) for (const s of S) {
+        const gh = C.fk(q).P['gh' + s], lat = C.lat(q, s), down = [0, -1, 0], up = [0, 1, 0], fwd = [0, 0, 1];
         q[s].girdle = [-2, C.lerp(-2, 2, e)];
         const ua = V.unit(V.add(V.add(down, fwd, C.lerp(.1, .2, e)), lat, .06)), el = V.add(gh, ua, C.M.B.ua);
-        const phi = C.lerp(16, 128, e) * C.D2R, fore = V.add(V.scale(down, Math.cos(phi)), fwd, Math.sin(phi)), palm = V.add(V.scale(up, Math.sin(phi)), fwd, Math.cos(phi));
+        const phi = C.lerp(17.5, 128, e) * C.D2R, fore = V.add(V.scale(down, Math.cos(phi)), fwd, Math.sin(phi)), palm = V.add(V.scale(up, Math.sin(phi)), fwd, Math.cos(phi));
         const g = gripFrom(C, el, fore, palm); g[0] = C.M.SIGN[s] * 21.5;
         const pole = V.unit(V.add(V.add(V.sub(el, V.mix(gh, g, .45)), [0, 0, -1], 6), lat, -2.5));
         const thumb = V.unit(V.add([C.M.SIGN[s], 0, 0], V.cross(fore, [1, 0, 0]), C.lerp(0, .14, e)));
-        C.grip(q, s, g, thumb, pole, { wristExt: -4 });
+        C.grip(q, s, g, thumb, pole, { wristExt: -4, allowShort: !pass });
       }
       return q;
     }
@@ -821,7 +823,8 @@ module.exports = {
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = C.M.clone(FP().q), P = pulleyOf(FP_TOWER);
-      for (const s of S) q[s].girdle = [C.lerp(4, 6, e), C.lerp(16, -16, e)];
+      /* пояс сверх ритма: в начале лопатки вытянуты к блоку, в конце «лопатки сведены» без подъёма плеч (ошибка в каталоге) */
+      for (const s of S) C.rhythm(q, s, [C.lerp(-2, -4, e), C.lerp(14, -8, e)]);
       q.neck = [C.lerp(-4, 2, e), 0, 0];
       const f = C.fk(q), head = f.P.head, ghm = V.mix(f.P.ghL, f.P.ghR, .5);
       const g0 = [0, ghm[1] + 9, ghm[2] + 53], g1 = [0, head[1] + 1, head[2] + 4];

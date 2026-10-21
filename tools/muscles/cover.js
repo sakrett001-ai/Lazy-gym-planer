@@ -47,6 +47,20 @@ function firstHit(MB, pos, sides, o, d, tmax, want = null) {
   }
   return who;
 }
+/* последняя (самая наружная) мышца на луче o + d·t до tmax — та, что видна сверху; −1 — мышц нет */
+function lastHit(MB, pos, sides, o, d, tmax) {
+  const e = [o[0] + d[0] * tmax, o[1] + d[1] * tmax, o[2] + d[2] * tmax], lo = o.map((x, k) => Math.min(x, e[k])), hi = o.map((x, k) => Math.max(x, e[k]));
+  const P = v => [pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]];
+  let best = -Infinity, who = -1;
+  for (const b of MB) {
+    if (b.hi[0] < lo[0] || b.lo[0] > hi[0] || b.hi[1] < lo[1] || b.lo[1] > hi[1] || b.hi[2] < lo[2] || b.lo[2] > hi[2]) continue;
+    for (let r = b.r0; r < b.r1 - 1; r++) for (let j = 0; j < sides; j++) {
+      const a = r * sides + j, bb = r * sides + (j + 1) % sides, c = a + sides, dd = bb + sides;
+      for (const t of [rayTri(o, d, P(a), P(bb), P(c)), rayTri(o, d, P(bb), P(dd), P(c))]) if (t < tmax && t > best) { best = t; who = b.i; }
+    }
+  }
+  return who;
+}
 /* расстояние до кожи по лучу (шаг 0,25 см, до 12 см) */
 function skinExit(sdf, o, d) { for (let t = .2; t < 12; t += .25) if (sdf([o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t]) > 0) return t; return 12; }
 const tally = (bound, by, hm) => { by[bound[hm].part] = (by[bound[hm].part] || 0) + 1; };
@@ -79,6 +93,37 @@ function scapulaCover({ skel, bound, start, pos, sides, m, m0, sdf, MB }) {
     });
   }
   return { n, open, by };
+}
+/* Нижний угол и нижняя треть медиального края лопатки (этап Д: при руке над головой лопатка поворачивается вверх, нижний
+   угол уходит наружу и вперёд по рёбрам). У человека нижний угол в любой позе закрыт широчайшей (часть её волокон начинается
+   от него — Gray's), нижнюю часть медиального края — нижние пучки трапециевидной. Точки — задние вершины кости в 4 см от
+   нижнего угла (ai) и у отрезка ts–ai в его нижней трети (не дальше 1,5 см от отрезка); луч — по нормали плоскости лопатки
+   (ts, ai, aa) наружу до кожи; точка закрыта, если самая наружная мышца на луче (та, что видна в «Анатомии») — одна из
+   частей parts (по умолчанию — широчайшая и трапециевидная): иначе сквозь них видны мышцы глубже или кость. Ориентиры G —
+   Mannequin.GIRDLE (рамка лопатки правой стороны, левая — зеркально по x).
+   { n, open, by: {наружная мышца на луче: точек}, at: [открытые точки: сторона и номер вершины] } */
+const LOWER_PARTS = new Set(['lat', 'trapinf', 'trapmid', 'trapsup']);
+function scapulaLowerCover({ skel, bound, pos, sides, m, m0, sdf, MB, G }, parts = LOWER_PARTS) {
+  let n = 0, open = 0; const by = {}, at = [], want = i => parts.has(bound[i].part);
+  for (const s of ['R', 'L']) {
+    const i = skel.bones.findIndex(b => b.name === 'scapula' && b.side === s), g = s === 'L' ? -1 : 1, mir = p => [g * p[0], p[1], p[2]];
+    const ts = mir(G.ts), ai = mir(G.ai), aa = mir(G.aa), e = sub(ai, ts), L2 = dot(e, e);
+    let nl = unit(cross(sub(ai, ts), sub(aa, ts))); if (Wd(m0, i, nl)[2] > 0) nl = nl.map(x => -x);
+    const w = unit(Wd(m, i, nl)), b = skel.bones[i], P = []; for (let k = 0; k < b.pos.length; k += 3) P.push([b.pos[k], b.pos[k + 1], b.pos[k + 2]]);
+    const near = p => { const d = sub(p, ai); if (Math.hypot(d[0], d[1], d[2]) <= 4) return true; const u = dot(sub(p, ts), e) / L2; if (u < 2 / 3 || u > 1) return false; const q = sub(sub(p, ts), e.map(x => x * u)); return Math.hypot(q[0], q[1], q[2]) <= 1.5; };
+    const sel = P.map(near), world = P.map(p => W(m, i, p));
+    world.forEach((p, k) => {
+      if (!sel[k]) return;
+      /* только задняя сторона: точка не глубже 0,5 см самой задней по w в своей окрестности 1,5 см */
+      const pw = dot(p, w); let mx = -Infinity;
+      for (let j = 0; j < world.length; j++) { if (!sel[j]) continue; const dd = sub(world[j], p), a = dot(dd, w); if (Math.abs(a) < 6 && Math.hypot(dd[0] - a * w[0], dd[1] - a * w[1], dd[2] - a * w[2]) < 1.5) mx = Math.max(mx, dot(world[j], w)); }
+      if (pw < mx - .5) return;
+      n++; const te = skinExit(sdf, p, w), hm = lastHit(MB, pos, sides, p, w, te);
+      if (hm >= 0) tally(bound, by, hm);
+      if (hm < 0 || !want(hm)) { open++; at.push(s + k); }
+    });
+  }
+  return { n, open, by, at };
 }
 const SPINE = ['sacrum', 'L5', 'L4', 'L3', 'L2', 'L1', 'thoracic12', 'thoracic11', 'thoracic10', 'thoracic9', 'thoracic8'];
 /* позвонков кадра: { n, open, by, deep } — deep: лучей, на которых до кожи есть мышца из parts (столбы и многораздельные: они
@@ -117,4 +162,4 @@ function wallFolds(wall) {
   for (const [d, s, q, c] of T) if (d * sg < 0) { top++; topQ.push([q, c]); where.unshift(`верх ${s}`); }
   return { quads: T.length, top, bottom, topQ, bottomQ, at: where.slice(0, 6).join(', ') };
 }
-module.exports = { muscleBoxes, firstHit, skinExit, scapulaCover, spineCover, wallFolds, SPINE };
+module.exports = { muscleBoxes, firstHit, lastHit, skinExit, scapulaCover, scapulaLowerCover, LOWER_PARTS, spineCover, wallFolds, SPINE };

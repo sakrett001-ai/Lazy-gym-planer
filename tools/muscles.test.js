@@ -1221,6 +1221,30 @@ test('back muscles cover the shoulder blade in rows: no bare medial border or sp
   const r = COVER.scapulaCover(coverCtx('cablerow', 1, new Set([...ES_PARTS, 'trapsup', 'trapmid', 'trapinf', 'rhomb', 'lat'])));
   assert(r.open > .5 * r.n, `without the broad back muscles only ${r.open} of ${r.n} points are bare`);
 });
+/* Руки над головой (плечо выше 120°): нижний угол лопатки и нижнюю треть медиального края закрывают широчайшая и нижняя
+   трапециевидная (Gray's Anatomy, 1918: широчайшая проходит над нижним углом). С поворотом лопатки вверх (ритм этапа Д) угол
+   уходит к подмышке; луч из задней поверхности кости по нормали лопатки — последней мышцей до кожи должна быть одна из них
+   (cover.js, scapulaLowerCover). По каталогу (кадры через 0,1, плечо выше 120°, 200 кадров по 26 точек): 4.57.0 — 33 открытых
+   точки в 6 кадрах (0,6 %: «снежный ангел», Y-T-W), этап Д до правки — 262 точки в 76 кадрах (5 %: лёжа и в упоре — угол уходил
+   за край широчайшей), теперь — 2 точки («велосипед», 0,04 %). Здесь — позы с руками вверх стоя, лёжа и в упоре. Ориентиры
+   лопатки, по которым рисованный путь LAT4 огибает угол (Muscles.SCAP_LM), — те же, что у манекена (GIRDLE). */
+const OVERHEAD = [['pullup', 0], ['chinup', 0], ['hang', 0], ['ohp', 1], ['ohext', 0], ['latpull', 0], ['superman', 0], ['crunch', 0],
+  ['pullover', .9], ['deadbug', .2], ['birddog', .2], ['sidebend', .5], ['rollout', .8], ['straightpull', .1], ['reversesnow', .9], ['ytw', 0]];
+test('arms overhead: the latissimus and lower trapezius cover the inferior angle and the lower medial border', () => {
+  for (const k of ['ts', 'ai', 'aa']) assert.deepEqual(Muscles.SCAP_LM[k], L.M.GIRDLE[k], `shoulder-blade landmark ${k} differs from Mannequin.GIRDLE`);
+  let open = 0, n = 0;
+  for (const [id, t] of OVERHEAD) {
+    const ctx = coverCtx(id, t), ja = L.M.jointAngles(rPose(id, t).R), r = COVER.scapulaLowerCover({ ...ctx, G: L.M.GIRDLE });
+    assert(Math.max(ja.L.elevation, ja.R.elevation) > 120, `${id} t=${t}: the arm is not above 120°`);
+    assert(r.n >= 20, `${id} t=${t}: only ${r.n} points near the inferior angle`);
+    assert(r.open <= 1, `${id} t=${t}: ${r.open} of ${r.n} points near the inferior angle are bare (${r.at.join(' ')})`);
+    open += r.open; n += r.n;
+  }
+  assert(open <= .01 * n, `${open} of ${n} points near the inferior angle are bare`);
+  /* отрицательная: без широчайшей и трапециевидной угол открыт */
+  const r = COVER.scapulaLowerCover({ ...coverCtx('chinup', 0, new Set(['lat', 'trapsup', 'trapmid', 'trapinf'])), G: L.M.GIRDLE });
+  assert(r.open > .5 * r.n, `without the latissimus and trapezius only ${r.open} of ${r.n} points are bare`);
+});
 /* Позвонки сбоку от остистых отростков (дуги, поперечные отростки L1–L5 и T8–T12, задняя поверхность крестца): их закрывают
    многораздельные и столбы выпрямителя — на луче назад до кожи одна из них есть не меньше чем у 97 % точек (первой — у 94 % и
    больше: где трапециевидная в приседе толще, её низ ниже верха длиннейшей, но длиннейшая под ней на месте), открыто не больше

@@ -45,6 +45,18 @@ test('self-collision: an arm driven through the chest is an error', () => {
   const R = stand(q => { q.L.shoulder = [0, -40, 0]; q.L.elbow = 0; });
   assert(errors(checkFrame(R, { contacts: FEET }), 'self-collision').length);
 });
+test('scapula: a shoulder blade turned into the ribs is an error; the girdle rhythm keeps it on them', () => {
+  /* наружная ротация лопатки на 20° без отведения ключицы назад: медиальный край уходит в рёбра (у живого человека между
+     лопаткой и рёбрами — подлопаточная и передняя зубчатая мышцы) */
+  const R = stand(q => { q.L.clav = [0, 0]; q.L.scap = [-20, 0, 0]; q.R.clav = [0, 0]; q.R.scap = [0, 0, 0]; });
+  const e = errors(checkFrame(R, { contacts: FEET }), 'scapula');
+  assert(e.length === 1 && /лопатка L/.test(e[0].detail) && e[0].depth > 1, JSON.stringify(e));
+  /* рука над головой, в сторону и сведённые лопатки — по ритму пояса со скольжением по рёбрам: правило молчит */
+  for (const [sh, gi] of [[[0, 170, 0], [0, 0]], [[0, 90, 0], [0, -15]], [[90, 0, 0], [-8, 10]]]) {
+    const R2 = stand(q => { for (const s of ['L', 'R']) { q[s].shoulder = sh; q[s].girdle = gi; } });
+    assert.deepEqual(errors(checkFrame(R2, { contacts: FEET }), 'scapula'), [], JSON.stringify(sh));
+  }
+});
 test('equipment: a part driven through another machine is an error', () => {
   const R = frame('bbbench', .5), pad = R.props.find(p => p.tone === 'pad');
   const pole = { kind: 'beam', id: 'pole:post', a: [pad.c[0] + 10, 186, pad.c[2]], b: [pad.c[0] + 10, pad.c[1] - 20, pad.c[2]], w: 6, h: 6, mount: 'floor', tone: 'frame' };
