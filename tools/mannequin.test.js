@@ -114,10 +114,11 @@ test('поверхность тела замкнута и симметрична
   const mid = V.mix(R.shL, R.elL, .5); assert.ok(M.limbSDF(R, 'ua', 'L', mid) < -3, 'ось плеча внутри руки');
 });
 
-test('сечение груди — скруглённый прямоугольник по ANSUR II: глубина и обхват в средней половине людей, ширина не больше 30', () => {
+test('сечение груди — скруглённый прямоугольник по ANSUR II: ширина, глубина и обхват в средней половине людей', () => {
   /* 4.41.0: на уровне сосков (128,2 см, ANSUR II chestheight) — горизонтальное сечение кожи корпуса стоя со складками,
      как в tools/mannequin/anthro.js; ANSUR II (мужчины 170–180 см, 72–84 кг): ширина 27,4–29,1, глубина 23,3–25,2,
-     обхват 99,2–104,3. Ширина 28,3 недостижима, пока тела широчайшей — трубки (комментарий к TORSO) */
+     обхват 99,2–104,3. До сужения груди ширина была 29,8 (проверка — не больше 30): тела широчайшей были трубками, потом
+     выходили из кожи сбоку груди (комментарий к TORSO); теперь все три замера — в средней половине людей */
   const R = M.catalogPose(M.neutral()), cache = M.torsoCache(R), y = M.FLOOR - 128.2, zc = M.spineFrame(R, 30).c[2], pts = [];
   for (let i = 0; i < 360; i++) {
     const a = i / 360 * 2 * Math.PI, at = r => [Math.cos(a) * r, y, zc + Math.sin(a) * r];
@@ -129,7 +130,7 @@ test('сечение груди — скруглённый прямоуголь�
   for (const p of s) { while (lo.length > 1 && cr(lo.at(-2), lo.at(-1), p) <= 0) lo.pop(); lo.push(p); }
   for (const p of s.reverse()) { while (up.length > 1 && cr(up.at(-2), up.at(-1), p) <= 0) up.pop(); up.push(p); }
   const h = lo.slice(0, -1).concat(up.slice(0, -1)); let per = 0; for (let i = 0; i < h.length; i++) per += Math.hypot(h[i][0] - h[(i + 1) % h.length][0], h[i][1] - h[(i + 1) % h.length][1]);
-  assert.ok(ext(0) <= 30, `ширина груди ${ext(0).toFixed(1)}`);
+  assert.ok(ext(0) >= 27.4 && ext(0) <= 29.1, `ширина груди ${ext(0).toFixed(1)}`);
   assert.ok(ext(1) >= 23.3 && ext(1) <= 25.2, `глубина груди ${ext(1).toFixed(1)}`);
   assert.ok(per >= 99.2 && per <= 104.3, `обхват груди ${per.toFixed(1)}`);
 });
