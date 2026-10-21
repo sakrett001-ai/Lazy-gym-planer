@@ -10,8 +10,10 @@
      и худший выход каждого семейства — не выше допуска проверки мышц (2,6 см; tools/muscles/check.js);
    - кожа в ключевых позах не поднимается над прежней выше, чем на 0,6 см над мышцами под ней (стоя — не выше 1,2 см);
    - стоя ширина груди не растёт (без складок она уже подогнана к ANSUR II), глубина — не больше чем на 0,3 см,
-     обхват — не больше ANSUR II (101,7 см) (замеры — tools/mannequin/anthro.js);
-   - соседние точки сетки кожи сдвинуты почти одинаково (без зубцов); ось — от точки у корпуса своей стороны к точке
+     обхват — не больше ANSUR II (101,7 см) и не меньше нижней границы средней половины людей (99,2 см, как проверка в
+     tools/mannequin.test.js) (замеры — tools/mannequin/anthro.js);
+   - соседние точки сетки кожи сдвинуты почти одинаково (без зубцов; и стоя с руками, отведёнными на 90° и 160°, — как
+     проверка плавности в tools/mannequin.test.js); ось — от точки у корпуса своей стороны к точке
      у плеча ниже центра сустава, высота не больше 5 см, ширина — не больше 8.
    Набор (тела мышц во всех позах) зависит от формы тела (TORSO), поз и данных мышц, но не от складок: --data файл
    сохраняет его при первом прогоне и берёт готовым при следующих (после правки тела файл удалить).
@@ -91,10 +93,12 @@ function build() {
 }
 
 /* ---------- ключевые позы (выпуклость, гладкость) и замеры стоя ---------- */
-const KEY = ['neutral', 'squat:0', 'hang:0', 'ohp:1', 'latraise:1', 'frontraise:1', 'dbfly:0.5', 'pullover:1', 'dip:1', 'pushup:1', 'bbbench:1', 'reversesnow:1', 'latpull:0', 'plank:0', 'ytw:0', 'sideplank:0', 'cablefly:0.5', 'jumpingjack:0.5', 'bbcurl:0', 'deadlift:0'];
+const KEY = ['neutral', 'squat:0', 'hang:0', 'ohp:1', 'latraise:1', 'frontraise:1', 'dbfly:0.5', 'pullover:1', 'dip:1', 'pushup:1', 'bbbench:1', 'reversesnow:1', 'latpull:0', 'plank:0', 'ytw:0', 'sideplank:0', 'cablefly:0.5', 'jumpingjack:0.5', 'bbcurl:0', 'deadlift:0', 'arms:160', 'arms:90'];
+/* arms:θ — стоя, руки отведены во фронтальной плоскости на θ (как проверка плавности складок в tools/mannequin.test.js) */
+const armsPose = th => { const q = M.neutral(); for (const s of ['L', 'R']) q[s].shoulder = [0, th, 0]; return M.catalogPose(q); };
 let KP = null, ANS = null, CH0 = null;
 const keyPoses = () => M.noFolds(() => KEY.map(k => {
-  const R = k === 'neutral' ? NR : EQ.rig(POSES[k.split(':')[0]])(+k.split(':')[1]), S = M.surface(R), body = M.bodyData(R), cache = M.torsoCache(R), pts = [], grids = [];
+  const R = k === 'neutral' ? NR : k.startsWith('arms:') ? armsPose(+k.split(':')[1]) : EQ.rig(POSES[k.split(':')[0]])(+k.split(':')[1]), S = M.surface(R), body = M.bodyData(R), cache = M.torsoCache(R), pts = [], grids = [];
   { const g = []; S.torsoHeights.forEach((h, i) => { if (h < 25) return; const f = M.torsoFrame(R, h); g.push(S.torso[i].map(p => { const e = { p, n: V.unit(V.perp(V.sub(p, f.c), f.y)), s: V.dot(V.sub(p, R.frames.thorax.o), R.frames.thorax.x) > 0 ? 'L' : 'R', w: 1 }; pts.push(e); return e; })); }); grids.push(g); }
   const old = q => M.noFolds(() => { let d = M.torsoSDF(R, q, cache); for (const s of ['L', 'R']) d = Math.min(d, M.limbSDF(R, 'ua', s, q)); for (const c of body.caps) d = Math.min(d, V.dist(q, c.c) - c.r); return d; });
   return { k, T: R.frames.thorax, U: { L: R.frames.uaL, R: R.frames.uaR }, pts, grids, old };
@@ -141,10 +145,11 @@ function evaluate(D, P) {
       const a = g[i][j].lift, b = g[i][(j + 1) % g[i].length].lift, c = i + 1 < g.length ? g[i + 1][j].lift : a;
       pen += 20 * Math.max(0, Math.max(Math.abs(a - b), Math.abs(a - c)) - .8) ** 2;
     }
-    for (const s of ['L', 'R']) { const lim = kp.k === 'neutral' ? 1.2 : Math.max(1.2, (muscleOut[kp.k]?.[s] ?? 0) + .6); pen += 50 * Math.max(0, mx[s] - lim) ** 2; }
+    /* позы arms:θ — только для плавности (мышц в наборе у них нет) */
+    if (!kp.k.startsWith('arms:')) for (const s of ['L', 'R']) { const lim = kp.k === 'neutral' ? 1.2 : Math.max(1.2, (muscleOut[kp.k]?.[s] ?? 0) + .6); pen += 50 * Math.max(0, mx[s] - lim) ** 2; }
   }
   { const set = setsFor(P, NR.frames.thorax, { L: NR.frames.uaL, R: NR.frames.uaR }, L0), c = chest(set);
-    pen += 5000 * (Math.max(0, c.br - CH0.br) ** 2 + Math.max(0, c.dp - CH0.dp - .3) ** 2 + Math.max(0, c.per - 101.7) ** 2); }
+    pen += 5000 * (Math.max(0, c.br - CH0.br) ** 2 + Math.max(0, c.dp - CH0.dp - .3) ** 2 + Math.max(0, c.per - 101.7) ** 2 + Math.max(0, 99.2 - c.per) ** 2); }
   for (const F of Object.values(P)) {
     pen += 50 * (Math.max(0, F.a - 5) ** 2 + Math.max(0, F.s - 8) ** 2 + Math.max(0, 1.5 - F.s) ** 2 + Math.max(0, F.ua[1] + 3) ** 2 + Math.max(0, 3 - F.tr[0]) ** 2);
     const ax = axes(F, NR.frames.thorax, NR.frames.uaL, 'L', 0), B = V.add(ax.A, ax.d, ax.L);
