@@ -918,7 +918,7 @@ function liftIn(set,p){
    — шары радиусом «до кожи в покое минус CUSH_GAP»; где шар выходит из кожи кадра, кожа корпуса поднимается по своей нормали
    (как складками: в сетке и в расстояниях одинаково, по точке кожи на луче от оси сечения) на выход шара, плавно у начала
    (CUSH_W). В покое шары внутри кожи — она та же до бита. */
-const CUSH=GIRDLE.back,CUSH_GAP=.5,CUSH_W=1;
+const CUSH=GIRDLE.back,CUSH_GAP=.3,CUSH_W=1;
 let CUSH_R=null,CUSH_OFF=false;
 const CUSH_AX=new WeakMap();
 function cushCenters(R){
