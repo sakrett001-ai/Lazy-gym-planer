@@ -190,8 +190,16 @@ const extreme = (pts, f) => pts.reduce((a, q) => (f(q) > f(a) ? q : a));
   if (C.length !== 7) throw Error('шейных позвонков: ' + C.length);
   /* поперечный отросток: самые наружные точки позвонка (в пределах 0,8 см от края); передний бугорок — передняя из них,
      задний — задняя (у C7 переднего бугорка нет: передний и задний — одна наружная часть) */
-  const tub = C.map(p => { const R = p.filter(q => q[0] < midX - 1), lat = Math.max(...R.map(q => midX - q[0])), L = R.filter(q => midX - q[0] > lat - .8);
-    return { ant: extreme(L, q => q[2]), post: extreme(L, q => -q[2]), tip: extreme(p, q => -q[2]) }; });
+  /* 4.60.0: задний бугорок — задний край кончика отростка (наружные 0,3 см), а не самая задняя точка полосы 0,8 см: в эту полосу
+     у позвонков HAT входит суставной столб (у C3–C5 она тянется на 2 см назад от кончика отростка), и задний бугорок уходил на
+     1 см назад — за суставы. У живого передний и задний бугорки разделены бороздой спинномозгового нерва (≈ 1 см), оба впереди
+     суставов (Gray's Anatomy, 1918, с. 98–99). C2 — один бугорок: «поперечные отростки осевого позвонка очень малы, каждый
+     кончается одним бугорком» (там же, с. 101); C2 в сетке HAT — шаблон типичного позвонка с двумя бугорками, и один бугорок
+     осевого позвонка ставится посередине между ними. */
+  const tub = C.map((p, k) => { const R = p.filter(q => q[0] < midX - 1), lat = Math.max(...R.map(q => midX - q[0])), L = R.filter(q => midX - q[0] > lat - .8), T = R.filter(q => midX - q[0] > lat - .3);
+    const ant = extreme(L, q => q[2]), post = extreme(T, q => -q[2]);
+    if (k === 1) { const t = mul(add(ant, post), .5); return { ant: t, post: t, tip: extreme(p, q => -q[2]) }; }
+    return { ant, post, tip: extreme(p, q => -q[2]) }; });
   const T = n => extreme(bone('thoracic' + n).w, q => -q[2]);                                  // вершина остистого отростка
   const eop = (() => { const s = md.muscles.find(mu => mu.name === 'trap_clav_1_r').el[0].s; return at(index(s.bone[0], s.bone[1] || ''), s.p); })();
   const mastoid = extreme(skull.w.filter(q => { const l = midX - q[0]; return l > 4 && l < 6.5 && q[2] > -3 && q[2] < 1.5; }), q => q[1]);
