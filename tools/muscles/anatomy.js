@@ -245,9 +245,12 @@ const extreme = (pts, f) => pts.reduce((a, q) => (f(q) > f(a) ? q : a));
        наружная поверхность 2-го ребра */
     ['SCALant1', [[cerv, tub[3].ant], [rc, scaleneTub]]],
     ['SCALant2', [[cerv, tub[5].ant], [rc, scaleneTub]]],
-    ['SCALmed1', [[cerv, tub[1].post], [rc, rib1Top(.5)]]],
-    ['SCALmed2', [[cerv, tub[3].post], [rc, rib1Top(.56)]]],
-    ['SCALmed3', [[cerv, tub[5].post], [rc, rib1Top(.62)]]],
+    /* средняя (4.60.0): пучки — у самой борозды подключичной артерии (лестничный бугорок — доля 0,8, борозда за ним), доли
+       0,55 / 0,62 / 0,7 — три соседние вершины верха ребра (до 4.60.0 — 0,5 / 0,56 / 0,62, на шаг дальше от борозды); задняя
+       часть прикрепления, к бугорку ребра, не рисуется (tools/muscles/README.md, «Шея: посадка 4.60.0») */
+    ['SCALmed1', [[cerv, tub[1].post], [rc, rib1Top(.55)]]],
+    ['SCALmed2', [[cerv, tub[3].post], [rc, rib1Top(.62)]]],
+    ['SCALmed3', [[cerv, tub[5].post], [rc, rib1Top(.7)]]],
     ['SCALpost1', [[cerv, tub[3].post], [rc, rib2Out(.28)]]],
     ['SCALpost2', [[cerv, tub[5].post], [rc, rib2Out(.36)]]],
   ];

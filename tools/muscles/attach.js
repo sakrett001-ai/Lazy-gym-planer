@@ -25,37 +25,54 @@ skel.bones.forEach((b, i) => { const v = []; for (let k = 0; k < b.pos.length; k
 const mean = v => [0, 1, 2].map(k => v.reduce((s, p) => s + p[k], 0) / v.length);
 const ext = (v, k) => [Math.min(...v.map(p => p[k])), Math.max(...v.map(p => p[k]))];
 
-/* позвонки сверху вниз: высоты центров (Y вниз). Шейный отдел — одна кость, но позвонки в её сетке — отдельные
-   компоненты связности: семь самых крупных (мелкие — диски), сверху вниз — C1…C7 (до 4.34.0 шея делилась по высоте
-   на семь равных частей — C7 выходил на 1,6 см ниже настоящего) */
-function cervicalY() {
-  const b = skel.bones.find(x => x.name === 'cervical'), n = b.pos.length / 3, par = Array.from({ length: n }, (_, i) => i);
+/* позвонки сверху вниз (Y вниз): у каждого — высота центра (y) и вершины остистого отростка (tip). Шейный отдел — одна
+   кость, но позвонки в её сетке — отдельные компоненты связности: семь самых крупных (мелкие — диски), сверху вниз —
+   C1…C7 (до 4.34.0 шея делилась по высоте на семь равных частей — C7 выходил на 1,6 см ниже настоящего). С 4.60.0 центр
+   шейного позвонка C2–C7 — центр его тела (поле bodies кости, build_bones.py): у центра всей сетки позвонка, вместе с
+   остистым отростком, наклонённым вниз, уровень выходил ниже тела на 0,4–1,4 см */
+const CERV = (() => {
+  const i0 = skel.bones.findIndex(x => x.name === 'cervical'), b = skel.bones[i0], n = b.pos.length / 3, par = Array.from({ length: n }, (_, i) => i);
   const find = x => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; };
   for (let i = 0; i < b.idx.length; i += 3) for (const [a, c] of [[b.idx[i], b.idx[i + 1]], [b.idx[i + 1], b.idx[i + 2]]]) { const ra = find(a), rc = find(c); if (ra !== rc) par[ra] = rc; }
   const comp = new Map(); for (let i = 0; i < n; i++) { const r = find(i); (comp.get(r) || comp.set(r, []).get(r)).push(i); }
-  const ys = [...comp.values()].sort((a, c) => c.length - a.length).slice(0, 7).map(c => mean(c.map(i => BONES.cervical.v[i]))[1]).sort((a, c) => a - c);
-  if (ys.length !== 7) throw new Error('шейный отдел: позвонков ' + ys.length);
-  return ys;
-}
+  const parts = [...comp.values()].sort((a, c) => c.length - a.length).slice(0, 7).map(c => c.map(i => BONES.cervical.v[i])).sort((a, c) => mean(a)[1] - mean(c)[1]);
+  if (parts.length !== 7) throw new Error('шейный отдел: позвонков ' + parts.length);
+  /* тела C7…C2 из данных кости (рамка шеи) → мир; без поля bodies (данные до 4.60.0) — центры компонент */
+  const body = b.bodies ? b.bodies.map(r => mean([at(i0, [0, r[0], r[1]]), at(i0, [0, r[2], r[3]])])).reverse() : null;   // C2…C7
+  return parts.map((p, k) => ({ pts: p, c: k > 0 && body ? body[k - 1] : mean(p), tip: p.reduce((a, q) => (q[2] < a[2] ? q : a)) }));
+})();
 const VERT = [];
 {
-  const c = k => mean(BONES[k].v);
+  const c = k => mean(BONES[k].v), tip = k => BONES[k].v.reduce((a, q) => (q[2] < a[2] ? q : a))[1];
   const skullY = ext(BONES.skull.v, 1)[1];
-  cervicalY().forEach((y, i) => VERT.push({ name: 'C' + (i + 1), y }));
-  for (let n = 1; n <= 12; n++) VERT.push({ name: 'T' + n, y: c('thoracic' + n)[1] });
-  for (let n = 1; n <= 5; n++) VERT.push({ name: 'L' + n, y: c('L' + n)[1] });
-  VERT.push({ name: 'S1', y: ext(BONES.sacrum.v, 1)[0] + 3 }, { name: 'S5', y: ext(BONES.sacrum.v, 1)[1] - 2 });
+  CERV.forEach((v, i) => VERT.push({ name: 'C' + (i + 1), y: v.c[1], tip: v.tip[1] }));
+  for (let n = 1; n <= 12; n++) VERT.push({ name: 'T' + n, y: c('thoracic' + n)[1], tip: tip('thoracic' + n) });
+  for (let n = 1; n <= 5; n++) VERT.push({ name: 'L' + n, y: c('L' + n)[1], tip: tip('L' + n) });
+  const s1 = ext(BONES.sacrum.v, 1)[0] + 3, s5 = ext(BONES.sacrum.v, 1)[1] - 2;
+  VERT.push({ name: 'S1', y: s1, tip: s1 }, { name: 'S5', y: s5, tip: s5 });
   VERT.skullY = skullY;
 }
 const SPINE_Z = (() => { const t = ['thoracic7', 'thoracic12', 'L3'].map(k => mean(BONES[k].v)[2]); return t; })();
-/* уровень по высоте: T7.5 — между T7 и T8; выше C1 — «череп» */
-function level(y) {
-  if (y < VERT[0].y - 2) return { label: 'череп', v: 0 };
+/* уровень по высоте: T7.5 — между T7 и T8; выше C1 — «череп». key — 'y' (центры) или 'tip' (вершины остистых отростков) */
+function level(y, key = 'y') {
+  if (y < VERT[0][key] - 2) return { label: 'череп', v: 0 };
   for (let i = 0; i < VERT.length - 1; i++) {
-    const a = VERT[i], b = VERT[i + 1];
-    if (y <= b.y) { const f = Math.max(0, (y - a.y) / (b.y - a.y)); return { label: f < .25 ? a.name : f > .75 ? b.name : a.name + '–' + b.name, v: i + f }; }
+    const a = VERT[i][key], b = VERT[i + 1][key];
+    if (y <= b) { const f = Math.max(0, (y - a) / (b - a)), A = VERT[i].name, Bn = VERT[i + 1].name; return { label: f < .25 ? A : f > .75 ? Bn : A + '–' + Bn, v: i + f }; }
   }
   return { label: 'ниже S5', v: VERT.length };
+}
+/* шейный отдел (4.60.0): уровень точки на самом позвонке — номер этого позвонка (ближе 0,6 см к его вершинам), точки выйной
+   связки (в рамке шейного отдела, но позади отростков) — по высоте вершин остистых отростков. Сторона — по своему позвонку:
+   сбоку — поперечные отростки и суставные столбы (дальше 1,5 см от средней линии), сзади — позади тела у средней линии
+   (дуга, остистые отростки, выйная связка), спереди — тело. До 4.60.0 «сзади» считалось от глубины T7, общей для всего
+   позвоночника: шейный отдел, посаженный на место (тела — у z ≈ 0), уходил «назад» поперечными отростками */
+function cervicalAt(p, lateral) {
+  let best = Infinity, k = -1;
+  CERV.forEach((v, i) => { for (const q of v.pts) { const d = Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]); if (d < best) { best = d; k = i; } } });
+  const body = CERV[Math.max(1, k)].c, where = lateral >= 1.5 ? 'сбоку' : p[2] < body[2] - 1 ? 'сзади' : 'спереди';
+  if (best < .6) return { lv: { label: 'C' + (k + 1), v: k }, where };
+  return { lv: level(p[1], 'tip'), where };
 }
 const vertIndex = name => VERT.findIndex(v => v.name === name);
 /* ось длинной кости — от верхнего (у ключицы — внутреннего) конца */
@@ -81,8 +98,12 @@ function describe(k, p) {
   const name = k.replace(/[LR]$/, ''), side = k.match(/[LR]$/)?.[0] || '';
   const lateral = Math.abs(p[0] - midX), z = p[2];
   if (/^(thoracic\d+|L\d|sacrum|ribcage|cervical|skull|jaw)$/.test(k)) {
-    const lv = level(p[1]), spineZ = SPINE_Z[0];
+    if (k === 'cervical') { const { lv, where } = cervicalAt(p, lateral); return { bone: k, kind: 'spine', level: lv.label, lv: +lv.v.toFixed(2), where, lateral: +lateral.toFixed(1) }; }
+    const spineZ = SPINE_Z[0];
     const where = lateral < 4 && z < spineZ + 4 ? 'сзади' : z > spineZ + 12 ? 'спереди' : 'сбоку';
+    /* сзади у средней линии (остистые отростки, надостистая связка) — по высоте вершин остистых отростков (4.60.0: вершина
+       отростка у C7 и грудных ниже тела своего позвонка, и начало у вершины выходило на уровень ниже) */
+    const lv = where === 'сзади' && lateral < 1.5 ? level(p[1], 'tip') : level(p[1]);
     return { bone: k, kind: 'spine', level: lv.label, lv: +lv.v.toFixed(2), where, lateral: +lateral.toFixed(1) };
   }
   if (/^pelvis/.test(k)) {
