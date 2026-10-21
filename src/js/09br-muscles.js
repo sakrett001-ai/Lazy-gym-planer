@@ -351,7 +351,7 @@ const Muscles = (() => {
   const SD = new Float64Array(3);
   let NODIR = 0;
   /* состояние кожи кадра: матрицы, закрутка предплечий, центры «шапок», плечевой пояс, складки подмышки, шея */
-  const SKN = { S: null, m: null, tw: new Float64Array(4), cap: new Float64Array(36), gd: new Float64Array(6), gk: new Float64Array(2), gm: new Float64Array(2), fold: new Float64Array(6 * 10), tsl: new Float64Array(2), neck: new Float64Array(18), hand: new Int32Array(2), foot: new Int32Array(2) };
+  const SKN = { S: null, m: null, tw: new Float64Array(4), cap: new Float64Array(36), gd: new Float64Array(6), gk: new Float64Array(2), gm: new Float64Array(2), fold: new Float64Array(6 * 10), cush: null, cushB: 0, tsl: new Float64Array(2), neck: new Float64Array(18), hand: new Int32Array(2), foot: new Int32Array(2) };
   function bindSkin(md, bound, idx, skel) {
     if (!MQ || !md.muscles.some(mu => mu.skp)) return null;
     const bone = (n, s = '') => { const i = idx.get(n + '|' + s); if (i === undefined) throw Error('muscles: skin bone ' + n + ' ' + s); return i; };
@@ -383,6 +383,9 @@ const Muscles = (() => {
       S.sides.push({ g, hum, uln, rad, fem, tib, scap: bone('scapula', s), rest: [g * (B.sc[0] + B.ghRel[0]), B.sc[1] + B.ghRel[1], B.sc[2] + B.ghRel[2]], ac: [g * (B.ghRel[0] + MQ.AC_CAP.off[0]), B.ghRel[1] + MQ.AC_CAP.off[1], B.ghRel[2] + MQ.AC_CAP.off[2]] });
       for (const k of Object.keys(MQ.FOLDS)) { const F = MQ.FOLDS[k]; S.folds.push({ g, hum, tr: [g * F.tr[0], F.tr[1], F.tr[2]], ua: [g * F.ua[0], F.ua[1], F.ua[2]], a: F.a, s: F.s, kv: F.kv, L0: 0 }); }
     }
+    /* мягкие ткани над лопаткой (Mannequin.cushLift): точки задней поверхности лопатки в её рамке (кость лопатки скелета — рамка
+       лопатки манекена, Skeleton.frames), радиусы — у манекена (по коже покоя) */
+    if (MQ.CUSH) { S.cushPts = S.sides.map(sd => MQ.CUSH.map(f => [-sd.g * f[0], f[1], f[2]])); S.cushR = Float64Array.from(MQ.cushRadii()); S.cushW = MQ.CUSH_W; }
     S.capR = Float64Array.from(S.caps, c => c.r); S.tbones = [S.sac, S.l5, S.rib]; S.skull = bone('skull'); S.headC = B.headCenter.slice();
     /* радиус шара с головой вокруг центра — по точкам поверхности головы с ушами (Mannequin.headSamples, их строят и силуэты
        каталога) и 1 см запаса между точками (headPart) */
@@ -454,9 +457,24 @@ const Muscles = (() => {
       F[o + 8] = f.s * f.s * Math.min(9, Math.max(0, Math.log(ak / .01)));
       F[o + 9] = f.s;
     });
-    /* наибольшее приближение кожи корпуса сдвигом надплечий (двойной сдвиг: сечение под сдвинутой точкой другое) и складками
-       (подъём не больше амплитуды) — для оценки снизу в torsoPart */
-    { let ak = 0; for (let j = 0; j < 6; j++) ak = Math.max(ak, SKN.fold[j * 10 + 7]); for (let k = 0; k < 2; k++) SKN.tsl[k] = 2 * SKN.gm[k] + ak + .3; }
+    /* мягкие ткани над лопаткой: центры шаров — в рамке грудной клетки; cushB — верхняя оценка подъёма (шар выходит из кожи без
+       подъёмов не больше, чем на радиус минус глубину центра под ней) */
+    SKN.cushB = 0;
+    if (S.cushPts) {
+      const n = S.cushR.length, C = SKN.cush || (SKN.cush = new Float64Array(2 * n * 3));
+      for (let k = 0; k < 2; k++) {
+        const sp = S.sides[k].scap * 12;
+        S.cushPts[k].forEach((q, i) => {
+          toLocal(m, S.rib, m[sp + 3] + m[sp] * q[0] + m[sp + 1] * q[1] + m[sp + 2] * q[2], m[sp + 7] + m[sp + 4] * q[0] + m[sp + 5] * q[1] + m[sp + 6] * q[2], m[sp + 11] + m[sp + 8] * q[0] + m[sp + 9] * q[1] + m[sp + 10] * q[2]);
+          const o = (k * n + i) * 3; C[o] = LQ[0]; C[o + 1] = LQ[1]; C[o + 2] = LQ[2];
+          const hh = LQ[1] + S.segH[2], rr = Math.sqrt(LQ[0] * LQ[0] + LQ[2] * LQ[2]), dep = rr < 1e-9 ? 0 : torsoR(S, hh, LQ[2], LQ[0]) - rr;
+          SKN.cushB = Math.max(SKN.cushB, S.cushR[i] - Math.max(0, dep - 2 * SKN.gm[k]) + .1);
+        });
+      }
+    }
+    /* наибольшее приближение кожи корпуса сдвигом надплечий (двойной сдвиг: сечение под сдвинутой точкой другое), складками
+       (подъём не больше амплитуды) и мягкими тканями над лопаткой — для оценки снизу в torsoPart */
+    { let ak = 0; for (let j = 0; j < 6; j++) ak = Math.max(ak, SKN.fold[j * 10 + 7]); for (let k = 0; k < 2; k++) SKN.tsl[k] = 2 * SKN.gm[k] + ak + SKN.cushB + .3; }
     /* шея (Mannequin.neckSDF): ось — от основания (рамка шеи: −1 по y, +2,5 по z) к точке в черепе (+1,5 по y рамки головы) */
     { const n = S.neck.cerv * 12, hd = S.neck.skull * 12, N = SKN.neck;
       const lx = m[n + 3] - m[n + 1] + m[n + 2] * 2.5, ly = m[n + 7] - m[n + 5] + m[n + 6] * 2.5, lz = m[n + 11] - m[n + 9] + m[n + 10] * 2.5;
@@ -485,6 +503,16 @@ const Muscles = (() => {
       if (sp === 2) { const xs = u / L * FX_N, is = xs | 0; v = ex * (is < FX_N ? FS[is] + (FS[is + 1] - FS[is]) * (xs - is) : 0); }
       else v = ex * Math.pow(Math.sin(Math.PI * u / L), sp);
       if (v > h) h = v;
+    }
+    return h;
+  }
+  /* подъём кожи корпуса над лопаткой в точке (x, y, z) рамки грудной клетки — Mannequin.cushLift */
+  function skinCush(x, y, z) {
+    const C = SKN.cush; if (!C || !SKN.cushB) return 0;
+    const S = SKN.S, r = S.cushR, n = r.length, W = S.cushW; let h = 0;
+    for (let k = 0; k < 2 * n; k++) {
+      const rr = r[k % n], dx = x - C[k * 3], dy = y - C[k * 3 + 1], dz = z - C[k * 3 + 2], d2 = dx * dx + dy * dy + dz * dz; if (d2 >= rr * rr) continue;
+      const pen = rr - Math.sqrt(d2), v = pen < W ? pen * pen / (2 * W) : pen - W / 2; if (v > h) h = v;
     }
     return h;
   }
@@ -594,7 +622,7 @@ const Muscles = (() => {
       const rho = Math.sqrt(lx * lx + lz * lz), r = rho < 1e-9 ? 0 : torsoR(S, h, lz, lx), ux = rho > 1e-9 ? lx / rho : 1, uz = rho > 1e-9 ? lz / rho : 0;
       let radial = rho - r;
       /* складки подмышки: подъём кожи в точке поверхности на луче от оси (со сдвигом плечевого пояса обратно) — в рамке грудной клетки */
-      if (rho > 1e-9 && !deep && radial > -SKIN_DEEP) radial -= skinFold(ux * r + sx, ly + sy, uz * r + sz);
+      if (rho > 1e-9 && !deep && radial > -SKIN_DEEP) { const px = ux * r + sx, py = ly + sy, pz = uz * r + sz; radial -= skinFold(px, py, pz) + skinCush(px, py, pz); }
       const axial = h - S.top, d = axial > 0 ? (radial > 0 ? Math.sqrt(radial * radial + axial * axial) : axial) : Math.max(radial, axial);
       if (!(d < best) || NODIR) return d;
       /* направление наружу — нормаль кожи: суперэллипс сечения в точке луча и наклон образующей по высоте (у груди под ключицей и
@@ -656,7 +684,8 @@ const Muscles = (() => {
     /* складки подмышки — у точки поверхности на луче от оси, в рамке грудной клетки */
     if (h > 20 && rho > 1e-9) {
       const qx = cx + Xx * ux * r + Zx * uz * r - m[rb + 3], qy = cy + Xy * ux * r + Zy * uz * r - m[rb + 7], qz = cz + Xz * ux * r + Zz * uz * r - m[rb + 11];
-      radial -= skinFold(m[rb] * qx + m[rb + 4] * qy + m[rb + 8] * qz, m[rb + 1] * qx + m[rb + 5] * qy + m[rb + 9] * qz, m[rb + 2] * qx + m[rb + 6] * qy + m[rb + 10] * qz);
+      const fx = m[rb] * qx + m[rb + 4] * qy + m[rb + 8] * qz, fy = m[rb + 1] * qx + m[rb + 5] * qy + m[rb + 9] * qz, fz = m[rb + 2] * qx + m[rb + 6] * qy + m[rb + 10] * qz;
+      radial -= skinFold(fx, fy, fz) + skinCush(fx, fy, fz);
     }
     const axial = S.bot * k - h, d = axial > 0 ? (radial > 0 ? Math.sqrt(radial * radial + axial * axial) : axial) : Math.max(radial, axial);
     if (!(d < best) || NODIR) return d;

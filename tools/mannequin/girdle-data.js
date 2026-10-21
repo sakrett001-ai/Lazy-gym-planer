@@ -12,7 +12,7 @@
    ISB (Wu et al., 2005): оси лопатки — по ts, ai, aa; ключицы — грудино-ключичный → ac.
    front — передняя (рёберная) поверхность тела лопатки: вершины с нормалью к рёбрам (cos ≥ 0,35 с нормалью плоскости
    вперёд) дальше 3,5 см от центра плечевого сустава и ac и медиальнее акромиона на 2,5 см; 40 точек, равномерно (выбор
-   самых удалённых друг от друга).
+   самых удалённых друг от друга); back — задняя поверхность у медиального края и корня ости (16 точек, этап Д).
    Оболочка рёбер — наибольший радиус вершин грудной клетки от оси (x = 0, z = zc; zc — средняя глубина вершин) по слою
    1 см и сектору 5° (как оболочка у стенок мышц), обе стороны — общей таблицей (наибольшее из левой и правой):
    строки — высота y0…y1 (рамка грудной клетки), столбцы — сектор a0…a1 (сектор k — азимут 5k° от передней линии,
@@ -53,6 +53,11 @@ function girdleData(bones = SK.decode(zlib.gunzipSync(fs.readFileSync(path.join(
   const fwd = n.map(x => -x), frontAll = V.filter((p, i) => len(sub(p, gl)) > 3.5 && len(sub(p, ac)) > 3.5 && U[i] < U[aa] - 2.5 && dot(N[i], fwd) > .35);
   const sel = [frontAll.reduce((m, p, i) => p[1] < frontAll[m][1] ? i : m, 0)];
   while (sel.length < 40) { let bi = -1, bd = -1; frontAll.forEach((p, i) => { const d = Math.min(...sel.map(j => len(sub(p, frontAll[j])))); if (d > bd) { bd = d; bi = i; } }); sel.push(bi); }
+  /* задняя поверхность у медиального края и корня ости (этап Д: мягкие ткани над лопаткой, Mannequin.cushLift): вершины с
+     нормалью назад (cos ≥ 0,35), не дальше 7 см латеральнее медиального края (ts), дальше 3,5 см от суставов; 16 точек, равномерно */
+  const backAll = V.filter((p, i) => len(sub(p, gl)) > 3.5 && len(sub(p, ac)) > 3.5 && U[i] < U[ts] + 7 && dot(N[i], n) > .35);
+  const selB = [backAll.reduce((m, p, i) => p[1] > backAll[m][1] ? i : m, 0)];
+  while (selB.length < 16) { let bi = -1, bd = -1; backAll.forEach((p, i) => { const d = Math.min(...selB.map(j => len(sub(p, backAll[j])))); if (d > bd) { bd = d; bi = i; } }); selB.push(bi); }
   /* оболочка рёбер */
   let zc = 0; for (let i = 2; i < rib.pos.length; i += 3) zc += rib.pos[i]; zc /= rib.pos.length / 3;
   const ny = Y1 - Y0 + 1, na = A1 - A0 + 1, env = new Array(ny * na).fill(0);
@@ -62,7 +67,7 @@ function girdleData(bones = SK.decode(zlib.gunzipSync(fs.readFileSync(path.join(
     const j = (y - Y0) * na + (a - A0), r = Math.round(Math.hypot(x, z) * 10); if (r > env[j]) env[j] = r;
   }
   return {
-    GIRDLE: { ac: ac.map(r2), ts: V[ts].map(r2), ai: ai.map(r2), aa: V[aa].map(r2), front: sel.map(i => frontAll[i].map(r2)) },
+    GIRDLE: { ac: ac.map(r2), ts: V[ts].map(r2), ai: ai.map(r2), aa: V[aa].map(r2), front: sel.map(i => frontAll[i].map(r2)), back: selB.map(i => backAll[i].map(r2)) },
     RIB_ENV: { zc: r2(zc), y0: Y0, y1: Y1, a0: A0, a1: A1, mm: env.join(' ') }
   };
 }
@@ -72,7 +77,7 @@ if (require.main === module) {
   if (process.argv.includes('--json')) console.log(JSON.stringify(d));
   else {
     const G = d.GIRDLE, s = p => '[' + p.join(',') + ']';
-    console.log(`const GIRDLE={ac:${s(G.ac)},ts:${s(G.ts)},ai:${s(G.ai)},aa:${s(G.aa)},\n front:[${G.front.map(s).join(',')}]};`);
+    console.log(`const GIRDLE={ac:${s(G.ac)},ts:${s(G.ts)},ai:${s(G.ai)},aa:${s(G.aa)},\n front:[${G.front.map(s).join(',')}],\n back:[${G.back.map(s).join(',')}]};`);
     console.log(`const RIB_ENV={zc:${d.RIB_ENV.zc},y0:${d.RIB_ENV.y0},y1:${d.RIB_ENV.y1},a0:${d.RIB_ENV.a0},a1:${d.RIB_ENV.a1},mm:'${d.RIB_ENV.mm}'};`);
   }
 }
