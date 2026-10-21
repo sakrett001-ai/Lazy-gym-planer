@@ -705,7 +705,7 @@ module.exports = {
     pose(t, C) {
       const { V } = C, L = SPM(), e = C.ease(t), q = C.M.clone(L.q), th = C.lerp(L.th0, L.th1, e);
       for (const s of S) {
-        q[s].girdle = [C.lerp(4, 9, e), C.lerp(0, 3, e)];
+        C.rhythm(q, s, [0, C.lerp(0, 2, e)]); /* пояс по ритму (этап Д: подъём плеч и поворот лопатки — от подъёма руки), сверх него — лёгкая протракция */
         const lat = C.lat(q, s), g = arcPt(L.P, L.R, th, C.M.SIGN[s] * L.hx);
         const pole = V.unit(V.add(V.add(V.scale(lat, C.lerp(.5, 1, e)), [0, -1, 0], C.lerp(1, .3, e)), [0, 0, 1], C.lerp(.6, .3, e)));
         C.grip(q, s, g, V.scale(lat, -1), pole, { wristExt: C.lerp(10, 2, e) });

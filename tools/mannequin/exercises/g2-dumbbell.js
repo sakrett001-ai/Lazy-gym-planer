@@ -726,7 +726,8 @@ module.exports = {
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = sitOnAdj(C, C.base(), { lumbar: 2, thoracic: -2, hip: 84, feetZ: -23 });
       q.neck = [2, 0, 0];
-      for (const s of S) q[s].girdle = [C.lerp(4, 18, e), C.lerp(2, 6, e)];
+      /* пояс по ритму (этап Д: подъём плеч и поворот лопатки — от подъёма руки), сверх него — лёгкая протракция */
+      for (const s of S) C.rhythm(q, s, [0, C.lerp(2, 4, e)]);
       const f = C.fk(q), T = C.axes(q, 'thorax');
       for (const s of S) {
         const lat = C.lat(q, s), gh = f.P['gh' + s], up = [0, 1, 0], fwd = V.unit(V.perp(T.z, up));
@@ -749,7 +750,8 @@ module.exports = {
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = sitOnAdj(C, C.base(), { lumbar: 2, thoracic: -2, hip: 84, feetZ: -23 });
       q.neck = [2, 0, 0];
-      for (const s of S) q[s].girdle = [C.lerp(2, 18, e), C.lerp(10, 6, e)];
+      /* пояс по ритму (этап Д: подъём плеч и поворот лопатки — от подъёма руки), сверх него — лёгкая протракция */
+      for (const s of S) C.rhythm(q, s, [0, C.lerp(8, 4, e)]);
       const f = C.fk(q), T = C.axes(q, 'thorax');
       for (const s of S) {
         const lat = C.lat(q, s), gh = f.P['gh' + s], up = [0, 1, 0], fwd = V.unit(V.perp(T.z, up)), back = V.scale(fwd, -1);

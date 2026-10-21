@@ -359,7 +359,7 @@ module.exports = {
         const d0 = V.unit(V.add(V.add([0, -1, 0], lat, .2), T.z, .14)), d1 = V.unit(V.add(V.add(lat, [0, 1, 0], .04), T.z, .3));
         const g = V.add(gh, slerpDir(V, d0, d1, e), 60);
         C.hold(q, s, g, V.unit(V.mix(V.add([0, 0, -1], lat, .5), V.add([0, 1, -.6], lat, .2), e)), { pron: C.lerp(5, 25, e) });
-        q[s].girdle = [C.lerp(0, 8, e), C.lerp(4, 6, e)];
+        C.rhythm(q, s, [0, 3]); /* пояс по ритму (этап Д: подъём плеч и поворот лопатки — от подъёма руки), сверх него — лёгкая протракция */
         C.hold(q, s, g, V.unit(V.mix(V.add([0, 0, -1], lat, .5), V.add([0, 1, -.6], lat, .2), e)), { pron: C.lerp(5, 25, e) });
       }
       return q;
@@ -590,7 +590,7 @@ module.exports = {
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = C.M.clone(CL().q), grab = C.point('col', 'grabL');
-      q.R.girdle = [C.lerp(0, 8, e), C.lerp(6, 2, e)];
+      C.rhythm(q, 'R', [0, C.lerp(4, 1, e)]); /* пояс по ритму (этап Д: подъём плеч и поворот лопатки — от подъёма руки), сверх него — лёгкая протракция */
       const f = C.fk(q), gh = f.P.ghR;
       C.grip(q, 'L', [grab[0], 128, grab[2]], [0, 1, 0], V.unit([.4, -1, -.3]));
       const d0 = V.unit(V.sub([4, 86, 34], gh)), d1 = V.unit([-.92, .04, .4]), d = slerpDir(V, d0, d1, e);
