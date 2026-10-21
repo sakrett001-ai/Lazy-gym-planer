@@ -5,7 +5,7 @@ import numpy as np, json, fast_simplification, sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from extract import chain, load
 S_T = 1.03          # рост манекена 174,5 см против 170 см в исходных моделях
-B = dict(ua=28.3, fa=27.0, th=40.7, sk=41.8, hipHalf=8.8)   # как B в src/js/09bm-mannequin.js
+B = dict(ua=28.3, fa=27.0, th=40.7, sk=41.8, hipHalf=8.8, ghRel=[17,-3.1,-6.7])   # как B в src/js/09bm-mannequin.js
 def M(v): v=np.asarray(v,float); return np.stack([-v[...,2], v[...,1], v[...,0]],-1)   # OpenSim (x вперёд, y вверх, z вправо) → манекен
 def unit(v): return v/np.linalg.norm(v)
 def rot_between(a,b):
@@ -61,9 +61,19 @@ def pelvisMap(v):
 for nm,side in (('r_pelvis','R'),('l_pelvis','L')):
     v,f=mesh(LEG,nm); add('pelvis_'+side,side,'pelvis',pelvisMap(v),f,900,xf=pelvisMap)
 v,f=mesh(TOR,'sacrum_geom_1_sacrum'); add('sacrum','',  'pelvis',pelvisMap(v),f,500,xf=pelvisMap)
+# Длина грудного отдела (4.62.0). Грудной блок MyoSim при общем масштабе S_T длиннее среднего: от верхней пластинки T1 до
+# нижней пластинки T12 по телам — 29,3 см, а у взрослого мужчины грудной отдел ≈ 28 см при поясничном 18 и шейном 12,5
+# (Gray's Anatomy, 1918, «The Vertebral Column as a Whole»: весь позвоночник мужчины ≈ 71 см). Шея, поставленная по черепу
+# (12,7 см), и прямой грудной блок опускали Th12 на 1,8 см и сжимали поясницу (центры тел T12 → L5: 15,8 → 14,4 см), хотя
+# поясница MyoSim и так короче нормы. Грудной блок (рёбра, грудина, позвонки T1–T12) сжимаем вдоль его оси к верхней
+# пластинке T1 на TH_SY: грудной отдел — 28 см, поясница — прежней длины.
+TH_SY=CFG.get('th_sy',.94)
+_t1=(M(next(load(file,Rg,pg) for (b,m,file,Rg,pg) in TOR['meshes'] if m.endswith('_thoracic1_s'))[0])-mid)*S_T; _t1=_t1[(_t1[:,2]>np.median(_t1[:,2]))&(np.abs(_t1[:,0])<1.6)]
+SYP=np.array([0.,float(np.percentile(_t1[:,1],95)),float(_t1[:,2].mean())])   # верх тела T1 (до наклона)
+def thorScale(q,w=1.): return SYP+(np.asarray(q)-SYP)*np.array([1.,1.+(TH_SY-1.)*w,1.])
 def trunkMap(v,w):
     """w — доля смещения грудного блока (0 у крестца, 1 у Th12 и выше)"""
-    return thoraxFit((np.asarray(v)-mid)*np.array([S_T,S_T,S_T]),w)
+    return thoraxFit(thorScale((np.asarray(v)-mid)*np.array([S_T,S_T,S_T]),w),w)
 yS=float(pelvisMap(mesh(TOR,'sacrum_geom_1_sacrum')[0])[:,1].max()); yT12=float(trunkMap(mesh(TOR,'torso_geom_1_thoracic12_s')[0],0)[:,1].mean())
 TH0=np.array([0,24.,0])   # начало рамки грудной клетки манекена в рамке таза (нейтральная поза)
 # Поясница (4.62.0). Шарниры поясницы манекена (B.lumbarPivot, B.thoracicPivot, VERT_LEVELS) стоят в суставах MyoSim,
@@ -226,7 +236,7 @@ ATL_INF=np.array([0,lm[lm[:,1]<np.percentile(lm[:,1],25)][:,1].mean(),lm[:,2].me
 # наклоне TH_PITCH, без сдвига (сдвиг грудного блока TH_DY, TH_DZ подбирается ниже — по шее)
 def tbody(n):
     v,_=next(load(file,Rg,pg) for (b,m,file,Rg,pg) in TOR['meshes'] if m.endswith('_'+n+'_s'))
-    v=pitchFit((M(v)-mid)*S_T,TH_PITCH,0.,0.); return v[(v[:,2]>np.median(v[:,2]))&(np.abs(v[:,0])<1.6)]
+    v=pitchFit(thorScale((M(v)-mid)*S_T),TH_PITCH,0.,0.); return v[(v[:,2]>np.median(v[:,2]))&(np.abs(v[:,0])<1.6)]
 b1,b2=tbody('thoracic1'),tbody('thoracic2'); u1=unit(b1.mean(0)-b2.mean(0)); TH_T1=tilt(u1)
 E00=b1.mean(0)+u1*np.percentile((b1-b1.mean(0))@u1,90); E00[0]=0
 # масштаб позвонка: поперёк — S_T (как у всех костей MyoSim), вдоль своей оси — S_T·k (высоты под длину шеи манекена)
@@ -317,7 +327,7 @@ ARM=chain('arm/assets/myoarm_r_chain.xml','arm/assets/myoarm_r_assets.xml','clav
 # суставной впадиной на центре плечевого сустава манекена (головка плечевой кости в ней); ключица — от грудино-ключичного
 # сустава к акромиально-ключичному этой лопатки (растянута по длине). Поворот — тот, что совмещает направления
 # «грудино-ключичный → плечевой сустав» модели и манекена.
-gh=P(ARM,'scapphant_r'); ac=P(ARM,'clavphant_r'); tgt=np.array([-17.0,-3.1,-4.]); Rg_=rot_between(gh,tgt)
+gh=P(ARM,'scapphant_r'); ac=P(ARM,'clavphant_r'); tgt=np.array([-B['ghRel'][0],B['ghRel'][1],B['ghRel'][2]],float); Rg_=rot_between(gh,tgt)
 # Лопатка на рёбрах: так поставленная, лопатка MoBL уходит телом на 1,5–2 см в грудную клетку манекена (у живого
 # человека между рёбрами и лопаткой — подлопаточная и передняя зубчатая мышцы). Поворачиваем её вокруг центра
 # плечевого сустава — вокруг вертикали и поперечной оси — на наименьшие углы, при которых передняя поверхность лежит
