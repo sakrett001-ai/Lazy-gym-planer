@@ -57,15 +57,20 @@ function ctx(equipment) {
       return out;
     },
     /* Положить область тела на плоскость (точка, нормаль): сдвиг таза вдоль нормали.
-       gap < 0 — поджатие мягких тканей и обивки, см. */
-    restOn(q, name, point, normal, gap = -1) {
-      const n = V.unit(normal), pts = C.region(q, name);
-      const min = Math.min(...pts.map(p => V.dot(V.sub(p, point), n)));
+       gap < 0 — поджатие мягких тканей и обивки, см (по коже без складок и тканей над лопаткой — region).
+       soft — глубже скольких сантиметров за плоскость не уходит кожа с мягкими тканями (regionOf); null — без ограничения.
+       На жёсткой опоре (пол под ковриком) ткани над лопаткой сминаются не больше, чем на толщину коврика и то же поджатие:
+       иначе (4.62.0, ткани над лопаткой не тоньше Mannequin.CUSH_MIN) лёжа на спине с опущенными и сведёнными лопатками
+       кожа над ними уходила под пол на 1,1 см */
+    restOn(q, name, point, normal, gap = -1, soft = null) {
+      const n = V.unit(normal), pts = C.region(q, name), depth = ps => Math.min(...ps.map(p => V.dot(V.sub(p, point), n)));
+      let min = depth(pts);
+      if (soft != null) min = Math.min(min, depth(C.regionOf(q, name)) + soft + gap);
       q.root.p = V.add(q.root.p, n, gap - min); return q;
     },
     /* Две области на одной плоскости (лопатки и ягодицы на скамье при прогибе): наклон таза вокруг его
        поперечной оси подбирается так, чтобы обе области касались плоскости одновременно. */
-    restOn2(q, a, b, point, normal, gap = -1, range = 30) {
+    restOn2(q, a, b, point, normal, gap = -1, range = 30, soft = null) {
       const n = V.unit(normal), base = q.root.q.slice(), axis = M3.col(M.fk(q).F.pelvis.R, 0);
       const minD = name => Math.min(...C.region(q, name).map(p => V.dot(V.sub(p, point), n)));
       const setPitch = deg => { q.root.q = M.Q.fromM3(M3.mul(M3.axis(axis, deg * D2R), M.Q.toM3(base))); };
@@ -73,7 +78,7 @@ function ctx(equipment) {
       let lo = -range, hi = range, flo = f(lo), fhi = f(hi);
       if (flo * fhi > 0) { setPitch(Math.abs(flo) < Math.abs(fhi) ? lo : hi); }
       else { for (let i = 0; i < 28; i++) { const m = (lo + hi) / 2, fm = f(m); if (flo * fm <= 0) { hi = m; fhi = fm; } else { lo = m; flo = fm; } } setPitch((lo + hi) / 2); }
-      return C.restOn(q, a, point, normal, gap);
+      return C.restOn(q, a, point, normal, gap, soft);
     },
     /* Хват: точка, ось ручки (направление большого пальца), полюс локтя */
     grip(q, s, point, thumb, pole, opts = {}) {

@@ -326,7 +326,10 @@ module.exports = {
       const along = q => { const f = C.fk(q), a = f.P.hipL, b = f.P.knL, ab = V.sub(b, a); return V.dot(V.sub(elbowOf(q), a), ab) / V.dot(ab, ab); };
       const lean = C.solve1D(l => along(seat(l)) - .8, 15, 60);
       const q = seat(lean);
-      q.L.girdle = [0, 8];
+      /* рабочее плечо выведено вперёд (протракция 8° сверх покоя) — до того же положения ключицы, что и в 4.61.0: в покое она
+         теперь отведена назад на 19,2° (Ludewig 2009; было 10,5°), поэтому сверх покоя — на 8,7° больше. С прежними 8° плечевой
+         сустав стоял на 2,7 см дальше назад, и висящее плечо уходило в грудную клетку на 4 см (допуск 3,2) */
+      q.L.girdle = [0, 8 + 8.7];
       /* плечевой сустав идёт за лопаткой (этап Д: поворот лопатки — от подъёма руки), поэтому локоть и гантель ставятся
          дважды — второй раз от плечевого сустава опущенной руки */
       for (const pass of [0, 1]) {
@@ -549,7 +552,9 @@ module.exports = {
       const { V, M } = C, q = C.base(), e = C.ease(t), lean = C.lerp(2, 42, e);
       pelvisLean(C, q, [0, C.lerp(88.4, 49.7, e), C.lerp(0, -20, e)], lean * .8);
       q.lumbar = [lean * .1, 0, 0]; q.thoracic = [lean * .1, 0, 0]; q.neck = [-lean * .35, 0, 0];
-      for (const s of S) q[s].girdle = [0, 6];
+      /* снаряд у груди, плечи вперёд: протракция 6° сверх покоя и ещё 8,7° — ключица там же, что и в 4.61.0 (в покое она теперь
+         отведена назад на 19,2°, Ludewig 2009; было 10,5°); с прежними 6° предплечье входило в грудь на 1,8 см */
+      for (const s of S) q[s].girdle = [0, 6 + 8.7];
       const feet = q => { for (const s of S) plant(C, q, s, [M.SIGN[s] * 15, 0, -2], { toeOut: 12 }); };
       /* точка у груди: прежний центр кулаков (под ним — та же раскладка рук и равновесие) */
       const at = q => { const T = C.axes(q, 'thorax'); return { T, Hc: V.add(V.add(T.o, T.y, 11.5), T.z, 26), fw: V.unit(V.perp(T.z, [0, 1, 0])) }; };
@@ -679,7 +684,9 @@ module.exports = {
       const { V } = C, q = C.base(), e = C.ease(t);
       C.root(q, [0, 89.2, 0], [0, 1, 0], [0, 0, 1]); q.neck = [0, 0, 0];
       const feet = q => { for (const s of S) plant(C, q, s, [C.M.SIGN[s] * 11, 0, -1]); };
-      for (const s of S) { armAngles(q, s, [C.lerp(17, 90, e), C.lerp(7, 6, e), C.lerp(-14, -10, e)], C.lerp(8, 10, e), 80); C.rhythm(q, s); }
+      /* внизу плечо согнуто на 20° (до 4.62.0 — 17°): плечевой сустав с ключицей, отведённой назад (Ludewig 2009), стоит на
+         2,7 см дальше назад, и с прежним углом гантели касались бёдер дисками (1,5 см) */
+      for (const s of S) { armAngles(q, s, [C.lerp(20, 90, e), C.lerp(7, 6, e), C.lerp(-14, -10, e)], C.lerp(8, 10, e), 80); C.rhythm(q, s); }
       settle(C, q, { lo: 1, hi: 7, loads: loadsIn(C, S, 6), resolve: feet });
       return q;
     }

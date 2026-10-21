@@ -854,7 +854,9 @@ module.exports = {
       for (const s of S) q[s].girdle = [C.lerp(14, -4, e), C.lerp(8, -6, e)];
       const f = C.fk(q);
       for (const s of S) {
-        const gh = f.P['gh' + s], lat = C.lat(q, s), a = C.lerp(32, -90, e) * C.D2R;
+        /* внизу рукоять у бёдер: −87,5° (до 4.62.0 — −90°): плечевой сустав с ключицей, отведённой назад (Ludewig 2009),
+           стоит на 2,7 см дальше назад, и прямо под ним рукоять уходила в бёдра (1 см) */
+        const gh = f.P['gh' + s], lat = C.lat(q, s), a = C.lerp(32, -87.5, e) * C.D2R;
         const g = V.add(V.add(gh, [0, Math.sin(a), Math.cos(a)], 61.5), lat, 1); g[0] = C.M.SIGN[s] * 19;
         const pole = V.unit(V.add(V.add(lat, [0, -1, 0], .6), [0, 0, -1], .3));
         C.grip(q, s, g, [-C.M.SIGN[s], 0, 0], pole, { wristExt: 4 });

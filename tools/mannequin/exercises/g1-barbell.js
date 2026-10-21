@@ -226,15 +226,21 @@ function ohpStand(C, o) {
   q._bar = bar;
   return q;
 }
+/* Протракция у ключиц в стойке с грифом сверх 4.61.0: в покое ключица теперь отведена назад на 19,2° (Ludewig 2009; было
+   10,5°), а плечи «полкой» под грифом выводятся вперёд до того же положения, что и прежде, — на 8,7° больше. Без этого плечевой
+   сустав и гриф стояли на 2,7 см ближе к лицу, и в начале жима гриф проходил сквозь подбородок (валидатор: 2,5 см у головы).
+   К локауту добавка сходит на нет: руки над головой — по ритму */
+const OHP_PRO = 8.7;
 const OHP = memo(t => {
   const C = ctx([]), { V } = C;
-  const start = ohpStand(C, { theta: 0, spine: [0, 0, 0], girdle: [0, 6], arms: q => rackArms(C, q) });
+  const start = ohpStand(C, { theta: 0, spine: [0, 0, 0], girdle: [0, 6 + OHP_PRO], arms: q => rackArms(C, q) });
   if (t < 1e-6) return start;
   const Zb = start._bar[2], Yr = start._bar[1], half = Math.abs(C.fk(start).P.gripL[0]);
   /* t, высота грифа (null — локаут), наклон таза, [поясница, грудной, шея], плечевой пояс */
   /* пояс — по ритму (поворот лопатки вверх, подъём и отведение ключицы растут с подъёмом плеча); сверх него у ключиц —
      лёгкая протракция (локти впереди грифа), к локауту она сходит на нет */
-  const K = [[.2, Yr + 11, -2, [-2, -2, -10], [0, 5]], [.4, Yr + 24, -3, [-3, -2, -12], [0, 4]], [.6, Yr + 37, -2, [-2, -1, -7], [0, 2]], [.8, Yr + 48, -1, [-1, 0, -2], [0, 1]], [1, null, 0, [0, 0, 4], [0, 0]]];
+  const pro = (t, a) => [0, a + OHP_PRO * (1 - t)];
+  const K = [[.2, Yr + 11, -2, [-2, -2, -10], pro(.2, 5)], [.4, Yr + 24, -3, [-3, -2, -12], pro(.4, 4)], [.6, Yr + 37, -2, [-2, -1, -7], pro(.6, 2)], [.8, Yr + 48, -1, [-1, 0, -2], pro(.8, 1)], [1, null, 0, [0, 0, 4], [0, 0]]];
   const k = K.find(p => Math.abs(p[0] - t) < 1e-6), a = C.lerp(32, 6, t) * C.D2R, distal = [0, Math.cos(a), -Math.sin(a)];
   const pole = s => V.unit(V.add(V.add([0, -1, 0], [C.M.SIGN[s], 0, 0], C.lerp(.5, 1.1, t)), [0, 0, 1], C.lerp(.6, 0, t)));
   const lockY = q => { const f = C.fk(q); return (f.P.ghL[1] + f.P.ghR[1]) / 2 + Math.sqrt(Math.max(0, (armLen(C, 4) + 8.1) ** 2 - (half - Math.abs(f.P.ghL[0])) ** 2 - (Zb - f.P.ghL[2]) ** 2)) - 1.5; };
@@ -252,11 +258,25 @@ const OHP = memo(t => {
 });
 
 /* ---------- Гриф на трапециях (присед, наклоны, Смит) ---------- */
-/* Точка грифа на верхней части трапеций: чуть ниже C7, гриф лежит на спине (поджатие мышц ≈ 0,4 см) */
-function barOnTraps(C, q, h = 55.8, r = 1.4) {
-  const R = C.M.catalogPose(q), p = C.M.torsoPoint(R, h, 'L', Math.PI), c = C.M.spineFrame(R, h).c;
-  const P = [p[0], C.M.FLOOR - p[1], p[2]], Cc = [c[0], C.M.FLOOR - c[1], c[2]], n = C.V.unit(C.V.sub(P, Cc));
-  return C.V.add(P, n, r - .4);
+/* Точка грифа на верхней части трапеций: чуть ниже C7. Гриф лежит на трапециевидной по обе стороны от шеи, над остистыми
+   (в борозде между валиками) он кожи почти не касается (Gray's Anatomy, 1918, «Surface Anatomy of the Back»). Поджатие мышц
+   под грифом — sink: где кожа выступает больше всего (по ширине спины ±16 см от средней линии, вдоль оси x грудной клетки),
+   гриф уходит в неё на 1,4 см — как в 4.61.0, где ось грифа ставилась на 1 см над кожей средней линии (поджатие 0,4 см), а
+   кожа спины в 10 см от неё стояла на 1 см дальше назад. С рельефом спины 4.62.0 (Mannequin.BACK_RELIEF, мягкие ткани над
+   лопаткой) валики выступают на 1,5 см, и гриф по средней линии уходил в них на 1,9 см (валидатор: 2,3 при допуске 2) */
+function barOnTraps(C, q, h = 55.8, r = 1.4, sink = 1.4) {
+  const { V, M } = C, R = M.catalogPose(q), p = M.torsoPoint(R, h, 'L', Math.PI), sf = M.spineFrame(R, h), c = sf.c, cache = M.torsoCache(R);
+  const n = V.unit(V.sub(p, c)), x = V.unit(V.add(sf.x, n, -V.dot(sf.x, n)));
+  let d = r - .4;
+  for (let i = 0; i < 6; i++) {
+    let m = Infinity;
+    for (let s = -16; s <= 16; s += 1) m = Math.min(m, M.torsoSDF(R, V.add(V.add(p, n, d), x, s), cache));
+    if (Math.abs(m - (r - sink)) < .01) break;
+    d += (r - sink) - m;
+  }
+  d = Math.max(d, r - .4);
+  const P = V.add(p, n, d);
+  return [P[0], M.FLOOR - P[1], P[2]];
 }
 /* Присед / наклон со штангой на спине: таз по наклону theta, высота таза hy; стопы стоят, баланс по горизонтали.
    Хват широкий, локти вниз-назад. */
@@ -397,9 +417,11 @@ function thrustBody(C, psi, { neck = 20, spine = [0, 0], scap = 33 } = {}) {
   C.root(q, [0, 50, HT_EDGE + 30], up, fwd);
   q.lumbar = [spine[0], 0, 0]; q.thoracic = [spine[1], 0, 0]; q.neck = [neck, 0, 0];
   for (const s of S) q[s].girdle = [0, -6];
-  /* точка оси корпуса на высоте лопаток — над кромкой на глубину спины (поджатие 1,2 см) */
+  /* точка оси корпуса на высоте лопаток — над кромкой на глубину спины (поджатие 1,2 см). Глубина — с валиками выпрямителя
+     по бокам от остистых (4.62.0, Mannequin.backRelief): кромка скамьи поперёк спины ложится на них, а не на борозду */
+  const ridge = Math.max(...Array.from({ length: 23 }, (_, x) => M.backRelief(scap, x, 1)));
   for (let i = 0; i < 3; i++) {
-    const R = M.catalogPose(q), c = M.spineFrame(R, scap).c, cc = [c[0], M.FLOOR - c[1], c[2]], b = M.sectionAt(scap)[2];
+    const R = M.catalogPose(q), c = M.spineFrame(R, scap).c, cc = [c[0], M.FLOOR - c[1], c[2]], b = M.sectionAt(scap)[2] + ridge;
     const T = C.axes(q, 'thorax'), target = V.add([0, 44, HT_EDGE], T.z, b - 1.2);
     q.root.p = V.add(q.root.p, V.sub(target, cc));
   }
@@ -858,9 +880,11 @@ module.exports = {
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = C.base(), st = { ax: 11, az: 0, out: 8 };
       q.lumbar = [0, 0, 0]; q.thoracic = [C.lerp(0, -3, e), 0, 0]; q.neck = [2, 0, 0];
+      /* внизу плечо согнуто на 4° (до 4.62.0 — 1°): плечевой сустав с ключицей, отведённой назад (Ludewig 2009), стоит на 2,7 см
+         дальше назад, и с прежним углом гриф уходил в бёдра на 3 см; теперь он перед бёдрами, как прежде */
       for (const s of S) {
         q[s].girdle = [C.lerp(-2, 2, e), C.lerp(4, -2, e)];
-        q[s].shoulder = [C.lerp(1, 14, e), C.lerp(9, 7, e), C.lerp(-4, 0, e)];
+        q[s].shoulder = [C.lerp(4, 14, e), C.lerp(9, 7, e), C.lerp(-4, 0, e)];
         q[s].elbow = C.lerp(9, 138, e); q[s].pron = -84; q[s].wrist = [C.lerp(4, 18, e), 0];
       }
       q.hands = { L: 'grip', R: 'grip' };
