@@ -1,6 +1,6 @@
 'use strict';
 /* Подгонка складок подмышки (Mannequin.FOLDS, src/js/09bm-mannequin.js).
-   node tools/mannequin/folds-fit.js [--iters 700] [--start файл.json] [--out файл.json] [--data набор.json]
+   node tools/mannequin/folds-fit.js [--iters 700] [--start файл.json] [--out файл.json] [--data набор.json] [--anchor w]
 
    Складки поднимают кожу корпуса над мышцами, идущими с корпуса на плечевую кость. Их оси, высоты и ширины
    подбираются по всем упражнениям каталога (позы t = 0; 0,25; 0,5; 0,75; 1); складок столько, сколько в FOLDS
@@ -141,9 +141,12 @@ function evaluate(D, P) {
   for (const kp of KP) {
     const set = setsFor(P, kp.T, kp.U, L0), mx = { L: 0, R: 0 };
     for (const e of kp.pts) { e.lift = e.w * lift(set[e.s], e.p); if (e.lift >= .3) mx[e.s] = Math.max(mx[e.s], kp.old(V.add(e.p, e.n, e.lift))); }
+    const arms = kp.k.startsWith('arms:');
     for (const g of kp.grids) for (let i = 0; i < g.length; i++) for (let j = 0; j < g[i].length; j++) {
       const a = g[i][j].lift, b = g[i][(j + 1) % g[i].length].lift, c = i + 1 < g.length ? g[i + 1][j].lift : a;
-      pen += 20 * Math.max(0, Math.max(Math.abs(a - b), Math.abs(a - c)) - .8) ** 2;
+      /* у поз arms:θ — только жёсткая граница чуть ниже допуска проверки (1,3 см): плавность там не перетягивает подгонку */
+      const jmp = Math.max(Math.abs(a - b), Math.abs(a - c));
+      pen += arms ? 500 * Math.max(0, jmp - 1.2) ** 2 : 20 * Math.max(0, jmp - .8) ** 2;
     }
     /* позы arms:θ — только для плавности (мышц в наборе у них нет) */
     if (!kp.k.startsWith('arms:')) for (const s of ['L', 'R']) { const lim = kp.k === 'neutral' ? 1.2 : Math.max(1.2, (muscleOut[kp.k]?.[s] ?? 0) + .6); pen += 50 * Math.max(0, mx[s] - lim) ** 2; }
@@ -163,8 +166,10 @@ function fit(D, start, iters) {
   const keys = []; for (const k of Object.keys(start)) { for (const a of ['tr', 'ua']) for (let i = 0; i < 3; i++) keys.push([k, a, i]); keys.push([k, 'a'], [k, 's'], [k, 'kv']); }
   const get = (P, k) => k.length === 3 ? P[k[0]][k[1]][k[2]] : P[k[0]][k[1]], set = (P, k, v) => { if (k.length === 3) P[k[0]][k[1]][k[2]] = v; else P[k[0]][k[1]] = v; };
   const build = x => { const P = JSON.parse(JSON.stringify(start)); keys.forEach((k, i) => set(P, k, x[i])); return P; };
-  const f = x => { const P = build(x); return Object.values(P).some(F => F.a < 0 || F.s < .5) ? 1e9 : evaluate(D, P).total; };
-  const n = keys.length, x0 = keys.map(k => get(start, k));
+  /* --anchor w — штраф за уход от начальных складок (см у точек осей, 0,2 у высоты, ширины и показателя): подгонка рядом с
+     прежними складками, когда нужно поправить одно (например, плавность у руки над головой), не переставляя остальное */
+  const anchor = +arg('--anchor', 0), n = keys.length, x0 = keys.map(k => get(start, k)), sc = keys.map(k => k.length === 3 ? 1 : .2);
+  const f = x => { const P = build(x); if (Object.values(P).some(F => F.a < 0 || F.s < .5)) return 1e9; let v = evaluate(D, P).total; if (anchor) for (let i = 0; i < n; i++) v += anchor * ((x[i] - x0[i]) / sc[i]) ** 2; return v; };
   let S = [x0, ...keys.map((k, i) => { const x = x0.slice(); x[i] += k.length === 2 ? .5 : 1.5; return x; })].map(x => ({ x, f: f(x) }));
   for (let it = 0; it < iters; it++) {
     S.sort((a, b) => a.f - b.f); const c = Array(n).fill(0); for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) c[j] += S[i].x[j] / n;
