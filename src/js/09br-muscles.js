@@ -554,7 +554,7 @@ const Muscles = (() => {
     const S = SKN.S, r = S.cushR, n = r.length, W = S.cushW; let h = 0;
     for (let k = 0; k < 2 * n; k++) {
       const rr = r[k % n], dx = x - C[k * 3], dy = y - C[k * 3 + 1], dz = z - C[k * 3 + 2], d2 = dx * dx + dy * dy + dz * dz; if (d2 >= rr * rr) continue;
-      const pen = rr - Math.sqrt(d2), v = pen < W ? pen * pen * (2 * W - pen) / (W * W) : pen; if (v > h) h = v;
+      const pen = rr - Math.sqrt(d2), v = pen < W ? pen * pen / (2 * W) : pen - W / 2; if (v > h) h = v;
     }
     return h;
   }
