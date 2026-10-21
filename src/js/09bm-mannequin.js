@@ -815,15 +815,16 @@ function ringConsts(h,cols){
    порядке, что torsoPointIn(R, h, side, colAngle(φ), 0, …), — точки совпадают до бита (тест в tools/mannequin.test.js) */
 function torsoRing(R,h,cols){
  const f=torsoFrame(R,h),K=ringConsts(h,cols),c=f.c,z=f.z,x=f.x,g=f.front,out=new Array(cols);
- const gd=h>38.8&&R.girdle&&R.frames.thorax?{L:girdleDelta(R,'L'),R:girdleDelta(R,'R')}:null,fs=h>20&&R.frames&&!FOLD_OFF?foldSet(R):null;
+ const gd=h>38.8&&R.girdle&&R.frames.thorax?{L:girdleDelta(R,'L'),R:girdleDelta(R,'R')}:null,up=h>20&&R.frames,fs=up&&!FOLD_OFF?foldSet(R):null;
  for(let i=0;i<cols;i++){
   const q=K[i],dz=q.dz,dx=q.dx;
   let p=[c[0]+z[0]*dz+x[0]*dx,c[1]+z[1]*dz+x[1]*dx,c[2]+z[2]*dz+x[2]*dx];
   if(g&&q.kf>0){const kf=q.kf,gc=g.c,gz=g.z,gx=g.x,r0=gc[0]+gz[0]*dz+gx[0]*dx,r1=gc[1]+gz[1]*dz+gx[1]*dx,r2=gc[2]+gz[2]*dz+gx[2]*dx;p=[p[0]+(r0-p[0])*kf,p[1]+(r1-p[1])*kf,p[2]+(r2-p[2])*kf];}
   if(h<0){const d=V.sub(p,c),rho=V.len(d);p=V.add(p,f.y,h*SEAT_K*seatW(rho<1e-9?0:V.dot(d,f.z)/rho));}
-  const nf=fs?V.unit(V.perp(V.sub(p,c),f.y)):null; /* луч складки — до сдвига надплечий (как torsoPointIn) */
+  const nf=up?V.unit(V.perp(V.sub(p,c),f.y)):null; /* луч складки — до сдвига надплечий (как torsoPointIn) */
   if(gd){const D=gd[q.side],k=q.gk;p=[p[0]+D[0]*k,p[1]+D[1]*k,p[2]+D[2]*k];}
-  if(fs){const d=liftIn(fs,p);if(d)p=V.add(p,nf,d);}
+  /* складки подмышки и мягкие ткани над лопаткой */
+  if(up){const d=(fs?liftIn(fs,p):0)+cushLift(R,p);if(d)p=V.add(p,nf,d);}
   out[i]=p;
  }
  return out;
