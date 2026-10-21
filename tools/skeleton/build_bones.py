@@ -45,7 +45,7 @@ TOR=chain('torso/assets/myotorso_chain.xml','torso/assets/myotorso_assets.xml','
 hjR,hjL=P(LEG,'femur_r'),P(LEG,'femur_l'); mid=(hjR+hjL)/2; sx=B['hipHalf']/abs(hjL[0]-mid[0])
 CFG=json.load(open(os.environ['SKEL_CFG'])) if os.environ.get('SKEL_CFG') else {}
 OUT=sys.argv[1] if len(sys.argv)>1 else os.path.join(os.path.dirname(os.path.abspath(__file__)),'../../qa/skeleton/bones.json')
-TH_PITCH=CFG.get('th_pitch',2.0); TH_DY=TH_DZ=None; RIB_X=CFG.get('rib_x',.96)   # сдвиг TH_DY, TH_DZ — по шее (ниже)
+TH_PITCH=CFG.get('th_pitch',2.0); TH_DY=TH_DZ=0.; RIB_X=CFG.get('rib_x',.96)   # сдвиг TH_DY, TH_DZ — по шее (ниже)
 PIV=np.array([0,24.,-12.])   # ось наклона грудного блока: на уровне шарнира грудного отдела, у задней поверхности
 def pitchFit(q,a_deg,dy,dz):
     a=np.radians(a_deg); c,s_=np.cos(a),np.sin(a); d=np.asarray(q)-PIV
