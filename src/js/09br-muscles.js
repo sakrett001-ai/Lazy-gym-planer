@@ -519,7 +519,7 @@ const Muscles = (() => {
     const S = SKN.S, r = S.cushR, n = r.length, W = S.cushW; let h = 0;
     for (let k = 0; k < 2 * n; k++) {
       const rr = r[k % n], dx = x - C[k * 3], dy = y - C[k * 3 + 1], dz = z - C[k * 3 + 2], d2 = dx * dx + dy * dy + dz * dz; if (d2 >= rr * rr) continue;
-      const pen = rr - Math.sqrt(d2), v = pen < W ? pen * pen / (2 * W) : pen - W / 2; if (v > h) h = v;
+      const pen = rr - Math.sqrt(d2), v = pen < W ? pen * pen * (2 * W - pen) / (W * W) : pen; if (v > h) h = v;
     }
     return h;
   }
@@ -1237,7 +1237,7 @@ const Muscles = (() => {
       if (fl && md.shells && md.shells[fan.side]) {
         const sh = md.shells[fan.side], sc = md.scap && md.scap[fan.side], si = idx.get('scapula|' + fan.side);
         /* все поля — явно (у полов всех лент одна форма объекта) */
-        fan.floor = { u0: fl.u0, ua: fl.ua ?? fl.u0, su0: fl.su0 ?? fl.ua ?? fl.u0, scap_c: fl.scap || 0, ribc: fl.ribc || 0, top: fl.top || 0, max: fl.max || 0, scapMax: fl.scapMax || 0, sideR: fan.side === 'R', rib: idx.get('ribcage|'), shell: { ...sh, r: Float64Array.from(sh.r, v => (v < 0 ? -1 : v / 100)) },
+        fan.floor = { u0: fl.u0, ua: fl.ua ?? fl.u0, su0: fl.su0 ?? fl.ua ?? fl.u0, ribMax: fl.ribMax || 0, scapNear: fl.scapNear || 0, scap_c: fl.scap || 0, ribc: fl.ribc || 0, top: fl.top || 0, max: fl.max || 0, scapMax: fl.scapMax || 0, sideR: fan.side === 'R', rib: idx.get('ribcage|'), shell: { ...sh, r: Float64Array.from(sh.r, v => (v < 0 ? -1 : v / 100)) },
           scap: fl.scap && sc && si !== undefined ? { i: si, o: sc.o, u: sc.u, v: sc.v, w: sc.w, u0: sc.u0, v0: sc.v0, du: sc.du, NU: sc.NU, NV: sc.NV, h: Float64Array.from(sc.h, x => x / 100), W: new Float64Array(12) } : null,
           bt: fl.back && md.backTop ? { ...md.backTop, z: Float64Array.from(md.backTop.z, v => (v === -32768 ? NaN : v / 100)) } : null };
       }
@@ -1266,7 +1266,7 @@ const Muscles = (() => {
      полосы); шов поднимается вместе с соседними центрами и сам — только над выпрямителем, не больше чем на FLOOR_SEAM сверх них.
      top — на сколько верх полосы снаружи верха выпрямителя: у трапециевидной больше, чем у широчайшей и ромбовидных (нижняя
      часть трапециевидной лежит поверх верхнего медиального края широчайшей и ромбовидных — Gray's, с. 432–435) */
-  const FLOOR = { trap: { scap: .25, ribc: .3, back: 1, top: .7, u0: .1, ua: .05, scapMax: 3 }, rhomb: { scap: .25, ribc: .3, back: 1, top: .3, u0: .25 }, lat: { scap: .25, ribc: .6, back: 1, top: .2, u0: .3, su0: .5, scapMax: 4 }, pecmaj: { ribc: .3, u0: .45, max: .4 } }, FLOOR_MAX = 2, FLOOR_BACK = 4, FLOOR_SKIN = .2, FLOOR_SEAM = .5;
+  const FLOOR = { trap: { scap: .25, ribc: .3, back: 1, top: .7, u0: .1, ua: .05, scapMax: 3 }, rhomb: { scap: .25, ribc: .3, back: 1, top: .3, u0: .25 }, lat: { scap: .25, ribc: .6, back: 1, top: .2, u0: .3, su0: .5, scapMax: 4, ribMax: 4, scapNear: .8 }, pecmaj: { ribc: .3, u0: .45, max: .4 } }, FLOOR_MAX = 2, SCAP_OUT = .5, FLOOR_BACK = 4, FLOOR_SKIN = .2, FLOOR_SEAM = .5;
   /* z верха столбов выпрямителя (рамка грудной клетки) в точке (x, h) карты md.backTop (правая сторона; у левой x — зеркально);
      NaN — столбов там нет */
   function backTopAt(T, x, h) {
@@ -1311,12 +1311,14 @@ const Muscles = (() => {
     const ng = nx * gx + ny * gy + nz * gz, sg = ng < 0 ? -1 : 1, bx = px - sg * nx * h, by = py - sg * ny * h, bz = pz - sg * nz * h;
     /* над лопаткой и рёбрами — не выше FLOOR_SKIN над кожей (глубина — по нейтральной позе, sk): где кость под самой кожей
        (ключица и верхние рёбра при сведённых лопатках), пласт лучше оставить чуть в кости, чем вынести из тела */
-    const dcap = depth < 1e8 ? Math.max(0, depth - h * Math.abs(ng) + FLOOR_SKIN) : Infinity, cap = Math.min(F.max || FLOOR_MAX, dcap), capS = Math.min(F.scapMax || F.max || FLOOR_MAX, dcap);
+    const dcap = depth < 1e8 ? Math.max(0, depth - h * Math.abs(ng) + FLOOR_SKIN) : Infinity, cap = Math.min(F.max || FLOOR_MAX, dcap), capS = Math.min(F.scapMax || F.max || FLOOR_MAX, dcap), capR = Math.min(F.ribMax || F.max || FLOOR_MAX, dcap);
     let need = -Infinity;
-    if (F.scap && u >= F.su0 && !onlyBack) {
+    if (F.scap && (u >= F.su0 || F.scapNear > 0) && !onlyBack) {
       const W = F.scap.W, dx = bx - W[0], dy = by - W[1], dz = bz - W[2], pu = dx * W[3] + dy * W[4] + dz * W[5], pv = dx * W[6] + dy * W[7] + dz * W[8], pw = dx * W[9] + dy * W[10] + dz * W[11];
       const hs = scapH(F.scap, pu, pv);
-      if (hs > -Infinity) { const L = Math.min(capS, hs + F.scap_c - pw); if (L > need) { need = L; FD[0] = W[9]; FD[1] = W[10]; FD[2] = W[11]; } }
+      /* лопатка — между точкой и кожей, а не снаружи тела: с поворотом вверх и наклоном назад плоскость лопатки у позвоночника
+         уходит далеко за кожу, и проекция точек у остистых отростков попадала на лопатку (их «поднимало» на всю высоту) */
+      if (hs > -Infinity) { const L0 = hs + F.scap_c - pw, L = L0 < depth + SCAP_OUT ? Math.min(u >= F.su0 ? capS : Math.min(capS, F.scapNear), L0) : 0; if (L > need) { need = L; FD[0] = W[9]; FD[1] = W[10]; FD[2] = W[11]; } }
     }
     const o = F.rib * 12, dx = bx - m[o + 3], dy = by - m[o + 7], dz = bz - m[o + 11];
     const lx = m[o] * dx + m[o + 4] * dy + m[o + 8] * dz, ly = m[o + 1] * dx + m[o + 5] * dy + m[o + 9] * dz, lz = m[o + 2] * dx + m[o + 6] * dy + m[o + 10] * dz;
@@ -1327,7 +1329,7 @@ const Muscles = (() => {
         const rs = onlyBack ? -1 : shellR(S, th, ly);
         if (rs > 0) {
           const rx = (m[o] * lx + m[o + 2] * zz) / r, ry = (m[o + 4] * lx + m[o + 6] * zz) / r, rz = (m[o + 8] * lx + m[o + 10] * zz) / r;
-          const L = Math.min(FLOOR_MAX, cap, rs + F.ribc - r); if (L > need) { need = L; FD[0] = rx; FD[1] = ry; FD[2] = rz; }
+          const L = Math.min(capR, rs + F.ribc - r); if (L > need) { need = L; FD[0] = rx; FD[1] = ry; FD[2] = rz; }
         }
       }
     }

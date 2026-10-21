@@ -965,7 +965,7 @@ function cushLift(R,p){
  const r=cushData().r,n=r.length;let h=0;
  for(let k=0;k<c.length/3;k++){
   const rr=r[k%n],dx=p[0]-c[k*3],dy=p[1]-c[k*3+1],dz=p[2]-c[k*3+2],d2=dx*dx+dy*dy+dz*dz;if(d2>=rr*rr)continue;
-  const pen=rr-Math.sqrt(d2),v=pen<CUSH_W?pen*pen/(2*CUSH_W):pen-CUSH_W/2;if(v>h)h=v;
+  const pen=rr-Math.sqrt(d2),v=pen<CUSH_W?pen*pen*(2*CUSH_W-pen)/(CUSH_W*CUSH_W):pen;if(v>h)h=v;
  }
  return h;
 }
