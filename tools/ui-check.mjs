@@ -144,9 +144,9 @@ await page.close();
     $('[data-mv-figure="anatomy"]').click();
     return { anat, skel, man, back: { last: calls.at(-1), pref: motionPrefs.view }, thanks: $('#mv-detail').textContent };
   });
-  check(fig.anat.last?.bones === 102 && fig.anat.last.muscles === 530 && fig.anat.pri.every(m => fig.anat.last.level[m] === 1) && fig.anat.pressed === 'anatomy' && !fig.anat.busy && /О демонстрациях/.test(fig.anat.note) && fig.anat.note.length < 260,
-    '«Анатомия» по умолчанию: 530 мышц на 102 костях, основные мышцы выделены, короткая подпись');
-  check(fig.skel.last?.bones === 102 && fig.skel.last.muscles === 0 && fig.skel.pressed === 'skeleton' && fig.skel.pref === 'skeleton' && /MyoSim/.test(fig.skel.note), '«Скелет» — только кости');
+  check(fig.anat.last?.bones === 109 && fig.anat.last.muscles === 530 && fig.anat.pri.every(m => fig.anat.last.level[m] === 1) && fig.anat.pressed === 'anatomy' && !fig.anat.busy && /О демонстрациях/.test(fig.anat.note) && fig.anat.note.length < 260,
+    '«Анатомия» по умолчанию: 530 мышц на 109 костях (102 — MyoSim, 7 — гортань и трахея), основные мышцы выделены, короткая подпись');
+  check(fig.skel.last?.bones === 109 && fig.skel.last.muscles === 0 && fig.skel.pressed === 'skeleton' && fig.skel.pref === 'skeleton' && /MyoSim/.test(fig.skel.note), '«Скелет» — только кости');
   check(fig.man.last?.bones === 0 && fig.man.last.muscles === 0 && fig.man.hidden && fig.man.pressed === 'mannequin' && fig.man.saved === 'mannequin', '«Манекен» убирает кости и мышцы, выбор запоминается');
   check(fig.back.last?.muscles === 530 && fig.back.pref === 'anatomy', 'возврат к «Анатомии»');
   check(/Укорачиваясь, мышца утолщается/.test(fig.thanks) && /DAS3/.test(fig.thanks), 'источники костей и мышц — в «О демонстрациях»');

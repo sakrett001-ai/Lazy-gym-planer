@@ -6,7 +6,8 @@
    «локальные см → каталог (см, Y вниз)». Особые случаи: позвонки L5–L1 — по рамке позвонка на своей высоте
    (Mannequin.vertebraFrame: поворот поясницы делится по уровням, как в MyoSim); ключица и лопатка — по рамке плечевого пояса, лопатка поворачивается за рукой и скользит по рёбрам (scapulaRot); лучевая кость — поворот с пронацией вокруг оси
    «головка лучевой — запястье»; надколенник — по углу колена (полиномы связи модели Rajagopal); фаланги — по линиям
-   пальцев текущего хвата. */
+   пальцев текущего хвата. Гортань и трахея (4.58.0, сегмент 'airway') — параметрические хрящи (tools/skeleton/airway.js)
+   в рамке шеи, повёрнутой к грудной клетке или к голове на долю угла (airwayFrame). */
 const Skeleton = (() => {
   const M = typeof Mannequin !== 'undefined' ? Mannequin : require('./09bm-mannequin.js');
   const { V } = M, SIGN = { L: 1, R: -1 }, FINGER_LEN = [8.0, 8.8, 8.2, 6.6], FINGER_SCALE = .9;
@@ -146,6 +147,31 @@ const Skeleton = (() => {
     }
     return lam < .02 && Math.abs(dl) < .1 ? null : rot(lam, dl);
   }
+  /* Гортань и трахея (сегмент 'airway', tools/skeleton/airway.js): сетки — в рамке шеи. Шея манекена гнётся в двух шарнирах —
+     у диска C7–T1 (B.neckPivot) и в атлантозатылочном суставе (B.headJoint), по половине угла. Трахея ниже шарнира шеи
+     уходит за рукоятку грудины и поворачивается вместе с грудной клеткой: кость с долей wt — рамка шеи, повёрнутая к рамке
+     «шея без поворота» (жёстко с грудной клеткой) на долю wt угла вокруг оси нижнего шарнира. Подъязычная кость подвешена к
+     нижней челюсти: доля wh — к рамке головы вокруг атлантозатылочного сустава. Поворот на долю — по оси и углу
+     относительного поворота (рамки каталога левые, относительный поворот — правый). */
+  function slerpLin(A, B, w) {
+    const Q = [0, 1, 2].map(i => [0, 1, 2].map(j => B[i][0] * A[j][0] + B[i][1] * A[j][1] + B[i][2] * A[j][2]));   /* B · Aᵀ */
+    const c = Math.max(-1, Math.min(1, (Q[0][0] + Q[1][1] + Q[2][2] - 1) / 2)), ang = Math.acos(c);
+    if (ang < 1e-7) return A;
+    const k = V.unit([Q[2][1] - Q[1][2], Q[0][2] - Q[2][0], Q[1][0] - Q[0][1]]), R = rotAxis(k, w * ang);
+    return [0, 1, 2].map(i => [0, 1, 2].map(j => R[i][0] * A[0][j] + R[i][1] * A[1][j] + R[i][2] * A[2][j]));
+  }
+  function airwayFrame(F, wt, wh) {
+    const N = frameAff(F.neck);
+    if (wt > 0) {
+      const T = frameAff(F.thorax), piv = M.B.neckPivot, lin = slerpLin(N.lin, T.lin, wt), P = apply(N, piv);
+      return { lin, t: [0, 1, 2].map(i => P[i] - (lin[i][0] * piv[0] + lin[i][1] * piv[1] + lin[i][2] * piv[2])) };
+    }
+    if (wh > 0) {
+      const H = frameAff(F.head), piv = M.B.headJoint, lin = slerpLin(N.lin, H.lin, wh), P = apply(N, piv);
+      return { lin, t: [0, 1, 2].map(i => P[i] - (lin[i][0] * piv[0] + lin[i][1] * piv[1] + lin[i][2] * piv[2])) };
+    }
+    return N;
+  }
   function pointAt(pts, s) {
     let acc = 0;
     for (let i = 1; i < pts.length; i++) { const l = V.dist(pts[i - 1], pts[i]); if (acc + l >= s || i === pts.length - 1) return V.mix(pts[i - 1], pts[i], l < 1e-9 ? 0 : Math.min(1, (s - acc) / l)); acc += l; }
@@ -182,6 +208,9 @@ const Skeleton = (() => {
         const th = F['th' + s], sk = F['sk' + s], k = jointAngle(th.y, sk.y, th.x) * 180 / Math.PI, tr = b.track;
         const i0 = Math.max(0, Math.min(tr.length - 2, Math.floor(k / 10))), u = Math.max(0, Math.min(1, (k - tr[i0][0]) / 10)), row = tr[i0].map((x, j) => x + (tr[i0 + 1][j] - x) * u);
         A = mul(frameAff(th), { lin: rotAxis([1, 0, 0], -row[1] * Math.PI / 180), t: row.slice(2, 5) });
+      } else if (b.seg === 'airway') {
+        const key = 'aw' + (b.wt || 0) + '|' + (b.wh || 0);
+        A = cache[key] || (cache[key] = airwayFrame(F, b.wt || 0, b.wh || 0));
       } else if (b.seg === 'finger' || b.seg === 'thumb') {
         const H = body.hands[s], [p0, p1] = digitJoints(H.shape, b), a = V.unit(V.sub(p1, p0)), ref = [g, 0, 0];
         const z = V.unit(V.sub(ref, V.scale(a, V.dot(ref, a)))), y = V.scale(a, -1), x = V.cross(y, z), k = V.dist(p0, p1) / b.len, st = FINGER_SCALE;
