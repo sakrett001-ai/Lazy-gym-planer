@@ -341,9 +341,12 @@ def main():
         band = rv[np.abs(rv[:, 1] - xo[1]) < .8]; zc = (band[:, 2].min() + band[:, 2].max()) / 2
         r0, a0, g = np.hypot(xo[0], xo[2] - zc), np.arctan2(abs(xo[0]), xo[2] - zc), np.sign(xo[0])
         x, L = xo, float(np.linalg.norm(xo - xi))
+        # левая сторона — зеркало правой, а грудная клетка MyoSim несимметрична (у края 1-го ребра — до 4 мм): начало — там, где
+        # и зеркальная точка лежит на рёбрах левой стороны (не дальше 1,5 мм от них), иначе левая стенка зубчатой расходится с
+        # зеркалом правой (узлы скольжения ложатся на оболочку своей стороны)
         for a in np.radians(np.arange(np.degrees(a0), 0, -.5)):
             c = np.array([g * r0 * np.sin(a), xo[1], zc + r0 * np.cos(a)]); x = closest_on_mesh(rv, rf, c)[0]; L = float(np.linalg.norm(x - xi))
-            if L >= target: break
+            if L >= target and closest_on_mesh(rv, rf, x * np.array([-1., 1., 1.]))[1] <= .15: break
         T = np.array(ours['ribcage']['T']); q = T[:, :3] @ x + T[:, 3]
         print(f'  {mu["name"]}: длина {np.linalg.norm(xo - xi):.1f} → {L:.1f} см (DAS3 {target:.1f}), начало сдвинуто вперёд на {np.linalg.norm(x - xo):.1f} см')
         return ['ribcage', ''], q, float(np.linalg.norm(x - xo)), 0.0, x

@@ -464,6 +464,8 @@ function obliqueInt(C, K, S, T, mus, eoBottom, tIO = 0) {
     if (Number.isFinite(gap)) d = Math.min(d, Math.max(.3, tIO > 0 ? gap - TEETH.c0 - rel * tIO : gap - .5 * rel - .1));
     if (tIO > 0 && Number.isFinite(gap)) rel = Math.min(rel, Math.max(.05, (gap - TEETH.c0 - d) / tIO));
     let Q = add(P.p, P.n, -d);
+    /* низ — над полом приложения обеих оболочек рёбер (clearShells): иначе в покое пол поднимал узел одной стороны */
+    if (tIO > 0) Q = clearShells(C, K, Q, P.n, rel * tIO);
     fixed.push(false); rels.push(rel);
     const onCrest = q <= 1 && IO.orig[c] >= .12;
     if (onCrest) {
@@ -1036,6 +1038,13 @@ function build(out, deps) {
   const mus = name => { const mu = out.muscles.find(x => x.name === name); if (!mu) throw Error('walls: нет мышцы ' + name); return mu; };
   const shells = {};
   for (const s of ['R', 'L']) { const c = SH[s].coarse; shells[s] = { th0: c.th0, dth: c.dth, y0: c.y0, dy: c.dy, NT: c.NT, NY: c.NY, zc: r3(c.zc), r: Array.from(c.r, v => (v < 0 ? -1 : Math.round(v * 100))) }; }
+  /* Оболочка приложения (по ней скользят узлы зубчатой и малой грудной и стоит пол стенок) — средняя двух сторон: стенки левой
+     стороны — зеркало правой, а грудная клетка MyoSim несимметрична — в 14 клетках из 1 422 стороны расходятся больше чем на
+     2 мм (до 8 мм: край 1-го ребра, концы плавающих рёбер). 4.62.0: узел первого зубца передней зубчатой лёг на такую клетку у
+     края 1-го ребра, и левая стенка ушла от зеркала правой на 3,7 мм. От рёбер своей стороны средняя — в пределах половины
+     расхождения (медиана 0,05 мм) */
+  if (shells.R.zc === shells.L.zc && shells.R.r.length === shells.L.r.length)
+    for (let i = 0; i < shells.R.r.length; i++) { const a = shells.R.r[i], b = shells.L.r[i]; if (a >= 0 && b >= 0) shells.R.r[i] = shells.L.r[i] = Math.round((a + b) / 2); }
   const S = SH.R, T = teeth(S), info = {};
   S.other = SH.L;
   K.rt = { ...shells.R, r: Float64Array.from(shells.R.r, v => (v < 0 ? -1 : v / 100)) };
