@@ -191,8 +191,15 @@ const Muscles = (() => {
       el: mu.el.map(e => e.s ? { s: pt(e.s) } : { w: { t: e.w.t, i: bone(e.w.bone), c: e.w.c, a: e.w.a, r: e.w.r, B: e.w.B, side: e.w.side ? pt(e.w.side) : null } }),
       /* стенка, лента или колпак линии и число колец (bindWalls, bindFans, bindCaps) — сразу в объекте: у всех линий одна форма
          объекта, и обращения к ним в циклах по линиям не замедляются */
-      wall: null, wallK: 0, fan: null, fanK: 0, cap: null, capK: 0, rings: 0
+      wall: null, wallK: 0, fan: null, fanK: 0, cap: null, capK: 0, rings: 0,
+      /* соседние брюшки (CONTACT): номера линий-соседей своей стороны */
+      contact: null
     }));
+    for (const [a, b] of CONTACT) for (const s of ['_r', '_l']) {
+      const i = bound.findIndex(mu => mu.name === a + s), j = bound.findIndex(mu => mu.name === b + s);
+      if (i < 0 || j < 0) continue;
+      (bound[i].contact || (bound[i].contact = [])).push(j); (bound[j].contact || (bound[j].contact = [])).push(i);
+    }
     bound.walls = bindWalls(md, bound, idx, skel);
     bound.fans = bindFans(md, bound, idx);
     bound.caps = bindCaps(md, bound, idx);
@@ -909,6 +916,54 @@ const Muscles = (() => {
      0,4: эллипс 6 : 1 вставал ребром там, где кожа над ним выпуклая, и выходил из неё краем); в складке (sk.k > 0) сечение
      сплющивается тем меньше, чем ближе кожа второй части, — место там только сдвигом вглубь. */
   const SKIN_GAP = .4, FLAT = .6;
+  /* ---------- соседние брюшки (4.58.0) ----------
+     Задняя поверхность бедра и предплечье — веретёна по своим линиям, а у человека соседние брюшки прилегают друг к другу
+     (Gray's Anatomy, 1918: длинная головка двуглавой бедра и полусухожильная — общим сухожилием от седалищного бугра,
+     полуперепончатая — под ними, короткая головка — под длинной; поверхностные сгибатели предплечья — общим сухожилием от
+     медиального надмыщелка, разгибатели — от латерального, «closely applied»). Между трубками оставались щели до 1,2–1,5 см, в
+     них были видны бедренная кость и глубокие мышцы. Пары соседей — CONTACT; у кольца брюшка сечение растягивается вдоль кожи
+     (ось w) в сторону соседа на всю щель до его брюшка (CONTACT_K; сосед не всегда тянется навстречу — из его кольца мы можем
+     лежать глубже) и на CONTACT_OVER сверх неё; площадь та же (толщина к коже меньше, не меньше 1 / CONTACT_W) — объём, путь,
+     длина и работа мышцы прежние, меняется рисунок.
+     Сосед должен лежать сбоку вдоль кожи (|w| ≥ |o|: глубже лежащий не тянет), щель — не шире CONTACT_MAX (подколенная и
+     локтевая ямки — настоящие промежутки: плечелучевая и круглый пронатор не пара), у обоих — брюшко, а не сухожилие.
+     tools/muscles/README.md, «Соседние брюшки»; тест — tools/muscles.test.js, «neighbouring bellies touch». */
+  const CONTACT = [
+    ['semiten', 'bflh'], ['semiten', 'semimem'], ['semimem', 'bflh'], ['bflh', 'bfsh'],
+    ['PT', 'FCR'], ['FCR', 'PL'], ['PL', 'FCU'], ['FCR', 'FDS3'], ['PL', 'FDS4'], ['FCU', 'FDS5'], ['FDS2', 'FDS3'], ['FDS3', 'FDS4'], ['FDS4', 'FDS5'],
+    ['BRD', 'ECRL'], ['ECRL', 'ECRB'], ['ECRB', 'EDC2'], ['EDC2', 'EDC3'], ['EDC3', 'EDC4'], ['EDC4', 'EDC5'], ['EDC5', 'EDM'], ['EDM', 'ECU']
+  ];
+  const CONTACT_MAX = 2.5, CONTACT_K = 1, CONTACT_OVER = .2, CONTACT_W = 1.8, CONTACT_U = .05;
+  let CT_P = null, CT_B = null; const CT_BODY = [];
+  /* полуширины кольца вдоль кожи к соседям: CW[0] — в сторону +w, CW[1] — −w (исходная aw, если соседа нет); CW[2] — толщина */
+  const CW = new Float64Array(3);
+  function contactWidths(mu, s0, b0, cx, cy, cz, tx, ty, tz, ox, oy, oz, wx, wy, wz, ao, aw) {
+    CW[0] = CW[1] = aw; CW[2] = ao;
+    const u0 = (s0 - b0.t0) / b0.lb; if (!(u0 > CONTACT_U && u0 < 1 - CONTACT_U)) return;
+    for (const j of mu.contact) {
+      const pts = CT_P[j].points, L = CT_P[j].length;
+      let best = Infinity, at = 0, tot = 0, qx = 0, qy = 0, qz = 0;
+      for (let a = 1; a < pts.length; a++) {
+        const A = pts[a - 1], B = pts[a], ex = B[0] - A[0], ey = B[1] - A[1], ez = B[2] - A[2], el2 = ex * ex + ey * ey + ez * ez, el = Math.sqrt(el2);
+        const f = el2 > 1e-12 ? Math.max(0, Math.min(1, ((cx - A[0]) * ex + (cy - A[1]) * ey + (cz - A[2]) * ez) / el2)) : 0;
+        const px = A[0] + ex * f, py = A[1] + ey * f, pz = A[2] + ez * f, d = (px - cx) ** 2 + (py - cy) ** 2 + (pz - cz) ** 2;
+        if (d < best) { best = d; at = tot + el * f; qx = px; qy = py; qz = pz; }
+        tot += el;
+      }
+      const b = CT_BODY[j] || (CT_BODY[j] = body(CT_B[j], L)), s = tot > 1e-9 ? at * L / tot : 0, u = (s - b.t0) / b.lb;
+      if (!(u > CONTACT_U && u < 1 - CONTACT_U)) continue;
+      let dx = qx - cx, dy = qy - cy, dz = qz - cz; const dt = dx * tx + dy * ty + dz * tz; dx -= dt * tx; dy -= dt * ty; dz -= dt * tz;
+      const dw = dx * wx + dy * wy + dz * wz, dov = dx * ox + dy * oy + dz * oz;
+      if (Math.abs(dw) < Math.abs(dov)) continue;
+      const side = dw > 0 ? 0 : 1, gap = Math.abs(dw) - aw - radiusAt(b, s);
+      if (!(gap > 0 && gap < CONTACT_MAX)) continue;
+      CW[side] = Math.max(CW[side], aw + gap * CONTACT_K + CONTACT_OVER);
+    }
+    /* растяжение обеих сторон вместе — не больше чем до средней полуширины CONTACT_W · aw */
+    const ext = CW[0] + CW[1] - 2 * aw, lim = 2 * aw * (CONTACT_W - 1);
+    if (ext > lim) { const k = lim / ext; CW[0] = aw + (CW[0] - aw) * k; CW[1] = aw + (CW[1] - aw) * k; }
+    CW[2] = ao * aw / ((CW[0] + CW[1]) * .5);
+  }
   function section(r, sk) {
     if (!sk) { SEC1.ao = SEC1.aw = r; SEC1.shift = 0; return SEC1; }
     const fl = sk.k > 0 ? FLAT + (1 - FLAT) * sk.k : FLAT, room = sk.d - SKIN_GAP, ao = Math.min(r, Math.max(fl * r, room));
@@ -1015,17 +1070,20 @@ const Muscles = (() => {
         cx -= hx * st; cy -= hy * st; cz -= hz * st;
       }
       if (TMODE === 1 && mu.tp >= 0 && RSK[r]) { const t0 = mu.tp + r * TPR; tput(t0 + 6, cx - cx0, T_X); tput(t0 + 7, cy - cy0, T_X); tput(t0 + 8, cz - cz0, T_X); }
+      /* соседние брюшки (CONTACT): полуширины вдоль кожи к соседям (+w, −w) и толщина при той же площади */
+      let awP = aw, awM = aw, aoC = ao;
+      if (mu.contact && CT_P) { contactWidths(mu, L * r / (n - 1), b, cx, cy, cz, tx, ty, tz, ox, oy, oz, wx, wy, wz, ao, aw); awP = CW[0]; awM = CW[1]; aoC = CW[2]; }
       /* центр кривизны — вглубь по оси сечения на rc; вершина эллипса (co, si) — на окружности радиуса rc + co под углом si / rc */
       const rc = BEND[r], kx = cx - ox * rc, ky = cy - oy * rc, kz = cz - oz * rc;
       for (let j = 0; j < SIDES; j++) {
-        const v = (v0 + r * SIDES + j) * 3, co = COS[j] * ao, si = SIN[j] * aw, th = Math.max(-BEND_MAX, Math.min(BEND_MAX, si / rc)), t2 = th * th;
+        const awj = SIN[j] > 0 ? awP : awM, v = (v0 + r * SIDES + j) * 3, co = COS[j] * aoC, si = SIN[j] * awj, th = Math.max(-BEND_MAX, Math.min(BEND_MAX, si / rc)), t2 = th * th;
         /* малые углы — рядом Тейлора (ошибка < 10⁻⁵ при |θ| < 0,3): у большинства колец кожа почти плоская */
         const ct = t2 < .09 ? 1 - t2 * (.5 - t2 / 24) : Math.cos(th), st = t2 < .09 ? th * (1 - t2 * (1 / 6 - t2 / 120)) : Math.sin(th);
         const rr = rc + co, ux = ox * ct + wx * st, uy = oy * ct + wy * st, uz = oz * ct + wz * st;
         pos[v] = kx + ux * rr; pos[v + 1] = ky + uy * rr; pos[v + 2] = kz + uz * rr;
         if (nor) {
           /* нормаль эллипса (cos/ao, sin/aw) в осях (o, w), повёрнутая на тот же угол */
-          const a1 = COS[j] / ao, a2 = SIN[j] / aw, n1 = a1 * ct - a2 * st, n2 = a1 * st + a2 * ct;
+          const a1 = COS[j] / aoC, a2 = SIN[j] / awj, n1 = a1 * ct - a2 * st, n2 = a1 * st + a2 * ct;
           const nx = ox * n1 + wx * n2, ny = oy * n1 + wy * n2, nz = oz * n1 + wz * n2, nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
           nor[v] = nx / nl; nor[v + 1] = ny / nl; nor[v + 2] = nz / nl;
         }
@@ -1111,6 +1169,7 @@ const Muscles = (() => {
     ['serrant', ['serr_ant_1', 'serr_ant_2', 'serr_ant_3', 'serr_ant_4', 'serr_ant_5', 'serr_ant_6', 'serr_ant_7', 'serr_ant_8', 'serr_ant_9', 'serr_ant10', 'serr_ant11', 'serr_ant12'], /^scapula/],
     ['rhomb', ['rhomboid_2', 'rhomboid_3', 'rhomboid_4', 'rhomboid_5'], /^scapula/],
     ['eo', ['EO7', 'EO8', 'EO1', 'EO2', 'EO3', 'EO4', 'EO5', 'EO6'], /^ribcage/],
+    ['scm', ['SCM1', 'SCM2', 'SCM3', 'SCM4'], /^skull/],
   ];
   const PEC_LOW = 7.5, PEC_U0 = .45;
   const BORDER = .35, BORDER_H = .5, TIP_IN = .25, TIP_OUT = .6, RIB_WMIN = .5, RIB_HMIN = .06, RIB_C0 = .3, RIB_C1 = 1, RIB_SPREAD = .8, RIB_STEER = .35, RIB_LAM = .3, RIB_AGREE = .5, RIB_HMAX = 3;
@@ -2773,13 +2832,15 @@ const Muscles = (() => {
     try {
       /* по памяти кожа кадра нужна только там, где ленты расходятся (skinDepth и skinLive сами готовят кадр кожи) */
       if (bound.skin && TMODE !== 2) skinFrame(bound.skin, m); else SKN.m = null;
+      CT_P = paths; CT_B = bound; CT_BODY.length = 0;
       for (let i = 0; i < bound.length; i++) if (!bound[i].fan && !bound[i].cap && !bound[i].wall) surface(bound[i], paths[i], m, pos, nor, start[i] * SIDES);
+      CT_P = CT_B = null;
       for (const fan of bound.fans || []) ribbon(fan, bound, paths, m, pos, nor, start);
       for (const cap of bound.caps || []) capSurface(cap, bound, paths, m, pos, nor, start);
       const walls = bound.walls || [];
       if (walls.length) wallTorso(walls[0].T, m);
       for (const wall of walls) wallSurface(wall, m, pos, nor, start, wall.T === walls[0].T);
-    } finally { TMODE = 0; TP = TA = TB = null; }
+    } finally { TMODE = 0; TP = TA = TB = null; CT_P = CT_B = null; }
   }
   function ringStarts(bound) { const st = new Uint32Array(bound.length + 1); for (let i = 0; i < bound.length; i++) st[i + 1] = st[i] + ringCount(bound[i]); return st; }
 

@@ -380,7 +380,7 @@ test('ribbons: broad flat muscles are drawn as ribbons of neighbouring lines, in
   /* задняя дельтовидная — трубки: её линии у головки плеча при отведении и руке над головой перекрещиваются (README);
      передняя зубчатая и наружная косая (ленты 4.51.0–4.53.0) с этапа Б — стенки по поверхности тела (тесты стенок ниже) */
   /* большая и средняя ягодичные с этапа В — пласты у сустава (стенки, тесты ниже) */
-  const EXPECT = { pecmaj: 7, lat: 6, trap: 13, infsp: 3, rhomb: 4 };
+  const EXPECT = { pecmaj: 7, lat: 6, trap: 13, infsp: 3, rhomb: 4, scm: 4 };
   for (const side of ['R', 'L']) assert.deepEqual(Object.fromEntries(bound.fans.filter(f => f.side === side).map(f => [f.key, f.K])), EXPECT, side);
   const seen = new Set();
   for (const fan of bound.fans) {
@@ -1294,4 +1294,69 @@ test('pectoralis major: the lower border is a convex arc below its chord', () =>
       assert(below >= .8, `${nm} in ${id} t=${t}: lower border ${below.toFixed(2)} cm below its chord`);
     }
   }
+});
+
+/* ---------- соседние брюшки (4.58.0, Muscles CONTACT, tools/muscles/README.md, «Соседние брюшки») ----------
+   У пары соседей, лежащих рядом вдоль кожи, щель между брюшками (от вершин кольца A до поверхности B, в обе стороны) — у
+   полусухожильной и длинной головки двуглавой бедра (румынская тяга, скандинавские сгибания, сгибание ног в начале; было до
+   0,6–1,2 см) и у короткого лучевого разгибателя запястья и разгибателя пальцев («молотки», сгибание запястий; было до 0,7 см)
+   больше 3 мм не больше чем у четверти колец и нигде не больше 0,5 см; объём тела (сумма площадей колец) — тот же, что у трубки
+   без соседей, ±4 %. В конце сгибания ног (колено согнуто) брюшки внизу расходятся к подколенной ямке — там щель настоящая.
+   Отрицательная: без соседей (contact = null) щель полусухожильной и двуглавой в румынской тяге — больше 0,45 см. */
+function ptTri(p, a, b, c) {
+  const ab = rSub(b, a), ac = rSub(c, a), ap = rSub(p, a), d1 = rDot(ab, ap), d2 = rDot(ac, ap); if (d1 <= 0 && d2 <= 0) return Math.hypot(...ap);
+  const bp = rSub(p, b), d3 = rDot(ab, bp), d4 = rDot(ac, bp); if (d3 >= 0 && d4 <= d3) return Math.hypot(...bp);
+  const vc = d1 * d4 - d3 * d2; if (vc <= 0 && d1 >= 0 && d3 <= 0) { const v = d1 / (d1 - d3); return Math.hypot(...rSub(p, [a[0] + ab[0] * v, a[1] + ab[1] * v, a[2] + ab[2] * v])); }
+  const cp = rSub(p, c), d5 = rDot(ab, cp), d6 = rDot(ac, cp); if (d6 >= 0 && d5 <= d6) return Math.hypot(...cp);
+  const vb = d5 * d2 - d1 * d6; if (vb <= 0 && d2 >= 0 && d6 <= 0) { const w = d2 / (d2 - d6); return Math.hypot(...rSub(p, [a[0] + ac[0] * w, a[1] + ac[1] * w, a[2] + ac[2] * w])); }
+  const va = d3 * d6 - d5 * d4; if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) { const w = (d4 - d3) / ((d4 - d3) + (d5 - d6)); return Math.hypot(...rSub(p, [b[0] + (c[0] - b[0]) * w, b[1] + (c[1] - b[1]) * w, b[2] + (c[2] - b[2]) * w])); }
+  const n = [ab[1] * ac[2] - ab[2] * ac[1], ab[2] * ac[0] - ab[0] * ac[2], ab[0] * ac[1] - ab[1] * ac[0]]; return Math.abs(rDot(ap, n)) / (Math.hypot(...n) || 1);
+}
+function bellyGaps(pos, a, b, paths) {
+  const A = bound.findIndex(x => x.name === a), B = bound.findIndex(x => x.name === b), nA = Muscles.ringCount(bound[A]), nB = Muscles.ringCount(bound[B]);
+  const bA = Muscles.body(bound[A], paths[A].length), bB = Muscles.body(bound[B], paths[B].length), belly = (bb, n, r) => { const u = (bb.L * r / (n - 1) - bb.t0) / bb.lb; return u > .1 && u < .9; };
+  const ring = (i, r) => { const c = [0, 0, 0]; for (let j = 0; j < RSIDES; j++) { const p = rV(pos, i, r, j); for (let k = 0; k < 3; k++) c[k] += p[k] / RSIDES; } let rr = 0; for (let j = 0; j < RSIDES; j++) rr += Math.hypot(...rSub(rV(pos, i, r, j), c)) / RSIDES; return { c, rr }; };
+  const RB = Array.from({ length: nB }, (_, r) => ring(B, r)), gaps = [];
+  for (let r = 0; r < nA; r++) {
+    if (!belly(bA, nA, r)) continue;
+    const { c, rr } = ring(A, r); let k = 0; for (let q = 1; q < nB; q++) if (Math.hypot(...rSub(c, RB[q].c)) < Math.hypot(...rSub(c, RB[k].c))) k = q;
+    const d = rSub(RB[k].c, c); if (!belly(bB, nB, k) || Math.hypot(...d) > rr + RB[k].rr + 1.5) continue;
+    const o = rSub(rV(pos, A, r, 0), c), w = rSub(rV(pos, A, r, 2), c); if (Math.abs(rDot(d, w) / Math.hypot(...w)) < Math.abs(rDot(d, o) / Math.hypot(...o))) continue;
+    let g = Infinity;
+    for (let j = 0; j < RSIDES && g > 0; j++) {
+      const p = rV(pos, A, r, j); if (Math.hypot(...rSub(p, RB[k].c)) < RB[k].rr * .9) { g = 0; break; }
+      for (let q = Math.max(0, k - 2); q < Math.min(nB - 1, k + 2); q++) for (let jj = 0; jj < RSIDES; jj++) {
+        const j1 = (jj + 1) % RSIDES; g = Math.min(g, ptTri(p, rV(pos, B, q, jj), rV(pos, B, q, j1), rV(pos, B, q + 1, jj)), ptTri(p, rV(pos, B, q, j1), rV(pos, B, q + 1, j1), rV(pos, B, q + 1, jj)));
+      }
+    }
+    gaps.push(g);
+  }
+  return gaps;
+}
+test('neighbouring bellies touch: hamstrings and forearm extensors without gaps, same volume as the tubes', () => {
+  const TUBE = new Float64Array(RBUF.length), area = (buf, i, r) => { const c = [0, 0, 0]; for (let j = 0; j < RSIDES; j++) { const p = rV(buf, i, r, j); for (let k = 0; k < 3; k++) c[k] += p[k] / RSIDES; } let s = 0; for (let j = 0; j < RSIDES; j++) { const a = rSub(rV(buf, i, r, j), c), b = rSub(rV(buf, i, r, (j + 1) % RSIDES), c); s += Math.hypot(a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]) / 2; } return s; };
+  for (const [id, t, pairs] of [['rdl', 0, [['semiten_r', 'bflh_r']]], ['rdl', 1, [['semiten_r', 'bflh_r']]], ['nordic', 0, [['semiten_r', 'bflh_r']]], ['legcurl', 0, [['semiten_r', 'bflh_r']]],
+    ['hammer', 0, [['ECRB_r', 'EDC2_r']]], ['hammer', 1, [['ECRB_r', 'EDC2_r']]], ['wristcurl', 0, [['ECRB_r', 'EDC2_r']]], ['wristcurl', 1, [['ECRB_r', 'EDC2_r']]]]) {
+    const { m } = rPose(id, t), paths = Muscles.layoutDrawn(bound, m, 1.5);
+    Muscles.surfaceAll(bound, paths, m, RBUF, null, RSTART);
+    for (const [a, b] of pairs) {
+      const g = bellyGaps(RBUF, a, b, paths).concat(bellyGaps(RBUF, b, a, paths)), where = `${a}–${b} in ${id} t=${t}`;
+      assert(g.length >= 4, `${where}: ${g.length} rings side by side`);
+      assert(g.filter(x => x > .3).length <= .25 * g.length && Math.max(...g) <= .5, `${where}: gaps ${g.map(x => x.toFixed(2)).join(' ')} cm`);
+    }
+    for (const nm of ['semiten_r', 'bflh_r', 'ECRB_r', 'EDC2_r', 'FCR_r']) {
+      const i = bound.findIndex(x => x.name === nm), n = Muscles.ringCount(bound[i]);
+      Muscles.surface(bound[i], paths[i], m, TUBE, null, RSTART[i] * RSIDES);
+      let s0 = 0, s1 = 0; for (let r = 0; r < n; r++) { s0 += area(TUBE, i, r); s1 += area(RBUF, i, r); }
+      assert(Math.abs(s1 / s0 - 1) <= .04, `${nm} in ${id} t=${t}: volume ${(100 * (s1 / s0 - 1)).toFixed(1)} % against the tube`);
+    }
+  }
+  /* отрицательная: без соседей щель остаётся */
+  const saved = bound.map(x => x.contact);
+  try {
+    for (const x of bound) x.contact = null;
+    const { m } = rPose('rdl', 0), paths = Muscles.layoutDrawn(bound, m, 1.5); Muscles.surfaceAll(bound, paths, m, RBUF, null, RSTART);
+    const g = bellyGaps(RBUF, 'semiten_r', 'bflh_r', paths).concat(bellyGaps(RBUF, 'bflh_r', 'semiten_r', paths));
+    assert(Math.max(...g) > .45, `without neighbours the hamstring gap is ${Math.max(...g).toFixed(2)} cm`);
+  } finally { bound.forEach((x, i) => { x.contact = saved[i]; }); }
 });

@@ -294,7 +294,11 @@ function rectus(C, K, S, mu) {
 const TEETH = {
   D: { 1: 80, 2: 72, 3: 65, 4: 58, 5: 52, 6: 54, 7: 58, 8: 64, 9: 71 },
   E: { 5: 66, 6: 68, 7: 72, 8: 78, 9: 85, 10: 93, 11: 106, 12: 131 },
-  c0: .12                                               /* зазор над оболочкой рёбер, см (выступы рёбер над межрёберными) */
+  c0: .12,                                              /* зазор над оболочкой рёбер, см (выступы рёбер над межрёберными) */
+  /* впадины между зубцами рёбер 2–5, ° назад от середины кончиков: зубчатая начинается и от апоневрозов над межрёберными
+     между зубцами (Gray's, 1918, с. 441: «and from the aponeuroses covering the intervening Intercostales») — край начала
+     почти сплошной; при 11° (до 4.58.0) с рукой над головой между зубцами у подмышки открывались рёбра */
+  valley: 3
 };
 function teeth(S) {
   const pt = (k, th, part) => { const R0 = ribAt(S, k, th); return { th, y: part === 'hi' ? lerp(R0.mid, R0.hi, .45) : part === 'lo' ? lerp(R0.mid, R0.lo, .45) : R0.mid, k }; };
@@ -302,8 +306,8 @@ function teeth(S) {
   for (const [k, th] of Object.entries(TEETH.D)) D[k] = pt(+k, th, 'hi');
   for (const [k, th] of Object.entries(TEETH.E)) E[k] = pt(+k, th, +k >= 10 ? 'mid' : 'lo');
   D.top = pt(1, 84, 'mid');
-  /* впадины зубчатой выше наружной косой (между зубцами рёбер 1–5): посередине, на 11° назад */
-  for (const k of [3, 4, 5]) { const a = D[k - 1], b = D[k]; V['d' + k] = { th: (a.th + b.th) / 2 + 11, y: (a.y + b.y) / 2 }; }
+  /* впадины зубчатой выше наружной косой (между зубцами рёбер 2–5): посередине, на TEETH.valley назад */
+  for (const k of [3, 4, 5]) { const a = D[k - 1], b = D[k]; V['d' + k] = { th: (a.th + b.th) / 2 + TEETH.valley, y: (a.y + b.y) / 2 }; }
   /* впадины наружной косой между зубцами 9–12 (там зубцы широчайшей): посередине, на 10° вперёд и на 1,2 см ниже */
   for (const k of [10, 11, 12]) { const a = E[k - 1], b = E[k]; V[k] = { th: (a.th + b.th) / 2 - 10, y: Math.min(a.y, b.y) - 1.2 }; }
   V.end = { th: E[12].th + 9, y: E[12].y - 1.5 };
@@ -338,7 +342,7 @@ function serratus(C, K, S, T, mus) {
    иначе он закрыл бы «кубики»); нижние — к паховой связке, задние (рёбра 11–12) — почти вертикально к передней половине
    гребня подвздошной кости. Апоневроз — EO.apo толщиной. Над рёбрами низ пласта — на оболочке (зубцы — на рёбрах), дальше от
    зубцов пласт может отойти от рёбер на EO.float; вне рёбер верх — EO.depth под кожей. */
-const EO = { F: [0, .05, .12, .2, .3, .4, .5, .6, .7, .79, .87, .93, .97, 1], depth: .45, apo: .15, over: .6, float: 1.2, names: ['EO7', 'EO8', 'EO1', 'EO2', 'EO3', 'EO4', 'EO5', 'EO6'],
+const EO = { F: [0, .05, .12, .2, .3, .4, .5, .6, .7, .79, .87, .93, .97, 1], depth: .45, apo: .15, over: .6, float: 1.2, blend: [.6, .35, .15], blendLast: .25, names: ['EO7', 'EO8', 'EO1', 'EO2', 'EO3', 'EO4', 'EO5', 'EO6'],
   /* швы на краю прямой между полосами EO7…EO4 (высота h) */
   semi: [40.5, 37.5, 34, 29, 22.5, 13] };
 function obliqueExt(C, K, S, T, mus) {
@@ -382,6 +386,12 @@ function obliqueExtNodes(C, K, S, W, tNom) {
   for (let pass = 0; pass < 3; pass++) for (let c = 0; c <= 2 * Kn; c++) for (let q = 2; q < n - 1; q++) {
     const x = at(c, q); let d = .25 * at(c, q - 1).d + .5 * x.d + .25 * at(c, q + 1).d; if (x.dRib != null) d = Math.min(d, x.dRib); x.d = Math.max(.3, d);
   }
+  /* Переход «на рёбрах — под кожей» у рёберной дуги. Над рёбрами низ пласта — жёстко с грудной клеткой, ниже верх — у кожи; в
+     сильном сгибании туловища (скручивания) рёбра опускаются к тазу и уходят вглубь, а кожа живота у дуги — нет, и на границе
+     вдоль полосы был излом до 130–170° (край рёберной части шёл ломаной). Строки под последней строкой над рёбрами следуют за
+     грудной клеткой на долю EO.blend (узел-смесь кожи и рамки грудной клетки): в нейтральной позе положение то же, в позе
+     переход растянут на несколько строк. Волокна наружной косой и правда идут от рёбер: у дуги мышца движется с ними. */
+  const lastRib = Array.from({ length: 2 * Kn + 1 }, (_, c) => { let l = 0; for (let q = 0; q < n; q++) if (at(c, q).dRib != null) l = q; return l; });
   for (const x of raw) {
     fixed.push(x.apo);
     /* зубцы (строка 0) и узлы над рёбрами: низ — на рёбрах (жёстко с грудной клеткой), потолок — CEIL под кожей */
@@ -393,7 +403,12 @@ function obliqueExtNodes(C, K, S, W, tNom) {
       Q = lerp3(Q, onB, w);
       nodes.push(mixNode(C, bones, ['pelvis_R', 'R'], Q, x.P.kf, w, 0, x.t));
     } else if (x.dRib != null) nodes.push(sandwichNode(C, bones, add(x.P.p, x.P.n, -CEIL), x.P.kf, add(Q, x.P.n, -x.t), 1, x.t));
-    else nodes.push(skinNode(C, Q, x.P.kf, 0, x.t));
+    else {
+      /* нижняя строка (свободный задний край у гребня) — не больше EO.blendLast: узел, жёсткий с грудной клеткой на 0,6, в
+         скручивании (велосипед) выходил из кожи на 0,8 см */
+      const k = x.q - lastRib[x.c], w = k >= 1 && k <= EO.blend.length ? Math.min(EO.blend[k - 1], x.q === n - 1 ? EO.blendLast : 1) : 0;
+      nodes.push(w > 0 ? mixNode(C, bones, ['ribcage', ''], Q, x.P.kf, w, 0, x.t) : skinNode(C, Q, x.P.kf, 0, x.t));
+    }
   }
   return { key: 'eo', lines: W.names, n, bones, nodes, strips: gridStrips(Kn, n), vol: W.vol, fixed };
 }
@@ -402,7 +417,7 @@ function obliqueExtNodes(C, K, S, W, tNom) {
    хрящам рёбер 10–12). Начало — латеральная половина паховой связки и передние 2/3 гребня; конец — край прямой (от h 5 до
    рёберной дуги) и нижние края хрящей 10–12. Под наружной косой: верх — на 0,5 мм под её нижней поверхностью (луч от кожи
    внутрь), где наружной косой нет — IO.depth под кожей. */
-const IO = { F: [0, .1, .22, .36, .5, .64, .78, .88, .95, 1], depth: .5, names: ['IO1', 'IO2', 'IO3', 'IO4', 'IO5', 'IO6'],
+const IO = { F: [0, .1, .22, .36, .5, .64, .78, .88, .95, 1], depth: .5, blend: [.15, .05], names: ['IO1', 'IO2', 'IO3', 'IO4', 'IO5', 'IO6'],
   orig: [0, .06, .12, .2, .28, .36, .45, .55, .64, .73, .82, .91, 1], ins: [0, .08, .16, .24, .32, .4, .5, .58, .66, .75, .84, .92, 1] };
 function obliqueInt(C, K, S, T, mus, eoBottom) {
   const { skin, LM } = K, names = IO.names.map(x => x + '_r'), Kn = names.length, n = IO.F.length, bones = [], nodes = [], fixed = [], { E } = T;
@@ -426,6 +441,10 @@ function obliqueInt(C, K, S, T, mus, eoBottom) {
       const B = polyAt(LM.crest.slice(0, 6), (IO.orig[c] - .12) / .88), w = q === 0 ? 1 : .5;
       Q = lerp3(Q, add(B, unit(sub(P.p, B)), .2), q === 0 ? 1 : .4);
       nodes.push(mixNode(C, bones, ['pelvis_R', 'R'], Q, P.kf, w, 0, rel));
+    } else if (q <= 1 + IO.blend.length && IO.orig[c] >= .12 && !Number.isFinite(gap)) {
+      /* строки над гребнем — за тазом на убывающую долю IO.blend: в сильном сгибании туловища кожа живота над гребнем уходит от
+         таза, и на второй строке был излом до 80° (как у наружной косой у рёберной дуги) */
+      nodes.push(mixNode(C, bones, ['pelvis_R', 'R'], Q, P.kf, IO.blend[q - 2], 0, rel));
     } else if (Number.isFinite(gap)) nodes.push(sandwichNode(C, bones, Q, P.kf, add(P.p, P.n, -(gap - .1)), 0, rel));
     else nodes.push(skinNode(C, Q, P.kf, 0, rel));
   }

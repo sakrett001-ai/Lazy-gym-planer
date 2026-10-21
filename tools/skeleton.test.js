@@ -12,8 +12,9 @@ const IDS = ['squat', 'deadlift', 'bbbench', 'lunge', 'dbcurl', 'pushup', 'legpr
 const entries = bakeAll({ only: IDS });
 const poses = IDS.flatMap(id => { const rig = EQ.rig(entries[id]); return [0, .5, 1].map(t => ({ id, t, R: rig(t) })); });
 
-test('bone data: 102 bones of both sides, valid triangles, attribution kept', () => {
-  assert.equal(data.bones.length, 102);
+test('bone data: 102 MyoSim bones of both sides and the larynx with the trachea, valid triangles, attribution kept', () => {
+  assert.equal(data.bones.filter(b => b.seg !== 'airway').length, 102);
+  assert.deepEqual(data.bones.filter(b => b.seg === 'airway').map(b => b.name).slice(0, 3), ['hyoid', 'thyroid', 'cricoid']);
   assert.match(data.source, /MyoSim.*Apache 2\.0/);
   for (const name of ['femur', 'tibia', 'humerus', 'radius', 'ulna', 'scapula', 'clavicle', 'patella', 'foot', 'toes', '2proxph', '1mc'])
     for (const s of ['L', 'R']) assert(bone(name, s) >= 0, name + s);
@@ -115,4 +116,60 @@ test('the kneecap rides with the knee', () => {
       assert(d > 2.5 && d < 7.5, `${id} t=${t}: kneecap ${d.toFixed(1)} cm from the knee centre`);
     }
   }
+});
+
+/* Гортань и трахея (tools/skeleton/airway.js): параметрические хрящи в рамке шеи. Размеры — по источникам у чисел в airway.js
+   (допуск — разброс в исследованиях); посадка — между позвонками, нижней челюстью и кожей шеи; в кадре — за шеей (подъязычная —
+   почти с головой, трахея ниже шарнира шеи — с грудной клеткой). */
+const AW = require('./skeleton/airway.js');
+const awBone = n => data.bones.find(b => b.name === n && b.seg === 'airway');
+const awPts = (n, f = () => true) => { const b = awBone(n), o = []; for (let i = 0; i < b.pos.length; i += 3) { const p = [b.pos[i], b.pos[i + 1], b.pos[i + 2]]; if (f(p)) o.push(p); } return o; };
+const span = (pts, k) => Math.max(...pts.map(p => p[k])) - Math.min(...pts.map(p => p[k]));
+
+test('larynx and trachea: present, sized as in an adult man', () => {
+  for (const n of ['hyoid', 'thyroid', 'cricoid', 'trachea1']) assert(awBone(n), n);
+  for (const b of data.bones.filter(x => x.seg === 'airway')) assert(b.nf > 50 && Math.abs(b.wt || 0) <= 1 && Math.abs(b.wh || 0) <= 1, b.name);
+  /* подъязычная: длина 39,1 и ширина 42,3 мм (Fakhry 2013) — ±3 мм */
+  const hy = awPts('hyoid'); assert(Math.abs(span(hy, 2) - 3.91) < .3 && Math.abs(span(hy, 0) - 4.23) < .3, `hyoid ${span(hy, 2).toFixed(2)} × ${span(hy, 0).toFixed(2)} cm`);
+  /* щитовидный: высота пластинки (сбоку, без рогов) 26,6–27,6 мм (Rawal 2014; Eckel 1994) ± 3; пластинка от выступа до заднего края
+     36,8–37,1 мм ± 3,6; угол 74 ± 8° (Rawal) … ≈90° (Gray's) */
+  const th = awPts('thyroid', p => Math.abs(p[0]) > 1.2 && Math.abs(p[0]) < 2), lam = span(th, 1);
+  assert(lam > 2.4 && lam < 3.0, `thyroid lamina height ${lam.toFixed(2)} cm`);
+  const T = AW.P.thyroid; assert(T.angle >= 66 && T.angle <= 92 && Math.abs(T.lamina - 3.7) < .36, 'thyroid angle and lamina width');
+  /* перстневидный: пластинка 22,3 мм, дуга 7,1 мм, снаружи спереди назад ≈ 27–28,5 мм (Kim, Song 2017) */
+  const zc = AW.POS.cricoid.z, lamC = span(awPts('cricoid', p => Math.abs(p[0]) < .4 && p[2] < zc), 1), arch = span(awPts('cricoid', p => Math.abs(p[0]) < .4 && p[2] > zc), 1), ap = span(awPts('cricoid'), 2);
+  assert(Math.abs(lamC - 2.23) < .15 && Math.abs(arch - .71) < .1 && ap > 2.5 && ap < 2.95, `cricoid lamina ${lamC.toFixed(2)}, arch ${arch.toFixed(2)}, AP ${ap.toFixed(2)} cm`);
+  /* трахея: 16–20 полуколец, поперечник 2–2,5 см (Gray's) */
+  assert(AW.P.trachea.rings >= 16 && AW.P.trachea.rings <= 20);
+  const tr = awPts('trachea1'); assert(span(tr, 0) >= 2 && span(tr, 0) <= 2.5, `trachea width ${span(tr, 0).toFixed(2)} cm`);
+});
+
+test('larynx and trachea: inside the neck, clear of the vertebrae and the jaw, follow the head and the neck', () => {
+  const G = require('./muscles/geometry.js'), pbs = G.prepareBones(data);
+  const other = data.bones.map((b, i) => /^(cervical|thoracic[1-6]|jaw|skull|ribcage|clavicle)$/.test(b.name) ? i : -1).filter(i => i >= 0);
+  const aw = data.bones.map((b, i) => b.seg === 'airway' ? i : -1).filter(i => i >= 0);
+  /* крайние позы шеи в каталоге: сгибание 26° (тяга бедром), разгибание 45° (концентрированный подъём), наклон 10°, поворот 8° — с запасом */
+  const qs = [['neutral', {}], ['flexion', { neck: [26, 0, 0] }], ['extension', { neck: [-45, 0, -8] }], ['turn', { neck: [0, 0, 30] }], ['bend', { neck: [0, 12, 0] }]];
+  for (const [label, set] of qs) {
+    const q = M.neutral(); Object.assign(q, set); const R = M.catalogPose(q), body = M.bodyData(R), m = Skeleton.frames(R, body, data.bones), pose = G.poseBones(pbs, m), cache = M.torsoCache(R);
+    const sdf = p => Math.min(M.torsoSDF(R, p, cache), M.headSDF(R, p), M.neckSDF(R, p));
+    let out = -Infinity, deep = 0, where = '';
+    for (const i of aw) {
+      const w = Skeleton.worldPoints(data.bones[i], m, i);
+      for (let j = 0; j < w.length; j += 3) {
+        const p = [w[j], w[j + 1], w[j + 2]]; out = Math.max(out, sdf(p));
+        for (const bi of other) { const P = pose[bi]; if (p[0] < P.lo[0] || p[0] > P.hi[0] || p[1] < P.lo[1] || p[1] > P.hi[1] || p[2] < P.lo[2] || p[2] > P.hi[2]) continue; const ql = P.inv(p); if (G.insideBone(pbs[bi], ql)) { const d = pbs[bi].near(ql); if (d > deep) { deep = d; where = data.bones[i].name + ' в ' + data.bones[bi].name; } } }
+      }
+    }
+    /* под кожей шеи (в разгибании подъязычная выходит под подбородком — у манекена там нет кожи дна рта, она стянута к шее) */
+    assert(out < (label === 'extension' ? 1 : .3), `${label}: larynx out of the skin by ${out.toFixed(2)} cm`);
+    assert(deep < .2, `${label}: ${where} ${deep.toFixed(2)} cm deep`);
+  }
+  /* в кадре: перстневидный — с шеей, нижний сегмент трахеи — с грудной клеткой, подъязычная — почти с головой */
+  const q = M.neutral(); q.neck = [26, 0, 30]; const R = M.catalogPose(q), m = Skeleton.frames(R, M.bodyData(R), data.bones), R0 = M.catalogPose(M.neutral()), m0 = Skeleton.frames(R0, M.bodyData(R0), data.bones);
+  const rel = (mm, a, b) => { const i = data.bones.findIndex(x => x.name === a), k = data.bones.findIndex(x => x.name === b), wa = Skeleton.worldPoints(data.bones[i], mm, i), wb = Skeleton.worldPoints(data.bones[k], mm, k); return M.V.dist([wa[0], wa[1], wa[2]], [wb[0], wb[1], wb[2]]); };
+  const last = data.bones.filter(b => b.seg === 'airway' && /^trachea/.test(b.name)).at(-1).name;
+  assert(Math.abs(rel(m, 'cricoid', 'cervical') - rel(m0, 'cricoid', 'cervical')) < 1e-3, 'cricoid moves with the cervical spine');
+  assert(Math.abs(rel(m, last, 'ribcage') - rel(m0, last, 'ribcage')) < 1e-3, 'lower trachea moves with the rib cage');
+  assert(Math.abs(rel(m, 'hyoid', 'jaw') - rel(m0, 'hyoid', 'jaw')) < Math.abs(rel(m, 'hyoid', 'cervical') - rel(m0, 'hyoid', 'cervical')), 'hyoid follows the jaw more than the spine');
 });
