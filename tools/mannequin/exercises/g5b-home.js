@@ -47,6 +47,8 @@ function plankBody(C, alpha, { ballZ = 0, ballY = 0, feetX = 10, dorsi = 6, mtpM
   return q;
 }
 
+/* пояс в упоре углом (этап Д): по ритму без смещений, k — 0 у прямых рук, 1 внизу */
+const PIKE_GIRDLE = (C, k) => [0, 0];
 /* Упор углом («перевёрнутая V»): ноги прямой линией от подушечек стоп под углом psi к горизонту (как plankBody),
    корпус наклонён вниз к голове на phi от горизонтали; сгибание в тазобедренных суставах = psi + phi. */
 function pikeBody(C, psi, phi, opts) {
@@ -62,7 +64,7 @@ function pikeBody(C, psi, phi, opts) {
    задней поверхности бедра (≈ 80° + половина сгибания колена), поэтому колени чуть согнуты, а «V» не слишком острая. */
 function pikeLayout(C, { phi0, phi1, opts, handX = 22, headGap = 4, floorY = 0, headAhead = 2 }) {
   const { V } = C;
-  const body = (psi, phi, k) => { const q = pikeBody(C, psi, phi, opts); for (const s of S) q[s].girdle = [C.lerp(14, 6, k), C.lerp(8, -4, k)]; q.neck = [C.lerp(0, -10, k), 0, 0]; return q; };
+  const body = (psi, phi, k) => { const q = pikeBody(C, psi, phi, opts); for (const s of S) C.rhythm(q, s, PIKE_GIRDLE(C, k)); q.neck = [C.lerp(0, -10, k), 0, 0]; return q; };
   const headTop = q => Math.min(...C.region(q, 'headAll').map(p => p[1]));
   /* низ: макушка в headGap см над опорой ладоней, голова чуть впереди кистей */
   const psi1 = C.solve1D(ps => headTop(body(ps, phi1, 1)) - floorY - headGap, -30, 80), head = C.fk(body(psi1, phi1, 1)).P.head;
@@ -469,8 +471,9 @@ module.exports = {
     pose(t, C) {
       const { V } = C, L = PIKED(), e = 1 - C.ease(t), q = pikeBody(C, C.lerp(L.psi0, L.psi1, e), C.lerp(L.phi0, L.phi1, e), L.opts);
       q.neck = [C.lerp(0, -10, e), 0, 0];
-      S.forEach((s, i) => {
-        q[s].girdle = [C.lerp(14, 6, e), C.lerp(8, -4, e)];
+      /* пояс по ритму (этап Д); плечевой сустав идёт за лопаткой — ладони ставятся дважды */
+      for (const pass of [0, 1]) S.forEach((s, i) => {
+        C.rhythm(q, s, PIKE_GIRDLE(C, e));
         const lat = C.lat(q, s), pole = V.unit(V.add(V.add([0, 0, -1], lat, .55), [0, 1, 0], .7));
         C.palm(q, s, L.palm[i], V.unit([-SG[s] * .05, 0, 1]), [0, 1, 0], pole);
       });
@@ -487,10 +490,11 @@ module.exports = {
     pose(t, C) {
       const { V } = C, L = PIKE(), e = C.ease(t), q = pikeBody(C, C.lerp(L.psi0, L.psi1, e), C.lerp(L.phi0, L.phi1, e), L.opts);
       q.neck = [C.lerp(0, -10, e), 0, 0];
-      S.forEach((s, i) => {
-        q[s].girdle = [C.lerp(14, 6, e), C.lerp(8, -4, e)];
+      /* пояс по ритму (этап Д); плечевой сустав идёт за лопаткой — ладони ставятся дважды */
+      for (const pass of [0, 1]) S.forEach((s, i) => {
+        C.rhythm(q, s, PIKE_GIRDLE(C, e));
         const lat = C.lat(q, s), pole = V.unit(V.add(V.add([0, 0, -1], lat, .55), [0, 1, 0], .7));
-        C.palm(q, s, L.palm[i], V.unit([-SG[s] * .05, 0, 1]), [0, 1, 0], pole);
+        C.palm(q, s, L.palm[i], V.unit([-SG[s] * .1, 0, 1]), [0, 1, 0], pole);
       });
       return q;
     }

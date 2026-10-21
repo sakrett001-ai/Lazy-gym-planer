@@ -237,7 +237,7 @@ module.exports = {
       }
       const chin = L.head[1] - 11.5, yTop = L.gh[1] + 55, y = C.lerp(chin + 1, yTop, e);
       for (const s of S) {
-        C.rhythm(q, s, [0, C.lerp(2, 6, e)]); /* пояс по ритму (этап Д: подъём плеч и поворот лопатки — от подъёма руки), сверх него — лёгкая протракция */
+        C.rhythm(q, s, [0, 0]); /* пояс по ритму без смещений (этап Д: подъём плеч, сведение ключицы и поворот лопатки — от подъёма руки) */
         const lat = C.lat(q, s), pole = V.unit(V.add(V.add([0, -1, 0], lat, .8), [0, 0, -1], .3));
         C.grip(q, s, V.add([0, y, z], lat, 32), V.scale(lat, -1), pole, { wristExt: 8 });
       }

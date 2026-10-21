@@ -726,14 +726,15 @@ module.exports = {
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = sitOnAdj(C, C.base(), { lumbar: 2, thoracic: -2, hip: 84, feetZ: -23 });
       q.neck = [2, 0, 0];
-      /* пояс по ритму (этап Д: подъём плеч и поворот лопатки — от подъёма руки), сверх него — лёгкая протракция */
-      for (const s of S) C.rhythm(q, s, [0, C.lerp(2, 4, e)]);
+      /* пояс по ритму без смещений (этап Д: подъём плеч, сведение ключицы и поворот лопатки — от подъёма руки); локти
+         чуть впереди корпуса — «локти уходят назад за корпус» в каталоге ошибка */
+      for (const s of S) C.rhythm(q, s, [0, 0]);
       const f = C.fk(q), T = C.axes(q, 'thorax');
       for (const s of S) {
         const lat = C.lat(q, s), gh = f.P['gh' + s], up = [0, 1, 0], fwd = V.unit(V.perp(T.z, up));
         const bot = V.add(V.add(V.add(gh, lat, 25), up, 21), fwd, 5), top = V.add(V.add(V.add(gh, lat, -1), up, 62.6), fwd, 3);
         const g = V.add(V.mix(bot, top, e), lat, 4 * Math.sin(Math.PI * e));
-        const pole = V.unit(V.add(V.add([0, -1, 0], lat, C.lerp(.9, .6, e)), fwd, -.15));
+        const pole = V.unit(V.add(V.add([0, -1, 0], lat, C.lerp(.9, .6, e)), fwd, .2));
         holdDir(C, q, s, g, pole, lat);
       }
       return q;
