@@ -796,14 +796,17 @@ module.exports = {
         /* рука вперёд: от вертикали к линии корпуса, большой палец вверх (ладонь внутрь) */
         /* сначала кисть поднимается от коврика ладонью вниз (локоть сгибается назад), затем рука выпрямляется вперёд
            до линии корпуса и поворачивается большим пальцем вверх */
-        const gh = C.fk(q).P['gh' + s], g = C.M.SIGN[s], Wfloor = palmWrist(C, s, V.add(L.palms[s], [(w.R - w.L) * BIRD.shift, 0, 0]), L.fing(s), [0, 1, 0]);
-        const a = (90 + L.th - 3) * C.D2R, line = [0, -Math.cos(a), Math.sin(a)], Wf = V.add(gh, line, armSpan(C, 5));
-        const lift = Math.min(1, k / .12), u = Math.max(0, (k - .12) / .88);
-        const W = V.mix(V.add(Wfloor, [0, 1, 0], 9 * lift), Wf, u);
-        const fingers = V.unit(V.mix(L.fing(s), line, u)), palm = V.unit(V.mix([0, -1, 0], [-g, 0, 0], u));
-        const M3 = C.M.M3, d = fingers, upn = V.scale(V.unit(V.perp(palm, d)), -1), x = V.scale(upn, g), y = V.scale(d, -1);
-        const pole = V.unit(V.mix(V.unit(V.add(V.add(V.scale(up, -1), [g, 0, 0], .5), [0, 1, 0], .3)), [g * .3, -1, 0], u));
-        C.M.solveArmWrist(q, s, W, pole, M3.cols(x, y, V.cross(x, y)));
+        /* плечевой сустав идёт за лопаткой (ритм пояса): руку ставим дважды — второй раз от сустава поднятой руки */
+        for (const pass of [0, 1]) {
+          const gh = C.fk(q).P['gh' + s], g = C.M.SIGN[s], Wfloor = palmWrist(C, s, V.add(L.palms[s], [(w.R - w.L) * BIRD.shift, 0, 0]), L.fing(s), [0, 1, 0]);
+          const a = (90 + L.th - 3) * C.D2R, line = [0, -Math.cos(a), Math.sin(a)], Wf = V.add(gh, line, armSpan(C, 5));
+          const lift = Math.min(1, k / .12), u = Math.max(0, (k - .12) / .88);
+          const W = V.mix(V.add(Wfloor, [0, 1, 0], 9 * lift), Wf, u);
+          const fingers = V.unit(V.mix(L.fing(s), line, u)), palm = V.unit(V.mix([0, -1, 0], [-g, 0, 0], u));
+          const M3 = C.M.M3, d = fingers, upn = V.scale(V.unit(V.perp(palm, d)), -1), x = V.scale(upn, g), y = V.scale(d, -1);
+          const pole = V.unit(V.mix(V.unit(V.add(V.add(V.scale(up, -1), [g, 0, 0], .5), [0, 1, 0], .3)), [g * .3, -1, 0], u));
+          C.M.solveArmWrist(q, s, W, pole, M3.cols(x, y, V.cross(x, y)));
+        }
         q.hands[s] = 'flat';
       }
       return q;

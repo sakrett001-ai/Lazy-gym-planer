@@ -422,7 +422,7 @@ const HT = memo(t => {
   const gap = B => { let m = 99; for (let x = -20; x <= 20; x += 2) { const p = M.toCat([x, B[1], B[2]]); m = Math.min(m, M.torsoSDF(R, p, cache), ...S.map(s => M.limbSDF(R, 'th', s, p))); } return m - 5; };
   const base = V.add(q.root.p, [0, 0, 1.5]), d = C.solve1D(d => gap(V.add(base, [0, d, 0])) + 1, 0, 30, 30), bar = V.add(base, [0, d, 0]);
   const P = C.axes(q, 'pelvis');
-  for (const s of S) { const lat = C.lat(q, s), pole = V.unit(V.add(V.add(V.scale(P.y, -.7), lat, 1), P.z, .15)); gripBar(C, q, s, bar, 31, pole, { axis: [1, 0, 0], wristExt: 10 }); }
+  for (const s of S) { const lat = C.lat(q, s), pole = V.unit(V.add(V.add(V.scale(P.y, -.7), lat, 1), P.z, .15)); gripBar(C, q, s, bar, 33, pole, { axis: [1, 0, 0], wristExt: 10 }); }
   q._bar = bar;
   return q;
 });

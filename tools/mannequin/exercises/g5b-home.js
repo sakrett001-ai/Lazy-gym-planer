@@ -186,7 +186,7 @@ function sideLungePose(C, k) {
   const resolve = q => {
     for (const s of S) { const F = feet[s]; C.foot(q, s, F.sup, 0, V.unit(V.add(F.fw, [SG[s], 0, 0], .15)), { forward: F.fw }); }
     const T = C.axes(q, 'thorax');
-    for (const s of S) { const lat = C.lat(q, s), w = V.add(V.add(V.add(T.o, T.y, 11.8), T.z, 30), lat, 4.6); q[s].girdle = [0, 6];
+    for (const s of S) { const lat = C.lat(q, s), w = V.add(V.add(V.add(T.o, T.y, 11.8), T.z, 30), lat, 7.5); q[s].girdle = [0, 6];
       C.armTo(q, s, w, V.unit(V.add([0, -1, 0], lat, .8)), { pron: 8, wrist: [0, 0], mode: 'relaxed' }); }
   };
   let x = C.lerp(0, SL.hipX, u), z = C.lerp(0, SL.hipZ, u), q = body(straightL(x, z), x, z);
@@ -532,7 +532,7 @@ module.exports = {
       S.forEach((s, i) => {
         q[s].girdle = [C.lerp(-2, 3, e), C.lerp(-14, 12, e)];
         const lat = C.lat(q, s), pole = V.unit(V.add(V.add(V.scale(ax, -1), lat, .4), [0, 1, 0], .3));
-        C.palm(q, s, L.palm[i], V.unit([-SG[s] * .1, 0, 1]), [0, 1, 0], pole);
+        C.palm(q, s, L.palm[i], V.unit([-SG[s] * .17, 0, 1]), [0, 1, 0], pole);
       });
       return q;
     }

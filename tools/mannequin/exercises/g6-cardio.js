@@ -63,7 +63,7 @@ function plankBody(C, theta = PLANK.theta) {
   C.rootAtShoulders(q, [0, MAT + 55.6, PLANK.handZ - 8]);
   return q;
 }
-function plankHands(C, q, hx = PLANK.handX, turn = -.18, hz = PLANK.handZ) {
+function plankHands(C, q, hx = PLANK.handX, turn = -.22, hz = PLANK.handZ) {
   const { V } = C;
   for (const s of S) {
     const lat = C.lat(q, s), fingers = V.unit([sgn(s) * turn, 0, 1]);
@@ -129,7 +129,9 @@ const burpeeLayout = C => BURPEE.layout || (BURPEE.layout = (() => {
   let q = burpeeSquatBody(C, [0, 40, -50]);
   /* опора на подушечки стоп: высота таза — по нижней точке подушечки */
   const ball0 = C.fk(q).P.ballL, y = 40 - (ball0[1] - (MAT + 2));
-  const zH = C.solve1D(z => BURPEE.reach - V.dist(C.fk(burpeeSquatBody(C, [0, y, z])).P.ghL, wr), -95, -20);
+  /* плечевой сустав идёт за лопаткой (этап Д: ритм пояса по подъёму руки) — длина руки меряется с ладонями на коврике */
+  const withHands = q => { try { plankHands(C, q, BURPEE.handX, BURPEE.turn, BURPEE.handZ); } catch (e) { /* не дотягивается */ } return q; };
+  const zH = C.solve1D(z => BURPEE.reach - V.dist(C.fk(withHands(burpeeSquatBody(C, [0, y, z]))).P.ghL, wr), -95, -20);
   q = burpeeSquatBody(C, [0, y, zH]);
   const b = C.fk(q).P.ballL;
   return { root: [0, y, zH], ball: [b[0], MAT, b[2]], plank: plankLayout(C) };

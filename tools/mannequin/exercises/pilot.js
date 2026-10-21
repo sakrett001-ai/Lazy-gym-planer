@@ -99,7 +99,7 @@ module.exports = {
       C.rootAtHip(q, 'R', [-1, 44 + 5.4 + C.M.B.th * Math.cos(kb), -24]);
       C.kneel(q, 'R', [-1, 44, kz], [0, 0, -1], [0, 1, 0], { toes: 'flat', plantar: 44 });
       let f = C.fk(q);
-      C.palm(q, 'R', [f.P.ghR[0] + 4, 44, f.P.ghR[2] + 12], [.8, 0, 1], [0, 1, 0], [-.4, 0, -1]);
+      C.palm(q, 'R', [f.P.ghR[0] + 4, 44, f.P.ghR[2] + 12], [.86, 0, 1], [0, 1, 0], [-.6, 0, -1]);
       C.foot(q, 'L', [31, 0, -22], 0, V.unit([.3, 0, 1]), { forward: V.unit([.22, 0, 1]) });
       f = C.fk(q);
       const T = C.axes(q, 'thorax'), gh = f.P.ghL;
@@ -214,7 +214,7 @@ module.exports = {
         const dir = V.unit(V.add(V.scale(lat, Math.cos(ang)), fwd, Math.sin(ang)));
         const grip = V.add([L.gh[s][0], gh[1] - 3, L.gh[s][2]], dir, rad);
         /* рукоять чуть наклонена внутренним концом вниз — запястье без локтевого отведения */
-        const tangent = V.unit(V.add(V.add(V.scale(lat, -Math.sin(ang)), fwd, Math.cos(ang)), [0, -1, 0], .22));
+        const tangent = V.unit(V.add(V.add(V.scale(lat, -Math.sin(ang)), fwd, Math.cos(ang)), [0, -1, 0], .27));
         const pole = V.unit(V.add(V.add([0, -.3, 0], lat, 1), [0, 0, -1], .2));
         C.grip(q, s, grip, tangent, pole);
       }
