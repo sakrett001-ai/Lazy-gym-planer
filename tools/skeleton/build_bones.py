@@ -66,12 +66,28 @@ def trunkMap(v,w):
     return thoraxFit((np.asarray(v)-mid)*np.array([S_T,S_T,S_T]),w)
 yS=float(pelvisMap(mesh(TOR,'sacrum_geom_1_sacrum')[0])[:,1].max()); yT12=float(trunkMap(mesh(TOR,'torso_geom_1_thoracic12_s')[0],0)[:,1].mean())
 TH0=np.array([0,24.,0])   # начало рамки грудной клетки манекена в рамке таза (нейтральная поза)
+# Поясница (4.62.0). Шарниры поясницы манекена (B.lumbarPivot, B.thoracicPivot, VERT_LEVELS) стоят в суставах MyoSim,
+# перенесённых преобразованием до 4.62.0: позвонок L_i — поворот на 12°·w вокруг PIV и сдвиг вперёд на 1 см·w (w — доля по
+# высоте от крестца до Th12). Если просто повернуть поясницу вместе с новым грудным блоком (2°·w, сдвиг по шее ·w), тела
+# L2–L4 уходят от осей шарниров на 1,1 см вперёд, и плечи мышц спины при наклоне — на треть меньше, чем в MyoSim
+# (многораздельная, поясничная часть длиннейшей; при повороте — квадратная мышца поясницы). Поэтому центры позвонков
+# остаются на прежней дуге поясницы и смещаются лишь на долю w смещения центра Th12 (грудной блок встал на 1,9 см ниже
+# и на 0,7 вперёд — диски поясницы ниже на 0,3–0,4 см каждый), а наклон каждого позвонка — как у грудного блока, 2°·w
+# (поворот вокруг своего центра).
+B0_PITCH,B0_DZ=12.0,1.0
+def lumbarFit(v,w,c0,dT):
+    q=pitchFit((np.asarray(v)-mid)*S_T,B0_PITCH*w,0.,B0_DZ*w); a=np.radians((TH_PITCH-B0_PITCH)*w); c,s_=np.cos(a),np.sin(a); d=q-c0
+    return np.stack([d[:,0],d[:,1]*c-d[:,2]*s_,d[:,1]*s_+d[:,2]*c],-1)+c0+dT*w
 def buildTrunk():
-    """поясничные позвонки (доля w сдвига грудного блока) и грудной блок — после того, как шея задала TH_DY, TH_DZ"""
+    """поясничные позвонки (на прежней дуге, доля w смещения Th12) и грудной блок — после того, как шея задала TH_DY, TH_DZ"""
     global AP
+    v12=mesh(TOR,'torso_geom_1_thoracic12_s')[0]
+    dT=trunkMap(v12,1).mean(0)-pitchFit((np.asarray(v12)-mid)*S_T,B0_PITCH,0.,B0_DZ).mean(0)
+    print('  центр Th12 к 4.61.0: %+.2f / %+.2f см (высота / вперёд)'%(dT[1],dT[2]))
     for i in (5,4,3,2,1):
         v,f=mesh(TOR,f'lumbar{i}_geom_1_lumbar{i}'); yc=float(trunkMap(v,0)[:,1].mean()); w=float(np.clip((yc-yS)/(yT12-yS),0,1))
-        q=trunkMap(v,w); h=float(q[:,1].mean()); add(f'L{i}','','spine',q-np.array([0,h,0]),f,260,h=round(h,2),xf=lambda p,w=w,h=h:trunkMap(p,w)-np.array([0,h,0]))
+        c0=pitchFit((np.asarray(v)-mid)*S_T,B0_PITCH*w,0.,B0_DZ*w).mean(0)
+        q=lumbarFit(v,w,c0,dT); h=float(q[:,1].mean()); add(f'L{i}','','spine',q-np.array([0,h,0]),f,260,h=round(h,2),xf=lambda p,w=w,h=h,c0=c0:lumbarFit(p,w,c0,dT)-np.array([0,h,0]))
     for (b,m,file,Rg,pg) in TOR['meshes']:
         if b!='torso': continue
         v,f=load(file,Rg,pg); q=trunkMap(M(v),1)
