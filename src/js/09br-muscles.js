@@ -254,7 +254,7 @@ const Muscles = (() => {
      подвздошно-рёберной открывалась щель. На пороге точка лежит на самом отрезке — путь меняется непрерывно. Длина и работа
      мышцы (layout) не меняются — только рисунок. Ориентиры лопатки — Mannequin.GIRDLE (09bm-mannequin.js), рамка кости
      лопатки скелета, правая сторона. */
-  const SLING = new Set(['LAT4']), SCAP_TS = [-4.91, -4.46, -12.65], SCAP_AI = [-7.45, -11.79, -13.71], SCAP_AA = [-17.37, 0.35, -4.84];
+  const SLING = new Set(['LAT4']), SCAP_TS = [-6.06, -4.33, -13.96], SCAP_AI = [-8.52, -11.79, -14.65], SCAP_AA = [-17.46, 0.35, -4.79];
   const SL_E1 = (() => { const a = [0, 1, 2].map(k => SCAP_AI[k] - SCAP_TS[k]); normalize(a); return a; })();
   const SL_E2 = (() => { const a = [0, 1, 2].map(k => SCAP_AI[k] - SCAP_TS[k]), b = [0, 1, 2].map(k => SCAP_AA[k] - SCAP_TS[k]), n = cross3(a, b); normalize(n); const e = cross3(n, SL_E1); normalize(e); return e; })();
   const SL_A = Math.hypot(SCAP_AI[0] - SCAP_TS[0], SCAP_AI[1] - SCAP_TS[1], SCAP_AI[2] - SCAP_TS[2]);

@@ -68,6 +68,7 @@ yS=float(pelvisMap(mesh(TOR,'sacrum_geom_1_sacrum')[0])[:,1].max()); yT12=float(
 TH0=np.array([0,24.,0])   # начало рамки грудной клетки манекена в рамке таза (нейтральная поза)
 def buildTrunk():
     """поясничные позвонки (доля w сдвига грудного блока) и грудной блок — после того, как шея задала TH_DY, TH_DZ"""
+    global AP
     for i in (5,4,3,2,1):
         v,f=mesh(TOR,f'lumbar{i}_geom_1_lumbar{i}'); yc=float(trunkMap(v,0)[:,1].mean()); w=float(np.clip((yc-yS)/(yT12-yS),0,1))
         q=trunkMap(v,w); h=float(q[:,1].mean()); add(f'L{i}','','spine',q-np.array([0,h,0]),f,260,h=round(h,2),xf=lambda p,w=w,h=h:trunkMap(p,w)-np.array([0,h,0]))
@@ -75,9 +76,31 @@ def buildTrunk():
         if b!='torso': continue
         v,f=load(file,Rg,pg); q=trunkMap(M(v),1)
         if 'ribcage' in m:
-            q=q*np.array([RIB_X,1,1])
-            add('ribcage','','thorax',q-TH0,f,5200,xf=lambda p:trunkMap(p,1)*np.array([RIB_X,1,1])-TH0)
+            q=q*np.array([RIB_X,1,1]); AP=apProfile(q); q=apStretch(q)
+            add('ribcage','','thorax',q-TH0,f,5200,xf=lambda p:apStretch(trunkMap(p,1)*np.array([RIB_X,1,1]))-TH0)
         else: add(m.split('_')[-2],'','thorax',q-TH0,f,240,xf=lambda p:trunkMap(p,1)-TH0)
+# Передняя стенка грудной клетки (4.62.0). После того как грудной блок встал под шею (наклон 2°), грудина и хрящи рёбер — на
+# 4–5 см под кожей груди (кожа по ANSUR II не меняется), у человека над грудиной 1,8 ± 0,9 см мягких тканей (КТ, мужчины с
+# нормальным ИМТ: Lemon и др., 2021 — место введения внутрикостного катетера в рукоятку). Переднюю половину клетки выносим
+# вперёд: на высоте y сдвиг AP_D(y) у переднего края (грудина, хрящи), к среднеподмышечной линии (самая широкая точка
+# сечения) — плавно на нет; задняя половина (позвонки, углы рёбер, ложе лопатки) не меняется. AP_D — по коже стоящей
+# фигуры: передний край на ≈1,8 см под ней; выше рукоятки — как у неё, ниже рёберной дуги — 0.
+AP_D=CFG.get('ap_d',[[29.5,0.],[34.5,1.2],[41.5,2.3],[50.5,3.2]])   # [высота над тазобедренными, сдвиг], см
+AP=None
+def apProfile(q):
+    """по слоям 1 см: z самой широкой точки (среднеподмышечная линия) и самой передней — сглажены"""
+    ys=np.arange(np.floor(q[:,1].min()),np.ceil(q[:,1].max())+1); z0=np.full(len(ys),np.nan); zf=np.full(len(ys),np.nan)
+    for k,y in enumerate(ys):
+        s=q[np.abs(q[:,1]-y)<.6]
+        if len(s)<20: continue
+        z0[k]=s[np.argmax(np.abs(s[:,0])),2]; zf[k]=s[:,2].max()
+    ok=~np.isnan(z0); z0=np.interp(ys,ys[ok],z0[ok]); zf=np.interp(ys,ys[ok],zf[ok])
+    ker=np.ones(5)/5; pad=lambda a:np.concatenate([[a[0]]*2,a,[a[-1]]*2])
+    return ys,np.convolve(pad(z0),ker,'valid'),np.convolve(pad(zf),ker,'valid')
+def apStretch(p):
+    p=np.array(p,float); ys,z0,zf=AP; y=p[:,1]; a=np.interp(y,ys,z0); b=np.interp(y,ys,zf)
+    u=np.clip((p[:,2]-a)/np.maximum(b-a,1.),0,1); s=u*u*(3-2*u); d=np.array(AP_D)
+    p[:,2]+=np.interp(y,d[:,0],d[:,1])*s; return p
 
 # ---------- шея и череп (геометрия HAT в рамке туловища Rajagopal: начало в (−10,07; 8,15; 0) см от таза) ----------
 HD=chain('head/assets/myohead_rigid_chain.xml','head/assets/myohead_simple_assets.xml','neck')
