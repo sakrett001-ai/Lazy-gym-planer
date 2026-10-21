@@ -319,11 +319,15 @@ module.exports = {
       const along = q => { const f = C.fk(q), a = f.P.hipL, b = f.P.knL, ab = V.sub(b, a); return V.dot(V.sub(elbowOf(q), a), ab) / V.dot(ab, ab); };
       const lean = C.solve1D(l => along(seat(l)) - .8, 15, 60);
       const q = seat(lean);
-      const f = C.fk(q), gh = f.P.ghL, E = elbowOf(q);
-      const u = V.unit(V.add(V.sub(E, gh), [-1, 0, 0], 6)), w = V.unit(V.perp(V.sub(V.add(gh, [3, 0, 16]), E), u)), phi = C.lerp(10, 114, e) * C.D2R;
-      const d = V.unit(V.add(V.scale(u, Math.cos(phi)), w, Math.sin(phi))), grip = V.add(E, d, 35.6);
       q.L.girdle = [0, 8];
-      C.hold(q, 'L', grip, V.unit(V.add(V.sub(E, V.mix(gh, grip, .5)), [1, 0, 0], .3)), { pron: C.lerp(-45, -86, e * e) });
+      /* плечевой сустав идёт за лопаткой (этап Д: поворот лопатки — от подъёма руки), поэтому локоть и гантель ставятся
+         дважды — второй раз от плечевого сустава опущенной руки */
+      for (const pass of [0, 1]) {
+        const f = C.fk(q), gh = f.P.ghL, E = elbowOf(q);
+        const u = V.unit(V.add(V.sub(E, gh), [-1, 0, 0], 6)), w = V.unit(V.perp(V.sub(V.add(gh, [3, 0, 16]), E), u)), phi = C.lerp(13, 114, e) * C.D2R;
+        const d = V.unit(V.add(V.scale(u, Math.cos(phi)), w, Math.sin(phi))), grip = V.add(E, d, 35.6);
+        C.hold(q, 'L', grip, V.unit(V.add(V.sub(E, V.mix(gh, grip, .5)), [1, 0, 0], .3)), { pron: C.lerp(-45, -86, e * e), allowShort: !pass });
+      }
       /* правая рука: ладонь на правом бедре над коленом — на верхней поверхности бедра (кожа сверху в этом месте, поджатие
          0,2 см). Прежде ладонь ставилась на 7,6 см над осью колена и висела над округлым коленом на 1,4 см, касаясь краем */
       const g2 = C.fk(q), knR = g2.P.knR, hipR = g2.P.hipR, tR = V.unit(V.sub(knR, hipR)), at = V.add(hipR, tR, 36);
@@ -345,11 +349,13 @@ module.exports = {
     pose(t, C) {
       const { V } = C, q = lieOnBench(C, C.base(), { arch: .9 }), e = C.ease(t);
       for (const s of S) q[s].girdle = [C.lerp(-2, 10, e), C.lerp(6, -4, e)];
-      const f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5), th = C.lerp(14, 84, e) * C.D2R;
-      const P = V.add(gh, [0, Math.cos(th), Math.sin(th)], 50);
       /* плавная раскладка: локти от «наружу» к «наружу-вниз-к ногам», пальцы от «к середине» к диагонали */
-      const k = Math.min(1, e / .35), m = Math.max(0, (e - .65) / .35), yw = C.lerp(80, 45, k);
-      cup(C, q, P, [0, 1, 0], [0, 0, 1], { w: 4.8, yaw: [yw, yw], poles: [(s, lat) => V.unit(V.add(V.add(lat, [0, 1, 0], -.6 * k * (1 - (s === 'L' ? 1 : .3) * m)), [0, 0, 1], -.6 * k - .4 * m))] });
+      const k = Math.min(1, e / .35), m = Math.max(0, (e - .65) / .35), yw = C.lerp(80, 45, k), th = C.lerp(14, 84, e) * C.D2R;
+      /* дуга гантели — от плечевых суставов; они идут за лопатками (ритм пояса), поэтому руки ставятся дважды */
+      for (const pass of [0, 1]) {
+        const f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5), P = V.add(gh, [0, Math.cos(th), Math.sin(th)], 50);
+        cup(C, q, P, [0, 1, 0], [0, 0, 1], { w: 4.8, yaw: [yw, yw], poles: [(s, lat) => V.unit(V.add(V.add(lat, [0, 1, 0], -.6 * k * (1 - (s === 'L' ? 1 : .3) * m)), [0, 0, 1], -.6 * k - .4 * m))] });
+      }
       return q;
     }
   },

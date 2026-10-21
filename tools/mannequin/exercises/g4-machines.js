@@ -438,6 +438,16 @@ function scsPose(C, heel, shZ = null) {
 }
 /* рукояти на каретке: вперёд от плеч dz, ниже плеч dy, ось — вверх с наклоном назад */
 const SCS_HD = { x: 26, dz: 28, dy: -12 };
+/* кисти на рукоятях. Плечевой пояс идёт за подъёмом рук (этап Д: лопатка поворачивается вверх, плечевые суставы и кожа
+   надплечий — за ней), поэтому упоры подгоняются по плечам с руками на рукоятях */
+function scsArms(C, q) {
+  const { V } = C, f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5);
+  for (const s of S) {
+    const lat = C.lat(q, s), g = [C.M.SIGN[s] * SCS_HD.x, gh[1] + SCS_HD.dy, gh[2] + SCS_HD.dz];
+    C.grip(q, s, g, V.unit([0, .9, -.4]), V.unit(V.add(V.add([0, -1, 0], lat, .3), [0, 0, 1], .3)));
+  }
+  return q;
+}
 const SCS_Z = once(() => { const C = ctx([]), f = C.fk(scsPose(C, 0)); return (f.P.ghL[2] + f.P.ghR[2]) / 2; });
 /* профиль верха плеч: наибольшая высота поверхности корпуса над полосой |x| ≈ x0 (до h = 50 — зона упора) */
 function shoulderTopAt(C, q, x0, hMax = 53.8) {
@@ -448,14 +458,16 @@ function shoulderTopAt(C, q, x0, hMax = 53.8) {
   return best;
 }
 const SCS_L = once(() => {
-  const C = ctx([]), { V } = C, q = scsPose(C, 0), f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5);
+  const C = ctx([]), { V } = C, q = scsArms(C, scsPose(C, 0)), f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5);
   /* упор наклонён по трапециевидной: прямая через верх плеч на |x| = 9 и 16 см */
   /* наклон — по верху плеч от |x| = 9 до 19,5 см (наружный край упора над дельтовидной), высота — в середине упора (|x| = 12,5) */
   const y9 = shoulderTopAt(C, q, 9, 56.8), yOut = shoulderTopAt(C, q, 19.5);
   const th = Math.atan2(y9 - yOut, 10.5), yc = y9 + (yOut - y9) * 3.5 / 10.5 - gh[1];
-  /* упоры вдавливаются в верх плеч на 0,8 см (до 4.41.0 — на 1 см), как у гакк-машины: с валиком трапециевидной 4.41.0
-     внутренний край упора уходил в кожу на 3,9 см при допуске мягкой опоры 4 см */
-  return { dz: gh[2] - SCS.zr, padZ: yc - .8, th };
+  /* упоры вдавливаются в верх плеч на 0,3 см (до этапа Д — на 0,8, до 4.41.0 — на 1 см), как у гакк-машины: с валиком
+     трапециевидной 4.41.0 внутренний край упора уходил в кожу на 3,9 см при допуске мягкой опоры 4 см; с этапа Д кожа
+     надплечий у точки на луче от оси сечения сдвигается так же, как кожа на этом луче, и знаковое расстояние в толще
+     валика у основания шеи глубже на 0,5 см (по вертикали до кожи — те же 3,6 см) */
+  return { dz: gh[2] - SCS.zr, padZ: yc - .3, th };
 });
 
 /* ================= Гакк-машина ================= */
@@ -603,12 +615,7 @@ module.exports = {
     contacts: [{ body: 'soleL', prop: 'cs:stepTop' }, { body: 'soleR', prop: 'cs:stepTop' }, { body: 'upperBack', prop: 'csSled:padL' }, { body: 'upperBack', prop: 'csSled:padR' },
       { body: 'gripL', prop: 'csSled:handleL' }, { body: 'gripR', prop: 'csSled:handleR' }],
     pose(t, C) {
-      const { V } = C, L = SCS_L(), e = C.ease(t), q = scsPose(C, C.lerp(-6.5, 30, e), SCS_Z()), f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5);
-      for (const s of S) {
-        const lat = C.lat(q, s), g = [C.M.SIGN[s] * SCS_HD.x, gh[1] + SCS_HD.dy, gh[2] + SCS_HD.dz];
-        C.grip(q, s, g, V.unit([0, .9, -.4]), V.unit(V.add(V.add([0, -1, 0], lat, .3), [0, 0, 1], .3)));
-      }
-      return q;
+      return scsArms(C, scsPose(C, C.lerp(-6.5, 30, C.ease(t)), SCS_Z()));
     }
   },
 
