@@ -89,18 +89,28 @@ AP_D=CFG.get('ap_d',[[29.5,0.],[34.5,1.2],[41.5,2.3],[50.5,3.2]])   # [высо�
 AP=None
 def apProfile(q):
     """по слоям 1 см: z самой широкой точки (среднеподмышечная линия) и самой передней — сглажены"""
-    ys=np.arange(np.floor(q[:,1].min()),np.ceil(q[:,1].max())+1); z0=np.full(len(ys),np.nan); zf=np.full(len(ys),np.nan)
+    ys=np.arange(np.floor(q[:,1].min()),np.ceil(q[:,1].max())+1); z0=np.full(len(ys),np.nan); zf=np.full(len(ys),np.nan); zb=np.full(len(ys),np.nan)
     for k,y in enumerate(ys):
         s=q[np.abs(q[:,1]-y)<.6]
         if len(s)<20: continue
-        z0[k]=s[np.argmax(np.abs(s[:,0])),2]; zf[k]=s[:,2].max()
-    ok=~np.isnan(z0); z0=np.interp(ys,ys[ok],z0[ok]); zf=np.interp(ys,ys[ok],zf[ok])
+        z0[k]=s[np.argmax(np.abs(s[:,0])),2]; zf[k]=s[:,2].max(); zb[k]=s[:,2].min()
+    ok=~np.isnan(z0); z0=np.interp(ys,ys[ok],z0[ok]); zf=np.interp(ys,ys[ok],zf[ok]); zb=np.interp(ys,ys[ok],zb[ok])
     ker=np.ones(5)/5; pad=lambda a:np.concatenate([[a[0]]*2,a,[a[-1]]*2])
-    return ys,np.convolve(pad(z0),ker,'valid'),np.convolve(pad(zf),ker,'valid')
+    return ys,np.convolve(pad(z0),ker,'valid'),np.convolve(pad(zf),ker,'valid'),np.convolve(pad(zb),ker,'valid')
+# Задняя стенка (4.62.0). Грудной блок под шеей стоит на 1–2 см глубже прежнего к коже спины: остистые — на 0,8–1,9 см под ней,
+# как у человека в борозде между валиками выпрямителя спины. Но кожа спины манекена плоская (без борозды и валиков), и углы
+# рёбер подошли к ней на 2,5–3,7 см (было 3,3–6,2; у человека над ними выпрямитель спины, трапециевидная и ромбовидные): лопатка
+# на рёбрах вышла бы к коже на 1,3 см ближе прежнего и в протракции (упор лёжа, вис, ролик) — из кожи до 2,2 см. Поэтому заднюю
+# стенку латеральнее позвоночника (|x| > 3 см, полностью — с 6 см; рёберно-позвоночные суставы на месте) выносим вперёд на
+# PB_D(y): у самой задней точки сечения — полностью, к среднеподмышечной линии — на нет. Углы рёбер — на 3,2–5,0 см под кожей,
+# лопатка в покое — там же, где до 4.62.0 (медиальный конец ости 12,9 см позади грудино-ключичного сустава, было 12,7).
+PB_D=CFG.get('pb_d',[[29.5,.3],[38.5,.9],[47.5,1.5],[56.5,1.5]])   # [высота над тазобедренными, сдвиг вперёд], см
 def apStretch(p):
-    p=np.array(p,float); ys,z0,zf=AP; y=p[:,1]; a=np.interp(y,ys,z0); b=np.interp(y,ys,zf)
+    p=np.array(p,float); ys,z0,zf,zb=AP; y=p[:,1]; a=np.interp(y,ys,z0); b=np.interp(y,ys,zf); c=np.interp(y,ys,zb)
     u=np.clip((p[:,2]-a)/np.maximum(b-a,1.),0,1); s=u*u*(3-2*u); d=np.array(AP_D)
-    p[:,2]+=np.interp(y,d[:,0],d[:,1])*s; return p
+    v=np.clip((a-p[:,2])/np.maximum(a-c,1.),0,1); t=v*v*(3-2*v); e=np.array(PB_D)
+    wx=np.clip((np.abs(p[:,0])-3.)/3.,0,1); wx=wx*wx*(3-2*wx)
+    p[:,2]+=np.interp(y,d[:,0],d[:,1])*s+np.interp(y,e[:,0],e[:,1])*t*wx; return p
 
 # ---------- шея и череп (геометрия HAT в рамке туловища Rajagopal: начало в (−10,07; 8,15; 0) см от таза) ----------
 HD=chain('head/assets/myohead_rigid_chain.xml','head/assets/myohead_simple_assets.xml','neck')
@@ -306,10 +316,11 @@ def ribPen(v):
 def rotXY(px,ty):
     a,b=np.radians(px),np.radians(ty); X=np.array([[1,0,0],[0,np.cos(a),-np.sin(a)],[0,np.sin(a),np.cos(a)]]); Y=np.array([[np.cos(b),0,np.sin(b)],[0,1,0],[-np.sin(b),0,np.cos(b)]]); return Y@X
 v0=S_T*(Rg_@(mesh(ARM,'scapula_r')[0]-gh).T).T
+SCAP_PX0=CFG.get('scap_px0',0.)
 best=None
-for px in range(-15,16):
+for px in range(-20,16):
     for ty in range(-20,21):
-        q=tgt+(rotXY(px,ty)@v0.T).T; pen=ribPen(q[::3]); cost=(pen>.05)*100+pen*10+abs(px)+abs(ty)
+        q=tgt+(rotXY(px,ty)@v0.T).T; pen=ribPen(q[::3]); cost=(pen>.05)*100+pen*10+abs(px-SCAP_PX0)+abs(ty)
         if best is None or cost<best[0]: best=(cost,px,ty,pen)
 SCAP_R=rotXY(best[1],best[2])
 print('лопатка на рёбрах: поворот вокруг поперечной оси',best[1],'°, вокруг вертикали',best[2],'°; заход в рёбра',round(best[3],2),'см')
