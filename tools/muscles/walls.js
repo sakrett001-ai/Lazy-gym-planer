@@ -338,7 +338,7 @@ function serratus(C, K, S, T, mus) {
    иначе он закрыл бы «кубики»); нижние — к паховой связке, задние (рёбра 11–12) — почти вертикально к передней половине
    гребня подвздошной кости. Апоневроз — EO.apo толщиной. Над рёбрами низ пласта — на оболочке (зубцы — на рёбрах), дальше от
    зубцов пласт может отойти от рёбер на EO.float; вне рёбер верх — EO.depth под кожей. */
-const EO = { F: [0, .05, .12, .2, .3, .4, .5, .6, .7, .79, .87, .93, .97, 1], depth: .45, apo: .15, over: .6, float: 1.2, blend: [.6, .35, .15], names: ['EO7', 'EO8', 'EO1', 'EO2', 'EO3', 'EO4', 'EO5', 'EO6'],
+const EO = { F: [0, .05, .12, .2, .3, .4, .5, .6, .7, .79, .87, .93, .97, 1], depth: .45, apo: .15, over: .6, float: 1.2, blend: [.6, .35, .15], blendLast: .25, names: ['EO7', 'EO8', 'EO1', 'EO2', 'EO3', 'EO4', 'EO5', 'EO6'],
   /* швы на краю прямой между полосами EO7…EO4 (высота h) */
   semi: [40.5, 37.5, 34, 29, 22.5, 13] };
 function obliqueExt(C, K, S, T, mus) {
@@ -400,7 +400,9 @@ function obliqueExtNodes(C, K, S, W, tNom) {
       nodes.push(mixNode(C, bones, ['pelvis_R', 'R'], Q, x.P.kf, w, 0, x.t));
     } else if (x.dRib != null) nodes.push(sandwichNode(C, bones, add(x.P.p, x.P.n, -CEIL), x.P.kf, add(Q, x.P.n, -x.t), 1, x.t));
     else {
-      const k = x.q - lastRib[x.c], w = k >= 1 && k <= EO.blend.length ? EO.blend[k - 1] : 0;
+      /* нижняя строка (свободный задний край у гребня) — не больше EO.blendLast: узел, жёсткий с грудной клеткой на 0,6, в
+         скручивании (велосипед) выходил из кожи на 0,8 см */
+      const k = x.q - lastRib[x.c], w = k >= 1 && k <= EO.blend.length ? Math.min(EO.blend[k - 1], x.q === n - 1 ? EO.blendLast : 1) : 0;
       nodes.push(w > 0 ? mixNode(C, bones, ['ribcage', ''], Q, x.P.kf, w, 0, x.t) : skinNode(C, Q, x.P.kf, 0, x.t));
     }
   }
@@ -411,7 +413,7 @@ function obliqueExtNodes(C, K, S, W, tNom) {
    хрящам рёбер 10–12). Начало — латеральная половина паховой связки и передние 2/3 гребня; конец — край прямой (от h 5 до
    рёберной дуги) и нижние края хрящей 10–12. Под наружной косой: верх — на 0,5 мм под её нижней поверхностью (луч от кожи
    внутрь), где наружной косой нет — IO.depth под кожей. */
-const IO = { F: [0, .1, .22, .36, .5, .64, .78, .88, .95, 1], depth: .5, blend: [.3, .12], names: ['IO1', 'IO2', 'IO3', 'IO4', 'IO5', 'IO6'],
+const IO = { F: [0, .1, .22, .36, .5, .64, .78, .88, .95, 1], depth: .5, blend: [.15, .05], names: ['IO1', 'IO2', 'IO3', 'IO4', 'IO5', 'IO6'],
   orig: [0, .06, .12, .2, .28, .36, .45, .55, .64, .73, .82, .91, 1], ins: [0, .08, .16, .24, .32, .4, .5, .58, .66, .75, .84, .92, 1] };
 function obliqueInt(C, K, S, T, mus, eoBottom) {
   const { skin, LM } = K, names = IO.names.map(x => x + '_r'), Kn = names.length, n = IO.F.length, bones = [], nodes = [], fixed = [], { E } = T;
