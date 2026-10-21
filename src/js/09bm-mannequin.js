@@ -927,7 +927,7 @@ function liftIn(set,p){
    не переносят). Где шар выходит из кожи кадра, кожа корпуса поднимается по своей нормали (как складками: в сетке и в
    расстояниях одинаково, по точке кожи на луче от оси сечения) на выход шара, плавно у начала (CUSH_W). В покое шары
    внутри кожи — она та же до бита. */
-const CUSH_GAP=.3,CUSH_W=1,CUSH_DEEP=5;
+const CUSH_GAP=.3,CUSH_W=2,CUSH_DEEP=5;
 let CUSH=null,CUSH_OFF=false;
 const CUSH_AX=new WeakMap();
 const spPoint=(S,g,f)=>V.add(V.add(V.add(S.o,S.x,-g*f[0]),S.y,f[1]),S.z,f[2]);
