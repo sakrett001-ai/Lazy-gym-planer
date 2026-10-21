@@ -357,7 +357,7 @@ module.exports = {
       for (const s of S) {
         const gh = f.P['gh' + s], lat = C.lat(q, s);
         const d0 = V.unit(V.add(V.add([0, -1, 0], lat, .2), T.z, .14)), d1 = V.unit(V.add(V.add(lat, [0, 1, 0], .04), T.z, .3));
-        const g = V.add(gh, slerpDir(V, d0, d1, e), 60);
+        const g = V.add(gh, slerpDir(V, d0, d1, e), 59); /* 4.62.0: сустав по ритму с ключицей, отведённой назад, — на 0,4 см дальше от ручки */
         C.hold(q, s, g, V.unit(V.mix(V.add([0, 0, -1], lat, .5), V.add([0, 1, -.6], lat, .2), e)), { pron: C.lerp(5, 25, e) });
         C.rhythm(q, s, [0, 3]); /* пояс по ритму (этап Д: подъём плеч и поворот лопатки — от подъёма руки), сверх него — лёгкая протракция */
         C.hold(q, s, g, V.unit(V.mix(V.add([0, 0, -1], lat, .5), V.add([0, 1, -.6], lat, .2), e)), { pron: C.lerp(5, 25, e) });
