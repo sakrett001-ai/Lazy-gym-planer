@@ -240,6 +240,24 @@ function build(skel) {
     if (last === null) return addv(p, u, -OVER);
     return at(last - OVER);
   };
+  /* Край — у своего ребра (или хряща): если после поправки край дальше HOLD от ближайшей точки своей части сетки (ребро k
+     стороны или грудина с хрящами — что ближе), он подтягивается к ней до HOLD. 4.62.0: грудной блок стоит прямее, и в
+     сечениях по азимуту у угла ребра и у шейки первого ребра край выходил на 3,6–4,1 мм от своего ребра (аудит — 3,5 мм). */
+  const HOLD = .25, tris = []; for (let f = 0; f < C.b.idx.length; f += 3) tris.push([C.b.idx[f], C.b.idx[f + 1], C.b.idx[f + 2]]);
+  const closest = (p, [a, b2, c]) => {     /* ближайшая точка треугольника (Ericson, Real-Time Collision Detection, 5.1.5) */
+    const ab = sub(b2, a), ac = sub(c, a), ap = sub(p, a), d1 = dotv(ab, ap), d2 = dotv(ac, ap);
+    if (d1 <= 0 && d2 <= 0) return a; const bp = sub(p, b2), d3 = dotv(ab, bp), d4 = dotv(ac, bp); if (d3 >= 0 && d4 <= d3) return b2;
+    const vc = d1 * d4 - d3 * d2; if (vc <= 0 && d1 >= 0 && d3 <= 0) return addv(a, ab, d1 / (d1 - d3));
+    const cp = sub(p, c), d5 = dotv(ab, cp), d6 = dotv(ac, cp); if (d6 >= 0 && d5 <= d6) return c;
+    const vb = d5 * d2 - d1 * d6; if (vb <= 0 && d2 >= 0 && d6 <= 0) return addv(a, ac, d2 / (d2 - d6));
+    const va = d3 * d6 - d5 * d4; if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) return addv(b2, sub(c, b2), (d4 - d3) / ((d4 - d3) + (d5 - d6)));
+    const den = 1 / (va + vb + vc); return addv(addv(a, ab, vb * den), ac, vc * den);
+  };
+  const hold = (p, s, rib) => {
+    let best = null;
+    for (const t of tris) { const part = C.label[s][t[0]]; if (part !== rib && part !== 0) continue; const q = closest(p, t.map(i => C.P[i])), d = Math.hypot(...sub(p, q)); if (!best || d < best.d) best = { q, d }; }
+    return best && best.d > HOLD && !inside(p) ? addv(best.q, sub(p, best.q), HOLD / best.d) : p;
+  };
   for (const s of ['R', 'L']) {
     const E = edges(C, s);
     for (let k = 1; k <= 11; k++) {
@@ -270,7 +288,7 @@ function build(skel) {
              губами (внутренний слой лежит глубже — его края ближе к внутренней губе), с нахлёстом под ребро */
           const depth = layer === 'ext' ? INSET : intDepth(th[i], L, T, (dotv(sub(a[i], ai[i]), n[i]) + dotv(sub(b[i], bi[i]), n[i])) / 2);
           const pa = atDepth(a[i], ai[i], depth, n[i]), pb = atDepth(b[i], bi[i], depth, n[i]);
-          A2.push(snap(pa, sub(pb, pa))); B2.push(snap(pb, sub(pa, pb)));
+          A2.push(hold(snap(pa, sub(pb, pa)), s, k)); B2.push(hold(snap(pb, sub(pa, pb)), s, k + 1));
           t.push(layerThickness(layer, th[i], L, T));
         }
         /* у самого заднего образца внутреннего слоя толщина 0 — пласт начинается от угла ребра тонким краем */
