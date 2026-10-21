@@ -10,6 +10,8 @@
      и худший выход каждого семейства — не выше FAM_MAX = 0,9 см: допуск тела над кожей в проверке мышц — 1 см (BODY_LIMIT в
      tools/muscles/check.js, с этапа Г; до него — 2,6 см, и подгонка держала худший выход под 2,6), запас 0,1 см;
    - кожа в ключевых позах не поднимается над прежней выше, чем на 0,6 см над мышцами под ней (стоя — не выше 1,2 см);
+   - под упорами для плеч (гакк-машина, икроножный тренажёр стоя) и грифом на спине (приседания, в том числе в Смите,
+     наклоны) кожа не поднимается так, чтобы деталь заходила в неё глубже допуска валидатора минус 0,1 см (LOADS);
    - стоя ширина груди не растёт (без складок она уже подогнана к ANSUR II), глубина — не больше чем на 0,3 см,
      обхват — не больше ANSUR II (101,7 см) и не меньше нижней границы средней половины людей (99,2 см, как проверка в
      tools/mannequin.test.js) с запасом 0,1 см на разницу замеров (здесь — 180 точек сечения сетки, в проверке — 360 лучей)
@@ -118,7 +120,32 @@ function chest(set) {
   const H = lo.slice(0, -1).concat(up.slice(0, -1)); let per = 0; for (let i = 0; i < H.length; i++) per += Math.hypot(H[i][0] - H[(i + 1) % H.length][0], H[i][1] - H[(i + 1) % H.length][1]);
   const xs = P.map(p => p[0]), zs = P.map(p => p[2]); return { per, br: Math.max(...xs) - Math.min(...xs), dp: Math.max(...zs) - Math.min(...zs) };
 }
-function prep() { if (!KP) { KP = keyPoses(); ANS = standing(); CH0 = chest(null); } }
+/* Упоры на надплечьях и гриф на спине (LOADS): складки не поднимают кожу под ними глубже допуска валидатора «тело в
+   инвентаре» для заявленной опоры (мягкий упор — 4 см, гриф — 2; tools/biomech/validator2.js) с запасом 0,1 см. Подъём
+   складок у плеча доходит до верха надплечья, где лежат упоры гакк-машины и икроножного тренажёра и гриф: подгонка под
+   суженную грудь без этого правила поднимала там кожу на 0,35 см вместо 0,21 и упоры гакк-машины заходили в неё на 4,05 см.
+   Точки деталей и заход без складок (с подушкой лопатки) — по запечённым позам, подъём — складками-кандидатами. */
+const LOADS = ['hacksquat', 'standcalf', 'smithsquat', 'squat', 'goodmorning'], LOAD_MARGIN = .1;
+const loadPoints = () => {
+  const VAL = require(path.join(root, 'tools/biomech/validator2.js')), out = [];
+  for (const id of LOADS.filter(k => POSES[k])) {
+    const rig = EQ.rig(EQ.variantEntry(POSES[id]));
+    for (const t of [0, .25, .5, .75, 1]) {
+      const R = rig(t), cache = M.torsoCache(R), T = R.frames.thorax, U = { L: R.frames.uaL, R: R.frames.uaR };
+      for (const c of (R.props || []).flatMap(VAL.collider)) {
+        if (c.cable) continue;
+        const lim = (c.soft ? 4 : 2) - LOAD_MARGIN;
+        for (const p of c.pts || []) M.noFolds(() => {
+          const it = {}, d0 = -M.torsoSDF(R, p, cache, it) + Math.min(c.ptR || 0, 2);
+          if (it.ps && d0 > lim - 1.5) out.push({ id, t, part: c.id, d0, ps: it.ps, lim, T, U });
+        });
+      }
+    }
+  }
+  return out;
+};
+let LP = null;
+function prep() { if (!KP) { KP = keyPoses(); ANS = standing(); CH0 = chest(null); LP = loadPoints(); } }
 
 /* ---------- цель ---------- */
 /* худший выход семейства и его вес (см. шапку); нижняя граница обхвата груди стоя — 99,2 + 0,1 */
@@ -155,6 +182,12 @@ function evaluate(D, P) {
     /* позы arms:θ — только для плавности (мышц в наборе у них нет) */
     if (!kp.k.startsWith('arms:')) for (const s of ['L', 'R']) { const lim = kp.k === 'neutral' ? 1.2 : Math.max(1.2, (muscleOut[kp.k]?.[s] ?? 0) + .6); pen += 50 * Math.max(0, mx[s] - lim) ** 2; }
   }
+  let loadMax = -Infinity, loadAt = '';
+  for (const e of LP) {
+    const d = e.d0 + lift(setsFor(P, e.T, e.U, L0).L, e.ps), x = d - e.lim;
+    if (x > loadMax) { loadMax = x; loadAt = `${e.id} t=${e.t} ${e.part} ${d.toFixed(2)}`; }
+    pen += 5000 * Math.max(0, x) ** 2;
+  }
   { const set = setsFor(P, NR.frames.thorax, { L: NR.frames.uaL, R: NR.frames.uaR }, L0), c = chest(set);
     pen += 5000 * (Math.max(0, c.br - CH0.br) ** 2 + Math.max(0, c.dp - CH0.dp - .3) ** 2 + Math.max(0, c.per - 101.7) ** 2 + Math.max(0, CHEST_MIN - c.per) ** 2); }
   for (const F of Object.values(P)) {
@@ -162,7 +195,7 @@ function evaluate(D, P) {
     const ax = axes(F, NR.frames.thorax, NR.frames.uaL, 'L', 0), B = V.add(ax.A, ax.d, ax.L);
     M.noFolds(() => { pen += 50 * (Math.max(0, M.torsoSDF(NR, ax.A) + 1) ** 2 + Math.max(0, M.limbSDF(NR, 'ua', 'L', B) + 1) ** 2); });
   }
-  return { famMax, famAt, loss, pen, total: loss + pen };
+  return { famMax, famAt, loss, pen, total: loss + pen, loadMax, loadAt };
 }
 
 /* ---------- Нелдер — Мид ---------- */
@@ -194,6 +227,7 @@ if (require.main === module) {
   const before = evaluate(D, none), P = fit(D, start, +arg('--iters', 700)), after = evaluate(D, P);
   console.log('Выход тел мышц из кожи, см: без складок → со складками');
   for (const [f, d] of Object.entries(after.famMax).sort((a, b) => b[1] - a[1])) console.log(`  ${f.padEnd(8)} ${before.famMax[f].toFixed(2).padStart(5)} → ${d.toFixed(2).padStart(5)}  ${after.famAt[f]}`);
+  console.log(`Упоры и гриф на надплечьях: до допуска валидатора (минус ${LOAD_MARGIN} см) — ${(-after.loadMax).toFixed(2)} см (${after.loadAt})`);
   console.log('const FOLDS=' + JSON.stringify(P));
   if (arg('--out')) fs.writeFileSync(arg('--out'), JSON.stringify(P));
 }
