@@ -39,7 +39,7 @@ LOCAL = ['torso-scale-depth-incr', 'torso-scale-horiz-incr', 'torso-vshape-incr'
          '*-foot-scale-depth-incr', '*-foot-scale-horiz-incr',
          'head-scale-vert-incr', 'head-scale-horiz-incr', 'head-scale-depth-incr', 'head-back-scale-depth-incr', 'head-trans-forward',
          'head-trans-up', 'head-fat-incr', 'forehead-trans-forward', 'chin-prominent-incr', 'chin-height-incr', 'chin-width-incr']
-POSE = ['sp5', 'sp4', 'sp3', 'sp2', 'sp1', 'neck', 'head', 'clav_e', 'clav_r', 'ty', 'tz', 'tw_ua', 'tw_fa', 'tw_th']
+POSE = ['sp5', 'sp4', 'sp3', 'sp2', 'sp1', 'neck', 'head', 'clav_e', 'clav_r', 'ty', 'tz', 'tw_ua', 'tw_fa', 'tw_th', 'neck_ty', 'neck_tz']
 NA = len(PHEN) + len(LOCAL) + len(POSE)
 OUT_STEP = 10
 SEG_OURS = {'th': 40.7, 'sk': 41.8, 'ua': 28.3, 'fa': 27.0}
@@ -78,7 +78,7 @@ class Model:
             else: local[n] = float(x)
         k += len(LOCAL)
         a = v[k:k + len(POSE)]; k += len(POSE)
-        q = {'spine': list(a[:5]), 'neck': a[5], 'head': a[6], 'clav': [a[7], a[8]], 't': [a[9], a[10]], 'tw': list(a[11:14])}
+        q = {'spine': list(a[:5]), 'neck': a[5], 'head': a[6], 'clav': [a[7], a[8]], 't': [a[9], a[10]], 'tw': list(a[11:14]), 'neck_t': [a[14], a[15]]}
         x = spine.unpack(v[k:])
         return phen, local, q, x
 
@@ -130,10 +130,10 @@ class Model:
         sc = checks.scapula(skin, posed['scapulaL'][::2])
         R['scap'] = W_SCAP * np.array([max(0.0, norms.SCAP_MIN - sc['post_min']) / .3])
         rp, _ = spine.posture_resid(self.p, x, self.tg, m=pm, w={'cervicale': .2})
-        R['posture'] = rp
-        R['skull'] = np.array([W_SK * (x['sk'] + 12.0) / 1.5])     # череп — в посадке HAT (−12°): лицо подгоняется формой и позой головы Anny
+        R['posture'] = 1.5 * rp      # осанка — по нормам: вес выше тканей, Anny подстраивается позой и формой
+        R['skull'] = np.array([W_SK * (x['sk'] + 12.0) / 4.0])     # череп — к посадке HAT (−12 ± 4°): лицо — формой, позой и сдвигом головы Anny
         R['reg'] = np.concatenate([.15 * np.asarray(v[len(PHEN):len(PHEN) + len(LOCAL)]),
-                                   np.array(q['spine'] + [q['neck'], q['head']] + q['clav']) / 15.0, np.array(q['tw']) / 30.0])
+                                   np.array(q['spine'] + [q['neck'], q['head']] + q['clav']) / 15.0, np.array(q['tw']) / 30.0, np.array(q['neck_t']) / 3.0])
         r = np.concatenate([R[k] for k in R])
         if detail:
             return r, dict(R=R, m=m, tissue=dict(zip(keys, d.tolist())), bones=bo, room=room, scap=sc, pm=pm, x=x, q=q, phen=phen,
@@ -150,7 +150,7 @@ class Model:
         return out
 
 
-STEP = np.array([.1] * len(PHEN) + [.25] * len(LOCAL) + [4.0] * 9 + [2.0, 2.0] + [6.0] * 3 + [4.0] * len(spine.PARAMS))
+STEP = np.array([.1] * len(PHEN) + [.25] * len(LOCAL) + [4.0] * 9 + [2.0, 2.0] + [6.0] * 3 + [1.0, 1.0] + [4.0] * len(spine.PARAMS))
 
 
 def gn(model, v, iters, lo, hi, log, free=None):
@@ -188,14 +188,19 @@ def main():
     ap.add_argument('--work', required=True); ap.add_argument('--out', required=True)
     ap.add_argument('--start', default='fit0.json'); ap.add_argument('--posture', default='posture-B.json'); ap.add_argument('--resume')
     ap.add_argument('--iters', type=int, default=12); ap.add_argument('--pose-iters', type=int, default=4)
+    ap.add_argument('--reset-posture', action='store_true', help='посадку скелета взять из --posture (форма Anny — из --resume)')
     a = ap.parse_args(); W = a.work
     model = Model(W)
-    lo = np.array([0.] * len(PHEN) + [-1.] * len(LOCAL) + [-20] * 7 + [-15, -25] + [-30, -15] + [-45] * 3 + [-40] * len(spine.PARAMS))
-    hi = np.array([1.] * len(PHEN) + [1.] * len(LOCAL) + [20] * 7 + [15, 25] + [30, 15] + [45] * 3 + [40] * len(spine.PARAMS))
+    lo = np.array([0.] * len(PHEN) + [-1.] * len(LOCAL) + [-20] * 7 + [-15, -25] + [-30, -15] + [-45] * 3 + [-4, -4] + [-40] * len(spine.PARAMS))
+    hi = np.array([1.] * len(PHEN) + [1.] * len(LOCAL) + [20] * 7 + [15, 25] + [30, 15] + [45] * 3 + [4, 4] + [40] * len(spine.PARAMS))
     if a.resume:
         v = np.array(json.load(open(a.resume))['v'], float)
-        if len(v) == len(lo) - 3:      # старый файл без закруток конечностей
-            k = len(PHEN) + len(LOCAL) + 11; v = np.concatenate([v[:k], [0, 0, 0], v[k:]])
+        if len(v) == len(lo) - 5:      # старый файл без закруток конечностей и сдвига шеи
+            k = len(PHEN) + len(LOCAL) + 11; v = np.concatenate([v[:k], [0, 0, 0, 0, 0], v[k:]])
+        elif len(v) == len(lo) - 2:    # без сдвига шеи
+            k = len(PHEN) + len(LOCAL) + 14; v = np.concatenate([v[:k], [0, 0], v[k:]])
+        if a.reset_posture:
+            v[len(v) - len(spine.PARAMS):] = spine.pack(json.load(open(os.path.join(W, a.posture))))
     else:
         st = json.load(open(os.path.join(W, a.start))); ps = json.load(open(os.path.join(W, a.posture)))
         phen0 = [st['phen'][k] for k in PHEN]
@@ -204,7 +209,7 @@ def main():
             key = ('l' + n[1:]) if n.startswith('*') else n
             loc0.append(st['local'].get(key, 0.0))
         ti = model.body.t_init(model.body.rest(*model.split(np.array(phen0 + loc0 + [0] * len(POSE) + spine.pack(ps)))[:2]), model.J)
-        v = np.array(phen0 + loc0 + [0] * 9 + ti + [0, 0, 0] + spine.pack(ps), float)
+        v = np.array(phen0 + loc0 + [0] * 9 + ti + [0, 0, 0, 0, 0] + spine.pack(ps), float)
     it0 = len(PHEN) + len(LOCAL) + 9
     V0 = model.anny(v)[0]; model.body.setup_groin(V0)
     if not a.resume:
