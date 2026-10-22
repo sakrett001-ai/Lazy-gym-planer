@@ -43,6 +43,10 @@ LOCAL = ['torso-scale-depth-incr', 'torso-scale-horiz-incr', 'torso-vshape-incr'
 POSE = ['sp5', 'sp4', 'sp3', 'sp2', 'sp1', 'neck', 'head', 'clav_e', 'clav_r', 'ty', 'tz', 'tw_ua', 'tw_fa', 'tw_th', 'neck_ty', 'neck_tz']
 NA = len(PHEN) + len(LOCAL) + len(POSE)
 OUT_STEP = 10
+# правки формы — как можно меньше; общий масштаб головы (по вертикали и в глубину), «жир» головы, лоб вперёд и высота
+# подбородка — дороже: ими подгонка сплющивала голову спереди назад и вытягивала её вверх, а «жиром» возвращала объём
+# (одутловатое лицо). Пусть череп ложится в голову сдвигом и затылком (head-back-scale-depth), скулами и подбородком.
+HEAD_COSTLY = ('head-scale-depth-incr', 'head-scale-vert-incr', 'head-fat-incr', 'forehead-trans-forward', 'chin-height-incr')
 SEG_OURS = {'th': 40.7, 'sk': 41.8, 'ua': 28.3, 'fa': 27.0}
 W_ANSUR, W_TISSUE, W_OUT, W_ROOM, W_SCAP, W_SEG, W_FLOOR, W_SK = 2.0, 1.0, 2.0, 1.5, 2.0, .5, 3.0, 1.0
 TRUNK_LM = ('C7',) + tuple('T%d' % i for i in range(1, 13)) + ('jugular', 'sternum', 'acromionL', 'clavicleL', 'scapSpineL', 'supAngleL',
@@ -134,7 +138,7 @@ class Model:
         rp, _ = spine.posture_resid(self.p, x, self.tg, m=pm, w={'cervicale': .2})
         R['posture'] = 1.5 * rp      # осанка — по нормам: вес выше тканей, Anny подстраивается позой и формой
         R['skull'] = np.array([W_SK * (x['sk'] + 12.0) / 4.0])     # череп — к посадке HAT (−12 ± 4°): лицо — формой, позой и сдвигом головы Anny
-        R['reg'] = np.concatenate([.15 * np.asarray(v[len(PHEN):len(PHEN) + len(LOCAL)]),
+        R['reg'] = np.concatenate([REG_W * np.asarray(v[len(PHEN):len(PHEN) + len(LOCAL)]),
                                    np.array(q['spine'] + [q['neck'], q['head']] + q['clav']) / 15.0, np.array(q['tw']) / 30.0, np.array(q['neck_t']) / 3.0])
         r = np.concatenate([R[k] for k in R])
         if detail:
@@ -152,6 +156,7 @@ class Model:
         return out
 
 
+REG_W = np.array([.8 if n in HEAD_COSTLY else .15 for n in LOCAL])
 STEP = np.array([.1] * len(PHEN) + [.25] * len(LOCAL) + [4.0] * 9 + [2.0, 2.0] + [6.0] * 3 + [1.0, 1.0] + [4.0] * len(spine.PARAMS))
 
 
@@ -185,7 +190,18 @@ def gn(model, v, iters, lo, hi, log, free=None):
         yield v
 
 
-def polish(model, v, sweeps, lo, hi, log):
+HEAD_PARAMS = [n for n in LOCAL if n.startswith(('head-', 'forehead-', 'chin-', 'neck-', 'measure-neck', '*-cheek'))]
+
+
+def head_free(v):
+    """индексы параметров головы и шеи: формы головы и шеи, поза шеи и головы Anny, её сдвиг, наклон черепа"""
+    k0 = len(PHEN); idx = [k0 + LOCAL.index(n) for n in HEAD_PARAMS]
+    kp = len(PHEN) + len(LOCAL); idx += [kp + POSE.index(n) for n in ('neck', 'head', 'neck_ty', 'neck_tz')]
+    idx += [len(v) - len(spine.PARAMS) + spine.PARAMS.index(n) for n in ('sk', 'e0', 'e1', 'e2', 'e3', 'e4', 'e5')]
+    return idx
+
+
+def polish(model, v, sweeps, lo, hi, log, free=None):
     """поиск по координатам: каждый параметр ±шаг, шаг уменьшается вдвое, если ни один не помог. Невязки негладкие
     (оболочки сечений, «наибольшее из колец», лучи), и якобиан конечными разностями у минимума перестаёт вести вниз —
     тогда Гаусс — Ньютон стоит, а перебор ещё находит спуск"""
@@ -193,7 +209,7 @@ def polish(model, v, sweeps, lo, hi, log):
     r = model.resid(v); best = r @ r; log(f'перебор: старт {best:.2f}')
     for sw in range(sweeps):
         t0 = time.time(); moved = 0
-        for j in range(len(v)):
+        for j in (range(len(v)) if free is None else free):
             for sgn in (1, -1):
                 vn = v.copy(); vn[j] = np.clip(vn[j] + sgn * step[j], lo[j], hi[j])
                 if vn[j] == v[j]: continue
@@ -212,6 +228,8 @@ def main():
     ap.add_argument('--start', default='fit0.json'); ap.add_argument('--posture', default='posture-B.json'); ap.add_argument('--resume')
     ap.add_argument('--iters', type=int, default=12); ap.add_argument('--pose-iters', type=int, default=4)
     ap.add_argument('--sweeps', type=int, default=0, help='проходы поиска по координатам после Гаусса — Ньютона')
+    ap.add_argument('--head-start', action='store_true', help='голову — заново (без крайних масштабов) перебором по голове и шее')
+    ap.add_argument('--head-sweeps', type=int, default=8)
     ap.add_argument('--reset-posture', action='store_true', help='посадку скелета взять из --posture (форма Anny — из --resume)')
     a = ap.parse_args(); W = a.work
     model = Model(W)
@@ -265,6 +283,13 @@ def main():
     for stage, free, n in (('поза', stage1, a.pose_iters), ('всё', None, a.iters)):
         log(f'== этап: {stage}')
         for v in gn(model, v, n, lo, hi, log, free):
+            D = save(v)
+            log('  блоки: ' + ', '.join(f'{k} {float(b_ @ b_):.1f}' for k, b_ in D['R'].items()))
+    if a.head_start:
+        # голова заново: общий масштаб и «жир» — к середине, дальше перебор только по голове и шее
+        for n, val in (('head-scale-depth-incr', -.4), ('head-scale-vert-incr', .4), ('head-fat-incr', 0.), ('forehead-trans-forward', .4), ('chin-height-incr', .4)):
+            v[len(PHEN) + LOCAL.index(n)] = val
+        for v in polish(model, v, a.head_sweeps, lo, hi, log, head_free(v)):
             D = save(v)
             log('  блоки: ' + ', '.join(f'{k} {float(b_ @ b_):.1f}' for k, b_ in D['R'].items()))
     for v in polish(model, v, a.sweeps, lo, hi, log):

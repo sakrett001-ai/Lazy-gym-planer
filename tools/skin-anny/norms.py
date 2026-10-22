@@ -48,7 +48,7 @@ SOURCES = {
 ANSUR_TONED = {
     'stature': ('p50', 4), 'crotchheight': ('p50', 3),
     'chestcircumference': ('p75', 2), 'chestbreadth': ('p75', 1), 'chestdepth': ('p75', 1),
-    'waistcircumference': ('p25', 2), 'waistbreadth': ('p25', 1), 'waistdepth': ('p25', 1.5),
+    'waistcircumference': ('p25', 2), 'waistbreadth': ('p25', 1), 'waistdepth': ('p25', 4),   # без живота — глубина талии с большим весом
     'buttockcircumference': ('p25', 2), 'buttockdepth': ('p25', 1.5), 'hipbreadth': ('p25', 1),
     'bideltoidbreadth': ('p75', 1.5), 'shouldercircumference': ('p75', 1),
     'bicepscircumferenceflexed': ('p75', 1), 'forearmcircumferenceflexed': ('p75', 1),

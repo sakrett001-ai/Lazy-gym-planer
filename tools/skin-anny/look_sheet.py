@@ -143,8 +143,8 @@ for k, nm, src, tk in ANG:
         nrm = '—'; c0 = c1 = 'dim'
     rows += f"<tr><td>{nm}</td><td>{nrm} <span class='small'>{src}</span></td><td class='{c0}'>{f1(pm0[k])}</td><td class='{c1}'>{f1(pm[k])}</td></tr>"
 rows += f"<tr><td>Сустав атлант — затылок (блок C2 + атлас к черепу), °</td><td>0 <span class='small'>конгруэнтен, как в HAT</span></td><td class='bad'>{f1(-27.77)}</td><td class='{'ok' if abs(pm['close_a']) < .5 else 'bad'}'>{f1(pm['close_a'])}</td></tr>"
-for k, nm in (('lvl_jugular', 'Уровень яремной вырезки (позвонки)'), ('lvl_xiphoid', 'Уровень мечевидного отростка'), ('lvl_tenthrib', 'Уровень 10-го ребра'), ('lvl_crest', 'Уровень гребней таза')):
-    rows += f"<tr><td>{nm}</td><td><span class='small'>{ {'lvl_jugular': 'T2–T3 (M12)', 'lvl_xiphoid': 'T9–T10 (K16, M12)', 'lvl_tenthrib': 'L2–L3 стоя (лёжа L1/L2, K16)', 'lvl_crest': 'L4–L5'}[k]}</span></td><td>{pm0[k]}</td><td>{pm[k]}</td></tr>"
+for k, nm in (('lvl_jugular', 'Уровень яремной вырезки (позвонки)'), ('lvl_xiphoid', 'Уровень кончика мечевидного отростка (низ грудины)'), ('lvl_tenthrib', 'Уровень 10-го ребра'), ('lvl_crest', 'Уровень гребней таза')):
+    rows += f"<tr><td>{nm}</td><td><span class='small'>{ {'lvl_jugular': 'T2–T3 (M12)', 'lvl_xiphoid': 'сочленение с телом — T9–T10 (K16, M12); кончик на 2–4 см ниже', 'lvl_tenthrib': 'L2–L3 стоя (лёжа L1/L2, K16)', 'lvl_crest': 'L4–L5'}[k]}</span></td><td>{pm0[k]}</td><td>{pm[k]}</td></tr>"
 # краниовертебральный угол: от вершины остистого C7 к уху (точка уха COCO у Anny — середина уха, ≈ 1 см позади козелка)
 from anny.keypoints import _load_keypoint_data
 from anny.paths import get_anny_root_dir
