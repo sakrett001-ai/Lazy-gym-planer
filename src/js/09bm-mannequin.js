@@ -1069,7 +1069,7 @@ function nearestSection(frames,p,hint,k=0,span=4){
     радиуса с поправкой и 2 см запаса), — штраф: в глубоком сгибании плоскости сечений груди проходят перед животом, и без
     штрафа точка живота «находила» сечение груди */
  for(let i=i0;i<=i1;i++){const s=frames[i],f=mixFrame(s.f,k),off=V.sub(p,f.c),along=V.dot(off,f.y),rm=secRmax(s.h);
-  const rho=Math.hypot(V.dot(off,f.x),V.dot(off,f.z)),sc=Math.abs(along)+2*Math.max(0,rho-rm);if(!best||sc<best.sc)best={s,f,off,along,i,sc};}
+  const rho=s.h<FRONT_H[1]?Math.hypot(V.dot(off,f.x),V.dot(off,f.z)):0,sc=Math.abs(along)+2*Math.max(0,rho-rm);if(!best||sc<best.sc)best={s,f,off,along,i,sc};}
  return best;
 }
 function torsoSDF(R,p,cache,info){
@@ -1117,7 +1117,7 @@ function torsoShiftAt(R,p,frames,hint){
  const best=nearestSection(frames,p,hint),hp=best.s.h+best.along;if(hp<=38.8)return[0,0,0];
  /* «боковитость» точки поверхности сечения на том же луче от оси — её боковое смещение в долях полуширины (как в
     torsoPointIn): у точки над кожей (складка) или под ней сдвиг тот же, что у кожи на этом луче */
- const hq=Math.min(hp,TORSO.at(-1)[0]),f=best.s.f,d=V.sub(p,f.c),lx=V.dot(d,f.x),lz=V.dot(d,f.z),rho=Math.hypot(lx,lz),[w,a,b,n,nf]=sectionAt(hq);
+ const hq=Math.min(hp,TORSO.at(-1)[0]+TOP_EXT),f=best.s.f,d=V.sub(p,f.c),lx=V.dot(d,f.x),lz=V.dot(d,f.z),rho=Math.hypot(lx,lz),[w,a,b,n,nf]=sectionExt(hq);
  /* «боковитость» — по суперэллипсу без радиальной поправки (как s в torsoPointIn) */
  const r=rho<1e-9?0:ellipseRadius(lz,lx,a,b,w,w,n,nf);
  return girdleShift(R,hp,lx>=0?'L':'R',rho<1e-9?0:Math.min(1,Math.abs(lx)*r/rho/w));

@@ -407,12 +407,14 @@ const Muscles = (() => {
     for (let i = 0; i < NH; i++) { const h = Math.min(S.top, H0 + i * .25); if (MQ.sectionExt && h > T.at(-1)[0]) { const e = MQ.sectionExt(h); for (let k = 0; k < 5; k++) S.ttab[i * 5 + k] = e[k]; continue; } let j = 1; while (j < T.length - 1 && T[j][0] < h) j++; const a = T[j - 1], c = T[j], u = Math.max(0, Math.min(1, (h - a[0]) / (c[0] - a[0]))); for (let k = 0; k < 5; k++) S.ttab[i * 5 + k] = a[k + 1] + (c[k + 1] - a[k + 1]) * u; }
     /* начало рамки поясницы — на высоте шарнира L5/S1, позвонок L5 стоит выше на свою высоту (как у стенок, wallTorso) */
     S.l5off = skel.bones[S.l5].h - B.lumbar[1];
-    S.rtab = new Float64Array(NH * 2 * (RT_N + 1));
+    S.rtab = new Float64Array(NH * 2 * (RT_N + 1)); S.rtab0 = new Float64Array(NH * 2 * (RT_N + 1));
     for (let i = 0; i < NH; i++) for (let half = 0; half < 2; half++) for (let j = 0; j <= RT_N; j++) {
       const t = j / RT_N, u = 1 - t, v = t, l = Math.sqrt(u * u + v * v), o = i * 5, T5 = S.ttab;
-      /* с радиальной поправкой сечения (Mannequin.torsoDR: угол от передней линии) */
-      const th = Math.atan2(v, u), hh = Math.min(S.top, H0 + i * .25);
-      S.rtab[(i * 2 + half) * (RT_N + 1) + j] = torsoR0(half ? T5[o + 2] : T5[o + 1], T5[o], half ? T5[o + 3] : T5[o + 4], u / l, v / l) + (MQ.torsoDRExt ? MQ.torsoDRExt(hh, half ? Math.PI - th : th) : MQ.torsoDR ? MQ.torsoDR(hh, half ? Math.PI - th : th) : 0);
+      /* с радиальной поправкой сечения (Mannequin.torsoDR: угол от передней линии); rtab0 — без неё: по суперэллипсу считается
+         «боковитость» точки для сдвига надплечий (как s в Mannequin.torsoPointIn и torsoShiftAt) */
+      const th = Math.atan2(v, u), hh = Math.min(S.top, H0 + i * .25), r0 = torsoR0(half ? T5[o + 2] : T5[o + 1], T5[o], half ? T5[o + 3] : T5[o + 4], u / l, v / l);
+      S.rtab0[(i * 2 + half) * (RT_N + 1) + j] = r0;
+      S.rtab[(i * 2 + half) * (RT_N + 1) + j] = r0 + (MQ.torsoDRExt ? MQ.torsoDRExt(hh, half ? Math.PI - th : th) : MQ.torsoDR ? MQ.torsoDR(hh, half ? Math.PI - th : th) : 0);
     }
     /* высоты, выше которых кожа корпуса жёстко с грудной клеткой: по боковой схеме и по передней (конец скругления у грудного шарнира) */
     S.pelvisTop = [S.blend[0][1] - S.blend[0][2], Math.min(S.blend[0][1] - S.blend[0][2], S.blendF[0][1] - S.blendF[0][2], MQ.FRONT_H[0])];
@@ -575,9 +577,9 @@ const Muscles = (() => {
   /* то же по таблице (bindSkin, rtab): строки через 0,25 см, передняя и задняя половины, 64 шага по t = |lx| / (|lx| + |lz|) —
      без Math.pow в кадре; ошибка — доли миллиметра */
   const RT_N = 64;
-  function torsoR(S, h, lz, lx) {
+  function torsoR(S, h, lz, lx, T = S.rtab) {
     const az = Math.abs(lz), ax = Math.abs(lx), t = ax / (ax + az || 1) * RT_N, j = Math.min(RT_N - 1, t | 0), f = t - j;
-    const x = (Math.max(S.bot, Math.min(S.top, h)) - S.th0) / .25, i = Math.min(S.ttab.length / 5 - 2, x | 0), g = x - i, T = S.rtab, W = 2 * (RT_N + 1);
+    const x = (Math.max(S.bot, Math.min(S.top, h)) - S.th0) / .25, i = Math.min(S.ttab.length / 5 - 2, x | 0), g = x - i, W = 2 * (RT_N + 1);
     const o0 = i * W + (lz >= 0 ? 0 : RT_N + 1) + j, o1 = o0 + W;
     const r0 = T[o0] + (T[o0 + 1] - T[o0]) * f, r1 = T[o1] + (T[o1 + 1] - T[o1]) * f;
     return r0 + (r1 - r0) * g;
@@ -658,7 +660,7 @@ const Muscles = (() => {
         for (let it = 0; it < 8; it++) {
           const qx = lx - gx * k, qy = ly - gy * k, qz = lz - gz * k, hh = qy + S.segH[2], x0 = (Math.max(S.bot, Math.min(S.top, hh)) - S.th0) / .25, i0 = Math.min(S.ttab.length / 5 - 2, x0 | 0), w = S.ttab[i0 * 5] + (S.ttab[i0 * 5 + 5] - S.ttab[i0 * 5]) * (x0 - i0);
           /* «боковитость» — у точки кожи на том же луче от оси (Mannequin.torsoShiftAt) */
-          const rq = Math.sqrt(qx * qx + qz * qz), sl = rq < 1e-9 ? 0 : Math.min(1, Math.abs(qx) * torsoR(S, hh, qz, qx) / rq / w), u1 = Math.max(0, Math.min(1, (hh - 38.8) / 15)), u2 = Math.max(0, Math.min(1, (hh - 53.8) / 6));
+          const rq = Math.sqrt(qx * qx + qz * qz), sl = rq < 1e-9 ? 0 : Math.min(1, Math.abs(qx) * torsoR(S, hh, qz, qx, S.rtab0) / rq / w), u1 = Math.max(0, Math.min(1, (hh - 38.8) / 15)), u2 = Math.max(0, Math.min(1, (hh - 53.8) / 6));
           const k1 = u1 * u1 * (3 - 2 * u1) * (1 - .4 * u2 * u2 * (3 - 2 * u2)) * sl * sl * .85, ch = Math.abs(k1 - k) * (Math.abs(gx) + Math.abs(gy) + Math.abs(gz));
           k = k1; if (ch < .03) break;
         }
