@@ -84,22 +84,26 @@ class AnnyPosed(AnnyBody):
             # кость корпуса: поворот D вокруг своей головы, затем преобразование родителя
             Gi = np.eye(4); Gi[:3, :3] = D[i]; Gi[:3, 3] = heads[i] - D[i] @ heads[i]
             G[i] = Gp @ Gi
-        # конечности: шарнир — наш сустав; направление сегмента — как у манекена
-        def seg(i_bone, parent_G, joint_w, dir_rest, dir_w, keep_rest=False):
+        # конечности: шарнир — наш сустав (в покое — там, куда его переносит преобразование родителя); сегмент поворачивается
+        # так, чтобы сустав Anny на его конце (колено, голеностоп, локоть, запястье рига) встал на наш сустав по направлению:
+        # кожа колена — вокруг нашего колена, а не в 2,5 см латеральнее (как было бы при повороте «сустав Anny → сустав Anny»)
+        def seg(parent_G, joint_w, child_rest=None, child_w=None):
             pj = to_anny(joint_w, t)                                     # наш сустав в позе (Anny, м)
             Gi = np.linalg.inv(parent_G); pr = Gi[:3, :3] @ pj + Gi[:3, 3]  # тот же сустав в покое
-            R = np.eye(3) if keep_rest else rot_between(dir_rest, dir_to_anny(dir_w))
+            R = np.eye(3) if child_rest is None else rot_between(child_rest - pr, dir_to_anny(np.subtract(child_w, joint_w)))
             M = np.eye(4); M[:3, :3] = R; M[:3, 3] = pj - R @ pr
-            return M, pr
+            return M, pr, (0.0 if child_rest is None else float(np.linalg.norm(child_rest - pr) * 100))
+        lens = {}
         for s in 'LR':
             h = lambda n: heads[L[n + '.' + s]]
             Gpel = G[L['pelvis.' + s]]
-            Gth, prh = seg(None, Gpel, J['hip' + s], h('lowerleg01') - h('upperleg01'), np.subtract(J['kn' + s], J['hip' + s]))
-            Gsk, prk = seg(None, Gth, J['kn' + s], h('foot') - h('lowerleg01'), np.subtract(J['an' + s], J['kn' + s]))
-            Gft, pra = seg(None, Gsk, J['an' + s], None, None, keep_rest=True)
+            Gth, prh, lth = seg(Gpel, J['hip' + s], h('lowerleg01'), J['kn' + s])
+            Gsk, prk, lsk = seg(Gth, J['kn' + s], h('foot'), J['an' + s])
+            Gft, pra, _ = seg(Gsk, J['an' + s])
             Gsh = G[L['shoulder01.' + s]]
-            Gua, prs = seg(None, Gsh, J['sh' + s], h('lowerarm01') - h('upperarm01'), np.subtract(J['el' + s], J['sh' + s]))
-            Gfa, pre = seg(None, Gua, J['el' + s], h('wrist') - h('lowerarm01'), np.subtract(J['wr' + s], J['el' + s]))
+            Gua, prs, lua = seg(Gsh, J['sh' + s], h('lowerarm01'), J['el' + s])
+            Gfa, pre, lfa = seg(Gua, J['el' + s], h('wrist'), J['wr' + s])
+            lens[s] = dict(th=lth, sk=lsk, ua=lua, fa=lfa)
             piv[s] = dict(hip=prh, knee=prk, ankle=pra, sh=prs, el=pre)
             for n in self.labels:
                 if not n.endswith('.' + s): continue
@@ -119,6 +123,7 @@ class AnnyPosed(AnnyBody):
             Hw[L['upperarm01.' + s]] = J['sh' + s]; Hw[L['lowerarm01.' + s]] = J['el' + s]; Hw[L['wrist.' + s]] = J['wr' + s]
         if self.groin is not None:
             V = self.groin_smooth(V)
+        self.last_lens = lens['L']
         return V, Hw, piv, heads
 
     def t_init(self, rest, J):

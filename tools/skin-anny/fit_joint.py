@@ -86,7 +86,7 @@ class Model:
         phen, local, q, x = self.split(v)
         rest = self.body.rest(phen, local)
         V, H, piv, heads = self.body.pose(rest, self.J, q)
-        return V, H, rest, piv
+        return V, H, rest, (piv, dict(self.body.last_lens))
 
     def skeleton(self, v):
         x = self.split(v)[3]; key = tuple(np.round(spine.pack(x), 6))
@@ -103,7 +103,7 @@ class Model:
 
     # ---------------- невязки ----------------
     def resid(self, v, an=None, detail=False):
-        V, H, rest, piv = an if an is not None else self.anny(v)
+        V, H, rest, (piv, self._lens) = an if an is not None else self.anny(v)
         posed, sk, LM, pm, trunk, tips, x = self.skeleton(v)
         phen, local, q, _ = self.split(v)
         if getattr(self, '_skin_for', None) is not V:          # одна и та же Anny (столбцы скелета) — та же кожа
@@ -112,7 +112,7 @@ class Model:
         R = {}; ref = self.ref['values']
         m = self.meas.measure(V, H)
         R['ansur'] = W_ANSUR * np.array([w * (m[k] - norms.ansur_target(ref, k)) / max(ref[k][2] - ref[k][0], .3) for k, (t_, w) in norms.ANSUR_TONED.items()])
-        L = self.body.rest_lengths(rest)
+        L = dict(self._lens)       # от нашего сустава (в покое Anny) до сустава рига на конце сегмента
         R['seg'] = W_SEG * np.array([L[k] - SEG_OURS[k] for k in SEG_OURS])
         R['floor'] = np.array([W_FLOOR * V[:, 1].min() / .2])
         keys = list(TRUNK_LM + LIMB_LM + HEAD_LM)
