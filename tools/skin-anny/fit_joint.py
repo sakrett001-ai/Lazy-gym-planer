@@ -38,7 +38,8 @@ LOCAL = ['torso-scale-depth-incr', 'torso-scale-horiz-incr', 'torso-vshape-incr'
          'measure-upperleg-height-incr', 'measure-lowerleg-height-incr', '*-upperleg-fat-incr', '*-lowerleg-fat-incr',
          '*-foot-scale-depth-incr', '*-foot-scale-horiz-incr',
          'head-scale-vert-incr', 'head-scale-horiz-incr', 'head-scale-depth-incr', 'head-back-scale-depth-incr', 'head-trans-forward',
-         'head-trans-up', 'head-fat-incr', 'forehead-trans-forward', 'chin-prominent-incr', 'chin-height-incr', 'chin-width-incr']
+         'head-trans-up', 'head-fat-incr', 'forehead-trans-forward', 'chin-prominent-incr', 'chin-height-incr', 'chin-width-incr',
+         'neck-double-incr', 'forehead-temple-incr', '*-cheek-volume-incr', '*-cheek-bones-incr', 'chin-jaw-drop-incr', 'pelvis-tone-incr']
 POSE = ['sp5', 'sp4', 'sp3', 'sp2', 'sp1', 'neck', 'head', 'clav_e', 'clav_r', 'ty', 'tz', 'tw_ua', 'tw_fa', 'tw_th', 'neck_ty', 'neck_tz']
 NA = len(PHEN) + len(LOCAL) + len(POSE)
 OUT_STEP = 10
@@ -118,7 +119,8 @@ class Model:
         keys = list(TRUNK_LM + LIMB_LM + HEAD_LM)
         d = skin.depth(np.array([LM[k][0] for k in keys]))
         lo = np.array([checks.norm_of(k)[0] for k in keys]); hi = np.array([checks.norm_of(k)[1] for k in keys])
-        R['tissue'] = W_TISSUE * np.where(d < lo, (lo - d) / .3, np.where(d > hi, (d - hi) / .3, 0.))
+        wk = np.array([2.0 if k in HEAD_LM else 1.0 for k in keys])   # лицо на черепе — главное для вида головы
+        R['tissue'] = W_TISSUE * wk * np.where(d < lo, (lo - d) / .3, np.where(d > hi, (d - hi) / .3, 0.))
         bo, BP, bd = checks.bones_out(skin, self.base, posed, step=OUT_STEP)
         R['out'] = W_OUT * np.array([np.sqrt(np.mean(np.clip(.15 - bd[i0:i0 + n], 0, None) ** 2)) / .3 for i0, n in self._out_slices(posed)])
         room = checks.back_room(skin, trunk, tips, self.h0)
@@ -183,18 +185,45 @@ def gn(model, v, iters, lo, hi, log, free=None):
         yield v
 
 
+def polish(model, v, sweeps, lo, hi, log):
+    """поиск по координатам: каждый параметр ±шаг, шаг уменьшается вдвое, если ни один не помог. Невязки негладкие
+    (оболочки сечений, «наибольшее из колец», лучи), и якобиан конечными разностями у минимума перестаёт вести вниз —
+    тогда Гаусс — Ньютон стоит, а перебор ещё находит спуск"""
+    step = STEP.copy() * .5
+    r = model.resid(v); best = r @ r; log(f'перебор: старт {best:.2f}')
+    for sw in range(sweeps):
+        t0 = time.time(); moved = 0
+        for j in range(len(v)):
+            for sgn in (1, -1):
+                vn = v.copy(); vn[j] = np.clip(vn[j] + sgn * step[j], lo[j], hi[j])
+                if vn[j] == v[j]: continue
+                rn = model.resid(vn); c = rn @ rn
+                if c < best - 1e-3:
+                    v, best = vn, c; moved += 1; break
+            else:
+                step[j] *= .5
+        log(f'перебор {sw}: {best:.2f}, сдвинуто {moved} ({time.time() - t0:.0f} с)')
+        yield v
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--work', required=True); ap.add_argument('--out', required=True)
     ap.add_argument('--start', default='fit0.json'); ap.add_argument('--posture', default='posture-B.json'); ap.add_argument('--resume')
     ap.add_argument('--iters', type=int, default=12); ap.add_argument('--pose-iters', type=int, default=4)
+    ap.add_argument('--sweeps', type=int, default=0, help='проходы поиска по координатам после Гаусса — Ньютона')
     ap.add_argument('--reset-posture', action='store_true', help='посадку скелета взять из --posture (форма Anny — из --resume)')
     a = ap.parse_args(); W = a.work
     model = Model(W)
     lo = np.array([0.] * len(PHEN) + [-1.] * len(LOCAL) + [-20] * 7 + [-15, -25] + [-30, -15] + [-45] * 3 + [-4, -4] + [-40] * len(spine.PARAMS))
     hi = np.array([1.] * len(PHEN) + [1.] * len(LOCAL) + [20] * 7 + [15, 25] + [30, 15] + [45] * 3 + [4, 4] + [40] * len(spine.PARAMS))
     if a.resume:
-        v = np.array(json.load(open(a.resume))['v'], float)
+        js = json.load(open(a.resume)); v = np.array(js['v'], float)
+        if len(v) != len(lo) and 'local' in js:   # другой набор параметров — собрать по именам
+            q = js['q']; loc = js['local']
+            loc0 = [loc.get(('l' + n[1:]) if n.startswith('*') else n, 0.0) for n in LOCAL]
+            pose0 = list(q['spine']) + [q['neck'], q['head']] + list(q['clav']) + list(q['t']) + list(q.get('tw', [0, 0, 0])) + list(q.get('neck_t', [0, 0]))
+            v = np.array([js['phen'][k] for k in PHEN] + loc0 + pose0 + spine.pack(js['posture']), float)
         if len(v) == len(lo) - 5:      # старый файл без закруток конечностей и сдвига шеи
             k = len(PHEN) + len(LOCAL) + 11; v = np.concatenate([v[:k], [0, 0, 0, 0, 0], v[k:]])
         elif len(v) == len(lo) - 2:    # без сдвига шеи
@@ -238,6 +267,9 @@ def main():
         for v in gn(model, v, n, lo, hi, log, free):
             D = save(v)
             log('  блоки: ' + ', '.join(f'{k} {float(b_ @ b_):.1f}' for k, b_ in D['R'].items()))
+    for v in polish(model, v, a.sweeps, lo, hi, log):
+        D = save(v)
+        log('  блоки: ' + ', '.join(f'{k} {float(b_ @ b_):.1f}' for k, b_ in D['R'].items()))
     save(v)
 
 
