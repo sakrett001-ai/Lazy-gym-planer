@@ -23,8 +23,13 @@ class Skin:
         cp, dist, tri = trimesh.proximity.closest_point(self.mesh, P)
         if exact:
             inside = self.mesh.ray.contains_points(P)
-        else:   # знак по нормали ближайшей грани: ошибается только у самой поверхности (для «костей снаружи» хватает)
-            inside = np.einsum('ij,ij->i', P - cp, self.fn[tri]) < 0
+        else:
+            # Знак по нормали ближайшей грани ошибается не только у самой поверхности: в подмышке, у ягодичной складки, у уха
+            # ближайшей оказывается «чужая» поверхность, и точка в глубине тела считалась снаружи на 4–7 см (сверено лучами:
+            # 166 из 2646 точек грудной клетки, 91 из 192 крестца). Поэтому точки ближе 3 см к коже проверяются лучами, а
+            # глубже 3 см — внутри (кость, вышедшая из кожи дальше 3 см, видна и по соседним точкам ближе 3 см).
+            inside = np.ones(len(P), bool); near = dist < 3.0
+            if near.any(): inside[near] = self.mesh.ray.contains_points(P[near])
         return np.where(inside, dist, -dist)
 
     def ray(self, o, d, tmax=80):

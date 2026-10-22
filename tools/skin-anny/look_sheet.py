@@ -132,10 +132,11 @@ ANG = [('PI', 'Угол наклона таза PI (морфология)', 'V05
        ('LL', 'Поясничный лордоз L1–S1', 'LH16/V05', 'LL'), ('TK', 'Грудной кифоз T4–T12', 'V05', 'TK'), ('TK_T1T12', 'Грудной кифоз T1–T12', '—', None),
        ('T1slope', 'Наклон T1 (T1 slope)', 'K10/C18', 'T1slope'), ('CL', 'Шейный лордоз C2–C7', 'C18/H97', 'CL'), ('SVA', 'SVA: C7 впереди S1, см', 'D15', 'SVA'),
        ('cSVA', 'cSVA: C2 впереди C7, см', 'C18/H97', 'cSVA')]
+LIT_SD = {'PT': 6.1, 'SS': 8.4, 'LL': 10.3, 'TK': 10.0, 'T1slope': 7.0, 'CL': 10.8, 'SVA': 2.5, 'cSVA': 1.06}   # СКО из источников (в подгонке допуски строже)
 rows = ''
 for k, nm, src, tk in ANG:
     if tk:
-        mu, sd = tg[tk]; nrm = f"{f1(mu)} ± {f1(sd)}"; c0 = 'ok' if abs(pm0[k] - mu) <= sd else ('warn' if abs(pm0[k] - mu) <= 2 * sd else 'bad'); c1 = 'ok' if abs(pm[k] - mu) <= sd else ('warn' if abs(pm[k] - mu) <= 2 * sd else 'bad')
+        mu = tg[tk][0]; sd = LIT_SD[tk]; nrm = f"{f1(mu)} ± {f1(sd)}"; c0 = 'ok' if abs(pm0[k] - mu) <= sd else ('warn' if abs(pm0[k] - mu) <= 2 * sd else 'bad'); c1 = 'ok' if abs(pm[k] - mu) <= sd else ('warn' if abs(pm[k] - mu) <= 2 * sd else 'bad')
     elif k == 'PI':
         nrm = '52,6 ± 10,4'; c0 = c1 = 'ok' if abs(pm[k] - 52.6) <= 10.4 else 'warn'
     else:
@@ -144,6 +145,16 @@ for k, nm, src, tk in ANG:
 rows += f"<tr><td>Сустав атлант — затылок (блок C2 + атлас к черепу), °</td><td>0 <span class='small'>конгруэнтен, как в HAT</span></td><td class='bad'>{f1(-27.77)}</td><td class='{'ok' if abs(pm['close_a']) < .5 else 'bad'}'>{f1(pm['close_a'])}</td></tr>"
 for k, nm in (('lvl_jugular', 'Уровень яремной вырезки (позвонки)'), ('lvl_xiphoid', 'Уровень мечевидного отростка'), ('lvl_tenthrib', 'Уровень 10-го ребра'), ('lvl_crest', 'Уровень гребней таза')):
     rows += f"<tr><td>{nm}</td><td><span class='small'>{ {'lvl_jugular': 'T2–T3 (M12)', 'lvl_xiphoid': 'T9–T10 (K16, M12)', 'lvl_tenthrib': 'L2–L3 стоя (лёжа L1/L2, K16)', 'lvl_crest': 'L4–L5'}[k]}</span></td><td>{pm0[k]}</td><td>{pm[k]}</td></tr>"
+# краниовертебральный угол: от вершины остистого C7 к уху (точка уха COCO у Anny — середина уха, ≈ 1 см позади козелка)
+from anny.keypoints import _load_keypoint_data
+from anny.paths import get_anny_root_dir
+KW, _ = _load_keypoint_data(model.body.m, get_anny_root_dir() / 'data' / 'keypoints' / 'coco.pth', labels=['left_ear', 'left_eye'])
+ear, eye = (KW.cpu().numpy().astype(float) @ V)
+c7 = D['posed']['cervical'][model.p.cerv_owner == 'C7']; c7t = c7[np.argmin(c7[:, 2])]
+cva = float(np.degrees(np.arctan2(ear[1] - c7t[1], ear[2] - c7t[2])))
+eyeear = float(np.degrees(np.arctan2(eye[1] - ear[1], eye[2] - ear[2])))
+rows += f"<tr><td>Краниовертебральный угол (C7 — ухо к горизонтали), °</td><td>≥ 48–50 <span class='small'>GS08</span></td><td>—</td><td class='{'ok' if cva >= 48 else 'warn'}'>{f1(cva)}</td></tr>"
+rows += f"<tr><td>Линия «ухо — глаз» Anny к горизонтали (плюс — глаз выше уха), °</td><td>—</td><td>—</td><td>{f1(eyeear)}</td></tr>"
 rows += f"<tr><td>Индекс Халлера (поперечник / от грудины до позвонка, внутри)</td><td>≈ 2,5 <span class='small'>H87</span></td><td>{f1(pm0.get('haller'), 2)}</td><td>{f1(pm.get('haller'), 2)}</td></tr>"
 for lvl in ('T4', 'T6', 'T8'):
     rows += f"<tr><td>Грудная клетка: грудина — остистый {lvl}, см</td><td>—</td><td>{f1(pm0['ap'].get(lvl))}</td><td>{f1(pm['ap'].get(lvl))}</td></tr>"
