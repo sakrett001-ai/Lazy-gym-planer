@@ -24,14 +24,15 @@ def bones_of(B, key='segments', skip=('finger', 'thumb')):
 
 def red_marks(reg, B, key='segments', lim=.0):
     """вершины костей снаружи кожи Anny — красные точки (из анализа: кости с выходом)"""
-    import trimesh
-    sk = trimesh.Trimesh(V, F, process=False); pq = trimesh.proximity.ProximityQuery(sk)
+    sys.path.insert(0, HERE)
+    from register import MeshSkin
+    skin = MeshSkin(V, F)
     marks = []
     for b in B[key]:
         if b['name'] in ('foot', 'toes', 'talus') or any(k in b['name'] for k in ('ph', 'mc', 'thumb', 'lunate', 'scaphoid', 'pisiform', 'triquetrum', 'capitate', 'trapez', 'hamate')):
             continue
         P = np.array(b['pos']).reshape(-1, 3)[::3]
-        d = np.concatenate([pq.signed_distance(P[i:i + 1500]) for i in range(0, len(P), 1500)])
+        d = skin.depth(P)
         for p in P[d < lim]:
             marks.append({'p': p.round(2).tolist(), 'r': .45, 'color': '#ff3b30'})
     return marks
@@ -85,7 +86,8 @@ def lmh(k): return L[k]['p'][1]
 am['cervicaleheight'] = lmh('C7'); am['acromialheight'] = lmh('acromionL'); am['suprasternaleheight'] = lmh('jugular')
 am['iliocristaleheight'] = lmh('iliacCrestL'); am['trochanterionheight'] = None; am['kneeheightmidpatella'] = None
 am['lateralmalleolusheight'] = lmh('latMalleolusL'); am['wristheight'] = lmh('radialStyloidL')
-am['biacromialbreadth'] = 2 * (L['acromionL']['p'][0] + .5); am['bicristalbreadth'] = None
+am['biacromialbreadth'] = man['biacromialbreadth'] + 2 * segs['girdleL']['t'][0]   # как anthro.js: наружная точка лопатки + 0,5 см; у Anny — со сдвигом пояса
+am['bicristalbreadth'] = man['bicristalbreadth']   # таз при вписывании сдвигается только вперёд-назад и вверх-вниз
 order = ['stature', 'crotchheight', 'cervicaleheight', 'acromialheight', 'suprasternaleheight', 'iliocristaleheight', 'lateralmalleolusheight', 'wristheight',
          'biacromialbreadth', 'bideltoidbreadth', 'chestcircumference', 'chestbreadth', 'chestdepth', 'waistcircumference', 'waistbreadth', 'waistdepth',
          'buttockcircumference', 'buttockdepth', 'hipbreadth', 'shouldercircumference', 'neckcircumference', 'neckcircumferencebase',
@@ -115,9 +117,12 @@ t_lm = f"<table><tr><th>Ориентир (левая сторона)</th><th>н�
 
 def shift_rows(reg):
     S = reg['shift_segments']; names = {'pelvis': 'таз', 'thorax': 'грудная клетка', 'neck': 'шея и голова', 'girdleL': 'пояс (ключица, лопатка)', 'uaL': 'плечо', 'faL': 'предплечье', 'thL': 'бедро', 'skL': 'голень'}
-    return ''.join(f"<td>{f1(S[k][0])} / {f1(S[k][1])} / {f1(S[k][2])}</td>" for k in names), ''.join(f'<th>{v}</th>' for v in names.values())
+    def cell(k):
+        t = S[k]['t']; p = S[k]['pitch']
+        return f"<td>{f1(t[0])} / {f1(t[1])} / {f1(t[2])}" + (f"<br><span class='small'>наклон {p:+.1f}°</span>".replace('.', ',') if abs(p) > .05 else '') + '</td>'
+    return ''.join(cell(k) for k in names), ''.join(f'<th>{v}</th>' for v in names.values())
 s1, hdr = shift_rows(r461); s2, _ = shift_rows(rpost)
-t_shift = f"<table><tr><th>Сдвиг сегмента, см (наружу / вверх / вперёд)</th>{hdr}</tr><tr><td>скелет 4.61.0</td>{s1}</tr><tr><td>скелет с осанкой</td>{s2}</tr></table><p class='small'>Сдвиги, при которых ориентиры ближе всего к норме (цена: 2 см сдвига = 0,3 см выхода из нормы; разрыв сустава 1 см — тоже). Сдвиг целиком: 4.61.0 {r461['shift_global']['pelvis'][1]:+.1f} вверх, {r461['shift_global']['pelvis'][2]:+.1f} вперёд; осанка {rpost['shift_global']['pelvis'][1]:+.1f}, {rpost['shift_global']['pelvis'][2]:+.1f}.</p>".replace('.', ',')
+t_shift = f"<table><tr><th>Сдвиг сегмента, см (наружу / вверх / вперёд)</th>{hdr}</tr><tr><td>скелет 4.61.0</td>{s1}</tr><tr><td>скелет с осанкой</td>{s2}</tr></table><p class='small'>Сдвиги, при которых ориентиры ближе всего к норме (цена: 2 см сдвига = 0,3 см выхода из нормы; разрыв сустава 1 см — тоже). Наклон корпуса — плюс: верх сегмента вперёд. Сдвиг всего скелета одним куском: 4.61.0 — {f1(r461['shift_global']['t'][1])} вверх, {f1(r461['shift_global']['t'][2])} вперёд; осанка — {f1(rpost['shift_global']['t'][1])} и {f1(rpost['shift_global']['t'][2])}.</p>"
 
 def back_rows():
     out = ''
@@ -135,6 +140,20 @@ def back_rows():
 t_back = f"<table><tr><th>Спина: от кости до кожи (в скобках — место для столба: минус слой над ним, BK.depth ветки осанки)</th><th>манекен 4.61.0</th><th>Anny + 4.61.0</th><th>манекен осанки</th><th>Anny + осанка</th></tr>{back_rows()}</table>" \
          "<p class='small'>h — высота над тазобедренными суставами (39–57 см ≈ T10–T3). Луч — горизонтально вперёд от кожи спины; кость — ближайшая в окрестности ±0,5 см по ширине и ±1,5 см по высоте (как backFloor в walls.js). Длиннейшей в 4.61.0 хватало 2,2–3,7 см места (README мышц ветки осанки); на ветке осанки осталось 1,0–1,4.</p>"
 
+def ap_rows():
+    out = ''
+    for h in ('36', '39', '42', '45', '48', '51', '54'):
+        def g(reg, col, k):
+            v = reg[col]['ap'].get(h); return None if not v else v[k]
+        sm, sa = g(r461, 'mannequin', 'skin'), g(r461, 'anny_global', 'skin')
+        b461 = None if sm is None else sm - g(r461, 'mannequin', 'sum'); bpo = None if g(rpost, 'mannequin', 'skin') is None else g(rpost, 'mannequin', 'skin') - g(rpost, 'mannequin', 'sum')
+        sums = [g(r461, 'mannequin', 'sum'), g(r461, 'anny_global', 'sum'), g(rpost, 'mannequin', 'sum'), g(rpost, 'anny_global', 'sum')]
+        out += f"<tr><td>h {h} (y {f1(float(h) + 89.5)})</td><td>{f1(sm)}</td><td>{f1(sa)}</td><td>{f1(b461)}</td><td>{f1(bpo)}</td>" + ''.join(f"<td class='{cls(v, 1.3, 4.2)}'>{f1(v)}</td>" for v in sums) + '</tr>'
+    return out
+t_ap = f"<table><tr><th>Высота над тазобедренными</th><th>кожа манекена: глубина по средней линии</th><th>кожа Anny</th><th>кость 4.61.0: остистый — грудина</th><th>кость осанки</th><th>ткани спереди + сзади: манекен 4.61.0</th><th>Anny + 4.61.0</th><th>манекен осанки</th><th>Anny + осанка</th></tr>{ap_rows()}</table>" \
+       "<p class='small'>Сумма тканей над грудиной и над остистым отростком по средней линии не зависит от сдвига грудной клетки вперёд-назад: это проверка, помещается ли грудная клетка скелета в глубину кожи. Норма суммы — 1,3–4,2 см (грудина 0,9–2,7 [L21] + остистые 0,4–1,5 [S18]); типично ≈ 2,8. Anny — скелет сдвинут целиком (без подгонки по сегментам).</p>"
+
+
 def other_rows():
     def sc(reg, col): s = reg[col]['scapula']['L']; return s
     rows = ''
@@ -144,7 +163,7 @@ def other_rows():
     for h in ('27', '33', '39'):
         vals = [(reg[col]['lateral'].get(h) or {}).get('depth') for reg, col in ((r461, 'mannequin'), (r461, 'anny_segments'), (rpost, 'mannequin'), (rpost, 'anny_segments'))]
         rows += f"<tr><td>рёбра сбоку, h {h}: до кожи, см</td>" + ''.join(f'<td>{f1(v)}</td>' for v in vals) + '</tr>'
-    for h in ('44', '50'):
+    for h in ('45', '51'):
         vals = [(reg[col]['front'].get(h) or {}).get('depth') for reg, col in ((r461, 'mannequin'), (r461, 'anny_segments'), (rpost, 'mannequin'), (rpost, 'anny_segments'))]
         rows += f"<tr><td>грудина спереди, h {h}: до кожи, см (норма 0,9–2,7)</td>" + ''.join(f"<td class='{cls(v, .9, 2.7)}'>{f1(v)}</td>" for v in vals) + '</tr>'
     def outb(reg, col):
@@ -154,21 +173,33 @@ def other_rows():
     return rows
 t_other = f"<table><tr><th>Лопатка, рёбра, грудина, выход костей</th><th>манекен 4.61.0</th><th>Anny + 4.61.0</th><th>манекен осанки</th><th>Anny + осанка</th></tr>{other_rows()}</table>"
 
+def notch(col):
+    """яремная ямка: насколько кожа у средней линии глубже, чем в 2,5 см от неё (над грудино-ключичными сочленениями,
+    ножки грудино-ключично-сосцевидных) — наибольшее по высоте в −3…+4 см от вырезки кости"""
+    R = r461[col]['relief']; F0 = np.array(R.get('front0.0', [])); F25 = np.array(R.get('front2.5', []))
+    if not len(F0) or not len(F25): return None
+    y0 = r461[col]['landmarks']['jugular']['p'][1]; ys = np.arange(y0 - 3, y0 + 4.01, .5)
+    return float(max(0, (np.interp(ys, F25[:, 0], F25[:, 1]) - np.interp(ys, F0[:, 0], F0[:, 1])).max()))
+for col in ('mannequin', 'anny_raw'):
+    r461[col]['relief_summary']['notch'] = notch(col)
+
+
 def relief_rows():
     out = ''
     names = {'furrow32': 'борозда позвоночника, h 32 (поясница)', 'furrow42': 'борозда позвоночника, h 42 (T9–T10)', 'furrow50': 'борозда позвоночника, h 50 (T6–T7)',
-             'scap42': 'лопатка выступает (h 42)', 'scap50': 'лопатка выступает (h 50)', 'jugular_notch': 'яремная ямка (глубина)', 'supraclavicular': 'надключичная ямка (глубина)'}
+             'scap42': 'лопатка выступает (h 42)', 'scap50': 'лопатка выступает (h 50)', 'notch': 'яремная ямка (глубина)', 'supraclavicular': 'надключичная ямка (глубина)'}
     for k, nm in names.items():
         vals = [r461['mannequin']['relief_summary'].get(k), r461['anny_raw']['relief_summary'].get(k)]
         out += f"<tr><td>{nm}</td>" + ''.join(f"<td class='{'ok' if (v or 0) >= .3 else 'bad'}'>{f1(v)}</td>" for v in vals) + '</tr>'
     return out
-t_relief = f"<table><tr><th>Рельеф кожи, см (плюс — есть)</th><th>манекен 4.61.0</th><th>Anny</th></tr>{relief_rows()}</table><p class='small'>Борозда — насколько кожа у средней линии ближе к телу, чем над столбами выпрямителя (2,5–4,5 см от линии); лопатка — насколько кожа в 6–11 см от средней линии выступает назад относительно кожи в 4 см; ямки — глубина профиля кожи под хордой (по средней линии у вырезки; по линии середины ключицы над ней).</p>"
+t_relief = f"<table><tr><th>Рельеф кожи, см (плюс — есть)</th><th>манекен 4.61.0</th><th>Anny</th></tr>{relief_rows()}</table><p class='small'>Борозда — насколько кожа у средней линии ближе к телу, чем над столбами выпрямителя (2,5–4,5 см от линии); лопатка — насколько кожа в 6–11 см от средней линии выступает назад относительно кожи в 4 см; яремная ямка — насколько кожа у средней линии глубже, чем в 2,5 см от неё (−3…+4 см от вырезки по высоте); надключичная — глубина профиля кожи под хордой по линии середины ключицы, от ключицы на 7 см вверх.</p>"
 
 spec = {'title': 'Проба кожи (шаг 0): Anny под ANSUR II и скелет манекена внутри неё',
         'sub': ['Anny 0.6.1 (NAVER LABS Europe; код Apache 2.0, сетка и формы — MakeHuman/MPFB2 CC0). Подгонка по медианам ANSUR II (мужчины 170–180 см, 72–84 кг) теми же уровнями, что anthro.js; стойка — нейтральная стойка манекена через риг Anny.',
                 'Кожа манекена и Anny — один материал и свет сцены приложения (src/volume/scene.mjs); камеры ортографические, масштаб в ряду одинаковый. Скелеты — MyoSim из src/data/skeleton.bin: 4.61.0 и ветка осанки (9f13c1f).'],
         'rows': rows, 'blocks': [{'title': 'ANSUR II: манекен против Anny', 'html': t_ansur}, {'title': 'Мягкие ткани над ориентирами, см', 'html': t_lm},
                                  {'title': 'Где Anny и скелет не согласуются: сдвиги сегментов при вписывании', 'html': t_shift},
+                                 {'title': 'Глубина грудной клетки: помещается ли скелет в кожу (по средней линии), см', 'html': t_ap},
                                  {'title': 'Место для мышц спины', 'html': t_back}, {'title': 'Лопатка, рёбра, грудина, кости снаружи', 'html': t_other},
                                  {'title': 'Рельеф', 'html': t_relief}]}
 sp = os.path.join(W, 'sheet-spec.json'); json.dump(spec, open(sp, 'w'))

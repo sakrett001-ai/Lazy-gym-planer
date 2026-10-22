@@ -36,13 +36,24 @@ def interp(tab, h):
 
 class MeshSkin:
     def __init__(self, V, F):
-        self.mesh = trimesh.Trimesh(V, F, process=False)
+        # кожа — самая большая связная часть: у Anny ещё три замкнутые части внутри головы (глазные яблоки, полость рта),
+        # они не кожа (иначе кости черепа рядом с ними считались бы «снаружи»)
+        parts = trimesh.Trimesh(V, F, process=False).split(only_watertight=False)
+        self.mesh = max(parts, key=lambda c: len(c.vertices))
         self.pq = trimesh.proximity.ProximityQuery(self.mesh)
 
     def depth(self, P):
         """глубина под кожей, см: плюс — внутри, минус — снаружи"""
-        P = np.atleast_2d(P)
-        return np.concatenate([self.pq.signed_distance(P[i:i + 1500]) for i in range(0, len(P), 1500)])
+        # знак — по нормали ближайшего треугольника (trimesh.signed_distance на пакетах в тысячи точек путал знак у точек
+        # глубоко внутри корпуса: contains_points в пакете и поштучно расходились)
+        P = np.atleast_2d(np.asarray(P, dtype=float)); out = np.empty(len(P))
+        N = self.mesh.face_normals
+        for i in range(0, len(P), 1500):
+            Q = P[i:i + 1500]
+            cp, dist, tri = self.mesh.nearest.on_surface(Q)
+            s = np.einsum('ij,ij->i', Q - cp, N[tri])
+            out[i:i + 1500] = np.where(s > 0, -dist, dist)
+        return out
 
     def ray(self, o, d, kind='enter', tmax=80):
         loc, ir, it = self.mesh.ray.intersects_location([o], [d], multiple_hits=True)
@@ -65,12 +76,12 @@ class MannequinSkin:
         return json.load(open(a))
 
 
-def bone_mesh(sk, pred, shift=None):
+def bone_mesh(sk, pred, T=None):
     Vs, Fs, n = [], [], 0
     for b in sk.bones:
         if not pred(b):
             continue
-        P = b['P'] + (shift(b) if shift else 0)
+        P = xf(T, b['seg'], b['P'])
         Vs.append(P); Fs.append(b['F'] + n); n += len(P)
     return trimesh.Trimesh(np.concatenate(Vs), np.concatenate(Fs), process=False)
 
@@ -109,67 +120,109 @@ def last_hit_before(mesh, o, d, tlim, offsets=((0, 0, 0),)):
 # ---------------------------------------------------------------- регистрация
 SEGS = ['pelvis', 'thorax', 'neck', 'girdle', 'ua', 'fa', 'th', 'sk']
 MID = ('pelvis', 'thorax', 'neck')
+PITCH = ('pelvis', 'thorax', 'neck')      # у сегментов корпуса — ещё наклон вперёд-назад вокруг своего нижнего сустава
 ADJ = [('pelvis', 'thorax'), ('thorax', 'neck'), ('thorax', 'girdle'), ('girdle', 'ua'), ('ua', 'fa'), ('pelvis', 'th'), ('th', 'sk')]
 
 
-def unpack_shifts(x):
-    """вектор → сдвиг каждого сегмента (левые/правые зеркально)"""
-    out, k = {}, 0
+def rx(deg):
+    a = np.radians(deg); c, s = np.cos(a), np.sin(a)
+    return np.array([[1, 0, 0], [0, c, -s], [0, s, c]])   # плюс — верх сегмента вперёд (+Z) при оси X влево
+
+
+def xf(T, seg, P):
+    """точки сегмента seg после преобразования T (словарь сегмент → (R, c, t)); без T — как есть"""
+    if not T or seg not in T:
+        return P
+    R, c, t = T[seg]
+    return (P - c) @ R.T + c + t
+
+
+def centers(sk):
+    """центры поворота сегментов корпуса и точки суставов между сегментами (координаты манекена)"""
+    J = sk.J
+    th12 = sk.bone('thoracic12'); cerv = sk.bone('cervical')
+    c = {'pelvis': (J['hipL'] + J['hipR']) / 2, 'thorax': th12.mean(0), 'neck': cerv[cerv[:, 1] < cerv[:, 1].min() + 2].mean(0)}
+    cl = sk.bone('clavicle', 'L'); sc_joint = cl[np.argmin(np.abs(cl[:, 0]))]
+    joints = {('pelvis', 'thorax'): c['thorax'], ('thorax', 'neck'): c['neck'], ('thorax', 'girdle'): sc_joint, ('girdle', 'ua'): J['shL'],
+              ('ua', 'fa'): J['elL'], ('pelvis', 'th'): J['hipL'], ('th', 'sk'): J['knL']}
+    return c, joints
+
+
+def unpack(x, C, mode):
+    T, k = {}, 0
+    if mode == 'global':
+        t = np.array([0, x[0], x[1]])
+        for s in SEGS:
+            for side in ([''] if s in MID else ['L', 'R']):
+                T[s + side] = (np.eye(3), np.zeros(3), t)
+        return T
     for s in SEGS:
         if s in MID:
-            out[s] = np.array([0, x[k], x[k + 1]]); k += 2
+            t = np.array([0, x[k], x[k + 1]]); k += 2
+            R = np.eye(3)
+            if s in PITCH:
+                R = rx(x[k]); k += 1
+            T[s] = (R, C[s], t)
         else:
             v = np.array(x[k:k + 3]); k += 3
-            out[s + 'L'] = v; out[s + 'R'] = v * np.array([-1, 1, 1])
-    return out
+            T[s + 'L'] = (np.eye(3), np.zeros(3), v); T[s + 'R'] = (np.eye(3), np.zeros(3), v * np.array([-1, 1, 1]))
+    return T
 
 
 def nparams():
-    return sum(2 if s in MID else 3 for s in SEGS)
+    return sum((2 + (s in PITCH)) if s in MID else 3 for s in SEGS)
 
 
-def register(skin, LM, mode):
+def register(skin, sk, LM, mode):
     keys = list(LM)
     P0 = np.array([LM[k][0] for k in keys]); seg = [LM[k][1] for k in keys]
     lo = np.array([norm_of(k)[0][0] for k in keys]); hi = np.array([norm_of(k)[0][1] for k in keys])
-
-    def shifts_of(x):
-        if mode == 'global':
-            return {s: np.array([0, x[0], x[1]]) for s in set(seg) | {a + b for a in SEGS if a not in MID for b in 'LR'} | set(MID)}
-        return unpack_shifts(x)
+    C, JN = centers(sk)
 
     def resid(x):
-        S = shifts_of(x)
-        d = skin.depth(P0 + np.array([S[s] for s in seg]))
-        r = np.where(d < lo, (lo - d) / .3, np.where(d > hi, (d - hi) / .3, 0.))
-        out = [r]
+        T = unpack(x, C, mode)
+        P = np.array([xf(T, s, p[None])[0] for s, p in zip(seg, P0)])
+        d = skin.depth(P)
+        out = [np.where(d < lo, (lo - d) / .3, np.where(d > hi, (d - hi) / .3, 0.))]
         if mode != 'global':
-            out.append(np.concatenate([v for k, v in S.items() if k in MID or k.endswith('L')]) / 2.0)
+            out.append(np.concatenate([T[k][2] for k in T if k in MID or k.endswith('L')]) / 2.0)   # сдвиг: 2 см — единица
+            out.append(np.array([x[i] for i in pitch_idx]) / 5.0)                                   # наклон: 5° — единица
             for a, b in ADJ:
-                for side in ('L', 'R') if (a not in MID or b not in MID) else ('',):
-                    ka = a if a in MID else a + side; kb = b if b in MID else b + side
-                    out.append((S[ka] - S[kb]) / 1.0)
+                ka = a if a in MID else a + 'L'; kb = b if b in MID else b + 'L'
+                j = JN[(a, b)][None]
+                out.append((xf(T, ka, j) - xf(T, kb, j))[0] / 1.0)                                 # разрыв сустава: 1 см — единица
         return np.concatenate(out)
 
+    pitch_idx, k = [], 0
+    for s in SEGS:
+        if s in MID:
+            k += 2
+            if s in PITCH: pitch_idx.append(k); k += 1
+        else:
+            k += 3
     n = 2 if mode == 'global' else nparams()
-    res = least_squares(resid, np.zeros(n), diff_step=.05, x_scale=1.0, max_nfev=400)
-    return shifts_of(res.x), res
+    res = least_squares(resid, np.zeros(n), diff_step=.05, x_scale=1.0, max_nfev=600)
+    T = unpack(res.x, C, mode)
+    info = {}
+    for s in T:
+        R, c, t = T[s]
+        info[s] = {'t': t.tolist(), 'pitch': float(np.degrees(np.arctan2(R[2, 1], R[1, 1])))}
+    return T, info
 
 
-def analyse(skin, sk, shift, mann=None):
+def analyse(skin, sk, T, mann=None):
     """замеры для одной кожи (Anny — MeshSkin; манекен — словарь ответов mannequin.js) и скелета со сдвигами"""
     LM = sk.landmarks()
-    sh = lambda segkey: shift.get(segkey, np.zeros(3)) if shift else np.zeros(3)
     hipY = sk.J['hipL'][1]
     out = {'landmarks': {}, 'bones': {}, 'back': {}, 'lateral': {}, 'front': {}, 'scapula': {}, 'relief': {}}
     # --- точки: ориентиры, вершины костей (без кистей и стоп — как skeleton/fit.js) ---
-    lm_keys = list(LM); lm_pts = np.array([LM[k][0] + sh(LM[k][1]) for k in lm_keys])
+    lm_keys = list(LM); lm_pts = np.array([xf(T, LM[k][1], LM[k][0][None])[0] for k in lm_keys])
     bone_sel = [b for b in sk.bones if b['kind'] not in ('finger', 'thumb', 'hand', 'foot', 'toes') and b['seg']]
-    bone_pts = [b['P'] + sh(b['seg']) for b in bone_sel]
+    bone_pts = [xf(T, b['seg'], b['P']) for b in bone_sel]
     allp = np.concatenate([lm_pts] + bone_pts)
     # --- лучи ---
-    trunk = bone_mesh(sk, lambda b: b['name'].startswith(TRUNK_BONES), lambda b: sh(b['seg']))
-    rib = bone_mesh(sk, lambda b: b['name'] == 'ribcage', lambda b: sh(b['seg']))
+    trunk = bone_mesh(sk, lambda b: b['name'].startswith(TRUNK_BONES), T)
+    rib = bone_mesh(sk, lambda b: b['name'] == 'ribcage', T)
     rays, meta = [], []
     for line, x in LINES.items():
         for h in H_BACK:
@@ -181,13 +234,13 @@ def analyse(skin, sk, shift, mann=None):
             continue
         zc = float(band[:, 2].mean())
         rays.append({'o': [0.0, hipY + h, zc], 'd': [1.0, 0, 0], 'kind': 'exit', 'max': 50}); meta.append(('lateral', zc, h))
-    for h in range(36, 60, 2):
+    for h in H_BACK:
         rays.append({'o': [0.0, hipY + h, 60.0], 'd': [0, 0, -1.0], 'kind': 'enter', 'max': 80}); meta.append(('front', 0, h))
     # рельеф: профили кожи спины поперёк (x −12…12) на четырёх высотах; передняя поверхность шеи и над ключицей
     for h in (22, 32, 42, 50):
         for x in np.arange(-12, 12.01, .5):
             rays.append({'o': [float(x), hipY + h, -60.0], 'd': [0, 0, 1.0], 'kind': 'enter', 'max': 80}); meta.append(('relief-back', float(x), h))
-    jug = LM['jugular'][0] + sh('thorax'); clv = LM['clavicleL'][0] + sh('girdleL')
+    jug = xf(T, 'thorax', LM['jugular'][0][None])[0]; clv = xf(T, 'girdleL', LM['clavicleL'][0][None])[0]
     for y in np.arange(jug[1] - 6, jug[1] + 8.01, .5):
         for x in (0.0, 2.5, float(clv[0])):
             rays.append({'o': [x, float(y), 60.0], 'd': [0, 0, -1.0], 'kind': 'enter', 'max': 80}); meta.append(('relief-front', x, float(y)))
@@ -196,13 +249,39 @@ def analyse(skin, sk, shift, mann=None):
         ans = mann.run(allp, rays)
         dall = -np.array([p['d'] for p in ans['points']])
         rhit = [None if r is None else r['t'] for r in ans['rays']]
+        # знаковое расстояние кожи манекена (torsoSDF и др.) — не евклидово: у ключицы 6,2 см при настоящих 3,5. Глубину
+        # ориентиров (они внутри) берём как настоящее расстояние до кожи: наименьший путь луча до выхода — 256 направлений,
+        # затем 64 направления в конусе 12° вокруг лучшего
+        dl0 = dall[:len(lm_keys)]
+        def fib(n):
+            i = np.arange(n) + .5; ph = np.arccos(1 - 2 * i / n); th = np.pi * (1 + 5 ** .5) * i
+            return np.stack([np.cos(th) * np.sin(ph), np.cos(ph), np.sin(th) * np.sin(ph)], 1)
+        D1 = fib(256)
+        r1 = [{'o': p.tolist(), 'd': d.tolist(), 'kind': 'exit', 'max': float(min(15, 1.5 * max(d0, .2) + 1))} for p, d0 in zip(lm_pts, dl0) for d in D1]
+        a1 = mann.run([], r1)['rays']
+        best = []
+        for j in range(len(lm_pts)):
+            ts = [(r['t'], D1[i]) for i, r in enumerate(a1[j * 256:(j + 1) * 256]) if r]
+            best.append(min(ts, key=lambda q: q[0]) if ts else (None, None))
+        cone = []
+        for (t, d) in best:
+            if d is None: cone.append([]); continue
+            u = np.cross(d, [1, 0, 0] if abs(d[0]) < .9 else [0, 1, 0]); u /= np.linalg.norm(u); w = np.cross(d, u)
+            cone.append([d * np.cos(a) + np.sin(a) * (u * np.cos(b) + w * np.sin(b)) for a in np.radians([3, 6, 9, 12]) for b in np.linspace(0, 2 * np.pi, 16, endpoint=False)])
+        r2 = [{'o': p.tolist(), 'd': d.tolist(), 'kind': 'exit', 'max': 15} for p, C in zip(lm_pts, cone) for d in C]
+        a2 = mann.run([], r2)['rays'] if r2 else []
+        k2 = 0
+        for j, ((t, d), C) in enumerate(zip(best, cone)):
+            ts = [r['t'] for r in a2[k2:k2 + len(C)] if r] + ([t] if t is not None else []); k2 += len(C)
+            if dl0[j] > 0 and ts:
+                dall[j] = min(ts)
     else:
         dall = skin.depth(allp)
         rhit = [skin.ray(np.array(r['o']), np.array(r['d']), r['kind'], r['max']) for r in rays]
     dl = dall[:len(lm_keys)]; k0 = len(lm_keys)
     for k, d in zip(lm_keys, dl):
         (lo, hi, src), name = norm_of(k)
-        out['landmarks'][k] = {'depth': float(d), 'lo': lo, 'hi': hi, 'src': src, 'name': name, 'seg': LM[k][1], 'p': (LM[k][0] + sh(LM[k][1])).tolist()}
+        out['landmarks'][k] = {'depth': float(d), 'lo': lo, 'hi': hi, 'src': src, 'name': name, 'seg': LM[k][1], 'p': xf(T, LM[k][1], LM[k][0][None])[0].tolist()}
     for b, P in zip(bone_sel, bone_pts):
         d = dall[k0:k0 + len(P)]; k0 += len(P)
         key = b['name'] + b['side']
@@ -231,7 +310,7 @@ def analyse(skin, sk, shift, mann=None):
             if t is None:
                 continue
             ps = o + dvec * t
-            tb = first_hit(rib, ps, dvec, 20)
+            tb = floor_hit(rib, ps, dvec, [np.array([dx, dy, 0]) for dx in (-.5, 0, .5) for dy in (-.75, 0, .75)], tmax=15)
             out['front'][m[2]] = {'skin_z': float(ps[2]), 'depth': tb}
         elif m[0] == 'relief-back':
             if t is not None:
@@ -240,6 +319,13 @@ def analyse(skin, sk, shift, mann=None):
             if t is not None:
                 out['relief'].setdefault('front%.1f' % m[1], []).append([m[2], float(o[2] - t)])
     out['relief_summary'] = relief_summary(out['relief'], jug, clv)
+    # сумма тканей спереди (над грудиной) и сзади (над остистыми) по средней линии: от сдвига грудной клетки вперёд-назад
+    # не зависит — показывает, помещается ли грудная клетка скелета в глубину кожи
+    out['ap'] = {}
+    for h in H_BACK:
+        f = out['front'].get(h); bk = out['back'].get('spinous', {}).get(h)
+        if f and bk and f['depth'] is not None and bk['depth'] is not None:
+            out['ap'][h] = {'sum': f['depth'] + bk['depth'], 'skin': f['skin_z'] - bk['skin_z'], 'front': f['depth'], 'back': bk['depth']}
     return out
 
 
@@ -292,22 +378,18 @@ def main():
     res['mannequin'] = analyse(None, sk, None, mann)
     # Anny: без сдвига, целиком, по сегментам
     res['anny_raw'] = analyse(anny, sk, None)
-    Sg, rg = register(anny, LM, 'global')
-    res['shift_global'] = {k: v.tolist() for k, v in Sg.items() if k in ('pelvis',)}
-    res['anny_global'] = analyse(anny, sk, Sg)
-    Ss, rs = register(anny, LM, 'segments')
-    res['shift_segments'] = {k: v.tolist() for k, v in Ss.items()}
-    res['anny_segments'] = analyse(anny, sk, Ss)
+    Tg, ig = register(anny, sk, LM, 'global')
+    res['shift_global'] = ig['pelvis']
+    res['anny_global'] = analyse(anny, sk, Tg)
+    Ts, is_ = register(anny, sk, LM, 'segments')
+    res['shift_segments'] = is_
+    res['anny_segments'] = analyse(anny, sk, Ts)
     json.dump(res, open(a.out, 'w'), indent=1, default=float)
-    # кости в позе сегментов — для листа
-    bones = []
-    for b in sk.bones:
-        P = b['P'] + (Ss.get(b['seg'], np.zeros(3)) if b['seg'] else 0)
-        bones.append({'name': b['name'], 'side': b['side'], 'pos': np.round(P, 3).ravel().tolist(), 'idx': b['F'].ravel().tolist()})
-    json.dump({'segments': bones, 'raw': [{'name': b['name'], 'side': b['side'], 'pos': np.round(b['P'], 3).ravel().tolist(), 'idx': b['F'].ravel().tolist()} for b in sk.bones],
-               'global': [{'name': b['name'], 'side': b['side'], 'pos': np.round(b['P'] + Sg['pelvis'], 3).ravel().tolist(), 'idx': b['F'].ravel().tolist()} for b in sk.bones]},
-              open(a.out.replace('.json', '-bones.json'), 'w'))
-    print(a.label, 'сдвиг целиком', np.round(Sg['pelvis'], 2), '; по сегментам:', {k: np.round(v, 2).tolist() for k, v in Ss.items() if not k.endswith('R')})
+    # кости — для листа: как есть, целиком, по сегментам
+    def dump(T):
+        return [{'name': b['name'], 'side': b['side'], 'pos': np.round(xf(T, b['seg'], b['P']), 3).ravel().tolist(), 'idx': b['F'].ravel().tolist()} for b in sk.bones]
+    json.dump({'segments': dump(Ts), 'raw': dump(None), 'global': dump(Tg)}, open(a.out.replace('.json', '-bones.json'), 'w'))
+    print(a.label, 'целиком', ig['pelvis'], '; по сегментам:', {k: (np.round(v['t'], 2).tolist(), round(v['pitch'], 1)) for k, v in is_.items() if not k.endswith('R')})
 
 
 if __name__ == '__main__':
