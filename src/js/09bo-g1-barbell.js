@@ -28,7 +28,10 @@
     b.box('seat', seatC, [W + 2, T, sl], { axes: [[1, 0, 0], sy, V.scale(sz, -1)], role: 'support', tone: 'pad', mount: 'seatPlate', round: 1.6, contact: 'top' });
     b.box('seatPlate', V.add(V.add(hinge, sz, sl / 2 + 1.5), sy, -1), [W - 6, 2, sl - 4], { axes: [[1, 0, 0], sy, V.scale(sz, -1)], mount: 'seatPost' });
     /* рама: продольная балка по полу, стойка сиденья, наклонный хребет под спинкой, подкос */
-    b.tube('rail', [0, 3.75, -50], [0, 3.75, upZ + 4], [8, 7.5], { mount: 'floor' });
+    /* балка — до стоек и не короче, чем до основания подкоса спинки (стойки ставятся по грифу: при атлете, сидящем дальше
+       вперёд, они ближе к спинке, а подкос — на месте) */
+    const strutZ = V.add(V.add(hinge, bz, bl * .62), by, -5.5)[2] + 4;
+    b.tube('rail', [0, 3.75, -50], [0, 3.75, Math.max(upZ + 4, strutZ + 4)], [8, 7.5], { mount: 'floor' });
     b.tube('footF', [-30, 3.75, -50], [30, 3.75, -50], [7.5, 7.5], { mount: 'floor' });
     for (const sx of [-1, 1]) b.box('capF' + (sx < 0 ? 'R' : 'L'), [sx * 30.5, 3.75, -50], [2, 7, 7], { mount: 'footF', tone: 'rubber', round: .5 });
     const plateC = V.add(V.add(hinge, sz, sl / 2 + 1.5), sy, -1), postZ = plateC[2];

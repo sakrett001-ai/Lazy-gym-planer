@@ -807,8 +807,10 @@ module.exports = {
       for (const s of S) {
         const gh = f.P['gh' + s], lat = C.lat(q, s), down = [0, -1, 0], fwd = [0, 0, 1];
         q[s].girdle = [-2, C.lerp(-2, 2, e)];
-        const ua = V.unit(V.add(V.add(down, fwd, C.lerp(.1, .2, e)), lat, .12)), el = V.add(gh, ua, C.M.B.ua);
-        const phi = C.lerp(16, 128, e) * C.D2R, fore = V.add(V.scale(down, Math.cos(phi)), fwd, Math.sin(phi));
+        /* внизу плечо чуть впереди (0,16 вместо 0,1) и предплечье — на 22° (было 16°): с 4.62.0 плечевой сустав на 3,3 см дальше
+           назад, и канат от кистей к нижнему блоку проходил сквозь бёдра */
+        const ua = V.unit(V.add(V.add(down, fwd, C.lerp(.16, .2, e)), lat, .12)), el = V.add(gh, ua, C.M.B.ua);
+        const phi = C.lerp(22, 128, e) * C.D2R, fore = V.add(V.scale(down, Math.cos(phi)), fwd, Math.sin(phi));
         const g = V.add(el, fore, 27 + 7); g[0] = C.M.SIGN[s] * C.lerp(16, 12, e);
         const pole = V.unit(V.add(V.add(V.sub(el, V.mix(gh, g, .45)), [0, 0, -1], 6), lat, -2.5));
         C.hold(q, s, g, pole, { pron: 0 });
