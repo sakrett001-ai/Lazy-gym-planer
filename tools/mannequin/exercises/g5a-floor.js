@@ -419,7 +419,14 @@ const GLUTEBRIDGE1 = once(() => bridgeLayout({ one: 'L', half: 9 }));
 function legRaiseBody(C, e) {
   const q = supine(C, { tilt: C.lerp(5, 20, e), lumbar: C.lerp(5, 20, e) });
   C.restOn(q, 'upperBack', [0, MAT, 0], [0, 1, 0], -.8);
-  if (e === 0) C.restOn2(q, 'upperBack', 'buttocks', [0, MAT, 0], [0, 1, 0], -.8);
+  /* в начале подъёма (контакт ягодиц заявлен до t = 0,3, e ≈ 0,22) — лопатки и ягодицы на коврике: наклон таза подбирается
+     так, чтобы касались обе области (до 4.62.0 — только при e = 0: с 4.62.0 спина у грудной клетки по коже Anny глубже, и по
+     одним лопаткам ягодицы к t = 0,3 отходили от коврика на 4,9 см); к e = 0,45 — плавно к посадке по лопаткам */
+  const u = Math.min(1, Math.max(0, (e - .22) / .23)), w = 1 - u * u * (3 - 2 * u);
+  if (w > 0) {
+    const q2 = C.M.clone(q); C.restOn2(q2, 'upperBack', 'buttocks', [0, MAT, 0], [0, 1, 0], -.8);
+    q.root.q = C.M.Q.slerp(q.root.q, q2.root.q, w); C.restOn(q, 'upperBack', [0, MAT, 0], [0, 1, 0], -.8);
+  }
   const f = C.fk(q), m = C.V.mix(f.P.ghL, f.P.ghR, .5); q.root.p = C.V.add(q.root.p, [0, 0, 45 - m[2]]);
   C.neckTo(q, 'headBack', [0, MAT, 0], [0, 1, 0], -.4);
   return q;
@@ -664,6 +671,10 @@ module.exports = {
     contacts: [{ body: 'back', prop: 'mat' }, { body: 'upperBack', prop: 'mat' }, { body: 'headBack', prop: 'mat' }],
     pose(t, C) {
       const { V } = C, q = supineCore(C, { tilt: 10, lumbar: 10 });
+      /* лопатки и низ спины с ягодицами — на коврике (с 4.62.0 спина у грудной клетки по коже Anny глубже, и по одной области
+         back касались только лопатки: таз висел, центр масс — в 15 см от опоры) */
+      C.restOn2(q, 'upperBack', 'buttocks', [0, MAT, 0], [0, 1, 0], -.8);
+      { const f = C.fk(q), h = V.mix(f.P.hipL, f.P.hipR, .5); q.root.p = V.add(q.root.p, [0, 0, -5 - h[2]]); }
       C.neckTo(q, 'headBack', [0, MAT, 0], [0, 1, 0], -.4);
       /* фаза работы: правая рука + левая нога в первой половине, левая рука + правая нога — во второй */
       const bump = u => (1 - Math.cos(4 * Math.PI * u)) / 2, w = { R: t < .5 ? bump(t) : 0, L: t >= .5 ? bump(t - .5) : 0 };

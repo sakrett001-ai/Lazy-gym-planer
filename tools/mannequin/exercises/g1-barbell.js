@@ -874,7 +874,9 @@ module.exports = {
       q.lumbar = [0, 0, 0]; q.thoracic = [C.lerp(0, -3, e), 0, 0]; q.neck = [2, 0, 0];
       for (const s of S) {
         q[s].girdle = [C.lerp(-2, 2, e), C.lerp(4, -2, e)];
-        q[s].shoulder = [C.lerp(1, 14, e), C.lerp(9, 7, e), C.lerp(-4, 0, e)];
+        /* внизу плечо согнуто на 5° (было 1°): с 4.62.0 плечевой сустав на 3,3 см дальше назад (пояс за грудной клеткой по
+           осанке), и гриф при прежнем угле лежал в бёдрах; 5° возвращают его к передней поверхности бёдер */
+        q[s].shoulder = [C.lerp(5, 14, e), C.lerp(9, 7, e), C.lerp(-4, 0, e)];
         q[s].elbow = C.lerp(9, 138, e); q[s].pron = -84; q[s].wrist = [C.lerp(4, 18, e), 0];
       }
       q.hands = { L: 'grip', R: 'grip' };

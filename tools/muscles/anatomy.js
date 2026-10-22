@@ -139,10 +139,16 @@ console.log('широчайшая: пучков', md.muscles.filter(mu => /^LAT\
   const sdf = G.skinSDF(R), skinZ = (x, y) => { for (let z = 30; z > -10; z -= .05) if (sdf([x, y, z]) < 0) return z; throw Error('нет кожи спереди'); };
   const L3 = index('L3'), src = md.muscles.find(mu => mu.name === 'EO1_r');
   for (const [name, r] of [['EO7', 5], ['EO8', 6]]) {
-    const a = ma + slope * (r - mr), cand = ribs[r - 1].filter(i => Math.abs(ang(rc.w[i]) - a) < 5).sort((i, j) => rad(rc.w[j]) - rad(rc.w[i]));
+    /* угол — продолжение ряда EO1–EO4, но не впереди костной части ребра (+2,5° от её переднего конца): с осанкой 4.62.0
+       (рёбра опущены на 3,9° в рёберно-позвоночных суставах) продолжение для ребра 5 ушло на 41,4° — на 5,3° впереди его
+       костного конца, на хрящ (хрящи — в компоненте грудины) */
+    const front = Math.min(...ribs[r - 1].map(i => ang(rc.w[i]))), a = Math.max(ma + slope * (r - mr), front + 2.5);
+    const cand = ribs[r - 1].filter(i => Math.abs(ang(rc.w[i]) - a) < 5).sort((i, j) => rad(rc.w[j]) - rad(rc.w[i]));
     const outer = cand.slice(0, Math.max(1, Math.round(cand.length / 3)));
     const o = mean(outer.map(i => rc.w[i])), oLoc = mean(outer.map(i => rc.loc[i]));
-    const x = midX - 3, y = o[1] + drop * (Math.abs(o[0] - midX) - 3), f = [x, y, skinZ(x, y) - 2];
+    /* апоневроз — у белой линии не выше кончика мечевидного отростка (у манекена — на высоте T11; эталон прикреплений, eo):
+       с осанкой 4.62.0 начало на ребре 5 выше, и продолжение спуска EO1–EO4 выводило конец на уровень T10 */
+    const x = midX - 3, y = Math.max(o[1] + drop * (Math.abs(o[0] - midX) - 3), mean(bone('thoracic11').w)[1] + .5), f = [x, y, skinZ(x, y) - 2];
     md.muscles.push(...pair(name, { fmax: src.fmax, L0: src.L0, LT: src.LT }, [
       { bone: ['L3', ''], p: round(toLocal(L3, f)), site: 'aponeurosis' },
       { bone: ['ribcage', ''], p: round(oLoc), site: 'rib' + r },
