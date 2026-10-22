@@ -254,7 +254,7 @@ const Muscles = (() => {
      подвздошно-рёберной открывалась щель. На пороге точка лежит на самом отрезке — путь меняется непрерывно. Длина и работа
      мышцы (layout) не меняются — только рисунок. Ориентиры лопатки — Mannequin.GIRDLE (09bm-mannequin.js), рамка кости
      лопатки скелета, правая сторона. */
-  const SLING = new Set(['LAT4']), SCAP_TS = [-4.91, -4.46, -12.65], SCAP_AI = [-7.45, -11.79, -13.71], SCAP_AA = [-17.37, 0.35, -4.84];
+  const SLING = new Set(['LAT4']), SCAP_TS = [-4.97, -4.09, -12.56], SCAP_AI = [-7.57, -11.46, -13.59], SCAP_AA = [-17.25, 0.95, -4.82];
   const SL_E1 = (() => { const a = [0, 1, 2].map(k => SCAP_AI[k] - SCAP_TS[k]); normalize(a); return a; })();
   const SL_E2 = (() => { const a = [0, 1, 2].map(k => SCAP_AI[k] - SCAP_TS[k]), b = [0, 1, 2].map(k => SCAP_AA[k] - SCAP_TS[k]), n = cross3(a, b); normalize(n); const e = cross3(n, SL_E1); normalize(e); return e; })();
   const SL_A = Math.hypot(SCAP_AI[0] - SCAP_TS[0], SCAP_AI[1] - SCAP_TS[1], SCAP_AI[2] - SCAP_TS[2]);
@@ -399,11 +399,12 @@ const Muscles = (() => {
     const bone = (n, s = '') => { const i = idx.get(n + '|' + s); if (i === undefined) throw Error('muscles: skin bone ' + n + ' ' + s); return i; };
     const B = MQ.B, prof = P => { const out = new Float64Array(101 * 4); for (let i = 0; i <= 100; i++) { const t = i / 100; let j = 1; while (j < P.length - 1 && P[j][0] < t) j++; const a = P[j - 1], c = P[j], u = Math.max(0, Math.min(1, (t - a[0]) / (c[0] - a[0]))); for (let k = 0; k < 4; k++) out[i * 4 + k] = a[k + 1] + (c[k + 1] - a[k + 1]) * u; } return out; };
     const S = { limb: [], caps: [], neck: { cerv: bone('cervical'), skull: bone('skull'), tab: (() => { const P = MQ.NECK, out = new Float64Array(101 * 4); for (let i = 0; i <= 100; i++) { const t = i / 100; let j = 1; while (j < P.length - 1 && P[j][0] < t) j++; const a = P[j - 1], c = P[j], u = Math.max(0, Math.min(1, (t - a[0]) / (c[0] - a[0]))); for (let k = 0; k < 3; k++) out[i * 4 + k] = a[k + 1] + (c[k + 1] - a[k + 1]) * u; } return out; })() }, rib: bone('ribcage'), l5: bone('L5'), sac: bone('sacrum'), L5h: 0,
-      torso: MQ.TORSO, top: MQ.TORSO.at(-1)[0], bot: MQ.TORSO[0][0], ttab: null, rtab: null, ftab: null, capR: null, pelvisTop: null, tbones: null, skull: 0, headC: null, headR: 0, th0: 0, l5off: 0, knz: 0, hand: null, foot: null, folds: [], foldSp: MQ.FOLD_SP, seat: MQ.SEAT_K, piv: [0, B.lumbar[1] + B.lumbarPivot[1], B.lumbarPivot[2], 0, B.thoracic[1] + B.thoracicPivot[1], B.thoracicPivot[2]],
+      torso: MQ.TORSO, top: MQ.TORSO.at(-1)[0] + (MQ.TOP_EXT || 0), bot: MQ.TORSO[0][0], ttab: null, rtab: null, ftab: null, capR: null, pelvisTop: null, tbones: null, skull: 0, headC: null, headR: 0, th0: 0, l5off: 0, knz: 0, hand: null, foot: null, folds: [], foldSp: MQ.FOLD_SP, seat: MQ.SEAT_K, piv: [0, B.lumbar[1] + B.lumbarPivot[1], B.lumbarPivot[2], 0, B.thoracic[1] + B.thoracicPivot[1], B.thoracicPivot[2]],
       blend: MQ.TORSO_BLEND, blendF: MQ.TORSO_BLEND_FRONT, frontH: MQ.FRONT_H, frontW: MQ.FRONT_W, rigid: [0, 0], segH: [0, B.lumbar[1], B.lumbar[1] + B.thoracic[1]], ramp: MQ.ramp, sides: [] };
     /* сечения корпуса — через 0,25 см: [w, a, b, nb, nf] (profileAt — линейно между строками TORSO) */
     const T = MQ.TORSO, H0 = T[0][0], NH = Math.ceil((S.top - H0) / .25) + 1; S.ttab = new Float64Array(NH * 5); S.th0 = H0;
-    for (let i = 0; i < NH; i++) { const h = Math.min(S.top, H0 + i * .25); let j = 1; while (j < T.length - 1 && T[j][0] < h) j++; const a = T[j - 1], c = T[j], u = Math.max(0, Math.min(1, (h - a[0]) / (c[0] - a[0]))); for (let k = 0; k < 5; k++) S.ttab[i * 5 + k] = a[k + 1] + (c[k + 1] - a[k + 1]) * u; }
+    /* выше верхней строки — продолжение на TOP_EXT (Mannequin.sectionExt: как торец корпуса в torsoSDF) */
+    for (let i = 0; i < NH; i++) { const h = Math.min(S.top, H0 + i * .25); if (MQ.sectionExt && h > T.at(-1)[0]) { const e = MQ.sectionExt(h); for (let k = 0; k < 5; k++) S.ttab[i * 5 + k] = e[k]; continue; } let j = 1; while (j < T.length - 1 && T[j][0] < h) j++; const a = T[j - 1], c = T[j], u = Math.max(0, Math.min(1, (h - a[0]) / (c[0] - a[0]))); for (let k = 0; k < 5; k++) S.ttab[i * 5 + k] = a[k + 1] + (c[k + 1] - a[k + 1]) * u; }
     /* начало рамки поясницы — на высоте шарнира L5/S1, позвонок L5 стоит выше на свою высоту (как у стенок, wallTorso) */
     S.l5off = skel.bones[S.l5].h - B.lumbar[1];
     S.rtab = new Float64Array(NH * 2 * (RT_N + 1));
@@ -411,7 +412,7 @@ const Muscles = (() => {
       const t = j / RT_N, u = 1 - t, v = t, l = Math.sqrt(u * u + v * v), o = i * 5, T5 = S.ttab;
       /* с радиальной поправкой сечения (Mannequin.torsoDR: угол от передней линии) */
       const th = Math.atan2(v, u), hh = Math.min(S.top, H0 + i * .25);
-      S.rtab[(i * 2 + half) * (RT_N + 1) + j] = torsoR0(half ? T5[o + 2] : T5[o + 1], T5[o], half ? T5[o + 3] : T5[o + 4], u / l, v / l) + (MQ.torsoDR ? MQ.torsoDR(hh, half ? Math.PI - th : th) : 0);
+      S.rtab[(i * 2 + half) * (RT_N + 1) + j] = torsoR0(half ? T5[o + 2] : T5[o + 1], T5[o], half ? T5[o + 3] : T5[o + 4], u / l, v / l) + (MQ.torsoDRExt ? MQ.torsoDRExt(hh, half ? Math.PI - th : th) : MQ.torsoDR ? MQ.torsoDR(hh, half ? Math.PI - th : th) : 0);
     }
     /* высоты, выше которых кожа корпуса жёстко с грудной клеткой: по боковой схеме и по передней (конец скругления у грудного шарнира) */
     S.pelvisTop = [S.blend[0][1] - S.blend[0][2], Math.min(S.blend[0][1] - S.blend[0][2], S.blendF[0][1] - S.blendF[0][2], MQ.FRONT_H[0])];

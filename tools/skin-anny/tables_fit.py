@@ -528,6 +528,10 @@ def fit_all(F, max_chest_depth=None):
     for h in TORSO_HS:
         kw = {}
         if h >= 52: kw = dict(xlim=13.5, keep_w=True, xfit=8.0, nf_max=2.6)
+        # у подмышки (h 45–50) по бокам точек Anny нет (там руки), и суперэллипс достраивал бока по ширине задних углов (заднюю
+        # подмышечную складку) — ящиком до x ±18: опущенная рука входила в корпус на 3,5–5 см. Ширина — прежняя (под руку),
+        # задние и передние углы — радиальной поправкой по точкам Anny
+        elif h >= 45: kw = dict(keep_w=True)
         if h >= 59: kw['front'] = lo[2] + neck[0][1]          # основание шеи спереди — как у шеи (t 0)
         if max_chest_depth is not None and 35 <= h <= 43: kw['max_depth'] = max_chest_depth
         kw['n_max'] = 4.0
@@ -562,7 +566,8 @@ def fit_all(F, max_chest_depth=None):
         res['LIMBS'][kind] = out
     # корни и концы, где контур сливается с соседней частью (плечо — с подмышкой и дельтой, бедро — с ягодицей и пахом, низ
     # голени — со стопой): прежний профиль в той же пропорции к ближайшей подогнанной строке
-    for kind, ts, ref in (('ua', (0, .1), .2), ('th', (0,), .1), ('sk', (1.0,), .9)):
+    # у плеча строка t 0,2 ещё захватывает подмышку (медиальный радиус 7,2 при 5,1 на t 0,3): корни плеча — от строки t 0,3
+    for kind, ts, ref in (('ua', (0, .1, .2), .3), ('th', (0,), .1), ('sk', (1.0,), .9)):
         new = res['LIMBS'][kind]; j = LIMB_TS.index(ref); oj = profile_at(LIMBS_461[kind], ref)
         for t in ts:
             i = LIMB_TS.index(t); oi = profile_at(LIMBS_461[kind], t)

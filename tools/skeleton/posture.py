@@ -106,10 +106,16 @@ class Posture:
         return self.apply('thorax', out)
 
     def rib_points(self, P, near=3.0):
-        """произвольные точки грудного блока (рамка таза до посадки): поворот ближайшего ребра или грудины (ближе near см),
-        иначе — только посадка грудного блока"""
-        P = np.asarray(P, float); d, j = self.tree.query(P); lab = self.tree_lab[j]; out = P.copy()
+        """произвольные точки грудного блока (рамка таза до посадки): поворот ближайшего ребра или грудины — полностью ближе
+        near − 1 см, дальше near + 1 см — только посадка грудного блока, между ними — в долю (при резком пороге точки мышц
+        левой и правой сторон по разные стороны от него: наружная косая EO2/EO4 справа и слева расходилась по длине на 0,7–0,8 см)"""
+        P = np.asarray(P, float); left = P[:, 0] > 0
+        if left.any() and (~left).any(): out = np.empty_like(P); out[left] = self.rib_points(P[left], near); out[~left] = self.rib_points(P[~left], near); return out
+        if left.all():                                      # левая сторона — зеркально правой (сетка рёбер MyoSim не строго симметрична:
+            Q = P * [-1, 1, 1]; return self.rib_points(Q, near) * [-1, 1, 1]   # точки мышц слева попадали к соседнему ребру)
+        d, j = self.tree.query(P); lab = self.tree_lab[j]; out = P.copy()
+        w = np.clip((near + 1.0 - d) / 2.0, 0.0, 1.0)
         for k, M in self.rib_R.items():
-            m = (lab == k) & (d < near)
-            if m.any(): out[m] = apply4(M, P[m])
+            m = (lab == k) & (w > 0)
+            if m.any(): out[m] = P[m] + (apply4(M, P[m]) - P[m]) * w[m, None]
         return self.apply('thorax', out)

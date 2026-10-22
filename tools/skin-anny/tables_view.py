@@ -38,7 +38,7 @@ def main():
     F = TF.Fitter(a.fit, a.base); T = TF.fit_all(F, a.chest_depth)
     if a.tables: T.update({k: v for k, v in json.load(open(a.tables)).items() if k in ('TORSO', 'LIMBS', 'NECK', 'HEAD_ROWS')})
     panels = []
-    for row, old in zip(T['TORSO'], TF.TORSO_461): panels.append(('torso', f'корпус h {row[0]}', row, old))
+    for row in T['TORSO']: panels.append(('torso', f'корпус h {row[0]}', row, [row[0]] + TF.profile_at(TF.TORSO_461, row[0])))
     for k in ('ua', 'fa', 'th', 'sk'):
         for row, old in zip(T['LIMBS'][k], TF.LIMBS_461[k]): panels.append(('limb', f'{k} t {row[0]}', row, old, k))
     for row, old in zip(T['NECK'], TF.NECK_461): panels.append(('neck', f'шея t {row[0]}', row, old, 'neck'))
