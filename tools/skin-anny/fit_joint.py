@@ -41,14 +41,15 @@ LOCAL = ['torso-scale-depth-incr', 'torso-scale-horiz-incr', 'torso-vshape-incr'
          'head-trans-up', 'head-fat-incr', 'forehead-trans-forward', 'chin-prominent-incr', 'chin-height-incr', 'chin-width-incr']
 POSE = ['sp5', 'sp4', 'sp3', 'sp2', 'sp1', 'neck', 'head', 'clav_e', 'clav_r', 'ty', 'tz']
 NA = len(PHEN) + len(LOCAL) + len(POSE)
+OUT_STEP = 6
 SEG_OURS = {'th': 40.7, 'sk': 41.8, 'ua': 28.3, 'fa': 27.0}
-W_TISSUE, W_OUT, W_ROOM, W_SCAP, W_SEG, W_FLOOR, W_SK = 1.5, 3.0, 2.0, 2.0, .5, 3.0, 1.0
+W_ANSUR, W_TISSUE, W_OUT, W_ROOM, W_SCAP, W_SEG, W_FLOOR, W_SK = 2.0, 1.0, 2.0, 1.5, 2.0, .5, 3.0, 1.0
 TRUNK_LM = ('C7',) + tuple('T%d' % i for i in range(1, 13)) + ('jugular', 'sternum', 'acromionL', 'clavicleL', 'scapSpineL', 'supAngleL',
             'infAngleL', 'iliacCrestL', 'ASISL', 'PSISL', 'sacrum', 'trochanterL')
 LIMB_LM = ('patellaL', 'tibialCrestL', 'fibulaHeadL', 'latMalleolusL', 'medMalleolusL', 'olecranonL', 'latEpicondyleL', 'medEpicondyleL',
            'radialStyloidL', 'ulnarStyloidL')
 HEAD_LM = ('vertex', 'glabella', 'nasion', 'pogonion', 'menton', 'gonionL', 'zygionL', 'opisthocranion', 'euryonL')
-OUT_BONES = ('thoracic', 'ribcage', 'L1', 'L2', 'L3', 'L4', 'L5', 'sacrum', 'pelvis', 'clavicle', 'scapula', 'humerus', 'ulna', 'radius',
+OUT_BONES = ('hyoid', 'thyroid', 'cricoid', 'thoracic', 'ribcage', 'L1', 'L2', 'L3', 'L4', 'L5', 'sacrum', 'pelvis', 'clavicle', 'scapula', 'humerus', 'ulna', 'radius',
              'femur', 'patella', 'tibia', 'fibula', 'skull', 'jaw', 'cervical')
 
 
@@ -110,7 +111,7 @@ class Model:
         skin = self._skin
         R = {}; ref = self.ref['values']
         m = self.meas.measure(V, H)
-        R['ansur'] = np.array([w * (m[k] - norms.ansur_target(ref, k)) / max(ref[k][2] - ref[k][0], .3) for k, (t_, w) in norms.ANSUR_TONED.items()])
+        R['ansur'] = W_ANSUR * np.array([w * (m[k] - norms.ansur_target(ref, k)) / max(ref[k][2] - ref[k][0], .3) for k, (t_, w) in norms.ANSUR_TONED.items()])
         L = self.body.rest_lengths(rest)
         R['seg'] = W_SEG * np.array([L[k] - SEG_OURS[k] for k in SEG_OURS])
         R['floor'] = np.array([W_FLOOR * V[:, 1].min() / .2])
@@ -118,7 +119,7 @@ class Model:
         d = skin.depth(np.array([LM[k][0] for k in keys]))
         lo = np.array([checks.norm_of(k)[0] for k in keys]); hi = np.array([checks.norm_of(k)[1] for k in keys])
         R['tissue'] = W_TISSUE * np.where(d < lo, (lo - d) / .3, np.where(d > hi, (d - hi) / .3, 0.))
-        bo, BP, bd = checks.bones_out(skin, self.base, posed, step=3)
+        bo, BP, bd = checks.bones_out(skin, self.base, posed, step=OUT_STEP)
         R['out'] = W_OUT * np.array([np.sqrt(np.mean(np.clip(.15 - bd[i0:i0 + n], 0, None) ** 2)) / .3 for i0, n in self._out_slices(posed)])
         room = checks.back_room(skin, trunk, tips, self.h0)
         rr = []
@@ -143,27 +144,33 @@ class Model:
         keys = [b['name'] + b['side'] for b in self.base.bones if b['kind'] not in checks.SKIP and b['seg']]
         out, i0 = [], 0
         for k in keys:
-            n = len(posed[k][::3])
+            n = len(posed[k][::OUT_STEP])
             if k.startswith(OUT_BONES) and not k.endswith('R'): out.append((i0, n))
             i0 += n
         return out
 
 
-def gn(model, v, iters, lo, hi, log):
-    na = NA
+STEP = np.array([.1] * len(PHEN) + [.25] * len(LOCAL) + [4.0] * 9 + [2.0, 2.0] + [4.0] * len(spine.PARAMS))
+
+
+def gn(model, v, iters, lo, hi, log, free=None):
+    na = NA; free = np.arange(len(v)) if free is None else np.asarray(free)
     def full(v, an=None): return model.resid(v, an)
     an = model.anny(v); r = full(v, an); lam = 1e-2
     log(f'старт: {r @ r:.2f}')
     for it in range(iters):
-        t0 = time.time(); Jm = np.empty((len(r), len(v)))
-        for j in range(len(v)):
+        t0 = time.time(); Jm = np.zeros((len(r), len(v)))
+        for j in free:
             h = (.08 if j < len(PHEN) + len(LOCAL) else (1.0 if j < na else .3))
             h = h if v[j] + h <= hi[j] else -h
             vj = v.copy(); vj[j] += h
             Jm[:, j] = (full(vj, None if j < na else an) - r) / h
-        A = Jm.T @ Jm; g = Jm.T @ r; best = (r @ r, v, r, an)
+        Jf = Jm[:, free]; A = Jf.T @ Jf; g = Jf.T @ r; best = (r @ r, v, r, an)
         for lm in (lam, lam * 10, lam * 100):
-            dv = -np.linalg.solve(A + lm * np.diag(np.diag(A) + 1e-6), g)
+            dv = np.zeros(len(v)); dv[free] = -np.linalg.solve(A + lm * np.diag(np.diag(A) + 1e-6), g)
+            # область доверия: за шаг формы Anny — не больше 0,25 (фенотип — 0,1), углы — 4°, сдвиги — 2 см
+            k = max(1.0, float(np.max(np.abs(dv) / STEP)))
+            dv = dv / k
             for al in (1, .5, .25):
                 vn = np.clip(v + al * dv, lo, hi); ann = model.anny(vn); rn = full(vn, ann)
                 if rn @ rn < best[0]: best = (rn @ rn, vn, rn, ann)
@@ -180,7 +187,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--work', required=True); ap.add_argument('--out', required=True)
     ap.add_argument('--start', default='fit0.json'); ap.add_argument('--posture', default='posture-B.json'); ap.add_argument('--resume')
-    ap.add_argument('--iters', type=int, default=12)
+    ap.add_argument('--iters', type=int, default=12); ap.add_argument('--pose-iters', type=int, default=4)
     a = ap.parse_args(); W = a.work
     model = Model(W)
     lo = np.array([0.] * len(PHEN) + [-1.] * len(LOCAL) + [-20] * 7 + [-15, -25] + [-30, -15] + [-40] * len(spine.PARAMS))
@@ -217,9 +224,13 @@ def main():
                    'posture': {k: (np.asarray(x).tolist() if not isinstance(x, float) else float(x)) for k, x in D['x'].items()},
                    'cost': float(r @ r), 'blocks': {k: float(b_ @ b_) for k, b_ in D['R'].items()}}, open(a.out, 'w'), indent=1)
         return D
-    for v in gn(model, v, a.iters, lo, hi, log):
-        D = save(v)
-        log('  блоки: ' + ', '.join(f'{k} {float(b_ @ b_):.1f}' for k, b_ in D['R'].items()))
+    # этап 1 — только поза Anny (поясница, шея, голова, ключицы, сдвиг) и посадка скелета; этап 2 — всё вместе
+    stage1 = list(range(len(PHEN) + len(LOCAL), len(v)))
+    for stage, free, n in (('поза', stage1, a.pose_iters), ('всё', None, a.iters)):
+        log(f'== этап: {stage}')
+        for v in gn(model, v, n, lo, hi, log, free):
+            D = save(v)
+            log('  блоки: ' + ', '.join(f'{k} {float(b_ @ b_):.1f}' for k, b_ in D['R'].items()))
     save(v)
 
 
