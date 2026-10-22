@@ -201,6 +201,10 @@ class Fitter:
                 m = np.abs(bt - th[k]) < np.radians(180 / (n - 1))
                 if m.any(): need[k] = br[m].max() + MARGIN['torso'] - base[k]
         if h >= 47: sigma = sigma * 1.5                  # у подмышки и надплечий контур Anny с разрывом (руки) — грубее
+        # основание шеи (сечение «бабочкой»: шея и гребни трапециевидных): спереди узкий столб шеи между ямками над ключицами —
+        # при σ 6 см перед шеи сглаживался в ямки и уходил на 1,5–2 см за кожу Anny (трахея — под самой кожей); столбцы сетки
+        # здесь через 1 см — мельче можно
+        if h >= 52: sigma = 2.5
         dr = np.maximum(gauss(dr, sigma), need)
         dr = gauss(dr, sigma * .6)
         d = np.clip(need - dr, 0, None)                  # недостающее над костями — гладким горбом, а не изломом
@@ -256,6 +260,23 @@ class Fitter:
         from scipy.ndimage import gaussian_filter
         Gp = gaussian_filter(Gp, sigma=smooth, mode='nearest')                       # грани сетки Anny — без ряби на свету
         G = Gp[:, n_lon - 1:2 * n_lon - 1]
+        # череп и нижняя челюсть — внутри с запасом MARGIN: по каждому направлению — наибольшая проекция вершин кости в конусе
+        # полуширины шага сетки (надбровья и скулы черепа MyoSim местами у самой кожи Anny — шаг 1: надпереносье −0,2)
+        Bh = np.vstack([self.bones[n] for n in ('skull', 'jaw') if n in self.bones]) - hc
+        Bh[:, 0] = np.abs(Bh[:, 0])                       # симметрично: левая половина
+        bu = Bh / np.linalg.norm(Bh, axis=1, keepdims=True); br = np.linalg.norm(Bh, axis=1)
+        cone = np.cos(np.radians(180 / (n_lat - 1)))
+        need = np.full(len(U), 0.0)
+        Uh = U.copy(); Uh[:, 0] = np.abs(Uh[:, 0])
+        cs = Uh @ bu.T
+        for i in range(len(U)):
+            m = cs[i] > cone
+            if m.any(): need[i] = float((br[m] * cs[i][m]).max()) + MARGIN['head']
+        need = need.reshape(n_lat, n_lon)
+        if (need > G).any():
+            d = np.clip(need - G, 0, None); dp = np.concatenate([d[:, ::-1][:, :-1], d, d[:, ::-1][:, 1:]], 1)
+            g = gaussian_filter(dp, sigma=1.0, mode='nearest')[:, n_lon - 1:2 * n_lon - 1]
+            k = float(np.max(np.where(d > 0, d / np.maximum(g, 1e-6), 0))); G = G + k * g
         G[0, :] = G[0, :].mean()                          # макушка — одна точка
         # ориентиры лица — для проверочных точек головы (headSamples)
         m = (np.abs(V[:, 0]) < .5) & (V[:, 1] > -8) & (V[:, 1] < 0) & (self.vw['head'] > .5)
@@ -314,6 +335,47 @@ class Fitter:
         stats = dict(n=int(len(lx)), rms=float(np.sqrt(np.mean(r ** 2))))
         if len(Bv): stats['bone_min'] = float((ellipse_radius(bx, by, rf, rb, rl, rm) - np.hypot(bx, by)).min())
         return [t] + [round(float(x), 2) for x in sol.x], stats
+
+    def limb_bone_fix(self, kind, s, rows, iters=6):
+        """кости сегмента — внутри профиля с запасом MARGIN по всей длине, а не только у плоскостей строк (строки — через
+        2,7–4,2 см, подгонка видит кости в ±1 см от строки; лодыжка, шиловидные отростки — между строками или за концевой
+        строкой, которая взята по пропорции): у точки кости на доле t профиль — линейно между соседними строками, как
+        profileAt в манекене; где не хватает — добавка к радиусу этой стороны у обеих соседних строк (у наибольшей по
+        направлению доли; если на сторону одной оси не хватает — к обеим)"""
+        rows = [list(r) for r in rows]; ts = [r[0] for r in rows]
+        a_, b_ = LIMB_DEF[kind]; A, Bj = self.J[a_ + s], self.J[b_ + s]; L = np.linalg.norm(Bj - A); ax = (Bj - A) / L
+        Bv = np.vstack([v for n, v in self.bones.items() if n.startswith(LIMB_BONES[kind])])
+        Bv = Bv[(Bv[:, 0] * (1 if s == 'L' else -1)) > 0]
+        t = (Bv - A) @ ax / L; Bv, t = Bv[(t >= 0) & (t <= 1)], t[(t >= 0) & (t <= 1)]
+        loc = []
+        for p, tt in zip(Bv, t):
+            front, lat = self.limb_axes(kind, s, tt)
+            front = front - ax * (front @ ax); front /= np.linalg.norm(front); lat = lat - ax * (lat @ ax) - front * (lat @ front); lat /= np.linalg.norm(lat)
+            c = A + (Bj - A) * tt; loc.append(((p - c) @ front, (p - c) @ lat))
+        loc = np.array(loc); fixed = 0.0
+        for it in range(iters):
+            worst = 0.0
+            for (lx, ly), tt in zip(loc, t):
+                i = min(max(int(np.searchsorted(ts, tt, side='right')) - 1, 0), len(ts) - 2); u = (tt - ts[i]) / (ts[i + 1] - ts[i])
+                pr = [(1 - u) * rows[i][k] + u * rows[i + 1][k] for k in range(1, 5)]
+                ci = 1 if lx >= 0 else 2; cj = 3 if ly >= 0 else 4          # столбцы: rf/rb, rl/rm
+                rho = np.hypot(lx, ly); need = rho + MARGIN['limb']
+                r = float(ellipse_radius(lx, ly, *pr))
+                if r >= need: continue
+                worst = max(worst, need - r)
+                a, b = pr[ci - 1], pr[cj - 1]; uu, vv = abs(lx) / rho, abs(ly) / rho
+                rhs = 1 / need ** 2 - (uu / a) ** 2 if vv >= uu else 1 / need ** 2 - (vv / b) ** 2
+                if rhs > 1e-9:                                           # хватает добавки по преобладающей оси
+                    if vv >= uu: col, cur, new = cj, b, vv / np.sqrt(rhs)
+                    else: col, cur, new = ci, a, uu / np.sqrt(rhs)
+                    for k in (i, i + 1): rows[k][col] = round(rows[k][col] + (new - cur) + .005, 2)
+                else:                                                    # по обеим осям — в долю
+                    f = need / r
+                    for k in (i, i + 1):
+                        rows[k][ci] = round(rows[k][ci] + a * (f - 1) + .005, 2); rows[k][cj] = round(rows[k][cj] + b * (f - 1) + .005, 2)
+            fixed = max(fixed, worst)
+            if worst <= 0: break
+        return rows, dict(bone_fix=round(fixed, 2), n=int(len(t)))
 
     # ---------------- шея ----------------
     def neck_axis(self):
@@ -501,6 +563,8 @@ def fit_all(F, max_chest_depth=None):
         for t in ts:
             i = LIMB_TS.index(t); oi = profile_at(LIMBS_461[kind], t)
             new[i] = [t] + [round(oi[k] * new[j][k + 1] / oj[k], 2) for k in range(4)]
+    for kind in res['LIMBS']:
+        res['LIMBS'][kind], st = F.limb_bone_fix(kind, 'L', res['LIMBS'][kind]); res['stats'][f'{kind} bones'] = st
     res['HEAD_R'], res['head_extra'] = F.head_grid(); res['head_top'] = F.head_top()
     return res
 
