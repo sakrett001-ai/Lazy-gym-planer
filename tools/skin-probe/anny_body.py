@@ -95,9 +95,13 @@ class AnnyBody:
             # направления сегментов манекена → в оси Anny
             ua = dir_to_anny(np.subtract(joints['el' + s], joints['sh' + s]))
             fa = dir_to_anny(np.subtract(joints['wr' + s], joints['el' + s]))
+            h = lambda n: heads[L[n + '.' + s]]
+            # ноги — по направлению сегментов манекена (вертикально) от «тазобедренного» сустава рига Anny. Он лежит на
+            # ≈ 2,5 см латеральнее центра головки бедра (у мужчины 175 см ±11,3 см, у манекена и у людей ±8,8), но середина
+            # бедра Anny — именно там: если свести колени к ширине манекена, бёдра заходят друг в друга. Поэтому ноги Anny
+            # стоят шире скелета, и это видно при вписывании (сдвиг бедра и голени наружу).
             th = dir_to_anny(np.subtract(joints['kn' + s], joints['hip' + s]))
             sk = dir_to_anny(np.subtract(joints['an' + s], joints['kn' + s]))
-            h = lambda n: heads[L[n + '.' + s]]
             Dua = rot_between(h('lowerarm01') - h('upperarm01'), ua)
             Dfa = rot_between(h('wrist') - h('lowerarm01'), fa)
             Dth = rot_between(h('lowerleg01') - h('upperleg01'), th)

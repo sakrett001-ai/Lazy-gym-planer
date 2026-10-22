@@ -49,7 +49,7 @@ WEIGHT = {'stature': 4, 'crotchheight': 4, 'chestcircumference': 2, 'chestbreadt
           'wristcircumference': 1, 'thighcircumference': 1, 'lowerthighcircumference': 1, 'calfcircumference': 1,
           'anklecircumference': 1, 'headcircumference': .7, 'headlength': .5, 'headbreadth': .5, 'footlength': .7,
           'footbreadthhorizontal': .3, 'weightkg': .5}
-SEG = {'_ua': (28.3, .25), '_fa': (27.0, .25), '_knee': (48.8, .5), '_ankle': (7.0, .5)}   # длины плеча и предплечья манекена (B.ua, B.fa), высоты коленного и голеностопного суставов манекена, см; вес на 1 см
+SEG = {'_ua': (28.3, .25), '_fa': (27.0, .25)}   # длины плеча и предплечья манекена (B.ua, B.fa), см; вес на 1 см
 
 
 def unpack(x):
@@ -88,9 +88,28 @@ lo = np.array([0.] * len(PHEN) + [-1.] * len(LOCAL)); hi = np.array([1.] * len(P
 t = time.time()
 r0 = resid(x0)
 print('старт: сумма квадратов', float(r0 @ r0), f'{time.time() - t:.2f} с на оценку', flush=True)
-res = least_squares(resid, x0, bounds=(lo, hi), diff_step=.02, max_nfev=a.iters, verbose=1, x_scale=.3, xtol=1e-12, ftol=1e-10)
-for k in range(2):
-    res = least_squares(resid, res.x, bounds=(lo, hi), diff_step=.01, max_nfev=a.iters, verbose=1, x_scale=.3, xtol=1e-12, ftol=1e-10)
+# Гаусс — Ньютон с затуханием: замеры по сечениям негладкие (оболочка, «наибольшее из колец»), и least_squares с мелким
+# шагом конечных разностей останавливался по xtol далеко от минимума. Шаг разностей крупнее (0,08), шаг — с поиском по прямой.
+x = x0.copy(); r = resid(x); lam = 1e-2
+for it in range(a.iters):
+    Jm = np.empty((len(r), len(x)))
+    for j in range(len(x)):
+        h = .08 if x[j] + .08 <= hi[j] else -.08
+        xj = x.copy(); xj[j] += h; Jm[:, j] = (resid(xj) - r) / h
+    A = Jm.T @ Jm; g = Jm.T @ r; best = (r @ r, x, r)
+    for lm in (lam, lam * 10, lam * 100):
+        dx = -np.linalg.solve(A + lm * np.diag(np.diag(A) + 1e-6), g)
+        for al in (1, .5, .25):
+            xn = np.clip(x + al * dx, lo, hi); rn = resid(xn)
+            if rn @ rn < best[0]: best = (rn @ rn, xn, rn)
+    if best[0] >= r @ r - 1e-4:
+        lam *= 10
+        if lam > 1e3: break
+        continue
+    lam = max(lam / 3, 1e-4); x, r = best[1], best[2]
+    print(f'шаг {it}: сумма квадратов {r @ r:.2f}', flush=True)
+class _R: pass
+res = _R(); res.x = x; res.fun = r
 print('итог: сумма квадратов', float(res.fun @ res.fun), f'{time.time() - t:.0f} с', flush=True)
 V, H = build(res.x)
 m = meas.measure(V, H)
