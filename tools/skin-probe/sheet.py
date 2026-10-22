@@ -22,11 +22,11 @@ mesh = {'pos': np.round(V, 2).ravel().tolist(), 'idx': F.ravel().tolist()}
 def bones_of(B, key='segments', skip=('finger', 'thumb')):
     return [{'pos': b['pos'], 'idx': b['idx']} for b in B[key] if not any(k in b['name'] for k in ('proxph', 'midph', 'distph', 'thumb'))]
 
-def red_marks(reg, B, key='segments', lim=.0):
+def red_marks(reg, B, key='segments', lim=.0, VF=None):
     """вершины костей снаружи кожи Anny — красные точки (из анализа: кости с выходом)"""
     sys.path.insert(0, HERE)
     from register import MeshSkin
-    skin = MeshSkin(V, F)
+    skin = MeshSkin(*(VF or (V, F)))
     marks = []
     for b in B[key]:
         if b['name'] in ('foot', 'toes', 'talus') or any(k in b['name'] for k in ('ph', 'mc', 'thumb', 'lunate', 'scaphoid', 'pisiform', 'triquetrum', 'capitate', 'trapez', 'hamate')):
@@ -41,18 +41,15 @@ C = [0, 88, 2]; full = 120
 row_m = [{'label': f'манекен 4.61.0 · {n}', 'cam': c, 'center': C, 'span': full, 'body': 'mannequin'} for c, n in (('front', 'спереди'), ('side', 'сбоку'), ('back', 'сзади'), ('angle', 'три четверти'))]
 row_a = [{'label': f'Anny под ANSUR II · {n}', 'cam': c, 'center': C, 'span': full, 'body': 'mesh', 'mesh': mesh} for c, n in (('front', 'спереди'), ('side', 'сбоку'), ('back', 'сзади'), ('angle', 'три четверти'))]
 
-def skel_row(reg, B, title):
-    marks = red_marks(reg, B)
-    bl = bones_of(B)
-    P = lambda **k: {'body': 'mesh', 'mesh': mesh, 'ghost': True, 'bones': bl, 'marks': marks, **k}
+def skel_row(reg, B, title, msh=None, VF=None, key='segments'):
+    marks = red_marks(reg, B, key=key, VF=VF)
+    bl = bones_of(B, key=key)
+    P = lambda **k: {'body': 'mesh', 'mesh': msh or mesh, 'ghost': True, 'bones': bl, 'marks': marks, **k}
     return [P(label=f'{title} · сбоку', cam='side', center=C, span=full),
             P(label=f'{title} · сзади', cam='back', center=C, span=full),
             P(label='шея и верх спины · сбоку', cam='side', center=[0, 140, -2], span=42),
             P(label='лопатки · сзади', cam='back', center=[0, 134, -6], span=46),
             P(label='верх спины · сзади-сбоку', cam='rear', center=[0, 136, -6], span=46)]
-
-def mann_row(B, root_label, mann_body):
-    return None
 
 rows = [
     {'title': 'Наш манекен 4.61.0 (кожа приложения, вид «Манекен»)', 'panels': row_m},
@@ -60,8 +57,23 @@ rows = [
     {'title': 'Скелет 4.61.0 в Anny (вписан по ориентирам, сдвиги по сегментам)', 'note': 'Полупрозрачная кожа Anny, кости MyoSim; красные точки — вершины костей снаружи кожи Anny.', 'panels': skel_row(r461, b461, 'скелет 4.61.0')},
     {'title': 'Скелет с осанкой (ветка feat/anatomy-posture, 9f13c1f) в Anny', 'panels': skel_row(rpost, bpost, 'скелет с осанкой')},
 ]
+# опыт (anny_fit_bones.py): Anny, подогнанная вместе со скелетом с осанкой — ANSUR II и ткани над ориентирами корпуса
+HAS_B = os.path.exists(os.path.join(W, 'reg-postb.json'))
+if HAS_B:
+    fitB = J('fitb-post.json'); VB = np.load(os.path.join(W, 'fitb-post-verts.npy')); FB = np.load(os.path.join(W, 'fitb-post-faces.npy'))
+    meshB = {'pos': np.round(VB, 2).ravel().tolist(), 'idx': FB.ravel().tolist()}
+    rB = J('reg-postb.json'); bB = J('reg-postb-bones.json')
+    rows.append({'title': 'Опыт: Anny, подогнанная вместе со скелетом с осанкой (ANSUR II + ткани над ориентирами корпуса)',
+                 'note': 'Те же параметры Anny (фенотип и местные формы), к замерам ANSUR II добавлены нормы тканей над остистыми, грудиной, вырезкой, лопаткой, ключицей, тазом; скелет — одним куском (без подгонки по сегментам).',
+                 'panels': [{'label': f'Anny-Б · {n}', 'cam': c, 'center': C, 'span': full, 'body': 'mesh', 'mesh': meshB} for c, n in (('side', 'сбоку'), ('back', 'сзади'))] +
+                           skel_row(rB, bB, 'осанка в Anny-Б', meshB, (VB, FB), key='global')[2:]})
 
 # ---------------- таблицы ----------------
+COLS = [(r461, 'mannequin', 'манекен 4.61.0 + скелет 4.61.0'), (r461, 'anny_segments', 'Anny + скелет 4.61.0'),
+        (rpost, 'mannequin', 'манекен ветки осанки + её скелет'), (rpost, 'anny_segments', 'Anny + скелет с осанкой')] + \
+       ([(rB, 'anny_global', 'Anny-Б + скелет с осанкой (одним куском)')] if HAS_B else [])
+AP_COLS = [(r461, 'mannequin'), (r461, 'anny_global'), (rpost, 'mannequin'), (rpost, 'anny_global')] + ([(rB, 'anny_global')] if HAS_B else [])
+HDR = ''.join(f'<th>{h}</th>' for _, _, h in COLS)
 def cls(v, lo, hi):
     if v is None: return 'dim'
     return 'ok' if lo <= v <= hi else ('warn' if lo - .5 <= v <= hi + .5 else 'bad')
@@ -97,22 +109,30 @@ def zc(v, k):
     p25, p50, p75 = REF[k]
     if v is None: return 'dim'
     return 'ok' if p25 <= v <= p75 else ('warn' if abs(v - p50) <= 1.349 * (p75 - p25) else 'bad')
-rows_html = ''.join(f"<tr><td>{NAMES.get(k, k)}</td><td>{f1(REF[k][1])} <span class='small'>({f1(REF[k][0])}–{f1(REF[k][2])})</span></td><td class='{zc(man.get(k), k)}'>{f1(man.get(k))}</td><td class='{zc(am.get(k), k)}'>{f1(am.get(k))}</td></tr>" for k in order)
+bm = {}
+if HAS_B:
+    bm = dict(fitB['measures']); LB = rB['anny_global']['landmarks']
+    for key, lk in (('cervicaleheight', 'C7'), ('acromialheight', 'acromionL'), ('suprasternaleheight', 'jugular'), ('iliocristaleheight', 'iliacCrestL'), ('lateralmalleolusheight', 'latMalleolusL'), ('wristheight', 'radialStyloidL')):
+        bm[key] = LB[lk]['p'][1]
+    bm['biacromialbreadth'] = man['biacromialbreadth']
+cb = lambda k: f"<td class='{zc(bm.get(k), k)}'>{f1(bm.get(k))}</td>" if HAS_B else ''
+rows_html = ''.join(f"<tr><td>{NAMES.get(k, k)}</td><td>{f1(REF[k][1])} <span class='small'>({f1(REF[k][0])}–{f1(REF[k][2])})</span></td><td class='{zc(man.get(k), k)}'>{f1(man.get(k))}</td><td class='{zc(am.get(k), k)}'>{f1(am.get(k))}</td>{cb(k)}</tr>" for k in order)
+insb = sum(1 for k in order if bm.get(k) is not None and REF[k][0] <= bm[k] <= REF[k][2])
 ins = sum(1 for k in order if am.get(k) is not None and REF[k][0] <= am[k] <= REF[k][2]); tot = sum(1 for k in order if am.get(k) is not None)
 insm = sum(1 for k in order if man.get(k) is not None and REF[k][0] <= man[k] <= REF[k][2])
-t_ansur = f"<table><tr><th>Замер</th><th>ANSUR II медиана (p25–p75)</th><th>манекен 4.61.0</th><th>Anny после подгонки</th></tr>{rows_html}</table><p class='small'>В средней половине людей: манекен {insm} из {len(order)}, Anny {ins} из {tot}. Зелёный — p25–p75, жёлтый — до 1 IQR от медианы, красный — дальше. * — по костным точкам: у манекена anthro.js, у Anny — точки вписанного скелета 4.61.0. Anny: фенотип {', '.join(f'{k} {v:.2f}' for k, v in fit['phen'].items())}; возраст 27 лет (шкала MakeHuman), пол мужской.</p>"
+t_ansur = f"<table><tr><th>Замер</th><th>ANSUR II медиана (p25–p75)</th><th>манекен 4.61.0</th><th>Anny после подгонки</th>{'<th>Anny-Б (со скелетом осанки)</th>' if HAS_B else ''}</tr>{rows_html}</table><p class='small'>В средней половине людей: манекен {insm} из {len(order)}, Anny {ins} из {tot}{f', Anny-Б {insb}' if HAS_B else ''}. Зелёный — p25–p75, жёлтый — до 1 IQR от медианы, красный — дальше. * — по костным точкам: у манекена anthro.js, у Anny — точки вписанного скелета 4.61.0. Anny: фенотип {', '.join(f'{k} {v:.2f}' for k, v in fit['phen'].items())}; возраст 27 лет (шкала MakeHuman), пол мужской.</p>"
 
 def lm_rows(keys):
     out = ''
     for k in keys:
         a0 = r461['mannequin']['landmarks'][k]; lo, hi = a0['lo'], a0['hi']
-        vals = [r461['mannequin']['landmarks'][k]['depth'], r461['anny_segments']['landmarks'][k]['depth'], rpost['mannequin']['landmarks'][k]['depth'], rpost['anny_segments']['landmarks'][k]['depth']]
+        vals = [reg[col]['landmarks'][k]['depth'] for reg, col, _ in COLS]
         out += f"<tr><td>{a0['name']}</td><td>{f1(lo)}–{f1(hi)} <span class='small'>{a0['src']}</span></td>" + ''.join(f"<td class='{cls(v, lo, hi)}'>{f1(v)}</td>" for v in vals) + '</tr>'
     return out
 LMK = ['C7', 'T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'jugular', 'sternum', 'acromionL', 'clavicleL', 'scapSpineL', 'supAngleL', 'infAngleL',
        'iliacCrestL', 'ASISL', 'PSISL', 'sacrum', 'trochanterL', 'patellaL', 'tibialCrestL', 'fibulaHeadL', 'latMalleolusL', 'medMalleolusL', 'olecranonL',
        'latEpicondyleL', 'medEpicondyleL', 'radialStyloidL', 'ulnarStyloidL', 'vertex', 'glabella']
-t_lm = f"<table><tr><th>Ориентир (левая сторона)</th><th>норма, см</th><th>манекен 4.61.0 + скелет 4.61.0</th><th>Anny + скелет 4.61.0</th><th>манекен ветки осанки + её скелет</th><th>Anny + скелет с осанкой</th></tr>{lm_rows(LMK)}</table>" \
+t_lm = f"<table><tr><th>Ориентир (левая сторона)</th><th>норма, см</th>{HDR}</tr>{lm_rows(LMK)}</table>" \
        "<p class='small'>Толщина мягких тканей — от точки кости до кожи (ближайшее расстояние), минус — кость снаружи кожи. Источники: S18 — Störchle 2018 (УЗИ, подкожный слой + кожа), L21 — Lemon 2021 (КТ, над грудиной 1,8 ± 0,9), S14 — Seol 2014 (УЗИ, до ромбовидной 14–18 мм), DG06 — De Greef 2006 (лицо), ор — ориентир по анатомии слоёв, без отдельного источника (проверить на следующем шаге). Anny — после вписывания по сегментам.</p>"
 
 def shift_rows(reg):
@@ -132,12 +152,12 @@ def back_rows():
                 v = reg[col]['back'].get(line, {}).get(h); return None if not v else v['depth']
             def rm(reg, col):
                 v = reg[col]['back'].get(line, {}).get(h); return None if not v or v['room'] is None else v['room']
-            vals = [g(r461, 'mannequin'), g(r461, 'anny_segments'), g(rpost, 'mannequin'), g(rpost, 'anny_segments')]
-            rooms = [rm(r461, 'mannequin'), rm(r461, 'anny_segments'), rm(rpost, 'mannequin'), rm(rpost, 'anny_segments')]
+            vals = [g(reg, col) for reg, col, _ in COLS]
+            rooms = [rm(reg, col) for reg, col, _ in COLS]
             lo, hi = need if need else (0, 99)
             out += f"<tr><td>{nm}, h {h}</td>" + ''.join(f"<td>{f1(v)} <span class='{cls(r, lo, hi) if need else 'dim'}'>({f1(r)})</span></td>" for v, r in zip(vals, rooms)) + '</tr>'
     return out
-t_back = f"<table><tr><th>Спина: от кости до кожи (в скобках — место для столба: минус слой над ним, BK.depth ветки осанки)</th><th>манекен 4.61.0</th><th>Anny + 4.61.0</th><th>манекен осанки</th><th>Anny + осанка</th></tr>{back_rows()}</table>" \
+t_back = f"<table><tr><th>Спина: от кости до кожи (в скобках — место для столба: минус слой над ним, BK.depth ветки осанки)</th>{HDR}</tr>{back_rows()}</table>" \
          "<p class='small'>h — высота над тазобедренными суставами (39–57 см ≈ T10–T3). Луч — горизонтально вперёд от кожи спины; кость — ближайшая в окрестности ±0,5 см по ширине и ±1,5 см по высоте (как backFloor в walls.js). Длиннейшей в 4.61.0 хватало 2,2–3,7 см места (README мышц ветки осанки); на ветке осанки осталось 1,0–1,4.</p>"
 
 def ap_rows():
@@ -147,10 +167,11 @@ def ap_rows():
             v = reg[col]['ap'].get(h); return None if not v else v[k]
         sm, sa = g(r461, 'mannequin', 'skin'), g(r461, 'anny_global', 'skin')
         b461 = None if sm is None else sm - g(r461, 'mannequin', 'sum'); bpo = None if g(rpost, 'mannequin', 'skin') is None else g(rpost, 'mannequin', 'skin') - g(rpost, 'mannequin', 'sum')
-        sums = [g(r461, 'mannequin', 'sum'), g(r461, 'anny_global', 'sum'), g(rpost, 'mannequin', 'sum'), g(rpost, 'anny_global', 'sum')]
-        out += f"<tr><td>h {h} (y {f1(float(h) + 89.5)})</td><td>{f1(sm)}</td><td>{f1(sa)}</td><td>{f1(b461)}</td><td>{f1(bpo)}</td>" + ''.join(f"<td class='{cls(v, 1.3, 4.2)}'>{f1(v)}</td>" for v in sums) + '</tr>'
+        sums = [g(reg, col, 'sum') for reg, col in AP_COLS]
+        sb = f"<td>{f1(g(rB, 'anny_global', 'skin'))}</td>" if HAS_B else ''
+        out += f"<tr><td>h {h} (y {f1(float(h) + 89.5)})</td><td>{f1(sm)}</td><td>{f1(sa)}</td>{sb}<td>{f1(b461)}</td><td>{f1(bpo)}</td>" + ''.join(f"<td class='{cls(v, 1.3, 4.2)}'>{f1(v)}</td>" for v in sums) + '</tr>'
     return out
-t_ap = f"<table><tr><th>Высота над тазобедренными</th><th>кожа манекена: глубина по средней линии</th><th>кожа Anny</th><th>кость 4.61.0: остистый — грудина</th><th>кость осанки</th><th>ткани спереди + сзади: манекен 4.61.0</th><th>Anny + 4.61.0</th><th>манекен осанки</th><th>Anny + осанка</th></tr>{ap_rows()}</table>" \
+t_ap = f"<table><tr><th>Высота над тазобедренными</th><th>кожа манекена: глубина по средней линии</th><th>кожа Anny</th>{'<th>кожа Anny-Б</th>' if HAS_B else ''}<th>кость 4.61.0: остистый — грудина</th><th>кость осанки</th><th>ткани спереди + сзади: манекен 4.61.0</th><th>Anny + 4.61.0</th><th>манекен осанки</th><th>Anny + осанка</th>{'<th>Anny-Б + осанка</th>' if HAS_B else ''}</tr>{ap_rows()}</table>" \
        "<p class='small'>Сумма тканей над грудиной и над остистым отростком по средней линии не зависит от сдвига грудной клетки вперёд-назад: это проверка, помещается ли грудная клетка скелета в глубину кожи. Норма суммы — 1,3–4,2 см (грудина 0,9–2,7 [L21] + остистые 0,4–1,5 [S18]); типично ≈ 2,8. Anny — скелет сдвинут целиком (без подгонки по сегментам).</p>"
 
 
@@ -158,20 +179,20 @@ def other_rows():
     def sc(reg, col): s = reg[col]['scapula']['L']; return s
     rows = ''
     for k, nm in (('min_depth', 'лопатка: наименьшая глубина, см'), ('lt10', 'лопатка: доля вершин мельче 1 см'), ('lt14', 'лопатка: доля мельче 1,4 см (Seol: 14 ± 2 мм)')):
-        vals = [sc(r461, 'mannequin')[k], sc(r461, 'anny_segments')[k], sc(rpost, 'mannequin')[k], sc(rpost, 'anny_segments')[k]]
+        vals = [sc(reg, col)[k] for reg, col, _ in COLS]
         rows += f"<tr><td>{nm}</td>" + ''.join(f"<td>{f1(v * (100 if k != 'min_depth' else 1), 1 if k == 'min_depth' else 0)}{'' if k == 'min_depth' else ' %'}</td>" for v in vals) + '</tr>'
     for h in ('27', '33', '39'):
-        vals = [(reg[col]['lateral'].get(h) or {}).get('depth') for reg, col in ((r461, 'mannequin'), (r461, 'anny_segments'), (rpost, 'mannequin'), (rpost, 'anny_segments'))]
+        vals = [(reg[col]['lateral'].get(h) or {}).get('depth') for reg, col, _ in COLS]
         rows += f"<tr><td>рёбра сбоку, h {h}: до кожи, см</td>" + ''.join(f'<td>{f1(v)}</td>' for v in vals) + '</tr>'
     for h in ('45', '51'):
-        vals = [(reg[col]['front'].get(h) or {}).get('depth') for reg, col in ((r461, 'mannequin'), (r461, 'anny_segments'), (rpost, 'mannequin'), (rpost, 'anny_segments'))]
+        vals = [(reg[col]['front'].get(h) or {}).get('depth') for reg, col, _ in COLS]
         rows += f"<tr><td>грудина спереди, h {h}: до кожи, см (норма 0,9–2,7)</td>" + ''.join(f"<td class='{cls(v, .9, 2.7)}'>{f1(v)}</td>" for v in vals) + '</tr>'
     def outb(reg, col):
         o = sorted(((v['out_max'], k) for k, v in reg[col]['bones'].items() if v['out_max'] > .3 and not k.endswith('R')), reverse=True)[:6]
         return ', '.join(f"{k} {f1(v)}" for v, k in o) or 'нет'
-    rows += '<tr><td>кости снаружи кожи (больше 0,3 см), см</td>' + ''.join(f"<td style='white-space:normal'>{outb(reg, col)}</td>" for reg, col in ((r461, 'mannequin'), (r461, 'anny_segments'), (rpost, 'mannequin'), (rpost, 'anny_segments'))) + '</tr>'
+    rows += '<tr><td>кости снаружи кожи (больше 0,3 см), см</td>' + ''.join(f"<td style='white-space:normal'>{outb(reg, col)}</td>" for reg, col, _ in COLS) + '</tr>'
     return rows
-t_other = f"<table><tr><th>Лопатка, рёбра, грудина, выход костей</th><th>манекен 4.61.0</th><th>Anny + 4.61.0</th><th>манекен осанки</th><th>Anny + осанка</th></tr>{other_rows()}</table>"
+t_other = f"<table><tr><th>Лопатка, рёбра, грудина, выход костей</th>{HDR}</tr>{other_rows()}</table>"
 
 def notch(col):
     """яремная ямка: насколько кожа у средней линии глубже, чем в 2,5 см от неё (над грудино-ключичными сочленениями,
