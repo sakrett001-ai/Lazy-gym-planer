@@ -6,12 +6,12 @@
 
 ## Что нужно
 
-- Python 3.10+, `torch` (CPU), `anny` 0.6.1, `trimesh`, `rtree`, `scipy`, `roma`, `safetensors`, `pyyaml`, `pillow`;
+- Python 3.10+, `torch` (CPU), `anny` 0.6.1, `trimesh`, `rtree`, `scipy`, `roma`, `safetensors`, `pyyaml`, `pillow`, `embreex` (лучи trimesh в 5–10 раз быстрее; без него подгонка — часы);
 - Node и зависимости репозитория (`npm ci`), Chromium для Playwright;
 - для шага 1 — клон MyoSim (как у `tools/skeleton/build_bones.py`, переменная `MYOSIM`): полные сетки позвонков.
 
 ```
-pip install --break-system-packages torch roma safetensors trimesh pyyaml pillow requests rtree scipy fast-simplification
+pip install --break-system-packages torch roma safetensors trimesh pyyaml pillow requests rtree scipy fast-simplification embreex
 pip download --no-deps anny==0.6.1 && pip install --break-system-packages --no-deps anny-0.6.1-py3-none-any.whl
 ```
 

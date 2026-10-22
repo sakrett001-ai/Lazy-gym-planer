@@ -87,22 +87,30 @@ class AnnyPosed(AnnyBody):
         # конечности: шарнир — наш сустав (в покое — там, куда его переносит преобразование родителя); сегмент поворачивается
         # так, чтобы сустав Anny на его конце (колено, голеностоп, локоть, запястье рига) встал на наш сустав по направлению:
         # кожа колена — вокруг нашего колена, а не в 2,5 см латеральнее (как было бы при повороте «сустав Anny → сустав Anny»)
-        def seg(parent_G, joint_w, child_rest=None, child_w=None):
+        tw = q.get('tw', [0, 0, 0])            # закрутка плеча, предплечья и бедра вокруг оси сегмента (°, плюс — наружу)
+        def seg(parent_G, joint_w, child_rest=None, child_w=None, twist=0.0):
             pj = to_anny(joint_w, t)                                     # наш сустав в позе (Anny, м)
             Gi = np.linalg.inv(parent_G); pr = Gi[:3, :3] @ pj + Gi[:3, 3]  # тот же сустав в покое
-            R = np.eye(3) if child_rest is None else rot_between(child_rest - pr, dir_to_anny(np.subtract(child_w, joint_w)))
+            if child_rest is None:
+                R = np.eye(3)
+            else:
+                dw = dir_to_anny(np.subtract(child_w, joint_w)); dw = dw / np.linalg.norm(dw)
+                R = rot_between(child_rest - pr, dw)
+                if twist:
+                    a = np.radians(twist); K = np.array([[0, -dw[2], dw[1]], [dw[2], 0, -dw[0]], [-dw[1], dw[0], 0]])
+                    R = (np.eye(3) + np.sin(a) * K + (1 - np.cos(a)) * K @ K) @ R
             M = np.eye(4); M[:3, :3] = R; M[:3, 3] = pj - R @ pr
             return M, pr, (0.0 if child_rest is None else float(np.linalg.norm(child_rest - pr) * 100))
         lens = {}
         for s in 'LR':
-            h = lambda n: heads[L[n + '.' + s]]
+            h = lambda n: heads[L[n + '.' + s]]; g = 1 if s == 'L' else -1
             Gpel = G[L['pelvis.' + s]]
-            Gth, prh, lth = seg(Gpel, J['hip' + s], h('lowerleg01'), J['kn' + s])
+            Gth, prh, lth = seg(Gpel, J['hip' + s], h('lowerleg01'), J['kn' + s], g * tw[2])
             Gsk, prk, lsk = seg(Gth, J['kn' + s], h('foot'), J['an' + s])
             Gft, pra, _ = seg(Gsk, J['an' + s])
             Gsh = G[L['shoulder01.' + s]]
-            Gua, prs, lua = seg(Gsh, J['sh' + s], h('lowerarm01'), J['el' + s])
-            Gfa, pre, lfa = seg(Gua, J['el' + s], h('wrist'), J['wr' + s])
+            Gua, prs, lua = seg(Gsh, J['sh' + s], h('lowerarm01'), J['el' + s], g * tw[0])
+            Gfa, pre, lfa = seg(Gua, J['el' + s], h('wrist'), J['wr' + s], g * tw[1])
             lens[s] = dict(th=lth, sk=lsk, ua=lua, fa=lfa)
             piv[s] = dict(hip=prh, knee=prk, ankle=pra, sh=prs, el=pre)
             for n in self.labels:
