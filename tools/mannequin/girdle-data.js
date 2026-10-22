@@ -20,7 +20,7 @@
 const fs = require('node:fs'), path = require('node:path'), zlib = require('node:zlib');
 const root = path.resolve(__dirname, '../..');
 const SK = require(path.join(root, 'src/js/09bq-skeleton.js'));
-const SC = [-2, 28.5, 4];
+const SC = (B => [-B.sc[0], B.sc[1], B.sc[2]])(require(path.join(root, 'src/js/09bm-mannequin.js')).B);   // грудино-ключичный сустав справа
 const Y0 = 2, Y1 = 36, A0 = 6, A1 = 36;
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];

@@ -2,7 +2,7 @@
 
 python3 tools/skin-anny/endplates.py --out work/endplates.json      (MYOSIM — путь к клону myo_sim, как у build_bones.py)
 В приложении сетки позвонков упрощены до 120–130 вершин: по ним плоскость пластинки «гуляет» на 5–20°. Здесь — те же
-позвонки до упрощения, теми же преобразованиями build_bones.py (trunkMap, place). Пластинка — плоскость по точкам
+позвонки до упрощения, теми же преобразованиями build_bones.py (trunkMap, place и, с шага 2, посадка по осанке POST). Пластинка — плоскость по точкам
 поверхности тела позвонка, нормаль которых смотрит вдоль его оси (|n·a| > 0,8), ось — по нормалям обеих пластинок
 (три уточнения). Тело — часть позвонка впереди позвоночного канала (по средней линии), |x| ≤ половины ширины тела.
 """
@@ -63,17 +63,19 @@ def main():
     with contextlib.redirect_stdout(io.StringIO()):
         import build_bones as BB
     W = lambda q: np.asarray(q) + np.array([0, HIP_Y, 0])
+    # осанка скелета (tools/skeleton/posture.py; с шага 2 — в build_bones.py): позвонки — в своей посадке
+    PA = (lambda k, q: BB.POST.apply(k, q)) if hasattr(BB, 'POST') else (lambda k, q: q)
     raw = {}
     # поясница: доля w — как в build_bones.py
     for i in (5, 4, 3, 2, 1):
         v, f = BB.mesh(BB.TOR, f'lumbar{i}_geom_1_lumbar{i}')
         yc = float(BB.trunkMap(v, 0)[:, 1].mean()); w = float(np.clip((yc - BB.yS) / (BB.yT12 - BB.yS), 0, 1))
-        raw[f'L{i}'] = (W(BB.trunkMap(v, w)), f)
+        raw[f'L{i}'] = (W(PA(f'L{i}', BB.trunkMap(v, w))), f)
     for (b, m, file, Rg, pg) in BB.TOR['meshes']:
         if b != 'torso' or 'ribcage' in m: continue
         v, f = BB.load(file, Rg, pg); nm = m.split('_')[-2]
-        raw[nm] = (W(BB.trunkMap(BB.M(v), 1)), f)
-    v, f = BB.mesh(BB.TOR, 'sacrum_geom_1_sacrum'); raw['sacrum'] = (W(BB.pelvisMap(v)), f)
+        raw[nm] = (W(PA('thorax', BB.trunkMap(BB.M(v), 1))), f)
+    v, f = BB.mesh(BB.TOR, 'sacrum_geom_1_sacrum'); raw['sacrum'] = (W(PA('pelvis', BB.pelvisMap(v))), f)
     # шея: вершины после посадки (vnew) и группы позвонков HAT
     vc = W(BB.vnew); fc = np.asarray(BB.fc)
     for i, g in zip((1, 2, 3, 4, 5, 6, 7), BB.VG):

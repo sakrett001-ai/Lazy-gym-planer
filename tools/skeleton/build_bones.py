@@ -1,9 +1,14 @@
 """Кости MyoSim → локальные координаты сегментов манекена (см; X влево, Y вверх, Z вперёд; начало — проксимальный сустав).
    python3 tools/skeleton/build_bones.py [выход.json]   (по умолчанию qa/skeleton/bones.json; MYOSIM — путь к клону myo_sim;
-   SKEL_CFG — JSON с поправками посадки). Нужны numpy, trimesh, fast-simplification."""
+   SKEL_CFG — JSON с поправками посадки; SKEL_POSTURE — файл осанки, по умолчанию tools/skin-anny/result/posture-patch.json,
+   none — посадка 4.61.0). Нужны numpy, scipy, trimesh, fast-simplification.
+   Осанка (кожа Anny, шаг 2; posture.py): кости таза, поясницы, грудного блока с рёбрами, шеи и черепа сначала садятся как в
+   4.61.0, затем каждая часть — своим преобразованием из файла осанки (рёбра — ещё и поворотом в рёберно-позвоночных суставах);
+   цепочка шеи подбирается по посадке 4.61.0, а грудино-ключичный сустав (SC_R, B.sc) идёт за рукояткой грудины."""
 import numpy as np, json, fast_simplification, sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from extract import chain, load
+from posture import Posture, apply4
 S_T = 1.03          # рост манекена 174,5 см против 170 см в исходных моделях
 B = dict(ua=28.3, fa=27.0, th=40.7, sk=41.8, hipHalf=8.8)   # как B в src/js/09bm-mannequin.js
 def M(v): v=np.asarray(v,float); return np.stack([-v[...,2], v[...,1], v[...,0]],-1)   # OpenSim (x вперёд, y вверх, z вправо) → манекен
@@ -45,6 +50,8 @@ TOR=chain('torso/assets/myotorso_chain.xml','torso/assets/myotorso_assets.xml','
 hjR,hjL=P(LEG,'femur_r'),P(LEG,'femur_l'); mid=(hjR+hjL)/2; sx=B['hipHalf']/abs(hjL[0]-mid[0])
 CFG=json.load(open(os.environ['SKEL_CFG'])) if os.environ.get('SKEL_CFG') else {}
 OUT=sys.argv[1] if len(sys.argv)>1 else os.path.join(os.path.dirname(os.path.abspath(__file__)),'../../qa/skeleton/bones.json')
+POST=Posture(CFG.get('posture'))
+print('осанка:',('по '+os.path.relpath(CFG.get('posture') or os.environ.get('SKEL_POSTURE') or __import__('posture').DEFAULT)) if POST.on else 'как в 4.61.0', POST.params if POST.on else '')
 TH_PITCH=CFG.get('th_pitch',12.0); TH_DY=CFG.get('th_dy',0.0); TH_DZ=CFG.get('th_dz',1.0); RIB_X=CFG.get('rib_x',.96)
 PIV=np.array([0,24.,-12.])   # ось наклона грудного блока: на уровне шарнира грудного отдела, у задней поверхности
 def thoraxFit(q,w):
@@ -58,23 +65,26 @@ def pelvisMap(v):
     d=np.asarray(v)-mid; u=np.clip((d[:,1]-2.)/6.,0,1); w=u*u*(3-2*u)
     return d*np.stack([sx+(SX_CREST-sx)*w,np.full(len(d),S_T),np.full(len(d),S_T)],-1)
 for nm,side in (('r_pelvis','R'),('l_pelvis','L')):
-    v,f=mesh(LEG,nm); add('pelvis_'+side,side,'pelvis',pelvisMap(v),f,900,xf=pelvisMap)
-v,f=mesh(TOR,'sacrum_geom_1_sacrum'); add('sacrum','',  'pelvis',pelvisMap(v),f,500,xf=pelvisMap)
+    v,f=mesh(LEG,nm); add('pelvis_'+side,side,'pelvis',POST.apply('pelvis',pelvisMap(v)),f,900,xf=lambda p:POST.apply('pelvis',pelvisMap(p)))
+v,f=mesh(TOR,'sacrum_geom_1_sacrum'); add('sacrum','',  'pelvis',POST.apply('pelvis',pelvisMap(v)),f,500,xf=lambda p:POST.apply('pelvis',pelvisMap(p)))
 def trunkMap(v,w):
     """w — доля смещения грудного блока (0 у крестца, 1 у Th12 и выше)"""
     return thoraxFit((np.asarray(v)-mid)*np.array([S_T,S_T,S_T]),w)
 yS=float(pelvisMap(mesh(TOR,'sacrum_geom_1_sacrum')[0])[:,1].max()); yT12=float(trunkMap(mesh(TOR,'torso_geom_1_thoracic12_s')[0],0)[:,1].mean())
 for i in (5,4,3,2,1):
     v,f=mesh(TOR,f'lumbar{i}_geom_1_lumbar{i}'); yc=float(trunkMap(v,0)[:,1].mean()); w=float(np.clip((yc-yS)/(yT12-yS),0,1))
-    q=trunkMap(v,w); h=float(q[:,1].mean()); add(f'L{i}','','spine',q-np.array([0,h,0]),f,260,h=round(h,2),xf=lambda p,w=w,h=h:trunkMap(p,w)-np.array([0,h,0]))
+    L=f'L{i}'; q=POST.apply(L,trunkMap(v,w)); h=float(q[:,1].mean()); add(L,'','spine',q-np.array([0,h,0]),f,260,h=round(h,2),xf=lambda p,w=w,h=h,L=L:POST.apply(L,trunkMap(p,w))-np.array([0,h,0]))
 TH0=np.array([0,24.,0])   # начало рамки грудной клетки манекена в рамке таза (нейтральная поза)
+UNP={}                    # грудной блок до посадки по осанке (рамка грудной клетки): по нему цепочка шеи, как в 4.61.0
 for (b,m,file,Rg,pg) in TOR['meshes']:
     if b!='torso': continue
     v,f=load(file,Rg,pg); q=trunkMap(M(v),1)
-    if 'ribcage' in m:
-        q=q*np.array([RIB_X,1,1])
-        add('ribcage','','thorax',q-TH0,f,5200,xf=lambda p:trunkMap(p,1)*np.array([RIB_X,1,1])-TH0)
-    else: add(m.split('_')[-2],'','thorax',q-TH0,f,240,xf=lambda p:trunkMap(p,1)-TH0)
+    if 'ribcage' in m: q=q*np.array([RIB_X,1,1])
+    UNP[m.split('_')[-2]]=(q,f)
+POST.setup_ribs(*UNP['ribcage'],verts=[q for k,(q,f) in UNP.items() if k!='ribcage'])
+for nm,(q,f) in UNP.items():
+    if nm=='ribcage': add('ribcage','','thorax',POST.rib_parts(q)-TH0,f,5200,xf=lambda p:POST.rib_points(trunkMap(p,1)*np.array([RIB_X,1,1]))-TH0)
+    else: add(nm,'','thorax',POST.apply('thorax',q)-TH0,f,240,xf=lambda p:POST.apply('thorax',trunkMap(p,1))-TH0)
 
 # ---------- шея и череп (геометрия HAT в рамке туловища Rajagopal: начало в (−10,07; 8,15; 0) см от таза) ----------
 HD=chain('head/assets/myohead_rigid_chain.xml','head/assets/myohead_simple_assets.xml','neck')
@@ -153,8 +163,8 @@ c1v=vc[VG[0]]; lm=c1v[(np.abs(c1v[:,0])>1.1)&(np.abs(c1v[:,0])<2.6)]; fac=lm[lm[
 FAC=np.array([0,fac[:,1].mean(),lm[:,2].mean()])
 PC=skullP(FAC[None])[0]                               # там же под черепом манекена
 # верхняя пластинка T1: центр тела T1 и ось T2 → T1 (наклон грудного блока у шейно-грудного перехода)
-def tbody(n):
-    v=np.array([b for b in bones if b['name']==n][0]['v']).reshape(-1,3)+TH0; return v[(v[:,2]>np.median(v[:,2]))&(np.abs(v[:,0])<1.6)]
+def tbody(n):                                         # тело позвонка до посадки по осанке (упрощённая сетка, как в 4.61.0)
+    v=np.round(decimate(UNP[n][0]-TH0,np.asarray(UNP[n][1]),240)[0],2)+TH0; return v[(v[:,2]>np.median(v[:,2]))&(np.abs(v[:,0])<1.6)]
 b1,b2=tbody('thoracic1'),tbody('thoracic2'); u1=unit(b1.mean(0)-b2.mean(0)); TH_T1=tilt(u1)
 E0=b1.mean(0)+u1*np.percentile((b1-b1.mean(0))@u1,90); E0[0]=0
 # масштаб позвонка: поперёк — S_T (как у всех костей MyoSim), вдоль своей оси — S_T·k (высоты под длину шеи манекена)
@@ -197,9 +207,24 @@ for g in G:                                           # позвонки и ме
     own=next((k_ for k_,gg in zip(range(1,8),VG) if gg is g),None)   # сам позвонок C2…C7 (не атлас и не обломок)
     v=shallow(vc[g],RAW[own]['inf'],RAW[own]['th'],FRONT[own]) if own and own>=2 else vc[g]
     vnew[g]=place(i)(v)
-DISC_CT=(E0+CH[7]['inf'])/2                           # центр диска C7/T1 — ось нижнего шарнира шеи (B.neckPivot)
+# осанка: позвонки, диски и обломки — каждый своим преобразованием (блок C2 + атлас — 'C2', диск C(j+2)/C(j+3) — 'D(j+2)(j+3)')
+part=np.empty(len(vc),object)
+for i,g in zip((1,2,3,4,5,6,7),VG): part[g]='C2' if i<=2 else f'C{i}'
+for j,g in enumerate(DG): part[g]=f'D{j+2}{j+3}'
+for g in G:
+    if part[g[0]] is None:
+        i=owner.get(g[0]) or (lambda m:2 if m<=2 else m)(min(cent,key=lambda k_:np.linalg.norm(vc[g].mean(0)-cent[k_]))); part[g]=f'C{i}'
+for k_ in set(part): vnew[part==k_]=POST.apply(k_,vnew[part==k_])
+E0p=POST.apply('thorax',E0[None])[0]
+for i in (2,3,4,5,6,7):
+    for w_ in ('inf','sup'):
+        if w_ in CH[i]: CH[i][w_]=POST.apply(f'C{i}',CH[i][w_][None])[0]
+PCp=POST.apply('C2',PC[None])[0]
+if POST.on: print('осанка шеи: ямки атласа блока C2 после посадки',np.round(PCp,2),'(под черепом',np.round(POST.apply('skull',PC[None])[0],2),')')
+PC=PCp
+DISC_CT=(E0p+CH[7]['inf'])/2                          # центр диска C7/T1 — ось нижнего шарнира шеи (B.neckPivot)
 bc={i:(CH[i]['inf']+CH[i]['sup'])/2 for i in range(3,8)}
-print('шея: T1 — пластинка',np.round(E0,2),'наклон %.1f°'%TH_T1,'; ямки атласа',np.round(PC,2),'; угол C7/T1 %.1f°, масштаб позвонков вдоль оси %.3f'%(J_CT,S_T*K_C))
+print('шея: T1 — пластинка',np.round(E0p,2),'наклон %.1f°'%TH_T1,'; ямки атласа',np.round(PC,2),'; угол C7/T1 %.1f°, масштаб позвонков вдоль оси %.3f'%(J_CT,S_T*K_C))
 print('  шаг тел C3→C6:',' '.join('%.2f'%np.linalg.norm(bc[i+1]-bc[i]) for i in (3,4,5)),'; центр диска C7/T1 (рамка шеи)',np.round(DISC_CT-neckO,2))
 # в данных кости: центр диска C7/T1 (ось нижнего шарнира шеи, B.neckPivot) и тела C7…C2 — центры нижней и верхней пластинок
 # (рамка шеи; у C2 верхняя — середина ямок атласа) — для проверок посадки гортани и оси
@@ -216,7 +241,7 @@ def jawP(v):
     a=np.radians(JAW_ROT); d=p-cond; y=d[:,1]*np.cos(a)+d[:,2]*np.sin(a); z=-d[:,1]*np.sin(a)+d[:,2]*np.cos(a)
     return np.stack([d[:,0],y,z*JAW_Z],-1)+cond
 for nm,v,f,t in (('skull',vs,fs,2600),('jaw',vj,fj,900)):
-    add(nm,'','head',(jawP(v) if nm=='jaw' else skullP(v))-headO,f,t)
+    add(nm,'','head',POST.apply('skull',jawP(v) if nm=='jaw' else skullP(v))-headO,f,t)
 
 # ---------- правая рука (левая — зеркально) ----------
 ARM=chain('arm/assets/myoarm_r_chain.xml','arm/assets/myoarm_r_assets.xml','clavicle_r')
@@ -229,7 +254,10 @@ gh=P(ARM,'scapphant_r'); ac=P(ARM,'clavphant_r'); tgt=np.array([-17.0,-3.1,-4.])
 # человека между рёбрами и лопаткой — подлопаточная и передняя зубчатая мышцы). Поворачиваем её вокруг центра
 # плечевого сустава — вокруг вертикали и поперечной оси — на наименьшие углы, при которых передняя поверхность лежит
 # не ближе SCAP_GAP см к оболочке рёбер; ключица потом идёт к новому положению акромиона.
-SCAP_GAP=CFG.get('scap_gap',0.8); SC_R=np.array([-2.,28.5,4.])        # грудино-ключичный сустав справа — как B.sc
+# Грудино-ключичный сустав справа — как B.sc: в 4.61.0 (−2; 28,5; 4) в рамке грудной клетки; по осанке он идёт с рукояткой
+# грудины (поворот рёбер и посадка грудного блока)
+SCAP_GAP=CFG.get('scap_gap',0.8); SC_R=np.round(POST.rib_points(np.array([[-2.,28.5,4.]])+TH0)[0]-TH0,2)
+print('грудино-ключичный сустав (B.sc):',SC_R)
 def ribShell():
     r=np.array([b for b in bones if b['name']=='ribcage'][0]['v']).reshape(-1,3)-SC_R   # рёбра в рамке ключицы
     zc=r[:,2].mean(); a=np.degrees(np.arctan2(r[:,0]+2.,r[:,2]-zc)); rad=np.hypot(r[:,0]+2.,r[:,2]-zc); sh={}
