@@ -653,16 +653,18 @@ const Muscles = (() => {
            головы), корпус дальше не считается */
         if (best < Infinity) { const lb = Math.max(q0, h - S.top) - SKN.tsl[sd]; if (lb > best + (NODIR ? 0 : HEAD_SKIP)) return lb; } }
       /* надплечья: кожа сдвинута за плечевым поясом (girdleShift) — расстояние от точки, сдвинутой обратно: неподвижная точка
-         q = p − сдвиг(q) (Mannequin.torsoSDF: до 10 шагов), до 0,3 мм; начало — с доли сдвига прошлой точки этой стороны (кольца
-         одной мышцы идут подряд) */
+         q = p − сдвиг(q) (Mannequin.torsoSDF: до 10 шагов), до 0,1 мм */
       if (h > 38.8 && !deep) {
-        let k = SKN.gk[sd];
-        for (let it = 0; it < 8; it++) {
+        /* с нуля и с затуханием 0,6 — тот же путь, что у Mannequin.torsoSDF (q ← смесь q и p − сдвиг(q)): у валика трапециевидной с
+           кожей Anny уравнение сдвига местами имеет второе решение, и с доли прошлой точки (прежний тёплый старт) итерация
+           приходила к нему — расстояние зависело от порядка точек, до 5 см */
+        let k = 0;
+        for (let it = 0; it < 12; it++) {
           const qx = lx - gx * k, qy = ly - gy * k, qz = lz - gz * k, hh = qy + S.segH[2], x0 = (Math.max(S.bot, Math.min(S.top, hh)) - S.th0) / .25, i0 = Math.min(S.ttab.length / 5 - 2, x0 | 0), w = S.ttab[i0 * 5] + (S.ttab[i0 * 5 + 5] - S.ttab[i0 * 5]) * (x0 - i0);
           /* «боковитость» — у точки кожи на том же луче от оси (Mannequin.torsoShiftAt) */
           const rq = Math.sqrt(qx * qx + qz * qz), sl = rq < 1e-9 ? 0 : Math.min(1, Math.abs(qx) * torsoR(S, hh, qz, qx, S.rtab0) / rq / w), u1 = Math.max(0, Math.min(1, (hh - 38.8) / 15)), u2 = Math.max(0, Math.min(1, (hh - 53.8) / 6));
           const k1 = u1 * u1 * (3 - 2 * u1) * (1 - .4 * u2 * u2 * (3 - 2 * u2)) * sl * sl * .85, ch = Math.abs(k1 - k) * (Math.abs(gx) + Math.abs(gy) + Math.abs(gz));
-          k = k1; if (ch < .03) break;
+          k += .6 * (k1 - k); if (.6 * ch < .01) break;
         }
         SKN.gk[sd] = k; sx = gx * k; sy = gy * k; sz = gz * k; lx -= sx; ly -= sy; lz -= sz; h = ly + S.segH[2];
       }
@@ -704,7 +706,8 @@ const Muscles = (() => {
         let kf = 0;
         for (let it = 0; it < 3; it++) {
           torsoSec(S, h + al);
-          const an = Math.atan2(Math.abs(lx) / TS[0], lz / TS[1]), uu = Math.max(0, Math.min(1, (an - S.frontW[0]) / (S.frontW[1] - S.frontW[0]))), k1 = 1 - uu * uu * (3 - 2 * uu);
+          /* угол — параметр суперэллипса точки (как в Mannequin.torsoSDF: tg ang = (u/v)^(nf/2)) */
+          const e2 = TS[4] / 2, an = Math.atan2(Math.pow(Math.abs(lx) / TS[0], e2), Math.pow(lz / TS[1], e2)), uu = Math.max(0, Math.min(1, (an - S.frontW[0]) / (S.frontW[1] - S.frontW[0]))), k1 = 1 - uu * uu * (3 - 2 * uu);
           if (it && Math.abs(k1 - kf) < .01) break;
           kf = k1; if (kf <= 0) break;
           h += al;
