@@ -409,7 +409,9 @@ const Muscles = (() => {
     S.rtab = new Float64Array(NH * 2 * (RT_N + 1));
     for (let i = 0; i < NH; i++) for (let half = 0; half < 2; half++) for (let j = 0; j <= RT_N; j++) {
       const t = j / RT_N, u = 1 - t, v = t, l = Math.sqrt(u * u + v * v), o = i * 5, T5 = S.ttab;
-      S.rtab[(i * 2 + half) * (RT_N + 1) + j] = torsoR0(half ? T5[o + 2] : T5[o + 1], T5[o], half ? T5[o + 3] : T5[o + 4], u / l, v / l);
+      /* с радиальной поправкой сечения (Mannequin.torsoDR: угол от передней линии) */
+      const th = Math.atan2(v, u), hh = Math.min(S.top, H0 + i * .25);
+      S.rtab[(i * 2 + half) * (RT_N + 1) + j] = torsoR0(half ? T5[o + 2] : T5[o + 1], T5[o], half ? T5[o + 3] : T5[o + 4], u / l, v / l) + (MQ.torsoDR ? MQ.torsoDR(hh, half ? Math.PI - th : th) : 0);
     }
     /* высоты, выше которых кожа корпуса жёстко с грудной клеткой: по боковой схеме и по передней (конец скругления у грудного шарнира) */
     S.pelvisTop = [S.blend[0][1] - S.blend[0][2], Math.min(S.blend[0][1] - S.blend[0][2], S.blendF[0][1] - S.blendF[0][2], MQ.FRONT_H[0])];
