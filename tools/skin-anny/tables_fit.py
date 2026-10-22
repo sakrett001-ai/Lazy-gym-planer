@@ -207,9 +207,10 @@ class Fitter:
         if h >= 52: sigma = 2.5
         dr = np.maximum(gauss(dr, sigma), need)
         dr = gauss(dr, sigma * .6)
-        d = np.clip(need - dr, 0, None)                  # недостающее над костями — гладким горбом, а не изломом
-        if d.max() > 0:
-            g = gauss(d, 1.5); k = max(float(d[i] / g[i]) for i in range(n) if d[i] > 0); dr = dr + k * g
+        for it in range(200):                            # недостающее над костями — гладким горбом, а не изломом (по шагам:
+            d = np.clip(need - dr, 0, None)              # единым множителем сглаженной нехватки широкий горб раздувался)
+            if d.max() < .01: break
+            dr = dr + gauss(d, 1.5) + np.where(d > 0, .01, 0)
         return [round(float(v), 2) for v in dr]
 
     def head_grid(self, top=11.9, n_lat=49, n_lon=49, cut=((-9.5, -9.0), (-15.0, 4.0)), ear=(-6.0, 2.0, -8.0, 0.5, 6.8), smooth=.7, xmax=8.6):
@@ -273,10 +274,11 @@ class Fitter:
             m = cs[i] > cone
             if m.any(): need[i] = float((br[m] * cs[i][m]).max()) + MARGIN['head']
         need = need.reshape(n_lat, n_lon)
-        if (need > G).any():
-            d = np.clip(need - G, 0, None); dp = np.concatenate([d[:, ::-1][:, :-1], d, d[:, ::-1][:, 1:]], 1)
-            g = gaussian_filter(dp, sigma=1.0, mode='nearest')[:, n_lon - 1:2 * n_lon - 1]
-            k = float(np.max(np.where(d > 0, d / np.maximum(g, 1e-6), 0))); G = G + k * g
+        for it in range(200):                             # недостающее над костями — гладким горбом (сглаженная нехватка, по шагам)
+            d = np.clip(need - G, 0, None)
+            if d.max() < .01: break
+            dp = np.concatenate([d[:, ::-1][:, :-1], d, d[:, ::-1][:, 1:]], 1)
+            G = G + gaussian_filter(dp, sigma=1.0, mode='nearest')[:, n_lon - 1:2 * n_lon - 1] + np.where(d > 0, .01, 0)
         G[0, :] = G[0, :].mean()                          # макушка — одна точка
         # ориентиры лица — для проверочных точек головы (headSamples)
         m = (np.abs(V[:, 0]) < .5) & (V[:, 1] > -8) & (V[:, 1] < 0) & (self.vw['head'] > .5)
@@ -514,13 +516,12 @@ def fit_all(F, max_chest_depth=None):
         if t == 0: neck.append(r0); continue
         rf = r0[1] + (rf5 - r0[1]) * min(1.0, t / .5) if t <= .5 else profile_at(NECK_461, t)[0]
         r, st = F.neck_row([t] + profile_at(NECK_461, t), rf=rf); res['stats'][f'neck {t}'] = st; neck.append(r)
-    # с середины шея — на уровне нижней челюсти и в черепе: контур сечения там — лицо и челюсть, не шея; сзади и с боков — как
-    # у строки t 0,25. Над основанием шея на JOIN см толще кожи Anny: низ головы (срез у затылка и горла, head_grid) уходит
-    # под кожу шеи, и стык не мерцает там, где поверхности почти совпадают
-    JOIN = .35
+    # с середины шея — на уровне нижней челюсти и в черепе: контур сечения там — лицо и челюсть, не шея. Голова манекена —
+    # прежняя (4.61.0, голова Anny не подставляется: tables_apply.py), и верх шеи входит в неё, как раньше: прежний профиль, но
+    # сзади и с боков не толще строки t 0,25 (шея Anny тоньше прежней — без утолщения к затылку)
     for i, t in enumerate(NECK_TS):
-        if t >= .5: neck[i][2:] = list(neck[1][2:])
-        if t >= .25: neck[i][2:] = [round(v + JOIN, 2) for v in neck[i][2:]]
+        if t >= .5:
+            o = profile_at(NECK_461, t); neck[i] = [t, round(o[0], 2), round(min(o[1], neck[1][2]), 2), round(min(o[2], neck[1][3]), 2)]
     res['NECK'] = neck
     # корпус: низ таза (h < 0: скошенный торец, промежность) — прежний: пах нейтральный, высота промежности ANSUR
     rows = []
@@ -553,7 +554,10 @@ def fit_all(F, max_chest_depth=None):
     for kind in LIMBS_461:
         out = []
         for t in LIMB_TS:
-            r, st = F.limb_row(kind, 'L', [t] + profile_at(LIMBS_461[kind], t), rmax=9 if ((kind == 'ua' and t < .2) or (kind == 'th' and t < .05)) else None, recenter=kind == 'ua')
+            # центрирование по площади — у плеча и у бедра: их кожа Anny сидит не вокруг наших костей (плечо — на 3–4 см позади
+            # плечевой, бедро — на 2 см впереди бедренной: спереди от кости 8,3 см ткани, сзади 7,7, тогда как у живого на середине
+            # бедра спереди меньше, чем сзади — мышцы передней поверхности ≈ 5 см, задней ≈ 6–7 см по УЗИ, Abe et al. 1994)
+            r, st = F.limb_row(kind, 'L', [t] + profile_at(LIMBS_461[kind], t), rmax=9 if ((kind == 'ua' and t < .2) or (kind == 'th' and t < .05)) else None, recenter=kind in ('ua', 'th'))
             out.append(r); res['stats'][f'{kind} {t}'] = st
         res['LIMBS'][kind] = out
     # корни и концы, где контур сливается с соседней частью (плечо — с подмышкой и дельтой, бедро — с ягодицей и пахом, низ

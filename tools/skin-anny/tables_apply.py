@@ -1,9 +1,10 @@
-"""Подставить таблицы кожи (tables_fit.py) в манекен src/js/09bm-mannequin.js: TORSO, LIMBS, NECK, HEAD_VAULT и строки лица.
+"""Подставить таблицы кожи (tables_fit.py) в манекен src/js/09bm-mannequin.js: TORSO, TORSO_DR, LIMBS, NECK.
 
-python3 tools/skin-anny/tables_apply.py W2/tables-fit.json [--top 11.9] [--dry]
-Меняются только числа в строках таблиц; комментарии к ним правятся отдельно. Строки головы: свод выше y 2,2 — эллипсоид
-HEAD_VAULT (высота макушки — --top: от неё зависит рост манекена, B.head[1]), ниже — сечения лица; пропущенные строки
-(контур не найден) — линейно между соседними.
+python3 tools/skin-anny/tables_apply.py W2/tables-fit.json [--dry]
+Меняются только числа в строках таблиц; комментарии к ним правятся отдельно.
+Голова не подставляется: сетка радиусов головы Anny (tables_fit.py, HEAD_R) — с низким подбородком (поза головы Anny шага 1:
+от яремной вырезки до подбородка 6,5 см) и с лицом длиннее лица черепа MyoSim; голова манекена — прежняя (4.61.0), до сетки
+Anny как видимой кожи (README, «План встраивания», п. 4).
 """
 import argparse, json, os, re
 import numpy as np
@@ -19,7 +20,7 @@ def row(r): return '[' + ','.join(num(v) for v in r) + ']'
 
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument('tables'); ap.add_argument('--top', type=float, default=11.9); ap.add_argument('--dry', action='store_true')
+    ap = argparse.ArgumentParser(); ap.add_argument('tables'); ap.add_argument('--dry', action='store_true')
     a = ap.parse_args(); T = json.load(open(a.tables)); s = open(MQ).read()
     # TORSO: по 6 строк в ряд
     rows = [row(r) for r in T['TORSO']]
@@ -33,20 +34,6 @@ def main():
     # радиальные поправки корпуса
     D = T['TORSO_DR']; mm = ' '.join(str(int(round(v * 100))) for r in D['dr'] for v in r)
     s, n = re.subn(r'const TORSO_DR=Object\.freeze\(\{[^}]*\}\);', lambda m: 'const TORSO_DR=Object.freeze({n:%d,h:[%s],\n u:\'%s\'});' % (D['n'], ','.join(num(h) for h in D['h']), mm), s, count=1); assert n == 1, 'TORSO_DR'
-    # голова: сетка радиусов, нос — в сетке (частей лица нет), уши и проверочные точки лица — по Anny
-    G = T['HEAD_R']; top = a.top
-    s, n = re.subn(r"const HEAD_R=Object\.freeze\(\{[^}]*\}\);", lambda m: "const HEAD_R=Object.freeze({nLat:%d,nLon:%d,u:'%s'});" % (G['nLat'], G['nLon'], G['u']), s, count=1); assert n == 1, 'HEAD_R'
-    i0_ = s.index('const HEAD_PARTS=['); i1_ = s.index('];', i0_) + 2
-    s = s[:i0_] + 'const HEAD_PARTS=[];   // нос и губы — в сетке HEAD_R' + s[i1_:]
-    X = T['head_extra']; e = X['ear_c']
-    s, n = re.subn(r'const HEAD_EAR=\{c:\[[-\d.,]+\]', lambda m: f'const HEAD_EAR={{c:[7.9,{num(e[1])},{num(e[2])}]', s, count=1); assert n == 1
-    t, pg, mn, gl = X['nose_tip'], X['pogonion'], X['menton'], X['glabella']
-    pts = [t, [-.8, t[1] - .6, t[2] - .8], [.8, t[1] - .6, t[2] - .8], pg, mn, gl]
-    s, n = re.subn(r'for\(const t of \[\[0,-3,11\.7\].*?\]\]\)', lambda m: 'for(const t of [' + ','.join(row([0 if abs(v) < 1e-9 else v for v in p_]) for p_ in pts) + '])', s, count=1)
-    if n != 1:
-        s, n = re.subn(r'(/\* выступающие точки лица:[^*]*\*/ ?\n? ?)for\(const t of \[.*?\]\]\)', lambda m: m.group(1) + 'for(const t of [' + ','.join(row(p_) for p_ in pts) + '])', s, count=1, flags=re.S)
-    assert n == 1, 'headSamples'
-    s, n = re.subn(r'head:\[([\d.]+),([\d.]+),([\d.]+)\],', lambda m: f'head:[{m.group(1)},{num(top)},{m.group(3)}],', s, count=1); assert n == 1
     if a.dry: print(body); print(lb); return
     open(MQ, 'w').write(s); print('записано:', MQ)
 

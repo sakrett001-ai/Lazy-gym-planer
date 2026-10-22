@@ -220,7 +220,7 @@ for i in (2,3,4,5,6,7):
     for w_ in ('inf','sup'):
         if w_ in CH[i]: CH[i][w_]=POST.apply(f'C{i}',CH[i][w_][None])[0]
 PCp=POST.apply('C2',PC[None])[0]
-if POST.on: print('осанка шеи: ямки атласа блока C2 после посадки',np.round(PCp,2),'(под черепом',np.round(POST.apply('skull',PC[None])[0],2),')')
+if POST.on: print('осанка шеи: ямки атласа блока C2 после посадки',np.round(PCp,2),'(под черепом',np.round(PC,2),')')
 PC=PCp
 DISC_CT=(E0p+CH[7]['inf'])/2                          # центр диска C7/T1 — ось нижнего шарнира шеи (B.neckPivot)
 bc={i:(CH[i]['inf']+CH[i]['sup'])/2 for i in range(3,8)}
@@ -240,8 +240,15 @@ def jawP(v):
     p=skullP(v); top=p[p[:,1]>p[:,1].max()-1.5]; cond=top[top[:,2]<np.percentile(top[:,2],30)].mean(0)
     a=np.radians(JAW_ROT); d=p-cond; y=d[:,1]*np.cos(a)+d[:,2]*np.sin(a); z=-d[:,1]*np.sin(a)+d[:,2]*np.cos(a)
     return np.stack([d[:,0],y,z*JAW_Z],-1)+cond
+# Череп и челюсть — в посадке 4.61.0 (поворот черепа осанки, −14° вокруг ямок атласа, не применяется; SKEL_CFG
+# skull_posture: true — применить). С ним лицо черепа MyoSim смотрело вверх относительно лица кожи: низ челюсти вставал на
+# 155,7 см при подбородке кожи Anny на 150 (у живого под нижней челюстью ≈ 1 см ткани), а повернуть череп обратно внутри
+# головы Anny нельзя — надпереносье выходит из кожи на 1,5 см (у черепа MyoSim лицо короче, чем у Anny). Поэтому голова —
+# прежняя (кожа ANSUR, 4.61.0) вместе с прежней посадкой черепа: подбородок кожи на 1,4 см ниже челюсти. Блок C2 + атлас —
+# по осанке (сгибание в атлантозатылочном суставе 13,7° — в пределах его подвижности).
+SKULL_T=POST.get('skull') if CFG.get('skull_posture') else np.eye(4)
 for nm,v,f,t in (('skull',vs,fs,2600),('jaw',vj,fj,900)):
-    add(nm,'','head',POST.apply('skull',jawP(v) if nm=='jaw' else skullP(v))-headO,f,t)
+    add(nm,'','head',apply4(SKULL_T,jawP(v) if nm=='jaw' else skullP(v))-headO,f,t)
 
 # ---------- правая рука (левая — зеркально) ----------
 ARM=chain('arm/assets/myoarm_r_chain.xml','arm/assets/myoarm_r_assets.xml','clavicle_r')

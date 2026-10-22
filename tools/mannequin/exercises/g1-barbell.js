@@ -252,11 +252,19 @@ const OHP = memo(t => {
 });
 
 /* ---------- Гриф на трапециях (присед, наклоны, Смит) ---------- */
-/* Точка грифа на верхней части трапеций: чуть ниже C7, гриф лежит на спине (поджатие мышц ≈ 0,4 см) */
+/* Точка грифа на верхней части трапеций: чуть ниже C7, гриф лежит на спине (поджатие мышц ≈ 0,4 см).
+   Опора — гребни трапециевидных мышц по бокам от средней линии: у кожи по подтянутой фигуре (4.62.0) по средней линии между
+   ними ложбина (стоя — 1,8 см, при сведённых и поднятых лопатках — до 3,5), поэтому гриф отодвигается назад от точки средней
+   линии до самой дальней назад точки кожи у грифа (сечения h ± 1 см, не дальше 14 см вбок — дальше руки) */
 function barOnTraps(C, q, h = 55.8, r = 1.4) {
-  const R = C.M.catalogPose(q), p = C.M.torsoPoint(R, h, 'L', Math.PI), c = C.M.spineFrame(R, h).c;
-  const P = [p[0], C.M.FLOOR - p[1], p[2]], Cc = [c[0], C.M.FLOOR - c[1], c[2]], n = C.V.unit(C.V.sub(P, Cc));
-  return C.V.add(P, n, r - .4);
+  const R = C.M.catalogPose(q), W = p => [p[0], C.M.FLOOR - p[1], p[2]];
+  const P = W(C.M.torsoPoint(R, h, 'L', Math.PI)), Cc = W(C.M.spineFrame(R, h).c), n = C.V.unit(C.V.sub(P, Cc));
+  let back = 0;
+  for (const hh of [h - 1, h, h + 1]) for (let i = 0; i <= 18; i++) {
+    const p = W(C.M.torsoPoint(R, hh, 'L', Math.PI * (.5 + i / 36)));
+    if (Math.abs(p[0] - P[0]) <= 14) back = Math.max(back, C.V.dot(C.V.sub(p, P), n));
+  }
+  return C.V.add(P, n, back + r - .4);
 }
 /* Присед / наклон со штангой на спине: таз по наклону theta, высота таза hy; стопы стоят, баланс по горизонтали.
    Хват широкий, локти вниз-назад. */
@@ -286,13 +294,19 @@ function backBarPose(C, o) {
   return q;
 }
 
+/* Плечевой пояс со штангой на трапециях: лопатки сведены и чуть подняты — «полка» под гриф. Подъём 10°, сведение 28° (было
+   12° и 20°): гриф на гребнях трапециевидных лёг на 1,5–2 см дальше назад (barOnTraps), и с прежним поясом наружная ротация
+   плеча выходила за предел (97° при 95°), а отведение кисти — на 1°; ретракция ключицы до 30° — в пределах у здоровых
+   (Ludewig PM et al. JBJS Am 2009; 91: 378–389) */
+const BACK_BAR_GIRDLE = [10, -28];
+
 /* ---------- Приседания со штангой ---------- */
-const SQ_ST = { ax: 15, az: 0, out: 15, kneeOut: 0 };
+const SQ_ST ={ ax: 15, az: 0, out: 15, kneeOut: 0 };
 const SQ = memo(t => {
   const C = ctx([]), e = t;
   /* опускание: таз и колени сгибаются одновременно; внизу бёдра около параллели, гриф над серединой стопы */
   const th = 45 * Math.pow(e, .5), hy = e < 1e-6 ? null : C.lerp(89, 53, Math.pow(e, 1.1));
-  return backBarPose(C, { theta: th, hy: hy ?? 94, knee: hy == null ? 3 : null, spine: [8 * e, 3 * e, -14 * e], st: SQ_ST, kg: SQ_KG, half: 49, girdle: [12, -20] });
+  return backBarPose(C, { theta: th, hy: hy ?? 94, knee: hy == null ? 3 : null, spine: [8 * e, 3 * e, -14 * e], st: SQ_ST, kg: SQ_KG, half: 49, girdle: BACK_BAR_GIRDLE });
 });
 
 /* ---------- Наклоны со штангой на плечах ---------- */
@@ -302,7 +316,7 @@ const GM = memo(t => {
   /* t, наклон таза, колени, [поясница, грудной, шея] */
   const K = [[0, 0, 4, [0, 0, 0]], [.25, 20, 10, [1, 1, -5]], [.5, 39, 15, [3, 2, -11]], [.75, 51, 20, [4, 4, -16]], [1, 60, 25, [6, 6, -21]]];
   const k = K.find(p => Math.abs(p[0] - t) < 1e-6);
-  return backBarPose(C, { theta: k[1], hy: 85.2, knee: k[2], spine: k[3], st: GM_ST, kg: GM_KG, half: 49, girdle: [12, -20] });
+  return backBarPose(C, { theta: k[1], hy: 85.2, knee: k[2], spine: k[3], st: GM_ST, kg: GM_KG, half: 49, girdle: BACK_BAR_GIRDLE });
 });
 
 /* ---------- Приседания в машине Смита ---------- */
@@ -311,10 +325,10 @@ const SSQ_ST = { ax: 15, az: 14, out: 12, kneeOut: 0 };
 const SSQ = memo(t => {
   const C = ctx([]), e = t;
   /* стопы на 14 см впереди грифа: корпус прямее, пятки на полу, колени по носкам.
-     Локти чуть дальше назад (0,95 вместо 0,9): с формой груди 4.41.0 гриф на трапециевидной лёг на 1,5 мм дальше назад,
-     и наружная ротация плеча вышла за предел на 0,1–0,2°; теперь 94,8° (предел 95°), отведение кисти 21,7° (22°) */
+     Локти — как в приседе (0,9): с поясом BACK_BAR_GIRDLE (лопатки сведены сильнее) наружной ротации хватает, а при 0,95
+     отведение кисти выходило за предел на 0,2° (до 4.62.0 — 0,95: с формой груди 4.41.0 ротация была на пределе) */
   const th = 30 * Math.pow(e, .6), hy = e < 1e-6 ? null : C.lerp(89, 53.5, Math.pow(e, 1.1));
-  return backBarPose(C, { theta: th, hy: hy ?? 94, knee: hy == null ? 4 : null, spine: [6 * e, 2 * e, -8 * e], st: SSQ_ST, half: 49, girdle: [12, -20], barZ: 0, elbowBack: .95 });
+  return backBarPose(C, { theta: th, hy: hy ?? 94, knee: hy == null ? 4 : null, spine: [6 * e, 2 * e, -8 * e], st: SSQ_ST, half: 49, girdle: BACK_BAR_GIRDLE, barZ: 0, elbowBack: .9 });
 });
 
 /* ---------- Лёжа на горизонтальной скамье ---------- */
