@@ -200,16 +200,14 @@ def pouch_correctives(back, o):
     бедра больше 90° (присед, сидя, «велосипед») бедро поднимается к нему, и треугольники купола и складки переворачиваются
     (вывороты — tools/anny-look/check.js). Форма возвращает купол к прежнему клину (его же смещение с обратным знаком) — по
     половине на каждое бедро: вес — «шатёр» по углу сгибания бедра hipFlex (back: от и до, доля); при одном согнутом бедре
-    (выпад) купол уходит наполовину. Смещения — в стойке (каталог: Y вниз)."""
+    (выпад) купол уходит наполовину. Одна форма на обе стороны (side 'LR': вес — среднее весов бёдер, AnnySkin.correctiveWeights)
+    — то же, что две половинные по сторонам, при вдвое меньшей работе вершинного шейдера. Смещения — в стойке (каталог: Y вниз)."""
     a0, a1, k = o['back']
     if not k: return []
     m = np.linalg.norm(back, axis=1) > .05; i = np.where(m)[0]
-    d = back[i] * np.array([1, -1, 1]) * (k / 2)
-    out = []
-    for s in 'LR':
-        out.append({'name': 'pouch' + s, 'side': s, 'angle': 'hipFlex', 'a0': a0, 'a1': a1, 'i': i.tolist(), 'd': np.round(d, 2).ravel().tolist()})
-    print(f'  форма pouchL/R: угол hipFlex {a0}→{a1}, вершин {len(i)}, наибольшее смещение {np.linalg.norm(d, axis=1).max():.1f} см (на сторону)')
-    return out
+    d = back[i] * np.array([1, -1, 1]) * k
+    print(f'  форма pouch: угол hipFlex {a0}→{a1} (среднее бёдер), вершин {len(i)}, наибольшее смещение {np.linalg.norm(d, axis=1).max():.1f} см')
+    return [{'name': 'pouch', 'side': 'LR', 'angle': 'hipFlex', 'a0': a0, 'a1': a1, 'i': i.tolist(), 'd': np.round(d, 2).ravel().tolist()}]
 
 
 def build(out_path, mannequin=None, shape='look'):

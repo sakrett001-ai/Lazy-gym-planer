@@ -19,7 +19,7 @@ const FLOOR=186,BOUNDS_STEP=37;
    trunks — тон плавок (вариант Б): цвет и доля смешения; 0 — без плавок (вариант А). Граница — линия плавок-брифов
         (trunkLine), ровная: в шейдере по расстоянию до неё со сглаживанием в пиксель (fwidth).
    Переопределение для листов сравнения — globalThis.ANNY_LOOK (те же ключи). */
-export const ANNY_LOOK={ao:[.85,.35],relief:[.6,6],roughness:.72,trunks:{color:'#7b889e',alpha:1}};
+export const ANNY_LOOK={ao:[.85,.35],relief:[.6,6],roughness:.72,trunks:{color:'#8390a6',alpha:1}};
 const look=()=>({...ANNY_LOOK,...(globalThis.ANNY_LOOK||{})});
 /* Линия плавок-брифов в стойке (см над полом, x — влево, z — вперёд; тазобедренные суставы — 89,5 над полом, ±8,8):
    пояс — 96,5 спереди, 97,5 сбоку, 98,5 сзади (≈ 8 см ниже пупка: у ANSUR II пупок — 105,5); вырез ноги — по углу a вокруг
@@ -117,12 +117,13 @@ export function createAnnyLayer(parent,skin){
   material.onBeforeCompile=s=>{
    s.uniforms.annyDQ=uniforms.annyDQ;s.uniforms.annyGlow=glow;s.uniforms.annyAO=uniforms.annyAO;s.uniforms.annyTrunk=uniforms.annyTrunk;patch(s,d.frames.length,{color:true});
    s.fragmentShader=s.fragmentShader.replace('#include <common>','#include <common>\nvarying vec4 vAnnyColor;\nvarying vec2 vAnnyLook;\nuniform float annyGlow;\nuniform vec2 annyAO;\nuniform vec4 annyTrunk;\nvec3 annyLinear(vec3 c){return mix(c/12.92,pow((c+.055)/1.055,vec3(2.4)),step(.04045,c));}')
-    /* плавки — под цветом мышц: активная зона закрашивает и их */
-    .replace('#include <color_fragment>','#include <color_fragment>\nfloat annyFw=max(fwidth(vAnnyLook.y)*.75,1e-3);diffuseColor.rgb=mix(diffuseColor.rgb,annyTrunk.rgb,smoothstep(-annyFw,annyFw,vAnnyLook.y)*annyTrunk.a);\nvec3 annyZone=annyLinear(vAnnyColor.rgb);diffuseColor.rgb=mix(diffuseColor.rgb,annyZone,vAnnyColor.a);')
+    /* плавки — под цветом мышц: активная зона закрашивает и их. Ветвления — только экономия (вне плавок и вне активных зон
+       смешение ничего не меняет, а растр на телефоне — работа фрагментов); производная — до ветвления (в нём она не определена) */
+    .replace('#include <color_fragment>','#include <color_fragment>\n'+(ta>0?'float annyFw=max(fwidth(vAnnyLook.y)*.75,1e-3);if(vAnnyLook.y>-annyFw)diffuseColor.rgb=mix(diffuseColor.rgb,annyTrunk.rgb,smoothstep(-annyFw,annyFw,vAnnyLook.y)*annyTrunk.a);\n':'')+'vec3 annyZone=vec3(0.);if(vAnnyColor.a>0.){annyZone=annyLinear(vAnnyColor.rgb);diffuseColor.rgb=mix(diffuseColor.rgb,annyZone,vAnnyColor.a);}')
     .replace('#include <aomap_fragment>','#include <aomap_fragment>\nreflectedLight.indirectDiffuse*=mix(1.,vAnnyLook.x,annyAO.x);float annyDir=mix(1.,vAnnyLook.x,annyAO.y);reflectedLight.directDiffuse*=annyDir;reflectedLight.directSpecular*=annyDir;')
     .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=annyZone*annyGlow*vAnnyColor.a;');
   };
-  material.customProgramCacheKey=()=>'anny-skin-'+d.frames.length+(globalThis.ANNY_METHOD||'');
+  material.customProgramCacheKey=()=>'anny-skin-'+d.frames.length+(ta>0?'-trunks':'')+(globalThis.ANNY_METHOD||'');
   /* тень: та же деформация в материале глубины */
   depth=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking});
   depth.onBeforeCompile=s=>{s.uniforms.annyDQ=uniforms.annyDQ;patch(s,d.frames.length,{normals:false});};

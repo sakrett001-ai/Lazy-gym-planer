@@ -78,6 +78,11 @@ test('corrective shapes: zero in the stance, full at the angle they were sculpte
   const q = M.neutral(); for (const s of M.SIDES) q[s].knee = 140; const w = A.correctiveWeights(M.catalogPose(q), d), names = d.correctives.map(c => c.name);
   for (const s of M.SIDES) assert(w[names.indexOf('knee' + s)] > .95, 'knee shape at 140°');
   assert(d.correctives.every(c => c.n > 0 && c.a1 > c.a0));
+  /* одна форма на обе стороны (side 'LR', обратный ход купола плавок): вес — среднее бёдер; одно согнутое бедро — половина */
+  const lr = d.correctives.findIndex(c => c.side === 'LR'); assert(lr >= 0, 'two-sided pouch shape');
+  const c = d.correctives[lr], qh = M.neutral(); qh.L.hip = [c.a1, 0, 4];
+  assert(Math.abs(A.correctiveWeights(M.catalogPose(qh), d)[lr] - .5) < 1e-6, 'one hip flexed — half');
+  qh.R.hip = [c.a1, 0, 4]; assert(Math.abs(A.correctiveWeights(M.catalogPose(qh), d)[lr] - 1) < 1e-6, 'both hips flexed — full');
 });
 
 /* ---------- сцена ---------- */
@@ -115,6 +120,19 @@ test('muscle zones on the Anny skin: every zone of the mannequin gets vertices o
   }
   /* правило — то же: центр каждой области корпуса — эта область */
   for (const [id, h0, h1, a0, a1] of P.t) assert.equal(regionOf('torso', 'L', (h0 + h1) / 2, (a0 + a1) / 2), id);
+});
+
+test('look: baked cavity shading in the data, trunk line of the briefs (variant B) — inside on the groin and buttocks, outside elsewhere', async () => {
+  /* затенённость впадин: доля открытого неба 0…1; большая часть кожи открыта, во впадинах (подмышка, пах, ягодичная складка) — темнее */
+  assert(d.shade && d.shade.length === d.nv && header.shade === true && header.index === 'delta');
+  const s = Array.from(d.shade).sort((a, b) => a - b), q = p => s[Math.floor(p * (s.length - 1))];
+  assert(s[0] >= 0 && s.at(-1) <= 1 && q(.5) > .9 && q(.02) < .7, `shade p2 ${q(.02)}, median ${q(.5)}`);
+  const { trunkLine, ANNY_LOOK } = await import('../src/volume/anny.mjs');
+  /* x — влево, высота над полом, z — вперёд (стойка): пах спереди и ягодица — внутри, грудь, середина бедра и колено — снаружи */
+  assert(trunkLine(0, 88, 10) > 0 && trunkLine(8, 88, -12) > 0 && trunkLine(-8, 88, -12) > 0, 'groin and buttocks are inside the briefs');
+  assert(trunkLine(0, 120, 10) < 0 && trunkLine(8.8, 70, 8) < 0 && trunkLine(8.8, 50, 6) < 0, 'chest, thigh and knee are outside');
+  assert(trunkLine(17, 95, 0) > 0 && trunkLine(17, 88, 0) < 0, 'high-cut leg opening on the side (≈ 93 cm)');
+  assert(ANNY_LOOK.trunks.alpha >= 0 && ANNY_LOOK.trunks.alpha <= 1 && ANNY_LOOK.roughness >= .62, 'matte, no gloss');
 });
 
 /* ---------- проверки видимой кожи (каталог — tools/anny-look/check.js) ---------- */

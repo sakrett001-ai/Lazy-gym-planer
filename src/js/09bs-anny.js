@@ -129,15 +129,20 @@ const AnnySkin = (() => {
   }
 
   /* ---------- корректирующие формы: вес по углу сустава — «шатёр»: 0 при a0, 1 при a1 (угол позы формы), 0 при a2
-     (без a2 — 1 и дальше) ---------- */
+     (без a2 — 1 и дальше). side 'LR' — одна форма на обе стороны: вес — среднее весов левой и правой (форма линейна по
+     весу, так что это то же, что две половинные формы по сторонам, при вдвое меньшей работе вершинного шейдера) ---------- */
   function correctiveWeights(R, d = data) {
     if (!d.correctives.length) return [];
     const A = M.jointAngles(R);
     return d.correctives.map(c => {
-      const src = c.side ? A[c.side] : A, v = c.angle.split('.').reduce((o, k) => o?.[k], src);
-      if (typeof v !== 'number') return 0;
-      if (v <= c.a1) return Math.max(0, Math.min(1, (v - c.a0) / (c.a1 - c.a0)));
-      return c.a2 == null ? 1 : Math.max(0, Math.min(1, (c.a2 - v) / (c.a2 - c.a1)));
+      const tent = src => {
+        const v = c.angle.split('.').reduce((o, k) => o?.[k], src);
+        if (typeof v !== 'number') return 0;
+        if (v <= c.a1) return Math.max(0, Math.min(1, (v - c.a0) / (c.a1 - c.a0)));
+        return c.a2 == null ? 1 : Math.max(0, Math.min(1, (c.a2 - v) / (c.a2 - c.a1)));
+      };
+      if (c.side === 'LR') return (tent(A.L) + tent(A.R)) / 2;
+      return tent(c.side ? A[c.side] : A);
     });
   }
 
