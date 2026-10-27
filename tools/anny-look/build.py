@@ -8,7 +8,9 @@ node tools/anny-look/export.js (qa/anny-look/mannequin.json). Сборка де�
 
 1. Сетка: подтянутая Anny (anny_look.AnnyLook: одобренные фенотип и местные формы + fit.json) в нейтральной стойке манекена
    4.61.0, без глаз и полости рта (главная связная часть), нейтральный гладкий пах. Координаты — каталог (см, Y вниз, пол 186),
-   как у рамок позы (Mannequin.catalogPose).
+   как у рамок позы (Mannequin.catalogPose). Глазницы закрыты гладкой заплаткой, ямка у вершины промежности сглажена
+   (anny_look.AnnyLook.neutral_face, neutral_groin): форма «bulge» −1 уже даёт гладкий пах, а прежнее лапласово сглаживание
+   области (tools/skin-anny) складывало треугольники — на свету тёмные пятна.
 2. Веса — перенос с рига Anny на сегменты манекена (рамки позы): ключица → cl, лопатка (shoulder01) → sp, плечо → ua,
    предплечье → fa и fd (доля fd растёт от локтя к запястью линейно, как закрутка сечений процедурной кожи), запястье и пясть
    → hand, фаланги → рамки фаланг пальцев (по суставам пальцев хвата, как у скелета), бедро → th, голень → sk, стопа → foot,
@@ -68,8 +70,8 @@ def build(out_path):
     P = C.Procedural(); D = P.D; body = AnnyLook(); fit = json.load(open(FIT))
     phen, local = body.params(fit); rest = body.rest(phen, local); q = q_from(fit['pose'])
     hands = D['hands']
-    V0 = body.stance(rest, P.J, q, hands, groin=False)[0]; body.setup_groin(V0)
-    V, Hw, G, heads = body.stance(rest, P.J, q, hands)
+    V, Hw, G, heads = body.stance(rest, P.J, q, hands, groin=False)
+    V = body.neutral_groin(body.neutral_face(V, Hw), P.J)
     F = body.skin_faces; used = np.unique(F); remap = -np.ones(len(V), np.int64); remap[used] = np.arange(len(used))
     V = V[used]; F = remap[F]; W = body.weights[used]          # плотные веса Anny по 104 костям
     labels = body.labels; L = body.idx; n = len(V)

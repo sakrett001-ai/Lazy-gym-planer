@@ -13,7 +13,7 @@ const here=path.dirname(fileURLToPath(import.meta.url)),root=path.resolve(here,'
 const {build}=require('esbuild'),{chromium}=require('playwright'),zlib=require('node:zlib');
 const arg=(k,d)=>{const i=process.argv.indexOf(k);return i>0?process.argv[i+1]:d;};
 const spec=JSON.parse(await fs.readFile(arg('--spec'),'utf8')),out=path.resolve(arg('--out','qa/anny-look/sheet.png')),before=arg('--before',null);
-const W=+arg('--width','1800');
+const W=+arg('--width','1800'),cmp=arg('--compare',null)==='lbs';
 async function lab(src,name){
  const dir=path.join(path.dirname(out),'.sheet-'+process.pid+'-'+name);await fs.mkdir(dir,{recursive:true});
  await fs.writeFile(path.join(dir,'entry.mjs'),`import * as THREE from 'three';import {createCatalogScene} from '${src}/src/volume/scene.mjs';window.THREE=THREE;window.createCatalogScene=createCatalogScene;`);
@@ -38,11 +38,13 @@ const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
 let html='';
 for(const row of spec.rows){
  const A=await after.p.evaluate(([panels,entries])=>Sheet.render(panels,entries,null),[row.panels,after.entries]);
- const B=prev?await prev.p.evaluate(([panels,entries,cams])=>Sheet.render(panels,entries,cams),[row.panels,prev.entries,A.map(a=>a.cam)]):null;
+ /* --compare lbs: второй ряд — та же кожа Anny линейным смешением (выбор способа скиннинга) */
+ const B=prev?await prev.p.evaluate(([panels,entries,cams])=>Sheet.render(panels,entries,cams),[row.panels,prev.entries,A.map(a=>a.cam)])
+  :cmp?await after.p.evaluate(([panels,entries,cams])=>Sheet.render(panels,entries,cams,'lbs'),[row.panels,after.entries,A.map(a=>a.cam)]):null;
  html+=`<section><h2>${esc(row.title)}</h2>${row.note?`<p class="note">${esc(row.note)}</p>`:''}`;
  const fig=(u,p,tag)=>`<figure><img src="${u}" width="${p.w||300}" height="${p.h||360}"><figcaption><b>${tag}</b> ${esc(p.label||`${p.id} · t=${p.t} · ${p.cam}`)}</figcaption></figure>`;
- if(B){html+=`<div class="pair"><div class="lbl">БЫЛО (4.61.0)</div><div class="row">${B.map((b,i)=>fig(b.url,row.panels[i],'')).join('')}</div></div>`;}
- html+=`<div class="pair"><div class="lbl">СТАЛО (Anny)</div><div class="row">${A.map((a,i)=>fig(a.url,row.panels[i],'')).join('')}</div></div></section>`;
+ if(B){html+=`<div class="pair"><div class="lbl">${cmp?'ЛИНЕЙНОЕ СМЕШЕНИЕ':'БЫЛО (4.61.0)'}</div><div class="row">${B.map((b,i)=>fig(b.url,row.panels[i],'')).join('')}</div></div>`;}
+ html+=`<div class="pair"><div class="lbl">${cmp?'ДВОЙНЫЕ КВАТЕРНИОНЫ':'СТАЛО (Anny)'}</div><div class="row">${A.map((a,i)=>fig(a.url,row.panels[i],'')).join('')}</div></div></section>`;
 }
 const css=`body{margin:0;background:#0b1018;color:#dfe7f3;font:14px/1.35 system-ui,sans-serif;width:${W}px}header{padding:16px 20px 4px}h1{margin:0;font-size:22px}
  header p{margin:3px 0;color:#a9b6c9}section{padding:6px 20px 8px;border-top:1px solid #1d2838}h2{font-size:16px;margin:6px 0 4px}.note{margin:0 0 6px;color:#a9b6c9}

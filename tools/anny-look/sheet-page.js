@@ -1,7 +1,7 @@
 /* Страница листа «было / стало» (tools/anny-look/sheet.mjs): кадры сцены приложения в студии вида «Манекен». */
 window.Sheet = {
-  render(panels, entries, cams) {
-    const THREE = window.THREE;
+  render(panels, entries, cams, method) {
+    const THREE = window.THREE; window.ANNY_METHOD = method || 'dq';
     if (window.ANNY_RAW && window.AnnySkin && !AnnySkin.data) AnnySkin.data = AnnySkin.decode(Uint8Array.from(atob(window.ANNY_RAW), c => c.charCodeAt(0)));
     const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); renderer.setPixelRatio(1);
     const out = [];

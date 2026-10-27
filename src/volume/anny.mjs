@@ -26,8 +26,22 @@ void annyBlend(out vec4 r,out vec4 d){
 }
 vec3 annyRotate(vec4 q,vec3 p){return p+2.*cross(q.xyz,cross(q.xyz,p)+q.w*p);}
 vec3 annyMove(vec4 r,vec4 d,vec3 p){return annyRotate(r,p)+2.*(r.w*d.xyz-d.w*r.xyz+cross(r.xyz,d.xyz));}
+#ifdef ANNY_LBS
+/* линейное смешение тех же преобразований (только для сравнения на листах: globalThis.ANNY_METHOD = 'lbs') */
+vec3 annyLinear(vec3 p,bool dir){
+ ivec4 ix=ivec4(annyIndex+.5);vec3 o=vec3(0.);
+ for(int k=0;k<4;k++){float w=annyWeight[k];if(w<=0.)continue;int i=ix[k];vec4 r=annyDQ[i*2],d=annyDQ[i*2+1];o+=w*(dir?annyRotate(r,p):annyMove(r,d,p));}
+ return o;
+}
+#endif
 `;
 function patch(shader,frames,{normals=true,color=false}={}){
+ if(globalThis.ANNY_METHOD==='lbs'){
+  shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\n#define ANNY_LBS\n#define ANNY_FRAMES '+frames+'\n'+DQ_PARS+(color?'attribute vec4 annyColor;\nvarying vec4 vAnnyColor;\n':''));
+  if(normals)shader.vertexShader=shader.vertexShader.replace('#include <skinnormal_vertex>','objectNormal=normalize(annyLinear(objectNormal,true));');
+  shader.vertexShader=shader.vertexShader.replace('#include <skinning_vertex>','transformed=annyLinear(transformed,false);'+(color?'\nvAnnyColor=annyColor;':''));
+  return;
+ }
  shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\n#define ANNY_FRAMES '+frames+'\n'+DQ_PARS+(color?'attribute vec4 annyColor;\nvarying vec4 vAnnyColor;\n':''));
  if(normals)shader.vertexShader=shader.vertexShader.replace('#include <skinnormal_vertex>','vec4 annyR,annyD;annyBlend(annyR,annyD);objectNormal=annyRotate(annyR,objectNormal);\n#ifdef USE_TANGENT\nobjectTangent=annyRotate(annyR,objectTangent);\n#endif');
  shader.vertexShader=shader.vertexShader.replace('#include <skinning_vertex>',(normals?'':'vec4 annyR,annyD;annyBlend(annyR,annyD);\n')+'transformed=annyMove(annyR,annyD,transformed);'+(color?'\nvAnnyColor=annyColor;':''));
@@ -60,11 +74,11 @@ export function createAnnyLayer(parent,skin){
     .replace('#include <color_fragment>','#include <color_fragment>\nvec3 annyZone=annyLinear(vAnnyColor.rgb);diffuseColor.rgb=mix(diffuseColor.rgb,annyZone,vAnnyColor.a);')
     .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=annyZone*annyGlow*vAnnyColor.a;');
   };
-  material.customProgramCacheKey=()=>'anny-skin-'+d.frames.length;
+  material.customProgramCacheKey=()=>'anny-skin-'+d.frames.length+(globalThis.ANNY_METHOD||'');
   /* тень: та же деформация в материале глубины */
   depth=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking});
   depth.onBeforeCompile=s=>{s.uniforms.annyDQ=uniforms.annyDQ;patch(s,d.frames.length,{normals:false});};
-  depth.customProgramCacheKey=()=>'anny-depth-'+d.frames.length;
+  depth.customProgramCacheKey=()=>'anny-depth-'+d.frames.length+(globalThis.ANNY_METHOD||'');
   mesh=new THREE.Mesh(g,material);mesh.name='anny-skin';mesh.customDepthMaterial=depth;mesh.castShadow=true;mesh.receiveShadow=false;mesh.frustumCulled=false;
   mesh.matrixAutoUpdate=false;mesh.matrix.set(.01,0,0,0, 0,-.01,0,FLOOR/100, 0,0,.01,0, 0,0,0,1);
   if(d.correctives.length)mesh.morphTargetInfluences=new Array(d.correctives.length).fill(0);

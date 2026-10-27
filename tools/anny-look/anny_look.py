@@ -10,6 +10,7 @@ tools/skin-anny/anny_pose.py: шарниры — наши суставы (пле
 import json, os
 import numpy as np
 import torch
+import anny
 from common import ROOT
 from anny_pose import AnnyPosed, to_anny, rx, ry, SPINE
 from anny_body import to_ours, dir_to_anny, rot_between
@@ -136,6 +137,29 @@ class AnnyLook(AnnyPosed):
                     G[i] = Mf @ G[i]
         return G
 
+    def neutral_face(self, V, H):
+        """глазницы закрыты гладкими «веками» (глаз нет, как у манекена): выстилка полости — заплатка fair()"""
+        F = self.skin_faces; L = self.idx
+        eyes = [H[L['eye.L']], H[L['eye.R']]]
+        # выстилка полостей — список вершин пакета Anny (data/template_mesh_internal_cavities.pth: глазницы и рот, номера —
+        # те же, что у сетки), у глаз; плюс вершины, чей луч по нормали снова встречает кожу (на всякий случай)
+        cav = torch.load(os.path.join(os.path.dirname(anny.__file__), 'data/template_mesh_internal_cavities.pth'), weights_only=False)['vertex_indices']
+        cav = np.array([i for i in cav if i < len(V)]); near = np.zeros(len(V), bool)
+        for c in eyes: near[cav[np.linalg.norm(V[cav] - c, axis=1) < 4.0]] = True
+        sel = eye_sockets(V, F, eyes) | near
+        self.socket = sel
+        V = fair(V, F, grow(F, sel, 1)) if sel.any() else V
+        return V
+
+    def neutral_groin(self, V, J):
+        """пах: форма «bulge» −1 уже гладкая; ямка у вершины промежности спереди (тёмное пятно на свету) — гладкой заплаткой
+        fair() по средней линии между бёдрами (|x| < 4 см, от 9 см ниже до 1 см выше тазобедренных, спереди)"""
+        F = self.skin_faces; hy = (J['hipL'][1] + J['hipR'][1]) / 2
+        used = np.zeros(len(V), bool); used[np.unique(F)] = True
+        sel = used & (np.abs(V[:, 0]) < 4.0) & (V[:, 1] > hy - 9) & (V[:, 1] < hy + 1) & (V[:, 2] > 0)
+        self.groin_sel = sel
+        return fair(V, F, sel) if sel.any() else V
+
     def stance(self, rest, J, q, hands=None, groin=True):
         """вершины в стойке (см, авторинг), головы костей рига в позе (см, авторинг) и матрицы костей"""
         G, heads = self.bones_pose(rest, J, q, hands)
@@ -146,3 +170,52 @@ class AnnyLook(AnnyPosed):
         if groin and self.groin is not None: V = self.groin_smooth(V)
         H = np.array([G[i][:3, :3] @ heads[i] + G[i][:3, 3] for i in range(len(self.labels))])
         return V, to_ours(H) + t, G, heads
+
+
+# ---------------- лицо и пах: гладкое заполнение (без глаз, без «дыр» и тёмных пятен) ----------------
+def neighbors(F, n):
+    import scipy.sparse as sp
+    I = np.concatenate([F[:, 0], F[:, 1], F[:, 2], F[:, 1], F[:, 2], F[:, 0]]); J = np.concatenate([F[:, 1], F[:, 2], F[:, 0], F[:, 0], F[:, 1], F[:, 2]])
+    A = sp.coo_matrix((np.ones(len(I)), (I, J)), shape=(n, n)).tocsr(); A.data[:] = 1.0
+    return A
+
+
+def fair(V, F, region, k=2):
+    """гладкая заплатка: вершины region — решение L^k x = 0 (равномерный лапласиан), остальные неподвижны (край —
+    соседние кольца: при k = 2 поверхность продолжает соседнюю кожу без излома)"""
+    import scipy.sparse as sp, scipy.sparse.linalg as sl
+    n = len(V); A = neighbors(F, n); deg = np.asarray(A.sum(1)).ravel()
+    L = sp.identity(n, format='csr') - sp.diags(1 / np.maximum(deg, 1)) @ A
+    Lk = L
+    for _ in range(k - 1): Lk = Lk @ L
+    Lk = Lk.tocsr()
+    ri = np.where(region)[0]; fi = np.where(~region)[0]
+    Arr = Lk[ri][:, ri].tocsc(); Arf = Lk[ri][:, fi]
+    out = V.copy()
+    for c in range(3):
+        out[ri, c] = sl.spsolve(Arr, -Arf @ V[fi, c])
+    return out
+
+
+def eye_sockets(V, F, eyes, r=3.2):
+    """выстилка глазниц (у Anny без глазных яблок): вершины у глаза, чей луч по нормали наружу снова встречает кожу ближе
+    2,5 см — они смотрят внутрь полости; плюс одно кольцо соседей (сгладить край век)"""
+    import trimesh
+    m = trimesh.Trimesh(V, F, process=False); N = np.asarray(m.vertex_normals)
+    sel = np.zeros(len(V), bool)
+    for c in eyes:
+        idx = np.where(np.linalg.norm(V - c, axis=1) < r)[0]
+        if not len(idx): continue
+        O = V[idx] + N[idx] * .02
+        loc, ir, it = m.ray.intersects_location(O, N[idx], multiple_hits=False)
+        hit = np.zeros(len(idx), bool)
+        if len(loc):
+            d = np.linalg.norm(loc - O[ir], axis=1); hit[ir[d < 2.5]] = True
+        sel[idx[hit]] = True
+    return sel
+
+
+def grow(F, sel, rings=1):
+    A = neighbors(F, len(sel))
+    for _ in range(rings): sel = sel | (A @ sel.astype(float) > 0)
+    return sel

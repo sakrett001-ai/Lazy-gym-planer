@@ -8,12 +8,15 @@ import common as C
 from anny_look import AnnyLook, q_from, FIT
 
 ap = argparse.ArgumentParser(); ap.add_argument('--out', default=os.path.join(C.ROOT, 'qa/anny-look/preview.png')); ap.add_argument('--fit', default=FIT)
-ap.add_argument('--hands', action='store_true'); ap.add_argument('--zoom', default='')
+ap.add_argument('--hands', action='store_true'); ap.add_argument('--groin', default='smooth'); ap.add_argument('--zoom', default='')
 a = ap.parse_args()
 P = C.Procedural(); body = AnnyLook(); fit = json.load(open(a.fit))
 phen, local = body.params(fit); rest = body.rest(phen, local)
 q = q_from(fit['pose']); hands = P.D['hands'] if a.hands else None
-V = body.stance(rest, P.J, q, hands, groin=False)[0]; body.setup_groin(V); V = body.stance(rest, P.J, q, hands)[0]
+V, H = body.stance(rest, P.J, q, hands, groin=False)[:2]
+if a.groin == 'smooth': body.setup_groin(V); V = body.stance(rest, P.J, q, hands)[0]
+if a.groin in ('face', 'all'): V = body.neutral_face(V, H); print('глазницы:', int(body.socket.sum()), 'вершин')
+if a.groin == 'all': V = body.neutral_groin(V, P.J); print('пах:', int(body.groin_sel.sum()), 'вершин')
 mesh = {'pos': np.round(V, 2).ravel().tolist(), 'idx': body.skin_faces.ravel().tolist()}
 CEN = [0, 87.5, 1.5]; full = 112
 rows = [{'title': 'манекен 4.61.0', 'panels': [{'label': c, 'cam': c, 'center': CEN, 'span': full, 'body': 'mannequin', 'w': 300, 'h': 560} for c in ('front', 'side', 'back', 'angle')]},
