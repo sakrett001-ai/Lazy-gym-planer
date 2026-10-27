@@ -146,7 +146,7 @@ function run({ ids = null, ts = [0, .25, .5, .75, 1], d = CMP.loadAnny(), log = 
       const e = EQ.variantEntry(entry, has), rig = EQ.rig(e);
       for (const t of ts) {
         const R = rig(t), P = A.skin(R, { d });
-        for (const p of penetration(R, P, d, kind, e, has)) if (p.depth > p.limit) res.penetration.push({ id, t, has: hn, ...p });
+        for (const p of penetration(R, P, d, kind, e, has)) if (p.depth > p.limit) res.penetration.push({ ex: id, t, has: hn, ...p });
         if (hn === 'всё') {
           const body = M.bodyData(R), Pv = new Float32Array(verts.length * 3); verts.forEach((v, k) => { Pv[k * 3] = P[v * 3]; Pv[k * 3 + 1] = P[v * 3 + 1]; Pv[k * 3 + 2] = P[v * 3 + 2]; });
           const dist = CMP.distances(d, Pv, R, zones, verts, body);
@@ -164,7 +164,7 @@ const FOLDS_FILE = path.join(__dirname, 'fixtures/folds.json');
 function foldBase() { try { return JSON.parse(fs.readFileSync(FOLDS_FILE, 'utf8')); } catch (e) { return {}; } }
 function failures(res) {
   const out = [];
-  for (const p of res.penetration) out.push(`${p.id}${p.has === 'ничего' ? ' (без необязательного инвентаря)' : ''} t=${p.t}: ${p.seg} в ${p.id === 'floor' ? 'полу' : p.id} на ${p.depth.toFixed(2)} см (допуск ${p.limit.toFixed(2)}: валидатор ${p.tol}, процедурная кожа ${p.proc.toFixed(2)} + ${DEPTH_EXTRA})`);
+  for (const p of res.penetration) out.push(`${p.ex}${p.has === 'ничего' ? ' (без необязательного инвентаря)' : ''} t=${p.t}: ${p.seg} в ${p.id === 'floor' ? 'полу' : p.id} на ${p.depth.toFixed(2)} см (допуск ${p.limit.toFixed(2)}: валидатор ${p.tol}, процедурная кожа ${p.proc.toFixed(2)} + ${DEPTH_EXTRA})`);
   for (const [z, s] of Object.entries(res.distance)) { if (s.p99 > DIST_P99) out.push(`${z}: 99 % вершин дальше ${s.p99.toFixed(2)} см от процедурной кожи (допуск ${DIST_P99})`); if (s.max > s.limitMax) out.push(`${z}: отход ${s.max.toFixed(2)} см (${s.where}, допуск ${s.limitMax})`); }
   const base = foldBase();
   for (const f of res.folds) { const b = base[`${f.id} ${f.t}`] || { inverted: 0, folds: 0 }; if (f.inverted > b.inverted) out.push(`${f.id} t=${f.t}: вывернутых треугольников ${f.inverted} (записано ${b.inverted})`); if (f.folds > b.folds) out.push(`${f.id} t=${f.t}: складок ${f.folds} (записано ${b.folds})`); }

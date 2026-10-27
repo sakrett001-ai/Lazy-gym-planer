@@ -48,28 +48,36 @@ def rigid_mask(W, frames):
     return W[:, idx].sum(1) > .5
 
 
-SH_GEO = 4.0             # доля плеча (ua) на стороне корпуса — до 0 на 4 см по коже от линии сгиба Anny (доля 0,5)
+SH_GEO = 4.0             # доля плеча (ua) на стороне корпуса — до 0 на 4 см по коже от линии сгиба Anny (доля руки 0,5)
+HIP_GEO = 6.0            # доля бедра (th) на стороне корпуса — до 0 на 6 см по коже от линии сгиба Anny (доля ноги 0,5)
 SH_FRONT = 1.0           # лопатка (sp) — только сзади: спереди от плоскости на 1 см впереди сустава её доля уходит ключице
 
 
-def shoulder_limit(W, V, F, J, fi, Wa):
-    """Плечо и лопатка не тянут за собой кожу груди и спины. У Anny малые доли кости плеча (upperarm01, 0,02–0,2) лежат по
-    всей груди и верху спины, у кости «shoulder01» — и спереди на груди: в её риге плечо поднимается на 30–40°, а у
-    манекена рука идёт над голову на 160–170° и лопатка поворачивается вверх на 50° — кожа бока и груди со смешанным
-    поворотом выходила «крыльями» (прыжки с разведением рук, руки над головой). У процедурной кожи грудь и спина за рукой
-    не поворачиваются (рука — своя труба, надплечья сдвигаются за плечевым суставом). Поэтому на стороне корпуса от линии
-    сгиба Anny (где у неё доля плеча 0,5) доля ua убывает до 0 на SH_GEO см по коже (путь по коже от руки до бока груди
-    идёт через подмышку), ушедшая доля — рамке ключицы (сдвиг и подъём надплечий); сторона руки — как у Anny (если срезать
-    и её, кожа подмышки остаётся у корпуса и тянется перепонкой). Доля sp спереди — тоже ключице."""
+def limb_limit(W, V, F, J, fi, Wa, limbs):
+    """Плечо и бедро не тянут за собой кожу корпуса. У Anny малые доли кости плеча (upperarm01, 0,02–0,2) лежат по всей
+    груди и верху спины, у кости «shoulder01» — и спереди на груди: в её риге плечо поднимается на 30–40°, а у манекена
+    рука идёт над голову на 160–170° и лопатка поворачивается вверх на 50° — кожа бока и груди со смешанным поворотом
+    выходила «крыльями» (прыжки с разведением рук, руки над головой). Так же доли бедра после сглаживания заходили на
+    крестец, и при сгибании бедра («велосипед», скручивания) кожа крестца уходила в пол. У процедурной кожи грудь, спина и
+    крестец за конечностью не поворачиваются. Поэтому на стороне корпуса от линии сгиба Anny (где у неё доля всей руки или
+    ноги 0,5) доля ua и th убывает до 0 на SH_GEO и HIP_GEO см по коже (путь по коже от руки до бока груди идёт через
+    подмышку), ушедшая доля плеча — рамке ключицы (сдвиг и подъём надплечий, как у процедурной кожи), бедра — тазу;
+    сторона конечности — как у Anny (если срезать и её, кожа подмышки остаётся у корпуса и тянется перепонкой). Доля sp
+    спереди — тоже ключице."""
     import scipy.sparse as sp_, scipy.sparse.csgraph as cg
     E = np.concatenate([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]]); L = np.linalg.norm(V[E[:, 0]] - V[E[:, 1]], axis=1)
     G = sp_.coo_matrix((np.concatenate([L, L]), (np.concatenate([E[:, 0], E[:, 1]]), np.concatenate([E[:, 1], E[:, 0]]))), shape=(len(V), len(V))).tocsr()
     for s, g in (('L', 1), ('R', -1)):
-        ua, sp, cl = fi['ua' + s], fi['sp' + s], fi['cl' + s]
-        arm = Wa['ua' + s] >= .5
-        dist = cg.dijkstra(G, directed=False, indices=np.where(arm)[0], min_only=True, limit=SH_GEO + 1)
-        u = np.clip(1 - dist / SH_GEO, 0, 1); keep = np.where(arm, 1.0, u * u * (3 - 2 * u))
-        moved = W[:, ua] * (1 - keep); W[:, ua] -= moved; W[:, cl] += moved
+        for limb, child, parent, reach in (('arm', 'ua' + s, 'cl' + s, SH_GEO), ('leg', 'th' + s, 'pelvis', HIP_GEO)):
+            if limb not in limbs:
+                continue
+            inside = Wa[limb + s] >= .5
+            dist = cg.dijkstra(G, directed=False, indices=np.where(inside)[0], min_only=True, limit=reach + 1)
+            u = np.clip(1 - dist / reach, 0, 1); keep = np.where(inside, 1.0, u * u * (3 - 2 * u))
+            moved = W[:, fi[child]] * (1 - keep); W[:, fi[child]] -= moved; W[:, fi[parent]] += moved
+        if 'arm' not in limbs:
+            continue
+        sp, cl = fi['sp' + s], fi['cl' + s]
         gh = np.asarray(J['sh' + s]); f = np.clip((V[:, 2] - gh[2] - SH_FRONT) / 3.0, 0, 1); front = f * f * (3 - 2 * f)
         moved = W[:, sp] * front; W[:, sp] -= moved; W[:, cl] += moved
     return W
@@ -179,11 +187,17 @@ def build(out_path, mannequin=None):
     ang = np.where(on_torso, P.a2[ii], ang_geo)
     wp, wl, wt = trunk_split(h, ang, D)
     Wo[:, fi['pelvis']] += trunk * wp; Wo[:, fi['lumbar']] += trunk * wl; Wo[:, fi['thorax']] += trunk * wt
-    Wa = {'ua' + s: sum(W[:, L[f'upperarm0{k}.{s}']] for k in (1, 2)) for s in 'LR'}
-    Wo = shoulder_limit(Wo, V, F, J, fi, Wa)
+    Wa = {}
+    for s in 'LR':
+        Wa['arm' + s] = sum(W[:, i] for n, i in L.items() if n.endswith('.' + s) and n.startswith(('upperarm', 'lowerarm', 'wrist', 'finger', 'metacarpal')))
+        Wa['leg' + s] = sum(W[:, i] for n, i in L.items() if n.endswith('.' + s) and n.startswith(('upperleg', 'lowerleg', 'foot', 'toe')))
     # сглаживание весов по сетке (кроме кистей, стоп и головы): у Anny веса — с рваными краями (в плече и подмышке доли
     # кисти рига 0,02–0,1 обрываются по рёбрам сетки), а у манекена соседние рамки поворачиваются на 100–170° — на коже швы
+    # плечо — до сглаживания (сглаживание смягчает срез, иначе кожа подмышки при руках вверх тянется перепонкой), бедро —
+    # после (сглаживание заново разносит долю бедра на крестец)
+    Wo = limb_limit(Wo, V, F, J, fi, Wa, ('arm',))
     Wo = smooth_weights(Wo, F, ~rigid_mask(Wo, FRAMES), SMOOTH_ITERS)
+    Wo = limb_limit(Wo, V, F, J, fi, Wa, ('leg',))
     Wo = foot_split(Wo, V, FRAMES, D)
     # четыре наибольших — непрерывно: из них вычитается пятый (иначе на границе, где пятый становится четвёртым, — скачок)
     order = np.argsort(-Wo, 1); w5 = np.take_along_axis(Wo, order[:, 4:5], 1); order = order[:, :4]
