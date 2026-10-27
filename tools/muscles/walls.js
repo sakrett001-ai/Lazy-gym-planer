@@ -860,7 +860,10 @@ function wallTopTris(out, W, shells, C) {
   return tris;
 }
 function glutes(out, C, mus, shells, info) {
-  const G = require('./geometry.js'), sdf0 = C.M.noFolds(() => G.skinSDF(C.R)), sdf = q => C.M.noFolds(() => sdf0(q));
+  /* кожа корпуса и ног без рук: в нейтральной стойке предплечья и кисти висят у вертелов, и луч от края большой ягодичной к коже
+     упирался бы в предплечье (с осанкой 4.62.0 рука на 3,3 см дальше назад — край пласта у прикрепления уходил на 10 см наружу) */
+  const G = require('./geometry.js'), sdf0 = C.M.noFolds(() => G.skinSDF(C.R)), legs = sdf0.parts.filter((f, i) => i === 0 || [5, 6, 9, 10].includes(i));
+  const sdf = q => C.M.noFolds(() => { let d = Infinity; for (const f of legs) d = Math.min(d, f(q)); return d; });
   const BT = []; for (const nm of ['pelvis_R|R', 'sacrum|', 'femur|R']) { const { b, w } = C.boneWorld(nm); for (let f = 0; f < b.idx.length; f += 3) BT.push([w[b.idx[f]], w[b.idx[f + 1]], w[b.idx[f + 2]]]); }
   /* малая → средняя (над малой) → большая (над средней) */
   const gMin = glDeep(C, GL.min, BT, null, sdf), mn = glWall(C, 'glmin', GL.min, gMin, ['glmin1', 'glmin2', 'glmin3'], mus, 1); mn.side = 'R';
