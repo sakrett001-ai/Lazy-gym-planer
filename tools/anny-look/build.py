@@ -257,7 +257,9 @@ def build(out_path, mannequin=None):
     corr = CR.build(cat, F, order, wq / 255.0, FRAMES)
     inputs = json.loads(subprocess.run(['node', os.path.join(C.ROOT, 'tools/anny-look/inputs.js')], check=True, capture_output=True, text=True).stdout)
     out = {'version': 1, 'source': {'anny': '0.6.1', 'toned': 'tools/skin-anny/result/anny-toned.json', 'fit': fit.get('pose'), 'local_delta': fit.get('local_delta', {}),
-                                    'mannequin': D['version'], 'inputs': inputs},
+                                    # версия приложения в файл не пишется: стойку и инструменты уже отпечатывает inputs,
+                                    # а номер версии менял бы файл при каждом выпуске без изменения данных
+                                    'inputs': inputs},
            'frames': FRAMES, 'v': np.round(cat, 2).ravel().tolist(), 'f': F.ravel().tolist(),
            'wi': order.ravel().tolist(), 'ww': wq.ravel().tolist(),
            'region': {'code': code.tolist(), 'side': side.tolist(), 'a1': np.round(a1, 3).tolist(), 'a2': np.round(a2, 3).tolist()},
