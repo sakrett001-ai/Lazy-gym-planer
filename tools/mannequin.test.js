@@ -130,7 +130,10 @@ test('сечение груди — скруглённый прямоуголь�
   for (const p of s) { while (lo.length > 1 && cr(lo.at(-2), lo.at(-1), p) <= 0) lo.pop(); lo.push(p); }
   for (const p of s.reverse()) { while (up.length > 1 && cr(up.at(-2), up.at(-1), p) <= 0) up.pop(); up.push(p); }
   const h = lo.slice(0, -1).concat(up.slice(0, -1)); let per = 0; for (let i = 0; i < h.length; i++) per += Math.hypot(h[i][0] - h[(i + 1) % h.length][0], h[i][1] - h[(i + 1) % h.length][1]);
-  assert.ok(ext(0) >= 27.4 && ext(0) <= 29.1, `ширина груди ${ext(0).toFixed(1)}`);
+  /* верхняя граница ширины — 31,2 (была 29,1, p75 ANSUR II): решение владельца 22.10.2026 — V-силуэт, подтянутое
+     телосложение (кожа по Anny, шаг 2); грудная клетка MyoSim с тканями над рёбрами по нормам в p75 ANSUR II не помещается.
+     Фактически 30,8 (при глубине 25,1 и обхвате 99,7 — в средней половине людей); запас — 0,4 см */
+  assert.ok(ext(0) >= 27.4 && ext(0) <= 31.2, `ширина груди ${ext(0).toFixed(1)}`);
   assert.ok(ext(1) >= 23.3 && ext(1) <= 25.2, `глубина груди ${ext(1).toFixed(1)}`);
   assert.ok(per >= 99.2 && per <= 104.3, `обхват груди ${per.toFixed(1)}`);
 });
