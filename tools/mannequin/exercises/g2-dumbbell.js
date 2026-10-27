@@ -85,7 +85,10 @@ function sitOnAdj(C, q, { id = 'bench', lumbar = 0, thoracic = 0, hip = 80, abd 
   C.root(q, [0, 58, -10], bz, by);
   q.lumbar = [lumbar, 0, 0]; q.thoracic = [thoracic, 0, 0];
   for (const s of S) { q[s].hip = [hip, abd, rot]; q[s].knee = 90; q[s].girdle = [...girdle]; }
-  restOnTwo(C, q, 'buttocks', sp.o, M.M3.col(sp.R, 1), -1.4, 'back', bp.o, by, -1.0);
+  /* на наклонной спинке (круче 70° от вертикали) — ягодицы в угол сиденья (C.seatBack); на почти вертикальной таз и так
+     у спинки, а наклон таза опустил бы бёдра в подушку горизонтальной скамьи варианта без наклонной */
+  const place = q => restOnTwo(C, q, 'buttocks', sp.o, M.M3.col(sp.R, 1), -1.4, 'back', bp.o, by, -1.0);
+  if (by[1] > .34) C.seatBack(q, place, bp.o, by, 1); else place(q);
   for (const s of S) {
     const f = C.fk(q), kn = f.P['kn' + s], g = M.SIGN[s], fwd = V.unit([-g * .18 * 0 + C.lat(q, s)[0] * .2, 0, -1]);
     C.foot(q, s, [kn[0] + C.lat(q, s)[0] * 4, 0, kn[2] + feetZ], 0, V.unit(V.add([0, .2, -1], C.lat(q, s), .35)), { forward: fwd });

@@ -228,18 +228,19 @@ function ohpStand(C, o) {
 }
 const OHP = memo(t => {
   const C = ctx([]), { V } = C;
-  const start = ohpStand(C, { theta: 0, spine: [0, 0, 0], girdle: [0, 6], arms: q => rackArms(C, q) });
+  const start = ohpStand(C, { theta: 0, spine: [0, 0, -5], girdle: [0, 6], arms: q => rackArms(C, q) });
   if (t < 1e-6) return start;
   const Zb = start._bar[2], Yr = start._bar[1], half = Math.abs(C.fk(start).P.gripL[0]);
-  /* t, высота грифа (null — локаут), наклон таза, [поясница, грудной, шея], плечевой пояс */
+  /* t, высота грифа (null — локаут), наклон таза, [поясница, грудной, шея], плечевой пояс, вынос грифа вперёд (см) */
   /* пояс — по ритму (поворот лопатки вверх, подъём и отведение ключицы растут с подъёмом плеча); сверх него у ключиц —
-     лёгкая протракция (локти впереди грифа), к локауту она сходит на нет */
-  const K = [[.2, Yr + 11, -2, [-2, -2, -10], [0, 5]], [.4, Yr + 24, -3, [-3, -2, -12], [0, 4]], [.6, Yr + 37, -2, [-2, -1, -7], [0, 2]], [.8, Yr + 48, -1, [-1, 0, -2], [0, 1]], [1, null, 0, [0, 0, 4], [0, 0]]];
+     лёгкая протракция (локти впереди грифа), к локауту она сходит на нет. Гриф обходит подбородок: голова уходит назад,
+     гриф — чуть вперёд (с осанкой 4.62.0 плечевые суставы на 3,3 см дальше назад, лицо — на прежнем месте) */
+  const K = [[.1, Yr + 5, -1, [-1, -1, -10], [0, 5.5], 2.5], [.2, Yr + 11, -2, [-2, -2, -12], [0, 5], 2.5], [.4, Yr + 24, -3, [-3, -2, -12], [0, 4], 1], [.6, Yr + 37, -2, [-2, -1, -7], [0, 2], 0], [.8, Yr + 48, -1, [-1, 0, -2], [0, 1], 0], [1, null, 0, [0, 0, 4], [0, 0], 0]];
   const k = K.find(p => Math.abs(p[0] - t) < 1e-6), a = C.lerp(32, 6, t) * C.D2R, distal = [0, Math.cos(a), -Math.sin(a)];
   const pole = s => V.unit(V.add(V.add([0, -1, 0], [C.M.SIGN[s], 0, 0], C.lerp(.5, 1.1, t)), [0, 0, 1], C.lerp(.6, 0, t)));
   const lockY = q => { const f = C.fk(q); return (f.P.ghL[1] + f.P.ghR[1]) / 2 + Math.sqrt(Math.max(0, (armLen(C, 4) + 8.1) ** 2 - (half - Math.abs(f.P.ghL[0])) ** 2 - (Zb - f.P.ghL[2]) ** 2)) - 1.5; };
   const arms = q => {
-    const bar = [0, k[1] ?? lockY(q), Zb];
+    const bar = [0, k[1] ?? lockY(q), Zb + k[5]];
     for (let i = 0; i < (k[1] == null ? 5 : 1); i++) {
       for (const s of S) { const lat = [C.M.SIGN[s], 0, 0]; gripFrame(C, q, s, V.add(bar, lat, half), V.scale(lat, -1), distal, pole(s)); }
       /* локаут: руки выпрямлены (локоть ≈ 5°) */
@@ -450,12 +451,15 @@ function sitIncline(C, bench, { arch = [-4, -6], girdle = [-4, -12], feetZ = -76
   C.root(q, V.add(V.add(bp.o, bz, 14), by, 12), bz, by);
   q.lumbar = [arch[0], 0, 0]; q.thoracic = [arch[1], 0, 0];
   for (const s of S) { q[s].hip = [70, 8, 6]; q[s].knee = 80; q[s].girdle = [...girdle]; }
-  for (let i = 0; i < 4; i++) {
+  /* спина на спинке, таз на сиденье — переносом вдоль спинки; ягодицы — в угол сиденья (C.seatBack) */
+  C.seatBack(q, q => {
+    for (let i = 0; i < 4; i++) {
+      C.restOn(q, 'back', bp.o, by, -1.2);
+      const d = Math.min(...C.region(q, 'buttocks').map(p => V.dot(V.sub(p, sp.o), sn)));
+      q.root.p = V.add(q.root.p, bz, (-1.4 - d) / V.dot(bz, sn));
+    }
     C.restOn(q, 'back', bp.o, by, -1.2);
-    const d = Math.min(...C.region(q, 'buttocks').map(p => V.dot(V.sub(p, sp.o), sn)));
-    q.root.p = V.add(q.root.p, bz, (-1.4 - d) / V.dot(bz, sn));
-  }
-  C.restOn(q, 'back', bp.o, by, -1.2);
+  }, bp.o, by, 3);
   C.neckTo(q, 'headBack', bp.o, by, -.4);
   for (const s of S) {
     const lat = C.latP(q, s), fwd = V.unit(V.add([0, 0, -1], lat, .25));
@@ -667,7 +671,7 @@ module.exports = {
      пропуская гриф, в локауте — под грифом. t=0 — гриф у ключиц, t=1 — руки выпрямлены над головой.
      Атлет стоит в силовой раме (гриф снят с J-крюков передних стоек). */
   ohp: {
-    keys: [0, .2, .4, .6, .8, 1],
+    keys: [0, .1, .2, .4, .6, .8, 1],
     equipment: [{ type: 'powerRack', id: 'rack', yaw: 180, at: [0, 0, -12], hook: 144, pullBar: false }, { type: 'barbell', id: 'bar', plates: [10] }],
     contacts: [...FEET, ...GRIPS('bar')],
     pose(t, C) { return C.M.clone(OHP(t)); }

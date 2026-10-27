@@ -449,7 +449,8 @@ function scsArms(C, q) {
   return q;
 }
 const SCS_Z = once(() => { const C = ctx([]), f = C.fk(scsPose(C, 0)); return (f.P.ghL[2] + f.P.ghR[2]) / 2; });
-/* профиль верха плеч: наибольшая высота поверхности корпуса над полосой |x| ≈ x0 (до h = 50 — зона упора) */
+/* профиль верха плеч: наибольшая высота поверхности корпуса над полосой |x| ≈ x0 (до h = hMax — зона упора; у |x| = 9
+   граница 58,8 — надплечье кожи 4.62.0 у основания шеи выше, как у гакк-машины) */
 function shoulderTopAt(C, q, x0, hMax = 53.8) {
   const R = C.M.catalogPose(q); let best = -Infinity;
   for (let h = 36; h <= hMax; h += .5) for (let a = 0; a < 2 * Math.PI; a += Math.PI / 32) for (const s of S) { const p = C.M.torsoPoint(R, h, s, a); if (Math.abs(Math.abs(p[0]) - x0) < 1.5) best = Math.max(best, C.M.FLOOR - p[1]); }
@@ -461,7 +462,7 @@ const SCS_L = once(() => {
   const C = ctx([]), { V } = C, q = scsArms(C, scsPose(C, 0)), f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5);
   /* упор наклонён по трапециевидной: прямая через верх плеч на |x| = 9 и 16 см */
   /* наклон — по верху плеч от |x| = 9 до 19,5 см (наружный край упора над дельтовидной), высота — в середине упора (|x| = 12,5) */
-  const y9 = shoulderTopAt(C, q, 9, 56.8), yOut = shoulderTopAt(C, q, 19.5);
+  const y9 = shoulderTopAt(C, q, 9, 58.8), yOut = shoulderTopAt(C, q, 19.5);
   const th = Math.atan2(y9 - yOut, 10.5), yc = y9 + (yOut - y9) * 3.5 / 10.5 - gh[1];
   /* упоры вдавливаются в верх плеч на 0,3 см (до этапа Д — на 0,8, до 4.41.0 — на 1 см), как у гакк-машины: с валиком
      трапециевидной 4.41.0 внутренний край упора уходил в кожу на 3,9 см при допуске мягкой опоры 4 см; с этапа Д кожа
@@ -493,10 +494,11 @@ const HK = once(() => {
 const HK_SLED = once(() => {
   const L = HK(), C = L.C, { V } = C, q = L.body(L.u0), f = C.fk(q), hip = V.mix(f.P.hipL, f.P.hipR, .5);
   const loc = p => [p[0], -V.dot(V.sub(p, hip), L.nb) - 30, V.dot(V.sub(p, hip), L.d)];
-  /* верх плеч по оси d над полосами |x| ≈ 9 и 16 (по зоне упора, до h = 50…53): упор наклонён по трапециевидной */
+  /* верх плеч по оси d над полосами |x| ≈ 9 и 16 (по зоне упора: у |x| = 9 — до h = 58,8, у |x| = 16 — до 53,8; у кожи 4.62.0
+     надплечье у основания шеи выше, и с прежней границей 56,8 упор уходил в него на 5 см): упор наклонён по трапециевидной */
   const R = C.M.catalogPose(q);
   const topAt = (x0, hMax) => { let best = null; for (let h = 36; h <= hMax; h += .5) for (let a = 0; a < 2 * Math.PI; a += Math.PI / 32) for (const s of S) { const p = C.M.torsoPoint(R, h, s, a), l = loc([p[0], C.M.FLOOR - p[1], p[2]]); if (Math.abs(Math.abs(l[0]) - x0) < 1.5 && (!best || l[2] > best[2])) best = l; } return best; };
-  const t9 = topAt(9, 56.8), t16 = topAt(16, 53.8), th = Math.atan2(t9[2] - t16[2], 7), top = (t9[2] + t16[2]) / 2, ySh = (t9[1] + t16[1]) / 2;
+  const t9 = topAt(9, 58.8), t16 = topAt(16, 53.8), th = Math.atan2(t9[2] - t16[2], 7), top = (t9[2] + t16[2]) / 2, ySh = (t9[1] + t16[1]) / 2;
   /* упоры вдавливаются в верх плеч на 0,8 см (до 4.41.0 — на 1 см): с валиком трапециевидной и складками подмышки 4.41.0
      внутренний край упора у основания шеи уходил в кожу на 4,0 см (предупреждение валидатора, допуск мягкой опоры 4 см) */
   const gh = loc(V.mix(f.P.ghL, f.P.ghR, .5)), yb = L.yBack, zs = top - .8, parts = [];
@@ -828,7 +830,7 @@ module.exports = {
       /* голова к верху отклоняется назад: подбородок проходит над перекладиной, лицо её не задевает */
       q.thoracic = [C.lerp(0, -8, e), 0, 0]; q.lumbar = [C.lerp(-2, -3, e), 0, 0]; q.neck = [C.lerp(0, -14, e), 0, 0];
       for (const s of S) { q[s].hip = [C.lerp(14, 22, e), 3, 4]; q[s].knee = C.lerp(48, 56, e); q[s].ankle = [-28, 0]; q[s].girdle = [C.lerp(24, -6, e), C.lerp(6, -8, e)]; }
-      const y = C.lerp(BAR[1] - 61.5, BAR[1] - 16, e), z = BAR[2] + C.lerp(-1, -7.5, e) - 10 * Math.sin(Math.PI * e);
+      const y = C.lerp(BAR[1] - 61.5, BAR[1] - 16, e), z = BAR[2] + C.lerp(-1, -10.5, e) - 10 * Math.sin(Math.PI * e);
       C.rootAtShoulders(q, [0, y, z]);
       for (const s of S) {
         const lat = C.lat(q, s);

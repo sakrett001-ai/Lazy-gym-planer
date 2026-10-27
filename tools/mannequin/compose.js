@@ -74,6 +74,21 @@ function ctx(equipment) {
       else { for (let i = 0; i < 28; i++) { const m = (lo + hi) / 2, fm = f(m); if (flo * fm <= 0) { hi = m; fhi = fm; } else { lo = m; flo = fm; } } setPitch((lo + hi) / 2); }
       return C.restOn(q, a, point, normal, gap);
     },
+    /* Посадка спиной к спинке (point, normal): атлет садится в угол сиденья — наклон таза вокруг его поперечной оси
+       подбирается так, чтобы ягодицы сзади касались спинки с зазором gap; бёдра сохраняют направление (сгибание бедра
+       растёт на угол наклона). place(q) ставит тело на сиденье и спинку переносом таза. С кожей 4.62.0 верх спины глубже
+       ягодиц (осанка по нормам: грудной блок на 3,3 см назад), и одним переносом тело съезжало по сиденью вперёд на 5–15 см. */
+    seatBack(q, place, point, normal, gap = 1, lo = -8, hi = 24) {
+      const n = V.unit(normal), base = q.root.q.slice(), p0 = q.root.p.slice(), axis = M3.col(M.fk(q).F.pelvis.R, 0);
+      const hip0 = { L: q.L.hip[0], R: q.R.hip[0] };
+      const set = deg => {
+        q.root.q = M.Q.fromM3(M3.mul(M3.axis(axis, deg * D2R), M.Q.toM3(base))); q.root.p = p0.slice();
+        for (const s of ['L', 'R']) q[s].hip[0] = hip0[s] + deg;
+        place(q);
+        return Math.min(...C.region(q, 'buttocks').map(p => V.dot(V.sub(p, point), n))) - gap;
+      };
+      const d = C.solve1D(set, lo, hi, 24); set(d); return d;
+    },
     /* Хват: точка, ось ручки (направление большого пальца), полюс локтя */
     grip(q, s, point, thumb, pole, opts = {}) {
       const info = M.solveArm(q, s, point, thumb, pole, opts);

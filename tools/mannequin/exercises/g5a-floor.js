@@ -702,7 +702,7 @@ module.exports = {
     pose(t, C) {
       const { V } = C, c = Math.cos(2 * Math.PI * t), sn = Math.sin(2 * Math.PI * t);
       /* поворот корпуса влево (+) при t=0, вправо при t=0,5 */
-      const q = supineCore(C, { tilt: 10, lumbar: 10, thoracic: 27, neck: 12, rot: 32 * c, seat: true });
+      const q = supineCore(C, { tilt: 0, lumbar: 4, thoracic: 18, neck: 12, rot: 32 * c, seat: false });
       for (const s of S) q[s].girdle = [6, s === 'R' ? 4 + 8 * c : 4 - 8 * c];
       /* ноги крутят «педали»: фаза левой ноги p=0 — колено к груди, p=0,5 — нога выпрямлена */
       for (const s of S) {
