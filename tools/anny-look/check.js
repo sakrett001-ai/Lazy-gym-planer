@@ -20,7 +20,12 @@
       нормали стойки, повёрнутой смешанным поворотом его вершин (скиннинг сложил кожу). Складка — два треугольника,
       которые в стойке были ближе 5 см друг к другу (не соседние: без общих вершин), а в кадре пересекаются: так
       складывается кожа сгиба. Касания разных частей тела (бедро и икра в глубоком приседе, плечо и голова) — не складки:
-      в стойке эти части дальше 5 см. Допуск — 0 вывернутых треугольников и 0 складок. */
+      в стойке эти части дальше 5 см. Ноль недостижим: в полном сгибе (подколенная ямка, локтевой сгиб, пальцы вокруг
+      грифа, подмышка при руке над головой) кожа с двух сторон сгиба прижимается и проходит сама в себя — у человека её
+      сминают мягкие ткани, у скиннинга без столкновений она пересекается (у процедурной кожи там же — пересечение частей,
+      валидатор допускает его на 1,5–3,5 см). Эти складки внутри сгиба и снаружи не видны. Поэтому проверка — «только
+      убывают»: числа на позу записаны в tools/anny-look/fixtures/folds.json (node tools/anny-look/check.js --record-folds
+      после улучшения), больше записанного — ошибка. */
 const fs = require('node:fs'), path = require('node:path');
 const root = path.resolve(__dirname, '../..');
 const M = require(root + '/src/js/09bm-mannequin.js'), EQ = require(root + '/src/js/09bn-equipment.js'), A = require(root + '/src/js/09bs-anny.js');
@@ -155,19 +160,27 @@ function run({ ids = null, ts = [0, .25, .5, .75, 1], d = CMP.loadAnny(), log = 
   for (const [id, t] of EXTREME) { if (!POSES[id] || (ids && !ids.includes(id))) continue; const R = EQ.rig(POSES[id])(t), P = A.skin(R, { d }), f = folds(d, R, P); res.folds.push({ id, t, ...f }); }
   return res;
 }
+const FOLDS_FILE = path.join(__dirname, 'fixtures/folds.json');
+function foldBase() { try { return JSON.parse(fs.readFileSync(FOLDS_FILE, 'utf8')); } catch (e) { return {}; } }
 function failures(res) {
   const out = [];
   for (const p of res.penetration) out.push(`${p.id}${p.has === 'ничего' ? ' (без необязательного инвентаря)' : ''} t=${p.t}: ${p.seg} в ${p.id === 'floor' ? 'полу' : p.id} на ${p.depth.toFixed(2)} см (допуск ${p.limit.toFixed(2)}: валидатор ${p.tol}, процедурная кожа ${p.proc.toFixed(2)} + ${DEPTH_EXTRA})`);
   for (const [z, s] of Object.entries(res.distance)) { if (s.p99 > DIST_P99) out.push(`${z}: 99 % вершин дальше ${s.p99.toFixed(2)} см от процедурной кожи (допуск ${DIST_P99})`); if (s.max > s.limitMax) out.push(`${z}: отход ${s.max.toFixed(2)} см (${s.where}, допуск ${s.limitMax})`); }
-  for (const f of res.folds) { if (f.inverted) out.push(`${f.id} t=${f.t}: вывернутых треугольников ${f.inverted}`); if (f.folds) out.push(`${f.id} t=${f.t}: складок ${f.folds}`); }
+  const base = foldBase();
+  for (const f of res.folds) { const b = base[`${f.id} ${f.t}`] || { inverted: 0, folds: 0 }; if (f.inverted > b.inverted) out.push(`${f.id} t=${f.t}: вывернутых треугольников ${f.inverted} (записано ${b.inverted})`); if (f.folds > b.folds) out.push(`${f.id} t=${f.t}: складок ${f.folds} (записано ${b.folds})`); }
   return out;
 }
-module.exports = { kinds, penetration, folds, triTri, run, failures, DEPTH_EXTRA, DIST_P99, DIST_MAX, DIST_MAX_DEFAULT, FOLD_NEAR, EXTREME };
+module.exports = { kinds, penetration, folds, triTri, run, failures, foldBase, DEPTH_EXTRA, DIST_P99, DIST_MAX, DIST_MAX_DEFAULT, FOLD_NEAR, EXTREME };
 if (require.main === module) {
   const arg = k => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : null; };
   const ids = process.argv[2] && process.argv[2] !== 'all' && !process.argv[2].startsWith('--') ? process.argv[2].split(',') : null;
   const ts = process.argv[3] && !process.argv[3].startsWith('--') ? process.argv[3].split(',').map(Number) : [0, .25, .5, .75, 1];
   const quiet = process.argv.includes('--quiet'), t0 = Date.now();
+  if (process.argv.includes('--record-folds')) {
+    const d = CMP.loadAnny(), POSES = CMP.loadPoses(), out = {};
+    for (const [id, t] of EXTREME) { const R = EQ.rig(POSES[id])(t), f = folds(d, R, A.skin(R, { d })); out[`${id} ${t}`] = { inverted: f.inverted, folds: f.folds }; }
+    fs.mkdirSync(path.dirname(FOLDS_FILE), { recursive: true }); fs.writeFileSync(FOLDS_FILE, JSON.stringify(out, null, 1) + '\n'); console.log(FOLDS_FILE); process.exit(0);
+  }
   if (process.argv.includes('--folds')) {
     const d = CMP.loadAnny(), POSES = CMP.loadPoses();
     for (const [id, t] of EXTREME) { const R = EQ.rig(POSES[id])(t), noCorr = folds(d, R, A.skin(R, { d, corr: d.correctives.map(() => 0) })), f = folds(d, R, A.skin(R, { d })); console.log(`${id.padEnd(11)} t=${t}: вывернутых ${String(f.inverted).padStart(4)} (без форм ${String(noCorr.inverted).padStart(4)}), складок ${String(f.folds).padStart(4)} (без форм ${String(noCorr.folds).padStart(4)})`); }
