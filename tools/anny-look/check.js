@@ -217,5 +217,5 @@ if (require.main === module) {
   if (arg('--json')) fs.writeFileSync(arg('--json'), JSON.stringify(res, null, 1));
   const bad = failures(res);
   if (bad.length) { console.error(`\nКожа Anny: ${bad.length} нарушений:\n` + bad.slice(0, 60).join('\n')); process.exit(1); }
-  console.log(`Кожа Anny: опоры, отход от процедурной кожи и крайние позы — в допусках (${ids ? ids.length : 'все'} упражнений × ${ts.length} фаз).`);
+  console.log(`Кожа Anny: опоры, отход от процедурной кожи и крайние позы — в допусках (${ids ? ids.length + ' упр.' : 'все упражнения'} × ${ts.length} фаз).`);
 }

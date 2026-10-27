@@ -31,7 +31,8 @@ const res=await page.evaluate(async([ids,F,runs,anny])=>{
  const A=window.AnnySkin;
  if(A){if(anny==='on')await A.load();else A.load=()=>new Promise(()=>{});}
  /* крючки: части кадра текущей фигуры (как GymPerf.volume панели замера) */
- let cur=null;const wrap=(obj,name,kind)=>{const orig=obj&&obj[name];if(typeof orig!=='function')return;obj[name]=function(...a){const t=performance.now();try{return orig.apply(this,a);}finally{if(cur)cur[kind]+=performance.now()-t;}};};
+ /* рендерер фигур переходит к следующей (запас) — обёртка одна: иначе время отрисовки считалось бы столько раз, сколько фигур */
+ let cur=null;const wrap=(obj,name,kind)=>{const orig=obj&&obj[name];if(typeof orig!=='function'||orig.benchWrapped)return;const w=obj[name]=function(...a){const t=performance.now();try{return orig.apply(this,a);}finally{if(cur)cur[kind]+=performance.now()-t;}};w.benchWrapped=true;};
  globalThis.GymPerf={volume({scene,renderer,options}){wrap(options,'data','pose');wrap(scene,'apply','scene');wrap(renderer,'render','render');},svg(){},card(){},thumb(){},add(){}};
  const sleep=ms=>new Promise(r=>setTimeout(r,ms)),med=a=>{const s=[...a].sort((x,y)=>x-y);return s[s.length>>1];};
  const host=document.createElement('div');host.style.cssText='position:fixed;left:0;top:0;width:390px;height:340px;z-index:99999';document.body.append(host);

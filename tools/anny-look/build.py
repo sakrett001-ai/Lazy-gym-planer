@@ -158,7 +158,7 @@ def build(out_path, mannequin=None):
     phen, local = body.params(fit); rest = body.rest(phen, local); q = q_from(fit['pose'])
     hands = D['hands']
     V, Hw, G, heads = body.stance(rest, P.J, q, hands, groin=False)
-    V = body.neutral_groin(body.neutral_face(V, Hw), P.J)
+    V = body.neutral_groin(body.neutral_throat(body.neutral_face(V, Hw), Hw), P.J)
     F = body.skin_faces; used = np.unique(F); remap = -np.ones(len(V), np.int64); remap[used] = np.arange(len(used))
     V = V[used]; F = remap[F]; W = body.weights[used]          # плотные веса Anny по 104 костям
     labels = body.labels; L = body.idx; n = len(V)

@@ -190,6 +190,17 @@ class AnnyLook(AnnyPosed):
         self.cavity &= self.dominant == L['head']
         return V
 
+    def neutral_throat(self, V, H):
+        """ярёмная ямка: у подтянутой Anny — глубокая ямка над грудиной между ножками грудино-ключично-сосцевидных; на
+        свету приложения (ключевой сверху спереди) она — тёмное пятно ромбом на горле в каждом виде спереди. Гладкая
+        заплатка fair() по средней линии: |x| < THROAT[0] см, от THROAT[1] см ниже до THROAT[2] см выше середины
+        грудино-ключичных суставов (головки костей ключиц рига), спереди от них"""
+        F = self.skin_faces; L = self.idx; c = (H[L['clavicle.L']] + H[L['clavicle.R']]) / 2
+        used = np.zeros(len(V), bool); used[np.unique(F)] = True
+        sel = used & (np.abs(V[:, 0]) < THROAT[0]) & (V[:, 1] > c[1] - THROAT[1]) & (V[:, 1] < c[1] + THROAT[2]) & (V[:, 2] > c[2])
+        self.throat_sel = sel
+        return fair(V, F, sel) if sel.any() else V
+
     def neutral_groin(self, V, J):
         """пах: форма «bulge» −1 уже гладкая; ямка у вершины промежности спереди (тёмное пятно на свету) — гладкой заплаткой
         fair() по средней линии между бёдрами (|x| < 4 см, от 9 см ниже до 1 см выше тазобедренных, спереди)"""
@@ -213,6 +224,7 @@ class AnnyLook(AnnyPosed):
 
 # ---------------- лицо и пах: гладкое заполнение (без глаз, без «дыр» и тёмных пятен) ----------------
 EYE_SINK, EYE_RINGS = .3, 6
+THROAT = (3.5, 2.0, 4.5)
 
 
 def neighbors(F, n):
