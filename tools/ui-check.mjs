@@ -490,7 +490,7 @@ await page.close();
 
 /* «Анатомия» вне разбора (этап 2) — настоящая объёмная графика (программный WebGL): карточки плана рисует общий рендерер
    (у карточки нет своего WebGL), анимируется одна, у остальных — один неподвижный кадр; «↗» открывает разбор; выбор
-   «Манекен» в разборе возвращает SVG-карточки, «Анатомия» — кадры; экран тренировки — в «Анатомии» с переключателем;
+   «Манекен» в разборе — карточки с кожей Anny (без её данных — SVG), «Анатомия» — кадры; экран тренировки — в «Анатомии» с переключателем;
    подделанные медленные кадры — откат на манекен с подписью, выбор человека не сбрасывается */
 {
   const a = await browser.newPage({ viewport: { width: 390, height: 844 } });
@@ -522,7 +522,10 @@ await page.close();
   await a.click('.card .illus.anatomy-on'); await a.waitForTimeout(200);
   check(await a.evaluate(() => $('#motion-view').open && !!detailMotion && detailMotion.it.ex.id === figs.find(F => F.btn === document.querySelector('.card .illus.anatomy-on'))?.it.ex.id), '«↗» в карточке с анатомией открывает разбор этого упражнения');
   await a.evaluate(() => { $('[data-mv-figure="mannequin"]').disabled = false; $('[data-mv-figure="mannequin"]').click(); }); await a.click('#mv-close'); await a.waitForTimeout(200);
-  check(await a.evaluate(() => motionPrefs.view === 'mannequin' && cardAnatomy.view === 'mannequin' && figs.every(F => !F.av?.on && (!F.f || getComputedStyle(F.f.svg).visibility !== 'hidden'))), '«Манекен» в разборе — карточки снова SVG-манекен');
+  /* «Манекен» — кожа Anny тем же общим рендерером (без костей и мышц); без её данных — снова SVG-манекен */
+  const skin = await a.waitForFunction(() => motionPrefs.view === 'mannequin' && cardAnatomy.view === 'skin' && figs.filter(F => F.vis && F.av?.on).length >= 2, null, { timeout: 60000 }).then(() => true, () => false);
+  check(skin && await a.evaluate(() => figs.filter(F => F.av?.on).every(F => F.av.layers.startsWith('skin')) && GymVolume.cards().stats().scenes <= 3), '«Манекен» в разборе — карточки: кожа Anny кадрами общего рендерера, без костей и мышц');
+  check(await a.evaluate(() => { const A = AnnySkin, d = A.data; A.data = null; cardAnatomy.annyFailed = true; applyCardsView(); const r = cardAnatomy.view === 'mannequin' && figs.every(F => !F.av?.on && (!F.f || getComputedStyle(F.f.svg).visibility !== 'hidden')); A.data = d; cardAnatomy.annyFailed = false; applyCardsView(); return r; }), '«Манекен» без данных кожи Anny — карточки снова SVG-манекен');
   await a.evaluate(() => openMotion(0)); await a.waitForTimeout(100);
   await a.evaluate(() => $('[data-mv-figure="anatomy"]').click()); await a.click('#mv-close');
   check(await a.waitForFunction(() => cardAnatomy.view === 'anatomy' && figs.filter(F => F.vis && F.av?.on).length >= 2, null, { timeout: 60000 }).then(() => true, () => false), 'и обратно «Анатомия» — кадры костей и мышц возвращаются');
@@ -564,7 +567,7 @@ await page.close();
 
 /* витрина атласа в «Анатомии» (этап 3) — настоящая объёмная графика (программный WebGL): сразу — SVG-миниатюры, потом у
    видимых — кадры костей и мышц (картинки из общего рендерера карточек); клик открывает разбор, «← Все упражнения»
-   возвращает на то же место и кадры — сразу из памяти; фильтр и поиск работают; «Манекен» — снова SVG. Без WebGL — SVG.
+   возвращает на то же место и кадры — сразу из памяти; фильтр и поиск работают; «Манекен» — кожа Anny (без её данных — SVG). Без WebGL — SVG.
    Кеш между сеансами — по http (офлайн-файлу Cache Storage недоступен): после перезагрузки кадры берутся из кеша. */
 {
   const thumbsState = page => page.evaluate(() => { const s = galleryAnatStats(); return { ...s, svg: document.querySelectorAll('#mv-gallery .mv-thumb.ready:not(.anat)').length, anat: document.querySelectorAll('#mv-gallery .mv-thumb.anat img.mv-anat').length }; });
@@ -603,14 +606,18 @@ await page.close();
   check(await g.evaluate(() => { const t = [...document.querySelectorAll('.mv-tile')].map(b => b.dataset.galleryOpen); return t.includes('latpull') && t.every(id => EXI[id].name.toLowerCase().includes('тяга верхнего')) && document.activeElement.id === 'mv-gq'; }), 'поиск в «Анатомии» работает, курсор в поле');
   check(await visAnat(g), 'найденные миниатюры — анатомия');
   await g.fill('#mv-gq', '');
-  /* «Манекен» в разборе — витрина снова SVG; «Анатомия» — кадры из памяти */
+  /* «Манекен» в разборе — витрина: кожа Anny кадрами того же рендерера; без её данных — снова SVG; «Анатомия» — кадры из памяти */
   await g.click('[data-gallery-open="latpull"]'); await g.waitForTimeout(100);
   await g.evaluate(() => { const b = $('[data-mv-figure="mannequin"]'); b.disabled = false; b.click(); });
   await g.click('#mv-back');
-  /* SVG видимых миниатюр строится, как раньше, в кадрах после возврата из разбора (на стенде — до нескольких секунд) */
+  const skinThumbs = await visAnat(g, 60000), sk = await thumbsState(g);
+  check(skinThumbs && sk.view === 'skin' && sk.anat > 0, `«Манекен» — миниатюры: кожа Anny (${JSON.stringify({ view: sk.view, anat: sk.anat })})`);
+  await g.evaluate(() => { AnnySkin._kept = AnnySkin.data; AnnySkin.data = null; galleryAnat.annyFailed = true; galleryAnatApply(); });
+  /* SVG видимых миниатюр строится, как раньше, в кадрах (на стенде — до нескольких секунд) */
   const svgBack = await g.waitForFunction(() => (v => v.length > 0 && v.every(el => el.querySelector('svg') && !el.classList.contains('anat')))([...document.querySelectorAll('#mv-gallery .mv-thumb')].filter(el => { const r = el.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; })), null, { timeout: 20000 }).then(() => true, () => false);
   const man = await thumbsState(g);
-  check(svgBack && man.view === 'mannequin' && man.anat === 0 && man.svg > 0, `«Манекен» — миниатюры снова SVG (${JSON.stringify({ view: man.view, anat: man.anat, svg: man.svg })})`);
+  check(svgBack && man.view === 'mannequin' && man.anat === 0 && man.svg > 0, `«Манекен» без данных кожи Anny — миниатюры снова SVG (${JSON.stringify({ view: man.view, anat: man.anat, svg: man.svg })})`);
+  await g.evaluate(() => { AnnySkin.data = AnnySkin._kept; delete AnnySkin._kept; galleryAnat.annyFailed = false; });
   await g.click('[data-gallery-open="latpull"]'); await g.waitForTimeout(100);
   await g.evaluate(() => $('[data-mv-figure="anatomy"]').click()); await g.click('#mv-back');
   check(await visAnat(g, 60000), 'снова «Анатомия» — кадры костей и мышц');
@@ -694,10 +701,14 @@ await page.close();
   const live = await p.evaluate(() => ({ pill: document.querySelector('[data-perf-pill]').textContent, screen: document.querySelector('[data-perf-k="screen"]').textContent, cards: document.querySelector('[data-perf-k="cards"]').textContent, view: document.querySelector('[data-perf-k="view"]').textContent }));
   check(/^\d/.test(live.pill) && /^\d+(,\d)? к\/с · кадр \d/.test(live.screen) && /анатомия \d.* · копия \d/.test(live.cards) && /^План — Анатомия; ступень (30|15|10) к\/с, медиана /.test(live.view),
     `живые цифры: кадры, карточка в «Анатомии» и её ступень (${live.screen} | ${live.cards} | ${live.view})`);
-  /* «Манекен» — снова SVG-карточки: из памяти и заново */
+  /* «Манекен» — кожа Anny кадрами общего рендерера: кадр карточки, копия и ступень; без данных кожи — SVG-карточки */
   await p.evaluate(() => { motionPrefs.view = 'mannequin'; applyCardsView(); });
+  const skinLive = await p.waitForFunction(() => /кожа \d.* · копия \d/.test(document.querySelector('[data-perf-k="cards"]').textContent) && /^План — Манекен; ступень (30|15|10) к\/с/.test(document.querySelector('[data-perf-k="view"]').textContent), null, { timeout: 30000 }).then(() => true, () => false);
+  check(skinLive, 'живые цифры в «Манекене»: кадр карточки с кожей Anny и его ступень');
+  await p.evaluate(() => { AnnySkin._kept = AnnySkin.data; AnnySkin.data = null; cardAnatomy.annyFailed = true; applyCardsView(); });
   const svgLive = await p.waitForFunction(() => /заново \d/.test(document.querySelector('[data-perf-k="cards"]').textContent) && /^План — рисунок SVG$/.test(document.querySelector('[data-perf-k="view"]').textContent), null, { timeout: 15000 }).then(() => true, () => false);
-  check(svgLive, 'живые цифры в «Манекене»: SVG-карточки, без ступени');
+  check(svgLive, 'живые цифры в «Манекене» без данных кожи: SVG-карточки, без ступени');
+  await p.evaluate(() => { AnnySkin.data = AnnySkin._kept; delete AnnySkin._kept; cardAnatomy.annyFailed = false; });
   await p.evaluate(() => { motionPrefs.view = 'mannequin'; openMotionItem(previewItem('legpress')); detailMotion.paused = false; });
   const volLive = await p.waitForFunction(() => /поза \d/.test(document.querySelector('[data-perf-k="volume"]')?.textContent || ''), null, { timeout: 15000 }).then(() => true, () => false);
   /* программная графика стенда отстаёт от кадров — фигуру сразу на паузу */
