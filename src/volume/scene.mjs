@@ -4,6 +4,7 @@ import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {createMannequinBody} from './body.mjs';
 import {createSkeletonLayer} from './skeleton.mjs';
 import {createMuscleLayer} from './muscles.mjs';
+import {createAnnyLayer} from './anny.mjs';
 import {isNewProp,propKey,createPropNode,updatePropNode} from './props.mjs';
 
 const add=(a,b,k=1)=>a.map((v,i)=>v+b[i]*k),sub=(a,b)=>a.map((v,i)=>v-b[i]),dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),len=a=>Math.hypot(...a);
@@ -165,6 +166,10 @@ export function createCatalogScene(first,{coarse=false}={}){
  const floorGrid=fadingGrid(5,20,0x485b76,[0,-.01,1]);scene.add(floorGrid);
  const mannequin=first.body?createMannequinBody(scene,first,{skin,joint,sole,mesh}):null;
  const parts=mannequin?mannequin.parts:{};let body=mannequin?mannequin.parts.torso.mesh:null,head=mannequin?mannequin.parts.head.mesh:null,nose,neck,dots;
+ /* вид «Манекен»: видимая кожа — сетка Anny (src/volume/anny.mjs), когда её данные загружены (AnnySkin, src/js/09bs-anny.js);
+    процедурная кожа тогда скрыта и не считается (рамки, проверки и мышцы её считают сами). Виды «Анатомия» и «Скелет» — прежний
+    процедурный силуэт кожи (GHOST): мышцы проверены против него. options.anny === false — прежняя кожа и в «Манекене». */
+ const anny=mannequin?createAnnyLayer(scene,skin):null;let annyShown=false;
  /* вид «Скелет» (options.skeleton): кости внутри почти невидимого силуэта кожи, области манекена скрыты. Вид «Анатомия» —
     то же с мышцами (options.anatomy: {skeleton, muscles, level}); кости при этом — по options.skeleton */
  const skeletonLayer=createSkeletonLayer(scene),muscleLayer=createMuscleLayer(scene);let ghosted=false;
@@ -271,15 +276,19 @@ export function createCatalogScene(first,{coarse=false}={}){
  }
  function apply(data,nextOptions={}){
   lastData=data;options={...options,...nextOptions};const R=data.pose;
-  if(mannequin)mannequin.apply(data,options);
   const bonesOn=!!(mannequin&&options.skeleton&&data.body),musclesOn=!!(mannequin&&options.anatomy&&data.body),skeletonOn=bonesOn||musclesOn;
+  const annyData=mannequin&&!skeletonOn&&options.anny!==false&&data.pose?.frames?globalThis.AnnySkin?.data:null;annyShown=!!annyData;
+  if(mannequin){mannequin.group.visible=!annyData;if(annyData)mannequin.dots(data,options);else mannequin.apply(data,options);}
+  if(annyData)anny.update(annyData,data,{on:options.muscles!==false,color:options.color,values:data.values,sideValues:data.sideValues,regions:data.regions,selected:options.selected});else anny?.hide();
   /* матрицы костей кадра: готовые (data.boneFrames — память кадров карточек плана, main.mjs) или посчитанные здесь */
   const frames=musclesOn?data.boneFrames||globalThis.Skeleton.frames(R,data.body,options.anatomy.skeleton.bones):null;
   if(bonesOn)skeletonLayer.update(options.skeleton,R,data.body,frames&&options.anatomy.skeleton===options.skeleton?frames:data.boneFrames||undefined);else skeletonLayer.hide();
   /* фаза и ключ позы (catalogVolumeData) — память кожи по фазе в слое мышц */
   if(musclesOn)muscleLayer.update(options.anatomy,frames,options.color,{values:data.values,sideValues:data.sideValues,regions:data.regions,phases:options.muscles!==false,selected:options.selected},data.poseKey&&typeof data.phase==='number'?{t:data.phase,key:data.poseKey}:null);else muscleLayer.hide();
   if(mannequin&&(skeletonOn||ghosted))ghost(skeletonOn);
-  if(skeletonOn||!data.surfaces.length)for(const o of regionMeshes.values())o.visible=false;
+  /* области мышц на процедурной коже; с кожей Anny зоны — цвет её вершин (поверхности областей не считаются) */
+  const surfaces=annyData?[]:data.surfaces;
+  if(skeletonOn||!surfaces.length)for(const o of regionMeshes.values())o.visible=false;
   if(!mannequin){
   updateGrid(body.geometry,data.torsoRings.length-1,torsoCols,(t,q)=>{
    const i=Math.min(data.torsoRings.length-2,Math.floor(t*(data.torsoRings.length-1))),f=t*(data.torsoRings.length-1)-i,a=data.torsoRings[i],b=data.torsoRings[i+1],h=a[0]+(b[0]-a[0])*f,w=a[1]+(b[1]-a[1])*f,ant=a[2]+(b[2]-a[2])*f,post=a[3]+(b[3]-a[3])*f,angle=q*Math.PI*2,s=Math.cos(angle);
@@ -300,7 +309,7 @@ export function createCatalogScene(first,{coarse=false}={}){
   }
   dots.visible=!!options.joints;
   }
-  const groups=new Map();for(const f of data.surfaces){const key=f.id+':'+f.side;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(f);}
+  const groups=new Map();for(const f of surfaces){const key=f.id+':'+f.side;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(f);}
   for(const[key,faces]of groups){
    let o=regionMeshes.get(key);if(!o){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(faces.length*6*3),3));const m=material('#a7b3c6',{roughness:.82});m.polygonOffset=true;m.polygonOffsetFactor=-1;m.polygonOffsetUnits=-1;o=mesh(regionsGroup,g,m,key);o.receiveShadow=false;o.userData={region:faces[0].id,side:faces[0].side};regionMeshes.set(key,o);}
    if(o.geometry.attributes.position.count!==faces.length*6){o.geometry.dispose();o.geometry=new THREE.BufferGeometry();o.geometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array(faces.length*6*3),3));}
@@ -325,12 +334,17 @@ export function createCatalogScene(first,{coarse=false}={}){
  const bounds=Object.fromEntries(Object.keys(cameras).map(id=>[id,{minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity}]));
  /* рамка — по самим деталям (и неподвижным: их сетки в скрытой группе), а не по объединённой сетке: кадр тот же, что до объединения.
     only='body' — только тело манекена (карточки плана в виде «Анатомия»: человек крупнее, тренажёр может уйти за край) */
+ /* скрытая кожа тела: процедурная при показанной Anny и наоборот (их сетки остаются в сцене) */
+ const under=(o,g)=>{for(let p=o;p;p=p.parent)if(p===g)return true;return false;};
+ const offBody=o=>!!mannequin&&(annyShown?under(o,mannequin.group):under(o,anny.group));
  function includeBounds(only){
-  const root=only==='body'&&mannequin?mannequin.group:scene;
-  root.traverse(o=>{if(!o.isMesh||!o.visible||o===floor||o.name==='dot-ring'||o.parent===dots||o.parent?.name==='joint-dots'||o.parent?.parent===stressGroup||o.userData.merged||o.userData.ghostTwin)return;if(!o.geometry.boundingBox)o.geometry.computeBoundingBox();const b=o.geometry.boundingBox;
-   for(const x of [b.min.x,b.max.x])for(const y of [b.min.y,b.max.y])for(const z of [b.min.z,b.max.z]){
-    const p=vec([x,y,z]).applyMatrix4(o.matrixWorld);for(const[id,c]of Object.entries(cameras)){const q=p.clone().applyMatrix4(c.matrixWorldInverse),e=bounds[id];e.minX=Math.min(e.minX,q.x);e.maxX=Math.max(e.maxX,q.x);e.minY=Math.min(e.minY,q.y);e.maxY=Math.max(e.maxY,q.y);}
-   }
+  const root=only==='body'&&mannequin?(annyShown?anny.group:mannequin.group):scene;
+  const add=p=>{for(const[id,c]of Object.entries(cameras)){const q=p.clone().applyMatrix4(c.matrixWorldInverse),e=bounds[id];e.minX=Math.min(e.minX,q.x);e.maxX=Math.max(e.maxX,q.x);e.minY=Math.min(e.minY,q.y);e.maxY=Math.max(e.maxY,q.y);}};
+  root.traverse(o=>{if(!o.isMesh||!o.visible||o===floor||o.name==='dot-ring'||o.parent===dots||o.parent?.name==='joint-dots'||o.parent?.parent===stressGroup||o.userData.merged||o.userData.ghostTwin||offBody(o))return;
+   /* кожа Anny — сетка в стойке, скиннинг на видеокарте: её место в кадре — по точкам выборки (сцена, м) */
+   if(o.userData.boundsPoints){for(const p of o.userData.boundsPoints)add(p);return;}
+   if(!o.geometry.boundingBox)o.geometry.computeBoundingBox();const b=o.geometry.boundingBox;
+   for(const x of [b.min.x,b.max.x])for(const y of [b.min.y,b.max.y])for(const z of [b.min.z,b.max.z])add(vec([x,y,z]).applyMatrix4(o.matrixWorld));
   });
  }
  function resize(width,height,pad=1.13){
@@ -370,7 +384,7 @@ export function createCatalogScene(first,{coarse=false}={}){
  }
  /* теневая камера ключевого света охватывает всю сцену со всеми фазами (по рамке камер) с запасом */
  function fitShadow(){
-  const box=new THREE.Box3();scene.traverse(o=>{if(!o.isMesh||!o.visible||o===floor||o.name==='dot-ring'||o.parent===dots||o.parent?.name==='joint-dots'||o.parent?.parent===stressGroup||o.userData.merged)return;box.expandByObject(o);});
+  const box=new THREE.Box3();scene.traverse(o=>{if(!o.isMesh||!o.visible||o===floor||o.name==='dot-ring'||o.parent===dots||o.parent?.name==='joint-dots'||o.parent?.parent===stressGroup||o.userData.merged||offBody(o))return;if(o.userData.boundsPoints){for(const p of o.userData.boundsPoints)box.expandByPoint(p);return;}box.expandByObject(o);});
   if(box.isEmpty())box.set(new THREE.Vector3(-1,0,-1),new THREE.Vector3(1,2,2));
   box.expandByScalar(.7);const center=box.getCenter(new THREE.Vector3()),r=box.getSize(new THREE.Vector3()).length()/2;
   for(const l of [key,fill,rim]){l.target.position.copy(center);l.position.copy(center).add(l.userData.dir||(l.userData.dir=l.position.clone().normalize().multiplyScalar(8)));l.target.updateMatrixWorld();}
@@ -378,9 +392,9 @@ export function createCatalogScene(first,{coarse=false}={}){
  }
  apply(first,{color:()=> '#a7b3c6'});
  return{scene,cameras,apply,includeBounds,resize,bounds,regionMeshes,parts,body,head,mannequin,skeleton:skeletonLayer,muscleLayer,propNodes:()=>propNodes,staticMeshes:()=>staticMerged.children,studio,fitShadow,setShadows,
-  dispose(){disposeGeometry();disposeMaterials();},disposeGeometry,disposeMaterials};
+  anny,dispose(){disposeGeometry();disposeMaterials();},disposeGeometry,disposeMaterials};
  /* геометрия, текстуры и карты теней освобождаются сразу; материалы — отдельно: пока они живы, рендерер держит их
     собранные программы для следующей фигуры (main.mjs) */
  function disposeGeometry(){scene.traverse(o=>{o.geometry?.dispose();if(o.isLight&&o.shadow?.map)o.shadow.dispose();if(o.material)for(const m of [].concat(o.material))m.map?.dispose();});for(const t of studioTextures)t.dispose();studioTextures=[];}
- function disposeMaterials(){const materials=new Set([ghostSkin,ghostDepth]);scene.traverse(o=>{if(o.material)for(const m of [].concat(o.material))materials.add(m);});for(const m of materials)m.dispose();}
+ function disposeMaterials(){const materials=new Set([ghostSkin,ghostDepth]);scene.traverse(o=>{if(o.material)for(const m of [].concat(o.material))materials.add(m);if(o.customDepthMaterial)materials.add(o.customDepthMaterial);});for(const m of materials)m.dispose();}
 }
