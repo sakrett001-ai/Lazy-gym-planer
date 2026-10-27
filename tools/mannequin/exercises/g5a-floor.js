@@ -679,7 +679,9 @@ module.exports = {
     equipment: SUP_MAT,
     contacts: [{ body: 'back', prop: 'mat' }, { body: 'upperBack', prop: 'mat' }, { body: 'headBack', prop: 'mat' }],
     pose(t, C) {
-      const { V } = C, q = supineCore(C, { tilt: 10, lumbar: 10 });
+      /* грудной отдел лёжа разогнут на 12° (кифоз прижат к коврику): иначе с кожей 4.62.0 грудная клетка лежала под углом 9°
+         к коврику, и руки уходили от мест 4.61.0 на 11 см */
+      const { V } = C, q = supineCore(C, { tilt: 10, lumbar: 10, thoracic: -12 });
       /* лопатки и низ спины с ягодицами — на коврике (с 4.62.0 спина у грудной клетки по коже Anny глубже, и по одной области
          back касались только лопатки: таз висел, центр масс — в 15 см от опоры) */
       C.restOn2(q, 'upperBack', 'buttocks', [0, MAT, 0], [0, 1, 0], -.8);
