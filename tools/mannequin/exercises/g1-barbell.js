@@ -429,7 +429,9 @@ const HT = memo(t => {
   for (const s of S) { top[s].hip = [0, 7, 6]; top[s].knee = 90; }
   const fTop = C.fk(top), feet = {};
   for (const s of S) { const kn = fTop.P['kn' + s]; feet[s] = [kn[0] * 1.15, 0, kn[2] + 1]; }
-  const psi = C.lerp(1, 38, 1 - C.ease(t)), q = thrustBody(C, psi, { neck: C.lerp(8, 26, C.ease(t)) });
+  /* вверху корпус на 2,5° выше горизонтали (до 4.62.0 — 1°): с тазом 4.62.0 бедро при 1° разгибалось на 11° при согнутом
+     колене — за предел прямой мышцы бедра */
+  const psi = C.lerp(2.5, 38, 1 - C.ease(t)), q = thrustBody(C, psi, { neck: C.lerp(8, 26, C.ease(t)) });
   for (const s of S) {
     const g = M.SIGN[s], fwd = V.unit([g * .14, 0, 1]);
     C.foot(q, s, V.add(feet[s], fwd, 13.5), 0, V.unit([g * .2, .3, 1]), { forward: fwd });

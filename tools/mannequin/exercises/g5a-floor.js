@@ -279,7 +279,8 @@ function pushPose(C, L, e) {
    в опускании; ключица вверху опущена и без протракции (g0 [−6,5; 0]), лопатка — по ритму сгибания (с внутренней ротацией).
    С поясом этапа Д при локтях наружу (.39) и ключице, выведенной вперёд на 3°, пучки широчайшей у подмышки и ромбовидные
    у медиального края расходились — между полосами открывались щели 0,73 и 0,80 см (лента не растягивается без щелей) */
-const PUSH = once(() => pushLayout({ x: 29, ahead: 12.7, out: 13.3, elTop: 12, pole0: [.1, -.02, 1.13], pole1: [.54, .57, 1.13], g0: [-6.5, 0], g1: [9.3, -13] }));
+/* пальцы на 12° наружу (до 4.62.0 — 13,3): внизу запястье отводилось на 30,1° при пределе 30° */
+const PUSH = once(() => pushLayout({ x: 29, ahead: 12.7, out: 12, elTop: 12, pole0: [.1, -.02, 1.13], pole1: [.54, .57, 1.13], g0: [-6.5, 0], g1: [9.3, -13] }));
 /* Узкий хват: ладони на ширине плеч (уже — пронация предплечья за пределом при прижатых локтях), пальцы внутрь; вверху
    ключица опущена на 6° (при 8,2° с поясом этапа Д кожа надплечья ложилась на первые межрёберные) */
 const DIAMOND = once(() => pushLayout({ x: 16.5, ahead: 12, out: -35, elTop: 10.8, low: 5, pole0: [1.22, .94, 1.32], pole1: [.38, 1.97, 1.5], g0: [-6, 6.3], g1: [0, -15] }));
@@ -289,8 +290,10 @@ const WIDEPUSH = once(() => pushLayout({ x: 40, ahead: 18, out: 25, low: 4.2, el
 /* «Лучник»: работает правая рука (ладонь неподвижна, локоть вдоль корпуса), левая выпрямляется и ладонь скользит в сторону;
    внизу корпус смещён к правой ладони поворотом тела вокруг стоп; вверху правая ключица опущена на 7° (при 9,8° с поясом
    этапа Д первые межрёберные под ключицей выходили над кожей на 1–2 мм) */
-const ARCHER = once(() => pushLayout({ low: 4, slide: { s: 'L', el: 8 }, x: 48.9, ahead: -.3, elTop: 11.2, outL: 82.8, outR: 65, yaw: -7, roll: 2,
-  pole0L: [.25, 1.45, .34], pole1L: [1.62, -.2, .69], g0L: [-.6, 7.8], g1L: [.8, -2.7], pole0R: [-.13, -.5, 1.46], pole1R: [0, 0, 1.14], g0R: [-7, 8.8], g1R: [10, -7] }));
+/* с осанкой 4.62.0 (плечевой сустав на 3,3 см дальше назад) пальцы правой — на 64° наружу (было 65), локоть внизу чуть внутрь
+   (полюс −0,14): иначе запястье внизу отводилось на 36° при пределе 30° */
+const ARCHER = once(() => pushLayout({ low: 4, slide: { s: 'L', el: 8 }, x: 48.9, ahead: -.3, elTop: 11.2, outL: 82.8, outR: 64, yaw: -7, roll: 2,
+  pole0L: [.25, 1.45, .34], pole1L: [1.62, -.2, .69], g0L: [-.6, 7.8], g1L: [.8, -2.7], pole0R: [-.13, -.5, 1.46], pole1R: [-.14, 0, 1.14], g0R: [-7, 8.8], g1R: [10, -7] }));
 const PLANK = once(() => { const C = ctx([]); return { theta: plankTheta(C, { ballZ: -72, arms: plankArms(C) }) }; });
 /* Боковая планка на правом предплечье: правый бок к коврику (живот смотрит в +X), тело — прямая линия от стоп до макушки,
    стопы одна на другой (правая — ребром на коврике), правое плечо вертикально над локтем, левая рука поднята вверх. */
@@ -428,7 +431,9 @@ function legRaiseBody(C, e) {
     q.root.q = C.M.Q.slerp(q.root.q, q2.root.q, w); C.restOn(q, 'upperBack', [0, MAT, 0], [0, 1, 0], -.8);
   }
   const f = C.fk(q), m = C.V.mix(f.P.ghL, f.P.ghR, .5); q.root.p = C.V.add(q.root.p, [0, 0, 45 - m[2]]);
-  C.neckTo(q, 'headBack', [0, MAT, 0], [0, 1, 0], -.4);
+  /* затылок на коврике: с осанкой 4.62.0 затылок от линии лопаток дальше на 4,3 см — разгибание шеи до 55° (предел
+     валидатора 60°), с прежним пределом подбора 45° голова висела над ковриком на 2 см */
+  C.neckTo(q, 'headBack', [0, MAT, 0], [0, 1, 0], -.4, -55);
   return q;
 }
 function legAngle(C, q, s, a, { dorsi = -15, knee = 0 } = {}) {
@@ -597,16 +602,20 @@ module.exports = {
     contacts: [{ body: 'buttocks', prop: 'mat' }, { body: 'back', prop: 'mat' }, { body: 'soleL', prop: 'mat' }, { body: 'soleR', prop: 'mat' },
       { body: 'upperBack', prop: 'mat', when: [0, .05] }, { body: 'handL', prop: 'mat', when: [0, .05] }, { body: 'handR', prop: 'mat', when: [0, .05] }],
     pose(t, C) {
-      const e = C.ease(t), body = (e, neck) => {
+      /* лопатки и ягодицы на коврике в исходном положении: у кожи 4.62.0 верх спины глубже ягодиц, и по одной спине таз висел
+         над ковриком на 3,8 см — наклон таза по обеим областям (w = 1), к середине подъёма (e = 0,45) — плавно к прежнему */
+      const e = C.ease(t), W = e => { const u = Math.min(1, e / .45); return 1 - u * u * (3 - 2 * u); }, body = (e, neck, w) => {
         const q = supine(C, { tilt: C.lerp(4, 12, e), lumbar: C.lerp(4, 12, e), thoracic: C.lerp(0, 28, e), neck });
         for (const s of S) { q[s].hip = [60, 8, 4]; q[s].knee = 95; }
+        if (w > 0) { const q2 = C.M.clone(q); C.restOn2(q2, 'upperBack', 'buttocks', [0, MAT, 0], [0, 1, 0], -.8); q.root.q = C.M.Q.slerp(q.root.q, q2.root.q, w); }
         return lieOn(C, q, 'back', [0, -10]);
       };
       /* в исходном положении затылок лежит в ладонях на коврике */
-      const q0 = body(0, 0); C.neckTo(q0, 'headBack', [0, MAT + 3.4, 0], [0, 1, 0], 0);
-      const q = body(e, q0.neck[0] + C.lerp(0, 14, e));
+      const qa = body(0, 0, 0), qb = body(0, 0, 1); C.neckTo(qa, 'headBack', [0, MAT + 3.4, 0], [0, 1, 0], 0); C.neckTo(qb, 'headBack', [0, MAT + 3.4, 0], [0, 1, 0], 0);
+      const q = body(e, C.lerp(qa.neck[0], qb.neck[0], W(e)) + C.lerp(0, 14, e), W(e));
       feetFlatAtKnee(C, q, 118);
-      for (const s of S) { q[s].girdle = [C.lerp(4, 8, e), C.lerp(0, 10, e)]; handBehindHead(C, q, s, { fwd: .6, up: 1 }); }
+      /* локти внизу чуть вперёд (0,75): с разогнутой шеей в исходном положении плечо иначе выходит за предел наружной ротации */
+      for (const s of S) { q[s].girdle = [C.lerp(4, 8, e), C.lerp(0, 10, e)]; handBehindHead(C, q, s, { fwd: C.lerp(.75, .6, e), up: 1 }); }
       return q;
     }
   },
@@ -632,7 +641,7 @@ module.exports = {
   /* Подъём ног лёжа: руки вдоль тела ладонями вниз, ноги прямые. t=0 — пятки в нескольких сантиметрах над ковриком
      (поясница прижата), t=1 — ноги вертикально, таз слегка подкручен и оторван от коврика. */
   lyinglegraise: {
-    keys: [0, .25, .5, .75, 1],
+    keys: [0, .25, .5, .625, .75, 1],   /* ключ 0,625: между 0,5 и 0,75 шея по интерполяции опускала затылок в коврик на 1 см */
     equipment: [{ type: 'mat', id: 'mat', len: 200, width: 70, at: [0, 0, -4] }],
     contacts: [{ body: 'back', prop: 'mat' }, { body: 'upperBack', prop: 'mat' }, { body: 'headBack', prop: 'mat' }, { body: 'palmL', prop: 'mat' }, { body: 'palmR', prop: 'mat' },
       { body: 'buttocks', prop: 'mat', when: [0, .3] }],
@@ -675,7 +684,7 @@ module.exports = {
          back касались только лопатки: таз висел, центр масс — в 15 см от опоры) */
       C.restOn2(q, 'upperBack', 'buttocks', [0, MAT, 0], [0, 1, 0], -.8);
       { const f = C.fk(q), h = V.mix(f.P.hipL, f.P.hipR, .5); q.root.p = V.add(q.root.p, [0, 0, -5 - h[2]]); }
-      C.neckTo(q, 'headBack', [0, MAT, 0], [0, 1, 0], -.4);
+      C.neckTo(q, 'headBack', [0, MAT, 0], [0, 1, 0], -.4, -55);   /* затылок на коврике — как у подъёма ног лёжа */
       /* фаза работы: правая рука + левая нога в первой половине, левая рука + правая нога — во второй */
       const bump = u => (1 - Math.cos(4 * Math.PI * u)) / 2, w = { R: t < .5 ? bump(t) : 0, L: t >= .5 ? bump(t - .5) : 0 };
       const T = C.axes(q, 'thorax');
@@ -731,7 +740,8 @@ module.exports = {
       const T = C.axes(q, 'thorax');
       /* плечевой сустав идёт за лопаткой (ритм пояса): руки ставятся дважды — второй раз от сустава поднятой руки */
       for (const pass of [0, 1]) for (const s of S) {
-        const lift = C.lerp(-.105, .1, e), dir = V.unit([C.M.SIGN[s] * .12, lift, 1]);
+        /* внизу руки наклонены к коврику сильнее, чем до 4.62.0 (−0,105): плечевой сустав на 3,3 см дальше от груди, лёжа — выше */
+        const lift = C.lerp(-.16, .1, e), dir = V.unit([C.M.SIGN[s] * .12, lift, 1]);
         armDir(C, q, s, dir, V.unit(V.add(T.z, V.scale(T.x, C.M.SIGN[s]), 1)), { el: 6, pron: 45, mode: 'flat' });
       }
       return q;
@@ -781,7 +791,8 @@ module.exports = {
     pose(t, C) {
       const { V } = C, q = prone(C, { lumbar: -4, thoracic: -6, region: 'belly' });
       q.neck = [4, 0, 0];
-      proneLegs(C, q, -6);
+      /* бёдра разогнуты на 9° (до 4.62.0 — 6): у кожи 4.62.0 низ живота выступает на 3 см больше, и бёдра висели над ковриком */
+      proneLegs(C, q, -9);
       const ang = C.lerp(8, 168, t) * C.D2R, lift = SNOW.lift * C.D2R;
       for (const s of S) {
         const g = C.M.SIGN[s];

@@ -182,7 +182,8 @@ function ohextKey(t, C, prev) {
   const { V } = C, q = C.base(), e = C.ease(t);
   C.root(q, [0, 89.2, 0], [0, 1, 0], [0, 0, 1]); q.lumbar = [1, 0, 0]; q.thoracic = [0, 0, 0]; q.neck = [C.lerp(4, 10, e), 0, 0];
   const feet = q => { for (const s of S) plant(C, q, s, [C.M.SIGN[s] * 11, 0, -1]); };
-  for (const s of S) q[s].girdle = [C.lerp(26, 22, e), C.lerp(2, 0, e)];
+  /* подъём пояса над головой — 22 (до 4.62.0 вверху 26): у кожи 4.62.0 надплечья выше, и при 26 затылок касался их на 1,5 см */
+  for (const s of S) q[s].girdle = [22, C.lerp(2, 0, e)];
   const cands = [];
   for (let yw = 20; yw <= 90; yw += 5) for (const fz of [-.4, 0, .3, .6, 1, 1.6]) for (const lx of [1, .4, -.2])
     cands.push({ yaw: yw, fz, lx, pole: (s, lat) => V.unit(V.add(V.add(V.scale(lat, lx), [0, 1, 0], C.lerp(.2, 4, e)), [0, 0, 1], fz)), dist: o => Math.abs(yw - o.yaw) / 10 + Math.abs(fz - o.fz) * 2 + Math.abs(lx - o.lx) * 2 });
@@ -190,8 +191,9 @@ function ohextKey(t, C, prev) {
   const arms = q => {
     const f = C.fk(q), head = f.P.head, gh = V.mix(f.P.ghL, f.P.ghR, .5);
     /* верхний диск идёт по дуге вокруг локтей: над головой → за затылок. Центр дуги — на 1,9 см впереди центра головы
-       (до 4.38.0 — 2 см: с осью шеи у тел позвонков голова при наклоне 4–10° стоит на 0,1–0,2 см впереди, дуга — на месте) */
-    const E = [0, gh[1] + 25, head[2] + 1.9], th = C.lerp(-15.6, 96, Math.pow(e, .8)) * C.D2R, r = e < .5 ? 26 + 2 * Math.sin(Math.PI * e) : C.lerp(26, 20, (e - .5) * 2);
+       (до 4.38.0 — 2 см: с осью шеи у тел позвонков голова при наклоне 4–10° стоит на 0,1–0,2 см впереди, дуга — на месте).
+       Дуга в начале спуска выносится от центра на 3 см (до 4.62.0 — на 2): с поясом 22 ладони иначе не достают до диска */
+    const E = [0, gh[1] + 25, head[2] + 1.9], th = C.lerp(-15.6, 96, Math.pow(e, .8)) * C.D2R, r = e < .5 ? 26 + 3 * Math.sin(Math.PI * e) : C.lerp(26, 20, (e - .5) * 2);
     const P = V.add(E, [0, Math.cos(th), -Math.sin(th)], r), tilt = C.lerp(18, 12, e) * C.D2R;
     chosen = cup(C, q, P, [0, Math.cos(tilt), Math.sin(tilt)], [0, 0, -1], { w: 5.8, stag: 3.8, cands: () => cands, prev, lam: 25,
       prefer: (q, s) => { const el = C.fk(q).P['el' + s]; return 1.2 * Math.max(0, Math.abs(el[0]) - 12) ** 2; } });
@@ -682,7 +684,8 @@ module.exports = {
       const { V } = C, q = C.base(), e = C.ease(t);
       C.root(q, [0, 89.2, 0], [0, 1, 0], [0, 0, 1]); q.neck = [0, 0, 0];
       const feet = q => { for (const s of S) plant(C, q, s, [C.M.SIGN[s] * 11, 0, -1]); };
-      for (const s of S) { armAngles(q, s, [C.lerp(17, 90, e), C.lerp(7, 6, e), C.lerp(-14, -10, e)], C.lerp(8, 10, e), 80); C.rhythm(q, s); }
+      /* внизу плечо согнуто на 20° (до 4.62.0 — 17): плечевой сустав на 3,3 см дальше назад, и гантели задевали бёдра */
+      for (const s of S) { armAngles(q, s, [C.lerp(20, 90, e), C.lerp(7, 6, e), C.lerp(-14, -10, e)], C.lerp(8, 10, e), 80); C.rhythm(q, s); }
       settle(C, q, { lo: 1, hi: 7, loads: loadsIn(C, S, 6), resolve: feet });
       return q;
     }

@@ -398,7 +398,8 @@ module.exports = {
       for (const s of S) {
         const gh = f.P['gh' + s], lat = C.lat(q, s), down = [0, -1, 0], fwd = [0, 0, 1];
         const ua = V.unit(V.add(V.add(down, fwd, C.lerp(.1, .15, e)), lat, .1)), el = V.add(gh, ua, C.M.B.ua);
-        const phi = C.lerp(88, 6, e) * C.D2R, fore = V.unit(V.add(V.add(V.scale(down, Math.cos(phi)), fwd, Math.sin(phi)), lat, -.1));
+        /* внизу локоть согнут на 10° (до 4.62.0 — 6): плечевой сустав на 3,3 см дальше назад, и рукояти задевали бёдра */
+        const phi = C.lerp(88, 10, e) * C.D2R, fore = V.unit(V.add(V.add(V.scale(down, Math.cos(phi)), fwd, Math.sin(phi)), lat, -.1));
         const wr = V.add(el, fore, C.M.B.fa), palm = V.add(V.scale(down, Math.sin(phi)), fwd, -Math.cos(phi));
         C.hold(q, s, V.add(V.add(wr, fore, 8), palm, 2.6), V.unit(V.add(V.add(V.sub(el, V.mix(gh, wr, .5)), [0, 0, -1], 4), lat, 2)), { pron: C.lerp(40, 20, e) });
       }
@@ -859,7 +860,9 @@ module.exports = {
       for (const s of S) q[s].girdle = [C.lerp(14, -4, e), C.lerp(8, -6, e)];
       const f = C.fk(q);
       for (const s of S) {
-        const gh = f.P['gh' + s], lat = C.lat(q, s), a = C.lerp(32, -90, e) * C.D2R;
+        /* внизу рукоять на 3° впереди вертикали от плечевого сустава: с осанкой 4.62.0 сустав на 3,3 см дальше назад, и по
+           вертикали гриф входил в бёдра */
+        const gh = f.P['gh' + s], lat = C.lat(q, s), a = C.lerp(32, -87, e) * C.D2R;
         const g = V.add(V.add(gh, [0, Math.sin(a), Math.cos(a)], 61.5), lat, 1); g[0] = C.M.SIGN[s] * 19;
         const pole = V.unit(V.add(V.add(lat, [0, -1, 0], .6), [0, 0, -1], .3));
         C.grip(q, s, g, [-C.M.SIGN[s], 0, 0], pole, { wristExt: 4 });
@@ -877,7 +880,8 @@ module.exports = {
       for (const s of S) {
         const gh = f.P['gh' + s], lat = C.lat(q, s), down = [0, -1, 0], fwd = [0, 0, 1];
         const ua = V.unit(V.add(V.add(down, fwd, C.lerp(.1, .16, e)), lat, .1)), el = V.add(gh, ua, C.M.B.ua);
-        const phi = C.lerp(88, 6, e) * C.D2R, fore = V.add(V.scale(down, Math.cos(phi)), fwd, Math.sin(phi)), palm = V.add(V.scale(down, Math.sin(phi)), fwd, -Math.cos(phi));
+        /* внизу локоть согнут на 10° (до 4.62.0 — 6): плечевой сустав на 3,3 см дальше назад, и кисти задевали бёдра */
+        const phi = C.lerp(88, 10, e) * C.D2R, fore = V.add(V.scale(down, Math.cos(phi)), fwd, Math.sin(phi)), palm = V.add(V.scale(down, Math.sin(phi)), fwd, -Math.cos(phi));
         const g = gripFrom(C, el, fore, palm); g[0] = C.M.SIGN[s] * 13.5;
         const pole = V.unit(V.add(V.add(V.sub(el, V.mix(gh, g, .45)), [0, 0, -1], 4), lat, 2));
         C.grip(q, s, g, [-C.M.SIGN[s], 0, 0], pole, { wristExt: 6 });
