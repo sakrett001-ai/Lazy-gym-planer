@@ -19,10 +19,17 @@
       этих полнот с запасом на сгиб). Кисти и стопе — нет (подошва и ладонь ставятся по контактам).
    2. Отход от процедурной кожи (distance). Процедурная кожа — то, по чему считаются контакты, равновесие и проверки;
       видимая кожа не должна уходить от неё дальше, чем сама форма Anny отличается от формы манекена в стойке, плюс запас
-      на сгибы. В стойке (fit.py: местные формы поправлены там, где расхождение больше 2–3 см) 99 % вершин — ближе
-      STANCE_P99 ≈ 3,5 см; поэтому в любом кадре 99 % вершин зоны должны быть ближе DIST_P99 = 5 см, а все — ближе
-      DIST_MAX по зонам (ягодицы и пах — 9 см: процедурный «низ таза» скошен до −9 см под седалищными буграми для опоры
-      сидя, у Anny там ягодичная складка; кисть — 6 см: пальцы Anny толще и длиннее трубок процедурной кисти; прочее — 7).
+      на сгибы. Отход вершины — до ближайшей поверхности частей процедурной кожи своей зоны (compare.js, ZONE_PARTS): не до
+      объединения всего тела, иначе касание частей (бедро о живот в глубоком сгибании, плечо у головы) мерилось бы как
+      отход формы. В стойке (fit.py; подгонка позы рига, формы — одобренные) отход 99 % вершин зоны — до 3,6 см, всех — до
+      3,9 (голова — до 5,1: уши, нос и подбородок Anny против эллипсоидов манекена; по зонам — node
+      tools/anny-look/stance-table.js). Поэтому в любом кадре 99 % вершин зоны должны быть ближе DIST_P99 = 5 см
+      (запас 1,5 см на сгибы), а все — ближе DIST_MAX = 7. Исключения по зонам, где процедурная кожа — не анатомия, а опора:
+      ягодицы — 7 и 9 см: процедурный низ таза скошен назад до 9 см ниже тазобедренных суставов (седалищные бугры с мягкими
+      тканями — опора сидя), а у Anny — ягодичная складка и межъягодичная борозда, и при сгибании бедра (тяги в наклоне,
+      присед, сидя) несколько вершин у середины расходятся с ним на 6,5–7 см; пах — 9 см (тот же скошенный низ таза
+      спереди); бедро — 8 см (промежность сзади при сгибании бедра больше 110°: тот же скос); кисть — 6 см (пальцы Anny
+      толще и длиннее трубок процедурной кисти). Выстилка рта (за губами, не видна) — не мерится.
    3. Самопересечения и вывороты (folds) в крайних позах. Треугольник вывернут, если его нормаль в кадре смотрит против
       нормали стойки, повёрнутой смешанным поворотом его вершин (скиннинг сложил кожу). Складка — два треугольника,
       которые в стойке были ближе 5 см друг к другу (не соседние: без общих вершин), а в кадре пересекаются: так
@@ -40,7 +47,7 @@ const V2 = require(root + '/tools/biomech/validator2.js'), CMP = require('./comp
 const { V } = M, FLOOR = M.FLOOR;
 const DEPTH_EXTRA = 1.0, HAND_FOOT_EXTRA = 1.5, FLOOR_TOL = 1.0, FLOOR_PRESS = 2.0;
 const extraOf = seg => seg === 'hand' || seg === 'foot' ? HAND_FOOT_EXTRA : DEPTH_EXTRA;
-const DIST_P99 = 5.0, DIST_MAX = { 'ягодицы': 9, 'пах': 9, 'кисть': 6 }, DIST_MAX_DEFAULT = 7.0;
+const DIST_P99 = { 'ягодицы': 7 }, DIST_P99_DEFAULT = 5.0, DIST_MAX = { 'ягодицы': 9, 'пах': 9, 'бедро': 8, 'кисть': 6 }, DIST_MAX_DEFAULT = 7.0;
 const FOLD_NEAR = 5.0;
 const EXTREME = [['squat', 1], ['goblet', 1], ['legcurl', 1], ['bbcurl', 1], ['dbcurl', 1], ['chinup', 0], ['pullup', 0], ['latpull', 0], ['ohp', 0], ['ohext', 0],
   ['hollow', 1], ['bicycle', .25], ['hangknee', 1], ['lunge', 1], ['cablewood', 1], ['nordic', 1], ['burpee', .5], ['seatedcalf', 0], ['crunch', 1], ['pushup', 1]];
@@ -171,7 +178,7 @@ function run({ ids = null, ts = [0, .25, .5, .75, 1], d = CMP.loadAnny(), log = 
     }
     log(id);
   }
-  for (const [z, a] of Object.entries(zacc)) { const s = a.all.sort((x, y) => x - y), n = s.length; res.distance[z] = { p99: s[Math.floor(n * .99)], p95: s[Math.floor(n * .95)], max: a.max, where: a.where, limitMax: DIST_MAX[z] ?? DIST_MAX_DEFAULT }; }
+  for (const [z, a] of Object.entries(zacc)) { const s = a.all.sort((x, y) => x - y), n = s.length; res.distance[z] = { p99: s[Math.floor(n * .99)], p95: s[Math.floor(n * .95)], max: a.max, where: a.where, limitP99: DIST_P99[z] ?? DIST_P99_DEFAULT, limitMax: DIST_MAX[z] ?? DIST_MAX_DEFAULT }; }
   for (const [id, t] of EXTREME) { if (!POSES[id] || (ids && !ids.includes(id))) continue; const R = EQ.rig(POSES[id])(t), P = A.skin(R, { d, floor: false }), f = folds(d, R, P); res.folds.push({ id, t, ...f }); }
   return res;
 }
@@ -180,12 +187,12 @@ function foldBase() { try { return JSON.parse(fs.readFileSync(FOLDS_FILE, 'utf8'
 function failures(res) {
   const out = [];
   for (const p of res.penetration) out.push(`${p.ex}${p.has === 'ничего' ? ' (без необязательного инвентаря)' : ''} t=${p.t}: ${p.seg} в ${p.id === 'floor' ? 'полу' : p.id} на ${p.depth.toFixed(2)} см (допуск ${p.limit.toFixed(2)}: валидатор ${p.tol}, процедурная кожа ${p.proc.toFixed(2)} + ${p.extra})`);
-  for (const [z, s] of Object.entries(res.distance)) { if (s.p99 > DIST_P99) out.push(`${z}: 99 % вершин дальше ${s.p99.toFixed(2)} см от процедурной кожи (допуск ${DIST_P99})`); if (s.max > s.limitMax) out.push(`${z}: отход ${s.max.toFixed(2)} см (${s.where}, допуск ${s.limitMax})`); }
+  for (const [z, s] of Object.entries(res.distance)) { if (s.p99 > s.limitP99) out.push(`${z}: 99 % вершин дальше ${s.p99.toFixed(2)} см от процедурной кожи (допуск ${s.limitP99})`); if (s.max > s.limitMax) out.push(`${z}: отход ${s.max.toFixed(2)} см (${s.where}, допуск ${s.limitMax})`); }
   const base = foldBase();
   for (const f of res.folds) { const b = base[`${f.id} ${f.t}`] || { inverted: 0, folds: 0 }; if (f.inverted > b.inverted) out.push(`${f.id} t=${f.t}: вывернутых треугольников ${f.inverted} (записано ${b.inverted})`); if (f.folds > b.folds) out.push(`${f.id} t=${f.t}: складок ${f.folds} (записано ${b.folds})`); }
   return out;
 }
-module.exports = { kinds, penetration, folds, triTri, run, failures, foldBase, DEPTH_EXTRA, HAND_FOOT_EXTRA, FLOOR_PRESS, DIST_P99, DIST_MAX, DIST_MAX_DEFAULT, FOLD_NEAR, EXTREME };
+module.exports = { kinds, penetration, folds, triTri, run, failures, foldBase, DEPTH_EXTRA, HAND_FOOT_EXTRA, FLOOR_PRESS, DIST_P99, DIST_P99_DEFAULT, DIST_MAX, DIST_MAX_DEFAULT, FOLD_NEAR, EXTREME };
 if (require.main === module) {
   const arg = k => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : null; };
   const ids = process.argv[2] && process.argv[2] !== 'all' && !process.argv[2].startsWith('--') ? process.argv[2].split(',') : null;
@@ -204,7 +211,7 @@ if (require.main === module) {
   const res = run({ ids, ts, log: quiet ? () => {} : () => process.stderr.write('.') });
   if (!quiet) {
     console.log(`\nкожа Anny: ${((Date.now() - t0) / 1000).toFixed(0)} с`);
-    console.log('отход от процедурной кожи (99 % / наибольший, см):'); for (const [z, s] of Object.entries(res.distance)) console.log(`  ${z.padEnd(12)} ${s.p99.toFixed(2).padStart(5)} / ${s.max.toFixed(2).padStart(5)} (допуск ${DIST_P99} / ${s.limitMax})  ${s.where}`);
+    console.log('отход от процедурной кожи (99 % / наибольший, см):'); for (const [z, s] of Object.entries(res.distance)) console.log(`  ${z.padEnd(12)} ${s.p99.toFixed(2).padStart(5)} / ${s.max.toFixed(2).padStart(5)} (допуск ${s.limitP99} / ${s.limitMax})  ${s.where}`);
     console.log('крайние позы (вывернутые треугольники, складки):', res.folds.map(f => `${f.id} ${f.t}: ${f.inverted}/${f.folds}`).join(', '));
   }
   if (arg('--json')) fs.writeFileSync(arg('--json'), JSON.stringify(res, null, 1));

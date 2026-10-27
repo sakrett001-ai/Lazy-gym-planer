@@ -136,7 +136,7 @@ test('distance to the procedural skin: within the limits in the stance and the s
   const verts = []; for (let v = 0; v < d.nv; v += 3) if (zones[v] !== 'полость') verts.push(v);
   const check = (R, P) => { const body = M.bodyData(R), Pv = new Float32Array(verts.length * 3); verts.forEach((v, k) => { for (let i = 0; i < 3; i++) Pv[k * 3 + i] = P[v * 3 + i]; }); const dist = CMP.distances(d, Pv, R, zones, verts, body), by = {};
     verts.forEach((v, k) => (by[zones[v]] ||= []).push(Math.abs(dist[k]))); const out = [];
-    for (const [z, a] of Object.entries(by)) { a.sort((x, y) => x - y); const p99 = a[Math.floor(a.length * .99)], mx = a.at(-1), lim = CK.DIST_MAX[z] ?? CK.DIST_MAX_DEFAULT; if (p99 > CK.DIST_P99) out.push(`${z} 99% ${p99.toFixed(2)}`); if (mx > lim) out.push(`${z} max ${mx.toFixed(2)}`); } return out; };
+    for (const [z, a] of Object.entries(by)) { a.sort((x, y) => x - y); const p99 = a[Math.floor(a.length * .99)], mx = a.at(-1), lim = CK.DIST_MAX[z] ?? CK.DIST_MAX_DEFAULT; if (p99 > (CK.DIST_P99[z] ?? CK.DIST_P99_DEFAULT)) out.push(`${z} 99% ${p99.toFixed(2)}`); if (mx > lim) out.push(`${z} max ${mx.toFixed(2)}`); } return out; };
   const R0 = M.catalogPose(M.neutral()); assert.deepEqual(check(R0, A.skin(R0, { d, floor: false })), []);
   for (const id of ['bbbench', 'legcurl', 'hipthrust']) for (const t of [0, 1]) { const { R } = pose(id, t); assert.deepEqual(check(R, A.skin(R, { d, floor: false })), [], `${id} t=${t}`); }
   /* отрицательный: грудь вынесена на 8 см вперёд */

@@ -21,7 +21,9 @@ const POSES = {
   /* колено в полном сгибе при бедре в стойке (сгибание ног) */
   knees: q => { for (const s of M.SIDES) { q[s].knee = 140; } },
   /* бедро в глубоком сгибании, колено согнуто (присед, «велосипед», подъём коленей) */
-  hips: q => { for (const s of M.SIDES) { q[s].hip = [120, 8, 10]; q[s].knee = 90; } }
+  hips: q => { for (const s of M.SIDES) { q[s].hip = [120, 8, 10]; q[s].knee = 90; } },
+  /* сидя (тяга сидя, тяга сверху, разгибания и жимы в тренажёрах: сгибание бедра 69–111°) */
+  seated: q => { for (const s of M.SIDES) { q[s].hip = [85, 6, 4]; q[s].knee = 85; } }
 };
 const poseR = name => { const q = M.neutral(); POSES[name](q); return M.catalogPose(q); };
 module.exports = { POSES, poseR };

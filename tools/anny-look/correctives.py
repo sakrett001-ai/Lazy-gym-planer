@@ -30,11 +30,11 @@ SPECS = [
     # кисти или стопы) от 0,02 до 0,98, по каждому набору, и не дальше r см от центра сустава в позе (сустав, r); у форм
     # «к процедурной коже» — ещё (части процедурной кожи, KEEP см)
     ('armsSide', 'armsSide', 'elevation', 30, 160, (ARM, ('cl', 'sp') + ARM), ('sh', 14)),
-    ('armsUp', 'armsUp', 'elevation', 90, None, (ARM, ('cl', 'sp') + ARM), ('sh', 14), (('torso', 'ua', 'sh', 'ac'), 2.0)),
+    ('armsUp', 'armsUp', 'elevation', 90, None, (ARM, ('cl', 'sp') + ARM), ('sh', 14), (('torso', 'ua', 'sh', 'ac'), 2.0, None, None)),
     ('elbow', 'elbows', 'elbow', 60, None, (FOREARM,), ('el', 8)),
     ('knee', 'knees', 'knee', 60, None, (SHANK,), ('kn', 10)),
     ('hip', 'hips', 'hipFlex', 45, None, (('th',) + SHANK,), ('hip', 14)),
-    ('armsOverhead', 'armsOverhead', 'elevation', 150, None, (ARM, ('cl', 'sp') + ARM), ('sh', 16), (('torso', 'ua', 'sh', 'ac'), 2.0)),
+    ('armsOverhead', 'armsOverhead', 'elevation', 150, None, (ARM, ('cl', 'sp') + ARM), ('sh', 16), (('torso', 'ua', 'sh', 'ac'), 2.0, None, None)),
 ]
 CONFORM_ITERS, CONFORM_TAUBIN = 8, 4   # шагов «подтянуть избыток (с долей круга) — сгладить» и проходов Таубина на шаг
 TAUBIN = (.5, -.53, 30)   # λ, μ, проходов
@@ -112,28 +112,33 @@ def build(Vcat, F, wi, ww, frames):
     out = []
     for name, pose, angle, a0, a2, chains, (jk, r), *conf in SPECS:
         S = np.array(poses[pose]['S']).reshape(-1, 12); DQ = dq_from(S)
-        # прежние формы — с их весом в этой позе
-        V0 = Vcat.copy()
-        for c in out:
-            w = tent(c, poses[pose]['angles'][c['side']][c['angle']])
-            if w > 0: V0[c['i']] += w * np.array(c['d']).reshape(-1, 3)
-        Pp, Rm = skin(V0, wi, ww, DQ)
         for s in 'LR':
-            band = np.zeros(n, bool)
-            for chain in chains:
+            # прежние формы (и левая этой же — у правой: круги сторон у таза перекрываются) — с их весом в этой позе
+            V0 = Vcat.copy()
+            for c in out:
+                w = tent(c, poses[pose]['angles'][c['side']][c['angle']])
+                if w > 0: V0[c['i']] += w * np.array(c['d']).reshape(-1, 3)
+            Pp, Rm = skin(V0, wi, ww, DQ)
+            band = np.zeros(n, bool) if chains else np.ones(n, bool)
+            for chain in chains or ():
                 ids = [fi[c + s] for c in chain]; wc = np.zeros(n)
                 for k in range(4): wc += np.where(np.isin(wi[:, k], ids), ww[:, k], 0)
                 band |= (wc > .02) & (wc < .98)
             dist = np.linalg.norm(Pp - np.array(poses[pose]['joints'][jk + s]), axis=1)
             fall = np.clip(1 - dist / r, 0, 1); fall = fall * fall * (3 - 2 * fall); fall[~band] = 0
+            if not chains:   # полоса без цепочки (сидя): только своя сторона, переход через середину на ±2 см
+                m = np.clip((Pp[:, 0] * (1 if s == 'L' else -1) + 2) / 4, 0, 1); fall *= m * m * (3 - 2 * m)
             ri = np.where(fall > 0)[0]
             if not len(ri): continue
             Q = Pp
             if conf:
-                parts, keep_ = conf[0]; Q = Pp.copy()
+                parts, keep_, keep_in, where = conf[0]; Q = Pp.copy()
+                if where == 'below':   # ниже сустава (каталог: Y вниз)
+                    fall[Pp[:, 1] < poses[pose]['joints'][jk + s][1] - 1.0] = 0; ri = np.where(fall > 0)[0]
                 for _ in range(CONFORM_ITERS):
-                    dd, gg = proc_sdf(pose, Q[ri], s, parts); e = np.clip(dd - keep_, 0, None)
-                    if e.max() < .2: break
+                    dd, gg = proc_sdf(pose, Q[ri], s, parts)
+                    e = np.clip(dd - keep_, 0, None) - (np.clip(-dd - keep_in, 0, None) if keep_in is not None else 0)
+                    if np.abs(e).max() < .2: break
                     Q[ri] -= gg * (e * fall[ri])[:, None]
                     Q = taubin(Q, A, fall, CONFORM_TAUBIN)
             X = taubin(Q, A, fall)

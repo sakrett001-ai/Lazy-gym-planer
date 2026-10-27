@@ -115,7 +115,7 @@ const ZONE_PARTS = {
   'верх спины': ['torso', 'sh', 'ac'], 'бока': ['torso', 'ua', 'sh'], 'живот': ['torso'], 'поясница': ['torso'], 'ягодицы': ['torso', 'th'],
   'пах': ['torso', 'th'], 'дельты': ['torso', 'ua', 'sh', 'ac'], 'плечо': ['ua', 'sh', 'el', 'torso'], 'локоть': ['ua', 'fa', 'el'],
   'предплечье': ['fa', 'el', 'wr'], 'кисть': ['hand', 'fa', 'wr'], 'бедро': ['th', 'torso', 'kn'], 'колено': ['th', 'sk', 'kn'],
-  'голень': ['sk', 'kn', 'an'], 'стопа': ['foot', 'sk', 'an'],
+  'голень': ['sk', 'kn', 'an'], 'стопа': ['foot', 'sk', 'an'], 'полость': ['head'],
 };
 /* расстояния вершин Anny (сетка кадра P) до процедурной кожи — до частей своей зоны (ZONE_PARTS) */
 function distances(d, P, R, zones, verts, body) {
@@ -123,7 +123,9 @@ function distances(d, P, R, zones, verts, body) {
   verts.forEach((v, k) => {
     const p = [P[k * 3], P[k * 3 + 1], P[k * 3 + 2]], z = zones[v], f = d.frames[d.wi[v * 4]];
     const s = /[LR]$/.test(f) ? f.slice(-1) : d.region.side[v] ? 'R' : 'L';
-    let m = Infinity; for (const part of ZONE_PARTS[z]) m = Math.min(m, sdf.part(part, s, p));
+    /* до ближайшей поверхности своих частей (знак — её): внутри соседней части (бедро в животе при глубоком сгибании,
+       надплечье в шее) мерить глубину в ней — мерить касание, а не форму */
+    let m = Infinity; for (const part of ZONE_PARTS[z]) { const x = sdf.part(part, s, p); if (Math.abs(x) < Math.abs(m)) m = x; }
     out[k] = m;
   });
   return out;
