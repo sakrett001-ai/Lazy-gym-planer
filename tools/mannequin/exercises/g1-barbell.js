@@ -388,12 +388,14 @@ const WRIST = once(() => {
     feet();
     return q;
   };
-  /* предплечье: тыльной стороной на верхней поверхности бедра, запястье на 3,5 см дальше колена */
+  /* предплечье: тыльной стороной на верхней поверхности бедра, запястье на 3,5 см дальше колена; локоть — выше на 6,4 см
+     и на 2 см снаружи (у кожи 4.62.0 бедро у таза толще, а плечевой сустав дальше назад — с прежней раскладкой предплечье
+     входило в бедро, плечо — в бок груди) */
   const fore = q => {
     const f = C.fk(q), out = {};
     for (const s of S) {
       const th = f.F['th' + s], hip = f.P['hip' + s], kn = f.P['kn' + s], up = M.M3.col(th.R, 2), dir = V.unit(V.sub(kn, hip));
-      const W = V.add(V.add(kn, dir, 8.5), up, 5.8 + 2.5), E = V.add(V.add(W, dir, -M.B.fa), up, 4.6);
+      const W = V.add(V.add(kn, dir, 8.5), up, 5.8 + 2.5), E = V.add(V.add(V.add(W, dir, -M.B.fa), up, 6.4), [M.SIGN[s], 0, 0], 2);
       out[s] = { W, E, w: V.unit(V.sub(W, E)) };
     }
     return out;

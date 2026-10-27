@@ -768,9 +768,11 @@ module.exports = {
       balance(C, q, PT_FEET, { shift: [0, C.lerp(0, -4, e)] });
       for (const s of S) q[s].girdle = [C.lerp(-4, 4, e), C.lerp(2, 8, e)];
       const f = C.fk(q), gm = V.mix(f.P.ghL, f.P.ghR, .5);
-      const target = V.mix([0, 72, f.P.hipL[2] + 21], [0, 41, f.P.knL[2] - 9], e);
+      /* кисти у паха — на 27 см впереди тазобедренных (до 4.62.0 — 21: низ живота кожи 4.62.0 на 3 см впереди, и предплечье
+         входило в него), внизу — на 3 см дальше от бёдер (внутренние поверхности бёдер ближе друг к другу) */
+      const target = V.mix([0, 72, f.P.hipL[2] + 27], [0, 41, f.P.knL[2] - 9], e);
       for (const s of S) {
-        const lat = C.lat(q, s), gh = f.P['gh' + s], g0 = V.add(target, lat, 3), g = V.add(gh, V.unit(V.sub(g0, gh)), Math.min(61, V.dist(g0, gh)));
+        const lat = C.lat(q, s), gh = f.P['gh' + s], g0 = V.add(V.add(target, lat, 2), [0, 0, 1], 3 * e), g = V.add(gh, V.unit(V.sub(g0, gh)), Math.min(61, V.dist(g0, gh)));
         C.hold(q, s, g, V.unit(V.add([0, 0, -1], lat, C.lerp(1.5, .3, e))), { pron: 0, allowShort: true });
       }
       return q;

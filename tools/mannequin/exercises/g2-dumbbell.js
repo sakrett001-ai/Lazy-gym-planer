@@ -313,7 +313,8 @@ module.exports = {
         q.lumbar = [lean * .2, 0, 4]; q.thoracic = [lean * .25, -2, 12]; q.neck = [-lean * .75, 0, -8];
         for (const s of S) { q[s].hip = [88, 26, 6]; q[s].knee = 90; }
         for (let i = 0; i < 2; i++) {
-          C.restOn(q, 'buttocks', [0, 44, 0], [0, 1, 0], -1.4);
+          /* поджатие 2,4 см: у кожи 4.62.0 ниже всего — задние поверхности бёдер, ягодицы над подушкой выше на 1 см */
+          C.restOn(q, 'buttocks', [0, 44, 0], [0, 1, 0], -2.4);
           for (const s of S) { const f = C.fk(q), kn = f.P['kn' + s], g = M.SIGN[s]; plant(C, q, s, [kn[0] + g * 4, 0, kn[2] + 3], { toeOut: 14 }); }
         }
         return q;
@@ -322,7 +323,7 @@ module.exports = {
       const along = q => { const f = C.fk(q), a = f.P.hipL, b = f.P.knL, ab = V.sub(b, a); return V.dot(V.sub(elbowOf(q), a), ab) / V.dot(ab, ab); };
       const lean = C.solve1D(l => along(seat(l)) - .8, 15, 60);
       const q = seat(lean);
-      q.L.girdle = [0, 8];
+      q.L.girdle = [0, 16];  /* плечо опущено вперёд (протракция): с осанкой 4.62.0 при 8 плечо входило в бок груди */
       /* плечевой сустав идёт за лопаткой (этап Д: поворот лопатки — от подъёма руки), поэтому локоть и гантель ставятся
          дважды — второй раз от плечевого сустава опущенной руки */
       for (const pass of [0, 1]) {
@@ -556,11 +557,12 @@ module.exports = {
         const { Hc, fw } = at(q), b = 5 * C.D2R, th = V.unit(V.add(V.scale([0, 1, 0], Math.cos(b)), fw, -Math.sin(b)));
         for (const s of S) { const lat = C.lat(q, s); C.grip(q, s, V.add(Hc, lat, 8.65), th, V.unit(V.add(V.add([0, -1, 0], lat, .3), fw, -.2))); }
       };
-      /* гантель: внутренняя грань верхнего диска — на высоте прежних кулаков + 4,7 см (там лежал диск), стоя — на 3 см ближе
-         к груди (в нижней точке корпус наклонён на 42° и грудь сама подходит к гантели — ближе диск уходит в неё); ладони
-         внахлёст под диском (одна ближе к груди, другая дальше), большие и указательные пальцы у рукояти, локти вниз */
+      /* гантель: внутренняя грань верхнего диска — на высоте прежних кулаков + 4,7 см (там лежал диск); до 4.62.0 стоя она
+         была на 3 см ближе к груди, у кожи 4.62.0 грудь сама на 3 см дальше от рамки грудной клетки, и предплечье с прежним
+         сдвигом входило в неё на 2,2 см; ладони внахлёст под диском (одна ближе к груди, другая дальше), большие и
+         указательные пальцы у рукояти, локти вниз */
       const cupped = q => {
-        const { T, Hc, fw } = at(q), P = V.add(V.add(Hc, [0, 1, 0], 4.7), T.z, -3 * (1 - e)), tl = 15 * C.D2R, n = V.add(V.scale([0, 1, 0], Math.cos(tl)), fw, -Math.sin(tl));
+        const { T, Hc, fw } = at(q), P = V.add(Hc, [0, 1, 0], 4.7), tl = 15 * C.D2R, n = V.add(V.scale([0, 1, 0], Math.cos(tl)), fw, -Math.sin(tl));
         /* ладони смотрят вверх и на 15° к груди (строго вверх — предплечье выворачивается за предел супинации на 4–5°);
            пальцы — вперёд и к середине на 50–80° (наружу при опущенных локтях — запястье за пределом отведения) */
         cup(C, q, P, n, fw, { w: 4.5, stag: 3, yaw: [50, 80], poles: [(s, lat) => V.unit(V.add(V.add([0, -1, 0], lat, .35), fw, -.25)), (s, lat) => V.unit(V.add(V.add([0, -1, 0], lat, .15), fw, -.1))] });
@@ -589,7 +591,8 @@ module.exports = {
       pelvisLean(C, q, [0, hy, hz], lean * .9);
       q.lumbar = [lean * .03, 0, 0]; q.thoracic = [lean * .05, 0, 0]; q.neck = [C.lerp(-16, 0, u), 0, 0];
       for (const s of S) plant(C, q, s, [M.SIGN[s] * 24.5, 0, -2], { toeOut: 20 });
-      for (const s of S) q[s].girdle = [C.lerp(-4, 4, e), C.lerp(8, 12, e)];
+      /* в замахе плечи протянуты вперёд (протракция 14): с осанкой 4.62.0 при 8 плечо входило в бок груди на 3,3 см */
+      for (const s of S) q[s].girdle = [C.lerp(-4, 4, e), C.lerp(14, 12, e)];
       const T = C.axes(q, 'thorax'), f = C.fk(q), sh = V.mix(f.P.ghL, f.P.ghR, .5), ph = C.lerp(-25, 88, e) * C.D2R;
       const H = V.add(sh, [0, -Math.cos(ph), Math.sin(ph)], 60.8);
       for (const s of S) {

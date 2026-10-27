@@ -366,7 +366,7 @@ const PLANKUP = once(() => {
      пояса по подъёму руки), поэтому невязка опоры меряется с поставленной рукой */
   const place = (q, s, st, th) => {
     if (st === 'F') { q[s].girdle = [-2, 8]; const f = fore[s]; C.armTo(q, s, f.W, V.unit(V.sub(f.E, V.mix(C.fk(q).P['gh' + s], f.W, .5))), { pron: 15, wrist: [0, 0], mode: 'fist' }); }
-    else if (st === 'P') { const lat = C.lat(q, s), { up } = proneAxes(th); q[s].girdle = [-6.5, 7];   /* рука прямая — лопатка вперёд («отталкиваться от пола») */ palmAuto(C, q, s, top.palms[s], top.fingers(s), [0, 1, 0], V.unit(V.add(V.add(V.scale(lat, 2), [0, 1, 0], .2), up, -1.13)), .9); }
+    else if (st === 'P') { const lat = C.lat(q, s), { up } = proneAxes(th); q[s].girdle = [-6.5, 14];   /* рука прямая — лопатка вперёд («отталкиваться от пола»); 14, а не 7: с осанкой 4.62.0 плечо при крене входило в бок груди на 4,1 см */ palmAuto(C, q, s, top.palms[s], top.fingers(s), [0, 1, 0], V.unit(V.add(V.add(V.scale(lat, 2), [0, 1, 0], .2), up, -1.13)), .9); }
   };
   /* невязка опоры стороны s в состоянии F/P */
   /* вне досягаемости (крайние углы подбора) рука не ставится — невязка по суставу без руки */

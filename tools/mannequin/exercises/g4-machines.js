@@ -539,7 +539,9 @@ const DCL = once(() => {
   for (const s of S) { q[s].hip = [72, 4, 4]; q[s].knee = 100; q[s].ankle = [-10, 0]; }
   const f = C.fk(q);
   /* доска: плоскость под спиной и ягодицами */
-  const n = fwd, o = Math.min(...C.region(q, 'back').map(p => V.dot(p, n))) + 1.2;
+  /* по ягодицам: таз на доске неподвижен; у кожи 4.62.0 верх спины в нейтрали глубже ягодиц на 4,4 см, и плоскость по всей
+     спине висела над тазом на 3 см */
+  const n = fwd, o = Math.min(...C.region(q, 'buttocks').map(p => V.dot(p, n))) + 1.2;
   const onPad = z => { /* точка плоскости с заданным z на средней линии */ const y = (o - n[2] * z) / n[1]; return [0, y, z]; };
   const hipZ = f.P.hipL[2], hiZ = hipZ + 10, loZ = f.P.ghL[2] - 40;
   /* валик под коленями: со стороны подколенной ямки; валик перед голеностопами: спереди голени над стопой */
@@ -564,11 +566,13 @@ module.exports = {
     pose(t, C) {
       const { V, M } = C, L = DCL(), e = C.ease(t), q = C.M.clone(L.q);
       q.lumbar = [C.lerp(2, 16, e), 0, 0]; q.thoracic = [C.lerp(4, 30, e), 0, 0]; q.neck = [C.lerp(8, 18, e), 0, 0];
-      for (const s of S) q[s].girdle = [0, 10];
+      for (const s of S) q[s].girdle = [0, 18];
       const T = C.axes(q, 'thorax');
       /* запястья — на 0,6 см дальше от груди, чем до 4.41.0: грудь над пупком стала на 0,5 см глубже, и предплечье
-         входило в неё на 1,8 см (предупреждение валидатора о самопересечении) */
-      const wr = { L: V.add(V.add(V.add(T.o, T.x, -7), T.y, 16.2), T.z, 16.1), R: V.add(V.add(V.add(T.o, T.x, 7), T.y, 10), T.z, 23.1) };
+         входило в неё на 1,8 см (предупреждение валидатора о самопересечении). С осанкой 4.62.0 (плечевые суставы на 3,3 см
+         дальше назад) предплечья скрещиваются круче: правое запястье на 2 см дальше от груди и на 3 см выше
+         (на верху скручивания не задевает бедро), плечи протянуты вперёд (18) */
+      const wr = { L: V.add(V.add(V.add(T.o, T.x, -7), T.y, 16.2), T.z, 16.1), R: V.add(V.add(V.add(T.o, T.x, 7), T.y, 13), T.z, 25.1) };
       for (const s of S) C.armTo(q, s, wr[s], V.unit(V.add(V.scale(T.y, -1), T.x, M.SIGN[s] * 1.1)), { pron: 60, mode: 'relaxed' });
       return q;
     }
@@ -936,11 +940,12 @@ module.exports = {
       q.lumbar = [C.lerp(-1, 13, e), 0, 0]; q.thoracic = [C.lerp(0, 8, e), 0, 0]; q.neck = [C.lerp(-8, 12, e), 0, 0];
       L.feet.forEach((ft, i) => { const s = S[i]; M.solveLeg(q, s, ft, V.unit(V.add(L.n, C.latP(q, s), .1))); });
       /* руки скрещены на груди: кисти у противоположных плеч, правое предплечье поверх левого */
-      for (const s of S) q[s].girdle = [0, 10];
+      for (const s of S) q[s].girdle = [0, 14];
       const T = C.axes(q, 'thorax');
       /* запястья — на 0,6 см дальше от груди, чем до 4.41.0: грудь над пупком стала на 0,5 см глубже, и предплечье
-         входило в неё на 1,8 см (предупреждение валидатора о самопересечении) */
-      const wr = { L: V.add(V.add(V.add(T.o, T.x, -7), T.y, 16.2), T.z, 16.1), R: V.add(V.add(V.add(T.o, T.x, 7), T.y, 10), T.z, 23.1) };
+         входило в неё на 1,8 см (предупреждение валидатора о самопересечении). С осанкой 4.62.0 (плечевые суставы на 3,3 см
+         дальше назад) предплечья скрещиваются круче: правое запястье на 2 см дальше от груди, плечи протянуты вперёд (14) */
+      const wr = { L: V.add(V.add(V.add(T.o, T.x, -7), T.y, 16.2), T.z, 16.1), R: V.add(V.add(V.add(T.o, T.x, 7), T.y, 10), T.z, 25.1) };
       for (const s of S) C.armTo(q, s, wr[s], V.unit(V.add(V.scale(T.y, -1), T.x, M.SIGN[s] * 1.3)), { pron: 60, mode: 'relaxed' });
       return q;
     }
