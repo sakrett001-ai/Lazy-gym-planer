@@ -88,12 +88,17 @@ test('speed: the longest task of a thumbnail decides — visible only above 90 m
   p.reset(); assert.equal(p.mode, 'near'); assert.equal(p.sample(9999), null, 'новое открытие — снова прогрев');
 });
 
-test('view: the person\'s choice; no WebGL, a loading error or a slow phone — SVG; while data loads — saved frames only', () => {
+test('view: the person\'s choice («Mannequin» — the Anny skin); no WebGL, a loading error or a slow phone — SVG; while data loads — saved frames only', () => {
   const v = (pref, o) => plain(R.thumbViewFor(pref, o));
   assert.deepEqual(v('anatomy'), { view: 'anatomy', render: true, note: '', wait: false });
   assert.deepEqual(v('skeleton'), { view: 'skeleton', render: true, note: '', wait: false });
   assert.deepEqual(v(undefined), { view: 'anatomy', render: true, note: '', wait: false }, 'по умолчанию — «Анатомия»');
-  assert.deepEqual(v('mannequin'), { view: 'mannequin', render: false, note: '', wait: false });
+  /* «Манекен» — кожа Anny кадрами общего рендерера; пока её данные грузятся — готовые кадры, без них и после отката — SVG */
+  assert.deepEqual(v('mannequin'), { view: 'skin', render: true, note: '', wait: false });
+  assert.deepEqual(v('mannequin', { state: 'loading' }), { view: 'skin', render: false, note: '', wait: true });
+  assert.deepEqual(v('mannequin', { state: 'error' }), { view: 'mannequin', render: false, note: '', wait: false });
+  assert.deepEqual(v('mannequin', { slow: true }), { view: 'mannequin', render: false, note: '', wait: false });
+  assert.deepEqual(v('mannequin', { able: false }), { view: 'mannequin', render: false, note: '', wait: false });
   assert.deepEqual(v('anatomy', { able: false }), { view: 'mannequin', render: false, note: '', wait: false }, 'без WebGL — SVG, без подписи');
   assert.deepEqual(v('anatomy', { state: 'loading' }), { view: 'anatomy', render: false, note: '', wait: true }, 'грузится: готовые кадры показываются, новые ждут');
   assert.deepEqual(v('anatomy', { state: 'error' }), { view: 'mannequin', render: false, note: R.FIGURE_NOTES.error, wait: false });

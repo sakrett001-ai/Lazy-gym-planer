@@ -75,7 +75,14 @@ export function createVolumeFigure(options){
  let updateVectors=()=>{};
  /* options.memoBones — фигура, которой показывают одно и то же повторение по сетке фаз (экран тренировки): матрицы костей — из памяти */
  const bonesMemo=options.memoBones?{map:new Map(),data:null}:null;
- const apply=(t,index)=>{const d=data(t,index,!!(skeleton||anatomy));if(bonesMemo)memoBones(bonesMemo,anatomy?.skeleton||skeleton,t,d);scene.apply(d,{color:options.color,selected,muscles,joints,stress,skeleton,anatomy});updateVectors(t,index,d.pose);};
+ /* кожа Anny (вид «Манекен», src/js/09bs-anny.js): данные грузятся при первом кадре фигуры без костей и мышц; пришли — кадр
+    заново (до того и при ошибке — процедурная кожа) */
+ let annyAsked=false;
+ const wantAnny=()=>{
+  const A=globalThis.AnnySkin;if(annyAsked||!A||A.data||skeleton||anatomy)return;annyAsked=true;
+  A.load().then(()=>{if(!disposed&&!skeleton&&!anatomy)at(lastT,{index:lastIndex});},()=>{});
+ };
+ const apply=(t,index)=>{const d=data(t,index,!!(skeleton||anatomy));if(bonesMemo)memoBones(bonesMemo,anatomy?.skeleton||skeleton,t,d);scene.apply(d,{color:options.color,selected,muscles,joints,stress,skeleton,anatomy});updateVectors(t,index,d.pose);wantAnny();};
  const trace=new THREE.Line(new THREE.BufferGeometry().setFromPoints(options.trace.map(p=>new THREE.Vector3(...world(p)))),new THREE.LineBasicMaterial({color:'#b4c3d9',transparent:true,opacity:.7}));trace.visible=false;scene.scene.add(trace);
  const vectors=new THREE.Group();vectors.name='movement-vectors';vectors.visible=false;scene.scene.add(vectors);
  for(const v of options.vectors){const a=new THREE.Vector3(...world(v.a)),b=new THREE.Vector3(...world(v.b)),d=b.clone().sub(a);vectors.add(new THREE.ArrowHelper(d.clone().normalize(),a,d.length(),/^(sh|hip)$/.test(v.key)?0x77a9d3:0xe97155,.075,.035));}

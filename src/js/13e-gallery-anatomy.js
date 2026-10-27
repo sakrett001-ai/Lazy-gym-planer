@@ -1,6 +1,7 @@
 /* ===================== АТЛАС ДВИЖЕНИЙ: МИНИАТЮРЫ В «АНАТОМИИ» (этап 3) =====================
    В выбранном виде фигуры (motionPrefs.view; по умолчанию «Анатомия») миниатюры витрины — кадры костей и мышц в почти
-   невидимом силуэте кожи, «Скелет» — только кости, «Манекен» — прежний SVG. Правила (размер, ключ, кеш, память,
+   невидимом силуэте кожи, «Скелет» — только кости, «Манекен» — кожа Anny (вид 'skin', skinViewFor; пока её данные
+   грузятся, не загрузились или телефон не успевает — прежний SVG). Правила (размер, ключ, кеш, память,
    скорость) — в 12-figure-pace.js, проверка — tools/gallery-anatomy.test.js и tools/ui-check.mjs.
    · Рисует тот же общий рендерер вне экрана, что карточки плана (GymVolume.cards; своего WebGL у витрины нет): неподвижный
      кадр той же фазы, что SVG-миниатюра (конечная точка движения), ракурсом «Под углом», рамка — по телу в этой позе.
@@ -17,7 +18,7 @@
      страница (при открытии витрины) и сервис-воркер (при обновлении). Холст один на все миниатюры.
    · Без WebGL, после ошибки загрузки костей и мышц и если телефон не успевает (thumbPace) — SVG, как раньше; пока
      кости и мышцы грузятся — SVG, а готовые кадры из памяти и кеша показываются сразу. */
-const galleryAnat = {view:'mannequin', render:false, note:'', wait:false, size:0, theme:'', loading:false, failed:false,
+const galleryAnat = {view:'mannequin', render:false, note:'', wait:false, size:0, theme:'', loading:false, failed:false, annyFailed:false,
   mem:new Map(), base:new Map(), state:new Map(), fails:new Map(), near:new Set(), fresh:new Set(), vis:new Set(), io:null, ioVis:null, queued:false, scrollAt:0,
   job:null, canvas:null, watched:null, type:'image/webp', noStore:false, pace:thumbPace(), stats:{painted:0, cached:0, chunks:0}, cleaned:false, freeTimer:0};
 
@@ -216,11 +217,17 @@ function galleryAnatKick(delay = 0) {
   if (delay) setTimeout(() => galleryIdle(galleryAnatWork), delay); else galleryIdle(galleryAnatWork);
 }
 function galleryAnatData() {
+  if (figureView() === 'mannequin') return annySkinModule()?.data ? 'ready' : galleryAnat.annyFailed ? 'error' : 'loading';
   const need = galleryAnat.view === 'anatomy' ? [Skeleton, Muscles] : [Skeleton];
   return need.every(x => x.data) ? 'ready' : galleryAnat.failed ? 'error' : 'loading';
 }
 function galleryAnatLoad() {
   if (galleryAnat.loading) return; galleryAnat.loading = true;
+  if (figureView() === 'mannequin') {
+    const A = annySkinModule(); if (!A) { galleryAnat.loading = false; return; }
+    A.load().then(() => { galleryAnat.annyFailed = false; }, () => { galleryAnat.annyFailed = true; }).then(() => { galleryAnat.loading = false; if (gallery.on) galleryAnatApply(); });
+    return;
+  }
   const need = figureView() === 'anatomy' ? [Skeleton, Muscles] : [Skeleton];
   Promise.all(need.map(x => x.load())).then(() => { galleryAnat.failed = false; }, () => { galleryAnat.failed = true; })
     .then(() => { galleryAnat.loading = false; if (gallery.on) galleryAnatApply(); });
@@ -266,7 +273,7 @@ function galleryAnatWork(deadline) {
     const has = propHas(b.ex, b.E), A = catalogAnimFor(b.ex.anim, has), bits = A.catalogRig(0).props.map(q => GymEquipment.visible(q, has) ? 1 : 0).join('');
     const h = stage.figure({key:['thumb', A.catalogId, A.catalogVariant || '', bits].join('|'), still:true, fit:'body', color:muscleColor, muscles:false, stress:false,
       data:(t, index, coarse, lean) => catalogVolumeData(A, t, index, has, coarse, lean)});
-    h.setLayers(Skeleton.data, layers); h.setLook({muscles:false, stress:false});
+    h.setLayers(galleryAnat.view === 'skin' ? null : Skeleton.data, layers); h.setLook({muscles:false, stress:false});
     job = galleryAnat.job = {id:n.id, b, key:n.key, h, prepared:false, long:0, t0:performance.now()};
   }
   const t0 = performance.now(); let painted = false;
@@ -315,7 +322,7 @@ function galleryAnatPaint(job) {
 function galleryAnatApply() {
   const box = $('#mv-gallery'); if (!box || !gallery.on) return;
   const pref = figureView(), was = galleryAnat.view + galleryAnat.theme + galleryAnat.size;
-  const choice = thumbViewFor(pref, {able:!!cardStage(), state:galleryAnatData(), slow:galleryAnat.pace.mode === 'svg', coarse:coarsePointer()});
+  const choice = thumbViewFor(pref, {able:!!cardStage() && (pref !== 'mannequin' || !!annySkinModule()), state:galleryAnatData(), slow:galleryAnat.pace.mode === 'svg', coarse:coarsePointer()});
   Object.assign(galleryAnat, {view:choice.view, render:choice.render, note:choice.note, wait:choice.wait, theme:galleryTheme()});
   const first = box.querySelector('.mv-thumb');
   galleryAnat.size = galleryAnat.view === 'mannequin' ? 0 : thumbCanvasSize(first ? first.getBoundingClientRect().width : 0, window.devicePixelRatio);

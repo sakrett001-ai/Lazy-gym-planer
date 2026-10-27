@@ -68,6 +68,14 @@ function figureViewFor(pref,{able=true,state='ready',slow=false,coarse=true}={})
   if(state!=='ready')return{view:'mannequin',note:FIGURE_NOTES.loading,wait:true};
   return{view:want,note:'',wait:false};
 }
+/* Вид «Манекен» в карточках плана и миниатюрах витрины: кожа Anny (src/js/09bs-anny.js) кадром общего рендерера
+   (view 'skin'), как в разборе и на экране тренировки. SVG-манекен, как раньше, — без объёмной графики, пока данные
+   кожи грузятся (wait), если не загрузились и после отката по скорости; подписи нет: это тот же «Манекен». */
+function skinViewFor({able=true,state='ready',slow=false}={}){
+  if(!able||slow||state==='error')return{view:'mannequin',note:'',wait:false};
+  if(state!=='ready')return{view:'mannequin',note:'',wait:true};
+  return{view:'skin',note:'',wait:false};
+}
 
 /* Неподвижные кадры карточек плана живут в холстах карточек (≈ ширина × высота × 4 байта: 260 × 260 точек — 0,27 МБ).
    Отпускается кадр карточки, ушедшей дальше двух экранов (far: false), и, если кадров больше limit, — давно не
@@ -160,6 +168,7 @@ function thumbPace(G=GALLERY_THUMBS){
 /* вид миниатюр: как у карточек (figureViewFor); render — рисовать ли новые кадры. Пока грузятся кости и мышцы, вид —
    выбранный (готовые кадры из памяти и кеша показываются), а новые не рисуются */
 function thumbViewFor(pref,{able=true,state='ready',slow=false,coarse=true}={}){
+  if(pref==='mannequin'){const c=skinViewFor({able,state,slow});return{view:c.wait?'skin':c.view,render:c.view==='skin',note:'',wait:c.wait};}
   const c=figureViewFor(pref,{able,state,slow,coarse}),want=['anatomy','skeleton','mannequin'].includes(pref)?pref:'anatomy';
   return{view:c.wait?want:c.view,render:c.view!=='mannequin',note:c.wait?'':c.note,wait:c.wait};
 }

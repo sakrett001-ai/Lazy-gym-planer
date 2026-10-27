@@ -301,13 +301,24 @@ test('a card two screens away lets its still frame go and gets it back when it r
   assert.equal(m.get('figs[2].btn.classList.contains("anatomy-on")'), true);
 });
 
-test('choosing «Mannequin» returns SVG cards and frees the stage; no WebGL — SVG as before', () => {
+test('«Mannequin»: cards paint the Anny skin (no bones, no muscles) once its data is in; without it — SVG; no WebGL — SVG as before', () => {
   const { m, idle, paints } = planModel();
   for (let k = 0; k < 5; k++) idle(); paints();
-  m.get('motionPrefs.view="mannequin";applyCardsView()');
+  /* данных кожи нет: пока грузятся и после ошибки — SVG-манекен без подписи */
+  m.get('AnnySkin.data=null;AnnySkin.load=()=>Promise.reject(Error("нет"));motionPrefs.view="mannequin";applyCardsView()');
   assert.equal(m.get('cardAnatomy.view'), 'mannequin');
   assert.deepEqual(plain(m.get('figs.map(F=>F.btn.classList.contains("anatomy-on"))')), [false, false, false]);
   assert.deepEqual(plain(m.get('figs.map(F=>F.note.hidden)')), [true, true, true], 'манекен по выбору — без подписи');
+  /* данные пришли: кожа Anny кадрами общего рендерера, кости и мышцы выключены */
+  m.get('AnnySkin.data={frames:[]};cardAnatomy.annyFailed=false;applyCardsView()');
+  assert.equal(m.get('cardAnatomy.view'), 'skin');
+  for (let k = 0; k < 5; k++) idle();
+  assert.deepEqual(paints().map(p => p.key.split('|')[0]).sort(), ['dbcurl', 'pushup'], 'неподвижные кадры кожи у неподвижных карточек');
+  assert.deepEqual(plain(m.get('figs.filter(F=>F.av?.on).map(F=>F.av.handle.layers)')), [[false, false], [false, false]], 'без костей и мышц');
+  assert.deepEqual(plain(m.get('figs.map(F=>F.note.hidden)')), [true, true, true]);
+  m.get('AnnySkin.data=null;cardAnatomy.annyFailed=true;applyCardsView()');
+  assert.equal(m.get('cardAnatomy.view'), 'mannequin');
+  assert.deepEqual(plain(m.get('figs.map(F=>F.btn.classList.contains("anatomy-on"))')), [false, false, false], 'данных кожи нет — снова SVG');
   m.get('motionPrefs.view="anatomy";window.GymVolume={cards:()=>null};applyCardsView()');
   for (let k = 0; k < 3; k++) idle();
   assert.equal(m.get('cardAnatomy.view'), 'mannequin'); assert.deepEqual(paints(), []);

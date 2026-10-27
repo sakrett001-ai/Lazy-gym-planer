@@ -227,18 +227,23 @@ function prefetchCardFrames(){
    Остальные карточки показывают один неподвижный кадр своей фазы: он рисуется один раз в простое (queueCardStills) и
    хранится в холсте карточки; карточка, ушедшая далеко от экрана, его отпускает (stillsToFree). До готовности кадра,
    пока грузятся кости и мышцы, без объёмной графики и после отката по скорости — SVG-манекен, как раньше.
-   Ракурс — как у карточки (cardCamera), рамка — по телу. Цвет мышц — как в разборе: по фазам или основные ярче. */
+   Ракурс — как у карточки (cardCamera), рамка — по телу. Цвет мышц — как в разборе: по фазам или основные ярче.
+   В виде «Манекен» тот же путь рисует кожу Anny (вид 'skin', skinViewFor): без костей и мышц, области мышц — цветом
+   кожи; пока её данные грузятся, не загрузились или телефон не успевает — SVG-манекен. */
 const PACE_SLACK=4;
-const cardAnatomy={pace:anatomyPace(),slow:false,failed:false,loading:false,view:'mannequin',theme:0,queued:false,far:null,idleFree:0};
+const cardAnatomy={pace:anatomyPace(),slow:false,failed:false,annyFailed:false,loading:false,view:'mannequin',theme:0,queued:false,far:null,idleFree:0};
+const annySkinModule=()=>typeof AnnySkin!=='undefined'?AnnySkin:null;
 const coarsePointer=()=>typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches;
 /* ракурс анатомии в карточке: тот, что выбран для упражнения в разборе, иначе «Сверху под углом», как у SVG-карточки */
 function cardCamera(F){return motionCamera(F.it.ex);}
 function cardStage(){try{return window.GymVolume?.cards?.()||null;}catch(e){return null;}}
 function cardAnatomyState(view=figureView()){
+  if(view==='mannequin'||view==='skin')return annySkinModule()?.data?'ready':cardAnatomy.annyFailed?'error':'loading';
   const need=view==='anatomy'?[Skeleton,Muscles]:[Skeleton];
   return need.every(x=>x.data)?'ready':cardAnatomy.failed?'error':'loading';
 }
 function cardAnatomyChoice(){
+  if(figureView()==='mannequin')return skinViewFor({able:!!annySkinModule()&&!!cardStage(),state:cardAnatomyState('skin'),slow:cardAnatomy.slow});
   return figureViewFor(motionPrefs.view,{able:!!cardStage(),state:cardAnatomyState(),slow:cardAnatomy.slow,coarse:coarsePointer()});
 }
 const cardAnatomyLive=F=>cardAnatomy.view!=='mannequin'&&!!F.av;
@@ -256,7 +261,7 @@ function cardAnatomyFor(F){
 /* слои фигуры карточки по виду: кости, мышцы (уровни упражнения), цвет по фазам и метки нагрузки — из настроек */
 function cardAnatomyLayers(F){
   const av=F.av,view=cardAnatomy.view,key=view+(motionPrefs.muscles?1:0)+(motionPrefs.stress?1:0);if(av.layers===key)return;
-  av.handle.setLayers(Skeleton.data,view==='anatomy'?{skeleton:Skeleton.data,muscles:Muscles.data,level:av.level}:null);
+  av.handle.setLayers(view==='skin'?null:Skeleton.data,view==='anatomy'?{skeleton:Skeleton.data,muscles:Muscles.data,level:av.level}:null);
   av.handle.setLook({muscles:motionPrefs.muscles,stress:motionPrefs.stress});av.layers=key;
 }
 function cardStillKey(F,m){const av=F.av,s=av.size;return [m.t,m.index,cardAnatomy.view,av.layers,cardAnatomy.theme,s?s.width+'x'+s.height:'',cardCamera(F)].join('|');}
@@ -309,6 +314,9 @@ function loadCardAnatomy(){
   /* в простое: разбор данных (≈1 МБ JSON мышц) не задерживает первую картинку плана — SVG-карточки */
   const idle=window.requestIdleCallback?cb=>requestIdleCallback(cb,{timeout:3000}):cb=>setTimeout(cb,300);
   idle(()=>{
+    /* «Манекен» — данные кожи Anny (≈ 0,2 МБ) */
+    if(figureView()==='mannequin'){const A=annySkinModule();if(!A){cardAnatomy.loading=false;return;}
+      A.load().then(()=>{cardAnatomy.loading=false;cardAnatomy.annyFailed=false;applyCardsView();},()=>{cardAnatomy.loading=false;cardAnatomy.annyFailed=true;applyCardsView();});return;}
     const need=figureView()==='anatomy'?[Skeleton,Muscles]:[Skeleton];
     Promise.all(need.map(x=>x.load())).then(()=>{cardAnatomy.loading=false;cardAnatomy.failed=false;applyCardsView();},()=>{cardAnatomy.loading=false;cardAnatomy.failed=true;applyCardsView();});
   });

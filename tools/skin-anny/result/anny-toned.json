@@ -1,0 +1,169 @@
+{
+ "anny": "0.6.1",
+ "gender": "male (0)",
+ "age": "27 лет (шкала MakeHuman)",
+ "phenotype": {
+  "muscle": 0.6899340681711978,
+  "weight": 0.29966680150578234,
+  "height": 0.460043432797335,
+  "proportions": 0.40473568976274726
+ },
+ "local_changes": {
+  "torso-scale-depth-incr": 0.4243,
+  "torso-scale-horiz-incr": -0.4401,
+  "torso-vshape-incr": -0.5961,
+  "torso-muscle-dorsi-incr": 0.0671,
+  "torso-muscle-pectoral-incr": -0.0187,
+  "measure-bust-circ-incr": 0.0067,
+  "measure-underbust-circ-incr": 0.2262,
+  "measure-waist-circ-incr": -0.1924,
+  "measure-hips-circ-incr": -0.262,
+  "measure-shoulder-dist-incr": 0.4416,
+  "measure-frontchest-dist-incr": 1.0,
+  "measure-napetowaist-dist-incr": -0.405,
+  "measure-waisttohip-dist-incr": -0.9003,
+  "hip-scale-horiz-incr": -0.4322,
+  "hip-scale-depth-incr": 0.3401,
+  "buttocks-volume-incr": 1.0,
+  "stomach-pregnant-incr": -0.3016,
+  "stomach-navel-out": 0.0012,
+  "torso-trans-forward": 0.0415,
+  "hip-trans-forward": 0.1681,
+  "measure-neck-circ-incr": 0.8524,
+  "measure-neck-height-incr": -0.4985,
+  "neck-scale-depth-incr": -0.9883,
+  "neck-trans-forward": 1.0,
+  "neck-back-scale-depth-incr": 0.8963,
+  "measure-upperarm-circ-incr": 0.4721,
+  "measure-upperarm-length-incr": 0.6618,
+  "measure-lowerarm-length-incr": 0.0012,
+  "measure-wrist-circ-incr": -1.0,
+  "l-lowerarm-muscle-incr": 1.0,
+  "r-lowerarm-muscle-incr": 1.0,
+  "l-upperarm-shoulder-muscle-incr": 0.2507,
+  "r-upperarm-shoulder-muscle-incr": 0.2507,
+  "l-upperarm-fat-incr": -0.1677,
+  "r-upperarm-fat-incr": -0.1677,
+  "l-lowerarm-fat-incr": 0.1446,
+  "r-lowerarm-fat-incr": 0.1446,
+  "measure-thigh-circ-incr": 0.371,
+  "measure-knee-circ-incr": 0.8945,
+  "measure-calf-circ-incr": -0.7848,
+  "measure-ankle-circ-incr": 0.1032,
+  "measure-upperleg-height-incr": -0.3171,
+  "measure-lowerleg-height-incr": -0.6751,
+  "l-upperleg-fat-incr": -0.0251,
+  "r-upperleg-fat-incr": -0.0251,
+  "l-lowerleg-fat-incr": -1.0,
+  "r-lowerleg-fat-incr": -1.0,
+  "l-foot-scale-depth-incr": -0.3909,
+  "r-foot-scale-depth-incr": -0.3909,
+  "l-foot-scale-horiz-incr": -0.3061,
+  "r-foot-scale-horiz-incr": -0.3061,
+  "head-scale-vert-incr": 0.4977,
+  "head-scale-horiz-incr": -0.0222,
+  "head-scale-depth-incr": -0.6344,
+  "head-back-scale-depth-incr": -0.6047,
+  "head-trans-forward": -0.1742,
+  "head-trans-up": 0.2274,
+  "head-fat-incr": -1.0,
+  "forehead-trans-forward": 0.8453,
+  "chin-prominent-incr": 0.0204,
+  "chin-height-incr": 0.2633,
+  "chin-width-incr": 0.023,
+  "neck-double-incr": 0.1641,
+  "forehead-temple-incr": 0.5,
+  "l-cheek-volume-incr": 0.8125,
+  "r-cheek-volume-incr": 0.8125,
+  "l-cheek-bones-incr": 1.0,
+  "r-cheek-bones-incr": 1.0,
+  "pelvis-tone-incr": 0.25
+ },
+ "bulge-incr": -1.0,
+ "groin_smooth": "лапласово, 40 итераций, |x| < 7,5 см, высота 73,5–95,5 см, только перед (z > −2)",
+ "rig_pose": {
+  "spine": [
+   -4.565,
+   -4.506,
+   -3.213,
+   4.952,
+   4.653
+  ],
+  "neck": 4.747,
+  "head": -5.49,
+  "clav": [
+   5.754,
+   14.478
+  ],
+  "t": [
+   76.801,
+   -0.729
+  ],
+  "tw": [
+   -0.678,
+   -3.781,
+   2.362
+  ],
+  "neck_t": [
+   1.07,
+   -0.443
+  ]
+ },
+ "rig_joints_rest_m": {
+  "L": {
+   "hip": [
+    0.088,
+    -0.00729,
+    0.12699
+   ],
+   "knee": [
+    0.16299,
+    -0.02808,
+    -0.2725
+   ],
+   "ankle": [
+    0.21465,
+    -0.00527,
+    -0.68666
+   ],
+   "sh": [
+    0.17454,
+    -0.10014,
+    0.61249
+   ],
+   "el": [
+    0.36315,
+    -0.03967,
+    0.41036
+   ]
+  },
+  "R": {
+   "hip": [
+    -0.088,
+    -0.00729,
+    0.12699
+   ],
+   "knee": [
+    -0.16299,
+    -0.02808,
+    -0.2725
+   ],
+   "ankle": [
+    -0.21465,
+    -0.00527,
+    -0.68666
+   ],
+   "sh": [
+    -0.17454,
+    -0.10014,
+    0.61249
+   ],
+   "el": [
+    -0.36315,
+    -0.03967,
+    0.41036
+   ]
+  }
+ },
+ "note": "координаты суставов — в покое Anny (м, Z вверх, лицо к −Y); поза рига — градусы, сдвиг t — см (мир манекена)"
+}

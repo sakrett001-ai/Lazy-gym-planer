@@ -104,5 +104,10 @@ export function createMannequinBody(root,first,{skin,joint,sole,mesh:sceneMesh})
   }
   dots.visible=!!options.joints;
  }
- return{group,parts,apply,dots};
+ /* только точки суставов: процедурная кожа скрыта (видимая кожа — Anny, src/volume/anny.mjs) */
+ function placeDots(data,options){
+  const R=data.pose;for(const s of ['L','R'])for(const key of ['sh','el','wr','hip','kn','an'])parts['dot'+key+s].mesh.position.fromArray(world(R[key+s]));
+  dots.visible=!!options.joints;
+ }
+ return{group,parts,apply,dots:placeDots};
 }

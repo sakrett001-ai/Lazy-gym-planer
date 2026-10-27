@@ -137,7 +137,8 @@ function perfDeviceLines(d) {
 }
 
 /* ---------- текст результата: устройство и таблица шагов (копировать, поделиться) ---------- */
-const perfViewName = v => PERF_T[v] || '—';
+/* 'skin' — «Манекен» с кожей Anny кадрами общего рендерера (карточки, витрина) */
+const perfViewName = v => v === 'skin' ? PERF_T.mannequin : PERF_T[v] || '—';
 function perfStepLine(s, i) {
   const head = `${i + 1}. ${s.label}`;
   if (s.skip) return `${head}: ${PERF_T.skipped} — ${s.skip}`;
@@ -283,7 +284,8 @@ function perfWhere() {
     return {place:'gallery', view:g && g.view !== 'mannequin' ? g.view : 'svg', thumbs:g};
   }
   if ($('#workout-view')?.open) return {place:'workout', view:perfViewOf($('#wv-stage')?.firstElementChild), pace:perfPaceOf('workout')};
-  /* карточки плана: «Анатомия» или «Скелет» — кадры общего рендерера, иначе (выбран манекен, откат, нет WebGL) — SVG */
+  /* карточки плана: «Анатомия», «Скелет» или «Манекен» с кожей Anny ('skin') — кадры общего рендерера, иначе (откат, нет
+     WebGL, нет данных кожи) — SVG */
   const v = typeof cardAnatomy !== 'undefined' ? cardAnatomy.view : 'mannequin';
   return {place:'plan', view:v === 'mannequin' ? 'svg' : v, pace:perfPaceOf('plan')};
 }
@@ -352,7 +354,7 @@ function perfPaint(P) {
     perfSet(k('screen'), `${perfNum(sum.fps)} ${PERF_T.fps} · ${PERF_T.frame} ${perfPair(sum.cost)} ${PERF_T.ms}`);
     const th = where.thumbs;
     perfSet(k('cards'), th && th.view !== 'mannequin' ? `${PERF_T.thumbs}: ${PERF_T.thumbTask} ${perfPair(p.thumb)} ${PERF_T.ms} · ${perfSay('thumbReady', {n:th.ready, m:th.near})}` + (th.mode === 'visible' ? ` · ${PERF_T.thumbVisible}` : '')
-      : p.anat ? `${PERF_T.anatCard} ${perfPair(p.anat)} · ${PERF_T.copyPart} ${perfPair(p.copy)} ${PERF_T.ms}`
+      : p.anat ? `${where.view === 'skin' ? PERF_T.skin : PERF_T.anatCard} ${perfPair(p.anat)} · ${PERF_T.copyPart} ${perfPair(p.copy)} ${PERF_T.ms}`
       : p.card ? `${PERF_T.anew} ${perfPair(p.svgMiss)} · ${PERF_T.fromMemory} ${perfPair(p.svgHit)} · DOM ${perfPair(p.svgDom)} ${PERF_T.ms}` : PERF_T.noFrames);
     perfSet(k('volume'), p.volume ? `${PERF_T.total} ${perfPair(p.volume)} ${PERF_T.ms}, ${PERF_T.figure} ${perfNum(sum.figFps)} ${PERF_T.fps}\n${PERF_T.pose} ${perfPair(p.pose)} · ${PERF_T.skin} ${perfPair(p.skin)} · ${PERF_T.bones} ${perfPair(p.bones)} · ${PERF_T.muscles} ${perfPair(p.muscles)} · ${PERF_T.scene} ${perfPair(p.sceneRest)} · ${PERF_T.render} ${perfPair(p.render)}` : PERF_T.noFrames);
     const qv = where.place === 'plan' ? null : q;

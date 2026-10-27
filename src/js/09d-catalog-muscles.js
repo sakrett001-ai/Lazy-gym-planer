@@ -214,6 +214,17 @@ function mannequinMuscleSurfaces(R,profile,{coarse=false}={}){
  }
  return faces;
 }
+/* Область мышцы в точке процедурной кожи по её адресу — то же правило, что у областей манекена (mannequinMuscleSurfaces):
+   part 'torso' (a1 — высота h, a2 — угол сечения), 'ua'/'fa'/'th'/'sk' (a1 — доля t, a2 — угол), 'delt' (a1 — полярный угол
+   на «шапке» плеча, a2 — азимут). По нему кожа Anny (09bs-anny.js) красит свои вершины: адрес вершины — на процедурной коже
+   стойки (tools/anny-look/build.py). Пустая строка — вне областей. */
+const inArc=(a,a0,a1)=>{for(const k of [0,1,-1])if(a+k*2*Math.PI>=a0&&a+k*2*Math.PI<=a1)return true;return false;};
+function mannequinRegionOf(part,side,a1,a2){
+ if(part==='torso'){for(const[id,h0,h1,b0,b1]of MANNEQUIN_TORSO_PATCHES)if(a1>=h0&&a1<=h1&&a2>=b0&&a2<=b1)return id;return '';}
+ if(part==='delt'){const polar=a1/(Math.PI/2*1.05),u=(polar-.18)/.85;if(u<0||u>1)return '';for(const[id,b0,b1]of MANNEQUIN_DELTS)if(inArc(a2,b0,b1))return id;return '';}
+ for(const[id,t0,t1,b0,b1]of MANNEQUIN_LIMB_PATCHES[part]||[])if(a1>=t0&&a1<=t1&&inArc(a2,b0,b1))return id;
+ return '';
+}
 /* анимация каталога под инвентарь показа: если хват зависит от необязательного снаряда (catalogVariants), берётся его поза —
    выбор тот же, что у видимости деталей (GymEquipment.variantOf); копия запоминается, чтобы кеши фигуры не путались */
 function catalogAnimFor(anim,has){
@@ -227,8 +238,13 @@ function catalogFigureAnim(anim){
 }
 /* lean — для вида «Анатомия»/«Скелет»: области манекена скрыты, их поверхности не нужны; phase и poseKey (функция позы — своя у
    каждого варианта инвентаря, catalogAnimFor) — память кожи по фазе в слое мышц (src/volume/muscles.mjs) */
+/* сетка процедурной кожи (body) и области мышц на ней (surfaces) считаются по первому обращению: с кожей Anny (вид «Манекен»)
+   сцена их не берёт (src/volume/scene.mjs) — кадр без них дешевле */
 function catalogVolumeData(anim,t,index,has,coarse=false,lean=false){
  const R=anim.catalogRig(t),state=muscleFrame(anim,t,index),profile=motionProfile(anim);
- if(R.frames)return{exerciseId:anim.catalogId,phase:t,poseKey:anim.catalogRig,pose:R,body:Mannequin.bodyData(R),stress:jointStressPoints(anim,R,t,index),surfaces:lean?[]:mannequinMuscleSurfaces(R,profile,{coarse}),values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>GymEquipment.visible(s,has)),torsoRings:[],limbProfiles:{}};
+ if(R.frames){
+  let body=null,surfaces=lean?[]:null;
+  return{exerciseId:anim.catalogId,phase:t,poseKey:anim.catalogRig,pose:R,get body(){return body||(body=Mannequin.bodyData(R));},stress:jointStressPoints(anim,R,t,index),get surfaces(){return surfaces||(surfaces=mannequinMuscleSurfaces(R,profile,{coarse}));},values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>GymEquipment.visible(s,has)),torsoRings:[],limbProfiles:{}};
+ }
  return{exerciseId:anim.catalogId,pose:R,surfaces:catalogMuscleSurfaces(R,profile,{coarse}),values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>!s.optional||!has||has(s.optional)),torsoRings:CATALOG_RINGS,limbProfiles:CATALOG_LIMB_PROFILES};
 }

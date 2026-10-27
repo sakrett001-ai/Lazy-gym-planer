@@ -37,7 +37,9 @@ const manifestSrc = JSON.parse(read(path.join(SRC, 'manifest.webmanifest')));
 const skeletonBin = fs.readFileSync(path.join(SRC, 'data', 'skeleton.bin')), skeletonB64 = skeletonBin.toString('base64');
 /* пути мышц (вид «Анатомия») — так же: файл по требованию, в офлайн-файлах встроены */
 const musclesBin = fs.readFileSync(path.join(SRC, 'data', 'muscles.bin')), musclesB64 = musclesBin.toString('base64');
-const ASSET_VERSION = VERSION + '-' + require('node:crypto').createHash('sha256').update([volumeSrc,cssSrc,jsSrc,bodySrc,pwaSrc,JSON.stringify(manifestSrc),read(path.join(SRC,'sw.js')),read(path.join(__dirname,'i18n/en.json')),skeletonB64,musclesB64].join('\n')).digest('hex').slice(0,12);
+/* кожа Anny (вид «Манекен», src/js/09bs-anny.js) — так же: файл по требованию, в офлайн-файлах встроена */
+const annyBin = fs.readFileSync(path.join(SRC, 'data', 'anny.bin')), annyB64 = annyBin.toString('base64');
+const ASSET_VERSION = VERSION + '-' + require('node:crypto').createHash('sha256').update([volumeSrc,cssSrc,jsSrc,bodySrc,pwaSrc,JSON.stringify(manifestSrc),read(path.join(SRC,'sw.js')),read(path.join(__dirname,'i18n/en.json')),skeletonB64,musclesB64,annyB64].join('\n')).digest('hex').slice(0,12);
 const reset = `:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}`;
 const headMeta = L => `<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -59,6 +61,9 @@ fs.copyFileSync(path.join(__dirname, 'third_party', 'myosim', 'NOTICE.md'), path
 fs.writeFileSync(path.join(DIST, 'muscles.bin'), musclesBin);
 fs.copyFileSync(path.join(__dirname, 'third_party', 'das3', 'LICENSE'), path.join(DIST, 'muscles-DAS3-LICENSE.txt'));
 fs.copyFileSync(path.join(__dirname, 'third_party', 'das3', 'NOTICE.md'), path.join(DIST, 'muscles-NOTICE.md'));
+fs.writeFileSync(path.join(DIST, 'anny.bin'), annyBin);
+fs.copyFileSync(path.join(__dirname, 'third_party', 'anny', 'LICENSE'), path.join(DIST, 'anny-LICENSE.txt'));
+fs.copyFileSync(path.join(__dirname, 'third_party', 'anny', 'NOTICE.md'), path.join(DIST, 'anny-NOTICE.md'));
 
 const report = [];
 for (const [lang, L] of Object.entries(LANGS)) {
@@ -108,7 +113,7 @@ ${body}
 `);
 
   /* 2. офлайн-файл: ссылка на другой язык ведёт на соседний офлайн-файл */
-  const single = `<title>${L.title}</title>\n<style>\n${inlineFonts(css)}\n</style>\n${body.replace(`href="${L.other.href}"`, `href="${L.other.offline}"`)}\n<script>\n${volumeSrc}\n</script>\n<script>window.SKELETON_BIN='${skeletonB64}';window.MUSCLES_BIN='${musclesB64}';</script>\n<script>\n${js}\n</script>\n`;
+  const single = `<title>${L.title}</title>\n<style>\n${inlineFonts(css)}\n</style>\n${body.replace(`href="${L.other.href}"`, `href="${L.other.offline}"`)}\n<script>\n${volumeSrc}\n</script>\n<script>window.SKELETON_BIN='${skeletonB64}';window.MUSCLES_BIN='${musclesB64}';window.ANNY_BIN='${annyB64}';</script>\n<script>\n${js}\n</script>\n`;
   fs.writeFileSync(path.join(DIST, `lazy-gym-planner-offline-${lang}.html`), `<!doctype html>
 <html lang="${L.html}">
 <head>
