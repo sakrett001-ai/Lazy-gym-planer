@@ -607,7 +607,9 @@ module.exports = {
     contacts: [{ body: 'soleL', prop: 'step:top' }, { body: 'soleR', prop: 'step:top' }, { body: 'gripL', prop: 'dbL', optional: true }, { body: 'gripR', prop: 'dbR', optional: true }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C, variant) {
-      const { V, M } = C, q = C.base(), e = C.ease(t), H = C.point('step', 'top')[1], heel = C.lerp(-5.5, 36, e), ballZ = -15;
+      /* пятки внизу — на 4,6 см ниже подушечек (было 5,5): с 4.62.0 центр масс корпуса по коже Anny впереди (живот), голень
+         в равновесии наклонена сильнее, и при 5,5 тыльное сгибание при прямом колене выходило за предел икроножной на 0,6° */
+      const { V, M } = C, q = C.base(), e = C.ease(t), H = C.point('step', 'top')[1], heel = C.lerp(-4.6, 36, e), ballZ = -15;
       C.root(q, [0, 100, -20], [0, 1, 0], [0, 0, 1]);
       q.neck = [2, 0, 0];
       for (const s of S) { q[s].girdle = [-2, -4]; armAngles(q, s, [-2, 13, 0], 8, 0, [0, 0], dbHand(variant)); }

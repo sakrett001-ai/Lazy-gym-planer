@@ -556,7 +556,9 @@ module.exports = {
         const d0 = V.unit(V.add(V.add(V.scale(lat, .94), fwd, .05), up, .2)), d1 = V.unit(V.add(V.add(V.scale(fwd, .9), up, -.3), lat, -.19));
         const g = V.add(gh, slerpDir(V, d0, d1, e), 61.5);
         const pole = V.unit(V.mix(V.add(V.scale(fwd, -1), up, .25), V.add(V.add(lat, up, -.12), fwd, -.65), e));
-        C.hold(q, s, g, pole, { pron: C.lerp(60, 25, e) });
+        /* в конце ладони пронированы на 40° (было 25°): с плечевым суставом 4.62.0 (на 3,3 см дальше назад) трос к кисти у
+           сведённых рук проходил сквозь предплечье на 1,2–1,3 см */
+        C.hold(q, s, g, pole, { pron: C.lerp(60, 40, e) });
       }
       return q;
     }
@@ -614,7 +616,9 @@ module.exports = {
       for (const s of S) q[s].girdle = [C.lerp(10, 4, e), 10];
       const f = C.fk(q), H = C.axes(q, 'head'), head = f.P.head, T = C.axes(q, 'thorax');
       for (const s of S) {
-        const g = V.add(V.add(V.add(head, H.x, C.M.SIGN[s] * 12.5), H.z, 3), H.y, 1.5);
+        /* кисти — в 13,5 см от середины головы (было 12,5): с осанкой 4.62.0 голова впереди грудной клетки дальше, и в скручивании
+           канат от кистей к блоку задевал голову на 1 см */
+        const g = V.add(V.add(V.add(head, H.x, C.M.SIGN[s] * 13.5), H.z, 3), H.y, 1.5);
         const pole = V.unit(V.add(V.add(V.scale(T.y, -1), T.z, .7), C.lat(q, s), .4));
         C.hold(q, s, g, pole, { pron: 20, flex: -10 });
       }
