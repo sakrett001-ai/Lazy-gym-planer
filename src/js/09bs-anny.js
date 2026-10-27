@@ -121,13 +121,16 @@ const AnnySkin = (() => {
     return out;
   }
 
-  /* ---------- корректирующие формы: вес по углу сустава (линейно между a0 и a1, не больше 1) ---------- */
+  /* ---------- корректирующие формы: вес по углу сустава — «шатёр»: 0 при a0, 1 при a1 (угол позы формы), 0 при a2
+     (без a2 — 1 и дальше) ---------- */
   function correctiveWeights(R, d = data) {
     if (!d.correctives.length) return [];
     const A = M.jointAngles(R);
     return d.correctives.map(c => {
       const src = c.side ? A[c.side] : A, v = c.angle.split('.').reduce((o, k) => o?.[k], src);
-      return typeof v === 'number' ? Math.max(0, Math.min(1, (v - c.a0) / (c.a1 - c.a0))) : 0;
+      if (typeof v !== 'number') return 0;
+      if (v <= c.a1) return Math.max(0, Math.min(1, (v - c.a0) / (c.a1 - c.a0)));
+      return c.a2 == null ? 1 : Math.max(0, Math.min(1, (c.a2 - v) / (c.a2 - c.a1)));
     });
   }
 

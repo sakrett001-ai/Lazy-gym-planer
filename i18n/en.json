@@ -2931,5 +2931,7 @@
  "только видимые": "visible only",
  "анатомия у экрана за {n} мс": "anatomy near the screen in {n} ms",
  "витрина": "gallery",
- "Подъязычная кость, хрящи гортани и трахея построены по их размерам у взрослых мужчин из анатомических исследований: Fakhry и др., 2013; Rawal и др., 2014; Kim и Song, 2017; Gray's Anatomy, 1918.": "The hyoid bone, the laryngeal cartilages and the trachea are built to their sizes in adult men from anatomical studies: Fakhry et al., 2013; Rawal et al., 2014; Kim and Song, 2017; Gray's Anatomy, 1918."
+ "Подъязычная кость, хрящи гортани и трахея построены по их размерам у взрослых мужчин из анатомических исследований: Fakhry и др., 2013; Rawal и др., 2014; Kim и Song, 2017; Gray's Anatomy, 1918.": "The hyoid bone, the laryngeal cartilages and the trachea are built to their sizes in adult men from anatomical studies: Fakhry et al., 2013; Rawal et al., 2014; Kim and Song, 2017; Gray's Anatomy, 1918.",
+ "Форма тела в виде «Манекен» — открытая параметрическая модель человека": "The body shape in the Mannequin view is the open parametric human model",
+ "(NAVER; код — лицензия Apache 2.0, сетка и веса MakeHuman — CC0), подогнанная под суставы манекена: скелет, мышцы и проверки поз — прежние.": "(NAVER; code under the Apache 2.0 license, MakeHuman mesh and weights under CC0), fitted to the mannequin's joints: the skeleton, muscles and pose checks are unchanged."
 }

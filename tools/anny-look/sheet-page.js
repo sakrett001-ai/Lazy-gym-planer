@@ -24,6 +24,24 @@ window.Sheet = {
           view.resize(w, h); view.apply(dataFor(p.t), look);
         }
       }
+      /* отладка: p.weights — регулярное выражение имён рамок; вершины окрашены долей веса этих рамок (синий 0 → красный 1) */
+      if (p.weights && view.anny?.mesh && AnnySkin.data) {
+        const d = AnnySkin.data, re = new RegExp(p.weights), a = view.anny.mesh.geometry.attributes.annyColor;
+        for (let v = 0; v < d.nv; v++) { let w = 0; for (let k = 0; k < 4; k++) if (re.test(d.frames[d.wi[v * 4 + k]])) w += d.ww[v * 4 + k];
+          const c = w <= 0 ? null : [Math.round(255 * Math.min(1, 2 * w)), Math.round(255 * (1 - Math.abs(2 * w - 1))), Math.round(255 * Math.max(0, 1 - 2 * w))];
+          if (c) { a.array.set([...c, 255], v * 4); } else a.array.set([0, 0, 0, 0], v * 4); }
+        a.needsUpdate = true;
+      }
+      /* отладка: p.marks === 'inverted' — вершины вывернутых треугольников (как tools/anny-look/check.js) красным */
+      if (p.marks === 'inverted' && view.anny?.mesh && AnnySkin.data) {
+        const d = AnnySkin.data, R = rig(p.t), P = AnnySkin.skin(R, { d }), S = AnnySkin.skinMats(R, d), DQ = AnnySkin.dualQuats(S, d.frames.length), a = view.anny.mesh.geometry.attributes.annyColor, V = Mannequin.V;
+        const rot = v => { let x = 0, y = 0, z = 0, w = 0, r0 = -1; for (let j = 0; j < 4; j++) { const wt = d.ww[v * 4 + j]; if (!wt) continue; const o = d.wi[v * 4 + j] * 8; let s = wt; if (r0 < 0) r0 = o; else if (DQ[o] * DQ[r0] + DQ[o + 1] * DQ[r0 + 1] + DQ[o + 2] * DQ[r0 + 2] + DQ[o + 3] * DQ[r0 + 3] < 0) s = -wt; x += s * DQ[o]; y += s * DQ[o + 1]; z += s * DQ[o + 2]; w += s * DQ[o + 3]; } const l = Math.hypot(x, y, z, w); return [x / l, y / l, z / l, w / l]; };
+        const rotate = (q, p) => { const [x, y, z, w] = q, cx = y * p[2] - z * p[1] + w * p[0], cy = z * p[0] - x * p[2] + w * p[1], cz = x * p[1] - y * p[0] + w * p[2]; return [p[0] + 2 * (y * cz - z * cy), p[1] + 2 * (z * cx - x * cz), p[2] + 2 * (x * cy - y * cx)]; };
+        const at = (Q, i) => [Q[i * 3], Q[i * 3 + 1], Q[i * 3 + 2]], nrm = (Q, a, b, c) => V.cross(V.sub(at(Q, b), at(Q, a)), V.sub(at(Q, c), at(Q, a)));
+        a.array.fill(0);
+        for (let t = 0; t < d.nf; t++) { const i0 = d.idx[t * 3], i1 = d.idx[t * 3 + 1], i2 = d.idx[t * 3 + 2], n0 = nrm(d.pos, i0, i1, i2), n1 = nrm(P, i0, i1, i2), l0 = V.len(n0), l1 = V.len(n1); if (l0 < 1e-9 || l1 < 1e-9) continue; if (V.dot(rotate(rot(i0), n0), n1) / (l0 * l1) < -.2) for (const v of [i0, i1, i2]) a.array.set([255, 30, 30, 255], v * 4); }
+        a.needsUpdate = true;
+      }
       view.studio(renderer); view.scene.updateMatrixWorld(true); view.fitShadow();
       renderer.render(view.scene, cam);
       out.push({ url: renderer.domElement.toDataURL('image/png'), cam: [cam.left, cam.right, cam.top, cam.bottom] });

@@ -23,7 +23,7 @@ node tools/anny-look/export.js (qa/anny-look/mannequin.json). Сборка де�
    что области манекена (MANNEQUIN_TORSO_PATCHES и др., 09d-catalog-muscles.js).
 4. Корректирующие формы (correctives.py) — смещения вершин в стойке, их включает угол сустава.
 """
-import argparse, hashlib, json, os, sys, warnings
+import argparse, hashlib, json, os, subprocess, sys, warnings
 import numpy as np
 warnings.filterwarnings('ignore')
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -36,6 +36,46 @@ CENTRAL = ['pelvis', 'lumbar', 'thorax', 'neck', 'head']
 SIDE_FRAMES = ['cl', 'sp', 'ua', 'fa', 'fd', 'hand', 'th', 'sk', 'foot', 'toes'] + [f'f{f}{k}' for f in range(5) for k in range(3)]
 FRAMES = CENTRAL + [n + s for s in 'LR' for n in SIDE_FRAMES]
 PART_CODE = {'torso': 1, 'ua': 2, 'fa': 3, 'th': 4, 'sk': 5, 'delt': 6}
+
+
+SMOOTH_ITERS = 10
+
+
+def rigid_mask(W, frames):
+    """вершины, веса которых не сглаживаются: пальцы кисти и голова (больше половины веса); ладонь и запястье сглаживаются
+    (иначе на сгибе запястья кожа складывается), стопа — по правилу процедурной стопы (foot_split)"""
+    idx = [i for i, f in enumerate(frames) if f.startswith('head') or (f[0] == 'f' and f[1].isdigit())]
+    return W[:, idx].sum(1) > .5
+
+
+def foot_blend_w(p, g):
+    """доля рамки пальцев стопы — Mannequin.footBlendW: линия сгиба косая, как линия головок плюсневых костей
+    (у первой — z ≈ 13,7, у пятой — z ≈ 10,7), ширина перехода ±1,6 см; p — в рамке стопы (x — влево, z — вперёд)"""
+    m = np.clip(-g * p[:, 0], -4.5, 5); zc = 12.2 + .375 * m; u = np.clip((p[:, 2] - zc + 1.6) / 3.2, 0, 1)
+    return u * u * (3 - 2 * u)
+
+
+def foot_split(W, V, frames, D):
+    """стопа и пальцы стопы: их общая доля делится по правилу процедурной стопы (сгиб у плюснефаланговых суставов — там,
+    где гнётся процедурная стопа и где её рамка пальцев поворачивается); у Anny сгиб пальцев резкий и в другом месте —
+    при подъёме на носки и в упоре лёжа кожа над пальцами выворачивалась"""
+    fi = {f: i for i, f in enumerate(frames)}
+    for s, g in (('L', 1), ('R', -1)):
+        fr = D['frames']['foot' + s]; o = np.array(fr['o']); R = np.stack([fr['x'], fr['y'], fr['z']], 1)
+        p = (V - o) @ R; w = foot_blend_w(p, g)
+        a, b = fi['foot' + s], fi['toes' + s]; tot = W[:, a] + W[:, b]
+        W[:, a] = tot * (1 - w); W[:, b] = tot * w
+    return W
+
+
+def smooth_weights(W, F, mask, iters, alpha=.5):
+    """лапласово сглаживание весов (равные соседи) у вершин mask; сумма весов остаётся 1"""
+    from anny_look import neighbors
+    A = neighbors(F, len(W)); deg = np.asarray(A.sum(1)).ravel(); m = mask[:, None]
+    for _ in range(iters):
+        avg = (A @ W) / np.maximum(deg, 1)[:, None]
+        W = np.where(m, (1 - alpha) * W + alpha * avg, W)
+    return W / W.sum(1, keepdims=True)
 
 
 def ramp(u, e):
@@ -112,8 +152,13 @@ def build(out_path):
     ang = np.where(on_torso, P.a2[ii], ang_geo)
     wp, wl, wt = trunk_split(h, ang, D)
     Wo[:, fi['pelvis']] += trunk * wp; Wo[:, fi['lumbar']] += trunk * wl; Wo[:, fi['thorax']] += trunk * wt
-    # четыре наибольших
-    order = np.argsort(-Wo, 1)[:, :4]; wv = np.take_along_axis(Wo, order, 1); wv = wv / wv.sum(1, keepdims=True)
+    # сглаживание весов по сетке (кроме кистей, стоп и головы): у Anny веса — с рваными краями (в плече и подмышке доли
+    # кисти рига 0,02–0,1 обрываются по рёбрам сетки), а у манекена соседние рамки поворачиваются на 100–170° — на коже швы
+    Wo = smooth_weights(Wo, F, ~rigid_mask(Wo, FRAMES), SMOOTH_ITERS)
+    Wo = foot_split(Wo, V, FRAMES, D)
+    # четыре наибольших — непрерывно: из них вычитается пятый (иначе на границе, где пятый становится четвёртым, — скачок)
+    order = np.argsort(-Wo, 1); w5 = np.take_along_axis(Wo, order[:, 4:5], 1); order = order[:, :4]
+    wv = np.maximum(np.take_along_axis(Wo, order, 1) - w5, 0); wv = wv / wv.sum(1, keepdims=True)
     # округление до 1/255 с суммой ровно 255 (в файле — байты)
     wq = np.floor(wv * 255 + .5).astype(int); wq[:, 0] += 255 - wq.sum(1)
     order = np.where(wq > 0, order, 0)
@@ -139,13 +184,15 @@ def build(out_path):
         sel = (armw > .3) & (r < 10) & (polar < 1.75) & (near_part | (code == 0)) & ~((code == 2) & (a1 > .3))
         code[sel] = 6; side[sel] = si; a1[sel] = polar[sel]; a2[sel] = az[sel]
 
-    # ---------- корректирующие формы ----------
-    corr = CR.build(V, F, Wo, FRAMES, P, body)
-
     # ---------- в каталог ----------
     cat = V.copy(); cat[:, 1] = FLOOR - cat[:, 1]
+    cat = np.round(cat, 2)
+
+    # ---------- корректирующие формы (по тем же данным, что попадут в файл: координаты до 0,01 см, доли — байты) ----------
+    corr = CR.build(cat, F, order, wq / 255.0, FRAMES)
+    inputs = json.loads(subprocess.run(['node', os.path.join(C.ROOT, 'tools/anny-look/inputs.js')], check=True, capture_output=True, text=True).stdout)
     out = {'version': 1, 'source': {'anny': '0.6.1', 'toned': 'tools/skin-anny/result/anny-toned.json', 'fit': fit.get('pose'), 'local_delta': fit.get('local_delta', {}),
-                                    'mannequin': D['version']},
+                                    'mannequin': D['version'], 'inputs': inputs},
            'frames': FRAMES, 'v': np.round(cat, 2).ravel().tolist(), 'f': F.ravel().tolist(),
            'wi': order.ravel().tolist(), 'ww': wq.ravel().tolist(),
            'region': {'code': code.tolist(), 'side': side.tolist(), 'a1': np.round(a1, 3).tolist(), 'a2': np.round(a2, 3).tolist()},
