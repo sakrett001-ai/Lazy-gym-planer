@@ -223,12 +223,20 @@ def build(out_path, mannequin=None):
     code = np.zeros(n, int); side = np.zeros(n, int); a1 = np.zeros(n); a2 = np.zeros(n)
     dom = np.array(labels)[body.dominant[used]]
     handfoot = np.array([l.startswith(('wrist', 'finger', 'metacarpal', 'foot', 'toe', 'head', 'eye')) for l in dom])
+    # точка процедурной кожи под вершиной — ближайшая из тех, чья нормаль смотрит туда же (cos > 0,3): кожа Anny отстоит от
+    # процедурной на 1–3 см, и у угла (бок таза над бедром, подмышка) ближайшей оказывалась точка соседней части за углом —
+    # у боковой ягодичной было вдвое меньше вершин, чем у процедурной кожи (по доле видимой площади)
+    Nv = np.zeros_like(V); fn = np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]])
+    for k in range(3): np.add.at(Nv, F[:, k], fn)
+    Nv /= np.maximum(np.linalg.norm(Nv, axis=1, keepdims=True), 1e-12)
+    _, ik = P.tree.query(V, k=16); ok = np.einsum('nkj,nj->nk', P.N[ik], Nv) > .3
+    ia = np.where(ok.any(1), ik[np.arange(n), np.argmax(ok, 1)], ii)
     for j in range(n):
         if handfoot[j]: continue
-        part = P.part[ii[j]]
-        if part.startswith('torso'): code[j] = 1; side[j] = 0 if part.endswith('L') else 1; a1[j] = P.a1[ii[j]]; a2[j] = P.a2[ii[j]]
+        part = P.part[ia[j]]
+        if part.startswith('torso'): code[j] = 1; side[j] = 0 if part.endswith('L') else 1; a1[j] = P.a1[ia[j]]; a2[j] = P.a2[ia[j]]
         elif part[:2] in ('ua', 'fa', 'th', 'sk') and len(part) == 3:
-            code[j] = PART_CODE[part[:2]]; side[j] = 0 if part[2] == 'L' else 1; a1[j] = P.a1[ii[j]]; a2[j] = P.a2[ii[j]]
+            code[j] = PART_CODE[part[:2]]; side[j] = 0 if part[2] == 'L' else 1; a1[j] = P.a1[ia[j]]; a2[j] = P.a2[ia[j]]
     # дельтовидная: по направлению от центра «шапки» плеча в рамке плеча — у вершин плечевого пояса и верха плеча
     for s, si in (('L', 0), ('R', 1)):
         g = next(g for g in D['grids'] if g['name'] == 'cap-sh' + s); c = np.array(g['addr']['c'])
@@ -236,7 +244,7 @@ def build(out_path, mannequin=None):
         d = V - c; r = np.linalg.norm(d, axis=1); dn = d / np.maximum(r, 1e-9)[:, None]
         polar = np.arccos(np.clip(dn @ uy, -1, 1)); az = np.arctan2(dn @ lat, dn @ uz)
         armw = Wo[:, [fi['ua' + s], fi['sp' + s], fi['cl' + s]]].sum(1)
-        near_part = np.array([p in ('cap-sh' + s, 'cap-ac' + s) or (p == 'ua' + s) for p in P.part[ii]])
+        near_part = np.array([p in ('cap-sh' + s, 'cap-ac' + s) or (p == 'ua' + s) for p in P.part[ia]])
         sel = (armw > .3) & (r < 10) & (polar < 1.75) & (near_part | (code == 0)) & ~((code == 2) & (a1 > .3))
         code[sel] = 6; side[sel] = si; a1[sel] = polar[sel]; a2[sel] = az[sel]
     code[body.cavity[used]] = CAVITY_CODE

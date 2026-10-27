@@ -184,7 +184,10 @@ class AnnyLook(AnnyPosed):
             self.weights = np.vstack([self.weights, Wn]); self.dominant = np.concatenate([self.dominant, Wn.argmax(1)])
             self.skin_faces = F
         # выстилка рта (полость за сомкнутыми губами): снаружи не видна — в проверках отхода и опор не считается
+        # (в списке пакета есть и 33 вершины на теле — у плеча, на груди: их номера, видимо, из другой нумерации сетки; берём
+        # только вершины головы — главная кость head)
         self.cavity = np.zeros(len(V), bool); self.cavity[cav] = True; self.cavity[:n0] &= ~sel
+        self.cavity &= self.dominant == L['head']
         return V
 
     def neutral_groin(self, V, J):
