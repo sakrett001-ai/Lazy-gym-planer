@@ -195,15 +195,38 @@ def bake_shade(V, F, dom):
     return vis
 
 
+def pouch_correctives(back, o):
+    """Плавки при сгибании бедра: купол (anny_look.AnnyLook.pouch) лежит в складке между тазом и бёдрами; при сгибании
+    бедра больше 90° (присед, сидя, «велосипед») бедро поднимается к нему, и треугольники купола и складки переворачиваются
+    (вывороты — tools/anny-look/check.js). Форма возвращает купол к прежнему клину (его же смещение с обратным знаком) — по
+    половине на каждое бедро: вес — «шатёр» по углу сгибания бедра hipFlex (back: от и до, доля); при одном согнутом бедре
+    (выпад) купол уходит наполовину. Смещения — в стойке (каталог: Y вниз)."""
+    a0, a1, k = o['back']
+    if not k: return []
+    m = np.linalg.norm(back, axis=1) > .05; i = np.where(m)[0]
+    d = back[i] * np.array([1, -1, 1]) * (k / 2)
+    out = []
+    for s in 'LR':
+        out.append({'name': 'pouch' + s, 'side': s, 'angle': 'hipFlex', 'a0': a0, 'a1': a1, 'i': i.tolist(), 'd': np.round(d, 2).ravel().tolist()})
+    print(f'  форма pouchL/R: угол hipFlex {a0}→{a1}, вершин {len(i)}, наибольшее смещение {np.linalg.norm(d, axis=1).max():.1f} см (на сторону)')
+    return out
+
+
 def build(out_path, mannequin=None, shape='look'):
     P = C.Procedural(mannequin) if mannequin else C.Procedural(); D = P.D; body = AnnyLook(shape); fit = json.load(open(FIT))
     phen, local = body.params(fit); rest = body.rest(phen, local); q = q_from(fit['pose'])
     hands = D['hands']
     V, Hw, G, heads = body.stance(rest, P.J, q, hands, groin=False)
     V = body.neutral_throat(body.neutral_face(V, Hw), Hw)
-    if shape == 'look': V = body.pouch(V, body.look['pouch'])
+    pouch_back = None
+    if shape == 'look':
+        V0 = V; V = body.pouch(V, body.look['pouch'])
+        # обратный ход купола (корректирующая форма «плавки при сгибании бедра», ниже): к прежнему клину; сваренные вершины —
+        # по средней линии (x не меняется)
+        pouch_back = V0 - V; pouch_back[[i for i, _ in body.pouch_welded], 0] = 0
     F = body.skin_faces; used = np.unique(F); remap = -np.ones(len(V), np.int64); remap[used] = np.arange(len(used))
     V = V[used]; F = remap[F]; W = body.weights[used]          # плотные веса Anny по 104 костям
+    if pouch_back is not None: pouch_back = pouch_back[used]; pin = body.pouch_pin[used]
     labels = body.labels; L = body.idx; n = len(V)
     V = ground_feet(V, W, labels)
 
@@ -255,6 +278,15 @@ def build(out_path, mannequin=None, shape='look'):
     Wo = smooth_weights(Wo, F, ~rigid_mask(Wo, FRAMES), SMOOTH_ITERS)
     Wo = limb_limit(Wo, V, F, J, fi, Wa, ('leg',))
     Wo = foot_split(Wo, V, FRAMES, D)
+    if shape == 'look' and body.look['pouch'].get('smooth'):
+        # пах: веса сглажены сильнее (переход таз — бёдра шире): у купола и столбцов касания бёдер за ним при сгибании и
+        # отведении бедра треугольники иначе переворачиваются (tools/anny-look/check.js, вывороты)
+        sm = body.look['pouch']['smooth']
+        for it, bx, by0, by1, bz0, bz1 in (sm if isinstance(sm[0], list) else [sm]):
+            gm = (np.abs(V[:, 0]) < bx) & (V[:, 1] > by0) & (V[:, 1] < by1) & (V[:, 2] > bz0) & (V[:, 2] < bz1)
+            Wo = smooth_weights(Wo, F, gm, it)
+        # низ купола по средней линии — за тазом (anny_look.AnnyLook.pouch, pin)
+        Wo = Wo * (1 - pin[:, None]); Wo[:, fi['pelvis']] += pin
     # четыре наибольших — непрерывно: из них вычитается пятый (иначе на границе, где пятый становится четвёртым, — скачок)
     order = np.argsort(-Wo, 1); w5 = np.take_along_axis(Wo, order[:, 4:5], 1); order = order[:, :4]
     wv = np.maximum(np.take_along_axis(Wo, order, 1) - w5, 0); wv = wv / wv.sum(1, keepdims=True)
@@ -301,6 +333,7 @@ def build(out_path, mannequin=None, shape='look'):
 
     # ---------- корректирующие формы (по тем же данным, что попадут в файл: координаты до 0,01 см, доли — байты) ----------
     corr = CR.build(cat, F, order, wq / 255.0, FRAMES)
+    if pouch_back is not None: corr += pouch_correctives(pouch_back, body.look['pouch'])
     inputs = json.loads(subprocess.run(['node', os.path.join(C.ROOT, 'tools/anny-look/inputs.js')], check=True, capture_output=True, text=True).stdout)
     out = {'version': 1, 'source': {'anny': '0.6.1', 'toned': 'tools/skin-anny/result/anny-toned.json', 'fit': fit.get('pose'), 'local_delta': fit.get('local_delta', {}),
                                     # версия приложения в файл не пишется: стойку и инструменты уже отпечатывает inputs,

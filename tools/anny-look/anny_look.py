@@ -242,14 +242,37 @@ class AnnyLook(AnnyPosed):
         N0 = np.asarray(trimesh.Trimesh(V, F, process=False).vertex_normals)
         shelf = used & (N0[:, 1] < -.6) & (np.abs(x) < 2.0) & (y > 85.5) & (y < 88.5) & (z > -1)
         out[shelf, 2] = np.maximum(z[shelf], zt[shelf] - (4.8 - z[shelf]).clip(0) * g('shelf') - .4)
-        inner = box & (np.abs(x) < g('xin')) & (z < 5.6) & (x > 0.02) & (y < g('weld_below'))
+        inner = box & (np.abs(x) < g('xin')) & (z < 5.6) & (x > 0.02) & (y < g('weld_below')) & (y > g('weld_above', 0))
+        # и столбец касания бёдер за ним (стенки щели между ними иначе — две почти совпадающие поверхности, которые при
+        # любом сгибании бедра проходят друг сквозь друга): сварен так же, стенки щели с обеих сторон совпадают и убираются
+        c0, c1, cx, cy0 = g('contact')
+        inner |= used & (x > 0.02) & (np.abs(x) < cx) & (z > c0) & (z < c1) & (y > cy0) & (y < g('weld_below'))
         T = cKDTree(V * np.array([-1, 1, 1])); remap = np.arange(len(V)); welded = []
         for i in np.where(inner)[0]:
             d, j = T.query(V[i])
             if d < .05 and j != i:
                 out[i, 0] = 0; out[i, 1:] = (out[i, 1:] + out[j, 1:]) / 2; remap[j] = i; welded.append((int(i), int(j)))
                 self.weights[i] = (self.weights[i] + self.weights[j]) / 2
-        F = remap[F]; self.skin_faces = F[(F[:, 0] != F[:, 1]) & (F[:, 1] != F[:, 2]) & (F[:, 0] != F[:, 2])]
+        F = remap[F]; F = F[(F[:, 0] != F[:, 1]) & (F[:, 1] != F[:, 2]) & (F[:, 0] != F[:, 2])]
+        # стенки щели после сварки — пары треугольников на тех же трёх вершинах с обратным обходом: убираются обе
+        key = np.sort(F, 1); _, inv, cnt = np.unique(key, axis=0, return_inverse=True, return_counts=True)
+        self.skin_faces = F[cnt[inv.ravel()] == 1]
+        # купол идёт за тазом, а не за бёдрами: у сетки клин — стенки бёдер (веса бедра), и при сгибании бедра низ купола
+        # поворачивался вместе с бедром и складывался в верх купола (вывороты и складки в приседе, «велосипеде», выпаде).
+        # Доля таза (кость root рига, при переносе — рамка pelvis) растёт с выдвижением: от pelvis[0] до pelvis[1] см — до 1
+        p0, p1 = g('pelvis')
+        beta = smoothstep(p0, p1, out[:, 2] - V[:, 2]) * (box | shelf)
+        if g('pelvis_y'): beta *= smoothstep(*g('pelvis_y'), y)     # низ купола — плавный переход к бёдрам
+        # и всё, что внутри купола и между бёдрами за ним (столбцы касания бёдер у вершины промежности): купол с ними —
+        # одно целое с тазом, переход к бёдрам — снаружи и ниже (rigid: |x| — до 1 при rx0, до 0 при rx1; высота — y0…y1)
+        # низ купола по средней линии (сваренные вершины у промежности): за тазом — после сглаживания весов (build.py), иначе
+        # при разведении бёдер они повисают между ними (отход от процедурной кожи до 9,4 см)
+        self.pouch_pin = np.zeros(len(V))
+        if g('pin'):
+            px, py0, py1, pk = g('pin')
+            self.pouch_pin = ((np.abs(out[:, 0]) < px) & (y > py0) & (y < py1) & used & (box | inner)) * pk
+        onehot = np.zeros(self.weights.shape[1]); onehot[self.idx['root']] = 1
+        self.weights = self.weights * (1 - beta[:, None]) + onehot[None] * beta[:, None]
         self.dominant = self.weights.argmax(1); self.pouch_welded = welded; self.pouch_sel = box | shelf
         print(f'  пах: выдвинуто {int((box | shelf).sum())} вершин (до {np.abs(out - V).max():.1f} см), сварено пар {len(welded)}')
         return out
