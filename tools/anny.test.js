@@ -19,6 +19,7 @@ function sourceOf(dd, H) {
   const R = dd.region, round = (x, k) => Math.round(x * k) / k;
   return { source: H.source, frames: dd.frames, v: Array.from(dd.pos, x => round(x, 100)), f: Array.from(dd.idx), wi: Array.from(dd.wi), ww: Array.from(dd.ww, x => Math.round(x * 255)),
     region: { code: Array.from(R.code), side: Array.from(R.side), a1: Array.from(R.a1, x => round(x, 500)), a2: Array.from(R.a2, x => round(x, 500)) },
+    shade: Array.from(dd.shade, x => Math.round(x * 255)),
     correctives: dd.correctives.map(c => { const { i, d: dl, n, ...rest } = c; return { ...rest, i: Array.from(i), d: Array.from(dl, x => round(x, 100)) }; }) };
 }
 test('anny.bin: canonical pack output (decode → pack.js gives the same bytes), weights sum to one', () => {

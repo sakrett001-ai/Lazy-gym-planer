@@ -1,7 +1,8 @@
 """Anny подтянутая в нейтральной стойке манекена 4.61.0 (кожа «только внешний вид»).
 
-Форма — одобренная владельцем подтянутая Anny (tools/skin-anny/result/anny-toned.json: фенотип, местные формы, нейтральный
-пах); поза её рига — по скелету 4.61.0 (tools/anny-look/fit.json: поза корпуса и сдвиг подобраны fit.py, плюс небольшие
+Форма — одобренная владельцем подтянутая Anny (tools/skin-anny/result/anny-toned.json: фенотип, местные формы) с шлифовкой
+мужской формы (tools/anny-look/look.json: ягодицы и таз, талия, голени, рельеф, пах «как в плавках» — купол pouch()); поза
+её рига — по скелету 4.61.0 (tools/anny-look/fit.json: поза корпуса и сдвиг подобраны fit.py, плюс небольшие
 поправки местных форм там, где Anny отходила от процедурной кожи 4.61.0 больше чем на 2–3 см). Конечности — как в
 tools/skin-anny/anny_pose.py: шарниры — наши суставы (плечевой, локтевой, тазобедренный, коленный, голеностопный),
 направления сегментов — нашей нейтральной стойки. Кисть Anny повёрнута к рамке кисти манекена, пальцы — по суставам пальцев
@@ -17,6 +18,10 @@ from anny_body import to_ours, dir_to_anny, rot_between
 
 TONED = os.path.join(ROOT, 'tools/skin-anny/result/anny-toned.json')
 FIT = os.path.join(ROOT, 'tools/anny-look/fit.json')
+LOOK = os.path.join(ROOT, 'tools/anny-look/look.json')
+# эталон «обычного мужчины» (лист для владельца): Anny по умолчанию — мужчина 27 лет, мышечность, вес и пропорции 0,5, без
+# местных форм; рост 0,35 — у Anny шкала роста своя (0,5 — 190,8 см), 0,35 — 174,4 см, медиана ANSUR II (174,5)
+REFERENCE = {'phenotype': {'muscle': .5, 'weight': .5, 'height': .35, 'proportions': .5}, 'local': {'bulge-incr': 0.0}}
 POSE_KEYS = ['sp5', 'sp4', 'sp3', 'sp2', 'sp1', 'neck', 'head', 'clav_e', 'clav_r', 'ty', 'tz', 'tw_ua', 'tw_fa', 'tw_th', 'neck_ty', 'neck_tz']
 FINGER_BONES = {0: ['finger1-1', 'finger1-2', 'finger1-3'], 1: ['finger2-1', 'finger2-2', 'finger2-3'], 2: ['finger3-1', 'finger3-2', 'finger3-3'],
                 3: ['finger4-1', 'finger4-2', 'finger4-3'], 4: ['finger5-1', 'finger5-2', 'finger5-3']}
@@ -39,14 +44,21 @@ def frame_from(a, b):
 
 
 class AnnyLook(AnnyPosed):
-    def __init__(self):
+    def __init__(self, shape='look'):
+        """shape: 'look' — одобренная форма с шлифовкой look.json (сборка), 'toned' — одобренная форма 4.62.0 без неё,
+        'reference' — эталон REFERENCE (Anny по умолчанию, для листа)"""
         torch.set_num_threads(1)
         super().__init__()
-        self.toned = json.load(open(TONED))
+        self.toned = json.load(open(TONED)); self.shape = shape
+        self.look = json.load(open(LOOK)) if shape == 'look' else None
 
     def params(self, fit=None):
-        """фенотип и местные формы: одобренные + поправки fit.json"""
+        """фенотип и местные формы: одобренные, правки look.json (заменяют значения), поправки fit.json"""
+        if self.shape == 'reference':
+            return dict(REFERENCE['phenotype']), dict(REFERENCE['local'])
         A = self.toned; phen = dict(A['phenotype']); local = dict(A['local_changes']); local['bulge-incr'] = A['bulge-incr']
+        if self.look:
+            phen.update(self.look['phenotype']); local.update(self.look['local'])
         for k, d in ((fit or {}).get('local_delta') or {}).items():
             local[k] = float(np.clip(local.get(k, 0.0) + d, -1, 1))
         return phen, local
@@ -201,14 +213,46 @@ class AnnyLook(AnnyPosed):
         self.throat_sel = sel
         return fair(V, F, sel) if sel.any() else V
 
-    def neutral_groin(self, V, J):
-        """пах: форма «bulge» −1 уже гладкая; ямка у вершины промежности спереди (тёмное пятно на свету) — гладкой заплаткой
-        fair() по средней линии между бёдрами (|x| < 4 см, от 9 см ниже до 1 см выше тазобедренных, спереди)"""
-        F = self.skin_faces; hy = (J['hipL'][1] + J['hipR'][1]) / 2
-        used = np.zeros(len(V), bool); used[np.unique(F)] = True
-        sel = used & (np.abs(V[:, 0]) < 4.0) & (V[:, 1] > hy - 9) & (V[:, 1] < hy + 1) & (V[:, 2] > 0)
-        self.groin_sel = sel
-        return fair(V, F, sel) if sel.any() else V
+    def pouch(self, V, o):
+        """Пах «как в плавках» (параметры — look.json, pouch). У сетки MakeHuman между бёдрами спереди — клин: передняя
+        поверхность бёдер у z ≈ 11 см, дно клина (линия, где бёдра касаются друг друга) — у z ≈ 3,8, вершина клина —
+        на 2,5 см ниже тазобедренных; на свету — тёмная «V», как у женской фигуры (прежняя заплатка fair() её только
+        сглаживала). Здесь клин закрыт: стенки клина и низ лобка (|x| < xs, выше линии касания z > zc) выдвинуты вперёд до
+        целевой поверхности мягким максимумом (порядок вершин по глубине сохраняется — треугольники не выворачиваются):
+        основа — уровень передней поверхности бёдер zbase (от лобка ztop вниз до b0, ниже — к линии касания к b1), поверх —
+        гладкий купол плавок: высота A (наибольшая на высоте ya, к yt и yb — до нуля), ширина — от wt вверху до wb внизу,
+        сечение (1 − u²)². Внутренний столбец стенок (|x| < xin, ниже weld_below) встаёт на среднюю линию и сваривается с
+        зеркальным (щель между бёдрами закрыта; веса — средние пары). Полка промежности за вершиной клина (нормаль вниз)
+        поджимается к передней поверхности (доля shelf), иначе её треугольники затемняют верх купола."""
+        import trimesh
+        from scipy.spatial import cKDTree
+        F = self.skin_faces; used = np.zeros(len(V), bool); used[np.unique(F)] = True
+        x, y, z = V[:, 0], V[:, 1], V[:, 2]
+        g = o.get
+        top, t0, b0, b1, zc = g('top'), g('t0'), g('b0'), g('b1'), g('zc')
+        base = np.where(y > t0, g('ztop') + (g('zbase') - g('ztop')) * (1 - smoothstep(t0, top, y)),
+                        np.where(y < b0, zc + (g('zbase') - zc) * smoothstep(b1, b0, y), g('zbase')))
+        amp = g('A') * np.where(y > g('ya'), 1 - smoothstep(g('ya'), g('yt'), y), smoothstep(g('yb'), g('ya'), y))
+        w = g('wb') + (g('wt') - g('wb')) * smoothstep(g('yb'), g('yt'), y)
+        u = np.clip(np.abs(x) / w, 0, 1); zt = base + amp * (1 - u * u) ** 2
+        lat = 1 - smoothstep(g('x0'), g('xs'), np.abs(x))
+        box = used & (np.abs(x) < g('xs')) & (y > b1 - .5) & (y < top) & (z > zc)
+        k = g('k'); z2 = (z + zt + np.sqrt((z - zt) ** 2 + k * k)) / 2
+        out = V.copy(); out[box, 2] = z[box] + (z2[box] - z[box]) * lat[box]
+        N0 = np.asarray(trimesh.Trimesh(V, F, process=False).vertex_normals)
+        shelf = used & (N0[:, 1] < -.6) & (np.abs(x) < 2.0) & (y > 85.5) & (y < 88.5) & (z > -1)
+        out[shelf, 2] = np.maximum(z[shelf], zt[shelf] - (4.8 - z[shelf]).clip(0) * g('shelf') - .4)
+        inner = box & (np.abs(x) < g('xin')) & (z < 5.6) & (x > 0.02) & (y < g('weld_below'))
+        T = cKDTree(V * np.array([-1, 1, 1])); remap = np.arange(len(V)); welded = []
+        for i in np.where(inner)[0]:
+            d, j = T.query(V[i])
+            if d < .05 and j != i:
+                out[i, 0] = 0; out[i, 1:] = (out[i, 1:] + out[j, 1:]) / 2; remap[j] = i; welded.append((int(i), int(j)))
+                self.weights[i] = (self.weights[i] + self.weights[j]) / 2
+        F = remap[F]; self.skin_faces = F[(F[:, 0] != F[:, 1]) & (F[:, 1] != F[:, 2]) & (F[:, 0] != F[:, 2])]
+        self.dominant = self.weights.argmax(1); self.pouch_welded = welded; self.pouch_sel = box | shelf
+        print(f'  пах: выдвинуто {int((box | shelf).sum())} вершин (до {np.abs(out - V).max():.1f} см), сварено пар {len(welded)}')
+        return out
 
     def stance(self, rest, J, q, hands=None, groin=True):
         """вершины в стойке (см, авторинг), головы костей рига в позе (см, авторинг) и матрицы костей"""
@@ -225,6 +269,10 @@ class AnnyLook(AnnyPosed):
 # ---------------- лицо и пах: гладкое заполнение (без глаз, без «дыр» и тёмных пятен) ----------------
 EYE_SINK, EYE_RINGS = .3, 6
 THROAT = (3.5, 2.0, 4.5)
+
+
+def smoothstep(a, b, x):
+    t = np.clip((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t)
 
 
 def neighbors(F, n):

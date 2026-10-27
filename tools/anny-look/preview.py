@@ -16,7 +16,7 @@ q = q_from(fit['pose']); hands = P.D['hands'] if a.hands else None
 V, H = body.stance(rest, P.J, q, hands, groin=False)[:2]
 if a.groin == 'smooth': body.setup_groin(V); V = body.stance(rest, P.J, q, hands)[0]
 if a.groin in ('face', 'all'): V = body.neutral_face(V, H); print('глазницы:', int(body.socket.sum()), 'вершин')
-if a.groin == 'all': V = body.neutral_groin(V, P.J); print('пах:', int(body.groin_sel.sum()), 'вершин')
+if a.groin == 'all': V = body.pouch(V, body.look['pouch'])
 mesh = {'pos': np.round(V, 2).ravel().tolist(), 'idx': body.skin_faces.ravel().tolist()}
 CEN = [0, 87.5, 1.5]; full = 112
 rows = [{'title': 'манекен 4.61.0', 'panels': [{'label': c, 'cam': c, 'center': CEN, 'span': full, 'body': 'mannequin', 'w': 300, 'h': 560} for c in ('front', 'side', 'back', 'angle')]},

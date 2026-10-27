@@ -9,6 +9,39 @@ import * as THREE from 'three';
    Рамка кадра и тени: сетка в стойке, поэтому её габарит в кадре — по точкам выборки вершин, скиннингом на процессоре
    (userData.boundsPoints: их берёт сцена для рамки камер и для тени). */
 const FLOOR=186,BOUNDS_STEP=37;
+/* Внешний вид кожи (только свет и цвет; форма и проверки — в данных anny.bin):
+   ao — затенённость впадин (запечена в стойке, AnnySkin.data.shade — доля открытого неба): [для рассеянного света неба,
+        для прямого]; рассеянный — как карта затенения three.js (aoMap), прямой — слабее (впадины глубже, но тень
+        ключевого света на теле не рисуется: тело тень не принимает, иначе она перекрывает цвет мышц);
+   relief — контраст формы: нормали «с нерезкой маской» (нормаль + relief·(нормаль − сглаженная по relief[1] кольцам)):
+        граница грудной, пресс, дельты читаются при той же геометрии и том же матовом материале;
+   roughness — шероховатость материала Anny (у манекена 0,62): матовее, без пластикового блика;
+   trunks — тон плавок (вариант Б): цвет и доля смешения; 0 — без плавок (вариант А). Граница — линия плавок-брифов
+        (trunkLine), ровная: в шейдере по расстоянию до неё со сглаживанием в пиксель (fwidth).
+   Переопределение для листов сравнения — globalThis.ANNY_LOOK (те же ключи). */
+export const ANNY_LOOK={ao:[.85,.35],relief:[.6,6],roughness:.72,trunks:{color:'#7b889e',alpha:1}};
+const look=()=>({...ANNY_LOOK,...(globalThis.ANNY_LOOK||{})});
+/* Линия плавок-брифов в стойке (см над полом, x — влево, z — вперёд; тазобедренные суставы — 89,5 над полом, ±8,8):
+   пояс — 96,5 спереди, 97,5 сбоку, 98,5 сзади (≈ 8 см ниже пупка: у ANSUR II пупок — 105,5); вырез ноги — по углу a вокруг
+   оси бедра (0 — спереди, +90° — снаружи, −90° — внутри, у промежности): h = 85 + 1,5·cos a + 8·sin a — у промежности 77
+   (купол плавок закрыт), спереди 86,5, снаружи 93 (высокий вырез брифов), сзади 83,5 (ягодичная складка). Возвращает
+   знаковое расстояние по высоте, см: плюс — внутри плавок. */
+export function trunkLine(x,h,z){
+ const phi=Math.atan2(x,z),top=97.5-Math.cos(phi);
+ const s=x>=0?1:-1,a=Math.atan2((x-8.8*s)*s,z),leg=85+1.5*Math.cos(a)+8*Math.sin(a);
+ return Math.min(top-h,h-leg);
+}
+const TRUNK_FRAMES=new Set(['pelvis','lumbar','thorax','thL','thR']);
+/* нормали «с нерезкой маской»: n + k·(n − n̄), n̄ — нормали, усреднённые по соседям rings раз */
+function reliefNormals(g,idx,nv,k,rings){
+ if(!(k>0))return;
+ const n=g.attributes.normal.array,adj=Array.from({length:nv},()=>new Set());
+ for(let t=0;t<idx.length;t+=3){const a=idx[t],b=idx[t+1],c=idx[t+2];adj[a].add(b).add(c);adj[b].add(a).add(c);adj[c].add(a).add(b);}
+ let s=Float32Array.from(n);
+ for(let r=0;r<rings;r++){const o=new Float32Array(s.length);for(let v=0;v<nv;v++){let x=s[v*3],y=s[v*3+1],z=s[v*3+2];for(const u of adj[v]){x+=s[u*3];y+=s[u*3+1];z+=s[u*3+2];}const l=Math.hypot(x,y,z)||1;o[v*3]=x/l;o[v*3+1]=y/l;o[v*3+2]=z/l;}s=o;}
+ for(let v=0;v<nv;v++){const x=n[v*3]+k*(n[v*3]-s[v*3]),y=n[v*3+1]+k*(n[v*3+1]-s[v*3+1]),z=n[v*3+2]+k*(n[v*3+2]-s[v*3+2]),l=Math.hypot(x,y,z)||1;n[v*3]=x/l;n[v*3+1]=y/l;n[v*3+2]=z/l;}
+ g.attributes.normal.needsUpdate=true;
+}
 const DQ_PARS=`
 uniform vec4 annyDQ[ANNY_FRAMES*2];
 #define ANNY_FLOOR ${FLOOR.toFixed(1)}
@@ -36,16 +69,17 @@ vec3 annyLinear(vec3 p,bool dir){
 }
 #endif
 `;
+const COLOR_PARS='attribute vec4 annyColor;\nvarying vec4 vAnnyColor;\nattribute vec2 annyLook;\nvarying vec2 vAnnyLook;\n',COLOR_OUT='\nvAnnyColor=annyColor;vAnnyLook=annyLook;';
 function patch(shader,frames,{normals=true,color=false}={}){
  if(globalThis.ANNY_METHOD==='lbs'){
-  shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\n#define ANNY_LBS\n#define ANNY_FRAMES '+frames+'\n'+DQ_PARS+(color?'attribute vec4 annyColor;\nvarying vec4 vAnnyColor;\n':''));
+  shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\n#define ANNY_LBS\n#define ANNY_FRAMES '+frames+'\n'+DQ_PARS+(color?COLOR_PARS:''));
   if(normals)shader.vertexShader=shader.vertexShader.replace('#include <skinnormal_vertex>','objectNormal=normalize(annyLinear(objectNormal,true));');
-  shader.vertexShader=shader.vertexShader.replace('#include <skinning_vertex>','transformed=annyLinear(transformed,false);transformed.y=min(transformed.y,ANNY_FLOOR);'+(color?'\nvAnnyColor=annyColor;':''));
+  shader.vertexShader=shader.vertexShader.replace('#include <skinning_vertex>','transformed=annyLinear(transformed,false);transformed.y=min(transformed.y,ANNY_FLOOR);'+(color?COLOR_OUT:''));
   return;
  }
- shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\n#define ANNY_FRAMES '+frames+'\n'+DQ_PARS+(color?'attribute vec4 annyColor;\nvarying vec4 vAnnyColor;\n':''));
+ shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\n#define ANNY_FRAMES '+frames+'\n'+DQ_PARS+(color?COLOR_PARS:''));
  if(normals)shader.vertexShader=shader.vertexShader.replace('#include <skinnormal_vertex>','vec4 annyR,annyD;annyBlend(annyR,annyD);objectNormal=annyRotate(annyR,objectNormal);\n#ifdef USE_TANGENT\nobjectTangent=annyRotate(annyR,objectTangent);\n#endif');
- shader.vertexShader=shader.vertexShader.replace('#include <skinning_vertex>',(normals?'':'vec4 annyR,annyD;annyBlend(annyR,annyD);\n')+'transformed=annyMove(annyR,annyD,transformed);transformed.y=min(transformed.y,ANNY_FLOOR);'+(color?'\nvAnnyColor=annyColor;':''));
+ shader.vertexShader=shader.vertexShader.replace('#include <skinning_vertex>',(normals?'':'vec4 annyR,annyD;annyBlend(annyR,annyD);\n')+'transformed=annyMove(annyR,annyD,transformed);transformed.y=min(transformed.y,ANNY_FLOOR);'+(color?COLOR_OUT:''));
 }
 export function createAnnyLayer(parent,skin){
  const group=new THREE.Group();group.name='anny';group.visible=false;parent.add(group);
@@ -58,9 +92,15 @@ export function createAnnyLayer(parent,skin){
   /* каталог — зеркальная система: обход треугольников разворачиваем, нормали считаем в ней же */
   const idx=new Uint16Array(d.idx.length);for(let i=0;i<idx.length;i+=3){idx[i]=d.idx[i];idx[i+1]=d.idx[i+2];idx[i+2]=d.idx[i+1];}
   g.setIndex(new THREE.BufferAttribute(idx,1));g.computeVertexNormals();
+  const L=look();reliefNormals(g,idx,d.nv,L.relief?.[0]??0,L.relief?.[1]??6);
   g.setAttribute('annyIndex',new THREE.BufferAttribute(Float32Array.from(d.wi),4));
   g.setAttribute('annyWeight',new THREE.BufferAttribute(d.ww,4));
   colorAttr=new THREE.BufferAttribute(new Uint8Array(d.nv*4),4,true);colorAttr.setUsage(THREE.DynamicDrawUsage);g.setAttribute('annyColor',colorAttr);
+  /* вид вершины: затенённость впадин (доля открытого неба) и расстояние до линии плавок (см, плюс — внутри; только таз и
+     бёдра — кисти и предплечья у бёдер в стойке не красятся) */
+  const lk=new Float32Array(d.nv*2);
+  for(let v=0;v<d.nv;v++){const f=d.frames[d.wi[v*4]];lk[v*2]=d.shade?d.shade[v]:1;lk[v*2+1]=TRUNK_FRAMES.has(f)?Math.max(-8,Math.min(8,trunkLine(d.pos[v*3],FLOOR-d.pos[v*3+1],d.pos[v*3+2]))):-8;}
+  g.setAttribute('annyLook',new THREE.BufferAttribute(lk,2));
   if(d.correctives.length){
    g.morphAttributes.position=d.correctives.map(c=>{const a=new Float32Array(d.nv*3);for(let j=0;j<c.n;j++){const v=c.i[j];a[v*3]=c.d[j*3];a[v*3+1]=c.d[j*3+1];a[v*3+2]=c.d[j*3+2];}return new THREE.BufferAttribute(a,3);});
    g.morphTargetsRelative=true;
@@ -71,11 +111,15 @@ export function createAnnyLayer(parent,skin){
   /* сетка замкнута, лицевая сторона — снаружи: изнанка не рисуется (у материала манекена — обе стороны: у процедурной
      кожи открытые края). Иначе в прорези век видна изнанка их внутренней стороны, и её перевёрнутую нормаль ярко
      освещает контровой свет — «белые глаза»; заодно вдвое меньше работы фрагментам. */
-  material=skin.clone();material.name='anny-skin';material.side=THREE.FrontSide;
+  material=skin.clone();material.name='anny-skin';material.side=THREE.FrontSide;material.roughness=L.roughness??skin.roughness;
+  const tc=new THREE.Color(L.trunks?.color||'#000'),ta=L.trunks?.alpha||0;
+  uniforms.annyAO={value:new THREE.Vector2(L.ao?.[0]??0,L.ao?.[1]??0)};uniforms.annyTrunk={value:new THREE.Vector4(tc.r,tc.g,tc.b,ta)};
   material.onBeforeCompile=s=>{
-   s.uniforms.annyDQ=uniforms.annyDQ;s.uniforms.annyGlow=glow;patch(s,d.frames.length,{color:true});
-   s.fragmentShader=s.fragmentShader.replace('#include <common>','#include <common>\nvarying vec4 vAnnyColor;\nuniform float annyGlow;\nvec3 annyLinear(vec3 c){return mix(c/12.92,pow((c+.055)/1.055,vec3(2.4)),step(.04045,c));}')
-    .replace('#include <color_fragment>','#include <color_fragment>\nvec3 annyZone=annyLinear(vAnnyColor.rgb);diffuseColor.rgb=mix(diffuseColor.rgb,annyZone,vAnnyColor.a);')
+   s.uniforms.annyDQ=uniforms.annyDQ;s.uniforms.annyGlow=glow;s.uniforms.annyAO=uniforms.annyAO;s.uniforms.annyTrunk=uniforms.annyTrunk;patch(s,d.frames.length,{color:true});
+   s.fragmentShader=s.fragmentShader.replace('#include <common>','#include <common>\nvarying vec4 vAnnyColor;\nvarying vec2 vAnnyLook;\nuniform float annyGlow;\nuniform vec2 annyAO;\nuniform vec4 annyTrunk;\nvec3 annyLinear(vec3 c){return mix(c/12.92,pow((c+.055)/1.055,vec3(2.4)),step(.04045,c));}')
+    /* плавки — под цветом мышц: активная зона закрашивает и их */
+    .replace('#include <color_fragment>','#include <color_fragment>\nfloat annyFw=max(fwidth(vAnnyLook.y)*.75,1e-3);diffuseColor.rgb=mix(diffuseColor.rgb,annyTrunk.rgb,smoothstep(-annyFw,annyFw,vAnnyLook.y)*annyTrunk.a);\nvec3 annyZone=annyLinear(vAnnyColor.rgb);diffuseColor.rgb=mix(diffuseColor.rgb,annyZone,vAnnyColor.a);')
+    .replace('#include <aomap_fragment>','#include <aomap_fragment>\nreflectedLight.indirectDiffuse*=mix(1.,vAnnyLook.x,annyAO.x);float annyDir=mix(1.,vAnnyLook.x,annyAO.y);reflectedLight.directDiffuse*=annyDir;reflectedLight.directSpecular*=annyDir;')
     .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=annyZone*annyGlow*vAnnyColor.a;');
   };
   material.customProgramCacheKey=()=>'anny-skin-'+d.frames.length+(globalThis.ANNY_METHOD||'');
