@@ -227,6 +227,7 @@ def build(out_path, mannequin=None, shape='look'):
     F = body.skin_faces; used = np.unique(F); remap = -np.ones(len(V), np.int64); remap[used] = np.arange(len(used))
     V = V[used]; F = remap[F]; W = body.weights[used]          # плотные веса Anny по 104 костям
     if pouch_back is not None: pouch_back = pouch_back[used]; pin = body.pouch_pin[used]
+    apex = body.pouch_apex[used] if shape == 'look' and body.pouch_apex is not None else None
     labels = body.labels; L = body.idx; n = len(V)
     V = ground_feet(V, W, labels)
 
@@ -334,6 +335,14 @@ def build(out_path, mannequin=None, shape='look'):
     # ---------- корректирующие формы (по тем же данным, что попадут в файл: координаты до 0,01 см, доли — байты) ----------
     corr = CR.build(cat, F, order, wq / 255.0, FRAMES)
     if pouch_back is not None: corr += pouch_correctives(pouch_back, body.look['pouch'])
+    if apex is not None and apex.any():
+        # веер у вершины клина (anny_look.AnnyLook.pouch, apex_after): гладкая заплатка после корректирующих форм, его
+        # вершины из форм убраны (их смещения считались по вееру до заплатки)
+        from anny_look import fair
+        cat = np.round(fair(cat, F, apex), 2); ai = set(np.where(apex)[0].tolist())
+        for c in corr:
+            keep = [k for k, v in enumerate(c['i']) if v not in ai]
+            c['d'] = [c['d'][k * 3 + j] for k in keep for j in range(3)]; c['i'] = [c['i'][k] for k in keep]
     inputs = json.loads(subprocess.run(['node', os.path.join(C.ROOT, 'tools/anny-look/inputs.js')], check=True, capture_output=True, text=True).stdout)
     out = {'version': 1, 'source': {'anny': '0.6.1', 'toned': 'tools/skin-anny/result/anny-toned.json', 'fit': fit.get('pose'), 'local_delta': fit.get('local_delta', {}),
                                     # версия приложения в файл не пишется: стойку и инструменты уже отпечатывает inputs,
