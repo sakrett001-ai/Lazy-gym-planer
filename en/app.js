@@ -10216,6 +10216,197 @@ const Muscles = (() => {
 if (typeof module !== 'undefined' && module.exports) module.exports = Muscles;
 if (typeof window !== 'undefined') window.Muscles = Muscles;
 
+/* ===================== КОЖА ANNY (вид «Манекен», только внешний вид) =====================
+   Сетка подтянутой Anny (Anny 0.6.1 — Apache 2.0, NAVER; сетка, формы и веса MakeHuman/MPFB2 — CC0; third_party/anny),
+   подогнанная под нейтральную стойку манекена 4.61.0 (tools/anny-look). Это только видимая кожа: кинематика, процедурная
+   кожа (Mannequin.surface, знаковые расстояния), скелет, мышцы и все проверки — прежние. Данные — src/data/anny.bin (gzip):
+   грузятся при первом показе объёмной фигуры в виде «Манекен», в офлайн-файле встроены (window.ANNY_BIN, base64); пока
+   не загрузились (или не загрузились совсем) — прежняя процедурная кожа.
+   Скиннинг — по сегментам манекена (рамки позы R.frames; фаланги пальцев — по суставам пальцев хвата, как у скелета):
+   двойные кватернионы (dual quaternion skinning): при повороте корпуса доля поворота шарнира поясницы — поворот вокруг его
+   оси, как у процедурной кожи (spineFrame), и плечо, предплечье и бедро при закрутке не «худеют» (у линейного смешения
+   сечение посередине сжимается в cos(φ/2) раз). Корректирующие формы — смещения вершин в стойке, их включает угол сустава
+   (jointAngles манекена); добавляются до скиннинга. Здесь — данные, рамки, кватернионы и скиннинг на процессоре (проверки,
+   рамка кадра); на видеокарте то же самое считает src/volume/anny.mjs. */
+const AnnySkin = (() => {
+  const M = typeof Mannequin !== 'undefined' ? Mannequin : require('./09bm-mannequin.js');
+  const { V } = M, SIGN = { L: 1, R: -1 }, FINGER_LEN = [8.0, 8.8, 8.2, 6.6];
+  let data = null, pending = null;
+
+  function decode(buf) {
+    const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf), dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+    if (String.fromCharCode(u8[0], u8[1], u8[2], u8[3]) !== 'ANY1') throw Error('anny: unknown format');
+    const hl = dv.getUint32(4, true), H = JSON.parse(new TextDecoder().decode(u8.subarray(8, 8 + hl)));
+    let off = 8 + hl;
+    const take = (T, n) => { const a = new T(u8.buffer.slice(u8.byteOffset + off, u8.byteOffset + off + n * T.BYTES_PER_ELEMENT)); off += n * T.BYTES_PER_ELEMENT; return a; };
+    const nv = H.nv, nf = H.nf, q = take(Int16Array, nv * 3), idx = take(Uint16Array, nf * 3), wi = take(Uint8Array, nv * 4), wq = take(Uint8Array, nv * 4);
+    const code = take(Uint8Array, nv), side = take(Uint8Array, nv), a1q = take(Int16Array, nv), a2q = take(Int16Array, nv);
+    const pos = new Float32Array(nv * 3); for (let i = 0; i < pos.length; i++) pos[i] = q[i] / H.scale;
+    const ww = new Float32Array(nv * 4); for (let i = 0; i < ww.length; i++) ww[i] = wq[i] / 255;
+    const a1 = new Float32Array(nv), a2 = new Float32Array(nv); for (let i = 0; i < nv; i++) { a1[i] = a1q[i] / H.rscale; a2[i] = a2q[i] / H.rscale; }
+    const correctives = H.correctives.map(c => { const i = take(Uint16Array, c.n); if (c.n % 2) off += 2; const dq = take(Int16Array, c.n * 3), d = new Float32Array(c.n * 3); for (let k = 0; k < d.length; k++) d[k] = dq[k] / H.scale; return { ...c, i, d }; });
+    return { source: H.source, frames: H.frames, nv, nf, pos, idx, wi, ww, region: { code, side, a1, a2 }, correctives };
+  }
+  async function gunzip(bytes) {
+    if (typeof DecompressionStream === 'undefined') throw Error('anny: DecompressionStream is unavailable');
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+  function fromBase64(s) { const bin = atob(s), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
+  function url() {
+    const up = typeof window !== 'undefined' && window.PODHOD_LANG && window.PODHOD_LANG !== 'ru' ? '../' : '';
+    return up + 'anny.bin' + (typeof window !== 'undefined' && window.PODHOD_BUILD ? '?v=' + window.PODHOD_BUILD : '');
+  }
+  /* загрузка один раз; при ошибке следующая попытка начнётся заново (до неё — процедурная кожа) */
+  function load() {
+    if (data) return Promise.resolve(data);
+    if (pending) return pending;
+    const bytes = typeof window !== 'undefined' && window.ANNY_BIN ? Promise.resolve(fromBase64(window.ANNY_BIN))
+      : fetch(url()).then(r => { if (!r.ok) throw Error('anny: ' + r.status); return r.arrayBuffer(); }).then(b => new Uint8Array(b));
+    pending = bytes.then(gunzip).then(decode).then(d => (data = d)).catch(e => { pending = null; throw e; });
+    return pending;
+  }
+
+  /* ---------- рамки сегментов: аффинные 3×4 по строкам (каталог) ---------- */
+  const aff = (o, x, y, z) => [x[0], y[0], z[0], o[0], x[1], y[1], z[1], o[1], x[2], y[2], z[2], o[2]];
+  function pathAt(pts, s) {
+    let acc = 0;
+    for (let i = 1; i < pts.length; i++) { const l = V.dist(pts[i - 1], pts[i]); if (acc + l >= s || i === pts.length - 1) return V.mix(pts[i - 1], pts[i], l < 1e-9 ? 0 : Math.min(1, (s - acc) / l)); acc += l; }
+    return pts[pts.length - 1];
+  }
+  /* суставы пальцев в рамке кисти: пальцы — на долях 0, 0,47, 0,76, 1 длины (как у скелета), большой — по точкам пути */
+  function digitJoints(shape) {
+    const out = shape.fingers.map((f, i) => { let tot = 0; for (let k = 1; k < f.pts.length; k++) tot += V.dist(f.pts[k - 1], f.pts[k]); const L = Math.min(FINGER_LEN[i], tot); return [0, .47, .76, 1].map(q => pathAt(f.pts, q * L)); });
+    const p = shape.thumb.pts; out.unshift(p.length >= 4 ? p.slice(0, 4) : [p[0], p[1], V.mix(p[1], p[2], .55), p[2]]);
+    return out;
+  }
+  /* рамка фаланги в рамке кисти: начало — сустав, y — к предыдущему суставу, z — поперёк пальцев (к большому пальцу) */
+  function phalanx(a, b, g) {
+    const y = V.unit(V.sub(a, b)); let z = V.perp([0, 0, 1], y); if (V.len(z) < .05) z = V.perp([g, 0, 0], y); z = V.unit(z);
+    return { o: a, x: V.cross(y, z), y, z };
+  }
+  /* все рамки кадра (имена — data.frames): R — поза каталога, hands — {L,R}: {frame, shape} (bodyData) или null (по R.hands) */
+  function frameMats(R, names, hands) {
+    const F = R.frames, out = new Float64Array(names.length * 12), digits = {};
+    const handOf = s => hands?.[s] || { frame: F['hand' + s], shape: M.handShape(R.hands?.[s] || 'relaxed', s, R.gripRadius?.[s] ?? 1.4) };
+    names.forEach((n, i) => {
+      let A;
+      const m = /^f(\d)(\d)([LR])$/.exec(n);
+      if (m) {
+        const s = m[3], H = handOf(s), js = digits[s] || (digits[s] = digitJoints(H.shape)), f = +m[1], k = +m[2], g = SIGN[s];
+        const P = phalanx(js[f][k], js[f][k + 1], g), hf = H.frame, W = p => V.add(V.add(V.add(hf.o, hf.x, p[0]), hf.y, p[1]), hf.z, p[2]), D = d => V.add(V.add(V.scale(hf.x, d[0]), hf.y, d[1]), hf.z, d[2]);
+        A = aff(W(P.o), D(P.x), D(P.y), D(P.z));
+      } else { const f = F[n]; A = aff(f.o, f.x, f.y, f.z); }
+      out.set(A, i * 12);
+    });
+    return out;
+  }
+  function inv(A, o = 0) {
+    /* обратная к ортогональной (с отражением) аффинной: линейная часть транспонируется */
+    const r = [A[o], A[o + 4], A[o + 8], A[o + 1], A[o + 5], A[o + 9], A[o + 2], A[o + 6], A[o + 10]], t = [A[o + 3], A[o + 7], A[o + 11]];
+    return [r[0], r[1], r[2], -(r[0] * t[0] + r[1] * t[1] + r[2] * t[2]), r[3], r[4], r[5], -(r[3] * t[0] + r[4] * t[1] + r[5] * t[2]), r[6], r[7], r[8], -(r[6] * t[0] + r[7] * t[1] + r[8] * t[2])];
+  }
+  const mul = (A, ao, B) => { const o = new Array(12); for (let i = 0; i < 3; i++) { for (let j = 0; j < 3; j++) o[i * 4 + j] = A[ao + i * 4] * B[j] + A[ao + i * 4 + 1] * B[4 + j] + A[ao + i * 4 + 2] * B[8 + j]; o[i * 4 + 3] = A[ao + i * 4] * B[3] + A[ao + i * 4 + 1] * B[7] + A[ao + i * 4 + 2] * B[11] + A[ao + i * 4 + 3]; } return o; };
+  /* рамки стойки (нейтральная поза, расслабленные кисти) — обратные, один раз на набор имён */
+  const BIND = new Map();
+  function bindInv(names) {
+    const key = names.join(','); let b = BIND.get(key);
+    if (!b) { const R0 = M.catalogPose(M.neutral()), A = frameMats(R0, names, null); b = []; for (let i = 0; i < names.length; i++) b.push(inv(A, i * 12)); BIND.set(key, b); }
+    return b;
+  }
+  /* матрицы скиннинга кадра: S = рамка кадра · (рамка стойки)⁻¹ — Float64Array по 12 */
+  function skinMats(R, d = data, hands = null) {
+    const A = frameMats(R, d.frames, hands), Bi = bindInv(d.frames), out = new Float64Array(d.frames.length * 12);
+    for (let i = 0; i < d.frames.length; i++) out.set(mul(A, i * 12, Bi[i]), i * 12);
+    return out;
+  }
+  /* двойные кватернионы: [qx,qy,qz,qw, dx,dy,dz,dw] на рамку; знак — к полусфере qw ≥ 0 */
+  function dualQuats(S, n) {
+    const out = new Float32Array(n * 8);
+    for (let i = 0; i < n; i++) {
+      const o = i * 12, m00 = S[o], m01 = S[o + 1], m02 = S[o + 2], m10 = S[o + 4], m11 = S[o + 5], m12 = S[o + 6], m20 = S[o + 8], m21 = S[o + 9], m22 = S[o + 10];
+      const tr = m00 + m11 + m22; let w, x, y, z;
+      if (tr > 0) { const s = Math.sqrt(tr + 1) * 2; w = .25 * s; x = (m21 - m12) / s; y = (m02 - m20) / s; z = (m10 - m01) / s; }
+      else if (m00 > m11 && m00 > m22) { const s = Math.sqrt(1 + m00 - m11 - m22) * 2; w = (m21 - m12) / s; x = .25 * s; y = (m01 + m10) / s; z = (m02 + m20) / s; }
+      else if (m11 > m22) { const s = Math.sqrt(1 + m11 - m00 - m22) * 2; w = (m02 - m20) / s; x = (m01 + m10) / s; y = .25 * s; z = (m12 + m21) / s; }
+      else { const s = Math.sqrt(1 + m22 - m00 - m11) * 2; w = (m10 - m01) / s; x = (m02 + m20) / s; y = (m12 + m21) / s; z = .25 * s; }
+      const l = Math.hypot(x, y, z, w) * (w < 0 ? -1 : 1); x /= l; y /= l; z /= l; w /= l;
+      const tx = S[o + 3], ty = S[o + 7], tz = S[o + 11];
+      /* dual = ½·(t, 0)·q */
+      const dx = .5 * (tx * w + ty * z - tz * y), dy = .5 * (-tx * z + ty * w + tz * x), dz = .5 * (tx * y - ty * x + tz * w), dw = -.5 * (tx * x + ty * y + tz * z);
+      out.set([x, y, z, w, dx, dy, dz, dw], i * 8);
+    }
+    return out;
+  }
+
+  /* ---------- корректирующие формы: вес по углу сустава — «шатёр»: 0 при a0, 1 при a1 (угол позы формы), 0 при a2
+     (без a2 — 1 и дальше) ---------- */
+  function correctiveWeights(R, d = data) {
+    if (!d.correctives.length) return [];
+    const A = M.jointAngles(R);
+    return d.correctives.map(c => {
+      const src = c.side ? A[c.side] : A, v = c.angle.split('.').reduce((o, k) => o?.[k], src);
+      if (typeof v !== 'number') return 0;
+      if (v <= c.a1) return Math.max(0, Math.min(1, (v - c.a0) / (c.a1 - c.a0)));
+      return c.a2 == null ? 1 : Math.max(0, Math.min(1, (c.a2 - v) / (c.a2 - c.a1)));
+    });
+  }
+
+  /* ---------- скиннинг на процессоре: проверки и рамка кадра (на экране — видеокарта, src/volume/anny.mjs) ----------
+     method 'dq' (как в приложении) или 'lbs' (линейное смешение — для сравнения); only — номера вершин (по умолчанию все);
+     floor — кожа прижата к полу (как на экране): вершины ниже пола — на полу. Мягкие ткани, лёжа на полу, сплющиваются о
+     него; кожа Anny полнее процедурной (подтянутое телосложение), а суставы — те же, поэтому там, где процедурная кожа
+     касается пола, предплечье, плечо или спина Anny ушли бы под пол. floor: false — без прижатия (насколько прижато —
+     проверка tools/anny-look/check.js). */
+  function skin(R, { d = data, method = 'dq', hands = null, only = null, corr = null, floor = true } = {}) {
+    const S = skinMats(R, d, hands), nfr = d.frames.length, DQ = method === 'dq' ? dualQuats(S, nfr) : null, cw = corr || correctiveWeights(R, d);
+    let P = d.pos;
+    if (cw.some(w => w > 0)) { P = Float32Array.from(d.pos); d.correctives.forEach((c, k) => { const w = cw[k]; if (!(w > 0)) return; for (let j = 0; j < c.n; j++) { const v = c.i[j]; P[v * 3] += w * c.d[j * 3]; P[v * 3 + 1] += w * c.d[j * 3 + 1]; P[v * 3 + 2] += w * c.d[j * 3 + 2]; } }); }
+    const list = only || null, n = list ? list.length : d.nv, out = new Float32Array(n * 3);
+    for (let k = 0; k < n; k++) {
+      const v = list ? list[k] : k, px = P[v * 3], py = P[v * 3 + 1], pz = P[v * 3 + 2];
+      if (DQ) {
+        let x = 0, y = 0, z = 0, w = 0, dx = 0, dy = 0, dz = 0, dw = 0, r0 = -1;
+        for (let j = 0; j < 4; j++) {
+          const wt = d.ww[v * 4 + j]; if (!wt) continue; const o = d.wi[v * 4 + j] * 8;
+          let s = wt; if (r0 < 0) r0 = o; else if (DQ[o] * DQ[r0] + DQ[o + 1] * DQ[r0 + 1] + DQ[o + 2] * DQ[r0 + 2] + DQ[o + 3] * DQ[r0 + 3] < 0) s = -wt;
+          x += s * DQ[o]; y += s * DQ[o + 1]; z += s * DQ[o + 2]; w += s * DQ[o + 3]; dx += s * DQ[o + 4]; dy += s * DQ[o + 5]; dz += s * DQ[o + 6]; dw += s * DQ[o + 7];
+        }
+        const l = Math.hypot(x, y, z, w); x /= l; y /= l; z /= l; w /= l; dx /= l; dy /= l; dz /= l; dw /= l;
+        /* поворот: p + 2·q×(q×p + w·p); сдвиг: 2·(w·d − dw·q + q×d) */
+        const cx = y * pz - z * py + w * px, cy = z * px - x * pz + w * py, cz = x * py - y * px + w * pz;
+        const rx = px + 2 * (y * cz - z * cy), ry = py + 2 * (z * cx - x * cz), rz = pz + 2 * (x * cy - y * cx);
+        out[k * 3] = rx + 2 * (w * dx - dw * x + y * dz - z * dy); out[k * 3 + 1] = ry + 2 * (w * dy - dw * y + z * dx - x * dz); out[k * 3 + 2] = rz + 2 * (w * dz - dw * z + x * dy - y * dx);
+      } else {
+        let ox = 0, oy = 0, oz = 0;
+        for (let j = 0; j < 4; j++) { const wt = d.ww[v * 4 + j]; if (!wt) continue; const o = d.wi[v * 4 + j] * 12; ox += wt * (S[o] * px + S[o + 1] * py + S[o + 2] * pz + S[o + 3]); oy += wt * (S[o + 4] * px + S[o + 5] * py + S[o + 6] * pz + S[o + 7]); oz += wt * (S[o + 8] * px + S[o + 9] * py + S[o + 10] * pz + S[o + 11]); }
+        out[k * 3] = ox; out[k * 3 + 1] = oy; out[k * 3 + 2] = oz;
+      }
+      if (floor && out[k * 3 + 1] > M.FLOOR) out[k * 3 + 1] = M.FLOOR;
+    }
+    return out;
+  }
+
+  /* ---------- мышечные зоны: область каждой вершины по её адресу на процедурной коже (правила областей манекена —
+     mannequinRegionOf, 09d-catalog-muscles.js); id — номер в списке областей, сторона — 0 левая, 1 правая ---------- */
+  const PART = ['', 'torso', 'ua', 'fa', 'th', 'sk', 'delt'];
+  function regions(d = data, regionOf = typeof mannequinRegionOf === 'function' ? mannequinRegionOf : null) {
+    if (!regionOf) return null;
+    if (d._regions && d._regions.fn === regionOf) return d._regions;
+    const ids = [], at = new Map(), rid = new Uint8Array(d.nv), R = d.region;
+    for (let v = 0; v < d.nv; v++) {
+      const part = PART[R.code[v]]; if (!part) continue;
+      const id = regionOf(part, R.side[v] ? 'R' : 'L', R.a1[v], R.a2[v]); if (!id) continue;
+      if (!at.has(id)) { ids.push(id); at.set(id, ids.length); }
+      rid[v] = at.get(id);
+    }
+    return d._regions = { fn: regionOf, ids, rid };
+  }
+  return { load, decode, frameMats, skinMats, dualQuats, correctiveWeights, skin, regions, bindInv, get data() { return data; }, set data(x) { data = x; } };
+})();
+if (typeof window !== 'undefined') window.AnnySkin = AnnySkin; /* объёмная сцена (volume.js) берёт данные и рамки отсюда */
+if (typeof module !== 'undefined' && module.exports) module.exports = AnnySkin;
+
 /* Catalog coordinates: centimetres, Y down. Reconstructed depth is an educational
    model, not measured motion capture. Original animation descriptors remain intact
    for the independent regression audit. All cameras use the same world pose. */
@@ -10819,6 +11010,17 @@ function mannequinMuscleSurfaces(R,profile,{coarse=false}={}){
  }
  return faces;
 }
+/* Область мышцы в точке процедурной кожи по её адресу — то же правило, что у областей манекена (mannequinMuscleSurfaces):
+   part 'torso' (a1 — высота h, a2 — угол сечения), 'ua'/'fa'/'th'/'sk' (a1 — доля t, a2 — угол), 'delt' (a1 — полярный угол
+   на «шапке» плеча, a2 — азимут). По нему кожа Anny (09bs-anny.js) красит свои вершины: адрес вершины — на процедурной коже
+   стойки (tools/anny-look/build.py). Пустая строка — вне областей. */
+const inArc=(a,a0,a1)=>{for(const k of [0,1,-1])if(a+k*2*Math.PI>=a0&&a+k*2*Math.PI<=a1)return true;return false;};
+function mannequinRegionOf(part,side,a1,a2){
+ if(part==='torso'){for(const[id,h0,h1,b0,b1]of MANNEQUIN_TORSO_PATCHES)if(a1>=h0&&a1<=h1&&a2>=b0&&a2<=b1)return id;return '';}
+ if(part==='delt'){const polar=a1/(Math.PI/2*1.05),u=(polar-.18)/.85;if(u<0||u>1)return '';for(const[id,b0,b1]of MANNEQUIN_DELTS)if(inArc(a2,b0,b1))return id;return '';}
+ for(const[id,t0,t1,b0,b1]of MANNEQUIN_LIMB_PATCHES[part]||[])if(a1>=t0&&a1<=t1&&inArc(a2,b0,b1))return id;
+ return '';
+}
 /* анимация каталога под инвентарь показа: если хват зависит от необязательного снаряда (catalogVariants), берётся его поза —
    выбор тот же, что у видимости деталей (GymEquipment.variantOf); копия запоминается, чтобы кеши фигуры не путались */
 function catalogAnimFor(anim,has){
@@ -10832,9 +11034,14 @@ function catalogFigureAnim(anim){
 }
 /* lean — для вида «Анатомия»/«Скелет»: области манекена скрыты, их поверхности не нужны; phase и poseKey (функция позы — своя у
    каждого варианта инвентаря, catalogAnimFor) — память кожи по фазе в слое мышц (src/volume/muscles.mjs) */
+/* сетка процедурной кожи (body) и области мышц на ней (surfaces) считаются по первому обращению: с кожей Anny (вид «Манекен»)
+   сцена их не берёт (src/volume/scene.mjs) — кадр без них дешевле */
 function catalogVolumeData(anim,t,index,has,coarse=false,lean=false){
  const R=anim.catalogRig(t),state=muscleFrame(anim,t,index),profile=motionProfile(anim);
- if(R.frames)return{exerciseId:anim.catalogId,phase:t,poseKey:anim.catalogRig,pose:R,body:Mannequin.bodyData(R),stress:jointStressPoints(anim,R,t,index),surfaces:lean?[]:mannequinMuscleSurfaces(R,profile,{coarse}),values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>GymEquipment.visible(s,has)),torsoRings:[],limbProfiles:{}};
+ if(R.frames){
+  let body=null,surfaces=lean?[]:null;
+  return{exerciseId:anim.catalogId,phase:t,poseKey:anim.catalogRig,pose:R,get body(){return body||(body=Mannequin.bodyData(R));},stress:jointStressPoints(anim,R,t,index),get surfaces(){return surfaces||(surfaces=mannequinMuscleSurfaces(R,profile,{coarse}));},values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>GymEquipment.visible(s,has)),torsoRings:[],limbProfiles:{}};
+ }
  return{exerciseId:anim.catalogId,pose:R,surfaces:catalogMuscleSurfaces(R,profile,{coarse}),values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>!s.optional||!has||has(s.optional)),torsoRings:CATALOG_RINGS,limbProfiles:CATALOG_LIMB_PROFILES};
 }
 
@@ -12999,6 +13206,14 @@ function figureViewFor(pref,{able=true,state='ready',slow=false,coarse=true}={})
   if(state!=='ready')return{view:'mannequin',note:FIGURE_NOTES.loading,wait:true};
   return{view:want,note:'',wait:false};
 }
+/* Вид «Манекен» в карточках плана и миниатюрах витрины: кожа Anny (src/js/09bs-anny.js) кадром общего рендерера
+   (view 'skin'), как в разборе и на экране тренировки. SVG-манекен, как раньше, — без объёмной графики, пока данные
+   кожи грузятся (wait), если не загрузились и после отката по скорости; подписи нет: это тот же «Манекен». */
+function skinViewFor({able=true,state='ready',slow=false}={}){
+  if(!able||slow||state==='error')return{view:'mannequin',note:'',wait:false};
+  if(state!=='ready')return{view:'mannequin',note:'',wait:true};
+  return{view:'skin',note:'',wait:false};
+}
 
 /* Неподвижные кадры карточек плана живут в холстах карточек (≈ ширина × высота × 4 байта: 260 × 260 точек — 0,27 МБ).
    Отпускается кадр карточки, ушедшей дальше двух экранов (far: false), и, если кадров больше limit, — давно не
@@ -13091,6 +13306,7 @@ function thumbPace(G=GALLERY_THUMBS){
 /* вид миниатюр: как у карточек (figureViewFor); render — рисовать ли новые кадры. Пока грузятся кости и мышцы, вид —
    выбранный (готовые кадры из памяти и кеша показываются), а новые не рисуются */
 function thumbViewFor(pref,{able=true,state='ready',slow=false,coarse=true}={}){
+  if(pref==='mannequin'){const c=skinViewFor({able,state,slow});return{view:c.wait?'skin':c.view,render:c.view==='skin',note:'',wait:c.wait};}
   const c=figureViewFor(pref,{able,state,slow,coarse}),want=['anatomy','skeleton','mannequin'].includes(pref)?pref:'anatomy';
   return{view:c.wait?want:c.view,render:c.view!=='mannequin',note:c.wait?'':c.note,wait:c.wait};
 }
@@ -13324,18 +13540,23 @@ function prefetchCardFrames(){
    Остальные карточки показывают один неподвижный кадр своей фазы: он рисуется один раз в простое (queueCardStills) и
    хранится в холсте карточки; карточка, ушедшая далеко от экрана, его отпускает (stillsToFree). До готовности кадра,
    пока грузятся кости и мышцы, без объёмной графики и после отката по скорости — SVG-манекен, как раньше.
-   Ракурс — как у карточки (cardCamera), рамка — по телу. Цвет мышц — как в разборе: по фазам или основные ярче. */
+   Ракурс — как у карточки (cardCamera), рамка — по телу. Цвет мышц — как в разборе: по фазам или основные ярче.
+   В виде «Манекен» тот же путь рисует кожу Anny (вид 'skin', skinViewFor): без костей и мышц, области мышц — цветом
+   кожи; пока её данные грузятся, не загрузились или телефон не успевает — SVG-манекен. */
 const PACE_SLACK=4;
-const cardAnatomy={pace:anatomyPace(),slow:false,failed:false,loading:false,view:'mannequin',theme:0,queued:false,far:null,idleFree:0};
+const cardAnatomy={pace:anatomyPace(),slow:false,failed:false,annyFailed:false,loading:false,view:'mannequin',theme:0,queued:false,far:null,idleFree:0};
+const annySkinModule=()=>typeof AnnySkin!=='undefined'?AnnySkin:null;
 const coarsePointer=()=>typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches;
 /* ракурс анатомии в карточке: тот, что выбран для упражнения в разборе, иначе «Сверху под углом», как у SVG-карточки */
 function cardCamera(F){return motionCamera(F.it.ex);}
 function cardStage(){try{return window.GymVolume?.cards?.()||null;}catch(e){return null;}}
 function cardAnatomyState(view=figureView()){
+  if(view==='mannequin'||view==='skin')return annySkinModule()?.data?'ready':cardAnatomy.annyFailed?'error':'loading';
   const need=view==='anatomy'?[Skeleton,Muscles]:[Skeleton];
   return need.every(x=>x.data)?'ready':cardAnatomy.failed?'error':'loading';
 }
 function cardAnatomyChoice(){
+  if(figureView()==='mannequin')return skinViewFor({able:!!annySkinModule()&&!!cardStage(),state:cardAnatomyState('skin'),slow:cardAnatomy.slow});
   return figureViewFor(motionPrefs.view,{able:!!cardStage(),state:cardAnatomyState(),slow:cardAnatomy.slow,coarse:coarsePointer()});
 }
 const cardAnatomyLive=F=>cardAnatomy.view!=='mannequin'&&!!F.av;
@@ -13353,7 +13574,7 @@ function cardAnatomyFor(F){
 /* слои фигуры карточки по виду: кости, мышцы (уровни упражнения), цвет по фазам и метки нагрузки — из настроек */
 function cardAnatomyLayers(F){
   const av=F.av,view=cardAnatomy.view,key=view+(motionPrefs.muscles?1:0)+(motionPrefs.stress?1:0);if(av.layers===key)return;
-  av.handle.setLayers(Skeleton.data,view==='anatomy'?{skeleton:Skeleton.data,muscles:Muscles.data,level:av.level}:null);
+  av.handle.setLayers(view==='skin'?null:Skeleton.data,view==='anatomy'?{skeleton:Skeleton.data,muscles:Muscles.data,level:av.level}:null);
   av.handle.setLook({muscles:motionPrefs.muscles,stress:motionPrefs.stress});av.layers=key;
 }
 function cardStillKey(F,m){const av=F.av,s=av.size;return [m.t,m.index,cardAnatomy.view,av.layers,cardAnatomy.theme,s?s.width+'x'+s.height:'',cardCamera(F)].join('|');}
@@ -13406,6 +13627,9 @@ function loadCardAnatomy(){
   /* в простое: разбор данных (≈1 МБ JSON мышц) не задерживает первую картинку плана — SVG-карточки */
   const idle=window.requestIdleCallback?cb=>requestIdleCallback(cb,{timeout:3000}):cb=>setTimeout(cb,300);
   idle(()=>{
+    /* «Манекен» — данные кожи Anny (≈ 0,2 МБ) */
+    if(figureView()==='mannequin'){const A=annySkinModule();if(!A){cardAnatomy.loading=false;return;}
+      A.load().then(()=>{cardAnatomy.loading=false;cardAnatomy.annyFailed=false;applyCardsView();},()=>{cardAnatomy.loading=false;cardAnatomy.annyFailed=true;applyCardsView();});return;}
     const need=figureView()==='anatomy'?[Skeleton,Muscles]:[Skeleton];
     Promise.all(need.map(x=>x.load())).then(()=>{cardAnatomy.loading=false;cardAnatomy.failed=false;applyCardsView();},()=>{cardAnatomy.loading=false;cardAnatomy.failed=true;applyCardsView();});
   });
@@ -15552,7 +15776,8 @@ document.addEventListener('click', e => {
 
 /* ===================== АТЛАС ДВИЖЕНИЙ: МИНИАТЮРЫ В «АНАТОМИИ» (этап 3) =====================
    В выбранном виде фигуры (motionPrefs.view; по умолчанию «Анатомия») миниатюры витрины — кадры костей и мышц в почти
-   невидимом силуэте кожи, «Скелет» — только кости, «Манекен» — прежний SVG. Правила (размер, ключ, кеш, память,
+   невидимом силуэте кожи, «Скелет» — только кости, «Манекен» — кожа Anny (вид 'skin', skinViewFor; пока её данные
+   грузятся, не загрузились или телефон не успевает — прежний SVG). Правила (размер, ключ, кеш, память,
    скорость) — в 12-figure-pace.js, проверка — tools/gallery-anatomy.test.js и tools/ui-check.mjs.
    · Рисует тот же общий рендерер вне экрана, что карточки плана (GymVolume.cards; своего WebGL у витрины нет): неподвижный
      кадр той же фазы, что SVG-миниатюра (конечная точка движения), ракурсом «Под углом», рамка — по телу в этой позе.
@@ -15569,7 +15794,7 @@ document.addEventListener('click', e => {
      страница (при открытии витрины) и сервис-воркер (при обновлении). Холст один на все миниатюры.
    · Без WebGL, после ошибки загрузки костей и мышц и если телефон не успевает (thumbPace) — SVG, как раньше; пока
      кости и мышцы грузятся — SVG, а готовые кадры из памяти и кеша показываются сразу. */
-const galleryAnat = {view:'mannequin', render:false, note:'', wait:false, size:0, theme:'', loading:false, failed:false,
+const galleryAnat = {view:'mannequin', render:false, note:'', wait:false, size:0, theme:'', loading:false, failed:false, annyFailed:false,
   mem:new Map(), base:new Map(), state:new Map(), fails:new Map(), near:new Set(), fresh:new Set(), vis:new Set(), io:null, ioVis:null, queued:false, scrollAt:0,
   job:null, canvas:null, watched:null, type:'image/webp', noStore:false, pace:thumbPace(), stats:{painted:0, cached:0, chunks:0}, cleaned:false, freeTimer:0};
 
@@ -15768,11 +15993,17 @@ function galleryAnatKick(delay = 0) {
   if (delay) setTimeout(() => galleryIdle(galleryAnatWork), delay); else galleryIdle(galleryAnatWork);
 }
 function galleryAnatData() {
+  if (figureView() === 'mannequin') return annySkinModule()?.data ? 'ready' : galleryAnat.annyFailed ? 'error' : 'loading';
   const need = galleryAnat.view === 'anatomy' ? [Skeleton, Muscles] : [Skeleton];
   return need.every(x => x.data) ? 'ready' : galleryAnat.failed ? 'error' : 'loading';
 }
 function galleryAnatLoad() {
   if (galleryAnat.loading) return; galleryAnat.loading = true;
+  if (figureView() === 'mannequin') {
+    const A = annySkinModule(); if (!A) { galleryAnat.loading = false; return; }
+    A.load().then(() => { galleryAnat.annyFailed = false; }, () => { galleryAnat.annyFailed = true; }).then(() => { galleryAnat.loading = false; if (gallery.on) galleryAnatApply(); });
+    return;
+  }
   const need = figureView() === 'anatomy' ? [Skeleton, Muscles] : [Skeleton];
   Promise.all(need.map(x => x.load())).then(() => { galleryAnat.failed = false; }, () => { galleryAnat.failed = true; })
     .then(() => { galleryAnat.loading = false; if (gallery.on) galleryAnatApply(); });
@@ -15818,7 +16049,7 @@ function galleryAnatWork(deadline) {
     const has = propHas(b.ex, b.E), A = catalogAnimFor(b.ex.anim, has), bits = A.catalogRig(0).props.map(q => GymEquipment.visible(q, has) ? 1 : 0).join('');
     const h = stage.figure({key:['thumb', A.catalogId, A.catalogVariant || '', bits].join('|'), still:true, fit:'body', color:muscleColor, muscles:false, stress:false,
       data:(t, index, coarse, lean) => catalogVolumeData(A, t, index, has, coarse, lean)});
-    h.setLayers(Skeleton.data, layers); h.setLook({muscles:false, stress:false});
+    h.setLayers(galleryAnat.view === 'skin' ? null : Skeleton.data, layers); h.setLook({muscles:false, stress:false});
     job = galleryAnat.job = {id:n.id, b, key:n.key, h, prepared:false, long:0, t0:performance.now()};
   }
   const t0 = performance.now(); let painted = false;
@@ -15867,7 +16098,7 @@ function galleryAnatPaint(job) {
 function galleryAnatApply() {
   const box = $('#mv-gallery'); if (!box || !gallery.on) return;
   const pref = figureView(), was = galleryAnat.view + galleryAnat.theme + galleryAnat.size;
-  const choice = thumbViewFor(pref, {able:!!cardStage(), state:galleryAnatData(), slow:galleryAnat.pace.mode === 'svg', coarse:coarsePointer()});
+  const choice = thumbViewFor(pref, {able:!!cardStage() && (pref !== 'mannequin' || !!annySkinModule()), state:galleryAnatData(), slow:galleryAnat.pace.mode === 'svg', coarse:coarsePointer()});
   Object.assign(galleryAnat, {view:choice.view, render:choice.render, note:choice.note, wait:choice.wait, theme:galleryTheme()});
   const first = box.querySelector('.mv-thumb');
   galleryAnat.size = galleryAnat.view === 'mannequin' ? 0 : thumbCanvasSize(first ? first.getBoundingClientRect().width : 0, window.devicePixelRatio);
@@ -16943,7 +17174,8 @@ function perfDeviceLines(d) {
 }
 
 /* ---------- текст результата: устройство и таблица шагов (копировать, поделиться) ---------- */
-const perfViewName = v => PERF_T[v] || '—';
+/* 'skin' — «Манекен» с кожей Anny кадрами общего рендерера (карточки, витрина) */
+const perfViewName = v => v === 'skin' ? PERF_T.mannequin : PERF_T[v] || '—';
 function perfStepLine(s, i) {
   const head = `${i + 1}. ${s.label}`;
   if (s.skip) return `${head}: ${PERF_T.skipped} — ${s.skip}`;
@@ -17089,7 +17321,8 @@ function perfWhere() {
     return {place:'gallery', view:g && g.view !== 'mannequin' ? g.view : 'svg', thumbs:g};
   }
   if ($('#workout-view')?.open) return {place:'workout', view:perfViewOf($('#wv-stage')?.firstElementChild), pace:perfPaceOf('workout')};
-  /* карточки плана: «Анатомия» или «Скелет» — кадры общего рендерера, иначе (выбран манекен, откат, нет WebGL) — SVG */
+  /* карточки плана: «Анатомия», «Скелет» или «Манекен» с кожей Anny ('skin') — кадры общего рендерера, иначе (откат, нет
+     WebGL, нет данных кожи) — SVG */
   const v = typeof cardAnatomy !== 'undefined' ? cardAnatomy.view : 'mannequin';
   return {place:'plan', view:v === 'mannequin' ? 'svg' : v, pace:perfPaceOf('plan')};
 }
@@ -17158,7 +17391,7 @@ function perfPaint(P) {
     perfSet(k('screen'), `${perfNum(sum.fps)} ${PERF_T.fps} · ${PERF_T.frame} ${perfPair(sum.cost)} ${PERF_T.ms}`);
     const th = where.thumbs;
     perfSet(k('cards'), th && th.view !== 'mannequin' ? `${PERF_T.thumbs}: ${PERF_T.thumbTask} ${perfPair(p.thumb)} ${PERF_T.ms} · ${perfSay('thumbReady', {n:th.ready, m:th.near})}` + (th.mode === 'visible' ? ` · ${PERF_T.thumbVisible}` : '')
-      : p.anat ? `${PERF_T.anatCard} ${perfPair(p.anat)} · ${PERF_T.copyPart} ${perfPair(p.copy)} ${PERF_T.ms}`
+      : p.anat ? `${where.view === 'skin' ? PERF_T.skin : PERF_T.anatCard} ${perfPair(p.anat)} · ${PERF_T.copyPart} ${perfPair(p.copy)} ${PERF_T.ms}`
       : p.card ? `${PERF_T.anew} ${perfPair(p.svgMiss)} · ${PERF_T.fromMemory} ${perfPair(p.svgHit)} · DOM ${perfPair(p.svgDom)} ${PERF_T.ms}` : PERF_T.noFrames);
     perfSet(k('volume'), p.volume ? `${PERF_T.total} ${perfPair(p.volume)} ${PERF_T.ms}, ${PERF_T.figure} ${perfNum(sum.figFps)} ${PERF_T.fps}\n${PERF_T.pose} ${perfPair(p.pose)} · ${PERF_T.skin} ${perfPair(p.skin)} · ${PERF_T.bones} ${perfPair(p.bones)} · ${PERF_T.muscles} ${perfPair(p.muscles)} · ${PERF_T.scene} ${perfPair(p.sceneRest)} · ${PERF_T.render} ${perfPair(p.render)}` : PERF_T.noFrames);
     const qv = where.place === 'plan' ? null : q;
@@ -17407,4 +17640,4 @@ logInit();
 plural = (n, a, b, c) => n === 1 ? a : c;
 DEC = '.';
 
-window.PODHOD_VERSION='4.61.0';window.PODHOD_BUILD='4.61.0-bf73aedee0e9';window.PODHOD_LANG='en';
+window.PODHOD_VERSION='4.62.0';window.PODHOD_BUILD='4.62.0-07a83501a667';window.PODHOD_LANG='en';
