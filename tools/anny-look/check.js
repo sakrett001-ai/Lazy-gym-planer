@@ -10,6 +10,13 @@
       этом кадре вдавлена глубже допуска (предупреждения валидатора, поза так одобрена), опора — её глубина. Сверх опоры
       кожа Anny может уйти ещё на DEPTH_EXTRA = 1 см: форма Anny отличается от процедурной (подтянутое телосложение, ягодицы,
       грудь), а 1 см — меньше толщины подкожного слоя над опорными зонами (ягодицы — 2–4 см, спина над лопатками — 1–2).
+      Кисть и стопа — HAND_FOOT_EXTRA = 1,5 см: ладонь Anny с подушечками и стопа со сводом и пальцами полнее трубок и колец
+      процедурной кисти и стопы (в стойке 95 % вершин кисти — ближе +1,97 см снаружи процедурной, стопы — +2,54).
+      Пол: на экране кожа к нему прижата (AnnySkin.skin, шейдер — вершины ниже пола на полу); проверяется, насколько
+      прижата (кожа без прижатия). Предплечье, плечо, корпус и ноги Anny полнее процедурных (в стойке 95 % вершин —
+      ближе +2,08 см снаружи у предплечья, +1,90 у плеча, +2,07 у верха спины, +2,48 у поясницы), а суставы те же: где
+      процедурная кожа лежит на полу, Anny ложится глубже на столько же — сверх допуска на это FLOOR_PRESS = 2 см (меньше
+      этих полнот с запасом на сгиб). Кисти и стопе — нет (подошва и ладонь ставятся по контактам).
    2. Отход от процедурной кожи (distance). Процедурная кожа — то, по чему считаются контакты, равновесие и проверки;
       видимая кожа не должна уходить от неё дальше, чем сама форма Anny отличается от формы манекена в стойке, плюс запас
       на сгибы. В стойке (fit.py: местные формы поправлены там, где расхождение больше 2–3 см) 99 % вершин — ближе
@@ -31,7 +38,8 @@ const root = path.resolve(__dirname, '../..');
 const M = require(root + '/src/js/09bm-mannequin.js'), EQ = require(root + '/src/js/09bn-equipment.js'), A = require(root + '/src/js/09bs-anny.js');
 const V2 = require(root + '/tools/biomech/validator2.js'), CMP = require('./compare.js');
 const { V } = M, FLOOR = M.FLOOR;
-const DEPTH_EXTRA = 1.0, FLOOR_TOL = 1.0;
+const DEPTH_EXTRA = 1.0, HAND_FOOT_EXTRA = 1.5, FLOOR_TOL = 1.0, FLOOR_PRESS = 2.0;
+const extraOf = seg => seg === 'hand' || seg === 'foot' ? HAND_FOOT_EXTRA : DEPTH_EXTRA;
 const DIST_P99 = 5.0, DIST_MAX = { 'ягодицы': 9, 'пах': 9, 'кисть': 6 }, DIST_MAX_DEFAULT = 7.0;
 const FOLD_NEAR = 5.0;
 const EXTREME = [['squat', 1], ['goblet', 1], ['legcurl', 1], ['bbcurl', 1], ['dbcurl', 1], ['chinup', 0], ['pullup', 0], ['latpull', 0], ['ohp', 0], ['ohext', 0],
@@ -77,11 +85,18 @@ function penetration(R, P, d, kind, entry, has) {
       if (skip(c, k)) continue;
       pd = Math.max(pd, -c.sdf(b.p) - (b.r || 0) * .5);
     }
-    out.push({ id: c.id + (c.part ? '/' + c.part : ''), depth: a.depth, tol: a.tol, proc: pd, limit: Math.max(a.tol, pd) + DEPTH_EXTRA, seg: a.seg, v: a.v });
+    const extra = extraOf(a.seg);
+    out.push({ id: c.id + (c.part ? '/' + c.part : ''), depth: a.depth, tol: a.tol, proc: pd, extra, limit: Math.max(a.tol, pd) + extra, seg: a.seg, v: a.v });
   }
-  /* пол */
-  let fd = 0, fv = -1; for (let v = 0; v < d.nv; v++) { const dep = P[v * 3 + 1] - FLOOR; if (dep > fd) { fd = dep; fv = v; } }
-  if (fv >= 0) { let pd = 0; for (const b of proc) pd = Math.max(pd, b.p[1] - FLOOR - (b.seg === 'foot' ? .6 : 0)); out.push({ id: 'floor', depth: fd, tol: FLOOR_TOL, proc: pd, limit: Math.max(FLOOR_TOL, pd) + DEPTH_EXTRA, seg: kind[fv].seg, v: fv }); }
+  /* пол: кожа без прижатия (P — skin с floor: false); худшая вершина — по запасу до её допуска */
+  let pd = 0; for (const b of proc) pd = Math.max(pd, b.p[1] - FLOOR - (b.seg === 'foot' ? .6 : 0));
+  let fl = null;
+  for (let v = 0; v < d.nv; v++) {
+    const dep = P[v * 3 + 1] - FLOOR; if (!(dep > 0)) continue;
+    const seg = kind[v].seg, extra = extraOf(seg) + (seg === 'hand' || seg === 'foot' ? 0 : FLOOR_PRESS), limit = Math.max(FLOOR_TOL, pd) + extra;
+    if (!fl || dep - limit > fl.depth - fl.limit) fl = { id: 'floor', depth: dep, tol: FLOOR_TOL, proc: pd, extra, limit, seg, v };
+  }
+  if (fl) out.push(fl);
   return out;
 }
 /* вывернутые треугольники и складки (см. шапку) */
@@ -137,7 +152,7 @@ function triTri(T1, T2) {
 
 function run({ ids = null, ts = [0, .25, .5, .75, 1], d = CMP.loadAnny(), log = () => {} } = {}) {
   const POSES = CMP.loadPoses(), list = (ids || Object.keys(POSES)).filter(id => POSES[id]), kind = kinds(d), zones = CMP.zonesOf(d);
-  const verts = []; for (let v = 0; v < d.nv; v += 2) verts.push(v);
+  const verts = []; for (let v = 0; v < d.nv; v += 2) if (zones[v] !== 'полость') verts.push(v);
   const res = { penetration: [], distance: {}, folds: [] };
   const zacc = {};
   for (const id of list) {
@@ -145,7 +160,7 @@ function run({ ids = null, ts = [0, .25, .5, .75, 1], d = CMP.loadAnny(), log = 
     for (const [hn, has] of invs) {
       const e = EQ.variantEntry(entry, has), rig = EQ.rig(e);
       for (const t of ts) {
-        const R = rig(t), P = A.skin(R, { d });
+        const R = rig(t), P = A.skin(R, { d, floor: false });
         for (const p of penetration(R, P, d, kind, e, has)) if (p.depth > p.limit) res.penetration.push({ ex: id, t, has: hn, ...p });
         if (hn === 'всё') {
           const body = M.bodyData(R), Pv = new Float32Array(verts.length * 3); verts.forEach((v, k) => { Pv[k * 3] = P[v * 3]; Pv[k * 3 + 1] = P[v * 3 + 1]; Pv[k * 3 + 2] = P[v * 3 + 2]; });
@@ -157,20 +172,20 @@ function run({ ids = null, ts = [0, .25, .5, .75, 1], d = CMP.loadAnny(), log = 
     log(id);
   }
   for (const [z, a] of Object.entries(zacc)) { const s = a.all.sort((x, y) => x - y), n = s.length; res.distance[z] = { p99: s[Math.floor(n * .99)], p95: s[Math.floor(n * .95)], max: a.max, where: a.where, limitMax: DIST_MAX[z] ?? DIST_MAX_DEFAULT }; }
-  for (const [id, t] of EXTREME) { if (!POSES[id] || (ids && !ids.includes(id))) continue; const R = EQ.rig(POSES[id])(t), P = A.skin(R, { d }), f = folds(d, R, P); res.folds.push({ id, t, ...f }); }
+  for (const [id, t] of EXTREME) { if (!POSES[id] || (ids && !ids.includes(id))) continue; const R = EQ.rig(POSES[id])(t), P = A.skin(R, { d, floor: false }), f = folds(d, R, P); res.folds.push({ id, t, ...f }); }
   return res;
 }
 const FOLDS_FILE = path.join(__dirname, 'fixtures/folds.json');
 function foldBase() { try { return JSON.parse(fs.readFileSync(FOLDS_FILE, 'utf8')); } catch (e) { return {}; } }
 function failures(res) {
   const out = [];
-  for (const p of res.penetration) out.push(`${p.ex}${p.has === 'ничего' ? ' (без необязательного инвентаря)' : ''} t=${p.t}: ${p.seg} в ${p.id === 'floor' ? 'полу' : p.id} на ${p.depth.toFixed(2)} см (допуск ${p.limit.toFixed(2)}: валидатор ${p.tol}, процедурная кожа ${p.proc.toFixed(2)} + ${DEPTH_EXTRA})`);
+  for (const p of res.penetration) out.push(`${p.ex}${p.has === 'ничего' ? ' (без необязательного инвентаря)' : ''} t=${p.t}: ${p.seg} в ${p.id === 'floor' ? 'полу' : p.id} на ${p.depth.toFixed(2)} см (допуск ${p.limit.toFixed(2)}: валидатор ${p.tol}, процедурная кожа ${p.proc.toFixed(2)} + ${p.extra})`);
   for (const [z, s] of Object.entries(res.distance)) { if (s.p99 > DIST_P99) out.push(`${z}: 99 % вершин дальше ${s.p99.toFixed(2)} см от процедурной кожи (допуск ${DIST_P99})`); if (s.max > s.limitMax) out.push(`${z}: отход ${s.max.toFixed(2)} см (${s.where}, допуск ${s.limitMax})`); }
   const base = foldBase();
   for (const f of res.folds) { const b = base[`${f.id} ${f.t}`] || { inverted: 0, folds: 0 }; if (f.inverted > b.inverted) out.push(`${f.id} t=${f.t}: вывернутых треугольников ${f.inverted} (записано ${b.inverted})`); if (f.folds > b.folds) out.push(`${f.id} t=${f.t}: складок ${f.folds} (записано ${b.folds})`); }
   return out;
 }
-module.exports = { kinds, penetration, folds, triTri, run, failures, foldBase, DEPTH_EXTRA, DIST_P99, DIST_MAX, DIST_MAX_DEFAULT, FOLD_NEAR, EXTREME };
+module.exports = { kinds, penetration, folds, triTri, run, failures, foldBase, DEPTH_EXTRA, HAND_FOOT_EXTRA, FLOOR_PRESS, DIST_P99, DIST_MAX, DIST_MAX_DEFAULT, FOLD_NEAR, EXTREME };
 if (require.main === module) {
   const arg = k => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : null; };
   const ids = process.argv[2] && process.argv[2] !== 'all' && !process.argv[2].startsWith('--') ? process.argv[2].split(',') : null;
@@ -178,12 +193,12 @@ if (require.main === module) {
   const quiet = process.argv.includes('--quiet'), t0 = Date.now();
   if (process.argv.includes('--record-folds')) {
     const d = CMP.loadAnny(), POSES = CMP.loadPoses(), out = {};
-    for (const [id, t] of EXTREME) { const R = EQ.rig(POSES[id])(t), f = folds(d, R, A.skin(R, { d })); out[`${id} ${t}`] = { inverted: f.inverted, folds: f.folds }; }
+    for (const [id, t] of EXTREME) { const R = EQ.rig(POSES[id])(t), f = folds(d, R, A.skin(R, { d, floor: false })); out[`${id} ${t}`] = { inverted: f.inverted, folds: f.folds }; }
     fs.mkdirSync(path.dirname(FOLDS_FILE), { recursive: true }); fs.writeFileSync(FOLDS_FILE, JSON.stringify(out, null, 1) + '\n'); console.log(FOLDS_FILE); process.exit(0);
   }
   if (process.argv.includes('--folds')) {
     const d = CMP.loadAnny(), POSES = CMP.loadPoses();
-    for (const [id, t] of EXTREME) { const R = EQ.rig(POSES[id])(t), noCorr = folds(d, R, A.skin(R, { d, corr: d.correctives.map(() => 0) })), f = folds(d, R, A.skin(R, { d })); console.log(`${id.padEnd(11)} t=${t}: вывернутых ${String(f.inverted).padStart(4)} (без форм ${String(noCorr.inverted).padStart(4)}), складок ${String(f.folds).padStart(4)} (без форм ${String(noCorr.folds).padStart(4)})`); }
+    for (const [id, t] of EXTREME) { const R = EQ.rig(POSES[id])(t), noCorr = folds(d, R, A.skin(R, { d, floor: false, corr: d.correctives.map(() => 0) })), f = folds(d, R, A.skin(R, { d, floor: false })); console.log(`${id.padEnd(11)} t=${t}: вывернутых ${String(f.inverted).padStart(4)} (без форм ${String(noCorr.inverted).padStart(4)}), складок ${String(f.folds).padStart(4)} (без форм ${String(noCorr.folds).padStart(4)})`); }
     process.exit(0);
   }
   const res = run({ ids, ts, log: quiet ? () => {} : () => process.stderr.write('.') });

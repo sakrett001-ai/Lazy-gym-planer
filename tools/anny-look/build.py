@@ -36,6 +36,7 @@ CENTRAL = ['pelvis', 'lumbar', 'thorax', 'neck', 'head']
 SIDE_FRAMES = ['cl', 'sp', 'ua', 'fa', 'fd', 'hand', 'th', 'sk', 'foot', 'toes'] + [f'f{f}{k}' for f in range(5) for k in range(3)]
 FRAMES = CENTRAL + [n + s for s in 'LR' for n in SIDE_FRAMES]
 PART_CODE = {'torso': 1, 'ua': 2, 'fa': 3, 'th': 4, 'sk': 5, 'delt': 6}
+CAVITY_CODE = 7          # выстилка рта: вершина не на видимой коже (областей мышц и проверок отхода нет)
 
 
 SMOOTH_ITERS = 10
@@ -141,6 +142,17 @@ def trunk_split(h, ang, D):
     return np.clip(wp, 0, 1), wl, np.clip(wt, 0, 1)
 
 
+def ground_feet(V, W, labels):
+    """Стопы — на полу. Подошва Anny в стойке оказывалась на 1,1 см выше пола: стопа стоит на нашем голеностопе, а у Anny
+    голеностоп ниже над подошвой, чем у процедурной стопы (у той подошва — на полу, 186,0). Стопа опускается к полу целиком
+    (по доле костей стопы и пальцев в риге Anny), лодыжка над ней растягивается по той же доле."""
+    for s in 'LR':
+        w = sum(W[:, i] for i, lab in enumerate(labels) if lab.endswith('.' + s) and lab.startswith(('foot', 'toe')))
+        sole = V[w > .5, 1].min()
+        V[:, 1] -= sole * w
+    return V
+
+
 def build(out_path, mannequin=None):
     P = C.Procedural(mannequin) if mannequin else C.Procedural(); D = P.D; body = AnnyLook(); fit = json.load(open(FIT))
     phen, local = body.params(fit); rest = body.rest(phen, local); q = q_from(fit['pose'])
@@ -150,6 +162,7 @@ def build(out_path, mannequin=None):
     F = body.skin_faces; used = np.unique(F); remap = -np.ones(len(V), np.int64); remap[used] = np.arange(len(used))
     V = V[used]; F = remap[F]; W = body.weights[used]          # плотные веса Anny по 104 костям
     labels = body.labels; L = body.idx; n = len(V)
+    V = ground_feet(V, W, labels)
 
     # ---------- перенос весов ----------
     J = P.J; hipY = (J['hipL'][1] + J['hipR'][1]) / 2
@@ -226,6 +239,7 @@ def build(out_path, mannequin=None):
         near_part = np.array([p in ('cap-sh' + s, 'cap-ac' + s) or (p == 'ua' + s) for p in P.part[ii]])
         sel = (armw > .3) & (r < 10) & (polar < 1.75) & (near_part | (code == 0)) & ~((code == 2) & (a1 > .3))
         code[sel] = 6; side[sel] = si; a1[sel] = polar[sel]; a2[sel] = az[sel]
+    code[body.cavity[used]] = CAVITY_CODE
 
     # ---------- в каталог ----------
     cat = V.copy(); cat[:, 1] = FLOOR - cat[:, 1]

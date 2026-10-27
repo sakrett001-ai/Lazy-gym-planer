@@ -21,6 +21,7 @@ function zonesOf(d) {
   const out = new Array(d.nv), R = d.region;
   for (let v = 0; v < d.nv; v++) {
     const f = d.frames[d.wi[v * 4]];
+    if (d.region.code[v] === 7) { out[v] = 'полость'; continue; }   /* выстилка рта (не видна) */
     if (/^(hand|f\d\d)/.test(f)) { out[v] = 'кисть'; continue; }
     if (/^(foot|toes)/.test(f)) { out[v] = 'стопа'; continue; }
     if (f === 'head') { out[v] = 'голова'; continue; }
@@ -38,6 +39,31 @@ function zonesOf(d) {
 }
 const sdCapsule = (p, a, b, r) => { const pa = V.sub(p, a), ba = V.sub(b, a), h = Math.max(0, Math.min(1, V.dot(pa, ba) / V.dot(ba, ba))); return V.len(V.sub(pa, V.scale(ba, h))) - r; };
 function sdRoundBox(p, c, ax, half, r) { const d = V.sub(p, c), q = [0, 1, 2].map(i => Math.abs(V.dot(d, ax[i])) - half[i] + r); return Math.hypot(Math.max(q[0], 0), Math.max(q[1], 0), Math.max(q[2], 0)) + Math.min(Math.max(q[0], q[1], q[2]), 0) - r; }
+/* Голова: M.headSDF — расстояние вдоль сечений (радиально по ряду и по оси), над макушкой и у лба оно не евклидово:
+   у точки на 2 см выше верхнего ряда и на 8 см впереди оси оно даёт 8 см, а ближайшая точка поверхности — в 3–4 см.
+   Поэтому для отхода — евклидово расстояние до сетки головы (headMesh, шаг ≈ 0,8 см; уши — эллипсоиды, расстояние по
+   ним — M.headLocalSDF), знак — по headLocalSDF. Сетка расстояний в рамке головы — один раз, шаг 1 см, трилинейно. */
+let HEAD_GRID = null;
+function headGrid() {
+  if (HEAD_GRID) return HEAD_GRID;
+  const pts = M.headMesh().pts, np_ = pts.length, X = new Float64Array(np_ * 3), lo = [-14, -18, -16], n = [29, 37, 33], h = 1, g = new Float32Array(n[0] * n[1] * n[2]);
+  pts.forEach((p, i) => { X[i * 3] = p[0]; X[i * 3 + 1] = p[1]; X[i * 3 + 2] = p[2]; });
+  for (let i = 0; i < n[0]; i++) for (let j = 0; j < n[1]; j++) for (let k = 0; k < n[2]; k++) {
+    const x = lo[0] + i * h, y = lo[1] + j * h, z = lo[2] + k * h, s = M.headLocalSDF([x, y, z], false);
+    let best = Infinity; for (let m = 0; m < np_; m++) { const dx = X[m * 3] - x, dy = X[m * 3 + 1] - y, dz = X[m * 3 + 2] - z, q = dx * dx + dy * dy + dz * dz; if (q < best) best = q; }
+    let dist = Math.sqrt(best) * (s < 0 ? -1 : 1);
+    if (s > 0) dist = Math.min(dist, M.headLocalSDF([x, y, z], true));   /* уши: эллипсоиды снаружи головы */
+    g[(i * n[1] + j) * n[2] + k] = dist;
+  }
+  return HEAD_GRID = { lo, n, h, g };
+}
+function headDist(R, p) {
+  const G = headGrid(), l = M.headLocal(R, p), f = [0, 1, 2].map(a => (l[a] - G.lo[a]) / G.h);
+  if (f.some((x, a) => x < 0 || x > G.n[a] - 1.001)) return M.headSDF(R, p);
+  const i = Math.floor(f[0]), j = Math.floor(f[1]), k = Math.floor(f[2]), u = f[0] - i, v = f[1] - j, w = f[2] - k, at = (a, b, c) => G.g[(a * G.n[1] + b) * G.n[2] + c];
+  let s = 0; for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) for (let c = 0; c < 2; c++) s += (a ? u : 1 - u) * (b ? v : 1 - v) * (c ? w : 1 - w) * at(i + a, j + b, k + c);
+  return s;
+}
 /* знаковое расстояние до процедурной кожи кадра (каталог): объединение частей; parts — по частям (для кистей и стоп — свои) */
 function proceduralSDF(R, body = M.bodyData(R), cache = M.torsoCache(R)) {
   const box = pts => { const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9]; for (const p of pts) for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], p[i]); hi[i] = Math.max(hi[i], p[i]); } return { lo, hi }; };
@@ -66,26 +92,44 @@ function proceduralSDF(R, body = M.bodyData(R), cache = M.torsoCache(R)) {
   function sdf(p) {
     let d = Infinity;
     if (near(tb, p, 6)) d = M.torsoSDF(R, p, cache);
-    d = Math.min(d, M.headSDF(R, p), M.neckSDF(R, p));
+    d = Math.min(d, headDist(R, p), M.neckSDF(R, p));
     for (const s of M.SIDES) for (const k of ['ua', 'fa', 'th', 'sk']) if (near(lb[k + s], p, 6)) d = Math.min(d, M.limbSDF(R, k, s, p));
     for (const c of caps) d = Math.min(d, V.dist(p, c.c) - c.r);
     return d;
   }
   sdf.hand = (s, p) => near(hands[s].b, p, 4) ? hands[s].f(p) : Infinity;
   sdf.foot = (s, p) => near(feet[s].b, p, 4) ? feet[s].f(p) : Infinity;
+  /* расстояние до одной части: torso, head, neck, ua/fa/th/sk, hand, foot (со стороной), колпачок сустава (ac, sh, el, wr, kn, an) */
+  const capOf = Object.fromEntries(caps.map(c => [c.key, c]));
+  sdf.part = (name, s, p) => name === 'torso' ? M.torsoSDF(R, p, cache) : name === 'head' ? headDist(R, p) : name === 'neck' ? M.neckSDF(R, p)
+    : name === 'hand' ? hands[s].f(p) : name === 'foot' ? feet[s].f(p) : ['ua', 'fa', 'th', 'sk'].includes(name) ? M.limbSDF(R, name, s, p)
+    : capOf[name + s] ? V.dist(p, capOf[name + s].c) - capOf[name + s].r : Infinity;
   return sdf;
 }
-/* расстояния вершин Anny (сетка кадра P) до процедурной кожи: кисть и стопа — до своих форм */
+/* Части процедурной кожи, до которых меряется отход вершины зоны (своя сторона): своя часть и соседние по суставу.
+   Не объединение всего тела: где части касаются друг друга (бедро о живот в глубоком приседе, кисть у затылка, плечо у
+   головы при руках вверх), вершина Anny внутри чужой части оказалась бы «далеко внутри» процедурной кожи — это касание
+   (его проверяют складки и опоры), а не отход формы. */
+const ZONE_PARTS = {
+  'голова': ['head'], 'шея': ['neck', 'head', 'torso', 'ac'], 'надплечья': ['torso', 'neck', 'ac', 'sh'], 'грудь': ['torso', 'sh', 'ac'],
+  'верх спины': ['torso', 'sh', 'ac'], 'бока': ['torso', 'ua', 'sh'], 'живот': ['torso'], 'поясница': ['torso'], 'ягодицы': ['torso', 'th'],
+  'пах': ['torso', 'th'], 'дельты': ['torso', 'ua', 'sh', 'ac'], 'плечо': ['ua', 'sh', 'el', 'torso'], 'локоть': ['ua', 'fa', 'el'],
+  'предплечье': ['fa', 'el', 'wr'], 'кисть': ['hand', 'fa', 'wr'], 'бедро': ['th', 'torso', 'kn'], 'колено': ['th', 'sk', 'kn'],
+  'голень': ['sk', 'kn', 'an'], 'стопа': ['foot', 'sk', 'an'],
+};
+/* расстояния вершин Anny (сетка кадра P) до процедурной кожи — до частей своей зоны (ZONE_PARTS) */
 function distances(d, P, R, zones, verts, body) {
   const sdf = proceduralSDF(R, body), out = new Float32Array(verts.length);
   verts.forEach((v, k) => {
-    const p = [P[k * 3], P[k * 3 + 1], P[k * 3 + 2]], z = zones[v], f = d.frames[d.wi[v * 4]], s = f.endsWith('R') ? 'R' : 'L';
-    out[k] = z === 'кисть' ? Math.min(sdf.hand(s, p), sdf(p)) : z === 'стопа' ? Math.min(sdf.foot(s, p), sdf(p)) : sdf(p);
+    const p = [P[k * 3], P[k * 3 + 1], P[k * 3 + 2]], z = zones[v], f = d.frames[d.wi[v * 4]];
+    const s = /[LR]$/.test(f) ? f.slice(-1) : d.region.side[v] ? 'R' : 'L';
+    let m = Infinity; for (const part of ZONE_PARTS[z]) m = Math.min(m, sdf.part(part, s, p));
+    out[k] = m;
   });
   return out;
 }
 function measure({ ids = null, ts = [0, .25, .5, .75, 1], method = 'dq', step = 3, d = loadAnny(), log = false } = {}) {
-  const POSES = loadPoses(), zones = zonesOf(d), verts = []; for (let v = 0; v < d.nv; v += step) verts.push(v);
+  const POSES = loadPoses(), zones = zonesOf(d), verts = []; for (let v = 0; v < d.nv; v += step) if (zones[v] !== 'полость') verts.push(v);
   const list = (ids || Object.keys(POSES)).filter(id => POSES[id]);
   const acc = Object.fromEntries(ZONES.map(z => [z, { all: [], max: 0, where: '' }]));
   const add = (P, R, where, body) => { const dist = distances(d, P, R, zones, verts, body); verts.forEach((v, k) => { const z = acc[zones[v]], a = Math.abs(dist[k]); z.all.push(dist[k]); if (a > z.max) { z.max = a; z.where = where; z.sign = Math.sign(dist[k]); } }); };
@@ -103,7 +147,7 @@ function measure({ ids = null, ts = [0, .25, .5, .75, 1], method = 'dq', step = 
   }
   return out;
 }
-module.exports = { loadAnny, loadPoses, zonesOf, proceduralSDF, distances, measure, ZONES };
+module.exports = { loadAnny, loadPoses, zonesOf, proceduralSDF, distances, measure, ZONES, ZONE_PARTS };
 if (require.main === module) {
   const arg = k => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : null; };
   const ids = process.argv[2] && process.argv[2] !== 'all' && !process.argv[2].startsWith('--') ? process.argv[2].split(',') : null;

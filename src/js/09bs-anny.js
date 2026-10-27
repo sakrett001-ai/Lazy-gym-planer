@@ -135,8 +135,12 @@ const AnnySkin = (() => {
   }
 
   /* ---------- скиннинг на процессоре: проверки и рамка кадра (на экране — видеокарта, src/volume/anny.mjs) ----------
-     method 'dq' (как в приложении) или 'lbs' (линейное смешение — для сравнения); only — номера вершин (по умолчанию все) */
-  function skin(R, { d = data, method = 'dq', hands = null, only = null, corr = null } = {}) {
+     method 'dq' (как в приложении) или 'lbs' (линейное смешение — для сравнения); only — номера вершин (по умолчанию все);
+     floor — кожа прижата к полу (как на экране): вершины ниже пола — на полу. Мягкие ткани, лёжа на полу, сплющиваются о
+     него; кожа Anny полнее процедурной (подтянутое телосложение), а суставы — те же, поэтому там, где процедурная кожа
+     касается пола, предплечье, плечо или спина Anny ушли бы под пол. floor: false — без прижатия (насколько прижато —
+     проверка tools/anny-look/check.js). */
+  function skin(R, { d = data, method = 'dq', hands = null, only = null, corr = null, floor = true } = {}) {
     const S = skinMats(R, d, hands), nfr = d.frames.length, DQ = method === 'dq' ? dualQuats(S, nfr) : null, cw = corr || correctiveWeights(R, d);
     let P = d.pos;
     if (cw.some(w => w > 0)) { P = Float32Array.from(d.pos); d.correctives.forEach((c, k) => { const w = cw[k]; if (!(w > 0)) return; for (let j = 0; j < c.n; j++) { const v = c.i[j]; P[v * 3] += w * c.d[j * 3]; P[v * 3 + 1] += w * c.d[j * 3 + 1]; P[v * 3 + 2] += w * c.d[j * 3 + 2]; } }); }
@@ -160,6 +164,7 @@ const AnnySkin = (() => {
         for (let j = 0; j < 4; j++) { const wt = d.ww[v * 4 + j]; if (!wt) continue; const o = d.wi[v * 4 + j] * 12; ox += wt * (S[o] * px + S[o + 1] * py + S[o + 2] * pz + S[o + 3]); oy += wt * (S[o + 4] * px + S[o + 5] * py + S[o + 6] * pz + S[o + 7]); oz += wt * (S[o + 8] * px + S[o + 9] * py + S[o + 10] * pz + S[o + 11]); }
         out[k * 3] = ox; out[k * 3 + 1] = oy; out[k * 3 + 2] = oz;
       }
+      if (floor && out[k * 3 + 1] > M.FLOOR) out[k * 3 + 1] = M.FLOOR;
     }
     return out;
   }

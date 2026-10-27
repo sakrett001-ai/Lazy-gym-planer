@@ -9,6 +9,12 @@
 весов Anny — 28 см, и при сгибе 140° решение уводило голень на 20 см.) Смещение в стойке — Rᵀ (x − p): в приложении оно
 добавляется до скиннинга и поворачивается смешанным поворотом вершины. Вес формы — «шатёр» по углу сустава: 0 при a0,
 1 при a1 (угол позы формы), 0 при a2 (если задан).
+
+Формы «к процедурной коже» (conform): в позе вершины полосы, отошедшие от процедурной кожи этой позы (части — свои у формы)
+дальше KEEP см, тянутся к ней на избыток с долей круга (по градиенту её знакового расстояния, sculpt.js --sdf), сетка
+сглаживается (Таубин, 4 прохода), и так до CONFORM_ITERS раз, пока избыток больше 2 мм; затем — то же сглаживание Таубина. Так у рук прямо вверх (174–177°): у вершин подмышки со стороны
+корпуса смешанный поворот (0° у корпуса и 177° у плеча) выносит кожу вбок «крыльями» на 7–8 см от процедурной кожи;
+Таубин складку не убирает. Формы строятся по очереди: в позе формы уже действуют прежние (с их весом в этой позе).
 """
 import json, os, subprocess, tempfile
 import numpy as np
@@ -21,13 +27,16 @@ ARM = ('ua',) + FOREARM
 SHANK = ('sk', 'foot', 'toes')
 SPECS = [
     # имя, поза, угол (Mannequin.jointAngles[side]), a0, a2; полоса — вершины, у которых доля рамок за суставом (вся цепочка до
-    # кисти или стопы) от 0,02 до 0,98, по каждому набору, и не дальше r см от центра сустава в позе (сустав, r)
+    # кисти или стопы) от 0,02 до 0,98, по каждому набору, и не дальше r см от центра сустава в позе (сустав, r); у форм
+    # «к процедурной коже» — ещё (части процедурной кожи, KEEP см)
     ('armsSide', 'armsSide', 'elevation', 30, 160, (ARM, ('cl', 'sp') + ARM), ('sh', 14)),
-    ('armsUp', 'armsUp', 'elevation', 90, None, (ARM, ('cl', 'sp') + ARM), ('sh', 14)),
+    ('armsUp', 'armsUp', 'elevation', 90, None, (ARM, ('cl', 'sp') + ARM), ('sh', 14), (('torso', 'ua', 'sh', 'ac'), 2.0)),
     ('elbow', 'elbows', 'elbow', 60, None, (FOREARM,), ('el', 8)),
     ('knee', 'knees', 'knee', 60, None, (SHANK,), ('kn', 10)),
     ('hip', 'hips', 'hipFlex', 45, None, (('th',) + SHANK,), ('hip', 14)),
+    ('armsOverhead', 'armsOverhead', 'elevation', 150, None, (ARM, ('cl', 'sp') + ARM), ('sh', 16), (('torso', 'ua', 'sh', 'ac'), 2.0)),
 ]
+CONFORM_ITERS, CONFORM_TAUBIN = 8, 4   # шагов «подтянуть избыток (с долей круга) — сгладить» и проходов Таубина на шаг
 TAUBIN = (.5, -.53, 30)   # λ, μ, проходов
 
 
@@ -66,9 +75,9 @@ def adjacency(F, n):
     return A
 
 
-def taubin(P, A, f):
+def taubin(P, A, f, it=None):
     """сглаживание Таубина (λ, μ — без усадки) с долей f по вершинам (0 — неподвижна)"""
-    deg = np.asarray(A.sum(1)).ravel(); X = P.copy(); lam, mu, it = TAUBIN; k = f[:, None]
+    deg = np.asarray(A.sum(1)).ravel(); X = P.copy(); lam, mu, it0 = TAUBIN; it = it or it0; k = f[:, None]
     for _ in range(it):
         for c in (lam, mu):
             avg = (A @ X) / np.maximum(deg, 1)[:, None]; X = X + c * k * (avg - X)
@@ -82,13 +91,33 @@ def sculpt_poses(frames):
         return json.load(open(op))
 
 
+def proc_sdf(pose, pts, side, parts):
+    with tempfile.TemporaryDirectory() as tmp:
+        ip = os.path.join(tmp, 'in.json'); op = os.path.join(tmp, 'out.json')
+        json.dump({'points': np.round(pts, 4).tolist(), 'side': side, 'parts': list(parts)}, open(ip, 'w'))
+        subprocess.run(['node', os.path.join(ROOT, 'tools/anny-look/sculpt.js'), '--sdf', pose, ip, op], check=True)
+        r = json.load(open(op))
+    return np.array(r['d']), np.array(r['g'])
+
+
+def tent(c, v):
+    if v <= c['a1']: return float(np.clip((v - c['a0']) / (c['a1'] - c['a0']), 0, 1))
+    return 1.0 if c.get('a2') is None else float(np.clip((c['a2'] - v) / (c['a2'] - c['a1']), 0, 1))
+
+
 def build(Vcat, F, wi, ww, frames):
     """Vcat — вершины в стойке (каталог), wi/ww — четыре рамки и доли на вершину. Возвращает список форм для anny.json."""
-    n = len(Vcat); A = adjacency(F, n); poses = sculpt_poses(frames)
+    n = len(Vcat); A = adjacency(F, n); poses = sculpt_poses(frames); deg = np.asarray(A.sum(1)).ravel()
     fi = {f: i for i, f in enumerate(frames)}
     out = []
-    for name, pose, angle, a0, a2, chains, (jk, r) in SPECS:
-        S = np.array(poses[pose]['S']).reshape(-1, 12); DQ = dq_from(S); Pp, Rm = skin(Vcat, wi, ww, DQ)
+    for name, pose, angle, a0, a2, chains, (jk, r), *conf in SPECS:
+        S = np.array(poses[pose]['S']).reshape(-1, 12); DQ = dq_from(S)
+        # прежние формы — с их весом в этой позе
+        V0 = Vcat.copy()
+        for c in out:
+            w = tent(c, poses[pose]['angles'][c['side']][c['angle']])
+            if w > 0: V0[c['i']] += w * np.array(c['d']).reshape(-1, 3)
+        Pp, Rm = skin(V0, wi, ww, DQ)
         for s in 'LR':
             band = np.zeros(n, bool)
             for chain in chains:
@@ -99,7 +128,15 @@ def build(Vcat, F, wi, ww, frames):
             fall = np.clip(1 - dist / r, 0, 1); fall = fall * fall * (3 - 2 * fall); fall[~band] = 0
             ri = np.where(fall > 0)[0]
             if not len(ri): continue
-            X = taubin(Pp, A, fall)
+            Q = Pp
+            if conf:
+                parts, keep_ = conf[0]; Q = Pp.copy()
+                for _ in range(CONFORM_ITERS):
+                    dd, gg = proc_sdf(pose, Q[ri], s, parts); e = np.clip(dd - keep_, 0, None)
+                    if e.max() < .2: break
+                    Q[ri] -= gg * (e * fall[ri])[:, None]
+                    Q = taubin(Q, A, fall, CONFORM_TAUBIN)
+            X = taubin(Q, A, fall)
             D = np.einsum('nji,nj->ni', Rm[ri], X[ri] - Pp[ri])          # Rᵀ (x − p)
             keep = np.linalg.norm(D, axis=1) > .05
             a1 = float(poses[pose]['angles'][s][angle])

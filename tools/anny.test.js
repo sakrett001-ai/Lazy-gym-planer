@@ -118,35 +118,39 @@ test('muscle zones on the Anny skin: every zone of the mannequin gets vertices o
 const SAMPLE = ['bbbench', 'chestpressm', 'legcurl', 'hipthrust', 'squat', 'pushup', 'seatedcalf', 'kneepush', 'plank', 'lyinglegraise'];
 test('supports: the Anny skin does not sink into benches, seats, pads, the floor, the bar or handles deeper than allowed (sample)', () => {
   for (const id of SAMPLE) for (const t of [0, .25, .5, .75, 1]) {
-    const { R, e } = pose(id, t), P = A.skin(R, { d }), bad = CK.penetration(R, P, d, kind, e, () => true).filter(p => p.depth > p.limit);
+    const { R, e } = pose(id, t), P = A.skin(R, { d, floor: false }), bad = CK.penetration(R, P, d, kind, e, () => true).filter(p => p.depth > p.limit);
     assert.deepEqual(bad.map(b => `${id} t=${t} ${b.id} ${b.depth.toFixed(2)}>${b.limit.toFixed(2)}`), []);
   }
   /* отрицательный: кожа спины на 6 см глубже в скамью — нарушение */
-  const { R, e } = pose('bbbench', .5), P = Float32Array.from(A.skin(R, { d })), up = [0, 1, 0];
+  const { R, e } = pose('bbbench', .5), P = Float32Array.from(A.skin(R, { d, floor: false })), up = [0, 1, 0];
   for (let v = 0; v < d.nv; v++) if (zones[v] === 'верх спины' || zones[v] === 'поясница' || zones[v] === 'ягодицы') P[v * 3 + 1] += 6 * up[1];
   assert(CK.penetration(R, P, d, kind, e, () => true).some(p => p.depth > p.limit), 'a back pushed 6 cm into the bench must fail');
-  const Pf = Float32Array.from(A.skin(R, { d })); for (let v = 0; v < d.nv; v++) if (zones[v] === 'стопа') Pf[v * 3 + 1] += 3;
+  const Pf = Float32Array.from(A.skin(R, { d, floor: false })); for (let v = 0; v < d.nv; v++) if (zones[v] === 'стопа') Pf[v * 3 + 1] += 3;
   assert(CK.penetration(R, Pf, d, kind, e, () => true).some(p => p.id === 'floor' && p.depth > p.limit), 'feet 3 cm under the floor must fail');
+  /* на экране кожа прижата к полу: ниже пола вершин нет; без прижатия — та же кожа */
+  const { R: Rs } = pose('superman', 0), Pp = A.skin(Rs, { d }), Pu = A.skin(Rs, { d, floor: false });
+  let below = 0, moved = 0; for (let v = 0; v < d.nv; v++) { if (Pp[v * 3 + 1] > M.FLOOR + 1e-4) below++; if (Pu[v * 3 + 1] <= M.FLOOR && Math.abs(Pp[v * 3 + 1] - Pu[v * 3 + 1]) > 1e-6) moved++; }
+  assert.equal(below, 0); assert.equal(moved, 0);
 });
 test('distance to the procedural skin: within the limits in the stance and the sample; a skin moved away fails', () => {
-  const verts = []; for (let v = 0; v < d.nv; v += 3) verts.push(v);
+  const verts = []; for (let v = 0; v < d.nv; v += 3) if (zones[v] !== 'полость') verts.push(v);
   const check = (R, P) => { const body = M.bodyData(R), Pv = new Float32Array(verts.length * 3); verts.forEach((v, k) => { for (let i = 0; i < 3; i++) Pv[k * 3 + i] = P[v * 3 + i]; }); const dist = CMP.distances(d, Pv, R, zones, verts, body), by = {};
     verts.forEach((v, k) => (by[zones[v]] ||= []).push(Math.abs(dist[k]))); const out = [];
     for (const [z, a] of Object.entries(by)) { a.sort((x, y) => x - y); const p99 = a[Math.floor(a.length * .99)], mx = a.at(-1), lim = CK.DIST_MAX[z] ?? CK.DIST_MAX_DEFAULT; if (p99 > CK.DIST_P99) out.push(`${z} 99% ${p99.toFixed(2)}`); if (mx > lim) out.push(`${z} max ${mx.toFixed(2)}`); } return out; };
-  const R0 = M.catalogPose(M.neutral()); assert.deepEqual(check(R0, A.skin(R0, { d })), []);
-  for (const id of ['bbbench', 'legcurl', 'hipthrust']) for (const t of [0, 1]) { const { R } = pose(id, t); assert.deepEqual(check(R, A.skin(R, { d })), [], `${id} t=${t}`); }
+  const R0 = M.catalogPose(M.neutral()); assert.deepEqual(check(R0, A.skin(R0, { d, floor: false })), []);
+  for (const id of ['bbbench', 'legcurl', 'hipthrust']) for (const t of [0, 1]) { const { R } = pose(id, t); assert.deepEqual(check(R, A.skin(R, { d, floor: false })), [], `${id} t=${t}`); }
   /* отрицательный: грудь вынесена на 8 см вперёд */
-  const P = Float32Array.from(A.skin(R0, { d })); for (let v = 0; v < d.nv; v++) if (zones[v] === 'грудь') P[v * 3 + 2] += 8;
+  const P = Float32Array.from(A.skin(R0, { d, floor: false })); for (let v = 0; v < d.nv; v++) if (zones[v] === 'грудь') P[v * 3 + 2] += 8;
   assert(check(R0, P).some(s => s.startsWith('грудь')));
 });
 test('extreme poses: inverted triangles and skin folds do not grow beyond the recorded counts; broken weights fail', () => {
   const base = JSON.parse(fs.readFileSync(path.join(root, 'tools/anny-look/fixtures/folds.json'), 'utf8'));
   for (const [id, t] of [['squat', 1], ['bbcurl', 1], ['latpull', 0], ['pushup', 1]]) {
-    const { R } = pose(id, t), f = CK.folds(d, R, A.skin(R, { d })), b = base[`${id} ${t}`];
+    const { R } = pose(id, t), f = CK.folds(d, R, A.skin(R, { d, floor: false })), b = base[`${id} ${t}`];
     assert(f.inverted <= b.inverted && f.folds <= b.folds, `${id} t=${t}: ${f.inverted}/${f.folds} > ${b.inverted}/${b.folds}`);
   }
   /* отрицательный: колено с весами бедра (кожа голени не идёт за голенью) — вывороты и складки */
   const dd = { ...d, wi: Uint8Array.from(d.wi) }, th = d.frames.indexOf('thL'), sk = d.frames.indexOf('skL'); for (let i = 0; i < dd.wi.length; i++) if (dd.wi[i] === sk && i % 4 === 0 && i / 4 % 2) dd.wi[i] = th;
-  const { R } = pose('squat', 1), f = CK.folds(dd, R, A.skin(R, { d: dd })), b = base['squat 1'];
+  const { R } = pose('squat', 1), f = CK.folds(dd, R, A.skin(R, { d: dd, floor: false })), b = base['squat 1'];
   assert(f.inverted > b.inverted || f.folds > b.folds, 'scrambled knee weights must fail');
 });

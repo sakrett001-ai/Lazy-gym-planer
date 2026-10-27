@@ -148,7 +148,20 @@ class AnnyLook(AnnyPosed):
         for c in eyes: near[cav[np.linalg.norm(V[cav] - c, axis=1) < 4.0]] = True
         sel = eye_sockets(V, F, eyes) | near
         self.socket = sel
-        V = fair(V, F, grow(F, sel, 1)) if sel.any() else V
+        if sel.any():
+            region = grow(F, sel, 1); V = fair(V, F, region)
+            # сомкнутые веки — чуть вглубь: гладкая заплатка продолжает выпуклость век и блестит на свету белым пятном,
+            # как глаз; середина заплатки уходит к центру глаза на EYE_SINK см, край (кольцо у кожи век) — на месте
+            A = neighbors(F, len(V)); ring = np.zeros(len(V)); cur = region.copy(); k = 0
+            while cur.any():
+                k += 1; ring[cur] = k; cur = cur & ~((A @ (~cur).astype(float)) > 0)
+            u = np.clip((ring - 1) / max(k - 1, 1), 0, 1); u = u * u * (3 - 2 * u)
+            for c in eyes:
+                idx = np.where(region & (np.linalg.norm(V - c, axis=1) < 4.0))[0]
+                n = (V[idx] - c) / np.maximum(np.linalg.norm(V[idx] - c, axis=1), 1e-9)[:, None]
+                V[idx] -= n * (EYE_SINK * u[idx])[:, None]
+        # выстилка рта (полость за сомкнутыми губами): снаружи не видна — в проверках отхода и опор не считается
+        self.cavity = np.zeros(len(V), bool); self.cavity[cav] = True; self.cavity &= ~grow(F, sel, 1)
         return V
 
     def neutral_groin(self, V, J):
@@ -173,6 +186,9 @@ class AnnyLook(AnnyPosed):
 
 
 # ---------------- лицо и пах: гладкое заполнение (без глаз, без «дыр» и тёмных пятен) ----------------
+EYE_SINK = .3
+
+
 def neighbors(F, n):
     import scipy.sparse as sp
     I = np.concatenate([F[:, 0], F[:, 1], F[:, 2], F[:, 1], F[:, 2], F[:, 0]]); J = np.concatenate([F[:, 1], F[:, 2], F[:, 0], F[:, 0], F[:, 1], F[:, 2]])

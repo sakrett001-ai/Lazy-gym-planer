@@ -4,13 +4,14 @@ import * as THREE from 'three';
    манекена, в координатах каталога (см, Y вниз, пол 186): сцена (м, Y вверх) = C·каталог — матрица объекта C (отражение по Y,
    поэтому обход треугольников развёрнут: лицевые стороны и нормали те же, что у процедурной кожи). Скиннинг — на видеокарте:
    двойные кватернионы рамок сегментов кадра (uniform-массив, по два vec4 на рамку), четыре веса на вершину; корректирующие
-   формы — морфы three.js (до скиннинга). Мышечные зоны — цвет вершины (sRGB, альфа — доля зоны): та же раскраска, что у
+   формы — морфы three.js (до скиннинга). Кожа прижата к полу (вершины ниже пола — на полу; почему — AnnySkin.skin). Мышечные зоны — цвет вершины (sRGB, альфа — доля зоны): та же раскраска, что у
    областей манекена (цвет по фазам, выбранная область), с тем же собственным свечением. Материал — материал кожи манекена.
    Рамка кадра и тени: сетка в стойке, поэтому её габарит в кадре — по точкам выборки вершин, скиннингом на процессоре
    (userData.boundsPoints: их берёт сцена для рамки камер и для тени). */
 const FLOOR=186,BOUNDS_STEP=37;
 const DQ_PARS=`
 uniform vec4 annyDQ[ANNY_FRAMES*2];
+#define ANNY_FLOOR ${FLOOR.toFixed(1)}
 attribute vec4 annyIndex;
 attribute vec4 annyWeight;
 void annyBlend(out vec4 r,out vec4 d){
@@ -39,12 +40,12 @@ function patch(shader,frames,{normals=true,color=false}={}){
  if(globalThis.ANNY_METHOD==='lbs'){
   shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\n#define ANNY_LBS\n#define ANNY_FRAMES '+frames+'\n'+DQ_PARS+(color?'attribute vec4 annyColor;\nvarying vec4 vAnnyColor;\n':''));
   if(normals)shader.vertexShader=shader.vertexShader.replace('#include <skinnormal_vertex>','objectNormal=normalize(annyLinear(objectNormal,true));');
-  shader.vertexShader=shader.vertexShader.replace('#include <skinning_vertex>','transformed=annyLinear(transformed,false);'+(color?'\nvAnnyColor=annyColor;':''));
+  shader.vertexShader=shader.vertexShader.replace('#include <skinning_vertex>','transformed=annyLinear(transformed,false);transformed.y=min(transformed.y,ANNY_FLOOR);'+(color?'\nvAnnyColor=annyColor;':''));
   return;
  }
  shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\n#define ANNY_FRAMES '+frames+'\n'+DQ_PARS+(color?'attribute vec4 annyColor;\nvarying vec4 vAnnyColor;\n':''));
  if(normals)shader.vertexShader=shader.vertexShader.replace('#include <skinnormal_vertex>','vec4 annyR,annyD;annyBlend(annyR,annyD);objectNormal=annyRotate(annyR,objectNormal);\n#ifdef USE_TANGENT\nobjectTangent=annyRotate(annyR,objectTangent);\n#endif');
- shader.vertexShader=shader.vertexShader.replace('#include <skinning_vertex>',(normals?'':'vec4 annyR,annyD;annyBlend(annyR,annyD);\n')+'transformed=annyMove(annyR,annyD,transformed);'+(color?'\nvAnnyColor=annyColor;':''));
+ shader.vertexShader=shader.vertexShader.replace('#include <skinning_vertex>',(normals?'':'vec4 annyR,annyD;annyBlend(annyR,annyD);\n')+'transformed=annyMove(annyR,annyD,transformed);transformed.y=min(transformed.y,ANNY_FLOOR);'+(color?'\nvAnnyColor=annyColor;':''));
 }
 export function createAnnyLayer(parent,skin){
  const group=new THREE.Group();group.name='anny';group.visible=false;parent.add(group);
