@@ -138,30 +138,53 @@ class AnnyLook(AnnyPosed):
         return G
 
     def neutral_face(self, V, H):
-        """глазницы закрыты гладкими «веками» (глаз нет, как у манекена): выстилка полости — заплатка fair()"""
+        """Глазницы закрыты гладкими «веками» (глаз нет, как у манекена). Выстилку глазниц (у Anny — глубокая чаша без
+        глазного яблока, ~700 вершин на глаз) сплющивать в заплатку нельзя: тысячи треугольников в 3 см² с координатами до
+        0,01 см складываются и вырождаются, нормали — шум, на свету — белые пятна, как глаза. Поэтому выстилка убирается, а
+        прорезь век закрывается своей заплаткой: край прорези, кольцо вдвое ближе к середине и середина (cap_sockets),
+        новые вершины — fair() (продолжает выпуклость век без излома), середина — на EYE_SINK см глубже (сомкнутые веки)."""
         F = self.skin_faces; L = self.idx
         eyes = [H[L['eye.L']], H[L['eye.R']]]
         # выстилка полостей — список вершин пакета Anny (data/template_mesh_internal_cavities.pth: глазницы и рот, номера —
         # те же, что у сетки), у глаз; плюс вершины, чей луч по нормали снова встречает кожу (на всякий случай)
         cav = torch.load(os.path.join(os.path.dirname(anny.__file__), 'data/template_mesh_internal_cavities.pth'), weights_only=False)['vertex_indices']
         cav = np.array([i for i in cav if i < len(V)]); near = np.zeros(len(V), bool)
-        for c in eyes: near[cav[np.linalg.norm(V[cav] - c, axis=1) < 4.0]] = True
-        sel = eye_sockets(V, F, eyes) | near
+        # связные куски выстилки (по рёбрам сетки между её вершинами) — целиком те, чья середина у глаза (ближе 4 см)
+        import scipy.sparse.csgraph as cg
+        iscav = np.zeros(len(V), bool); iscav[cav] = True
+        A = neighbors(F, len(V)).tocoo(); m = iscav[A.row] & iscav[A.col]
+        import scipy.sparse as sp_
+        G = sp_.coo_matrix((np.ones(m.sum()), (A.row[m], A.col[m])), shape=(len(V), len(V)))
+        ncomp, lab = cg.connected_components(G, directed=False)
+        for c in eyes:   # у каждого глаза — самый большой кусок с серединой ближе 4 см (мелкие — вне чаши: у век, у носа)
+            best = max((k for k in np.unique(lab[cav]) if np.linalg.norm(V[cav[lab[cav] == k]].mean(0) - c) < 4.0), key=lambda k: (lab[cav] == k).sum())
+            near[cav[lab[cav] == best]] = True
+        # в списке пакета — не все вершины выстилки (между кусками остаются вершины без отметки): замыкание (рост на 2 кольца
+        # и сжатие на 2) заполняет промежутки внутри чаши, не выходя за кромку век
+        closed = grow(F, near, 2); closed &= ~grow(F, ~closed, 2); near |= closed
+        # убирается только выстилка из списка пакета (чаша с краем по кромке век): по лучам нормалей (eye_sockets) в выборку
+        # попадали и складки век и виска — после удаления там оставались дыры с рваным краем
+        sel = near
         self.socket = sel
+        n0 = len(V)
         if sel.any():
-            region = grow(F, sel, 1); V = fair(V, F, region)
-            # сомкнутые веки — чуть вглубь: гладкая заплатка продолжает выпуклость век и блестит на свету белым пятном,
-            # как глаз; середина заплатки уходит к центру глаза на EYE_SINK см, край (кольцо у кожи век) — на месте
-            A = neighbors(F, len(V)); ring = np.zeros(len(V)); cur = region.copy(); k = 0
-            while cur.any():
-                k += 1; ring[cur] = k; cur = cur & ~((A @ (~cur).astype(float)) > 0)
-            u = np.clip((ring - 1) / max(k - 1, 1), 0, 1); u = u * u * (3 - 2 * u)
+            V, F, src, depth = cap_sockets(V, F, sel)
+            new = np.arange(n0, len(V)); region = np.zeros(len(V), bool); region[new] = True
+            # и кромки век (EYE_RINGS колец от прорези): у Anny они толстые, загнуты к глазному яблоку; без него нижняя кромка —
+            # полочка, обращённая вверх, на свету — белая полоса, как белок глаза. Заплатка вместе с ними — гладкие сомкнутые веки
+            rim = np.zeros(len(V), bool); rim[np.unique(np.concatenate([np.array(r) for r in src]))] = True
+            region |= grow(F, rim, EYE_RINGS) & (np.linalg.norm(V[:, None, :] - np.array(eyes)[None], axis=2).min(1) < 3.0)
+            V = fair(V, F, region)
             for c in eyes:
-                idx = np.where(region & (np.linalg.norm(V - c, axis=1) < 4.0))[0]
-                n = (V[idx] - c) / np.maximum(np.linalg.norm(V[idx] - c, axis=1), 1e-9)[:, None]
-                V[idx] -= n * (EYE_SINK * u[idx])[:, None]
+                idx = new[np.linalg.norm(V[new] - c, axis=1) < 4.0]
+                nrm = (V[idx] - c) / np.maximum(np.linalg.norm(V[idx] - c, axis=1), 1e-9)[:, None]
+                V[idx] -= nrm * (EYE_SINK * depth[idx - n0])[:, None]
+            # новые вершины: веса и главная кость — средние по краю своей прорези
+            Wn = np.stack([self.weights[r].mean(0) for r in src]); Wn /= Wn.sum(1, keepdims=True)
+            self.weights = np.vstack([self.weights, Wn]); self.dominant = np.concatenate([self.dominant, Wn.argmax(1)])
+            self.skin_faces = F
         # выстилка рта (полость за сомкнутыми губами): снаружи не видна — в проверках отхода и опор не считается
-        self.cavity = np.zeros(len(V), bool); self.cavity[cav] = True; self.cavity &= ~grow(F, sel, 1)
+        self.cavity = np.zeros(len(V), bool); self.cavity[cav] = True; self.cavity[:n0] &= ~sel
         return V
 
     def neutral_groin(self, V, J):
@@ -186,7 +209,7 @@ class AnnyLook(AnnyPosed):
 
 
 # ---------------- лицо и пах: гладкое заполнение (без глаз, без «дыр» и тёмных пятен) ----------------
-EYE_SINK = .3
+EYE_SINK, EYE_RINGS = .3, 6
 
 
 def neighbors(F, n):
@@ -229,6 +252,43 @@ def eye_sockets(V, F, eyes, r=3.2):
             d = np.linalg.norm(loc - O[ir], axis=1); hit[ir[d < 2.5]] = True
         sel[idx[hit]] = True
     return sel
+
+
+def cap_sockets(V, F, sel):
+    """убрать треугольники с вершинами sel и закрыть дыры: край — петля граничных рёбер, кольцо на полпути к середине и
+    середина (обход — как у убранных: ребро края в заплатке идёт против ребра оставшегося треугольника). Возвращает V, F,
+    для каждой новой вершины — вершины края её петли (src) и глубину (0,5 у кольца, 1 у середины)."""
+    Fk = F[~sel[F].any(1)]
+    # островки (дно чаши без отметок в списке пакета) — прочь: остаётся одна связная кожа
+    import scipy.sparse as sp_, scipy.sparse.csgraph as cg
+    n = len(V); I = np.concatenate([Fk[:, 0], Fk[:, 1], Fk[:, 2]]); J = np.concatenate([Fk[:, 1], Fk[:, 2], Fk[:, 0]])
+    _, lab = cg.connected_components(sp_.coo_matrix((np.ones(len(I)), (I, J)), shape=(n, n)), directed=False)
+    main = np.bincount(lab[Fk[:, 0]]).argmax(); Fk = Fk[lab[Fk[:, 0]] == main]
+    he = {}
+    for f in Fk:
+        for a, b in ((f[0], f[1]), (f[1], f[2]), (f[2], f[0])): he[(a, b)] = True
+    nxt = {a: b for (a, b) in he if (b, a) not in he}
+    V = list(V); faces = [Fk]; src = []; depth = []; loops = []
+    seen = set()
+    for start in list(nxt):
+        if start in seen: continue
+        loop = [start]; seen.add(start); v = nxt[start]
+        while v != start and v not in seen:
+            loop.append(v); seen.add(v); v = nxt[v]
+        if len(loop) < 3: continue
+        loops.append((len(loop), np.round(np.array([V[i] for i in loop]).mean(0), 1).tolist(), np.round(np.ptp(np.array([V[i] for i in loop]), 0), 1).tolist()))
+        P = np.array([V[i] for i in loop]); c = P.mean(0); k = len(loop)
+        ring = []
+        for p in P:
+            V.append(c + (p - c) * .5); ring.append(len(V) - 1); src.append(loop); depth.append(.5)
+        V.append(c); ci = len(V) - 1; src.append(loop); depth.append(1.0)
+        cap = []
+        for i in range(k):
+            a, b = loop[i], loop[(i + 1) % k]; ra, rb = ring[i], ring[(i + 1) % k]
+            cap += [(b, a, ra), (b, ra, rb), (rb, ra, ci)]
+        faces.append(np.array(cap))
+    print('  глазницы: петли края', loops)
+    return np.array(V), np.concatenate(faces), src, np.array(depth)
 
 
 def grow(F, sel, rings=1):

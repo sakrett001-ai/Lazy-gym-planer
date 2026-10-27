@@ -68,7 +68,10 @@ export function createAnnyLayer(parent,skin){
   /* габарит задаём сами (по точкам кадра): сетка в стойке, без него отсечение по пирамиде видимости ошибётся */
   g.boundingSphere=new THREE.Sphere(new THREE.Vector3(),1e3);g.boundingBox=new THREE.Box3(new THREE.Vector3(-1e3,-1e3,-1e3),new THREE.Vector3(1e3,1e3,1e3));
   uniforms={annyDQ:{value:new Float32Array(d.frames.length*8)}};
-  material=skin.clone();material.name='anny-skin';
+  /* сетка замкнута, лицевая сторона — снаружи: изнанка не рисуется (у материала манекена — обе стороны: у процедурной
+     кожи открытые края). Иначе в прорези век видна изнанка их внутренней стороны, и её перевёрнутую нормаль ярко
+     освещает контровой свет — «белые глаза»; заодно вдвое меньше работы фрагментам. */
+  material=skin.clone();material.name='anny-skin';material.side=THREE.FrontSide;
   material.onBeforeCompile=s=>{
    s.uniforms.annyDQ=uniforms.annyDQ;s.uniforms.annyGlow=glow;patch(s,d.frames.length,{color:true});
    s.fragmentShader=s.fragmentShader.replace('#include <common>','#include <common>\nvarying vec4 vAnnyColor;\nuniform float annyGlow;\nvec3 annyLinear(vec3 c){return mix(c/12.92,pow((c+.055)/1.055,vec3(2.4)),step(.04045,c));}')
