@@ -13,14 +13,15 @@ const FLOOR=186,BOUNDS_STEP=37;
    ao — затенённость впадин (запечена в стойке, AnnySkin.data.shade — доля открытого неба): [для рассеянного света неба,
         для прямого]; рассеянный — как карта затенения three.js (aoMap), прямой — слабее (впадины глубже, но тень
         ключевого света на теле не рисуется: тело тень не принимает, иначе она перекрывает цвет мышц);
-   relief — контраст формы: нормали «с нерезкой маской» (нормаль + relief·(нормаль − сглаженная по relief[1] кольцам)):
+   relief — контраст формы: нормали «с нерезкой маской» (нормаль + relief·(нормаль − сглаженная по relief[1] кольцам));
+        relief[2] — доля маски спереди в плавках (пах: купол и складка у бедра — гладкие, маска их края не заостряет):
         граница грудной, пресс, дельты читаются при той же геометрии и том же матовом материале;
    roughness — шероховатость материала Anny (у манекена 0,62): матовее, без пластикового блика;
    trunks — тон плавок (вариант Б): цвет и доля смешения; 0 — без плавок (вариант А). Граница — линия плавок-брифов
         (trunkLine), ровная: в шейдере по расстоянию до неё со сглаживанием в пиксель (fwidth).
    Выключенная часть (ao [0, 0], trunks.alpha 0) в шейдер не попадает; обе выключены — нет и атрибута вида вершины (цена
    растра — как без них). Переопределение для листов сравнения — globalThis.ANNY_LOOK (те же ключи). */
-export const ANNY_LOOK={ao:[.85,.35],relief:[.6,6],roughness:.72,trunks:{color:'#8390a6',alpha:1}};
+export const ANNY_LOOK={ao:[.85,.35],relief:[.6,6,.25],roughness:.72,trunks:{color:'#8390a6',alpha:1}};
 const look=()=>({...ANNY_LOOK,...(globalThis.ANNY_LOOK||{})});
 /* Линия плавок-брифов в стойке (см над полом, x — влево, z — вперёд; тазобедренные суставы — 89,5 над полом, ±8,8):
    пояс — 96,5 спереди, 97,5 сбоку, 98,5 сзади (≈ 8 см ниже пупка: у ANSUR II пупок — 105,5); вырез ноги — по углу a вокруг
@@ -34,13 +35,13 @@ export function trunkLine(x,h,z){
 }
 const TRUNK_FRAMES=new Set(['pelvis','lumbar','thorax','thL','thR']);
 /* нормали «с нерезкой маской»: n + k·(n − n̄), n̄ — нормали, усреднённые по соседям rings раз */
-function reliefNormals(g,idx,nv,k,rings){
+function reliefNormals(g,idx,nv,k,rings,kv){
  if(!(k>0))return;
  const n=g.attributes.normal.array,adj=Array.from({length:nv},()=>new Set());
  for(let t=0;t<idx.length;t+=3){const a=idx[t],b=idx[t+1],c=idx[t+2];adj[a].add(b).add(c);adj[b].add(a).add(c);adj[c].add(a).add(b);}
  let s=Float32Array.from(n);
  for(let r=0;r<rings;r++){const o=new Float32Array(s.length);for(let v=0;v<nv;v++){let x=s[v*3],y=s[v*3+1],z=s[v*3+2];for(const u of adj[v]){x+=s[u*3];y+=s[u*3+1];z+=s[u*3+2];}const l=Math.hypot(x,y,z)||1;o[v*3]=x/l;o[v*3+1]=y/l;o[v*3+2]=z/l;}s=o;}
- for(let v=0;v<nv;v++){const x=n[v*3]+k*(n[v*3]-s[v*3]),y=n[v*3+1]+k*(n[v*3+1]-s[v*3+1]),z=n[v*3+2]+k*(n[v*3+2]-s[v*3+2]),l=Math.hypot(x,y,z)||1;n[v*3]=x/l;n[v*3+1]=y/l;n[v*3+2]=z/l;}
+ for(let v=0;v<nv;v++){const kk=kv?k*kv[v]:k,x=n[v*3]+kk*(n[v*3]-s[v*3]),y=n[v*3+1]+kk*(n[v*3+1]-s[v*3+1]),z=n[v*3+2]+kk*(n[v*3+2]-s[v*3+2]),l=Math.hypot(x,y,z)||1;n[v*3]=x/l;n[v*3+1]=y/l;n[v*3+2]=z/l;}
  g.attributes.normal.needsUpdate=true;
 }
 const DQ_PARS=`
@@ -95,7 +96,10 @@ export function createAnnyLayer(parent,skin){
   /* каталог — зеркальная система: обход треугольников разворачиваем, нормали считаем в ней же */
   const idx=new Uint16Array(d.idx.length);for(let i=0;i<idx.length;i+=3){idx[i]=d.idx[i];idx[i+1]=d.idx[i+2];idx[i+2]=d.idx[i+1];}
   g.setIndex(new THREE.BufferAttribute(idx,1));g.computeVertexNormals();
-  const L=look();reliefNormals(g,idx,d.nv,L.relief?.[0]??0,L.relief?.[1]??6);
+  const L=look(),kf=L.relief?.[2]??1,kv=kf<1?new Float32Array(d.nv):null;
+  /* доля маски: спереди в плавках (до 3 см за их линией, глубже 2 см от середины тела) — relief[2], плавно */
+  if(kv)for(let v=0;v<d.nv;v++){const x=d.pos[v*3],hh=FLOOR-d.pos[v*3+1],z=d.pos[v*3+2],t=TRUNK_FRAMES.has(d.frames[d.wi[v*4]])&&z>2?Math.min(1,Math.max(0,(trunkLine(x,hh,z)+3)/3)):0;kv[v]=1-(1-kf)*t*t*(3-2*t);}
+  reliefNormals(g,idx,d.nv,L.relief?.[0]??0,L.relief?.[1]??6,kv);
   const tc=new THREE.Color(L.trunks?.color||'#000'),ta=L.trunks?.alpha||0,aoOn=(L.ao?.[0]||0)>0||(L.ao?.[1]||0)>0,lookVary=aoOn||ta>0;
   g.setAttribute('annyIndex',new THREE.BufferAttribute(Float32Array.from(d.wi),4));
   g.setAttribute('annyWeight',new THREE.BufferAttribute(d.ww,4));

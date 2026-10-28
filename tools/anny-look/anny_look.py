@@ -247,9 +247,6 @@ class AnnyLook(AnnyPosed):
         shelf = used & (N0[:, 1] < -.6) & (np.abs(x) < 2.0) & (y > 85.5) & (y < 88.5) & (z > -1)
         out[shelf, 2] = np.maximum(z[shelf], zt[shelf] - (4.8 - z[shelf]).clip(0) * g('shelf') - g('shelf_off', .4))
         inner = box & (np.abs(x) < g('xin')) & (z < 5.6) & (x > 0.02) & (y < g('weld_below')) & (y > g('weld_above', 0))
-        # передняя часть стенок клина (z от wf[0]) сварена выше — до свода (wf[1]): щель между стенками под сводом закрыта
-        if g('weld_front'):
-            wz, wy = g('weld_front'); inner |= box & (np.abs(x) < g('xin')) & (z >= wz) & (x > 0.02) & (y < wy) & (y > g('weld_above', 0))
         # и столбец касания бёдер за ним (стенки щели между ними иначе — две почти совпадающие поверхности, которые при
         # любом сгибании бедра проходят друг сквозь друга): сварен так же, стенки щели с обеих сторон совпадают и убираются
         c0, c1, cx, cy0 = g('contact')

@@ -134,6 +134,27 @@ test('look: baked cavity shading in the data, trunk line of the briefs (variant 
   assert(trunkLine(17, 95, 0) > 0 && trunkLine(17, 88, 0) < 0, 'high-cut leg opening on the side (≈ 93 cm)');
   assert(ANNY_LOOK.trunks.alpha >= 0 && ANNY_LOOK.trunks.alpha <= 1 && ANNY_LOOK.roughness >= .62, 'matte, no gloss');
 });
+test('pouch: the front of the dome has no up-facing ledge (a bright patch under the key light from above)', () => {
+  /* нормали вершин передней поверхности паха в стойке (|x| < 3, высота 84–91 см, z > 8,5): доля «вверх» — меньше 0,3
+     (у купола с полкой — дном щели между стенками клина под сводом лобка — была 0,70) */
+  const upMax = pos => {
+    const n = new Float64Array(d.nv * 3), I = d.idx;
+    for (let t = 0; t < I.length; t += 3) {
+      const a = I[t], b = I[t + 1], c = I[t + 2], u = [0, 1, 2].map(k => pos[b * 3 + k] - pos[a * 3 + k]), v = [0, 1, 2].map(k => pos[c * 3 + k] - pos[a * 3 + k]);
+      const cr = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+      for (const w of [a, b, c]) for (let k = 0; k < 3; k++) n[w * 3 + k] += cr[k];
+    }
+    const h = v => M.FLOOR - pos[v * 3 + 1], unit = v => Math.hypot(n[v * 3], n[v * 3 + 1], n[v * 3 + 2]) || 1;
+    let s = 0; for (let v = 0; v < d.nv; v++) if (Math.abs(pos[v * 3]) < 3 && h(v) > 124 && h(v) < 130 && pos[v * 3 + 2] > 5) s += n[v * 3 + 2] / unit(v);
+    let up = -1; for (let v = 0; v < d.nv; v++) if (Math.abs(pos[v * 3]) < 3 && h(v) > 84 && h(v) < 91 && pos[v * 3 + 2] > 8.5) up = Math.max(up, -Math.sign(s) * n[v * 3 + 1] / unit(v));
+    return up;
+  };
+  const up = upMax(d.pos); assert(up < .3, `up-facing share ${up.toFixed(2)}`);
+  /* отрицательный: ступенька — низ купола (высота 84–87) выдвинут на 2 см вперёд, его верх смотрит вверх */
+  const step = Float32Array.from(d.pos);
+  for (let v = 0; v < d.nv; v++) { const hh = M.FLOOR - step[v * 3 + 1]; if (Math.abs(step[v * 3]) < 3 && hh > 84 && hh < 87 && step[v * 3 + 2] > 8.5) step[v * 3 + 2] += 2; }
+  assert(upMax(step) > .3);
+});
 
 /* ---------- проверки видимой кожи (каталог — tools/anny-look/check.js) ---------- */
 const SAMPLE = ['bbbench', 'chestpressm', 'legcurl', 'hipthrust', 'squat', 'pushup', 'seatedcalf', 'kneepush', 'plank', 'lyinglegraise'];
