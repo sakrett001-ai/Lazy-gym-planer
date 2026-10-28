@@ -92,10 +92,15 @@ function routeOf(props, e, P, S) {
 function auditEntry(id, entry, { samples = 41 } = {}) {
   const ev = EQ.variantEntry(entry), rig = EQ.rig(ev), eqs = (ev.equipment || []);
   const cablesEq = eqs.filter(e => e.type === 'g3cable'), bandsEq = eqs.filter(e => e.type === 'g3band' || e.type === 'band');
-  if (!cablesEq.length && !bandsEq.length) return [];
+  /* стек рычажных тренажёров (09bo-g4-machines.js, stack): плиты одним неподвижным блоком, трос от головы стека — до блока
+     на верхней балке; к рычагу трос не идёт, плиты за рычагом не поднимаются */
+  const fixedStacks = EQ.build(eqs, EQ.rig(ev)(0)).filter(p => !p.dyn && /stkPlates$/.test(p.id));
+  if (!cablesEq.length && !bandsEq.length && !fixedStacks.length) return [];
+  const rows = fixedStacks.map(p => ({ id, kind: '—', part: p.id, type: 'стек', frames: [], flags: ['стек неподвижен: плиты одним блоком не поднимаются за рычагом, трос от головы стека доходит только до блока на балке'] }));
+  if (!cablesEq.length && !bandsEq.length) return rows;
   const frames = [];
   for (let i = 0; i < samples; i++) { const t = i / (samples - 1), R = rig(t); frames.push({ t, R }); }
-  const kind = KIND[id] || '—', rows = [];
+  const kind = KIND[id] || '—';
   /* кисть на рукояти: отклонение и сгибание запястья по кадрам (Mannequin.jointAngles, как в валидаторе) — рукоять, не
      повёрнутая вслед за предплечьем, выворачивает запястье */
   const ja = frames.map(({ R }) => M.jointAngles(R));
@@ -195,7 +200,8 @@ function flagsOf(r) {
     if (r.moveAng > LIM.lineMove) f.push(`${r.type} под ${r.moveAng.toFixed(0)}° к ходу рукояти`);
   }
   if (r.kind === 'arc' && r.planeAng > LIM.arcPlane) f.push(`${r.type} выходит из плоскости движения на ${r.planeAng.toFixed(0)}°`);
-  if (r.wrist && Math.max(-r.wrist.dev[0], r.wrist.dev[1]) > LIM.wristDev) f.push(`запястье отклонено до ${Math.max(-r.wrist.dev[0], r.wrist.dev[1]).toFixed(0)}° (рукоять не по предплечью?)`);
+  /* у прямой рукояти (bar) ось хвата задана грифом: отклонение — следствие ширины хвата, оно печатается, но не отмечается */
+  if (r.wrist && r.attach !== 'bar' && Math.max(-r.wrist.dev[0], r.wrist.dev[1]) > LIM.wristDev) f.push(`запястье отклонено до ${Math.max(-r.wrist.dev[0], r.wrist.dev[1]).toFixed(0)}° (рукоять не по предплечью?)`);
   if (r.type === 'трос' && r.liftMin != null) {
     if (r.liftAtStretch < LIM.hoverMin || r.liftAtStretch > LIM.hoverMax) f.push(`стек в растяжке (t=${r.stretchT.toFixed(3)}) на ${r.liftAtStretch.toFixed(1)} см над плитами (норма ${LIM.hoverMin}–${LIM.hoverMax})`);
     if (r.lying.length) f.push(`стек лежит на плитах в ${r.lying.length} кадр. (t=${r.lying[0].toFixed(3)}…${r.lying[r.lying.length - 1].toFixed(3)})`);
@@ -218,6 +224,7 @@ function run({ only, samples = 41, baked = false } = {}) {
 }
 const f1 = v => v == null ? '—' : (+v).toFixed(1), f0 = v => v == null ? '—' : (+v).toFixed(0), rng = (a, k = f0) => `${k(a[0])}…${k(a[1])}`;
 function describe(r) {
+  if (r.type === 'стек') return `стек тренажёра ${r.part}`;
   const out = [`${r.type} ${r.part} [${r.kind}]`, `к полу ${rng(r.floorAng)}°`, `к ходу ≤${f0(r.moveAng)}° (середина ${f0(r.moveAngMid)}°)`,
     `${r.type === 'трос' ? (r.attach === 'ankle' ? 'голеностоп' : 'кисть') + ' над осью блока' : 'кисть над креплением'} ${rng(r.height)} см`,
     r.kind === 'line' ? `от прямой ${f1(r.lineDev)} см, поворот ${f0(r.swing)}°` : `из плоскости ${f0(r.planeAng)}°`,
