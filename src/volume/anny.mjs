@@ -18,7 +18,8 @@ const FLOOR=186,BOUNDS_STEP=37;
    roughness — шероховатость материала Anny (у манекена 0,62): матовее, без пластикового блика;
    trunks — тон плавок (вариант Б): цвет и доля смешения; 0 — без плавок (вариант А). Граница — линия плавок-брифов
         (trunkLine), ровная: в шейдере по расстоянию до неё со сглаживанием в пиксель (fwidth).
-   Переопределение для листов сравнения — globalThis.ANNY_LOOK (те же ключи). */
+   Выключенная часть (ao [0, 0], trunks.alpha 0) в шейдер не попадает; обе выключены — нет и атрибута вида вершины (цена
+   растра — как без них). Переопределение для листов сравнения — globalThis.ANNY_LOOK (те же ключи). */
 export const ANNY_LOOK={ao:[.85,.35],relief:[.6,6],roughness:.72,trunks:{color:'#8390a6',alpha:1}};
 const look=()=>({...ANNY_LOOK,...(globalThis.ANNY_LOOK||{})});
 /* Линия плавок-брифов в стойке (см над полом, x — влево, z — вперёд; тазобедренные суставы — 89,5 над полом, ±8,8):
@@ -69,17 +70,19 @@ vec3 annyLinear(vec3 p,bool dir){
 }
 #endif
 `;
-const COLOR_PARS='attribute vec4 annyColor;\nvarying vec4 vAnnyColor;\nattribute vec2 annyLook;\nvarying vec2 vAnnyLook;\n',COLOR_OUT='\nvAnnyColor=annyColor;vAnnyLook=annyLook;';
-function patch(shader,frames,{normals=true,color=false}={}){
+const COLOR_PARS='attribute vec4 annyColor;\nvarying vec4 vAnnyColor;\n',COLOR_OUT='\nvAnnyColor=annyColor;';
+const LOOK_PARS='attribute vec2 annyLook;\nvarying vec2 vAnnyLook;\n',LOOK_OUT='vAnnyLook=annyLook;';
+function patch(shader,frames,{normals=true,color=false,lookVary=false}={}){
+ const pars=(color?COLOR_PARS:'')+(lookVary?LOOK_PARS:''),out=(color?COLOR_OUT:'')+(lookVary?LOOK_OUT:'');
  if(globalThis.ANNY_METHOD==='lbs'){
-  shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\n#define ANNY_LBS\n#define ANNY_FRAMES '+frames+'\n'+DQ_PARS+(color?COLOR_PARS:''));
+  shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\n#define ANNY_LBS\n#define ANNY_FRAMES '+frames+'\n'+DQ_PARS+pars);
   if(normals)shader.vertexShader=shader.vertexShader.replace('#include <skinnormal_vertex>','objectNormal=normalize(annyLinear(objectNormal,true));');
-  shader.vertexShader=shader.vertexShader.replace('#include <skinning_vertex>','transformed=annyLinear(transformed,false);transformed.y=min(transformed.y,ANNY_FLOOR);'+(color?COLOR_OUT:''));
+  shader.vertexShader=shader.vertexShader.replace('#include <skinning_vertex>','transformed=annyLinear(transformed,false);transformed.y=min(transformed.y,ANNY_FLOOR);'+out);
   return;
  }
- shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\n#define ANNY_FRAMES '+frames+'\n'+DQ_PARS+(color?COLOR_PARS:''));
+ shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\n#define ANNY_FRAMES '+frames+'\n'+DQ_PARS+pars);
  if(normals)shader.vertexShader=shader.vertexShader.replace('#include <skinnormal_vertex>','vec4 annyR,annyD;annyBlend(annyR,annyD);objectNormal=annyRotate(annyR,objectNormal);\n#ifdef USE_TANGENT\nobjectTangent=annyRotate(annyR,objectTangent);\n#endif');
- shader.vertexShader=shader.vertexShader.replace('#include <skinning_vertex>',(normals?'':'vec4 annyR,annyD;annyBlend(annyR,annyD);\n')+'transformed=annyMove(annyR,annyD,transformed);transformed.y=min(transformed.y,ANNY_FLOOR);'+(color?COLOR_OUT:''));
+ shader.vertexShader=shader.vertexShader.replace('#include <skinning_vertex>',(normals?'':'vec4 annyR,annyD;annyBlend(annyR,annyD);\n')+'transformed=annyMove(annyR,annyD,transformed);transformed.y=min(transformed.y,ANNY_FLOOR);'+out);
 }
 export function createAnnyLayer(parent,skin){
  const group=new THREE.Group();group.name='anny';group.visible=false;parent.add(group);
@@ -93,14 +96,17 @@ export function createAnnyLayer(parent,skin){
   const idx=new Uint16Array(d.idx.length);for(let i=0;i<idx.length;i+=3){idx[i]=d.idx[i];idx[i+1]=d.idx[i+2];idx[i+2]=d.idx[i+1];}
   g.setIndex(new THREE.BufferAttribute(idx,1));g.computeVertexNormals();
   const L=look();reliefNormals(g,idx,d.nv,L.relief?.[0]??0,L.relief?.[1]??6);
+  const tc=new THREE.Color(L.trunks?.color||'#000'),ta=L.trunks?.alpha||0,aoOn=(L.ao?.[0]||0)>0||(L.ao?.[1]||0)>0,lookVary=aoOn||ta>0;
   g.setAttribute('annyIndex',new THREE.BufferAttribute(Float32Array.from(d.wi),4));
   g.setAttribute('annyWeight',new THREE.BufferAttribute(d.ww,4));
   colorAttr=new THREE.BufferAttribute(new Uint8Array(d.nv*4),4,true);colorAttr.setUsage(THREE.DynamicDrawUsage);g.setAttribute('annyColor',colorAttr);
   /* вид вершины: затенённость впадин (доля открытого неба) и расстояние до линии плавок (см, плюс — внутри; только таз и
      бёдра — кисти и предплечья у бёдер в стойке не красятся) */
-  const lk=new Float32Array(d.nv*2);
-  for(let v=0;v<d.nv;v++){const f=d.frames[d.wi[v*4]];lk[v*2]=d.shade?d.shade[v]:1;lk[v*2+1]=TRUNK_FRAMES.has(f)?Math.max(-8,Math.min(8,trunkLine(d.pos[v*3],FLOOR-d.pos[v*3+1],d.pos[v*3+2]))):-8;}
-  g.setAttribute('annyLook',new THREE.BufferAttribute(lk,2));
+  if(lookVary){
+   const lk=new Float32Array(d.nv*2);
+   for(let v=0;v<d.nv;v++){const f=d.frames[d.wi[v*4]];lk[v*2]=d.shade?d.shade[v]:1;lk[v*2+1]=TRUNK_FRAMES.has(f)?Math.max(-8,Math.min(8,trunkLine(d.pos[v*3],FLOOR-d.pos[v*3+1],d.pos[v*3+2]))):-8;}
+   g.setAttribute('annyLook',new THREE.BufferAttribute(lk,2));
+  }
   if(d.correctives.length){
    g.morphAttributes.position=d.correctives.map(c=>{const a=new Float32Array(d.nv*3);for(let j=0;j<c.n;j++){const v=c.i[j];a[v*3]=c.d[j*3];a[v*3+1]=c.d[j*3+1];a[v*3+2]=c.d[j*3+2];}return new THREE.BufferAttribute(a,3);});
    g.morphTargetsRelative=true;
@@ -112,18 +118,17 @@ export function createAnnyLayer(parent,skin){
      кожи открытые края). Иначе в прорези век видна изнанка их внутренней стороны, и её перевёрнутую нормаль ярко
      освещает контровой свет — «белые глаза»; заодно вдвое меньше работы фрагментам. */
   material=skin.clone();material.name='anny-skin';material.side=THREE.FrontSide;material.roughness=L.roughness??skin.roughness;
-  const tc=new THREE.Color(L.trunks?.color||'#000'),ta=L.trunks?.alpha||0;
   uniforms.annyAO={value:new THREE.Vector2(L.ao?.[0]??0,L.ao?.[1]??0)};uniforms.annyTrunk={value:new THREE.Vector4(tc.r,tc.g,tc.b,ta)};
   material.onBeforeCompile=s=>{
-   s.uniforms.annyDQ=uniforms.annyDQ;s.uniforms.annyGlow=glow;s.uniforms.annyAO=uniforms.annyAO;s.uniforms.annyTrunk=uniforms.annyTrunk;patch(s,d.frames.length,{color:true});
-   s.fragmentShader=s.fragmentShader.replace('#include <common>','#include <common>\nvarying vec4 vAnnyColor;\nvarying vec2 vAnnyLook;\nuniform float annyGlow;\nuniform vec2 annyAO;\nuniform vec4 annyTrunk;\nvec3 annyLinear(vec3 c){return mix(c/12.92,pow((c+.055)/1.055,vec3(2.4)),step(.04045,c));}')
+   s.uniforms.annyDQ=uniforms.annyDQ;s.uniforms.annyGlow=glow;s.uniforms.annyAO=uniforms.annyAO;s.uniforms.annyTrunk=uniforms.annyTrunk;patch(s,d.frames.length,{color:true,lookVary});
+   s.fragmentShader=s.fragmentShader.replace('#include <common>','#include <common>\nvarying vec4 vAnnyColor;\n'+(lookVary?'varying vec2 vAnnyLook;\n':'')+'uniform float annyGlow;\nuniform vec2 annyAO;\nuniform vec4 annyTrunk;\nvec3 annyLinear(vec3 c){return mix(c/12.92,pow((c+.055)/1.055,vec3(2.4)),step(.04045,c));}')
     /* плавки — под цветом мышц: активная зона закрашивает и их. Ветвления — только экономия (вне плавок и вне активных зон
        смешение ничего не меняет, а растр на телефоне — работа фрагментов); производная — до ветвления (в нём она не определена) */
     .replace('#include <color_fragment>','#include <color_fragment>\n'+(ta>0?'float annyFw=max(fwidth(vAnnyLook.y)*.75,1e-3);if(vAnnyLook.y>-annyFw)diffuseColor.rgb=mix(diffuseColor.rgb,annyTrunk.rgb,smoothstep(-annyFw,annyFw,vAnnyLook.y)*annyTrunk.a);\n':'')+'vec3 annyZone=vec3(0.);if(vAnnyColor.a>0.){annyZone=annyLinear(vAnnyColor.rgb);diffuseColor.rgb=mix(diffuseColor.rgb,annyZone,vAnnyColor.a);}')
-    .replace('#include <aomap_fragment>','#include <aomap_fragment>\nreflectedLight.indirectDiffuse*=mix(1.,vAnnyLook.x,annyAO.x);float annyDir=mix(1.,vAnnyLook.x,annyAO.y);reflectedLight.directDiffuse*=annyDir;reflectedLight.directSpecular*=annyDir;')
+    .replace('#include <aomap_fragment>','#include <aomap_fragment>\n'+(aoOn?'reflectedLight.indirectDiffuse*=mix(1.,vAnnyLook.x,annyAO.x);float annyDir=mix(1.,vAnnyLook.x,annyAO.y);reflectedLight.directDiffuse*=annyDir;reflectedLight.directSpecular*=annyDir;':''))
     .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=annyZone*annyGlow*vAnnyColor.a;');
   };
-  material.customProgramCacheKey=()=>'anny-skin-'+d.frames.length+(ta>0?'-trunks':'')+(globalThis.ANNY_METHOD||'');
+  material.customProgramCacheKey=()=>'anny-skin-'+d.frames.length+(ta>0?'-trunks':'')+(aoOn?'-ao':'')+(globalThis.ANNY_METHOD||'');
   /* тень: та же деформация в материале глубины */
   depth=new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking});
   depth.onBeforeCompile=s=>{s.uniforms.annyDQ=uniforms.annyDQ;patch(s,d.frames.length,{normals:false});};
