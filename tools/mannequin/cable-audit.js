@@ -18,6 +18,8 @@
    * передаточное отношение и проводка: при 2:1 (ratio 0,5) на верхней плите стека нарисован подвижный блок, при 1:1 —
      нет; трос от блока доходит до стека (цепочка тросов от колеса или оси поворота блока через колёса тренажёра
      к тросу верхней плиты).
+   Рычажный стек (BIND.g4camCable, 09bo-g4-lever.js) — строки «кулачок», см. auditLever: длина троса, касание кулачка
+   и колёс, кулачок вместе с рычагом, подъём стека против k·∫p dφ, трос против рамы, момент против кривой силы.
    Эспандер (BIND.band, BIND.g3band), по кадрам и по каждой ветви: длина ветви, угол ленты к полу и к линии тяги,
    высота кисти над точкой, откуда лента идёт к кисти; длина в растяжке — наименьшая за повтор (лента не сжимается
    посреди повтора), растяжение max/min не больше 3 (паспортный предел латексных лент), путь кисти вдоль ленты —
@@ -89,6 +91,125 @@ function routeOf(props, e, P, S) {
   return { ok: seen.has(stk), chain: [...seen], hasStack: cables.some(c => c.id === stk) };
 }
 
+/* ---------- рычаг → кулачок → блоки → стек (BIND.g4camCable, 09bo-g4-lever.js) ----------
+   Всё меряется по нарисованным деталям кадра, а не по расчёту узла: трос (id:cable) и трос стека (id:stkCable), кулачок
+   (id:cam — рамка c, u, v), плечо рычага (рычаг из того же списка инвентаря, деталь arm), колёса блоков (route), верхняя
+   плита (id:stkTop). Профиль кулачка (дуги по оси троса) переводится в кадр по рамке нарисованного кулачка. */
+const LEVER_LIM = {
+  length: .2,     // см: длина троса (путь + трос стека) за повтор постоянна
+  tangentCos: 1e-3, // |cos| угла между свободным отрезком и радиусом колеса в точке касания
+  onRim: .02,     // см: точка касания на ободе колеса (по оси троса) и на профиле кулачка
+  side: .02,      // см: профиль кулачка по одну сторону от прямой схода троса
+  rigid: .01,     // °: кулачок поворачивается вместе с рычагом
+  lift: .2,       // см: подъём верхней плиты против k·∫p dφ
+  hover: [.9, 1.1], // см: в начале повтора плиты висят на 1 см
+  clear: .05      // см: ось троса не ближе r − 0,05 к раме, телу кулачка, щекам, кронштейнам (кроме колёс и кулачка, по которым идёт)
+};
+const polyLen = pts => { let L = 0; for (let i = 1; i < pts.length; i++) L += V.dist(pts[i - 1], pts[i]); return L; };
+function auditLever(id, entry, { samples = 41 } = {}) {
+  const ev = EQ.variantEntry(entry), rig = EQ.rig(ev), eqs = ev.equipment || [], V2 = require('../biomech/validator2.js'), CURVES = require('./strength-curves.js');
+  const rows = [];
+  for (const e of eqs.filter(q => q.type === 'g4camCable')) {
+    const lever = eqs.find(q => q.type === 'g4lever' && e.mountTo.startsWith(q.id + ':')), A = V.unit(e.axis), P = e.pivot, k = e.ratio ?? 1;
+    const st = e.stack, Y = M3.col(st.R, 1), wheelIds = new Set(), routeParts = [];
+    const fr = [];
+    for (let i = 0; i < samples; i++) {
+      const t = i / (samples - 1), R = rig(t), props = R.props, get = s => props.find(p => p.id === s);
+      const cable = get(e.id + ':cable').pts.map(fromCat), drop = get(e.id + ':stkCable').pts.map(fromCat), cam = get(e.id + ':cam');
+      const cu = dirFromCat(cam.u), cv = dirFromCat(cam.v), cc = fromCat(cam.c), toW = q => V.add(V.add(cc, cu, q[0]), cv, q[1]);
+      const arm = get(lever.id + ':arm'), armDir = V.unit(V.perp(V.sub(fromCat(arm.b), fromCat(arm.a)), A));
+      const a = M.jointAngles(R), knee = (a.L.knee + a.R.knee) / 2;
+      /* прямая схода с кулачка: последний отрезок троса на кулачке → первая точка у колеса первого блока */
+      const r0 = e.route[0], onWheel = (p, w) => Math.abs(V.dist(V.sub(p, V.scale(A, V.dot(V.sub(p, w.c), A))), w.c) - w.r);
+      const jArr = cable.findIndex(p => onWheel(p, r0) < LEVER_LIM.onRim), T = cable[jArr - 1], N = cable[jArr], dir = V.unit(V.sub(N, T));
+      /* плечо: расстояние от оси рычага до прямой схода (в плоскости, перпендикулярной оси) */
+      const w0 = V.perp(V.sub(T, P), A), p = V.len(V.perp(w0, V.unit(V.perp(dir, A))));
+      /* касание кулачка: профиль (по оси троса) по одну сторону от прямой, точка схода на профиле */
+      const nOut = V.unit(V.perp(V.sub(V.sub(T, V.scale(A, V.dot(V.sub(T, cc), A))), cc), dir)), prof = [];
+      for (const arc of e.cam.arcs) for (let j = 0; j <= 8; j++) prof.push(toW(EQ.leverStack.camPoint(e.cam.arcs, arc.a0 + (arc.a1 - arc.a0) * j / 8)));
+      /* до профиля — точно по дугам: точка в рамке кулачка, расстояние до каждой дуги (до её концов, если угол вне дуги) */
+      const tq = [V.dot(V.sub(T, cc), cu), V.dot(V.sub(T, cc), cv)], onProf = Math.min(...e.cam.arcs.map(arc => {
+        const d = [tq[0] - arc.c[0], tq[1] - arc.c[1]], a = Math.atan2(d[1], d[0]), a2 = arc.a0 + ((a - arc.a0) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+        if (a2 <= arc.a1) return Math.abs(Math.hypot(d[0], d[1]) - arc.r);
+        return Math.min(...[arc.a0, arc.a1].map(b => Math.hypot(tq[0] - arc.c[0] - arc.r * Math.cos(b), tq[1] - arc.c[1] - arc.r * Math.sin(b))));
+      }));
+      const side = Math.max(...prof.map(q => V.dot(V.sub(q, T), nOut)));
+      /* касание блоков: точки на ободе, свободные отрезки перпендикулярны радиусу */
+      let tan = 0, rim = 0;
+      for (const w of e.route) {
+        const idx = cable.map((q, j) => onWheel(q, w) < LEVER_LIM.onRim ? j : -1).filter(j => j >= 0);
+        if (!idx.length) { tan = Infinity; continue; }
+        const ends = [[idx[0], idx[0] - 1], [idx[idx.length - 1], idx[idx.length - 1] + 1]];
+        for (const [j, nb] of ends) {
+          /* за последним колесом — шток верхней плиты (нижний конец троса стека) */
+          const q = cable[j], other = nb < cable.length ? cable[nb] : drop[0];
+          if (!other) continue;
+          rim = Math.max(rim, onWheel(q, w));
+          const rad = V.unit(V.perp(V.sub(q, w.c), A)), seg = V.unit(V.perp(V.sub(other, q), A));
+          tan = Math.max(tan, Math.abs(V.dot(rad, seg)));
+        }
+      }
+      const top = get(e.id + ':stkTop'), lift = V.dot(V.sub(fromCat(top.c), st.o), Y) - (st.sel * st.pitch + 2);
+      /* колёса блоков нарисованы там, где их считает узел, и не двигаются */
+      const wheelOff = Math.max(...e.route.map(w => { const q = get(w.id); return q ? Math.max(V.dist(fromCat(q.c), w.c), Math.abs(q.r - w.r)) : Infinity; }));
+      fr.push({ t, knee, p, arm: armDir, camU: cu, L: polyLen(cable) + polyLen(drop), lift, side, onProf, tan, rim, wheelOff,
+        dropJoin: V.dist(cable[cable.length - 1], drop[drop.length - 1]), cable, drop, props });
+    }
+    /* кулачок с рычагом: угол между осью u кулачка и плечом рычага постоянен; угол рычага — по плечу */
+    const ang = (u, v) => Math.atan2(V.dot(V.cross(u, v), A), V.dot(u, v)) * 180 / Math.PI;
+    const rel = fr.map(f => ang(f.arm, f.camU)), rigid = Math.max(...rel) - Math.min(...rel);
+    const phi = fr.map(f => ang(fr[0].arm, f.arm) * Math.PI / 180);
+    /* подъём против k·∫p dφ (трапеции по кадрам) */
+    let I = 0; const calc = [0];
+    for (let i = 1; i < fr.length; i++) { I += (fr[i].p + fr[i - 1].p) / 2 * Math.abs(phi[i] - phi[i - 1]); calc.push(I * k); }
+    const liftErr = Math.max(...fr.map((f, i) => Math.abs((f.lift - fr[0].lift) - calc[i])));
+    const Ls = fr.map(f => f.L), lifts = fr.map(f => f.lift);
+    /* трос против рамы и других деталей: всё, кроме колёс блоков (трос лежит в их канавке), кулачка и самого стека */
+    const route = new Set(e.route.map(w => w.id)), skip = c => c.cable || c.id.startsWith(e.id + ':') || route.has(c.id);
+    let clear = { d: Infinity };
+    for (const f of [fr[0], fr[Math.floor(fr.length / 2)], fr[fr.length - 1], ...fr.filter((_, i) => i % 5 === 0)]) {
+      const cols = f.props.filter(q => !q.free).flatMap(V2.collider).filter(c => !c.unknown && !skip(c));
+      for (const line of [f.cable, f.drop]) for (let i = 1; i < line.length; i++) {
+        const a = line[i - 1], b = line[i], n = Math.max(1, Math.ceil(V.dist(a, b)));
+        for (let j = 0; j <= n; j++) { const q = V.mix(a, b, j / n), qc = [q[0], M.FLOOR - q[1], q[2]];
+          for (const c of cols) { const d = c.sdf(qc) - EQ.leverStack.CABLE_R; if (d < clear.d) clear = { d, id: c.id, t: f.t }; } }
+      }
+    }
+    /* момент тренажёра против кривой силы */
+    const curve = CURVES[e.curve] || null, pm = Math.max(...fr.map(f => f.p)), knees = fr.map(f => f.knee);
+    const tn = curve ? (() => { const fm = Math.max(...knees.map(curve.f)); return knees.map(th => curve.f(th) / fm); })() : null;
+    const pn = fr.map(f => f.p / pm), iP = pn.indexOf(1), err = tn ? pn.map((v, i) => v - tn[i]) : [];
+    const row = { id, kind: 'рычаг', part: e.id, type: 'кулачок', ratio: k, maxLift: st.maxLift, frames: [],
+      length: [Math.min(...Ls), Math.max(...Ls)], tan: Math.max(...fr.map(f => f.tan)), rim: Math.max(...fr.map(f => f.rim)),
+      side: Math.max(...fr.map(f => f.side)), onProf: Math.max(...fr.map(f => f.onProf)), dropJoin: Math.max(...fr.map(f => f.dropJoin)),
+      rigid, liftErr, liftStart: lifts[0], liftMin: Math.min(...lifts), liftMax: Math.max(...lifts), wheelOff: Math.max(...fr.map(f => f.wheelOff)), clear,
+      p: [Math.min(...fr.map(f => f.p)), pm], knee: [knees[0], knees[knees.length - 1]], curve: e.curve,
+      peakMachine: knees[iP], peakTarget: tn ? knees[tn.indexOf(Math.max(...tn))] : null,
+      ratioMachine: Math.min(...pn), ratioTarget: tn ? Math.min(...tn) : null,
+      rms: err.length ? Math.sqrt(err.reduce((s, x) => s + x * x, 0) / err.length) : null, maxDev: err.length ? Math.max(...err.map(Math.abs)) : null };
+    row.frames = fr.map((f, i) => ({ t: +f.t.toFixed(3), knee: +f.knee.toFixed(1), p: +f.p.toFixed(2), norm: +pn[i].toFixed(3), target: tn ? +tn[i].toFixed(3) : null, lift: +f.lift.toFixed(2), calc: +(fr[0].lift + calc[i]).toFixed(2), L: +f.L.toFixed(3) }));
+    row.flags = leverFlags(row);
+    rows.push(row);
+  }
+  return rows;
+}
+function leverFlags(r) {
+  const f = [], L = LEVER_LIM;
+  if (r.length[1] - r.length[0] > L.length) f.push(`длина троса меняется на ${(r.length[1] - r.length[0]).toFixed(2)} см`);
+  if (r.tan > L.tangentCos) f.push(`трос не по касательной к блоку (cos ${r.tan.toExponential(1)})`);
+  if (r.rim > L.onRim || r.onProf > L.onRim) f.push(`точка касания не на ободе (${Math.max(r.rim, r.onProf).toFixed(3)} см)`);
+  if (r.side > L.side) f.push(`профиль кулачка заходит за прямую схода на ${r.side.toFixed(3)} см`);
+  if (r.dropJoin > L.onRim) f.push(`трос стека не начинается там, где кончается путь (${r.dropJoin.toFixed(3)} см)`);
+  if (r.rigid > L.rigid) f.push(`кулачок проворачивается относительно рычага на ${r.rigid.toFixed(3)}°`);
+  if (r.wheelOff > L.onRim) f.push(`колесо блока не там, где его считает узел (${r.wheelOff.toFixed(3)} см)`);
+  if (r.liftErr > L.lift) f.push(`подъём стека расходится с k·∫p dφ на ${r.liftErr.toFixed(2)} см`);
+  if (r.liftStart < L.hover[0] || r.liftStart > L.hover[1]) f.push(`в начале повтора плиты на ${r.liftStart.toFixed(2)} см (норма 1)`);
+  if (r.liftMin < .5) f.push(`плиты ложатся посреди повтора (${r.liftMin.toFixed(2)} см)`);
+  if (r.liftMax >= r.maxLift) f.push(`стек упирается в maxLift ${r.maxLift}`);
+  if (r.clear.d < -L.clear) f.push(`трос проходит сквозь ${r.clear.id} (t=${r.clear.t}) на ${(-r.clear.d).toFixed(2)} см`);
+  return f;
+}
+
 /* ---------- одно упражнение ---------- */
 function auditEntry(id, entry, { samples = 41 } = {}) {
   const ev = EQ.variantEntry(entry), rig = EQ.rig(ev), eqs = (ev.equipment || []);
@@ -96,8 +217,9 @@ function auditEntry(id, entry, { samples = 41 } = {}) {
   /* стек рычажных тренажёров (09bo-g4-machines.js, stack): плиты одним неподвижным блоком, трос от головы стека — до блока
      на верхней балке; к рычагу трос не идёт, плиты за рычагом не поднимаются */
   const fixedStacks = EQ.build(eqs, EQ.rig(ev)(0)).filter(p => !p.dyn && /stkPlates$/.test(p.id));
-  if (!cablesEq.length && !bandsEq.length && !fixedStacks.length) return [];
-  const rows = fixedStacks.map(p => ({ id, kind: '—', part: p.id, type: 'стек', frames: [], flags: ['стек неподвижен: плиты одним блоком не поднимаются за рычагом, трос от головы стека доходит только до блока на балке'] }));
+  const levers = eqs.some(e => e.type === 'g4camCable') ? auditLever(id, entry, { samples }) : [];
+  if (!cablesEq.length && !bandsEq.length && !fixedStacks.length) return levers;
+  const rows = [...levers, ...fixedStacks.map(p => ({ id, kind: '—', part: p.id, type: 'стек', frames: [], flags: ['стек неподвижен: плиты одним блоком не поднимаются за рычагом, трос от головы стека доходит только до блока на балке'] }))];
   if (!cablesEq.length && !bandsEq.length) return rows;
   const frames = [];
   for (let i = 0; i < samples; i++) { const t = i / (samples - 1), R = rig(t); frames.push({ t, R }); }
@@ -226,6 +348,11 @@ function run({ only, samples = 41, baked = false } = {}) {
 const f1 = v => v == null ? '—' : (+v).toFixed(1), f0 = v => v == null ? '—' : (+v).toFixed(0), rng = (a, k = f0) => `${k(a[0])}…${k(a[1])}`;
 function describe(r) {
   if (r.type === 'стек') return `стек тренажёра ${r.part}`;
+  if (r.type === 'кулачок') return [`кулачок ${r.part} [рычаг, k=${r.ratio}]`, `плечо троса ${rng(r.p, f1)} см, колено ${rng(r.knee)}°`,
+    r.curve ? `пик момента ${f0(r.peakMachine)}° (цель ${f0(r.peakTarget)}°), min/max ${r.ratioMachine.toFixed(2)} (цель ${r.ratioTarget.toFixed(2)}), откл. RMS ${r.rms.toFixed(3)}, max ${r.maxDev.toFixed(3)}` : 'без кривой силы',
+    `длина троса ${rng(r.length, v => v.toFixed(2))} см`, `касание: cos ${r.tan.toExponential(1)}, обод ${Math.max(r.rim, r.onProf).toFixed(3)} см, профиль за прямой ${r.side.toFixed(3)} см`,
+    `кулачок/рычаг ${r.rigid.toFixed(4)}°`, `стек: старт ${f1(r.liftStart)}, min ${f1(r.liftMin)}, max ${f1(r.liftMax)} из ${r.maxLift} см, против k·∫p dφ ${r.liftErr.toFixed(3)} см`,
+    `зазор троса до рамы ${r.clear.d.toFixed(2)} см (${r.clear.id})`].join(' | ');
   const out = [`${r.type} ${r.part} [${r.kind}]`, `к полу ${rng(r.floorAng)}°`, `к ходу ≤${f0(r.moveAng)}° (середина ${f0(r.moveAngMid)}°)`,
     `${r.type === 'трос' ? (r.attach === 'ankle' ? 'голеностоп' : 'кисть') + ' над осью блока' : 'кисть над креплением'} ${rng(r.height)} см`,
     r.kind === 'line' ? `от прямой ${f1(r.lineDev)} см, поворот ${f0(r.swing)}°` : `из плоскости ${f0(r.planeAng)}°`,
@@ -243,9 +370,10 @@ if (require.main === module) {
   const bad = rows.filter(r => r.flags.length);
   for (const r of all ? rows : bad) {
     console.log(`${r.id.padEnd(14)} ${describe(r)}${r.flags.length ? '\n    ⚠ ' + r.flags.join('; ') : ''}`);
+    if (frames && r.type === 'кулачок') { for (const f of r.frames.filter((_, i) => i % 4 === 0)) console.log(`      t=${f.t.toFixed(3).padEnd(6)} колено ${f1(f.knee).padStart(6)}°  плечо ${f.p.toFixed(2).padStart(6)} см  момент ${f.norm.toFixed(3)} (цель ${f.target == null ? '—' : f.target.toFixed(3)})  подъём ${f1(f.lift).padStart(5)} (k·∫p dφ ${f1(f.calc).padStart(5)}) см  трос ${f.L.toFixed(2)} см`); continue; }
     if (frames) for (const f of r.frames.filter((_, i) => i % 5 === 0)) console.log(`      t=${f.t.toFixed(3).padEnd(6)} к полу ${f1(f.floor).padStart(6)}°  к ходу ${f.move == null ? '   —' : f1(f.move).padStart(5)}°  высота ${f1(f.h).padStart(6)} см${f.lift != null ? `  стек ${f1(f.lift).padStart(6)} см` : ''}${f.len != null ? `  длина ${f1(f.len).padStart(6)} см` : ''}`);
   }
   console.log(`\nУпражнений ${new Set(rows.map(r => r.id)).size}; тросов ${rows.filter(r => r.type === 'трос').length}, ветвей ленты ${rows.filter(r => r.type === 'лента').length}; с замечаниями ${new Set(bad.map(r => r.id)).size} упражнений (${bad.length} строк)`);
   if (arg('--json')) fs.writeFileSync(arg('--json'), JSON.stringify(rows, null, 1));
 }
-module.exports = { run, auditEntry, KIND, LIM };
+module.exports = { run, auditEntry, auditLever, KIND, LIM, LEVER_LIM };

@@ -1,13 +1,17 @@
 import * as THREE from 'three';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 
-/* Детали инвентаря нового формата (GymEquipment): beam, obox, cyl, sphere, barbell(len), dumbbell(handle), cable. */
+/* Детали инвентаря нового формата (GymEquipment): beam, obox, cyl, sphere, barbell(len), dumbbell(handle), cable,
+   prism — плоский выпуклый контур pts (см, в осях u, v) толщиной len вдоль w с центром c (кулачок рычажного тренажёра). */
 const world=p=>[p[0]/100,(186-p[1])/100,p[2]/100],direction=p=>[p[0],-p[1],p[2]],vec=p=>new THREE.Vector3(...p);
 const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],add=(a,b,k=1)=>[a[0]+b[0]*k,a[1]+b[1]*k,a[2]+b[2]*k],len=a=>Math.hypot(...a),unit=a=>{const l=len(a)||1;return a.map(v=>v/l);};
 const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
-export const NEW_KINDS=new Set(['beam','obox','cyl','sphere','cable']);
+export const NEW_KINDS=new Set(['beam','obox','cyl','sphere','cable','prism']);
 export const isNewProp=s=>NEW_KINDS.has(s.kind)||(s.kind==='barbell'&&s.len)||(s.kind==='dumbbell'&&s.handle)||(s.kind==='kettlebell'&&s.handleAxis);
-export function propKey(s){return s.kind+(s.kind==='barbell'?JSON.stringify(s.plates||[]):'')+(s.kind==='cable'?':'+s.pts.length:'')+(s.kind==='beam'?(s.r?':r':':w'):'')+(s.kind==='cyl'?':'+(s.sides||24):'');}
+export function propKey(s){return s.kind+(s.kind==='barbell'?JSON.stringify(s.plates||[]):'')+(s.kind==='cable'?':'+s.pts.length:'')+(s.kind==='beam'?(s.r?':r':':w'):'')+(s.kind==='cyl'?':'+(s.sides||24):'')+(s.kind==='prism'?':'+prismKey(s):'');}
+const prismKey=s=>s.pts.length+':'+s.len+':'+s.pts.reduce((a,q)=>a+q[0]*1.7+q[1]*2.3,0).toFixed(3);
+/* контур в плоскости XY (м), выдавлен на len по Z симметрично: знак оси w не важен, ориентацию задают u, v */
+function prismGeometry(s){const sh=new THREE.Shape(s.pts.map(q=>new THREE.Vector2(q[0]/100,q[1]/100)));const g=new THREE.ExtrudeGeometry(sh,{depth:s.len/100,bevelEnabled:false,curveSegments:1});g.translate(0,0,-s.len/200);g.computeVertexNormals();return g;}
 function basisQ(x,y,z){const X=unit(direction(x)),Y=unit(direction(y)),Z=cross(X,Y);return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(vec(X),vec(Y),vec(Z)));}
 const UP=new THREE.Vector3(0,1,0);
 function alignY(o,a,b){const d=sub(b,a),l=len(d);o.visible=l>1e-4;if(!o.visible)return 0;o.position.fromArray(world(add(a,d,.5)));o.quaternion.setFromUnitVectors(UP,vec(unit(direction(d))));return l;}
@@ -20,6 +24,7 @@ export function createPropNode(parent,s,mats,mesh){
  else if(s.kind==='obox'){const o=mesh(g,boxGeometry(s),m,'box');o.userData.size=sizeKey(s);}
  else if(s.kind==='cyl')mesh(g,new THREE.CylinderGeometry(1,1,1,s.sides||24),m,'cyl');
  else if(s.kind==='sphere')mesh(g,new THREE.SphereGeometry(1,18,12),m,'sphere');
+ else if(s.kind==='prism')mesh(g,prismGeometry(s),m,'prism');
  else if(s.kind==='cable')for(let i=1;i<s.pts.length;i++)mesh(g,new THREE.CylinderGeometry(1,1,1,8),m,'cable');
  else if(s.kind==='barbell'){
   mesh(g,new THREE.CylinderGeometry(1,1,1,18),mats.chrome,'shaft');
@@ -50,6 +55,7 @@ export function updatePropNode(node,s){
  }else if(s.kind==='obox'){const o=ch[0],k=sizeKey(s);if(o.userData.size!==k){o.geometry.dispose();o.geometry=boxGeometry(s);o.userData.size=k;}o.position.fromArray(world(s.c));o.quaternion.copy(basisQ(s.x,s.y,s.z));o.scale.set(1,1,1);}
  else if(s.kind==='cyl'){const o=ch[0];o.position.fromArray(world(s.c));o.quaternion.setFromUnitVectors(UP,vec(unit(direction(s.axis))));o.scale.set(s.r/100,s.len/100,s.r/100);}
  else if(s.kind==='sphere'){const o=ch[0];o.position.fromArray(world(s.c));o.scale.setScalar(s.r/100);}
+ else if(s.kind==='prism'){const o=ch[0];o.position.fromArray(world(s.c));o.quaternion.copy(basisQ(s.u,s.v,s.w));}
  else if(s.kind==='cable'){for(let i=1;i<s.pts.length;i++){const o=ch[i-1],l=alignY(o,s.pts[i-1],s.pts[i]);o.scale.set(s.r/100,l/100,s.r/100);}}
  else if(s.kind==='barbell'){
   const ax=unit(s.axis),c=s.c,q=new THREE.Quaternion().setFromUnitVectors(UP,vec(unit(direction(ax))));

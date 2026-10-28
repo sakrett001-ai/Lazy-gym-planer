@@ -104,16 +104,33 @@ BIND.g4sled = (e, R) => {
   return rigid(e.id || 'sled', O, X, Y, Z, e.parts || [], e.mountTo);
 };
 
+/* Ось рычага на стойке сбоку: стойка с корпусом подшипника снаружи кулачка, стальная ось сквозь подшипник к ступице рычага.
+   Слева направо (sx = +1): плечо рычага (hubX − 1), ступица рычага и кулачок (до hubX + 6), зазор, стойка (hubX + 11,5). */
+function leverAxle(b, s, mount) {
+  const py = s.pivot[0], pz = s.pivot[1], hx = s.hubX, sx = Math.sign(hx), xb = hx + sx * 11.5;
+  b.tube('pivotPost', [xb, 7.5, pz], [xb, py - 4, pz], [7, 7], { mount });
+  b.cyl('bearing', [xb, py, pz], [1, 0, 0], 4.5, 7, { mount: 'pivotPost' });
+  const xa = hx - sx * 3, xe = xb + sx * 4.5;
+  b.cyl('axle', [(xa + xe) / 2, py, pz], [1, 0, 0], 1.6, Math.abs(xe - xa), { mount: 'bearing', tone: 'chrome' });
+  b.anchor('pivot', [hx, py, pz]);
+  return xb;
+}
 /* ---------- Разгибание ног сидя ----------
    s: seatH — верх сиденья; seatZ — [задний, передний] край сиденья; back — {z0 (низ спинки у сиденья), ang (наклон
-   от вертикали), len}; pivot — [y, z] оси колен; hubX — сторона рычага (−X — правая); handle — {x, y, z}. */
+   от вертикали), len}; pivot — [y, z] оси колен; hubX — сторона рычага (−X — правая); handle — {x, y, z};
+   stack — {z, H} колонна стека за спинкой; p1y — высота оси нижнего блока.
+   Передача (09bo-g4-lever.js): трос сходит с низа кулачка назад к нижнему блоку за сиденьем (p1, огибает его снизу и сзади),
+   поднимается перед плитами к верхнему блоку колонны (p2) и опускается к верхней плите стека (1:1). Плоскость троса —
+   канавка кулачка (hubX + 4,5); колонна стека стоит в ней же. Габариты класса: Legend Fitness 911 Leg Extension —
+   182 × 91 × 189 см, стек 91 кг (200 lb, плиты по 10 lb). */
 TYPES.legExtension = (s, b) => {
-  const H = s.seatH, [z0, z1] = s.seatZ, T = 7, py = s.pivot[0], pz = s.pivot[1], hx = s.hubX, sx = Math.sign(hx);
+  const H = s.seatH, [z0, z1] = s.seatZ, T = 7, hx = s.hubX, sx = Math.sign(hx), xc = hx + sx * 4.5, xb = hx + sx * 11.5, zs = s.stack.z;
   const a = s.back.ang * D2R, up = [0, Math.cos(a), -Math.sin(a)], nb = [0, Math.sin(a), Math.cos(a)];
-  /* основание */
-  b.tube('base', [0, 3.75, z0 - 32], [0, 3.75, z1 - 4], [8, 7.5], { mount: 'floor' });
-  b.tube('baseB', [-34, 3.75, z0 - 26], [34, 3.75, z0 - 26], [8, 7.5], { mount: 'base' });
-  b.tube('baseM', [-30, 3.75, z1 - 10], [30, 3.75, z1 - 10], [8, 7.5], { mount: 'base' });
+  /* основание: средняя балка до колонны стека, поперечины, боковая балка под осью рычага и блоком */
+  b.tube('base', [0, 3.75, zs - 4], [0, 3.75, z1 - 4], [8, 7.5], { mount: 'floor' });
+  b.tube('baseB', [-30, 3.75, z0 - 26], [30, 3.75, z0 - 26], [8, 7.5], { mount: 'base' });
+  b.tube('baseM', [-30, 3.75, z1 - 10], [xb + sx * 4, 3.75, z1 - 10], [8, 7.5], { mount: 'base' });
+  b.tube('baseS', [xb, 3.75, zs], [xb, 3.75, Math.max(z1 - 10, s.pivot[1] + 6)], [7.5, 7.5], { mount: 'baseM' });
   /* сиденье */
   const seatC = [0, H - T / 2, (z0 + z1) / 2];
   const under = pad(b, 'seat', seatC, [34, T, z1 - z0], [[1, 0, 0], [0, 1, 0], [0, 0, 1]], 'seatPost');
@@ -122,11 +139,8 @@ TYPES.legExtension = (s, b) => {
   const bl = s.back.len || 58, bot = [0, H + 2, s.back.z0], bc = V.add(V.add(bot, up, bl / 2), nb, -T / 2);
   const behind = pad(b, 'back', bc, [32, T, bl], [[1, 0, 0], nb, up], 'backStrut');
   b.tube('backStrut', [0, 7.5, z0 - 22], V.add(behind, nb, -.5), [6, 6], { mount: 'baseB' });
-  /* стойка оси рычага сбоку, кулачок (диск) снаружи от рычага */
-  b.tube('baseM2', [hx + sx * 7, 3.75, z1 - 10], [hx + sx * 7, 3.75, pz + 6], [7.5, 7.5], { mount: 'baseM' });
-  b.tube('pivotPost', [hx + sx * 7, 7.5, pz - 2], [hx + sx * 7, py + 4, pz - 2], [7, 7], { mount: 'baseM2' });
-  b.cyl('cam', [hx + sx * 3.5, py, pz], [1, 0, 0], 10, 3, { mount: 'pivotPost', sides: 28 });
-  b.cyl('hub', [hx + sx * .5, py, pz], [1, 0, 0], 4.2, 3.4, { mount: 'cam', tone: 'chrome' });
+  /* ось рычага: стойка с подшипником на боковой балке */
+  leverAxle(b, s, 'baseS');
   /* рукояти по бокам сиденья */
   for (const sg of [1, -1]) {
     const k = sg > 0 ? 'L' : 'R', hxp = sg * s.handle.x, hz = s.handle.z - 5;
@@ -134,11 +148,14 @@ TYPES.legExtension = (s, b) => {
     b.tube('hPost' + k, [hxp, H - T - 1.5, hz], [hxp, s.handle.y, hz], [3.5, 3.5], { mount: 'hArm' + k });
     handle(b, 'handle' + k, [hxp, s.handle.y, hz], [hxp, s.handle.y, hz + 18], 1.6, 'hPost' + k);
   }
-  /* стек грузов позади спинки */
-  const sz = z0 - 46;
-  stack(b, 'stk', [0, 0, sz], 150, { w: 30 });
-  b.tube('stkLink', [0, 3.75, sz + 4], [0, 3.75, z0 - 30], [8, 7.5], { mount: 'stkBaseS' });
-  b.anchor('pivot', [hx, py, pz]);
+  /* колонна стека за спинкой (плоскость троса), поперечина колонны — на средней балке основания */
+  const col = E.leverStack.column(b, 'stk', { at: [xc, 0, zs], H: s.stack.H, mount: 'base', r: 5 });
+  /* нижний блок за сиденьем: ось на 15 см перед осью стека (ветвь вверх — в 3 см перед плитами), кронштейн вперёд
+     к стойке на боковой балке */
+  const p1 = [xc, s.p1y, zs + 2 * col.r + 5], at = E.leverStack.pulley(b, 'p1', p1, 5, { dir: [0, 0, 1], mount: 'p1Arm' });
+  b.tube('p1Post', [xb, 7.5, at[2] - .75], [xb, s.p1y + 2.5, at[2] - .75], [5, 5], { mount: 'baseS' });
+  b.tube('p1Arm', [xc, s.p1y, at[2] - .75], [xb - sx * 2.5, s.p1y, at[2] - .75], [3, 3], { mount: 'p1Post' });
+  b.anchor('p1', p1); b.anchor('p2', col.wheel);
 };
 
 /* Наклонная подушка между двумя точками поверхности: from → to вдоль подушки, n — нормаль (вверх от поверхности),
@@ -150,10 +167,14 @@ function padAlong(b, k, from, to, n, w, T, mount, opts = {}) {
 }
 /* ---------- Сгибание ног лёжа: скамья с изломом под тазом ----------
    s: hump [y, z] — линия излома (верх подушек); knee — [y, z] конец бедренной подушки; head — [y, z] конец грудной;
-   nTh, nT — нормали подушек; pivot — [y, z] оси колен; hubX — сторона рычага; handle — {x, y, z}. */
+   nTh, nT — нормали подушек; pivot — [y, z] оси колен; hubX — сторона рычага; handle — {x, y, z}; stack — {z, H} колонна
+   стека за стопами.
+   Передача (09bo-g4-lever.js): трос сходит с верха кулачка назад прямо к верхнему блоку колонны (огибает его сверху и сзади)
+   и опускается к верхней плите стека (1:1). Плоскость троса — канавка кулачка (hubX + 4,5). Габариты класса: Hammer Strength
+   Select Full Prone Leg Curl — 165 × 99 × 140 см, стек 95 кг; BLK BOX Selectorised Prone Leg Curl — 182 × 93,5 × 152 см. */
 TYPES.legCurl = (s, b) => {
   const T = 7, W = 32, H = [0, ...s.hump], Kp = [0, ...s.knee], Hd = [0, ...s.head], nTh = [0, ...s.nTh], nT = [0, ...s.nT];
-  const [py, pz] = s.pivot, hx = s.hubX, sx = Math.sign(hx);
+  const hx = s.hubX, sx = Math.sign(hx), xc = hx + sx * 4.5, xb = hx + sx * 11.5, zs = s.stack.z;
   const thB = padAlong(b, 'thighPad', Kp, H, nTh, W, T, 'beamTh');
   const toB = padAlong(b, 'chestPad', V.add(H, [0, 0, 1], .5), Hd, nT, W, T, 'beamT');
   /* балки под подушками и стойки */
@@ -167,13 +188,11 @@ TYPES.legCurl = (s, b) => {
   b.tube('base', [0, 3.75, s.knee[1] > 0 ? Kp[2] + 8 : Kp[2] + 8], [0, 3.75, Hd[2] + 30], [8, 7.5], { mount: 'floor' });
   b.tube('frontLeg', [0, 7.5, Hd[2] - 8], V.add(tZ, nTU, -2.5), [7, 7], { mount: 'base' });
   b.tube('baseF', [-32, 3.75, Hd[2] + 24], [32, 3.75, Hd[2] + 24], [8, 7.5], { mount: 'base' });
-  b.tube('baseB', [-30, 3.75, Kp[2] + 12], [hx + sx * 11, 3.75, Kp[2] + 12], [8, 7.5], { mount: 'base' });
+  b.tube('baseB', [-30, 3.75, Kp[2] + 12], [xb + sx * 4, 3.75, Kp[2] + 12], [8, 7.5], { mount: 'base' });
   b.tube('rearLeg', [0, 7.5, Kp[2] + 16], V.add(V.add(thA, dTh, 10), nThU, -2.5), [7, 7], { mount: 'baseB' });
-  /* ось рычага: стойка от пола сбоку от колен, кулачок снаружи */
-  b.tube('baseP', [hx + sx * 7, 3.75, Kp[2] + 12], [hx + sx * 7, 3.75, pz - 6], [7.5, 7.5], { mount: 'baseB' });
-  b.tube('pivotUp', [hx + sx * 7, 7.5, pz], [hx + sx * 7, py + 4, pz], [6, 6], { mount: 'baseP' });
-  b.cyl('cam', [hx + sx * 3.5, py, pz], [1, 0, 0], 10, 3, { mount: 'pivotUp', sides: 28 });
-  b.cyl('hub', [hx + sx * .5, py, pz], [1, 0, 0], 4.2, 3.4, { mount: 'cam', tone: 'chrome' });
+  /* ось рычага: стойка с подшипником на боковой балке, балка — назад до колонны стека */
+  b.tube('baseS', [xb, 3.75, zs], [xb, 3.75, Kp[2] + 12], [7.5, 7.5], { mount: 'baseB' });
+  leverAxle(b, s, 'baseS');
   /* рукояти под передним краем грудной подушки: наклонные стойки на поперечине, поперечина — на стойке от основания */
   const ha = unit([0, ...s.handle.ax]), top = [0, s.handle.y + ha[1] * 9, s.handle.z + ha[2] * 9];
   b.tube('hPost', [0, 7.5, top[2]], [0, top[1] + 2, top[2]], [6, 6], { mount: 'base' });
@@ -182,10 +201,9 @@ TYPES.legCurl = (s, b) => {
     const k = sg > 0 ? 'L' : 'R', g = [sg * s.handle.x, s.handle.y, s.handle.z];
     handle(b, 'handle' + k, V.add(g, ha, 9), V.add(g, ha, -8), 1.6, 'hBar');
   }
-  /* стек грузов сбоку у грудной подушки */
-  stack(b, 'stk', [hx + sx * 28, 0, (H[2] + Hd[2]) / 2], 140, { along: 'z', w: 30 });
-  b.tube('stkLink', [hx + sx * 11, 3.75, Kp[2] + 12], [hx + sx * 11, 3.75, (H[2] + Hd[2]) / 2], [7.5, 7.5], { mount: 'baseB' });
-  b.tube('stkLink2', [hx + sx * 11, 3.75, (H[2] + Hd[2]) / 2], [hx + sx * 24, 3.75, (H[2] + Hd[2]) / 2], [7.5, 7.5], { mount: 'stkBase' });
+  /* колонна стека за стопами (плоскость троса), поперечина колонны — на боковой балке */
+  const col = E.leverStack.column(b, 'stk', { at: [xc, 0, zs], H: s.stack.H, mount: 'baseS', r: 5 });
+  b.anchor('p2', col.wheel);
 };
 
 /* ---------- Гиперэкстензия 45° ----------

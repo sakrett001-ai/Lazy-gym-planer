@@ -5,7 +5,7 @@
    Трос (BIND.g3cable) идёт от колеса блока к рукояти; положение блока выбрано так, чтобы трос проходил мимо тела.
    rest — длина троса (центр колеса — рукоять) в исходном положении: от неё считается подъём плит стека; считается по позе
    (withRest), чтобы в растяжке плиты висели на HOVER см. Проверка проводки, хода рукояти и стека — tools/mannequin/cable-audit.js. */
-const { ctx } = require('../compose.js');
+const { ctx, bakedPoses } = require('../compose.js');
 const EQ = require('../../../src/js/09bn-equipment.js');
 const S = ['L', 'R'];
 const once = f => { let v; return () => v ?? (v = f()); };
@@ -31,17 +31,7 @@ const pulleyOf = (eq, pre = '') => EQ.anchors([eq])[eq.id][pre + 'pulley'];
    (latpull, latpullv, latpulluh, cablewood) или висели до 4,7 см. */
 const HOVER = 1, TUNED = new WeakMap();
 function withRest(spec, list) {
-  const C = ctx(list), { M, V } = C, round = (v, k) => Math.round(v * k) / k;
-  const hint = q => ({ L: M.humeralElevation(q.L, M.SIGN.L), R: M.humeralElevation(q.R, M.SIGN.R) });
-  const keys = (spec.keys || [0, .25, .5, .75, 1]).map(t => {
-    try {
-      M.rhythmHint(null); let q = spec.pose(t, C);
-      for (let k = 0; k < 2; k++) { M.rhythmHint(hint(q)); q = spec.pose(t, C); }
-      return { t, v: M.pack(q).map((x, i) => i >= 3 && i < 7 ? round(x, 1e5) : round(x, 100)), hands: { L: q.hands?.L || 'relaxed', R: q.hands?.R || 'relaxed' } };
-    } finally { M.rhythmHint(null); }
-  });
-  const track = M.makeTrack(keys, { loop: !!spec.loop }), poses = [];
-  for (let i = 0; i <= 40; i++) { const k = track(i / 40); poses.push(M.catalogPose(M.unpack(k.v, k.hands))); }
+  const { M, V } = ctx(list), poses = bakedPoses(spec, list);
   return list.map(e => {
     if (e.type !== 'g3cable') return e;
     const P = M.toCat(e.from), h = e.hands || ['L', 'R'];
