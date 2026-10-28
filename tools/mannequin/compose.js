@@ -218,4 +218,21 @@ function ctx(equipment) {
   };
   return C;
 }
-module.exports = { ctx, fromCat };
+/* Позы повторения так, как их запекает и проигрывает приложение (author.js: два прохода ритма плечевого пояса, округление
+   ключей; EQ.rig: дорожка по ключам): n + 1 кадр позы каталога (без инвентаря). Нужны там, где инвентарь подстраивается
+   под позу — длина троса блока (g3-cable.js, withRest), профиль кулачка и длина троса рычажного стека (g4-machines.js). */
+function bakedPoses(spec, list, n = 40) {
+  const C = ctx(list), round = (v, k) => Math.round(v * k) / k;
+  const hint = q => ({ L: M.humeralElevation(q.L, M.SIGN.L), R: M.humeralElevation(q.R, M.SIGN.R) });
+  const keys = (spec.keys || [0, .25, .5, .75, 1]).map(t => {
+    try {
+      M.rhythmHint(null); let q = spec.pose(t, C);
+      for (let k = 0; k < 2; k++) { M.rhythmHint(hint(q)); q = spec.pose(t, C); }
+      return { t, v: M.pack(q).map((x, i) => i >= 3 && i < 7 ? round(x, 1e5) : round(x, 100)), hands: { L: q.hands?.L || 'relaxed', R: q.hands?.R || 'relaxed' } };
+    } finally { M.rhythmHint(null); }
+  });
+  const track = M.makeTrack(keys, { loop: !!spec.loop }), poses = [];
+  for (let i = 0; i <= n; i++) { const k = track(i / n); poses.push(M.catalogPose(M.unpack(k.v, k.hands))); }
+  return poses;
+}
+module.exports = { ctx, fromCat, bakedPoses };

@@ -344,33 +344,43 @@
       const st = e.stack, hands = e.hands || ['L', 'R'];
       const end = e.attach === 'ankle' ? R['an' + (e.foot || 'L')] : V.mix(R['grip' + hands[0]], R['grip' + (hands[1] || hands[0])], .5);
       const lift = Math.max(0, Math.min(st.maxLift, (V.dist(end, P) - (e.rest || 0)) * (e.ratio ?? 1)));
-      const o = toCat(st.o), X = dirCat(M3.col(st.R, 0)), Y = dirCat(M3.col(st.R, 1)), Z = dirCat(M3.col(st.R, 2));
-      /* плиты и верхняя плита скользят по обеим направляющим: rides — детали, сквозь которые они проходят по устройству */
-      const at = (y) => V.add(o, Y, y + lift), sid = id + ':stk', rides = [e.rodPart, e.rodPart.replace(/L$/, 'R')];
-      for (let i = 0; i < st.sel; i++) out.push({ kind: 'obox', c: at(i * st.pitch + st.size[1] / 2), x: X, y: Y, z: Z, size: [...st.size], round: .35, tone: 'stack', role: 'frame', id: sid + i, mount: e.rodPart, rides });
-      const topC = at(st.sel * st.pitch + 2);
-      out.push({ kind: 'obox', c: topC, x: X, y: Y, z: Z, size: [st.size[0] + 1, 4, st.size[2] + 1], round: .5, tone: 'frame', role: 'frame', id: sid + 'Top', mount: e.rodPart, rides });
-      const top = V.add(o, Y, st.topY - st.o[1]), fl = st.float;
-      if (fl) {
-        /* 2:1: подвижный блок на верхней плите — вилка из двух щёк по сторонам колеса, ось, колесо (ось колеса — по Z стека);
-           трос из оси верхней балки (fl.into над topY, там кончается путь cableRun) вниз по стороне −X, под колесом (по хордам
-           внутри обода — отрезков меньше, хорды скрыты колесом и щёками вилки) и вверх по стороне +X к проушине */
-        const fh = fl.gap + fl.r + 1.6, fc = V.add(topC, Y, 2 + fh / 2), wc = V.add(topC, Y, 2 + fl.gap + fl.r);
-        for (const [k, sg] of [['A', 1], ['B', -1]]) out.push({ kind: 'obox', c: V.add(fc, Z, sg * 1.9), x: X, y: Y, z: Z, size: [2 * fl.r + 1, fh, .7], round: .3, tone: 'frame', role: 'frame', id: sid + 'Fork' + k, mount: sid + 'Top' });
-        out.push({ kind: 'cyl', c: wc, axis: Z, r: .6, len: 4.6, tone: 'chrome', role: 'frame', id: sid + 'Axle', mount: sid + 'ForkA' });
-        out.push({ kind: 'cyl', c: wc, axis: Z, r: fl.r, len: 2.4, tone: 'chrome', role: 'frame', id: sid + 'Float', mount: sid + 'Axle' });
-        const pts = [V.add(V.add(top, X, -fl.r), Y, fl.into || 0)];
-        for (let j = 0; j <= 2; j++) { const a = j / 2 * Math.PI; pts.push(V.add(V.add(wc, X, -fl.r * Math.cos(a)), Y, -fl.r * Math.sin(a))); }
-        pts.push(V.add(V.add(top, X, fl.r), Y, -fl.dead));
-        out.push({ kind: 'cable', pts, r: .35, tone: 'cable', role: 'cable', id: sid + 'Cable', mount: sid + 'Float' });
-      } else {
-        const stemTop = V.add(topC, Y, 8);
-        out.push({ kind: 'beam', a: V.add(topC, Y, 2), b: stemTop, r: 1.1, tone: 'chrome', role: 'frame', id: sid + 'Stem', mount: sid + 'Top' });
-        out.push({ kind: 'cable', pts: [stemTop, top], r: .35, tone: 'cable', role: 'cable', id: sid + 'Cable', mount: sid + 'Stem' });
-      }
+      out.push(...stackParts(st, lift, id, e.rodPart));
     }
     return out;
   };
+  /* Подвижная часть стека (общая для блочных и рычажных тренажёров): выбранные плиты, верхняя плита и над ней шток с тросом
+     (1:1) или подвижный блок (2:1, st.float). st — стек из stackInfo и рамки 'stack' (o, R — во внутренних координатах),
+     lift — подъём плит, см; детали — id + ':stk…', скользят по направляющим rodPart и парной (…R). */
+  function stackParts(st, lift, id, rodPart) {
+    const out = [], o = toCat(st.o), X = dirCat(M3.col(st.R, 0)), Y = dirCat(M3.col(st.R, 1)), Z = dirCat(M3.col(st.R, 2));
+    /* плиты и верхняя плита скользят по обеим направляющим: rides — детали, сквозь которые они проходят по устройству */
+    const at = (y) => V.add(o, Y, y + lift), sid = id + ':stk', rides = [rodPart, rodPart.replace(/L$/, 'R')];
+    for (let i = 0; i < st.sel; i++) out.push({ kind: 'obox', c: at(i * st.pitch + st.size[1] / 2), x: X, y: Y, z: Z, size: [...st.size], round: .35, tone: 'stack', role: 'frame', id: sid + i, mount: rodPart, rides });
+    const topC = at(st.sel * st.pitch + 2);
+    out.push({ kind: 'obox', c: topC, x: X, y: Y, z: Z, size: [st.size[0] + 1, 4, st.size[2] + 1], round: .5, tone: 'frame', role: 'frame', id: sid + 'Top', mount: rodPart, rides });
+    const top = V.add(o, Y, st.topY - st.o[1]), fl = st.float;
+    if (fl) {
+      /* 2:1: подвижный блок на верхней плите — вилка из двух щёк по сторонам колеса, ось, колесо (ось колеса — по Z стека);
+         трос из оси верхней балки (fl.into над topY, там кончается путь cableRun) вниз по стороне −X, под колесом (по хордам
+         внутри обода — отрезков меньше, хорды скрыты колесом и щёками вилки) и вверх по стороне +X к проушине */
+      const fh = fl.gap + fl.r + 1.6, fc = V.add(topC, Y, 2 + fh / 2), wc = V.add(topC, Y, 2 + fl.gap + fl.r);
+      for (const [k, sg] of [['A', 1], ['B', -1]]) out.push({ kind: 'obox', c: V.add(fc, Z, sg * 1.9), x: X, y: Y, z: Z, size: [2 * fl.r + 1, fh, .7], round: .3, tone: 'frame', role: 'frame', id: sid + 'Fork' + k, mount: sid + 'Top' });
+      out.push({ kind: 'cyl', c: wc, axis: Z, r: .6, len: 4.6, tone: 'chrome', role: 'frame', id: sid + 'Axle', mount: sid + 'ForkA' });
+      out.push({ kind: 'cyl', c: wc, axis: Z, r: fl.r, len: 2.4, tone: 'chrome', role: 'frame', id: sid + 'Float', mount: sid + 'Axle' });
+      const pts = [V.add(V.add(top, X, -fl.r), Y, fl.into || 0)];
+      for (let j = 0; j <= 2; j++) { const a = j / 2 * Math.PI; pts.push(V.add(V.add(wc, X, -fl.r * Math.cos(a)), Y, -fl.r * Math.sin(a))); }
+      pts.push(V.add(V.add(top, X, fl.r), Y, -fl.dead));
+      out.push({ kind: 'cable', pts, r: .35, tone: 'cable', role: 'cable', id: sid + 'Cable', mount: sid + 'Float' });
+    } else {
+      const stemTop = V.add(topC, Y, 8);
+      out.push({ kind: 'beam', a: V.add(topC, Y, 2), b: stemTop, r: 1.1, tone: 'chrome', role: 'frame', id: sid + 'Stem', mount: sid + 'Top' });
+      out.push({ kind: 'cable', pts: [stemTop, top], r: .35, tone: 'cable', role: 'cable', id: sid + 'Cable', mount: sid + 'Stem' });
+    }
+    return out;
+  }
+  /* общие узлы стека для рычажных тренажёров (09bo-g4-lever.js): Sub — узел со сдвигом и разворотом, stack — неподвижная часть
+     (направляющие, нижние плиты, рамка и stackInfo), stackParts — подвижная (плиты, верхняя плита, шток или подвижный блок) */
+  E.cableStack = { Sub, stack, parts: stackParts, FLOAT, PITCH, PLATE };
   /* Эспандер от крепления (кольцо на двери): обе ветви от одной точки к кольцам стремён рукоятей (E.stirrup, как у
      эспандера под стопами); ветви крепятся к детали mountTo */
   BIND.g3band = (e, R) => {
