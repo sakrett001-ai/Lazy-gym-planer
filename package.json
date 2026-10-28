@@ -24,7 +24,7 @@
     "skeleton:fit": "node tools/skeleton/fit.js all 0,0.5,1 --max 1.5",
     "muscles:check": "node tools/muscles/check.js all 0,0.5,1 --max-bone 2 --max-skin 2.2 --max-body 1",
     "muscles:compare": "node tools/muscles/compare.js",
-    "anny:build": "node tools/anny-look/export.js && python3 tools/anny-look/build.py && node tools/anny-look/pack.js",
+    "anny:build": "node tools/anny-look/export.js && python3 tools/anny-look/build.py && node tools/anny-look/hands.js && node tools/anny-look/pack.js",
     "anny:check": "node tools/anny-look/check.js all 0,0.25,0.5,0.75,1 --quiet",
     "mannequin:sheet": "node tools/mannequin/sheet.mjs",
     "mannequin:review": "node tools/mannequin/check.js --quiet --json qa/check-all.json; node tools/muscles/check.js all 0,0.5,1 --json qa/muscles/check-all.json; node tools/mannequin/viewer/build.mjs qa/mannequin-review.html --report qa/check-all.json --muscles qa/muscles/check-all.json"

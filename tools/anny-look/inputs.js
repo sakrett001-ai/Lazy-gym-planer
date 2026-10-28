@@ -7,7 +7,7 @@
 const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto');
 const root = path.resolve(__dirname, '../..');
 const FILES = ['tools/anny-look/fit.json', 'tools/anny-look/build.py', 'tools/anny-look/anny_look.py', 'tools/anny-look/correctives.py', 'tools/anny-look/common.py',
-  'tools/anny-look/sculpt.js', 'tools/anny-look/compare.js', 'tools/anny-look/export.js', 'tools/skin-anny/anny_pose.py', 'tools/skin-anny/anny_body.py', 'tools/skin-anny/result/anny-toned.json', 'tools/anny-look/look.json'];
+  'tools/anny-look/sculpt.js', 'tools/anny-look/compare.js', 'tools/anny-look/hands.js', 'tools/anny-look/export.js', 'tools/skin-anny/anny_pose.py', 'tools/skin-anny/anny_body.py', 'tools/skin-anny/result/anny-toned.json', 'tools/anny-look/look.json'];
 const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 function filesHash(read = f => fs.readFileSync(path.join(root, f))) { return sha(Buffer.concat(FILES.flatMap(f => [Buffer.from(f + '\n'), read(f)]))); }
 function stanceHash(M = require(root + '/src/js/09bm-mannequin.js')) {

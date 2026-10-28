@@ -19,7 +19,7 @@ function sourceOf(dd, H) {
   const R = dd.region, round = (x, k) => Math.round(x * k) / k;
   return { source: H.source, frames: dd.frames, v: Array.from(dd.pos, x => round(x, 100)), f: Array.from(dd.idx), wi: Array.from(dd.wi), ww: Array.from(dd.ww, x => Math.round(x * 255)),
     region: { code: Array.from(R.code), side: Array.from(R.side), a1: Array.from(R.a1, x => round(x, 500)), a2: Array.from(R.a2, x => round(x, 500)) },
-    shade: Array.from(dd.shade, x => Math.round(x * 255)),
+    shade: Array.from(dd.shade, x => Math.round(x * 255)), hands: H.hands,
     correctives: dd.correctives.map(c => { const { i, d: dl, n, ...rest } = c; return { ...rest, i: Array.from(i), d: Array.from(dl, x => round(x, 100)) }; }) };
 }
 test('anny.bin: canonical pack output (decode → pack.js gives the same bytes), weights sum to one', () => {
@@ -50,6 +50,7 @@ test('anny.bin rebuilds byte for byte from tools/anny-look (Python stage + pack.
   try {
     cp.execFileSync('node', [path.join(root, 'tools/anny-look/export.js'), '--out', path.join(tmp, 'mannequin.json')], { cwd: root, stdio: 'ignore' });
     cp.execFileSync('python3', [path.join(root, 'tools/anny-look/build.py'), '--out', json, '--mannequin', path.join(tmp, 'mannequin.json')], { cwd: root, stdio: 'ignore', timeout: 600000 });
+    cp.execFileSync('node', [path.join(root, 'tools/anny-look/hands.js'), json], { cwd: root, stdio: 'ignore' });
     cp.execFileSync('node', [path.join(root, 'tools/anny-look/pack.js'), json, bin], { cwd: root, stdio: 'ignore' });
     assert(Buffer.compare(fs.readFileSync(bin), gz) === 0, 'rebuilt anny.bin differs from src/data/anny.bin');
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }

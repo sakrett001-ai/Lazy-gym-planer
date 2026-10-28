@@ -195,11 +195,44 @@ def bake_shade(V, F, dom):
     return vis
 
 
+def digit_rig(body, rest, G, Hw, V, W, D):
+    """Суставы и оси пальцев Anny в стойке — в рамке кисти манекена (x, y, z рамки hand; −y — к пальцам, ладонь — в −g·x,
+    +z — к большому пальцу), см. По ним приложение ставит пальцы Anny по хвату (AnnySkin.digitPose): поворот каждой фаланги —
+    вокруг её собственного сустава рига Anny, а не вокруг суставов процедурной кисти манекена (у Anny кисть больше: пястно-
+    фаланговые суставы на 1–2 см дальше от запястья, запястно-пястный сустав большого пальца — на 1,5 см). На палец (0 —
+    большой, 1…4 — указательный…мизинец): j — головы трёх костей (большой: запястно-пястный, пястно-фаланговый,
+    межфаланговый суставы; остальные — пястно-фаланговый, проксимальный и дистальный межфаланговые) и конец (кончик кожи по
+    оси концевой фаланги); ax — оси костей рига в стойке (x — ось сгибания рига MakeHuman, y — вдоль кости, z — к ладонной
+    стороне); base — начало пястной кости (у большого — запястье): от неё считается угол пястно-фалангового сустава."""
+    L = body.idx; BP = rest['rest_bone_poses'][0].cpu().numpy().astype(np.float64); out = {}
+    for s in 'LR':
+        fr = D['frames']['hand' + s]; o = np.array(fr['o']); Rh = np.stack([fr['x'], fr['y'], fr['z']], 1)
+        loc = lambda p: (np.asarray(p) - o) @ Rh
+        digits = []
+        for f, bones in FINGER_BONES.items():
+            ii = [L[b + '.' + s] for b in bones]; js = [loc(Hw[i]) for i in ii]; axes = []
+            for i in ii:
+                A = (G[i] @ BP[i])[:3, :3]                      # кость в стойке (оси Anny)
+                cols = [np.array([A[0, k], A[2, k], -A[1, k]]) @ Rh for k in range(3)]   # Anny → наши оси → рамка кисти
+                y = cols[1] / np.linalg.norm(cols[1]); z = cols[2] - y * (cols[2] @ y); z /= np.linalg.norm(z); x = np.cross(y, z)
+                if x @ cols[0] < 0: x = -x
+                axes.append([x, y, z])
+            # кончик: вершины концевой фаланги (главная кость рига) — дальняя по её оси
+            vd = loc(V[body.dominant[:len(V)] == ii[2]]); y2 = axes[2][1]
+            tip = js[2] + y2 * float(((vd - js[2]) @ y2).max())
+            base = loc(Hw[body.parents[ii[0]]])
+            r6 = lambda a: [round(float(x), 4) for x in a]
+            digits.append({'j': [r6(p) for p in js + [tip]], 'ax': [[r6(a) for a in ax] for ax in axes], 'base': r6(base)})
+        out[s] = {'digits': digits}
+    return out
+
+
 def build(out_path, mannequin=None, shape='look'):
     P = C.Procedural(mannequin) if mannequin else C.Procedural(); D = P.D; body = AnnyLook(shape); fit = json.load(open(FIT))
     phen, local = body.params(fit); rest = body.rest(phen, local); q = q_from(fit['pose'])
     hands = D['hands']
     V, Hw, G, heads = body.stance(rest, P.J, q, hands, groin=False)
+    digits = digit_rig(body, rest, G, Hw, V, None, D)
     V = body.neutral_throat(body.neutral_face(V, Hw), Hw)
     F = body.skin_faces; used = np.unique(F); remap = -np.ones(len(V), np.int64); remap[used] = np.arange(len(used))
     V = V[used]; F = remap[F]; W = body.weights[used]          # плотные веса Anny по 104 костям
@@ -312,7 +345,7 @@ def build(out_path, mannequin=None, shape='look'):
            'frames': FRAMES, 'v': np.round(cat, 2).ravel().tolist(), 'f': F.ravel().tolist(),
            'wi': order.ravel().tolist(), 'ww': wq.ravel().tolist(),
            'region': {'code': code.tolist(), 'side': side.tolist(), 'a1': np.round(a1, 3).tolist(), 'a2': np.round(a2, 3).tolist()},
-           'shade': shade.tolist(), 'correctives': corr}
+           'shade': shade.tolist(), 'correctives': corr, 'hands': digits}
     if shape != 'look': out['source']['shape'] = shape
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     s = json.dumps(out, separators=(',', ':'))

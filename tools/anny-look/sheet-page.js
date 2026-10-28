@@ -12,8 +12,20 @@ window.Sheet = {
       const dataFor = t => { const R = rig(t); return { exerciseId: p.id, pose: R, body: Mannequin.bodyData(R), surfaces: [], values: {}, regions: {}, props: (R.props || []).filter(q => GymEquipment.visible(q, has)), torsoRings: [], limbProfiles: {} }; };
       const view = createCatalogScene(dataFor(p.t));
       const look = { muscles: false, joints: false, stress: false, color: () => '#a7b3c6' };
-      const cam = view.cameras[p.cam];
-      if (cams && cams[i]) { [cam.left, cam.right, cam.top, cam.bottom] = cams[i]; cam.updateProjectionMatrix(); view.apply(dataFor(p.t), look); }
+      let cam = view.cameras[p.cam];
+      /* p.look — кисть крупно по её собственным осям (рамка hand стороны p.side, по умолчанию L): 'palm' — с ладони, 'back' —
+         с тыла, 'thumb' — вдоль ручки со стороны большого пальца, 'pinky' — со стороны мизинца, 'tips' — с кончиков пальцев;
+         верх кадра — к запястью, центр — центр хвата, ширина — p.span (м) */
+      if (p.look) {
+        const s = p.side || 'L', R = rig(p.t), hf = R.frames['hand' + s], g = s === 'L' ? 1 : -1;
+        const dirs = { palm: [-g, 0, 0], back: [g, 0, 0], thumb: [0, 0, 1], pinky: [0, 0, -1], tips: [0, -1, 0] }, l = Array.isArray(p.look) ? p.look : dirs[p.look];
+        const W = v => new THREE.Vector3(hf.x[0] * v[0] + hf.y[0] * v[1] + hf.z[0] * v[2], -(hf.x[1] * v[0] + hf.y[1] * v[1] + hf.z[1] * v[2]), hf.x[2] * v[0] + hf.y[2] * v[1] + hf.z[2] * v[2]).normalize();
+        const c = R['grip' + s], at = new THREE.Vector3(c[0] / 100, (186 - c[1]) / 100, c[2] / 100), span = p.span || .25, hh = span * h / w / 2;
+        /* камера в p.near м от центра хвата (по умолчанию 0,09): диски и стойки дальше по ручке — за ней, не заслоняют кисть */
+        cam = new THREE.OrthographicCamera(-span / 2, span / 2, hh, -hh, 0, 30);
+        cam.up.copy(W(Math.abs(l[1]) > .9 ? [g, 0, 0] : [0, 1, 0])); cam.position.copy(at).addScaledVector(W(l), p.near || .09); cam.lookAt(at); cam.updateMatrixWorld(true);
+        view.apply(dataFor(p.t), look);
+      } else if (cams && cams[i]) { [cam.left, cam.right, cam.top, cam.bottom] = cams[i]; cam.updateProjectionMatrix(); view.apply(dataFor(p.t), look); }
       else {
         if (p.focus) {
           view.apply(dataFor(p.t), look);
