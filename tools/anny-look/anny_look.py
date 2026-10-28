@@ -65,6 +65,28 @@ class AnnyLook(AnnyPosed):
             local[k] = float(np.clip(local.get(k, 0.0) + d, -1, 1))
         return phen, local
 
+    def rest(self, phen, local=None):
+        """покой рига; у формы look — руки и ноги со своим фенотипом (look.json: limbs), см. limb_blend"""
+        out = super().rest(phen, local)
+        limbs = (self.look or {}).get('limbs') if self.shape == 'look' else None
+        if not limbs: return out
+        V = out['rest_vertices'].clone()
+        for k, ph in limbs.items():
+            p2 = dict(phen); p2.update(ph)
+            V2 = super().rest(p2, local)['rest_vertices']
+            a = torch.tensor(self.limb_blend(k), dtype=V.dtype)[None, :, None]
+            V = V + a * (V2 - out['rest_vertices'])
+        out = dict(out); out['rest_vertices'] = V
+        return out
+
+    def limb_blend(self, kind):
+        """доля фенотипа конечности у вершины: по весам рига Anny на кости руки (arms) или ноги (legs), обе стороны;
+        малые доли (у Anny доли кости плеча 0,02–0,2 лежат по груди и спине, бедра — по крестцу) не берутся: плавно от 0,1
+        до 0,9"""
+        w = sum(self.arm_w[s] if kind == 'arms' else self.leg_w[s] for s in 'LR')
+        u = np.clip((w - .1) / .8, 0, 1)
+        return u * u * (3 - 2 * u)
+
     def bones_pose(self, rest, J, q, hands=None):
         """матрицы костей G (Anny, м) для стойки: корпус — позой рига q, конечности — шарнирами на наших суставах (как
         AnnyPosed.pose), кисть — к рамке кисти манекена, пальцы — по суставам его расслабленной кисти (hands, export.js)"""
