@@ -78,11 +78,6 @@ test('corrective shapes: zero in the stance, full at the angle they were sculpte
   const q = M.neutral(); for (const s of M.SIDES) q[s].knee = 140; const w = A.correctiveWeights(M.catalogPose(q), d), names = d.correctives.map(c => c.name);
   for (const s of M.SIDES) assert(w[names.indexOf('knee' + s)] > .95, 'knee shape at 140°');
   assert(d.correctives.every(c => c.n > 0 && c.a1 > c.a0));
-  /* одна форма на обе стороны (side 'LR', обратный ход купола плавок): вес — среднее бёдер; одно согнутое бедро — половина */
-  const lr = d.correctives.findIndex(c => c.side === 'LR'); assert(lr >= 0, 'two-sided pouch shape');
-  const c = d.correctives[lr], qh = M.neutral(); qh.L.hip = [c.a1, 0, 4];
-  assert(Math.abs(A.correctiveWeights(M.catalogPose(qh), d)[lr] - .5) < 1e-6, 'one hip flexed — half');
-  qh.R.hip = [c.a1, 0, 4]; assert(Math.abs(A.correctiveWeights(M.catalogPose(qh), d)[lr] - 1) < 1e-6, 'both hips flexed — full');
 });
 
 /* ---------- сцена ---------- */
@@ -122,7 +117,7 @@ test('muscle zones on the Anny skin: every zone of the mannequin gets vertices o
   for (const [id, h0, h1, a0, a1] of P.t) assert.equal(regionOf('torso', 'L', (h0 + h1) / 2, (a0 + a1) / 2), id);
 });
 
-test('look: baked cavity shading in the data, trunk line of the briefs (variant B) — inside on the groin and buttocks, outside elsewhere', async () => {
+test('look: baked cavity shading in the data; trunk line of the briefs (tone off by default) — inside on the groin and buttocks, outside elsewhere', async () => {
   /* затенённость впадин: доля открытого неба 0…1; большая часть кожи открыта, во впадинах (подмышка, пах, ягодичная складка) — темнее */
   assert(d.shade && d.shade.length === d.nv && header.shade === true && header.index === 'delta');
   const s = Array.from(d.shade).sort((a, b) => a - b), q = p => s[Math.floor(p * (s.length - 1))];
@@ -132,30 +127,9 @@ test('look: baked cavity shading in the data, trunk line of the briefs (variant 
   assert(trunkLine(0, 88, 10) > 0 && trunkLine(8, 88, -12) > 0 && trunkLine(-8, 88, -12) > 0, 'groin and buttocks are inside the briefs');
   assert(trunkLine(0, 120, 10) < 0 && trunkLine(8.8, 70, 8) < 0 && trunkLine(8.8, 50, 6) < 0, 'chest, thigh and knee are outside');
   assert(trunkLine(17, 95, 0) > 0 && trunkLine(17, 88, 0) < 0, 'high-cut leg opening on the side (≈ 93 cm)');
-  assert(ANNY_LOOK.trunks.alpha >= 0 && ANNY_LOOK.trunks.alpha <= 1 && ANNY_LOOK.roughness >= .62, 'matte, no gloss');
+  assert(!(ANNY_LOOK.trunks?.alpha > 0), 'no trunks tone by default (the owner chose the groin of the reference)');
+  assert(ANNY_LOOK.roughness >= .62, 'matte, no gloss');
 });
-test('pouch: the front of the dome has no up-facing ledge (a bright patch under the key light from above)', () => {
-  /* нормали вершин передней поверхности паха в стойке (|x| < 3, высота 84–91 см, z > 8,5): доля «вверх» — меньше 0,3
-     (у купола с полкой — дном щели между стенками клина под сводом лобка — была 0,70) */
-  const upMax = pos => {
-    const n = new Float64Array(d.nv * 3), I = d.idx;
-    for (let t = 0; t < I.length; t += 3) {
-      const a = I[t], b = I[t + 1], c = I[t + 2], u = [0, 1, 2].map(k => pos[b * 3 + k] - pos[a * 3 + k]), v = [0, 1, 2].map(k => pos[c * 3 + k] - pos[a * 3 + k]);
-      const cr = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-      for (const w of [a, b, c]) for (let k = 0; k < 3; k++) n[w * 3 + k] += cr[k];
-    }
-    const h = v => M.FLOOR - pos[v * 3 + 1], unit = v => Math.hypot(n[v * 3], n[v * 3 + 1], n[v * 3 + 2]) || 1;
-    let s = 0; for (let v = 0; v < d.nv; v++) if (Math.abs(pos[v * 3]) < 3 && h(v) > 124 && h(v) < 130 && pos[v * 3 + 2] > 5) s += n[v * 3 + 2] / unit(v);
-    let up = -1; for (let v = 0; v < d.nv; v++) if (Math.abs(pos[v * 3]) < 3 && h(v) > 84 && h(v) < 91 && pos[v * 3 + 2] > 8.5) up = Math.max(up, -Math.sign(s) * n[v * 3 + 1] / unit(v));
-    return up;
-  };
-  const up = upMax(d.pos); assert(up < .3, `up-facing share ${up.toFixed(2)}`);
-  /* отрицательный: ступенька — низ купола (высота 84–87) выдвинут на 2 см вперёд, его верх смотрит вверх */
-  const step = Float32Array.from(d.pos);
-  for (let v = 0; v < d.nv; v++) { const hh = M.FLOOR - step[v * 3 + 1]; if (Math.abs(step[v * 3]) < 3 && hh > 84 && hh < 87 && step[v * 3 + 2] > 8.5) step[v * 3 + 2] += 2; }
-  assert(upMax(step) > .3);
-});
-
 /* ---------- проверки видимой кожи (каталог — tools/anny-look/check.js) ---------- */
 const SAMPLE = ['bbbench', 'chestpressm', 'legcurl', 'hipthrust', 'squat', 'pushup', 'seatedcalf', 'kneepush', 'plank', 'lyinglegraise'];
 test('supports: the Anny skin does not sink into benches, seats, pads, the floor, the bar or handles deeper than allowed (sample)', () => {

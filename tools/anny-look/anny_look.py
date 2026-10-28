@@ -1,9 +1,10 @@
-"""Anny подтянутая в нейтральной стойке манекена 4.61.0 (кожа «только внешний вид»).
+"""Anny в нейтральной стойке манекена 4.61.0 (кожа «только внешний вид»).
 
-Форма — одобренная владельцем подтянутая Anny (tools/skin-anny/result/anny-toned.json: фенотип, местные формы) с шлифовкой
-мужской формы (tools/anny-look/look.json: ягодицы и таз, талия, голени, рельеф, пах «как в плавках» — купол pouch()); поза
-её рига — по скелету 4.61.0 (tools/anny-look/fit.json: поза корпуса и сдвиг подобраны fit.py, плюс небольшие
-поправки местных форм там, где Anny отходила от процедурной кожи 4.61.0 больше чем на 2–3 см). Конечности — как в
+Форма — эталон «обычного мужчины», одобренный владельцем: Anny по умолчанию (мужчина 27 лет, мышечность, вес и пропорции
+0,5, местные формы тела и пах — по умолчанию) на нашем скелете: рост фенотипа и три местные формы длин сегментов
+(tools/anny-look/look.json, подгонка — tools/anny-look/lengths.py) — чтобы суставы рига Anny совпали с суставами
+скелета; поза её рига — по скелету 4.61.0 (tools/anny-look/fit.json: поза корпуса и сдвиг подобраны fit.py). Прежняя
+подтянутая форма 4.62.0 (tools/skin-anny/result/anny-toned.json) — для сравнения на листах (shape='toned'). Конечности — как в
 tools/skin-anny/anny_pose.py: шарниры — наши суставы (плечевой, локтевой, тазобедренный, коленный, голеностопный),
 направления сегментов — нашей нейтральной стойки. Кисть Anny повёрнута к рамке кисти манекена, пальцы — по суставам пальцев
 расслабленной кисти манекена.
@@ -45,20 +46,21 @@ def frame_from(a, b):
 
 class AnnyLook(AnnyPosed):
     def __init__(self, shape='look'):
-        """shape: 'look' — одобренная форма с шлифовкой look.json (сборка), 'toned' — одобренная форма 4.62.0 без неё,
-        'reference' — эталон REFERENCE (Anny по умолчанию, для листа)"""
+        """shape: 'look' — эталон на нашем скелете (look.json, сборка), 'toned' — подтянутая форма 4.62.0 (для листа),
+        'reference' — эталон REFERENCE как есть (Anny по умолчанию, рост 174,4 см, без форм длин, для листа)"""
         torch.set_num_threads(1)
         super().__init__()
         self.toned = json.load(open(TONED)); self.shape = shape
         self.look = json.load(open(LOOK)) if shape == 'look' else None
 
     def params(self, fit=None):
-        """фенотип и местные формы: одобренные, правки look.json (заменяют значения), поправки fit.json"""
+        """фенотип и местные формы: look.json (эталон на нашем скелете) или подтянутая форма 4.62.0; поправки fit.json"""
         if self.shape == 'reference':
             return dict(REFERENCE['phenotype']), dict(REFERENCE['local'])
-        A = self.toned; phen = dict(A['phenotype']); local = dict(A['local_changes']); local['bulge-incr'] = A['bulge-incr']
         if self.look:
-            phen.update(self.look['phenotype']); local.update(self.look['local'])
+            phen = dict(self.look['phenotype']); local = dict(self.look['local'])
+        else:
+            A = self.toned; phen = dict(A['phenotype']); local = dict(A['local_changes']); local['bulge-incr'] = A['bulge-incr']
         for k, d in ((fit or {}).get('local_delta') or {}).items():
             local[k] = float(np.clip(local.get(k, 0.0) + d, -1, 1))
         return phen, local
@@ -213,138 +215,6 @@ class AnnyLook(AnnyPosed):
         self.throat_sel = sel
         return fair(V, F, sel) if sel.any() else V
 
-    def pouch(self, V, o):
-        """Пах «как в плавках» (параметры — look.json, pouch). У сетки MakeHuman между бёдрами спереди — клин: передняя
-        поверхность бёдер у z ≈ 11 см, дно клина (линия, где бёдра касаются друг друга) — у z ≈ 3,8, вершина клина —
-        на 2,5 см ниже тазобедренных; на свету — тёмная «V», как у женской фигуры (прежняя заплатка fair() её только
-        сглаживала). Здесь клин закрыт: стенки клина и низ лобка (|x| < xs, выше линии касания z > zc) выдвинуты вперёд до
-        целевой поверхности мягким максимумом (порядок вершин по глубине сохраняется — треугольники не выворачиваются):
-        основа — уровень передней поверхности бёдер zbase (от лобка ztop вниз до b0, ниже — к линии касания к b1), поверх —
-        гладкий купол плавок: высота A (наибольшая на высоте ya, к yt и yb — до нуля), ширина — от wt вверху до wb внизу,
-        сечение (1 − u²)². Внутренний столбец стенок (|x| < xin, ниже weld_below) встаёт на среднюю линию и сваривается с
-        зеркальным (щель между бёдрами закрыта; веса — средние пары). Полка промежности за вершиной клина (нормаль вниз)
-        поджимается к передней поверхности (доля shelf), иначе её треугольники затемняют верх купола."""
-        import trimesh
-        from scipy.spatial import cKDTree
-        F = self.skin_faces; used = np.zeros(len(V), bool); used[np.unique(F)] = True
-        x, y, z = V[:, 0], V[:, 1], V[:, 2]
-        g = o.get
-        top, t0, b0, b1, zc = g('top'), g('t0'), g('b0'), g('b1'), g('zc')
-        ya2 = g('ya2', g('ya'))
-
-        def target(x, y):
-            base = np.where(y > t0, g('ztop') + (g('zbase') - g('ztop')) * (1 - smoothstep(t0, top, y)),
-                            np.where(y < b0, zc + (g('zbase') - zc) * smoothstep(b1, b0, y), g('zbase')))
-            amp = g('A') * np.where(y > ya2, 1 - smoothstep(ya2, g('yt'), y), np.where(y > g('ya'), 1.0, smoothstep(g('yb'), g('ya'), y)))
-            w = g('wb') + (g('wt') - g('wb')) * smoothstep(g('yb'), g('yt'), y)
-            u = np.clip(np.abs(x) / w, 0, 1); return base + amp * (1 - u * u) ** 2
-        zt = target(x, y)
-        lat = 1 - smoothstep(g('x0'), g('xs'), np.abs(x))
-        box = used & (np.abs(x) < g('xs')) & (y > b1 - .5) & (y < top) & (z > zc)
-        k = g('k'); z2 = (z + zt + np.sqrt((z - zt) ** 2 + k * k)) / 2
-        out = V.copy(); out[box, 2] = z[box] + (z2[box] - z[box]) * lat[box]
-        N0 = np.asarray(trimesh.Trimesh(V, F, process=False).vertex_normals)
-        shelf = used & (N0[:, 1] < -.6) & (np.abs(x) < 2.0) & (y > 85.5) & (y < 88.5) & (z > -1)
-        out[shelf, 2] = np.maximum(z[shelf], zt[shelf] - (4.8 - z[shelf]).clip(0) * g('shelf') - g('shelf_off', .4))
-        inner = box & (np.abs(x) < g('xin')) & (z < 5.6) & (x > 0.02) & (y < g('weld_below')) & (y > g('weld_above', 0))
-        # и столбец касания бёдер за ним (стенки щели между ними иначе — две почти совпадающие поверхности, которые при
-        # любом сгибании бедра проходят друг сквозь друга): сварен так же, стенки щели с обеих сторон совпадают и убираются
-        c0, c1, cx, cy0 = g('contact')
-        inner |= used & (x > 0.02) & (np.abs(x) < cx) & (z > c0) & (z < c1) & (y > cy0) & (y < g('weld_below'))
-        T = cKDTree(V * np.array([-1, 1, 1])); remap = np.arange(len(V)); welded = []
-        for i in np.where(inner)[0]:
-            d, j = T.query(V[i])
-            if d < .05 and j != i:
-                out[i, 0] = 0; out[i, 1:] = (out[i, 1:] + out[j, 1:]) / 2; remap[j] = i; welded.append((int(i), int(j)))
-                self.weights[i] = (self.weights[i] + self.weights[j]) / 2
-        F = remap[F]; F = F[(F[:, 0] != F[:, 1]) & (F[:, 1] != F[:, 2]) & (F[:, 0] != F[:, 2])]
-        # стенки щели после сварки — пары треугольников на тех же трёх вершинах с обратным обходом: убираются обе
-        key = np.sort(F, 1); _, inv, cnt = np.unique(key, axis=0, return_inverse=True, return_counts=True)
-        self.skin_faces = F[cnt[inv.ravel()] == 1]
-        # верх купола: стенки клина, сваренные до свода, и передний край свода сходятся у средней линии в комок вершин с
-        # нормалями во все стороны (на свету — пятно). Гладкая заплатка по передней поверхности: соседство — только
-        # треугольники с вершинами впереди zf (свод уходит назад длинными треугольниками; по нему заплатка тянула бы купол внутрь)
-        self.pouch_layout = np.zeros(len(V), bool); self.pouch_front = None
-        if g('front_layout'):
-            fx, fy0, fy1, fz = g('front_layout'); F2 = self.skin_faces
-            nz = np.full(len(out), np.inf)                     # самая задняя соседняя вершина
-            for a_, b_ in ((0, 1), (1, 2), (2, 0), (1, 0), (2, 1), (0, 2)): np.minimum.at(nz, F2[:, a_], out[F2[:, b_], 2])
-            front = (out[:, 2] > fz) & (nz > fz - 3); Ff = F2[front[F2].all(1)]
-            reg = used & front & (np.abs(out[:, 0]) < fx) & (out[:, 1] > fy0) & (out[:, 1] < fy1)
-            # только связная передняя поверхность (язычок свода за ней — свои треугольники, они остаются позади)
-            import scipy.sparse as sp
-            from scipy.sparse.csgraph import connected_components
-            nc, lab = connected_components(neighbors(Ff, len(out)), directed=False)
-            infront = np.zeros(len(out), bool); infront[np.unique(Ff)] = True
-            main = np.bincount(lab[reg & infront], minlength=nc).argmax() if (reg & infront).any() else -1
-            reg &= infront & (lab == main)
-            if reg.any():
-                # раскладка по передней поверхности: x и высота — гармонические (среднее соседей, край закреплён), глубина —
-                # целевая поверхность купола (гладкая по построению); комок раскладывается без перегибов
-                pl = fair(out, Ff, reg, k=1); out[reg, 0] = pl[reg, 0]; out[reg, 1] = pl[reg, 1]
-                # веер у лобка (вершины стенок и свода, сошедшиеся к средней линии) раскладывается в комок из рёбер
-                # короче миллиметров — их треугольники переворачиваются при сгибании бедра: короткие рёбра стянуты (вершина
-                # из раскладки — в соседнюю, веса — средние; только где у ребра ровно два общих соседа — сетка остаётся
-                # многообразием), затем раскладка заново
-                if g('layout_collapse'):
-                    total = 0
-                    for _ in range(20):
-                        F2 = self.skin_faces; E = np.unique(np.sort(np.concatenate([F2[:, [0, 1]], F2[:, [1, 2]], F2[:, [2, 0]]]), 1), axis=0)
-                        Ln = np.linalg.norm(pl[E[:, 0]] - pl[E[:, 1]], axis=1); A_ = neighbors(F2, len(out)).tolil()
-                        rem = np.arange(len(out)); touched = np.zeros(len(out), bool); n_ = 0
-                        for e in np.argsort(Ln):
-                            if Ln[e] >= g('layout_collapse'): break
-                            a_, b_ = E[e]
-                            if not (reg[a_] or reg[b_]) or touched[a_] or touched[b_]: continue
-                            if len(set(A_.rows[a_]) & set(A_.rows[b_])) != 2: continue
-                            keep, drop = (a_, b_) if (not reg[a_] or reg[b_]) else (b_, a_)
-                            rem[drop] = keep; reg[drop] = False; n_ += 1
-                            self.weights[keep] = (self.weights[keep] + self.weights[drop]) / 2
-                            touched[[a_, b_]] = True; touched[A_.rows[a_]] = True; touched[A_.rows[b_]] = True
-                        if not n_: break
-                        F2 = rem[F2]; F2 = F2[(F2[:, 0] != F2[:, 1]) & (F2[:, 1] != F2[:, 2]) & (F2[:, 0] != F2[:, 2])]
-                        self.skin_faces = F2; Ff = F2[front[F2].all(1)]; total += n_
-                        pl = fair(out, Ff, reg, k=1); out[reg, 0] = pl[reg, 0]; out[reg, 1] = pl[reg, 1]
-                    print(f'  верх купола: стянуто коротких рёбер {total}')
-                out[reg, 2] = np.maximum(target(out[reg, 0], out[reg, 1]), out[reg, 2] - 10); self.pouch_layout = reg; self.pouch_front = Ff
-            # язычок свода (передний край низа лобка и сваренных стенок за передней поверхностью, с длинными треугольниками
-            # назад): на прежнюю глубину — выдвинутый, он перекрещивался с соседними треугольниками свода (складки в стойке)
-            tongue = used & (out[:, 2] > fz) & ~reg & ~(infront & (lab == main)) & (np.abs(out[:, 0]) < fx) & (out[:, 1] > fy0 - 1) & (out[:, 1] < fy1 + 1)
-            out[tongue, 1:] = V[tongue, 1:]
-            # и расплетён (сваренные вершины стенок и свода в полсантиметра друг от друга): сглаживание по соседям
-            if tongue.any() and g('tongue_smooth'):
-                A_ = neighbors(F2, len(out)); deg = np.asarray(A_.sum(1)).ravel(); tongue &= deg > 0
-                for _ in range(int(g('tongue_smooth'))):
-                    avg = (A_ @ out) / np.maximum(deg, 1)[:, None]; out[tongue] = avg[tongue]
-        # вершина клина (веер у лобка, где сходились стенки и полка промежности): после выдвижения его вершины сжаты в
-        # 1–2 см и часть треугольников смотрит назад (на свету — светлое пятно и тёмная «дыра»); гладкая заплатка fair()
-        self.pouch_apex = None
-        if g('apex'):
-            ax_, ay0, ay1, az = g('apex')
-            reg = used & (np.abs(out[:, 0]) < ax_) & (y > ay0) & (y < ay1) & (out[:, 2] > az)
-            reg[[j for _, j in welded]] = False
-            if g('apex_after'): self.pouch_apex = reg      # заплатка — в build.py после корректирующих форм
-            elif reg.any(): out = fair(out, self.skin_faces, reg)
-        # купол идёт за тазом, а не за бёдрами: у сетки клин — стенки бёдер (веса бедра), и при сгибании бедра низ купола
-        # поворачивался вместе с бедром и складывался в верх купола (вывороты и складки в приседе, «велосипеде», выпаде).
-        # Доля таза (кость root рига, при переносе — рамка pelvis) растёт с выдвижением: от pelvis[0] до pelvis[1] см — до 1
-        p0, p1 = g('pelvis')
-        beta = smoothstep(p0, p1, out[:, 2] - V[:, 2]) * (box | shelf)
-        if g('pelvis_y'): beta *= smoothstep(*g('pelvis_y'), y)     # низ купола — плавный переход к бёдрам
-        # и всё, что внутри купола и между бёдрами за ним (столбцы касания бёдер у вершины промежности): купол с ними —
-        # одно целое с тазом, переход к бёдрам — снаружи и ниже (rigid: |x| — до 1 при rx0, до 0 при rx1; высота — y0…y1)
-        # низ купола по средней линии (сваренные вершины у промежности): за тазом — после сглаживания весов (build.py), иначе
-        # при разведении бёдер они повисают между ними (отход от процедурной кожи до 9,4 см)
-        self.pouch_pin = np.zeros(len(V))
-        if g('pin'):
-            px, py0, py1, pk = g('pin')
-            self.pouch_pin = ((np.abs(out[:, 0]) < px) & (y > py0) & (y < py1) & used & (box | inner)) * pk
-        onehot = np.zeros(self.weights.shape[1]); onehot[self.idx['root']] = 1
-        self.weights = self.weights * (1 - beta[:, None]) + onehot[None] * beta[:, None]
-        self.dominant = self.weights.argmax(1); self.pouch_welded = welded; self.pouch_sel = box | shelf
-        print(f'  пах: выдвинуто {int((box | shelf).sum())} вершин (до {np.abs(out - V).max():.1f} см), сварено пар {len(welded)}')
-        return out
-
     def stance(self, rest, J, q, hands=None, groin=True):
         """вершины в стойке (см, авторинг), головы костей рига в позе (см, авторинг) и матрицы костей"""
         G, heads = self.bones_pose(rest, J, q, hands)
@@ -357,13 +227,9 @@ class AnnyLook(AnnyPosed):
         return V, to_ours(H) + t, G, heads
 
 
-# ---------------- лицо и пах: гладкое заполнение (без глаз, без «дыр» и тёмных пятен) ----------------
+# ---------------- лицо и горло: гладкое заполнение (без глаз, без «дыр» и тёмных пятен) ----------------
 EYE_SINK, EYE_RINGS = .3, 6
 THROAT = (3.5, 2.0, 4.5)
-
-
-def smoothstep(a, b, x):
-    t = np.clip((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t)
 
 
 def neighbors(F, n):

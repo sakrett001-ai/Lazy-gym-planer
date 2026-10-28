@@ -9,7 +9,7 @@ node tools/anny-look/export.js (qa/anny-look/mannequin.json). Сборка де�
 1. Сетка: подтянутая Anny (anny_look.AnnyLook: одобренные фенотип и местные формы, шлифовка look.json + fit.json) в
    нейтральной стойке манекена 4.61.0, без глаз и полости рта (главная связная часть). Координаты — каталог (см, Y вниз,
    пол 186), как у рамок позы (Mannequin.catalogPose). Глазницы закрыты гладкой заплаткой (anny_look.AnnyLook.neutral_face),
-   пах — «как в плавках»: клин между бёдрами закрыт, поверх — гладкий купол (anny_look.AnnyLook.pouch).
+   пах — как у Anny по умолчанию (форма bulge 0, без заплаток и сглаживания: клин между бёдрами, как у эталона).
    --shape reference — эталон для листа (Anny по умолчанию, anny_look.REFERENCE), не для приложения.
 2. Веса — перенос с рига Anny на сегменты манекена (рамки позы): ключица → cl, лопатка (shoulder01) → sp, плечо → ua,
    предплечье → fa и fd (доля fd растёт от локтя к запястью линейно, как закрутка сечений процедурной кожи), запястье и пясть
@@ -195,43 +195,14 @@ def bake_shade(V, F, dom):
     return vis
 
 
-def pouch_correctives(back, o):
-    """Плавки при сгибании бедра: купол (anny_look.AnnyLook.pouch) лежит в складке между тазом и бёдрами; при сгибании
-    бедра больше 90° (присед, сидя, «велосипед») бедро поднимается к нему, и треугольники купола и складки переворачиваются
-    (вывороты — tools/anny-look/check.js). Форма возвращает купол к прежнему клину (его же смещение с обратным знаком) — по
-    половине на каждое бедро: вес — «шатёр» по углу сгибания бедра hipFlex (back: от и до, доля); при одном согнутом бедре
-    (выпад) купол уходит наполовину. Одна форма на обе стороны (side 'LR': вес — среднее весов бёдер, AnnySkin.correctiveWeights)
-    — то же, что две половинные по сторонам, при вдвое меньшей работе вершинного шейдера. Смещения — в стойке (каталог: Y вниз)."""
-    a0, a1, k = o['back']
-    if not k: return []
-    m = np.linalg.norm(back, axis=1) > .05; i = np.where(m)[0]
-    d = back[i] * np.array([1, -1, 1]) * k
-    print(f'  форма pouch: угол hipFlex {a0}→{a1} (среднее бёдер), вершин {len(i)}, наибольшее смещение {np.linalg.norm(d, axis=1).max():.1f} см')
-    return [{'name': 'pouch', 'side': 'LR', 'angle': 'hipFlex', 'a0': a0, 'a1': a1, 'i': i.tolist(), 'd': np.round(d, 2).ravel().tolist()}]
-
-
 def build(out_path, mannequin=None, shape='look'):
     P = C.Procedural(mannequin) if mannequin else C.Procedural(); D = P.D; body = AnnyLook(shape); fit = json.load(open(FIT))
     phen, local = body.params(fit); rest = body.rest(phen, local); q = q_from(fit['pose'])
     hands = D['hands']
     V, Hw, G, heads = body.stance(rest, P.J, q, hands, groin=False)
     V = body.neutral_throat(body.neutral_face(V, Hw), Hw)
-    pouch_back = None
-    if shape == 'look':
-        V0 = V; V = body.pouch(V, body.look['pouch'])
-        # обратный ход купола (корректирующая форма «плавки при сгибании бедра», ниже): к прежнему клину; сваренные вершины —
-        # по средней линии (x не меняется)
-        pouch_back = V0 - V; pouch_back[[i for i, _ in body.pouch_welded], 0] = 0
-        # разложенные по передней поверхности (верх купола): их сдвиг к клину у каждой свой (из глубины клина), и при сгибании
-        # бедра верх купола сминался бы; ход назад здесь — гармоническое продолжение хода соседей (гладкий), раскладка по x
-        # и высоте остаётся
-        if body.pouch_front is not None and body.pouch_layout.any():
-            from anny_look import fair
-            pouch_back[body.pouch_layout, :2] = 0
     F = body.skin_faces; used = np.unique(F); remap = -np.ones(len(V), np.int64); remap[used] = np.arange(len(used))
     V = V[used]; F = remap[F]; W = body.weights[used]          # плотные веса Anny по 104 костям
-    if pouch_back is not None: pouch_back = pouch_back[used]; pin = body.pouch_pin[used]
-    apex = body.pouch_apex[used] if shape == 'look' and body.pouch_apex is not None else None
     labels = body.labels; L = body.idx; n = len(V)
     V = ground_feet(V, W, labels)
 
@@ -283,15 +254,6 @@ def build(out_path, mannequin=None, shape='look'):
     Wo = smooth_weights(Wo, F, ~rigid_mask(Wo, FRAMES), SMOOTH_ITERS)
     Wo = limb_limit(Wo, V, F, J, fi, Wa, ('leg',))
     Wo = foot_split(Wo, V, FRAMES, D)
-    if shape == 'look' and body.look['pouch'].get('smooth'):
-        # пах: веса сглажены сильнее (переход таз — бёдра шире): у купола и столбцов касания бёдер за ним при сгибании и
-        # отведении бедра треугольники иначе переворачиваются (tools/anny-look/check.js, вывороты)
-        sm = body.look['pouch']['smooth']
-        for it, bx, by0, by1, bz0, bz1 in (sm if isinstance(sm[0], list) else [sm]):
-            gm = (np.abs(V[:, 0]) < bx) & (V[:, 1] > by0) & (V[:, 1] < by1) & (V[:, 2] > bz0) & (V[:, 2] < bz1)
-            Wo = smooth_weights(Wo, F, gm, it)
-        # низ купола по средней линии — за тазом (anny_look.AnnyLook.pouch, pin)
-        Wo = Wo * (1 - pin[:, None]); Wo[:, fi['pelvis']] += pin
     # четыре наибольших — непрерывно: из них вычитается пятый (иначе на границе, где пятый становится четвёртым, — скачок)
     order = np.argsort(-Wo, 1); w5 = np.take_along_axis(Wo, order[:, 4:5], 1); order = order[:, :4]
     wv = np.maximum(np.take_along_axis(Wo, order, 1) - w5, 0); wv = wv / wv.sum(1, keepdims=True)
@@ -338,15 +300,6 @@ def build(out_path, mannequin=None, shape='look'):
 
     # ---------- корректирующие формы (по тем же данным, что попадут в файл: координаты до 0,01 см, доли — байты) ----------
     corr = CR.build(cat, F, order, wq / 255.0, FRAMES)
-    if pouch_back is not None: corr += pouch_correctives(pouch_back, body.look['pouch'])
-    if apex is not None and apex.any():
-        # веер у вершины клина (anny_look.AnnyLook.pouch, apex_after): гладкая заплатка после корректирующих форм, его
-        # вершины из форм убраны (их смещения считались по вееру до заплатки)
-        from anny_look import fair
-        cat = np.round(fair(cat, F, apex), 2); ai = set(np.where(apex)[0].tolist())
-        for c in corr:
-            keep = [k for k, v in enumerate(c['i']) if v not in ai]
-            c['d'] = [c['d'][k * 3 + j] for k in keep for j in range(3)]; c['i'] = [c['i'][k] for k in keep]
     inputs = json.loads(subprocess.run(['node', os.path.join(C.ROOT, 'tools/anny-look/inputs.js')], check=True, capture_output=True, text=True).stdout)
     out = {'version': 1, 'source': {'anny': '0.6.1', 'toned': 'tools/skin-anny/result/anny-toned.json', 'fit': fit.get('pose'), 'local_delta': fit.get('local_delta', {}),
                                     # версия приложения в файл не пишется: стойку и инструменты уже отпечатывает inputs,
