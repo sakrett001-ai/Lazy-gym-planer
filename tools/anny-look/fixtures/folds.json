@@ -1,82 +1,82 @@
 {
  "squat 1": {
-  "inverted": 237,
-  "folds": 463
+  "inverted": 216,
+  "folds": 302
  },
  "goblet 1": {
-  "inverted": 120,
-  "folds": 147
+  "inverted": 102,
+  "folds": 80
  },
  "legcurl 1": {
-  "inverted": 138,
-  "folds": 292
+  "inverted": 109,
+  "folds": 271
  },
  "bbcurl 1": {
-  "inverted": 148,
-  "folds": 379
+  "inverted": 139,
+  "folds": 359
  },
  "dbcurl 1": {
-  "inverted": 127,
-  "folds": 326
+  "inverted": 124,
+  "folds": 308
  },
  "chinup 0": {
-  "inverted": 170,
-  "folds": 346
+  "inverted": 145,
+  "folds": 294
  },
  "pullup 0": {
-  "inverted": 139,
-  "folds": 290
+  "inverted": 121,
+  "folds": 248
  },
  "latpull 0": {
-  "inverted": 156,
-  "folds": 366
+  "inverted": 142,
+  "folds": 277
  },
  "ohp 0": {
-  "inverted": 167,
-  "folds": 364
+  "inverted": 155,
+  "folds": 289
  },
  "ohext 0": {
-  "inverted": 72,
-  "folds": 98
+  "inverted": 40,
+  "folds": 39
  },
  "hollow 1": {
-  "inverted": 66,
-  "folds": 86
+  "inverted": 44,
+  "folds": 51
  },
  "bicycle 0.25": {
-  "inverted": 99,
-  "folds": 322
+  "inverted": 85,
+  "folds": 266
  },
  "hangknee 1": {
-  "inverted": 216,
-  "folds": 392
+  "inverted": 163,
+  "folds": 275
  },
  "lunge 1": {
-  "inverted": 51,
-  "folds": 368
+  "inverted": 37,
+  "folds": 296
  },
  "cablewood 1": {
-  "inverted": 151,
-  "folds": 377
+  "inverted": 124,
+  "folds": 296
  },
  "nordic 1": {
-  "inverted": 64,
-  "folds": 368
+  "inverted": 60,
+  "folds": 252
  },
  "burpee 0.5": {
-  "inverted": 143,
-  "folds": 220
+  "inverted": 71,
+  "folds": 117
  },
  "seatedcalf 0": {
-  "inverted": 171,
-  "folds": 342
+  "inverted": 140,
+  "folds": 269
  },
  "crunch 1": {
-  "inverted": 105,
-  "folds": 320
+  "inverted": 86,
+  "folds": 259
  },
  "pushup 1": {
-  "inverted": 81,
-  "folds": 154
+  "inverted": 69,
+  "folds": 91
  }
 }
