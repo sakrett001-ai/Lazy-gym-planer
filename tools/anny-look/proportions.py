@@ -29,7 +29,8 @@ from anny_measure import Measurer, section, hull_perimeter
 ROWS = [('stature', 'Рост'), ('chestcircumference', 'Обхват груди'), ('waistcircumference', 'Обхват талии (пупок)'),
         ('buttockcircumference', 'Обхват ягодиц'), ('buttockdepth', 'Глубина ягодиц'), ('waistdepth', 'Глубина талии'),
         ('hipbreadth', 'Ширина бёдер'), ('bideltoidbreadth', 'Ширина по дельтам'), ('thighcircumference', 'Обхват бедра'),
-        ('bicepscircumferenceflexed', 'Обхват плеча'), ('calfcircumference', 'Обхват голени'),
+        ('bicepscircumferenceflexed', 'Обхват плеча'), ('forearmcircumferenceflexed', 'Обхват предплечья'),
+        ('wristcircumference', 'Обхват запястья'), ('calfcircumference', 'Обхват голени'), ('anklecircumference', 'Обхват над лодыжкой'),
         ('shr', 'Дельты / бёдра'), ('whr', 'Талия / ягодицы'), ('bproj', 'Выступ ягодиц сверх живота'),
         ('buttock_peak_h', 'Высота наибольшего выступа ягодиц'), ('troch_depr', 'Впадина у вертела')]
 
