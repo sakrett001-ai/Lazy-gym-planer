@@ -427,7 +427,7 @@ const LRM = once(() => {
   const R = 100, hx = T.hx, A0 = [0, gh[1] + T.y0, gh[2] + T.z0], A1 = [0, gh[1] + T.y1, gh[2] + T.z1], P = [44, ...arcCenter(A0, A1, R, [1, 0])];
   const th0 = arcAng(P, A0), th1 = arcAng(P, A1), py = padZ + (seatH + 6 - seatH - 40) * Math.tan(-lean * D2R);
   const machine = { type: 'seatedLever', id: 'lr', seat: { h: seatH, z0: -24, z1: padZ - 8 }, pad: { kind: 'chest', z: padAt(padZ, seatH + 22, -lean, 'chest', seatH), ang: -lean, y0: seatH + 22, y1: seatH + 66, w: 30 },
-    hub: { x: P[0], y: P[1], z: P[2] }, tower: { z: padZ + 62, h: P[1] + 14 }, stack: { z: padZ + 86, H: r1(P[1] + 10.5), yaw: Math.PI } };
+    hub: { x: P[0], y: P[1], z: P[2] }, tower: { z: padZ + 62, h: P[1] + 14 }, stack: { z: padZ + 86, H: r1(P[1] + 10.5), yaw: 180 } };
   return { q, P, R, hx, th0, th1, machine, gh };
 });
 const LRM_T = { hx: 22, y0: -9, z0: 63, y1: -20, z1: 8, beta: 14 };
