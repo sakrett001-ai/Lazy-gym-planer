@@ -111,7 +111,7 @@ const AnnySkin = (() => {
       else { const s = Math.sqrt(1 + A[8] - A[0] - A[4]) * 2; w = (A[3] - A[1]) / s; x = (A[2] + A[6]) / s; y = (A[5] + A[7]) / s; z = s / 4; }
       const l = Math.hypot(x, y, z, w) * (w < 0 ? -1 : 1); return [x / l, y / l, z / l, w / l];
     },
-    fromQuat([x, y, z, w]) { return [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w), 2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w), 2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]; }
+    fromQuat(q) { const l = Math.hypot(...q), [x, y, z, w] = q.map(v => v / l); return [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w), 2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w), 2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]; }
   };
   const D2R = Math.PI / 180;
   /* угол от p до q вокруг оси a (проекции на плоскость, перпендикулярную a), градусы */
@@ -165,7 +165,7 @@ const AnnySkin = (() => {
     const pose = (fa, thR, tha) => ({ T: [chain(rig.digits[0], thR), ...fingers.map((dg, i) => chain(dg, fa[i].map((t, k) => flexRot(dg, k, t))))], ang: [tha, ...fa], mode, r });
     const row = mode === 'grip' || mode === 'fist' ? tableRow(d.hands[s], mode, r) : null, th = rig.digits[0];
     const out = row ? pose(row.f, [R3.fromQuat(row.th.q), flexRot(th, 1, row.th.t[0]), flexRot(th, 2, row.th.t[1])], [null, ...row.th.t])
-      : mode === 'flat' ? pose(fingers.map(() => DIG.flat), [flatThumb(rig), flexRot(th, 1, 5), flexRot(th, 2, 5)], [null, 5, 5])
+      : mode === 'flat' ? (H => pose(fingers.map(() => DIG.flat), [H ? R3.fromQuat(H.th.q) : flatThumb(rig), flexRot(th, 1, H ? H.th.t[0] : 5), flexRot(th, 2, H ? H.th.t[1] : 5)], [null, ...(H ? H.th.t : [5, 5])]))(d.hands[s].flat)
       : mode === 'hook' ? pose(fingers.map(() => DIG.hook), I3, [null, th.bind[1], th.bind[2]])
       : pose(fingers.map(dg => dg.bind), I3, [null, th.bind[1], th.bind[2]]);
     C.set(key, out);
