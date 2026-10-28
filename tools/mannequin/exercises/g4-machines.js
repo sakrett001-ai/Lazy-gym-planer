@@ -3,7 +3,9 @@
    Ось Z — вперёд от тела (куда смотрит лицо в исходной позе), X — влево, Y — вверх, см.
    Каждая раскладка тренажёра вычисляется от позы (once): оси рычагов — через оси нагружаемых суставов,
    направляющие — вдоль линии движения, подушки — по поверхности тела. */
-const { ctx } = require('../compose.js');
+const { ctx, bakedPoses } = require('../compose.js');
+const EQ = require('../../../src/js/09bn-equipment.js');
+const CAM = require('../cam-design.js'), CURVES = require('../strength-curves.js');
 const S = ['L', 'R'], C_SIGN = { L: 1, R: -1 };
 const once = f => { let v; return () => v ?? (v = f()); };
 const D2R = Math.PI / 180;
@@ -23,7 +25,10 @@ const LX = once(() => {
   /* валик — на нижней трети голеней спереди: 9 см над голеностопом, 7,4 см перед осью голени */
   const off = [0, 9, 7.4], rR = Math.hypot(C.M.B.sk - off[1], off[2]);
   const hubX = 27;
-  const machine = { type: 'legExtension', id: 'lx', seatH, seatZ: [backZ - 4, K[2] - 9], back: { z0: backZ - 1.5, ang: lean, len: 60 }, pivot: [K[1], K[2]], hubX, handle: { x: 23, y: seatH + 3, z: f.P.hipL[2] - 2 } };
+  /* колонна стека за спинкой: поперечина основания в 2,5 см за поперечиной спинки, высота 135 см (паспорт класса — 189 с кожухом);
+     нижний блок — ось на высоте 45 см: трос с низа кулачка (37–53 см над полом) идёт назад почти горизонтально */
+  const machine = { type: 'legExtension', id: 'lx', seatH, seatZ: [backZ - 4, K[2] - 9], back: { z0: backZ - 1.5, ang: lean, len: 60 }, pivot: [K[1], K[2]], hubX, handle: { x: 23, y: seatH + 3, z: f.P.hipL[2] - 2 },
+    stack: { z: backZ - 38, H: 135 }, p1y: 45 };
   return { q, K, off, rR, hubX, machine, f };
 });
 
@@ -45,11 +50,53 @@ const LC = once(() => {
   const onTh = z => (oTh - nTh[2] * z) / nTh[1], onT = z => (oT - nT[2] * z) / nT[1];
   const kz = K[2] + 4, headZ = f.P.ghL[2] + 2;
   const hubX = 27;
+  /* колонна стека за стопами (в 75 см за осью колен — вне хода валика и стоп), высота 120 см */
   const machine = { type: 'legCurl', id: 'lc', hump: [hy, hz], knee: [onTh(kz), kz], head: [onT(headZ), headZ], nTh: nTh.slice(1), nT: nT.slice(1), pivot: [K[1], K[2]], hubX,
-    handle: { x: 20, y: f.P.ghL[1] - 40, z: f.P.ghL[2] + 20, ax: [1, .5] } };
+    handle: { x: 20, y: f.P.ghL[1] - 40, z: f.P.ghL[2] + 20, ax: [1, .5] }, stack: { z: K[2] - 75, H: 120 } };
   const off = [0, 7, -8.2], rR = Math.hypot(C.M.B.sk - off[1], off[2]);
   return { q, K, off, rR, hubX, machine };
 });
+
+/* ================= Рычаг → кулачок → стек (разгибание и сгибание ног) =================
+   Рычаг: ось — через центры коленных суставов, ступица на оси тренажёра (lx:axle, lc:axle), плечо до валика — по голени
+   манекена (rR: 9 или 7 см над голеностопом, ANSUR II), с регулировкой как у серийных тренажёров: внешняя труба плеча,
+   выдвижная труба с валиком и фиксатор (подпружиненный штырь с рукояткой). Кулачок, трос и стек — общий узел
+   09bo-g4-lever.js (BIND.g4camCable); профиль кулачка подбирается по кривой силы сустава (cam-design.js,
+   strength-curves.js) на кадрах повторения так, как их проигрывает приложение; длина троса rest — чтобы в начале повтора
+   плиты висели на HOVER см над остальными (как у блочных тренажёров G3). */
+const r1 = v => Math.round(v * 10) / 10, r2 = v => Math.round(v * 100) / 100, rp = p => p.map(r2);
+function legLever(id, L, mountTo) {
+  const r = L.rR, ax = -L.hubX;
+  return { type: 'g4lever', id, pivot: [L.hubX, L.K[1], L.K[2]], axis: [1, 0, 0], mountTo, bind: { mix: ['anL', 'anR'], frame: 'skL', off: L.off },
+    parts: [
+      { name: 'hub', kind: 'cyl', c: [2.5, 0, 0], axis: [1, 0, 0], r: 4.5, len: 7 },
+      { name: 'arm', kind: 'beam', a: [-1, -4, 0], b: [-1, 24, 0], w: 4, h: 7, up: [0, 0, 1], mount: 'hub' },
+      { name: 'slide', kind: 'beam', a: [-1, 20, 0], b: [-1, r + 3, 0], w: 3, h: 5.4, up: [0, 0, 1], mount: 'arm' },
+      { name: 'pin', kind: 'cyl', c: [-3.6, 22, 0], axis: [1, 0, 0], r: .5, len: 2.4, mount: 'arm', tone: 'chrome' },
+      { name: 'knob', kind: 'sphere', c: [-5.2, 22, 0], r: 1.2, mount: 'pin', tone: 'rubber' },
+      { name: 'bar', kind: 'beam', a: [-1, r, 0], b: [ax + 16, r, 0], r: 1.6, mount: 'slide', tone: 'chrome' },
+      { name: 'roller', kind: 'cyl', c: [ax, r, 0], axis: [1, 0, 0], r: 5.5, len: 36, mount: 'bar', tone: 'pad', role: 'pad' }
+    ] };
+}
+/* Инвентарь с узлом передачи (считается один раз): машина, рычаг, кулачок с тросом и стеком. curve — кривая силы
+   (strength-curves.js, имя записывается в узел — по нему аудит сравнивает момент с целью), sense —
+   направление огибания кулачка тросом, scale — плечо троса на пике целевой кривой, см; kg — масса всего стека по паспорту
+   тренажёра этого класса (kgSrc) — для проверки энергией (tools/lever-stacks.test.js). Блоки: p1 (если есть) и верхний блок
+   колонны p2, оба Ø10. */
+const HOVER = 1, LEVER_EQ = new WeakMap();
+function leverStackEq(spec, { L, lever, curve, sense, scale, kg, kgSrc }) {
+  if (LEVER_EQ.has(spec)) return LEVER_EQ.get(spec);
+  const m = L.machine, A = EQ.anchors([m])[m.id], info = A.stkstackInfo, st = A.stkstack;
+  const tr = { type: 'g4camCable', id: m.id + 'Cam', pivot: lever.pivot, axis: [1, 0, 0], bind: lever.bind, plane: 4.5, mountTo: lever.id + ':hub', curve, kg, kgSrc,
+    route: (A.p1 ? [{ c: rp(A.p1), r: 5, s: -1, id: m.id + ':p1' }] : []).concat([{ c: rp(A.p2), r: 5, s: 1, id: m.id + ':stkpulley' }]), ratio: info.ratio, rodPart: m.id + ':' + info.rod,
+    stack: { o: rp(st.o), R: st.R.map(v => Math.round(v * 1e4) / 1e4), sel: info.sel, pitch: info.pitch, size: info.size, topY: r2(info.topY), maxLift: r1(info.maxLift) } };
+  const poses = bakedPoses(spec, [m]);
+  tr.cam = CAM.design(tr, poses, { curve: CURVES[curve], sense, scale }).cam;
+  tr.rest = r2(Math.min(...poses.map(R => EQ.leverStack.state({ ...tr, rest: 0 }, R).L)) - HOVER / tr.ratio);
+  const out = [m, lever, tr];
+  LEVER_EQ.set(spec, out);
+  return out;
+}
 
 /* ================= Гиперэкстензия 45° ================= */
 /* t=0 — тело прямой линией под 45°, t=1 — наклон через тазобедренные суставы. Ноги неподвижны: таз вращается
@@ -947,16 +994,8 @@ module.exports = {
   /* Сгибание ног лёжа. t=0 — ноги почти прямые, валик над пятками; t=1 — пятки подтянуты к ягодицам (~125°). */
   legcurl: {
     keys: [0, .2, .4, .6, .8, 1],
-    equipment: (() => {
-      const L = LC(), r = L.rR, ax = -L.hubX;
-      return [L.machine, { type: 'g4lever', id: 'lcArm', pivot: [L.hubX, L.K[1], L.K[2]], axis: [1, 0, 0], mountTo: 'lc:hub',
-        bind: { mix: ['anL', 'anR'], frame: 'skL', off: L.off },
-        parts: [
-          { name: 'arm', kind: 'beam', a: [-1, -4, 0], b: [-1, r + 3, 0], w: 4, h: 7, up: [0, 0, 1] },
-          { name: 'bar', kind: 'beam', a: [-1, r, 0], b: [ax + 16, r, 0], r: 1.6, mount: 'arm', tone: 'chrome' },
-          { name: 'roller', kind: 'cyl', c: [ax, r, 0], axis: [1, 0, 0], r: 5.5, len: 36, mount: 'bar', tone: 'pad', role: 'pad' }
-        ] }];
-    })(),
+    /* кулачок по кривой сгибания колена лёжа (пик 25°), плечо на пике 15 см: подъём стека ~27 см за повтор */
+    get equipment() { const L = LC(); return leverStackEq(this, { L, lever: legLever('lcArm', L, 'lc:axle'), curve: 'kneeFlexionProne', sense: 1, scale: 15, kg: 95, kgSrc: 'Hammer Strength Select Full Prone Leg Curl' }); },
     contacts: [{ body: 'thL', prop: 'lc:thighPad' }, { body: 'thR', prop: 'lc:thighPad' }, { body: 'chest', prop: 'lc:chestPad' },
       { body: 'skL', prop: 'lcArm:roller' }, { body: 'skR', prop: 'lcArm:roller' }, { body: 'gripL', prop: 'lc:handleL' }, { body: 'gripR', prop: 'lc:handleR' }],
     pose(t, C) {
@@ -972,16 +1011,8 @@ module.exports = {
   /* Разгибание ног сидя. t=0 — колени согнуты ~85°, валик на нижней трети голеней; t=1 — ноги почти прямые. */
   legext: {
     keys: [0, .25, .5, .75, 1],
-    equipment: (() => {
-      const L = LX(), r = L.rR, ax = -L.hubX;
-      return [L.machine, { type: 'g4lever', id: 'lxArm', pivot: [L.hubX, L.K[1], L.K[2]], axis: [1, 0, 0], mountTo: 'lx:hub',
-        bind: { mix: ['anL', 'anR'], frame: 'skL', off: L.off },
-        parts: [
-          { name: 'arm', kind: 'beam', a: [-1, -4, 0], b: [-1, r + 3, 0], w: 4, h: 7, up: [0, 0, 1] },
-          { name: 'bar', kind: 'beam', a: [-1, r, 0], b: [ax + 16, r, 0], r: 1.6, mount: 'arm', tone: 'chrome' },
-          { name: 'roller', kind: 'cyl', c: [ax, r, 0], axis: [1, 0, 0], r: 5.5, len: 36, mount: 'bar', tone: 'pad', role: 'pad' }
-        ] }];
-    })(),
+    /* кулачок по кривой разгибания колена (пик 65°), плечо на пике 21,5 см: подъём стека ~20,5 см за повтор */
+    get equipment() { const L = LX(); return leverStackEq(this, { L, lever: legLever('lxArm', L, 'lx:axle'), curve: 'kneeExtension', sense: -1, scale: 21.5, kg: 91, kgSrc: 'Legend Fitness 911 Leg Extension' }); },
     contacts: [{ body: 'buttocks', prop: 'lx:seat' }, { body: 'back', prop: 'lx:back' }, { body: 'shinL', prop: 'lxArm:roller' }, { body: 'shinR', prop: 'lxArm:roller' },
       { body: 'gripL', prop: 'lx:handleL' }, { body: 'gripR', prop: 'lx:handleR' }],
     pose(t, C) {

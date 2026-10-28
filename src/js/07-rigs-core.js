@@ -235,6 +235,7 @@ function buildSpatialFigure(anim,opts={}){
   if(s.kind==='beam')line3(s.a,s.b,s.r?2*s.r:Math.max(s.w,s.h),TONE3[s.tone]||TONE3.frame,0,{'data-prop':s.id||'beam'});
   else if(s.kind==='obox')obox(s.c,[s.x,s.y,s.z].map(V3.unit),s.size,s.tone,{'data-prop':s.id||'box'});
   else if(s.kind==='cyl')cylinder(s.c,s.axis,s.r,s.len,s.tone,{'data-prop':s.id||'cyl'});
+  else if(s.kind==='prism'){const P=[];for(const k of [-.5,.5])for(const q of s.pts)P.push(V3.add(V3.add(V3.add(s.c,s.u,q[0]),s.v,q[1]),s.w,k*s.len));silhouette(P,shade(TONE3[s.tone]||TONE3.frame,.9),{'data-prop':s.id||'prism'});}
   else if(s.kind==='sphere'){const q=project(s.c);queue('circle',{cx:f1(q[0]),cy:f1(q[1]),r:f1(s.r),fill:TONE3[s.tone]||TONE3.frame},[s.c]);}
   else if(s.kind==='cable')for(let i=1;i<s.pts.length;i++)line3(s.pts[i-1],s.pts[i],Math.max(1,2*s.r),TONE3[s.tone]||TONE3.cable,0,{'data-prop':s.id||'cable'});
   else if(s.kind==='barbell'&&s.len){

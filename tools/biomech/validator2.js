@@ -80,6 +80,16 @@ function romChecks(R, entry = {}) {
 /* ---------- SDF инвентаря (каталог) ---------- */
 function sdCapsule(p, a, b, r) { const pa = V.sub(p, a), ba = V.sub(b, a), bb = V.dot(ba, ba), h = bb < 1e-9 ? 0 : clamp(V.dot(pa, ba) / bb, 0, 1); return V.len(V.sub(pa, V.scale(ba, h))) - r; }
 function sdOBB(p, c, axes, half) { const d = V.sub(p, c), q = axes.map((ax, i) => Math.abs(V.dot(d, ax)) - half[i]); return V.len(q.map(v => Math.max(v, 0))) + Math.min(Math.max(...q), 0); }
+/* знаковое расстояние до многоугольника на плоскости (внутри — минус) */
+function sdPolygon(P, x, y) {
+  let d = Infinity, inside = false;
+  for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
+    const [ax, ay] = P[j], [bx, by] = P[i], ex = bx - ax, ey = by - ay, wx = x - ax, wy = y - ay, l2 = ex * ex + ey * ey, t = l2 > 1e-12 ? clamp((wx * ex + wy * ey) / l2, 0, 1) : 0;
+    d = Math.min(d, Math.hypot(wx - ex * t, wy - ey * t));
+    if ((ay > y) !== (by > y) && x < ax + (y - ay) * ex / ey) inside = !inside;
+  }
+  return inside ? -d : d;
+}
 function sdCyl(p, c, axis, r, halfH) { const d = V.sub(p, c), y = V.dot(d, axis), rad = V.len(V.perp(d, axis)), dx = rad - r, dy = Math.abs(y) - halfH; return Math.min(Math.max(dx, dy), 0) + Math.hypot(Math.max(dx, 0), Math.max(dy, 0)); }
 /* ручка: расстояние от точки до её оси (капсула — отрезок оси, трос и канат — ломаная, прочее — до поверхности плюс
    радиус) и направление ручки в ближайшей точке (у коробок — нет) */
@@ -107,6 +117,13 @@ function collider(s) {
   } else if (s.kind === 'obox') { const ax = [s.x, s.y, s.z].map(V.unit), half = s.size.map(v => v / 2); c.sdf = p => sdOBB(p, s.c, ax, half); c.pts = obbPoints(s.c, ax, half, 4); c.r = Math.min(...half); }
   else if (s.kind === 'cyl') { const ax = V.unit(s.axis); c.sdf = p => sdCyl(p, s.c, ax, s.r, s.len / 2); c.pts = cylPoints(s.c, ax, s.r, s.len / 2); c.r = Math.min(s.r, s.len / 2); }
   else if (s.kind === 'sphere') { c.sdf = p => V.dist(p, s.c) - s.r; c.pts = [s.c]; c.r = s.r; }
+  /* плоский контур pts (в осях u, v) толщиной len вдоль w: кулачок рычажного тренажёра */
+  else if (s.kind === 'prism') {
+    const u = V.unit(s.u), v = V.unit(s.v), w = V.unit(s.w), P = s.pts, hl = s.len / 2;
+    c.sdf = p => { const q = V.sub(p, s.c), d = sdPolygon(P, V.dot(q, u), V.dot(q, v)), z = Math.abs(V.dot(q, w)) - hl; return Math.min(Math.max(d, z), 0) + Math.hypot(Math.max(d, 0), Math.max(z, 0)); };
+    c.pts = []; for (const z of [-hl, 0, hl]) for (const [a, b] of P) c.pts.push(V.add(V.add(V.add(s.c, u, a), v, b), w, z));
+    c.r = hl;
+  }
   else if (s.kind === 'cable') { c.cable = true; c.pts = s.pts; c.r = s.r; c.ptR = s.r; c.sdf = p => Math.min(...s.pts.slice(1).map((b, i) => sdCapsule(p, s.pts[i], b, s.r))); }
   else if (s.kind === 'barbell' || s.kind === 'dumbbell') return compound(s, c);
   else if (s.kind === 'kettlebell' && s.handleAxis) {
