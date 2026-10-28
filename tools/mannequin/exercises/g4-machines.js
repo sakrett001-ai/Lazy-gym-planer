@@ -103,7 +103,7 @@ function leverStackEq(spec, { L, lever, curve, sense, scale, kg, kgSrc }) {
 function seatedCamEq(spec, { m, levers, bind, curve, sense, scale, kg, kgSrc, s2 }) {
   if (LEVER_EQ.has(spec)) return LEVER_EQ.get(spec);
   const mm = { ...m, stack: { ...m.stack, mult: MULT_R } }, A = EQ.anchors([mm])[m.id], info = A.stkstackInfo, st = A.stkstack;
-  const tr = { type: 'g4camCable', id: m.id + 'Cam', pivot: rp(A.pivot), axis: [1, 0, 0], bind, plane: 0, mountTo: m.id + ':axle', curve, kg, kgSrc,
+  const tr = { type: 'g4camCable', id: m.id + 'Cam', pivot: rp(A.pivot), axis: [1, 0, 0], bind, plane: 0, mountTo: m.id + ':axle', lever: levers[0].id, curve, kg, kgSrc, anchorParts: [m.id + ':stkdeadEnd'],
     route: [{ c: rp(A.p2), r: 5, s: s2, id: m.id + ':stkpulley' }], ratio: 2, rodPart: m.id + ':' + info.rod,
     stack: { o: rp(st.o), R: st.R.map(v => Math.round(v * 1e4) / 1e4), sel: info.sel, pitch: info.pitch, size: info.size, topY: r2(info.topY), maxLift: 0 } };
   const poses = bakedPoses(spec, [mm, ...levers]);
@@ -317,7 +317,7 @@ function GV_EQ(spec) {
   if (GV_EQS.has(spec)) return GV_EQS.get(spec);
   const m = GV_MACHINE(), link = GV_LINK(), A = EQ.anchors([m]).gv, info = A.stkstackInfo, st = A.stkstack;
   const tr = { type: 'g4camCable', id: 'gvCab', kind: 'block', pivot: [0, GV.P[1] + GV.d0[1], GV.P[2] + GV.d0[2]], anglePivot: GV.P, axis: [1, 0, 0], bind: link.bind,
-    at: [GV_RA, 0], wheel: GV_WHEEL, sense: 1, fork: GV_FORK, dead: rp(A.dead), mountTo: 'gvPad:xbar', kg: 100, kgSrc: 'Life Fitness Insignia Assist Dip Chin (тяжёлый стек)',
+    at: [GV_RA, 0], wheel: GV_WHEEL, sense: 1, fork: GV_FORK, dead: rp(A.dead), mountTo: 'gvPad:xbar', lever: 'gvPad', anchorParts: ['gv:deadEnd'], kg: 100, kgSrc: 'Life Fitness Insignia Assist Dip Chin (тяжёлый стек)',
     route: [{ c: rp(A.p1), r: 5, s: -1, id: 'gv:p1' }, { c: rp(A.p2), r: 5, s: -1, id: 'gv:stkpulley' }], ratio: info.ratio, rodPart: 'gv:' + info.rod,
     stack: { o: rp(st.o), R: st.R.map(v => Math.round(v * 1e4) / 1e4), sel: info.sel, pitch: info.pitch, size: info.size, topY: r2(info.topY), maxLift: r1(info.maxLift) } };
   const poses = bakedPoses(spec, [m, link]);
@@ -507,7 +507,8 @@ function haEq(spec, side) {
   if (LEVER_EQ.has(spec)) return LEVER_EQ.get(spec);
   const L = HA(), cfg = HA_CAM[side], m = { ...L.machine, cab: cfg.cab, stack: HA_STACK }, levers = [haLever(L, 'L', side), haLever(L, 'R', side)];
   const A = EQ.anchors([m]).ha, info = A.stkstackInfo, st = A.stkstack, lv = levers[0];
-  const tr = { type: 'g4camCable', id: 'haCam', pivot: lv.pivot, axis: [0, 1, 0], bind: lv.bind, plane: r2(cfg.cab.y - lv.pivot[1]), mountTo: 'ha:hubL',
+  const tr = { type: 'g4camCable', id: 'haCam', pivot: lv.pivot, axis: [0, 1, 0], bind: lv.bind, plane: r2(cfg.cab.y - lv.pivot[1]), mountTo: 'ha:hubL', lever: lv.id,
+    tail: { id: 'ha:tail', wheels: ['ha:stkp2', 'ha:stkpulley'] },
     route: ['p1', 'p1b'].map(k => ({ c: rp(A[k]), r: 5.5, s: cfg.cab[k].s, id: 'ha:' + k })), depart: [0, 0, -1],
     curve: cfg.curve, kg: 138, kgSrc: 'Hammer Strength Select Hip ' + (side === 'out' ? 'Abduction' : 'Adduction'), ratio: info.ratio, rodPart: 'ha:' + info.rod,
     stack: { o: rp(st.o), R: st.R.map(v => Math.round(v * 1e4) / 1e4), sel: info.sel, pitch: info.pitch, size: info.size, topY: r2(info.topY), maxLift: r1(info.maxLift) } };
@@ -620,7 +621,7 @@ function SCS_EQ(spec) {
     ] };
   const A = EQ.anchors([m]).cs, info = A.stkstackInfo, st = A.stkstack;
   const tr = { type: 'g4camCable', id: 'csCab', kind: 'sled', pivot: [0, 0, SCS.zr], axis: [1, 0, 0], bind: sled.bind, rail: sled.rail, at: [0, top - 15.3, 0], mountTo: 'csSled:eye',
-    curve: 'plantarFlexion', kg: 100, kgSrc: 'Panatta 1SC089 Calf Machine',
+    lever: 'csSled', jointCurve: 'plantarFlexion', kg: 100, kgSrc: 'Panatta 1SC089 Calf Machine',
     route: [{ c: rp(A.pa), r: 5, s: -1, id: 'cs:pa' }, { c: rp(A.pb), r: 5, s: -1, id: 'cs:pb' }, { c: rp(A.pc), r: 5, s: 1, id: 'cs:stkpulley' }], ratio: info.ratio, rodPart: 'cs:' + info.rod,
     stack: { o: rp(st.o), R: st.R.map(v => Math.round(v * 1e4) / 1e4), sel: info.sel, pitch: info.pitch, size: info.size, topY: r2(info.topY), maxLift: r1(info.maxLift) } };
   const poses = bakedPoses(spec, [m, sled]);
