@@ -3,7 +3,8 @@
    Тренажёры — src/js/09bo-g3-cable.js: блочная колонна (g3Tower), кроссовер (g3Crossover), тяга верхнего блока
    (g3LatPulldown), тяга горизонтального блока (g3SeatedRow), дверь с креплением ленты (g3Door).
    Трос (BIND.g3cable) идёт от колеса блока к рукояти; положение блока выбрано так, чтобы трос проходил мимо тела.
-   rest — длина троса (центр колеса — рукоять) в исходном положении: от неё считается подъём плит стека. */
+   rest — длина троса (центр колеса — рукоять) в исходном положении: от неё считается подъём плит стека; считается по позе
+   (withRest), чтобы в растяжке плиты висели на HOVER см. Проверка проводки, хода рукояти и стека — tools/mannequin/cable-audit.js. */
 const { ctx } = require('../compose.js');
 const EQ = require('../../../src/js/09bn-equipment.js');
 const S = ['L', 'R'];
@@ -11,16 +12,45 @@ const once = f => { let v; return () => v ?? (v = f()); };
 const r1 = v => Math.round(v * 10) / 10;
 const rp = p => p.map(r1);
 
-/* Трос на блоке снаряда: колесо, ось поворота кронштейна, стек грузов (anchors снаряда; pre — префикс колонны кроссовера) */
+/* Трос на блоке снаряда: колесо, ось поворота кронштейна, стек грузов (anchors снаряда; pre — префикс колонны кроссовера).
+   Передаточное отношение — как у тренажёра (stackInfo.ratio): колонна и кроссовер 2:1 с подвижным блоком на стеке,
+   тяги верхнего и горизонтального блока 1:1 (09bo-g3-cable.js, stack). Прежде у всех стояло 2:1, а подвижного блока не было. */
 function cable(eq, pre, opts) {
   const A = EQ.anchors([eq])[eq.id], st = A[pre + 'stack'], info = A[pre + 'stackInfo'];
   return {
     type: 'g3cable', from: rp(A[pre + 'pulley']), swivel: rp(A[pre + 'swivelPt']), swivelPart: eq.id + ':' + pre + 'swivel', rodPart: eq.id + ':' + info.rod,
-    stack: { o: rp(st.o), R: st.R.map(v => Math.round(v * 1e4) / 1e4), sel: info.sel, pitch: info.pitch, size: info.size, topY: r1(info.topY), maxLift: r1(info.maxLift) },
-    ratio: .5, ...opts
+    stack: { o: rp(st.o), R: st.R.map(v => Math.round(v * 1e4) / 1e4), sel: info.sel, pitch: info.pitch, size: info.size, topY: r1(info.topY), maxLift: r1(info.maxLift), ...(info.float ? { float: info.float } : {}) },
+    ratio: info.ratio, ...opts
   };
 }
 const pulleyOf = (eq, pre = '') => EQ.anchors([eq])[eq.id][pre + 'pulley'];
+/* Длина троса rest по позе: плиты в растяжке (там, где трос за повтор короче всего) висят на HOVER см над остальными —
+   трос натянут, плиты не лежат и не стучат (NSCA для тяги сидя: груз не опускается на остальные плиты). Поза считается так же,
+   как её запекает и проигрывает приложение (author.js: два прохода ритма пояса, округление ключей; EQ.rig: дорожка по
+   ключам, 41 кадр), поэтому подъём в растяжке — ровно HOVER. Прежде rest ставился вручную: в растяжке плиты лежали
+   (latpull, latpullv, latpulluh, cablewood) или висели до 4,7 см. */
+const HOVER = 1, TUNED = new WeakMap();
+function withRest(spec, list) {
+  const C = ctx(list), { M, V } = C, round = (v, k) => Math.round(v * k) / k;
+  const hint = q => ({ L: M.humeralElevation(q.L, M.SIGN.L), R: M.humeralElevation(q.R, M.SIGN.R) });
+  const keys = (spec.keys || [0, .25, .5, .75, 1]).map(t => {
+    try {
+      M.rhythmHint(null); let q = spec.pose(t, C);
+      for (let k = 0; k < 2; k++) { M.rhythmHint(hint(q)); q = spec.pose(t, C); }
+      return { t, v: M.pack(q).map((x, i) => i >= 3 && i < 7 ? round(x, 1e5) : round(x, 100)), hands: { L: q.hands?.L || 'relaxed', R: q.hands?.R || 'relaxed' } };
+    } finally { M.rhythmHint(null); }
+  });
+  const track = M.makeTrack(keys, { loop: !!spec.loop }), poses = [];
+  for (let i = 0; i <= 40; i++) { const k = track(i / 40); poses.push(M.catalogPose(M.unpack(k.v, k.hands))); }
+  return list.map(e => {
+    if (e.type !== 'g3cable') return e;
+    const P = M.toCat(e.from), h = e.hands || ['L', 'R'];
+    const end = R => e.attach === 'ankle' ? R['an' + (e.foot || 'L')] : V.mix(R['grip' + h[0]], R['grip' + (h[1] || h[0])], .5);
+    return { ...e, rest: r1(Math.min(...poses.map(R => V.dist(end(R), P))) - HOVER / (e.ratio ?? 1)) };
+  });
+}
+/* инвентарь упражнения с rest по позе (считается один раз): get equipment() { return tuned(this, () => [...]); } */
+function tuned(spec, build) { if (!TUNED.has(spec)) TUNED.set(spec, withRest(spec, build())); return TUNED.get(spec); }
 
 /* Стойка: таз в точке root, наклон корпуса вперёд lean (град, в тазобедренных), разворот yaw (0 — взгляд в +Z).
    feet: {L: [x, z, yawDeg], R: …} — точка под подушечкой стопы и разворот носка. */
@@ -75,6 +105,22 @@ function gripAtElbow(C, q, s, el, fore, palm, thumb, pole, opts = {}) {
   return g;
 }
 
+/* Прямой ход рукояти вдоль троса (как rowLine у тяги сидя): от точки E в конце тяги (endAt по позе корпуса bodyAt(1)) к блоку.
+   W — центр колеса блока (или точка крепления ленты при wr = 0), side — сторона колеса, с которой сходит трос (+1 — сверху,
+   −1 — снизу; задаётся тросу через wrap), направление u — на касательную в вертикальной плоскости через E и W. В растяжке
+   середина хвата на прямой там, где локти разогнуты до el° (place(q, g, e, allowShort) ставит руки), но не ближе keep см
+   к касательной (у каната карабин впереди кистей не должен дойти до колеса). */
+function pullLine(C, W, wr, side, bodyAt, endAt, place, el, keep = 14) {
+  const { V } = C;
+  return C.unhinted(() => {
+    const E = endAt(bodyAt(1)), d = V.sub(W, E), L = V.len(d), a = side * Math.asin(wr / L);
+    const dz = Math.hypot(d[0], d[2]), ang = Math.atan2(d[1], dz) + a, u = V.unit([d[0] / dz * Math.cos(ang), Math.sin(ang), d[2] / dz * Math.cos(ang)]);
+    const elbow = s0 => { const q = bodyAt(0); place(q, V.add(E, u, s0), 0, true); place(q, V.add(E, u, s0), 0, true); return (q.L.elbow + q.R.elbow) / 2; };
+    const s0 = C.solve1D(s => elbow(s) - el, 10, Math.sqrt(L * L - wr * wr) - keep);
+    return { E, u, s0, reach: Math.sqrt(L * L - wr * wr) };
+  });
+}
+
 /* ---------- Разгибание рук на верхнем блоке (прямая рукоять) ---------- */
 const PD_TOWER = { type: 'g3Tower', id: 'col', h: 196, at: [0, 0, 70], yaw: 180 };
 const PD_FEET = { L: [11, 15, 8], R: [-11, 15, -8] };
@@ -98,8 +144,16 @@ const CC = once(() => {
   balance(C, q, CC_FEET, { shift: [0, 0] });
   return { q };
 });
-/* ---------- Тяга каната к лицу ---------- */
-const FP_TOWER = { type: 'g3Tower', id: 'col', h: 166, at: [0, 0, 128], yaw: 180 };
+/* ---------- Тяга каната к лицу ----------
+   Техника — подсказки каталога (05-motion-cues.js, 01-exercises-base.js): блок на уровне лба, канат тянется к лицу, концы
+   разводятся, локти высоко в стороны; в конце кисти у ушей, лопатки сведены; возврат — до выпрямления рук. NSCA Kinetic
+   Select «Face Pull (Machine)»: в растяжке руки полностью выпрямлены перед лицом, локти в стороны, рукоять тянется к лицу,
+   пока середина каната не подойдёт к нему; NASM «Face Pull»: блок примерно на уровне глаз, канат — к лицу.
+   Середина хвата идёт по прямой вдоль троса (pullLine): от точки у лица в конце тяги к нижней касательной колеса
+   (wrap [0, −1, 0]); в растяжке локти разогнуты до 10°. Прежде кисти начинали на 16 см ниже оси блока у плеч при локтях,
+   согнутых на 62°, и поднимались к лицу по дуге (путь в 12 см от прямой, трос под 34° к ходу кистей). Колонна отодвинута
+   на 20 см («отступите на шаг»): в растяжке карабин каната в ~30 см от колеса, а не у самого блока. */
+const FP_TOWER = { type: 'g3Tower', id: 'col', h: 166, at: [0, 0, 148], yaw: 180 };
 const FP_FEET = { L: [13, 12, 8], R: [-13, 12, -8] };
 const FP = once(() => {
   const C = ctx([FP_TOWER]), q = C.base();
@@ -108,6 +162,27 @@ const FP = once(() => {
   balance(C, q, FP_FEET, { shift: [0, 1] });
   return { q };
 });
+/* Корпус тяги к лицу по фазе (стойка base — у блока FP, у эспандера BFP): пояс сверх ритма — в начале лопатки вытянуты к
+   блоку, в конце «лопатки сведены» без подъёма плеч (ошибка в каталоге); голова прямо */
+function fpBody(C, base, t) {
+  const e = C.ease(t), q = C.M.clone(base);
+  for (const s of S) C.rhythm(q, s, [C.lerp(-2, -4, e), C.lerp(14, -8, e)]);
+  q.neck = [C.lerp(-4, 2, e), 0, 0];
+  return q;
+}
+/* Кисти тяги к лицу: середина хвата mid, кисти разведены на half (концы каната или ленты расходятся к ушам), хват сверху
+   (пронация 70° → 5°), локти в стороны и к концу — высоко */
+function fpGrip(C, q, mid, e, allowShort, halves = [5.5, 17.5]) {
+  const { V } = C, half = C.lerp(halves[0], halves[1], e);
+  for (const s of S) {
+    const lat = C.lat(q, s), g = V.add(mid, lat, half);
+    const pole = V.unit(V.add(V.add(lat, [0, 1, 0], C.lerp(-.6, .25, e)), [0, 0, -1], C.lerp(-.2, .35, e)));
+    C.hold(q, s, g, pole, { pron: C.lerp(70, 5, e), flex: C.lerp(0, -10, e), allowShort });
+  }
+}
+/* середина хвата в конце тяги: у лица, на 1 см выше центра головы и на 4 см впереди (кисти — у ушей) */
+const fpEnd = (C, q, fwd = 4) => { const head = C.fk(q).P.head; return [0, head[1] + 1, head[2] + fwd]; };
+const FPL = once(() => { const C = ctx([FP_TOWER]); return pullLine(C, pulleyOf(FP_TOWER), 4.5, -1, t => fpBody(C, FP().q, t), q => fpEnd(C, q), (q, g, e, sh) => fpGrip(C, q, g, e, sh), 10, 30); });
 /* направление между двумя единичными векторами (сферическая интерполяция) */
 function slerpDir(V, a, b, t) { const d = Math.max(-1, Math.min(1, V.dot(a, b))), th = Math.acos(d); if (th < 1e-4) return a; const s = Math.sin(th); return V.add(V.scale(a, Math.sin((1 - t) * th) / s), b, Math.sin(t * th) / s); }
 /* ---------- Пуловер на блоке прямыми руками ---------- */
@@ -390,7 +465,9 @@ const BAND = once(() => {
 /* Дверь стоит при x > 0, пользователь смотрит в +X (ни одна из камер атласа не смотрит со стороны +X — дверь не заслоняет тело).
    Позы строятся лицом к +Z (дверь при z > 0) и поворачиваются на 90° вокруг вертикали. */
 const DOOR_TOP = { type: 'g3Door', id: 'door', anchor: 'top', at: [72, 0, 0], yaw: 90 };
-const DOOR_SIDE = { type: 'g3Door', id: 'door', anchor: 'side', h: 165, at: [112, 0, 37.5], yaw: 90 };
+/* тяга ленты к лицу: дверь на 15 см дальше, чем прежде, — в растяжке (руки выпрямлены перед лицом) ветвь ленты 44 см,
+   в конце 99 см (растяжение ×2,3, не больше ×3) */
+const DOOR_SIDE = { type: 'g3Door', id: 'door', anchor: 'side', h: 165, at: [127, 0, 37.5], yaw: 90 };
 const BPD_FEET = { L: [11, 14, 8], R: [-11, 14, -8] };
 const BPD = once(() => {
   const C = ctx([]), q = C.base();
@@ -406,6 +483,13 @@ const BFP = once(() => {
   q.lumbar = [-2, 0, 0];
   balance(C, q, BFP_FEET, { shift: [0, 1] });
   return { q };
+});
+/* прямая к креплению ленты: поза строится лицом к +Z, крепление — в тех же осях (до поворота на 90°); кисти с рукоятями
+   эспандера разведены шире, чем на канате (BAND_HALF), — стремена рукоятей не сходятся */
+const BAND_HALF = [7, 18];
+const BFPL = once(() => {
+  const C = ctx([DOOR_SIDE]), A = C.M.M3.v(C.M.M3.ry(-90), EQ.anchors([DOOR_SIDE]).door.anchor);
+  return pullLine(C, A, 0, 1, t => fpBody(C, BFP().q, t), q => fpEnd(C, q, 5), (q, g, e, sh) => fpGrip(C, q, g, e, sh, BAND_HALF), 10, 20);
 });
 
 module.exports = {
@@ -469,25 +553,18 @@ module.exports = {
     }
   },
 
-  /* Лента закреплена в притворе двери на уровне лица. t=0 — руки вытянуты к креплению; t=1 — кисти у лица, локти высоко в стороны, концы ленты разведены. */
+  /* Лента закреплена в притворе двери на уровне лба. t=0 — руки выпрямлены к креплению перед лицом, лента натянута; t=1 —
+     кисти у ушей, локти высоко в стороны, концы ленты разведены. Середина хвата — по прямой к креплению, как у тяги каната
+     к лицу (fpBody, fpGrip; источники — «Тяга каната к лицу» выше). Прежде кисти начинали на 15 см ниже крепления при
+     локтях, согнутых на 64°, и поднимались к лицу по дуге (путь в 14 см от прямой, лента поворачивалась на 22°). */
   bandfacepull: {
     keys: [0, .25, .5, .75, 1],
     equipment: [DOOR_SIDE, { type: 'g3band', id: 'band', from: rp(EQ.anchors([DOOR_SIDE]).door.anchor), mountTo: 'door:ring', r: .7 }],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'band:handleL' }, { body: 'gripR', prop: 'band:handleR' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
-      const { V } = C, e = C.ease(t), q = C.M.clone(BFP().q);
-      /* пояс сверх ритма: в начале лопатки вытянуты к блоку, в конце «лопатки сведены» без подъёма плеч (ошибка в каталоге) */
-      for (const s of S) C.rhythm(q, s, [C.lerp(-2, -4, e), C.lerp(14, -8, e)]);
-      q.neck = [C.lerp(-4, 2, e), 0, 0];
-      const f = C.fk(q), head = f.P.head, ghm = V.mix(f.P.ghL, f.P.ghR, .5);
-      const g0 = [0, ghm[1] + 9, ghm[2] + 53], g1 = [0, head[1] + 1, head[2] + 5];
-      const mid = V.add(V.mix(g0, g1, e), [0, 1, 0], 4 * Math.sin(Math.PI * e)), half = C.lerp(7, 18, e);
-      for (const s of S) {
-        const lat = C.lat(q, s), g = V.add(mid, lat, half);
-        const pole = V.unit(V.add(V.add(lat, [0, 1, 0], C.lerp(-.6, .25, e)), [0, 0, -1], C.lerp(-.2, .35, e)));
-        C.hold(q, s, g, pole, { pron: C.lerp(70, 5, e), flex: C.lerp(0, -10, e) });
-      }
+      const { V } = C, e = C.ease(t), L = BFPL(), q = fpBody(C, BFP().q, t);
+      fpGrip(C, q, V.add(L.E, L.u, C.lerp(L.s0, 0, e)), e, false, BAND_HALF);
       return turn(C, q, 90);
     }
   },
@@ -495,7 +572,7 @@ module.exports = {
   /* Сидя, бёдра под валиками, широкий хват сверху, корпус отклонён на ~12°. t=0 — руки выпрямлены вверх; t=1 — гриф у верха груди, локти вниз. */
   latpull: {
     keys: [0, .25, .5, .75, 1],
-    get equipment() { const E = LP_EQ(), A = EQ.anchors([E]).lat; return [E, cable(E, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 19, bend: 8, wrap: [0, 0, -1], rest: 45 }), { type: 'g3line', id: 'boomCable', pts: [rp(A.boomCableA), rp(A.boomCableB)] }]; },
+    get equipment() { return tuned(this, () => { const E = LP_EQ(), A = EQ.anchors([E]).lat; return [E, cable(E, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 19, bend: 8, wrap: [0, 0, -1] }), { type: 'g3line', id: 'boomCable', pts: [rp(A.boomCableA), rp(A.boomCableB)] }]; }); },
     contacts: [{ body: 'buttocks', prop: 'lat:seat' }, { body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = latSeat(C, 8), L = LP();
@@ -517,7 +594,7 @@ module.exports = {
      отклонён назад чуть больше, чем при широком хвате. Большой палец смотрит назад, к лицу (нейтральный хват над головой). */
   latpullv: {
     keys: [0, .25, .5, .75, 1],
-    get equipment() { const E = LP_EQ(), A = EQ.anchors([E]).lat; return [E, cable(E, '', { id: 'cab', attach: 'V', hands: ['L', 'R'], clip: 11, wrap: [0, 0, -1], rest: 53 }), { type: 'g3line', id: 'boomCable', pts: [rp(A.boomCableA), rp(A.boomCableB)] }]; },
+    get equipment() { return tuned(this, () => { const E = LP_EQ(), A = EQ.anchors([E]).lat; return [E, cable(E, '', { id: 'cab', attach: 'V', hands: ['L', 'R'], clip: 11, wrap: [0, 0, -1] }), { type: 'g3line', id: 'boomCable', pts: [rp(A.boomCableA), rp(A.boomCableB)] }]; }); },
     contacts: [{ body: 'buttocks', prop: 'lat:seat' }, { body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.5, R: 1.5 },
     pose(t, C) {
@@ -529,7 +606,13 @@ module.exports = {
       for (const s of S) {
         const lat = C.lat(q, s), g = [C.M.SIGN[s] * 6.5, y, z];
         const pole = V.unit(V.add(V.add(lat, [0, 0, 1], C.lerp(.9, 1.1, e)), [0, -1, 0], C.lerp(.2, .9, e)));
-        C.grip(q, s, g, V.unit([-C.M.SIGN[s] * .1, C.lerp(.35, .05, e), -1]), pole, { wristExt: 4 });
+        /* ручки поперёк предплечья: V-рукоять висит на карабине и качается вокруг него, ручки наклоняются вслед за
+           предплечьями (как у тяги сидя, rowGripV), кисть продолжает предплечье. Прежде ручки держали наклон по фазе,
+           а предплечья к середине тяги уходят внутрь — отклонение запястья доходило до 27° */
+        const thumb = V.unit([-C.M.SIGN[s] * .1, C.lerp(.35, .05, e), -1]);
+        C.grip(q, s, g, thumb, pole, { wristExt: 4, allowShort: true });
+        const f = C.fk(q), fore = V.unit(V.sub(f.P['wr' + s], f.P['el' + s]));
+        C.grip(q, s, g, V.unit(V.perp(thumb, fore)), pole, { wristExt: 4 });
       }
       return q;
     }
@@ -539,7 +622,7 @@ module.exports = {
      t=1 — гриф у верхней части груди, локти внизу перед корпусом. Рукоять та же, что в широком хвате (≈118 см). */
   latpulluh: {
     keys: [0, .25, .5, .75, 1],
-    get equipment() { const E = LP_EQ(), A = EQ.anchors([E]).lat; return [E, cable(E, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 43, bend: 8, wrap: [0, 0, -1], rest: 47 }), { type: 'g3line', id: 'boomCable', pts: [rp(A.boomCableA), rp(A.boomCableB)] }]; },
+    get equipment() { return tuned(this, () => { const E = LP_EQ(), A = EQ.anchors([E]).lat; return [E, cable(E, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 43, bend: 8, wrap: [0, 0, -1] }), { type: 'g3line', id: 'boomCable', pts: [rp(A.boomCableA), rp(A.boomCableB)] }]; }); },
     contacts: [{ body: 'buttocks', prop: 'lat:seat' }, { body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = latSeat(C, C.lerp(8, 13, e)), L = LP();
@@ -590,7 +673,7 @@ module.exports = {
      t=0 — руки разведены в стороны, локти мягко согнуты; t=1 — рукояти сведены по дуге вниз-вперёд перед грудью. */
   cablefly: {
     keys: [0, .2, .4, .6, .8, 1],
-    equipment: [XO_HI, cable(XO_HI, 'L', { id: 'cabL', attach: 'D', hands: ['L'], plane: 'swivel', clip: 11, rest: 87 }), cable(XO_HI, 'R', { id: 'cabR', attach: 'D', hands: ['R'], plane: 'swivel', clip: 11, rest: 87 })],
+    get equipment() { return tuned(this, () => [XO_HI, cable(XO_HI, 'L', { id: 'cabL', attach: 'D', hands: ['L'], plane: 'swivel', clip: 11 }), cable(XO_HI, 'R', { id: 'cabR', attach: 'D', hands: ['R'], plane: 'swivel', clip: 11 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'gripL', prop: 'cabL' }, { body: 'gripR', prop: 'cabR' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
@@ -611,7 +694,7 @@ module.exports = {
   /* Нижние блоки кроссовера, шаг вперёд, корпус чуть наклонён. t=0 — руки внизу и в стороны; t=1 — сведены по дуге снизу вверх до уровня плеч. */
   cablelowfly: {
     keys: [0, .2, .4, .6, .8, 1],
-    equipment: [XO_LO, cable(XO_LO, 'L', { id: 'cabL', attach: 'D', hands: ['L'], plane: 'swivel', clip: 11, rest: 108 }), cable(XO_LO, 'R', { id: 'cabR', attach: 'D', hands: ['R'], plane: 'swivel', clip: 11, rest: 108 })],
+    get equipment() { return tuned(this, () => [XO_LO, cable(XO_LO, 'L', { id: 'cabL', attach: 'D', hands: ['L'], plane: 'swivel', clip: 11 }), cable(XO_LO, 'R', { id: 'cabR', attach: 'D', hands: ['R'], plane: 'swivel', clip: 11 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'gripL', prop: 'cabL' }, { body: 'gripR', prop: 'cabR' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
@@ -633,7 +716,7 @@ module.exports = {
      Левая рука держится за ручку на стойке колонны. */
   cablelat: {
     keys: [0, .2, .4, .6, .8, 1],
-    equipment: [CL_TOWER, cable(CL_TOWER, '', { id: 'cab', attach: 'D', hands: ['R'], rest: 77 })],
+    get equipment() { return tuned(this, () => [CL_TOWER, cable(CL_TOWER, '', { id: 'cab', attach: 'D', hands: ['R'] })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'col:grabL' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
@@ -651,7 +734,7 @@ module.exports = {
   /* На коленях лицом к верхнему блоку, канат у лба. t=0 — корпус почти прямой; t=1 — позвоночник скручен, локти к бёдрам. Таз неподвижен. */
   cablecrunch: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [CR_TOWER, CR_MAT, cable(CR_TOWER, '', { id: 'cab', attach: 'rope', knob: 'thumb', hands: ['L', 'R'], ropeLen: 26, rest: 97 })],
+    get equipment() { return tuned(this, () => [CR_TOWER, CR_MAT, cable(CR_TOWER, '', { id: 'cab', attach: 'rope', knob: 'thumb', hands: ['L', 'R'], ropeLen: 26 })]); },
     contacts: [{ body: 'kneeL', prop: 'mat' }, { body: 'kneeR', prop: 'mat' }, { body: 'footL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
@@ -672,7 +755,7 @@ module.exports = {
      t=0 — нога под тазом, колено согнуто, стопа над полом; t=1 — бедро отведено назад до полного разгибания. */
   glutekick: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [GK_TOWER, cable(GK_TOWER, '', { id: 'cab', attach: 'ankle', foot: 'L', rest: 70 })],
+    get equipment() { return tuned(this, () => [GK_TOWER, cable(GK_TOWER, '', { id: 'cab', attach: 'ankle', foot: 'L' })]); },
     contacts: [{ body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'col:grabR' }, { body: 'gripR', prop: 'col:grabL' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
@@ -688,7 +771,7 @@ module.exports = {
   /* Прямая нога отводится назад (работает левая), лёгкий наклон, руки на стойке; стопа не касается пола. */
   cablekickback: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [KB_TOWER, cable(KB_TOWER, '', { id: 'cab', attach: 'ankle', foot: 'L', rest: 89 })],
+    get equipment() { return tuned(this, () => [KB_TOWER, cable(KB_TOWER, '', { id: 'cab', attach: 'ankle', foot: 'L' })]); },
     contacts: [{ body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'col:grabR' }, { body: 'gripR', prop: 'col:grabL' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
@@ -708,7 +791,7 @@ module.exports = {
      правого, поэтому под тазом нога проходит над полом за счёт сгибания бедра (до 25° к концу) и колена (не больше 15°). */
   cableadduct: {
     keys: [0, .2, .4, .6, .8, 1],
-    equipment: [AD_TOWER(), cable(AD_TOWER(), '', { id: 'cab', attach: 'ankle', foot: 'L', wrap: [0, -1, 0], rest: 30 })],
+    get equipment() { return tuned(this, () => [AD_TOWER(), cable(AD_TOWER(), '', { id: 'cab', attach: 'ankle', foot: 'L', wrap: [0, -1, 0] })]); },
     contacts: [{ body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'col:grabL' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
@@ -724,7 +807,7 @@ module.exports = {
      от направления вперёд. Локоть неподвижен у бока, кисть — продолжение предплечья, корпус не поворачивается. */
   cableextrot: {
     keys: [0, .2, .4, .6, .8, 1],
-    equipment: [ER_TOWER, ER_TOWEL, cable(ER_TOWER, '', { id: 'cab', attach: 'D', hands: ['R'], rest: 45 })],
+    get equipment() { return tuned(this, () => [ER_TOWER, ER_TOWEL, cable(ER_TOWER, '', { id: 'cab', attach: 'D', hands: ['R'] })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripR', prop: 'cab' }, { body: 'uaR', prop: 'towel' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
@@ -751,7 +834,7 @@ module.exports = {
   /* Спиной к блоку, шаг вперёд, корпус наклонён, локти у ушей. t=0 — канат за головой; t=1 — руки выпрямлены вперёд-вверх, концы разведены. */
   cableohext: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [OH_TOWER, cable(OH_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26, rest: 95 })],
+    get equipment() { return tuned(this, () => [OH_TOWER, cable(OH_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
@@ -774,7 +857,7 @@ module.exports = {
      t=1 — руки у правого колена, корпус и таз развёрнуты вправо, руки почти прямые. */
   cablewood: {
     keys: [0, .2, .4, .6, .8, 1],
-    equipment: [WD_TOWER, cable(WD_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26, plane: 'swivel', rest: 57 })],
+    get equipment() { return tuned(this, () => [WD_TOWER, cable(WD_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26, plane: 'swivel' })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
@@ -800,7 +883,7 @@ module.exports = {
   /* Спиной к нижнему блоку, канат между ног. t=0 — стоя прямо, кисти у паха; t=1 — наклон с отведением таза назад, колени мягкие, спина прямая. */
   pullthrough: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [PT_TOWER, cable(PT_TOWER, '', { id: 'cab', attach: 'rope', knob: 'thumb', hands: ['L', 'R'], ropeLen: 26, rest: 98 })],
+    get equipment() { return tuned(this, () => [PT_TOWER, cable(PT_TOWER, '', { id: 'cab', attach: 'rope', knob: 'thumb', hands: ['L', 'R'], ropeLen: 26 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
@@ -822,7 +905,7 @@ module.exports = {
   /* t=0 — руки выпрямлены, рукоять у бёдер (хват снизу); t=1 — рукоять у груди, локти у корпуса. */
   cablecurl: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [CC_TOWER, cable(CC_TOWER, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 11, rest: 62 })],
+    get equipment() { return tuned(this, () => [CC_TOWER, cable(CC_TOWER, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 11 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = C.M.clone(CC().q);
@@ -845,7 +928,7 @@ module.exports = {
      t=0 — руки выпрямлены, кисти перед бёдрами; t=1 — кисти у груди, локти у корпуса. */
   ropecurl: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [CC_TOWER, cable(CC_TOWER, '', { id: 'cab', attach: 'rope', knob: 'thumb', hands: ['L', 'R'], ropeLen: 26, rest: 62 })],
+    get equipment() { return tuned(this, () => [CC_TOWER, cable(CC_TOWER, '', { id: 'cab', attach: 'rope', knob: 'thumb', hands: ['L', 'R'], ropeLen: 26 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
@@ -863,26 +946,16 @@ module.exports = {
     }
   },
 
-  /* t=0 — руки вытянуты к блоку, канат перед лицом; t=1 — кисти у ушей, локти высоко в стороны. */
+  /* t=0 — руки выпрямлены к блоку перед лицом, канат натянут; t=1 — кисти у ушей, локти высоко в стороны. Середина хвата —
+     по прямой вдоль троса (раскладка и источники — «Тяга каната к лицу» выше). */
   facepull: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [FP_TOWER, cable(FP_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26, rest: 39 })],
+    get equipment() { return tuned(this, () => [FP_TOWER, cable(FP_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26, wrap: [0, -1, 0] })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
-      const { V } = C, e = C.ease(t), q = C.M.clone(FP().q), P = pulleyOf(FP_TOWER);
-      /* пояс сверх ритма: в начале лопатки вытянуты к блоку, в конце «лопатки сведены» без подъёма плеч (ошибка в каталоге) */
-      for (const s of S) C.rhythm(q, s, [C.lerp(-2, -4, e), C.lerp(14, -8, e)]);
-      q.neck = [C.lerp(-4, 2, e), 0, 0];
-      const f = C.fk(q), head = f.P.head, ghm = V.mix(f.P.ghL, f.P.ghR, .5);
-      const g0 = [0, ghm[1] + 9, ghm[2] + 53], g1 = [0, head[1] + 1, head[2] + 4];
-      const mid = V.add(V.mix(g0, g1, e), [0, 1, 0], 4 * Math.sin(Math.PI * e)), half = C.lerp(5.5, 17.5, e);
-      const clip = V.add(mid, V.unit(V.sub(P, mid)), Math.sqrt(26 * 26 - half * half));
-      for (const s of S) {
-        const lat = C.lat(q, s), g = V.add(mid, lat, half);
-        const pole = V.unit(V.add(V.add(lat, [0, 1, 0], C.lerp(-.6, .25, e)), [0, 0, -1], C.lerp(-.2, .35, e)));
-        C.hold(q, s, g, pole, { pron: C.lerp(70, 5, e), flex: C.lerp(0, -10, e) });
-      }
+      const { V } = C, e = C.ease(t), L = FPL(), q = fpBody(C, FP().q, t);
+      fpGrip(C, q, V.add(L.E, L.u, C.lerp(L.s0, 0, e)), e);
       return q;
     }
   },
@@ -890,7 +963,7 @@ module.exports = {
   /* t=0 — прямые руки на уровне головы; t=1 — рукоять у бёдер, лопатки опущены. */
   straightpull: {
     keys: [0, .2, .4, .6, .8, 1],
-    equipment: [SP_TOWER, cable(SP_TOWER, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 12, rest: 39 })],
+    get equipment() { return tuned(this, () => [SP_TOWER, cable(SP_TOWER, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 12 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = C.M.clone(SP().q);
@@ -908,7 +981,7 @@ module.exports = {
   /* t=0 — локти согнуты под 90°, рукоять на уровне низа груди; t=1 — руки выпрямлены, рукоять у бёдер. */
   pushdown: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [PD_TOWER, cable(PD_TOWER, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 11, rest: 89 })],
+    get equipment() { return tuned(this, () => [PD_TOWER, cable(PD_TOWER, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 11 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = C.M.clone(PD().q), f = C.fk(q);
@@ -929,7 +1002,7 @@ module.exports = {
      разведены к бёдрам, предплечья чуть повёрнуты ладонями назад. Локти у корпуса всю амплитуду. */
   ropepushdown: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [PD_TOWER, cable(PD_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26, rest: 89 })],
+    get equipment() { return tuned(this, () => [PD_TOWER, cable(PD_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {

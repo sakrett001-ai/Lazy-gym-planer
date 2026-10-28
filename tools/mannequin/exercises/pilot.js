@@ -1,7 +1,7 @@
 'use strict';
 /* Пилот: упражнения со скриншотов пользователя. Ось Z — вдоль скамьи/тренажёра, X — поперёк, Y — вверх, см.
    Каждая поза строится так: корпус (углы) → опора (подушка, сиденье, пол) → стопы → кисти к реальным ручкам. */
-const { ctx } = require('../compose.js');
+const { ctx, fromCat } = require('../compose.js');
 const S = ['L', 'R'];
 const once = f => { let v; return () => v ?? (v = f()); };
 
@@ -36,6 +36,60 @@ const SOHP = once(() => {
   C.restOn(q, 'back', bp.o, by, -1.0);
   const f = C.fk(q);
   return { q, gh: V.mix(f.P.ghL, f.P.ghR, .5), head: f.P.head };
+});
+
+/* ---------- Тяга эспандера сидя на полу ----------
+   Техника — подсказки каталога (05-motion-cues.js, 01-exercises-base.js): сидя на полу, ноги прямые, середина ленты за
+   стопами; спина прямая, руки вытянуты вперёд с натяжением ленты; концы ленты — к поясу, лопатки сводятся, локти назад.
+   TheraBand (Performance Health Academy, «Shoulder Seated Row in Long Sitting»): в начале руки выпрямлены перед собой,
+   концы ленты тянутся к бёдрам, колени и спина прямые. Таз в длинном сидении отклонён назад на 12–16° (задняя поверхность
+   бедра при почти прямых коленях), поясница выводит корпус почти в вертикаль, грудной отдел прямой; стопы на месте весь
+   повтор. Каждая кисть идёт по прямой вдоль своей ветви ленты — от точки у пояса к месту, где лента сходит со стопы
+   (BIND.band, fromSole); в растяжке локти разогнуты до 10°. Рукоять поперёк предплечья — кисть продолжает предплечье.
+   Прежде в растяжке спина была скруглена (сгибание поясницы 20° и грудного отдела 14°), локти согнуты на 62°, кисти
+   на 30 см выше стоп: лента шла под 54° к полу и поворачивалась за повтор на 48°, рукоять стояла вертикально при любом
+   наклоне предплечья (отклонение кисти до 18°). */
+const BR_MAT = { type: 'mat', id: 'mat', len: 180, at: [0, 0, 30] };
+function brBody(C, t, hz) {
+  const { V } = C, e = C.ease(t), q = C.base(), tilt = C.lerp(12, 16, e) * C.D2R;
+  C.root(q, [0, 12, 0], [0, Math.cos(tilt), -Math.sin(tilt)], [0, Math.sin(tilt), Math.cos(tilt)]);
+  q.lumbar = [14, 0, 0]; q.thoracic = [C.lerp(2, -2, e), 0, 0]; q.neck = [C.lerp(-2, 2, e), 0, 0];
+  for (const s of S) { q[s].hip = [76, 5, 6]; q[s].knee = 10; }
+  C.restOn(q, 'buttocks', [0, 1, 0], [0, 1, 0], -1.2);
+  const z = hz ?? C.fk(q).P.hipL[2];
+  for (const s of S) {
+    const f = C.fk(q), hip = f.P['hip' + s], lat = C.latP(q, s);
+    C.heel(q, s, V.add([hip[0], 1, z + 82], lat, 1.5), 0, 72, [0, 1, 0]);
+  }
+  for (const s of S) q[s].girdle = [0, C.lerp(14, -15, e)];
+  return q;
+}
+/* стопы — по тазу в растяжке (BR0): при отклонении таза назад к концу тяги пятки не съезжают по коврику */
+const BR0 = once(() => { const C = ctx([BR_MAT]); return C.fk(brBody(C, 0)).P.hipL[2]; });
+/* конец ленты у пояса в конце тяги и место, где ветвь сходит со стопы (как BIND.band: сбоку от подушечки стопы) */
+function brEnd(C, q, s) { const { V } = C, T = C.axes(q, 'thorax'); return V.add(V.add(V.add(T.o, T.x, C.M.SIGN[s] * 18.5), T.y, -6), T.z, 10); }
+function brSole(C, q, s) { const { V } = C, R = C.M.catalogPose(q), t = R.frames['toes' + s], lat = V.scale(t.x, C.M.SIGN[s]); return fromCat(V.add(V.add(R['ball' + s], lat, 5.6), t.y, -1)); }
+/* кисти на расстоянии k от точки у пояса вдоль своей ветви; рукоять поперёк предплечья (большой палец вверх, перпендикулярно
+   предплечью), локти в растяжке вниз и в стороны, в конце — назад */
+function brGrip(C, q, L, k, e, allowShort) {
+  const { V } = C;
+  for (const s of S) {
+    const lat = C.lat(q, s), g = V.add(L[s].E, L[s].u, k);
+    const pole = V.unit(V.mix(V.add([0, -1, -.2], lat, .6), V.add([0, -.6, -1], lat, .5), e));
+    C.grip(q, s, g, [0, 1, 0], pole, { allowShort: true });
+    const f = C.fk(q), fore = V.unit(V.sub(f.P['wr' + s], f.P['el' + s]));
+    C.grip(q, s, g, V.unit(V.perp([0, 1, 0], fore)), pole, { allowShort });
+  }
+}
+const BRL = once(() => {
+  const C = ctx([BR_MAT]), { V } = C;
+  return C.unhinted(() => {
+    const q1 = brBody(C, 1, BR0()), q0 = brBody(C, 0, BR0()), L = {};
+    for (const s of S) { const E = brEnd(C, q1, s), A = brSole(C, q0, s); L[s] = { E, u: V.unit(V.sub(A, E)), len: V.dist(A, E) }; }
+    const elbow = k => { const q = brBody(C, 0, BR0()); brGrip(C, q, L, k, 0, true); brGrip(C, q, L, k, 0, true); return (q.L.elbow + q.R.elbow) / 2; };
+    L.s0 = C.solve1D(k => elbow(k) - 10, 10, Math.min(L.L.len, L.R.len) - 20);
+    return L;
+  });
 });
 
 module.exports = {
@@ -245,31 +299,17 @@ module.exports = {
     }
   },
 
-  /* Тяга эспандера к поясу сидя на полу: лента охватывает подошвы. t=0 — руки впереди, t=1 — кисти у пояса. */
+  /* Тяга эспандера к поясу сидя на полу: лента охватывает подошвы (раскладка и источники — «Тяга эспандера сидя на полу»
+     выше). t=0 — руки выпрямлены вперёд к стопам, лента натянута, лопатки разведены; t=1 — кисти у пояса, локти назад,
+     лопатки сведены. Спина прямая, кисти — по прямой вдоль ветвей ленты. */
   bandrow: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [{ type: 'mat', id: 'mat', len: 180, at: [0, 0, 30] }, { type: 'band', id: 'band', fromSole: true, r: .7 }],
+    equipment: [BR_MAT, { type: 'band', id: 'band', fromSole: true, r: .7 }],
     contacts: [{ body: 'buttocks', prop: 'mat' }, { body: 'footL', prop: 'mat' }, { body: 'footR', prop: 'mat' }, { body: 'gripL', prop: 'band:handleL' }, { body: 'gripR', prop: 'band:handleR' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
-      const { V } = C, e = C.ease(t), q = C.base(), tilt = C.lerp(12, 16, e) * C.D2R;
-      C.root(q, [0, 12, 0], [0, Math.cos(tilt), -Math.sin(tilt)], [0, Math.sin(tilt), Math.cos(tilt)]);
-      q.lumbar = [C.lerp(20, 10, e), 0, 0]; q.thoracic = [C.lerp(14, 0, e), 0, 0]; q.neck = [C.lerp(-10, 4, e), 0, 0];
-      for (const s of S) { q[s].hip = [76, 5, 6]; q[s].knee = 10; }
-      C.restOn(q, 'buttocks', [0, 1, 0], [0, 1, 0], -1.2);
-      const hz = C.fk(q).P.hipL[2];
-      for (const s of S) {
-        const f = C.fk(q), hip = f.P['hip' + s], lat = C.latP(q, s);
-        C.heel(q, s, V.add([hip[0], 1, hz + 82], lat, 1.5), 0, 72, [0, 1, 0]);
-      }
-      const f = C.fk(q), T = C.axes(q, 'thorax');
-      for (const s of S) {
-        q[s].girdle = [0, C.lerp(14, -15, e)];
-        const lat = C.lat(q, s), gh = f.P['gh' + s];
-        const g0 = V.add(V.add(gh, [0, 0, 1], 57), [0, -1, 0], 14), g1 = V.add(V.add(V.add(T.o, T.x, C.M.SIGN[s] * 17), T.y, -6), T.z, 10);
-        const pole = V.unit(V.mix(V.add([0, -1, -.2], lat, .6), V.add([0, -.6, -1], lat, .5), e));
-        C.grip(q, s, V.add(V.mix(g0, g1, e), lat, C.lerp(-3, 2, e)), [0, 1, 0], pole);
-      }
+      const e = C.ease(t), L = BRL(), q = brBody(C, t, BR0());
+      brGrip(C, q, L, C.lerp(L.s0, 0, e), e);
       return q;
     }
   },
