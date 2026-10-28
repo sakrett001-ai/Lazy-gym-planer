@@ -24,7 +24,7 @@
    Внутренние координаты: Y вверх, пол Y = 0, см. */
 ((E) => {
 const M = typeof Mannequin !== 'undefined' ? Mannequin : require('./09bm-mannequin.js');
-const { V, toCat, dirCat } = M, { BIND } = E, unit = V.unit;
+const { V, M3, toCat, dirCat } = M, { BIND } = E, unit = V.unit;
 /* трос 4,8 мм (3/16″, 7×19 — как у селекторных тренажёров) */
 const CABLE_R = .24;
 const TAU = 2 * Math.PI, rot90 = v => [-v[1], v[0]], ang2 = v => Math.atan2(v[1], v[0]), wrapPi = a => a - TAU * Math.floor((a + Math.PI) / TAU);
@@ -168,7 +168,14 @@ const drivesOf = e => e.drives || [e];
 function state(e, R) {
   const ds = drivesOf(e).map(d => driveState(d, R)), L = ds.reduce((s, q) => s + q.L, 0);
   const k = e.ratio ?? 1, raw = (L - (e.rest || 0)) * k, lift = Math.max(0, Math.min(e.stack ? e.stack.maxLift : Infinity, raw));
-  return { ...ds[0], drives: ds, L, rawLift: raw, lift };
+  /* подвижный блок 1:2 в колонне (mult): трос привода с блока колонны висит вниз на d = d0 − (L − rest) до проушины обоймы
+     блока B; трос стека — от штока верхней плиты вверх, через верх B и вниз к неподвижной проушине dead (k = 2) */
+  let mult = null;
+  if (e.mult) {
+    const d = e.mult.d0 - (L - (e.rest || 0)), top = V.add(ds[0].leave3, [0, -1, 0], d);
+    mult = { d, top, c: V.add(top, [0, -1, 0], e.mult.r + 3) };
+  }
+  return { ...ds[0], drives: ds, L, rawLift: raw, lift, mult };
 }
 
 /* ---------- Кулачок: контур (рамка кулачка) и детали ---------- */
@@ -221,11 +228,29 @@ BIND.g4camCable = (e, R) => {
       out.push({ kind: 'cyl', c: toCat(c3), axis: w, r: .6, len: 2 * half + 1.2, sides: 12, tone: 'chrome', role: 'frame', id: id + ':blockAxle', mount: id + ':blockForkA' });
       for (const [k, sg] of [['A', 1], ['B', -1]]) out.push({ kind: 'obox', c: toCat(V.add(V.add(c3, A, sg * half), fd, (fl - 1.2) / 2)), x: w, y: dirCat(fd), z: dirCat(V.cross(A, fd)), size: [.7, fl + 1.2, 3], round: .2, tone: 'frame', role: 'frame', id: id + ':blockFork' + k, mount: d.mountTo });
     }
-    out.push({ kind: 'cable', pts: q.pts3.map(toCat), r: CABLE_R, tone: 'cable', role: 'cable', id: id + ':cable', mount: kind === 'cam' ? id + ':cam' : kind === 'block' ? id + ':block' : d.mountTo });
+    const pts = q.pts3.concat(i === 0 && S.mult ? [S.mult.top] : []);
+    out.push({ kind: 'cable', pts: pts.map(toCat), r: CABLE_R, tone: 'cable', role: 'cable', id: id + ':cable', mount: kind === 'cam' ? id + ':cam' : kind === 'block' ? id + ':block' : d.mountTo });
   });
-  if (e.stack) out.push(...E.cableStack.parts(e.stack, S.lift, e.id, e.rodPart, CABLE_R));
+  if (e.stack) out.push(...E.cableStack.parts(e.stack, S.lift, e.id, e.rodPart, CABLE_R, !!S.mult));
+  if (S.mult) out.push(...multParts(e, S));
   return out;
 };
+/* Подвижный блок 1:2 в колонне: колесо B (ось — X стека), ось в обойме из двух щёк, мостик обоймы с проушиной троса привода;
+   трос стека от штока верхней плиты вверх к B (сторона −Z стека), по верху B и вниз к проушине dead (сторона +Z, перед плитами) */
+function multParts(e, S) {
+  const st = e.stack, mu = e.mult, sid = e.id + ':stk', X = M3.col(st.R, 0), Y = M3.col(st.R, 1), Z = M3.col(st.R, 2), r = mu.r, half = 1.9, out = [];
+  const c = S.mult.c, fl = r + 1.5, ax = dirCat(X), up = [0, 1, 0];
+  out.push({ kind: 'cyl', c: toCat(c), axis: ax, r, len: 2.4, sides: 24, tone: 'chrome', role: 'frame', id: sid + 'Mult', mount: sid + 'MultAxle' });
+  out.push({ kind: 'cyl', c: toCat(c), axis: ax, r: .6, len: 2 * half + 1.2, sides: 12, tone: 'chrome', role: 'frame', id: sid + 'MultAxle', mount: sid + 'MultForkA' });
+  for (const [k, sg] of [['A', 1], ['B', -1]]) out.push({ kind: 'obox', c: toCat(V.add(V.add(c, X, sg * half), up, (fl - 1.2) / 2)), x: ax, y: dirCat(up), z: dirCat(Z), size: [.7, fl + 1.2, 3], round: .2, tone: 'frame', role: 'frame', id: sid + 'MultFork' + k, mount: sid + 'MultBridge' });
+  out.push({ kind: 'obox', c: toCat(V.add(c, up, fl + .75)), x: ax, y: dirCat(up), z: dirCat(Z), size: [2 * half + .7, 1.5, 3], round: .3, tone: 'frame', role: 'frame', id: sid + 'MultBridge', mount: e.id + ':cable' });
+  /* трос стека: шток → B → dead */
+  const stem = V.add(st.o, Y, S.lift + st.sel * st.pitch + 2 + 8), pts = [stem];
+  for (let j = 0; j <= 8; j++) { const a = Math.PI * j / 8; pts.push(V.add(V.add(c, Z, -r * Math.cos(a)), up, r * Math.sin(a))); }
+  pts.push(mu.dead);
+  out.push({ kind: 'cable', pts: pts.map(toCat), r: CABLE_R, tone: 'cable', role: 'cable', id: sid + 'Cable', mount: sid + 'Stem' });
+  return out;
+}
 
 /* ---------- Неподвижные узлы рамы ---------- */
 /* Блок на кронштейне: колесо радиуса r (ось axis), ось колеса в двух щеках вилки, мостик вилки на расстоянии r + 1,5 см
@@ -243,8 +268,15 @@ function pulley(t, k, c, r, { axis = [1, 0, 0], dir, mount, half = 1.9 }) {
    нижние плиты, рамка и stackInfo), блок под верхней балкой — его колесо сходом вниз попадает в ось стека (трос к нему
    подходит со стороны +Z узла, перед плитами). at — центр стека на полу, H — высота колонны, r — радиус верхнего блока.
    Ключи деталей — с префиксом pre; возвращает центр верхнего блока и высоту схода (topY) во внутренних координатах. */
-function column(b, pre, { at, H, n = 15, sel = 5, r = 5, mount, X = 27, yaw = 0 }) {
+function column(b, pre, { at, H, n = 15, sel = 5, r = 5, mount, X = 27, yaw = 0, mult = 0 }) {
   const t = E.cableStack.Sub(b, pre, at, yaw);
+  /* подвижный блок 1:2 (mult — его радиус): блок колонны сдвинут вперёд на mult — трос с него висит над осью блока B;
+     проушина неподвижного конца троса стека — на кронштейне основания перед плитами (сторона +Z, на 2·mult от оси стека) */
+  if (mult) {
+    t.tube('deadArm', [0, 3.75, 3.5], [0, 3.75, 2 * mult + 2], [4, 7.5], { mount: 'baseM' });
+    t.box('deadEnd', [0, 8.5, 2 * mult], [2.5, 2, 2.5], { mount: 'deadArm', tone: 'chrome', round: .4 });
+    t.anchor('dead', [0, 9.3, 2 * mult]);
+  }
   t.tube('baseM', [-X - 4, 3.75, 0], [X + 4, 3.75, 0], [8, 7.5], { mount: '/' + mount });
   for (const [k, x] of [['L', X], ['R', -X]]) {
     t.tube('foot' + k, [x, 3.75, -26], [x, 3.75, 22], [7.5, 7.5], { mount: 'baseM' });
@@ -252,9 +284,11 @@ function column(b, pre, { at, H, n = 15, sel = 5, r = 5, mount, X = 27, yaw = 0 
     t.tube('brace' + k, [x, 7.5, -24], [x, 58, -3.75], [5, 5], { mount: 'foot' + k, up: [1, 0, 0] });
   }
   t.tube('top', [-X - 3.75, H - 3.75, 0], [X + 3.75, H - 3.75, 0], [7.5, 7.5], { mount: 'upL' });
-  const topY = H - 7.5 - 3 - r, wc = [0, topY, r];
+  const topY = H - 7.5 - 3 - r, wc = [0, topY, r + mult];
   E.cableStack.stack(t, { H, n, sel, base: 'baseM', topY });
-  pulley(t, 'pulley', wc, r, { dir: [0, 1, 0], mount: 'top' });
+  /* блок, сдвинутый вперёд (mult), — на консоли от верхней балки */
+  if (mult) t.tube('wheelArm', [0, H - 3.75, 3], [0, H - 3.75, r + mult + 2.5], [6, 7.5], { mount: 'top' });
+  pulley(t, 'pulley', wc, r, { dir: [0, 1, 0], mount: mult ? 'wheelArm' : 'top' });
   return { wheel: t.P(wc), r, topY, H };
 }
 E.leverStack = { CABLE_R, plane, leverAngle, tangent, support, camPoint, camWrap, driveState, drivesOf, state, outline, hull, camParts, pulley, column };

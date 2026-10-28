@@ -351,7 +351,7 @@
   /* Подвижная часть стека (общая для блочных и рычажных тренажёров): выбранные плиты, верхняя плита и над ней шток с тросом
      (1:1) или подвижный блок (2:1, st.float). st — стек из stackInfo и рамки 'stack' (o, R — во внутренних координатах),
      lift — подъём плит, см; детали — id + ':stk…', скользят по направляющим rodPart и парной (…R); cableR — радиус троса. */
-  function stackParts(st, lift, id, rodPart, cableR = .35) {
+  function stackParts(st, lift, id, rodPart, cableR = .35, noCable = false) {
     const out = [], o = toCat(st.o), X = dirCat(M3.col(st.R, 0)), Y = dirCat(M3.col(st.R, 1)), Z = dirCat(M3.col(st.R, 2));
     /* плиты и верхняя плита скользят по обеим направляющим: rides — детали, сквозь которые они проходят по устройству */
     const at = (y) => V.add(o, Y, y + lift), sid = id + ':stk', rides = [rodPart, rodPart.replace(/L$/, 'R')];
@@ -369,13 +369,13 @@
       out.push({ kind: 'cyl', c: wc, axis: Z, r: fl.r, len: 2.4, tone: 'chrome', role: 'frame', id: sid + 'Float', mount: sid + 'Axle' });
       const pts = [V.add(V.add(top, X, -fl.r), Y, fl.into || 0)];
       for (let j = 0; j <= 2; j++) { const a = j / 2 * Math.PI; pts.push(V.add(V.add(wc, X, -fl.r * Math.cos(a)), Y, -fl.r * Math.sin(a))); }
-      /* twin — дифференциал рычажного тренажёра (09bo-g4-lever.js): второй конец тоже уходит вверх к неподвижному блоку */
-      pts.push(fl.twin ? V.add(V.add(top, X, fl.r), Y, fl.into || 0) : V.add(V.add(top, X, fl.r), Y, -fl.dead));
+      pts.push(V.add(V.add(top, X, fl.r), Y, -fl.dead));
       out.push({ kind: 'cable', pts, r: cableR, tone: 'cable', role: 'cable', id: sid + 'Cable', mount: sid + 'Float' });
     } else {
       const stemTop = V.add(topC, Y, 8);
       out.push({ kind: 'beam', a: V.add(topC, Y, 2), b: stemTop, r: 1.1, tone: 'chrome', role: 'frame', id: sid + 'Stem', mount: sid + 'Top' });
-      out.push({ kind: 'cable', pts: [stemTop, top], r: cableR, tone: 'cable', role: 'cable', id: sid + 'Cable', mount: sid + 'Stem' });
+      /* noCable — трос штока рисует узел рычажного стека (подвижный блок 1:2 в колонне, 09bo-g4-lever.js) */
+      if (!noCable) out.push({ kind: 'cable', pts: [stemTop, top], r: cableR, tone: 'cable', role: 'cable', id: sid + 'Cable', mount: sid + 'Stem' });
     }
     return out;
   }
