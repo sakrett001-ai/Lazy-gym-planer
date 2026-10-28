@@ -1,8 +1,10 @@
-"""Anny подтянутая в нейтральной стойке манекена 4.61.0 (кожа «только внешний вид»).
+"""Anny в нейтральной стойке манекена 4.61.0 (кожа «только внешний вид»).
 
-Форма — одобренная владельцем подтянутая Anny (tools/skin-anny/result/anny-toned.json: фенотип, местные формы, нейтральный
-пах); поза её рига — по скелету 4.61.0 (tools/anny-look/fit.json: поза корпуса и сдвиг подобраны fit.py, плюс небольшие
-поправки местных форм там, где Anny отходила от процедурной кожи 4.61.0 больше чем на 2–3 см). Конечности — как в
+Форма — эталон «обычного мужчины», одобренный владельцем: Anny по умолчанию (мужчина 27 лет, мышечность, вес и пропорции
+0,5, местные формы тела и пах — по умолчанию) на нашем скелете: рост фенотипа и три местные формы длин сегментов
+(tools/anny-look/look.json, подгонка — tools/anny-look/lengths.py) — чтобы суставы рига Anny совпали с суставами
+скелета; поза её рига — по скелету 4.61.0 (tools/anny-look/fit.json: поза корпуса и сдвиг подобраны fit.py). Прежняя
+подтянутая форма 4.62.0 (tools/skin-anny/result/anny-toned.json) — для сравнения на листах (shape='toned'). Конечности — как в
 tools/skin-anny/anny_pose.py: шарниры — наши суставы (плечевой, локтевой, тазобедренный, коленный, голеностопный),
 направления сегментов — нашей нейтральной стойки. Кисть Anny повёрнута к рамке кисти манекена, пальцы — по суставам пальцев
 расслабленной кисти манекена.
@@ -17,6 +19,10 @@ from anny_body import to_ours, dir_to_anny, rot_between
 
 TONED = os.path.join(ROOT, 'tools/skin-anny/result/anny-toned.json')
 FIT = os.path.join(ROOT, 'tools/anny-look/fit.json')
+LOOK = os.path.join(ROOT, 'tools/anny-look/look.json')
+# эталон «обычного мужчины» (лист для владельца): Anny по умолчанию — мужчина 27 лет, мышечность, вес и пропорции 0,5, без
+# местных форм; рост 0,35 — у Anny шкала роста своя (0,5 — 190,8 см), 0,35 — 174,4 см, медиана ANSUR II (174,5)
+REFERENCE = {'phenotype': {'muscle': .5, 'weight': .5, 'height': .35, 'proportions': .5}, 'local': {'bulge-incr': 0.0}}
 POSE_KEYS = ['sp5', 'sp4', 'sp3', 'sp2', 'sp1', 'neck', 'head', 'clav_e', 'clav_r', 'ty', 'tz', 'tw_ua', 'tw_fa', 'tw_th', 'neck_ty', 'neck_tz']
 FINGER_BONES = {0: ['finger1-1', 'finger1-2', 'finger1-3'], 1: ['finger2-1', 'finger2-2', 'finger2-3'], 2: ['finger3-1', 'finger3-2', 'finger3-3'],
                 3: ['finger4-1', 'finger4-2', 'finger4-3'], 4: ['finger5-1', 'finger5-2', 'finger5-3']}
@@ -39,17 +45,52 @@ def frame_from(a, b):
 
 
 class AnnyLook(AnnyPosed):
-    def __init__(self):
+    def __init__(self, shape='look'):
+        """shape: 'look' — эталон на нашем скелете (look.json, сборка), 'toned' — подтянутая форма 4.62.0 (для листа),
+        'reference' — эталон REFERENCE как есть (Anny по умолчанию, рост 174,4 см, без форм длин, для листа)"""
         torch.set_num_threads(1)
         super().__init__()
-        self.toned = json.load(open(TONED))
+        self.toned = json.load(open(TONED)); self.shape = shape
+        self.look = json.load(open(LOOK)) if shape == 'look' else None
 
     def params(self, fit=None):
-        """фенотип и местные формы: одобренные + поправки fit.json"""
-        A = self.toned; phen = dict(A['phenotype']); local = dict(A['local_changes']); local['bulge-incr'] = A['bulge-incr']
+        """фенотип и местные формы: look.json (эталон на нашем скелете) или подтянутая форма 4.62.0; поправки fit.json"""
+        if self.shape == 'reference':
+            return dict(REFERENCE['phenotype']), dict(REFERENCE['local'])
+        if self.look:
+            phen = dict(self.look['phenotype']); local = dict(self.look['local'])
+        else:
+            A = self.toned; phen = dict(A['phenotype']); local = dict(A['local_changes']); local['bulge-incr'] = A['bulge-incr']
         for k, d in ((fit or {}).get('local_delta') or {}).items():
             local[k] = float(np.clip(local.get(k, 0.0) + d, -1, 1))
         return phen, local
+
+    def rest(self, phen, local=None):
+        """покой рига; у формы look — руки и ноги со своим фенотипом (look.json: limbs), см. limb_blend"""
+        out = super().rest(phen, local)
+        limbs = (self.look or {}).get('limbs') if self.shape == 'look' else None
+        if not limbs: return out
+        V = out['rest_vertices'].clone()
+        for k, ph in limbs.items():
+            p2 = dict(phen); p2.update(ph)
+            V2 = super().rest(p2, local)['rest_vertices']
+            a = torch.tensor(self.limb_blend(k), dtype=V.dtype)[None, :, None]
+            V = V + a * (V2 - out['rest_vertices'])
+        out = dict(out); out['rest_vertices'] = V
+        return out
+
+    LIMB_BONES = {'arms': ('upperarm', 'lowerarm', 'wrist', 'finger', 'metacarpal'), 'upperarms': ('upperarm',),
+                  'forearms': ('lowerarm', 'wrist', 'finger', 'metacarpal'), 'legs': ('upperleg', 'lowerleg', 'foot', 'toe'),
+                  'thighs': ('upperleg',), 'shanks': ('lowerleg', 'foot', 'toe')}
+
+    def limb_blend(self, kind):
+        """доля фенотипа конечности у вершины: по весам рига Anny на кости руки (arms) или ноги (legs) — или их части, обе
+        стороны; малые доли (у Anny доли кости плеча 0,02–0,2 лежат по груди и спине, бедра — по крестцу) не берутся: плавно
+        от 0,1 до 0,9"""
+        pre = self.LIMB_BONES[kind]; n0 = self.vw.shape[0]       # вершины сетки Anny (без заплаток век)
+        w = sum(self.weights[:n0, i] for n, i in self.idx.items() if n[-2:] in ('.L', '.R') and n.startswith(pre))
+        u = np.clip((w - .1) / .8, 0, 1)
+        return u * u * (3 - 2 * u)
 
     def bones_pose(self, rest, J, q, hands=None):
         """матрицы костей G (Anny, м) для стойки: корпус — позой рига q, конечности — шарнирами на наших суставах (как
@@ -201,15 +242,6 @@ class AnnyLook(AnnyPosed):
         self.throat_sel = sel
         return fair(V, F, sel) if sel.any() else V
 
-    def neutral_groin(self, V, J):
-        """пах: форма «bulge» −1 уже гладкая; ямка у вершины промежности спереди (тёмное пятно на свету) — гладкой заплаткой
-        fair() по средней линии между бёдрами (|x| < 4 см, от 9 см ниже до 1 см выше тазобедренных, спереди)"""
-        F = self.skin_faces; hy = (J['hipL'][1] + J['hipR'][1]) / 2
-        used = np.zeros(len(V), bool); used[np.unique(F)] = True
-        sel = used & (np.abs(V[:, 0]) < 4.0) & (V[:, 1] > hy - 9) & (V[:, 1] < hy + 1) & (V[:, 2] > 0)
-        self.groin_sel = sel
-        return fair(V, F, sel) if sel.any() else V
-
     def stance(self, rest, J, q, hands=None, groin=True):
         """вершины в стойке (см, авторинг), головы костей рига в позе (см, авторинг) и матрицы костей"""
         G, heads = self.bones_pose(rest, J, q, hands)
@@ -222,7 +254,7 @@ class AnnyLook(AnnyPosed):
         return V, to_ours(H) + t, G, heads
 
 
-# ---------------- лицо и пах: гладкое заполнение (без глаз, без «дыр» и тёмных пятен) ----------------
+# ---------------- лицо и горло: гладкое заполнение (без глаз, без «дыр» и тёмных пятен) ----------------
 EYE_SINK, EYE_RINGS = .3, 6
 THROAT = (3.5, 2.0, 4.5)
 

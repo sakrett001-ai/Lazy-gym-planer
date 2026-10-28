@@ -1,11 +1,12 @@
-"""Подгонка подтянутой Anny под нейтральную стойку манекена 4.61.0 (кожа «только внешний вид»).
+"""Подгонка Anny (форма — look.json) под нейтральную стойку манекена 4.61.0 (кожа «только внешний вид»).
 
 python3 tools/anny-look/fit.py [--stage pose|shape|all] [--iters 40] [--out tools/anny-look/fit.json]
 
-Фенотип и местные формы — одобренные (tools/skin-anny/result/anny-toned.json). Подбираются:
+Фенотип и местные формы — tools/anny-look/look.json (эталон на нашем скелете; рост и формы длин — lengths.py). Подбираются:
   * pose — поза рига Anny по скелету 4.61.0: поясница и грудной отдел (spine05…01), шея, голова, ключицы (подъём, отведение),
     сдвиг всей Anny (вверх, вперёд), закрутки плеча, предплечья, бедра, сдвиг шеи с головой. Конечности стоят шарнирами на
-    наших суставах по построению (anny_look.AnnyLook.bones_pose) — их суставы рига совпадают с нашими.
+    наших суставах по построению (anny_look.AnnyLook.bones_pose) — их суставы рига совпадают с нашими. Посадка, заданная в
+    look.json (pose_fixed — с причиной), не подбирается.
   * shape — поправки местных форм Anny (SHAPE ниже) там, где кожа Anny отходит от процедурной кожи 4.61.0 больше чем на
     2–3 см; поправки дорогие (ушли бы от одобренного вида), бесплатно — только расхождение до DEAD см.
 Невязка — расстояние вершин Anny до процедурной кожи 4.61.0 (common.Procedural) по нормали, без кистей и стоп (их форма
@@ -44,8 +45,6 @@ class Fit:
         key = tuple(sorted((k, round(v, 6)) for k, v in local_delta.items()))
         if key != self._rest_key:
             phen, local = self.body.params({'local_delta': local_delta}); self._rest = self.body.rest(phen, local); self._rest_key = key
-            if self.body.groin is None:
-                V = self.body.stance(self._rest, self.P.J, q_from(self.start_pose()), groin=False)[0]; self.body.setup_groin(V)
         return self._rest
 
     def start_pose(self):
@@ -61,7 +60,7 @@ class Fit:
 
     def resid(self, pose, delta_x, sub=True):
         rest = self.rest(self.shape_delta(delta_x))
-        V = self.body.stance(rest, self.P.J, q_from(pose))[0]
+        V = self.body.stance(rest, self.P.J, q_from(pose), groin=False)[0]   # пах — как у эталона, без сглаживания
         idx = self.sub if sub else self.used
         sd, i = self.P.query(V[idx]); z = self.P.zone_of_sample[i]
         w = np.array([ZW.get(k, .5) for k in z])
@@ -75,7 +74,10 @@ class Fit:
         # разворачивала бедро на 37° (надколенник вбок) и плечо на 66°
         tw0 = v_from(self.body.toned['rig_pose'])
         for k in ('tw_ua', 'tw_fa', 'tw_th'): x0[POSE_KEYS.index(k)] = tw0[k]
-        FREE = [i for i, k in enumerate(POSE_KEYS) if not k.startswith('tw_')]
+        # посадка, заданная в look.json (pose_fixed, с причиной в pose_fixed_why), не подбирается
+        fixed = (self.body.look or {}).get('pose_fixed') or {}
+        for k, v in fixed.items(): x0[POSE_KEYS.index(k)] = v
+        FREE = [i for i, k in enumerate(POSE_KEYS) if not k.startswith('tw_') and k not in fixed]
         d0 = np.array([self.fit.get('shape_x', {}).get(n, 0.0) for n in SHAPE])
         free_pose = stage in ('pose', 'all'); free_shape = stage in ('shape', 'all')
         def unpack(v):

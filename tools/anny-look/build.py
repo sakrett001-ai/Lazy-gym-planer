@@ -6,11 +6,11 @@ python3 tools/anny-look/build.py [--out qa/anny-look/anny.json]
 node tools/anny-look/export.js (qa/anny-look/mannequin.json). Сборка детерминирована: одни и те же пакеты дают тот же файл
 (torch — в один поток, дальше — float64).
 
-1. Сетка: подтянутая Anny (anny_look.AnnyLook: одобренные фенотип и местные формы + fit.json) в нейтральной стойке манекена
-   4.61.0, без глаз и полости рта (главная связная часть), нейтральный гладкий пах. Координаты — каталог (см, Y вниз, пол 186),
-   как у рамок позы (Mannequin.catalogPose). Глазницы закрыты гладкой заплаткой, ямка у вершины промежности сглажена
-   (anny_look.AnnyLook.neutral_face, neutral_groin): форма «bulge» −1 уже даёт гладкий пах, а прежнее лапласово сглаживание
-   области (tools/skin-anny) складывало треугольники — на свету тёмные пятна.
+1. Сетка: подтянутая Anny (anny_look.AnnyLook: одобренные фенотип и местные формы, шлифовка look.json + fit.json) в
+   нейтральной стойке манекена 4.61.0, без глаз и полости рта (главная связная часть). Координаты — каталог (см, Y вниз,
+   пол 186), как у рамок позы (Mannequin.catalogPose). Глазницы закрыты гладкой заплаткой (anny_look.AnnyLook.neutral_face),
+   пах — как у Anny по умолчанию (форма bulge 0, без заплаток и сглаживания: клин между бёдрами, как у эталона).
+   --shape reference — эталон для листа (Anny по умолчанию, anny_look.REFERENCE), не для приложения.
 2. Веса — перенос с рига Anny на сегменты манекена (рамки позы): ключица → cl, лопатка (shoulder01) → sp, плечо → ua,
    предплечье → fa и fd (доля fd растёт от локтя к запястью линейно, как закрутка сечений процедурной кожи), запястье и пясть
    → hand, фаланги → рамки фаланг пальцев (по суставам пальцев хвата, как у скелета), бедро → th, голень → sk, стопа → foot,
@@ -19,9 +19,11 @@ node tools/anny-look/export.js (qa/anny-look/mannequin.json). Сборка де�
    процедурной кожи (TORSO_BLEND, TORSO_BLEND_FRONT, FRONT_W): у Anny пять позвонков рига, у манекена — два шарнира.
    Четыре наибольших веса на вершину, сумма — 1.
 3. Адрес вершины на процедурной коже (часть, сторона, h и угол или t и угол, у дельтовидной — полярный угол и азимут на
-   «шапке» плеча) — по ближайшей видимой точке процедурной кожи: по нему приложение красит мышечные зоны тем же правилом,
+   «шапке» плеча точки с той же нормалью) — по ближайшей видимой точке процедурной кожи: по нему приложение красит мышечные зоны тем же правилом,
    что области манекена (MANNEQUIN_TORSO_PATCHES и др., 09d-catalog-muscles.js).
 4. Корректирующие формы (correctives.py) — смещения вершин в стойке, их включает угол сустава.
+5. Затенённость впадин (shade, байт на вершину: доля открытого неба 0…1) — bake_shade: запечённое в стойке «окружающее
+   затенение» по точкам кожи (без лучей — детерминированно, numpy).
 """
 import argparse, hashlib, json, os, subprocess, sys, warnings
 import numpy as np
@@ -153,12 +155,52 @@ def ground_feet(V, W, labels):
     return V
 
 
-def build(out_path, mannequin=None):
-    P = C.Procedural(mannequin) if mannequin else C.Procedural(); D = P.D; body = AnnyLook(); fit = json.load(open(FIT))
+SHADE_R = 10.0           # радиус затенения, см: впадины масштаба мышц и суставов (ключица, край грудной, пресс, ягодичная складка)
+SHADE_GROUPS = {'T': 'T LL LR', 'LL': 'LL T', 'LR': 'LR T', 'AL': 'AL', 'AR': 'AR'}
+
+
+def shade_group(frame):
+    """группа рамки для затенения: корпус с головой, рука, нога (по стороне)"""
+    if frame in CENTRAL or frame[:2] in ('cl', 'sp'): return 'T'
+    s = frame[-1]
+    return ('L' if frame[:2] in ('th', 'sk') or frame[:4] in ('foot', 'toes') else 'A') + s
+
+
+def bake_shade(V, F, dom):
+    """Запечённая затенённость впадин в стойке (ambient occlusion по точкам, как у Bunnell, GPU Gems 2, гл. 14): каждая
+    вершина — диск площадью в треть смежных треугольников; вершина p затеняется дисками q ближе SHADE_R, повёрнутыми к ней
+    и лежащими над её касательной плоскостью: A·cos θp·cos θq / (π d² + A), с затуханием (1 − d/R)². Затеняют только части,
+    которые от позы не уходят: корпус — корпус и бёдра (ягодичная и паховая складки), нога — своя нога и корпус, рука —
+    только своя рука (рука у бока в стойке не должна оставлять тень на рёбрах, когда она поднята). Без лучей — сумма по
+    точкам в float64 (numpy, cKDTree): сборка детерминирована. Возвращает долю открытого неба 0…1."""
+    import trimesh
+    from scipy.spatial import cKDTree
+    m = trimesh.Trimesh(V, F, process=False); N = np.asarray(m.vertex_normals)
+    area = np.zeros(len(V)); np.add.at(area, F.ravel(), np.repeat(m.area_faces / 3, 3))
+    grp = np.array([shade_group(f) for f in dom]); used = area > 0
+    tree = cKDTree(V); occ = np.zeros(len(V))
+    allow = {g: np.isin(grp, SHADE_GROUPS[g].split()) & used for g in SHADE_GROUPS}
+    for p in np.where(used)[0]:
+        nb = np.array(sorted(tree.query_ball_point(V[p], SHADE_R)), dtype=np.int64)
+        nb = nb[allow[grp[p]][nb] & (nb != p)]
+        if not len(nb): continue
+        d = V[nb] - V[p]; r = np.linalg.norm(d, axis=1); ok = r > 1e-6; nb, d, r = nb[ok], d[ok], r[ok]
+        cr = np.clip(d @ N[p] / r, 0, 1); ce = np.clip(-np.einsum('ij,ij->i', N[nb], d) / r, 0, 1)
+        occ[p] = np.sum(area[nb] * cr * ce / (np.pi * r * r + area[nb]) * (1 - r / SHADE_R) ** 2)
+    vis = np.clip(1 - occ, 0, 1)
+    # два шага сглаживания по сетке: точки — не лучи, но на редкой сетке пах и подмышка дают пятна в одну вершину
+    from anny_look import neighbors
+    A = neighbors(F, len(V)); deg = np.asarray(A.sum(1)).ravel()
+    for _ in range(2): vis = np.where(used, .5 * vis + .5 * (A @ vis) / np.maximum(deg, 1), vis)
+    return vis
+
+
+def build(out_path, mannequin=None, shape='look'):
+    P = C.Procedural(mannequin) if mannequin else C.Procedural(); D = P.D; body = AnnyLook(shape); fit = json.load(open(FIT))
     phen, local = body.params(fit); rest = body.rest(phen, local); q = q_from(fit['pose'])
     hands = D['hands']
     V, Hw, G, heads = body.stance(rest, P.J, q, hands, groin=False)
-    V = body.neutral_groin(body.neutral_throat(body.neutral_face(V, Hw), Hw), P.J)
+    V = body.neutral_throat(body.neutral_face(V, Hw), Hw)
     F = body.skin_faces; used = np.unique(F); remap = -np.ones(len(V), np.int64); remap[used] = np.arange(len(used))
     V = V[used]; F = remap[F]; W = body.weights[used]          # плотные веса Anny по 104 костям
     labels = body.labels; L = body.idx; n = len(V)
@@ -246,8 +288,15 @@ def build(out_path, mannequin=None):
         armw = Wo[:, [fi['ua' + s], fi['sp' + s], fi['cl' + s]]].sum(1)
         near_part = np.array([p in ('cap-sh' + s, 'cap-ac' + s) or (p == 'ua' + s) for p in P.part[ia]])
         sel = (armw > .3) & (r < 10) & (polar < 1.75) & (near_part | (code == 0)) & ~((code == 2) & (a1 > .3))
-        code[sel] = 6; side[sel] = si; a1[sel] = polar[sel]; a2[sel] = az[sel]
+        # адрес на «шапке» — точка сферы с той же нормалью, что у вершины (у сферы это и есть направление от центра): плечо
+        # эталона уже и ниже шапки манекена, и по направлению от её центра боковая поверхность дельтовидной уходит под экватор
+        # шапки — в боковую зону попадала 1 вершина на сторону, в заднюю — 3 (у 4.62.0 — 5 и 7). По нормали — 9 и 14
+        pn = np.arccos(np.clip(Nv @ uy, -1, 1)); an = np.arctan2(Nv @ lat, Nv @ uz)
+        code[sel] = 6; side[sel] = si; a1[sel] = pn[sel]; a2[sel] = an[sel]
     code[body.cavity[used]] = CAVITY_CODE
+
+    # ---------- затенённость впадин (в стойке) ----------
+    shade = np.floor(bake_shade(V, F, [FRAMES[i] for i in order[:, 0]]) * 255 + .5).astype(int)
 
     # ---------- в каталог ----------
     cat = V.copy(); cat[:, 1] = FLOOR - cat[:, 1]
@@ -263,7 +312,8 @@ def build(out_path, mannequin=None):
            'frames': FRAMES, 'v': np.round(cat, 2).ravel().tolist(), 'f': F.ravel().tolist(),
            'wi': order.ravel().tolist(), 'ww': wq.ravel().tolist(),
            'region': {'code': code.tolist(), 'side': side.tolist(), 'a1': np.round(a1, 3).tolist(), 'a2': np.round(a2, 3).tolist()},
-           'correctives': corr}
+           'shade': shade.tolist(), 'correctives': corr}
+    if shape != 'look': out['source']['shape'] = shape
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     s = json.dumps(out, separators=(',', ':'))
     open(out_path, 'w').write(s)
@@ -273,4 +323,5 @@ def build(out_path, mannequin=None):
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(); ap.add_argument('--out', default=os.path.join(C.ROOT, 'qa/anny-look/anny.json'))
     ap.add_argument('--mannequin', default=None, help='qa/anny-look/mannequin.json (node tools/anny-look/export.js)')
-    a = ap.parse_args(); build(a.out, a.mannequin)
+    ap.add_argument('--shape', default='look', choices=['look', 'reference'], help='reference — эталон для листа, не для приложения')
+    a = ap.parse_args(); build(a.out, a.mannequin, a.shape)

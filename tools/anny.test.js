@@ -19,6 +19,7 @@ function sourceOf(dd, H) {
   const R = dd.region, round = (x, k) => Math.round(x * k) / k;
   return { source: H.source, frames: dd.frames, v: Array.from(dd.pos, x => round(x, 100)), f: Array.from(dd.idx), wi: Array.from(dd.wi), ww: Array.from(dd.ww, x => Math.round(x * 255)),
     region: { code: Array.from(R.code), side: Array.from(R.side), a1: Array.from(R.a1, x => round(x, 500)), a2: Array.from(R.a2, x => round(x, 500)) },
+    shade: Array.from(dd.shade, x => Math.round(x * 255)),
     correctives: dd.correctives.map(c => { const { i, d: dl, n, ...rest } = c; return { ...rest, i: Array.from(i), d: Array.from(dl, x => round(x, 100)) }; }) };
 }
 test('anny.bin: canonical pack output (decode → pack.js gives the same bytes), weights sum to one', () => {
@@ -116,6 +117,19 @@ test('muscle zones on the Anny skin: every zone of the mannequin gets vertices o
   for (const [id, h0, h1, a0, a1] of P.t) assert.equal(regionOf('torso', 'L', (h0 + h1) / 2, (a0 + a1) / 2), id);
 });
 
+test('look: baked cavity shading in the data; trunk line of the briefs (tone off by default) — inside on the groin and buttocks, outside elsewhere', async () => {
+  /* затенённость впадин: доля открытого неба 0…1; большая часть кожи открыта, во впадинах (подмышка, пах, ягодичная складка) — темнее */
+  assert(d.shade && d.shade.length === d.nv && header.shade === true && header.index === 'delta');
+  const s = Array.from(d.shade).sort((a, b) => a - b), q = p => s[Math.floor(p * (s.length - 1))];
+  assert(s[0] >= 0 && s.at(-1) <= 1 && q(.5) > .9 && q(.02) < .7, `shade p2 ${q(.02)}, median ${q(.5)}`);
+  const { trunkLine, ANNY_LOOK } = await import('../src/volume/anny.mjs');
+  /* x — влево, высота над полом, z — вперёд (стойка): пах спереди и ягодица — внутри, грудь, середина бедра и колено — снаружи */
+  assert(trunkLine(0, 88, 10) > 0 && trunkLine(8, 88, -12) > 0 && trunkLine(-8, 88, -12) > 0, 'groin and buttocks are inside the briefs');
+  assert(trunkLine(0, 120, 10) < 0 && trunkLine(8.8, 70, 8) < 0 && trunkLine(8.8, 50, 6) < 0, 'chest, thigh and knee are outside');
+  assert(trunkLine(17, 95, 0) > 0 && trunkLine(17, 88, 0) < 0, 'high-cut leg opening on the side (≈ 93 cm)');
+  assert(!(ANNY_LOOK.trunks?.alpha > 0), 'no trunks tone by default (the owner chose the groin of the reference)');
+  assert(ANNY_LOOK.roughness >= .62, 'matte, no gloss');
+});
 /* ---------- проверки видимой кожи (каталог — tools/anny-look/check.js) ---------- */
 const SAMPLE = ['bbbench', 'chestpressm', 'legcurl', 'hipthrust', 'squat', 'pushup', 'seatedcalf', 'kneepush', 'plank', 'lyinglegraise'];
 test('supports: the Anny skin does not sink into benches, seats, pads, the floor, the bar or handles deeper than allowed (sample)', () => {
