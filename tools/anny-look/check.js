@@ -39,11 +39,13 @@
       сминают мягкие ткани, у скиннинга без столкновений она пересекается (у процедурной кожи там же — пересечение частей,
       валидатор допускает его на 1,5–3,5 см). Эти складки внутри сгиба и снаружи не видны. Поэтому проверка — «только
       убывают»: числа на позу записаны в tools/anny-look/fixtures/folds.json (node tools/anny-look/check.js --record-folds
-      после улучшения), больше записанного — ошибка. */
+      после улучшения), больше записанного — ошибка.
+   4. Хват (holds.js): кисть в режиме 'grip' у ручки — обхват ручки кожей ладони и пальцев, глубина пальцев и ладони в ручке,
+      кончики пальцев и большого пальца не торчат из кулака. Допуски и их обоснование — в шапке holds.js. */
 const fs = require('node:fs'), path = require('node:path');
 const root = path.resolve(__dirname, '../..');
 const M = require(root + '/src/js/09bm-mannequin.js'), EQ = require(root + '/src/js/09bn-equipment.js'), A = require(root + '/src/js/09bs-anny.js');
-const V2 = require(root + '/tools/biomech/validator2.js'), CMP = require('./compare.js');
+const V2 = require(root + '/tools/biomech/validator2.js'), CMP = require('./compare.js'), HOLDS = require('./holds.js');
 const { V } = M, FLOOR = M.FLOOR;
 const DEPTH_EXTRA = 1.0, HAND_FOOT_EXTRA = 1.5, FLOOR_TOL = 1.0, FLOOR_PRESS = 2.0;
 const extraOf = seg => seg === 'hand' || seg === 'foot' ? HAND_FOOT_EXTRA : DEPTH_EXTRA;
@@ -160,7 +162,7 @@ function triTri(T1, T2) {
 function run({ ids = null, ts = [0, .25, .5, .75, 1], d = CMP.loadAnny(), log = () => {} } = {}) {
   const POSES = CMP.loadPoses(), list = (ids || Object.keys(POSES)).filter(id => POSES[id]), kind = kinds(d), zones = CMP.zonesOf(d);
   const verts = []; for (let v = 0; v < d.nv; v += 2) if (zones[v] !== 'полость') verts.push(v);
-  const res = { penetration: [], distance: {}, folds: [] };
+  const res = { penetration: [], distance: {}, folds: [], holds: [] };
   const zacc = {};
   for (const id of list) {
     const entry = POSES[id], invs = [['всё', () => true], ['ничего', () => false]];
@@ -169,6 +171,7 @@ function run({ ids = null, ts = [0, .25, .5, .75, 1], d = CMP.loadAnny(), log = 
       for (const t of ts) {
         const R = rig(t), P = A.skin(R, { d, floor: false });
         for (const p of penetration(R, P, d, kind, e, has)) if (p.depth > p.limit) res.penetration.push({ ex: id, t, has: hn, ...p });
+        for (const o of HOLDS.framesHolds(R, P, d, e, has)) res.holds.push({ id, t, has: hn, ...o, bad: HOLDS.problems(o) });
         if (hn === 'всё') {
           const body = M.bodyData(R), Pv = new Float32Array(verts.length * 3); verts.forEach((v, k) => { Pv[k * 3] = P[v * 3]; Pv[k * 3 + 1] = P[v * 3 + 1]; Pv[k * 3 + 2] = P[v * 3 + 2]; });
           const dist = CMP.distances(d, Pv, R, zones, verts, body);
@@ -188,6 +191,7 @@ function failures(res) {
   const out = [];
   for (const p of res.penetration) out.push(`${p.ex}${p.has === 'ничего' ? ' (без необязательного инвентаря)' : ''} t=${p.t}: ${p.seg} в ${p.id === 'floor' ? 'полу' : p.id} на ${p.depth.toFixed(2)} см (допуск ${p.limit.toFixed(2)}: валидатор ${p.tol}, процедурная кожа ${p.proc.toFixed(2)} + ${p.extra})`);
   for (const [z, s] of Object.entries(res.distance)) { if (s.p99 > s.limitP99) out.push(`${z}: 99 % вершин дальше ${s.p99.toFixed(2)} см от процедурной кожи (допуск ${s.limitP99})`); if (s.max > s.limitMax) out.push(`${z}: отход ${s.max.toFixed(2)} см (${s.where}, допуск ${s.limitMax})`); }
+  out.push(...HOLDS.failures(res.holds || []));
   const base = foldBase();
   for (const f of res.folds) { const b = base[`${f.id} ${f.t}`] || { inverted: 0, folds: 0 }; if (f.inverted > b.inverted) out.push(`${f.id} t=${f.t}: вывернутых треугольников ${f.inverted} (записано ${b.inverted})`); if (f.folds > b.folds) out.push(`${f.id} t=${f.t}: складок ${f.folds} (записано ${b.folds})`); }
   return out;
@@ -212,10 +216,12 @@ if (require.main === module) {
   if (!quiet) {
     console.log(`\nкожа Anny: ${((Date.now() - t0) / 1000).toFixed(0)} с`);
     console.log('отход от процедурной кожи (99 % / наибольший, см):'); for (const [z, s] of Object.entries(res.distance)) console.log(`  ${z.padEnd(12)} ${s.p99.toFixed(2).padStart(5)} / ${s.max.toFixed(2).padStart(5)} (допуск ${s.limitP99} / ${s.limitMax})  ${s.where}`);
+    const H = HOLDS.summary(res.holds), f2 = x => x.toFixed(2);
+    console.log(`хват (${H.n} кистей): обхват не меньше ${(H.cover.min * 100).toFixed(0)} % (допуск ${HOLDS.LIM.COVER_MIN * 100}), пальцы в ручке до ${f2(H.fingerDepth.max)} (запас до допуска ${f2(H.fingerDepth.margin)}), ладонь — до ${f2(H.palmDepth.max)} (запас ${f2(H.palmDepth.margin)}), кончики пальцев — до ${f2(H.tipFinger.max)} (допуск ${HOLDS.LIM.TIP_FINGER}), большого — до ${f2(H.tipThumb.max)} (допуск ${HOLDS.LIM.TIP_THUMB})`);
     console.log('крайние позы (вывернутые треугольники, складки):', res.folds.map(f => `${f.id} ${f.t}: ${f.inverted}/${f.folds}`).join(', '));
   }
   if (arg('--json')) fs.writeFileSync(arg('--json'), JSON.stringify(res, null, 1));
   const bad = failures(res);
   if (bad.length) { console.error(`\nКожа Anny: ${bad.length} нарушений:\n` + bad.slice(0, 60).join('\n')); process.exit(1); }
-  console.log(`Кожа Anny: опоры, отход от процедурной кожи и крайние позы — в допусках (${ids ? ids.length + ' упр.' : 'все упражнения'} × ${ts.length} фаз).`);
+  console.log(`Кожа Anny: опоры, отход от процедурной кожи, хват и крайние позы — в допусках (${ids ? ids.length + ' упр.' : 'все упражнения'} × ${ts.length} фаз).`);
 }

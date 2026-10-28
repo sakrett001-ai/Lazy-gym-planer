@@ -8,7 +8,8 @@
      адрес на процедурной коже: часть Uint8, сторона Uint8, a1 Int16 и a2 Int16 (×1/500), затенённость впадин Uint8 (доля
      открытого неба ×255; shade: true) с байтом выравнивания при нечётном числе вершин, корректирующие формы: номера вершин
      Uint16 и смещения Int16 ×3 (×0,01 см) — по формам подряд, длины — в заголовке.
-   Заголовок: {version, source, scale, rscale, index, shade, frames, nv, nf, correctives:[{name, n, …правило включения}]}.
+   Заголовок: {version, source, scale, rscale, index, shade, frames, nv, nf, correctives:[{name, n, …правило включения}],
+   hands: {L, R: [на палец {j, ax, base}]}} — суставы и оси пальцев рига Anny в рамке кисти (build.py, digit_rig).
    Сжатие — gzip уровня 9 без имени файла и времени (zlib.gzipSync): тот же вход даёт тот же файл байт в байт. */
 const fs = require('node:fs'), path = require('node:path'), zlib = require('node:zlib');
 const root = path.resolve(__dirname, '../..');
@@ -37,7 +38,7 @@ function encode(src) {
     const n = c.i.length, ci = Uint16Array.from(c.i), cd = new Int16Array(n * 3); for (let k = 0; k < n * 3; k++) cd[k] = int16(c.d[k], SCALE, 'смещение');
     const { i, d, ...rest } = c; meta.push({ ...rest, n }); chunks.push(Buffer.from(ci.buffer), ...(n % 2 ? [Buffer.alloc(2)] : []), Buffer.from(cd.buffer));
   }
-  let header = Buffer.from(JSON.stringify({ version: 1, source: src.source, scale: SCALE, rscale: RSCALE, index: 'delta', shade: true, frames: src.frames, nv, nf, correctives: meta }), 'utf8');
+  let header = Buffer.from(JSON.stringify({ version: 1, source: src.source, scale: SCALE, rscale: RSCALE, index: 'delta', shade: true, frames: src.frames, nv, nf, correctives: meta, ...(src.hands ? { hands: src.hands } : {}) }), 'utf8');
   if (header.length % 4) header = Buffer.concat([header, Buffer.alloc(4 - header.length % 4, 0x20)]);
   const head = Buffer.alloc(8); head.write('ANY1', 0, 'latin1'); head.writeUInt32LE(header.length, 4);
   /* выравнивание: Int16 — по 2 байта, всё подряд кратно 2 (после байтов затенённости при нечётном nv — байт выравнивания) */
