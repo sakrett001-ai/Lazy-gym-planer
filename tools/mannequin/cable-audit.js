@@ -73,10 +73,11 @@ function pca(pts) {
   return { c, axes };
 }
 const lineDist = (p, a, u) => V.len(V.perp(V.sub(p, a), u));
-/* цепочка тросов: от колеса блока (или оси поворота) через колёса тренажёра к тросу верхней плиты стека */
+/* цепочка тросов: от колеса блока (или оси поворота) через колёса тренажёра к тросу верхней плиты стека; тросы — ломаные
+   (BIND: g3line, трос стека) и неподвижные отрезки рамы (тонкие брусья с ролью cable: путь внутри колонны, cableRun) */
 function routeOf(props, e, P, S) {
-  const id = e.id, cables = props.filter(p => p.kind === 'cable' && p.role === 'cable' && p.id !== id + ':line' && !/:(L|R)$/.test(p.id))
-    .map(p => ({ id: p.id, pts: p.pts.map(fromCat) }));
+  const id = e.id, cables = props.filter(p => p.role === 'cable' && (p.kind === 'cable' || (p.kind === 'beam' && p.r)) && p.id !== id + ':line' && !/:(L|R)$/.test(p.id))
+    .map(p => ({ id: p.id, pts: (p.pts || [p.a, p.b]).map(fromCat) }));
   const wheels = props.filter(p => p.kind === 'cyl' && /wheel/i.test(p.id)).map(p => ({ id: p.id, c: fromCat(p.c), r: p.r }));
   const ends = c => [c.pts[0], c.pts[c.pts.length - 1]];
   const onRim = (p, w) => Math.abs(V.dist(p, w.c) - w.r) < LIM.join + .5 && V.dist(p, w.c) < w.r + LIM.join + .5;

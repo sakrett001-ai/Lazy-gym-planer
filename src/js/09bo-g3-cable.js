@@ -54,8 +54,9 @@
   }
   /* Подвижный блок стека колонны (2:1, как у колонн и кроссоверов с регулируемым по высоте блоком: Legend Fitness
      Adjustable Cable Column, BodyKore MX1174, Eleiko Single Adjustable Pulley 1:2, Life Fitness Signature Series Adjustable
-     Cable Crossover, Titan Cable Tower — блок колонны 2:1): колесо Ø9, под ним 1,2 см до верхней плиты, проушина 1 см */
-  const FLOAT = { r: 4.5, gap: 1.2, dead: 1 };
+     Cable Crossover, Titan Cable Tower — блок колонны 2:1): колесо Ø9, под ним 1,2 см до верхней плиты, проушина 1 см;
+     трос к блоку выходит из оси верхней балки (into — на 3,75 см выше её нижней грани), там его встречает путь cableRun */
+  const FLOAT = { r: 4.5, gap: 1.2, dead: 1, into: 3.75 };
   /* Блочная колонна в осях узла: стойки и стек при z=0, направляющая каретки при z=11,5, колесо блока при z=25 */
   function tower(t, { H = 218, h = 100, grab = true, n = 15, sel = 5, lowRail = false }) {
     const X = 27, RZ = 11.5, hh = Math.max(20, Math.min(H - 20, h));
@@ -72,11 +73,16 @@
     t.tube('braceL', [X, 7.5, -32], [X, 60, -3.75], [5, 5], { mount: 'baseL', up: [1, 0, 0] });
     t.tube('braceR', [-X, 7.5, -32], [-X, 60, -3.75], [5, 5], { mount: 'baseR', up: [1, 0, 0] });
     stack(t, { H, n, sel, float: FLOAT });
-    /* Путь троса (2:1, BIND.g3cable): от оси поворота блока — внутрь каретки, вверх внутри направляющей, по перемычке
-       railTop к верхней балке над стеком, вдоль неё на −X на радиус подвижного блока и вниз из её нижней грани к подвижному
-       блоку на верхней плите; от блока трос уходит вверх к проушине deadEnd под балкой (на +X). Внутри труб трос скрыт. */
+    /* Путь троса (2:1): от оси поворота блока — внутрь каретки, вверх внутри направляющей и по перемычке railTop наискось
+       в верхнюю балку над стеком, на −X на радиус подвижного блока (cableRun; неподвижные отрезки троса внутри труб, на экране
+       скрыты); оттуда BIND.g3cable ведёт трос вниз из нижней грани балки к подвижному блоку на верхней плите и вверх
+       к проушине deadEnd под балкой (на +X). */
     t.box('deadEnd', [FLOAT.r, H - 7.5 - FLOAT.dead + 1, 0], [2.5, 2, 2.5], { mount: 'top', tone: 'chrome', round: .4 });
-    t.path('cableRun', [[0, hh, RZ + 7.9], [0, hh, RZ], [0, H - 3.75, RZ], [0, H - 3.75, 0], [-FLOAT.r, H - 3.75, 0], [-FLOAT.r, H - 7.5, 0]]);
+    const run = [[0, hh, RZ + 5.5], [0, hh, RZ], [0, H - 3.75, RZ], [-FLOAT.r, H - 7.5 + FLOAT.into, 0]];
+    t.path('cableRun', run);
+    run.forEach((p, i, a) => {
+      if (i) t.tube('run' + i, a[i - 1], p, .35, { mount: ['carriage', 'rail', 'railTop'][i - 1], tone: 'cable', role: 'cable' });
+    });
     /* направляющая каретки и каретка с фиксатором */
     t.tube('rail', [0, 7.5, RZ], [0, H - 7.5, RZ], [7.5, 7.5], { mount: 'baseF', up: [0, 0, 1] });
     t.tube('railTop', [0, H - 3.75, 0], [0, H - 3.75, RZ + 3.75], [7.5, 7.5], { mount: 'top' });
@@ -347,13 +353,14 @@
       const top = V.add(o, Y, st.topY - st.o[1]), fl = st.float;
       if (fl) {
         /* 2:1: подвижный блок на верхней плите — вилка из двух щёк по сторонам колеса, ось, колесо (ось колеса — по Z стека);
-           трос сверху по стороне −X, под колесом и вверх по стороне +X к проушине */
+           трос из оси верхней балки (fl.into над topY, там кончается путь cableRun) вниз по стороне −X, под колесом (по хордам
+           внутри обода — отрезков меньше, хорды скрыты колесом и щёками вилки) и вверх по стороне +X к проушине */
         const fh = fl.gap + fl.r + 1.6, fc = V.add(topC, Y, 2 + fh / 2), wc = V.add(topC, Y, 2 + fl.gap + fl.r);
         for (const [k, sg] of [['A', 1], ['B', -1]]) out.push({ kind: 'obox', c: V.add(fc, Z, sg * 1.9), x: X, y: Y, z: Z, size: [2 * fl.r + 1, fh, .7], round: .3, tone: 'frame', role: 'frame', id: sid + 'Fork' + k, mount: sid + 'Top' });
         out.push({ kind: 'cyl', c: wc, axis: Z, r: .6, len: 4.6, tone: 'chrome', role: 'frame', id: sid + 'Axle', mount: sid + 'ForkA' });
         out.push({ kind: 'cyl', c: wc, axis: Z, r: fl.r, len: 2.4, tone: 'chrome', role: 'frame', id: sid + 'Float', mount: sid + 'Axle' });
-        const pts = [V.add(top, X, -fl.r)];
-        for (let j = 0; j <= 8; j++) { const a = j / 8 * Math.PI; pts.push(V.add(V.add(wc, X, -fl.r * Math.cos(a)), Y, -fl.r * Math.sin(a))); }
+        const pts = [V.add(V.add(top, X, -fl.r), Y, fl.into || 0)];
+        for (let j = 0; j <= 2; j++) { const a = j / 2 * Math.PI; pts.push(V.add(V.add(wc, X, -fl.r * Math.cos(a)), Y, -fl.r * Math.sin(a))); }
         pts.push(V.add(V.add(top, X, fl.r), Y, -fl.dead));
         out.push({ kind: 'cable', pts, r: .35, tone: 'cable', role: 'cable', id: sid + 'Cable', mount: sid + 'Float' });
       } else {

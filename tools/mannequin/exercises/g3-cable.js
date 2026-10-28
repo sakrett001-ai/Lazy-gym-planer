@@ -24,8 +24,6 @@ function cable(eq, pre, opts) {
   };
 }
 const pulleyOf = (eq, pre = '') => EQ.anchors([eq])[eq.id][pre + 'pulley'];
-/* неподвижный путь троса колонны (g3Tower, cableRun): от оси поворота блока через каретку и направляющую к подвижному блоку стека */
-const colRun = (eq, pre = '') => ({ type: 'g3line', id: 'run' + pre, pts: EQ.anchors([eq])[eq.id][pre + 'cableRun'].map(rp) });
 /* Длина троса rest по позе: плиты в растяжке (там, где трос за повтор короче всего) висят на HOVER см над остальными —
    трос натянут, плиты не лежат и не стучат (как в NSCA: груз не опускается на стек между повторами). Поза считается так же,
    как её запекает и проигрывает приложение (author.js: два прохода ритма пояса, округление ключей; EQ.rig: дорожка по
@@ -674,7 +672,7 @@ module.exports = {
      t=0 — руки разведены в стороны, локти мягко согнуты; t=1 — рукояти сведены по дуге вниз-вперёд перед грудью. */
   cablefly: {
     keys: [0, .2, .4, .6, .8, 1],
-    get equipment() { return tuned(this, () => [XO_HI, cable(XO_HI, 'L', { id: 'cabL', attach: 'D', hands: ['L'], plane: 'swivel', clip: 11 }), colRun(XO_HI, 'L'), cable(XO_HI, 'R', { id: 'cabR', attach: 'D', hands: ['R'], plane: 'swivel', clip: 11 }), colRun(XO_HI, 'R')]); },
+    get equipment() { return tuned(this, () => [XO_HI, cable(XO_HI, 'L', { id: 'cabL', attach: 'D', hands: ['L'], plane: 'swivel', clip: 11 }), cable(XO_HI, 'R', { id: 'cabR', attach: 'D', hands: ['R'], plane: 'swivel', clip: 11 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'gripL', prop: 'cabL' }, { body: 'gripR', prop: 'cabR' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
@@ -695,7 +693,7 @@ module.exports = {
   /* Нижние блоки кроссовера, шаг вперёд, корпус чуть наклонён. t=0 — руки внизу и в стороны; t=1 — сведены по дуге снизу вверх до уровня плеч. */
   cablelowfly: {
     keys: [0, .2, .4, .6, .8, 1],
-    get equipment() { return tuned(this, () => [XO_LO, cable(XO_LO, 'L', { id: 'cabL', attach: 'D', hands: ['L'], plane: 'swivel', clip: 11 }), colRun(XO_LO, 'L'), cable(XO_LO, 'R', { id: 'cabR', attach: 'D', hands: ['R'], plane: 'swivel', clip: 11 }), colRun(XO_LO, 'R')]); },
+    get equipment() { return tuned(this, () => [XO_LO, cable(XO_LO, 'L', { id: 'cabL', attach: 'D', hands: ['L'], plane: 'swivel', clip: 11 }), cable(XO_LO, 'R', { id: 'cabR', attach: 'D', hands: ['R'], plane: 'swivel', clip: 11 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'gripL', prop: 'cabL' }, { body: 'gripR', prop: 'cabR' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
@@ -717,7 +715,7 @@ module.exports = {
      Левая рука держится за ручку на стойке колонны. */
   cablelat: {
     keys: [0, .2, .4, .6, .8, 1],
-    get equipment() { return tuned(this, () => [CL_TOWER, cable(CL_TOWER, '', { id: 'cab', attach: 'D', hands: ['R'] }), colRun(CL_TOWER)]); },
+    get equipment() { return tuned(this, () => [CL_TOWER, cable(CL_TOWER, '', { id: 'cab', attach: 'D', hands: ['R'] })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'col:grabL' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
@@ -735,7 +733,7 @@ module.exports = {
   /* На коленях лицом к верхнему блоку, канат у лба. t=0 — корпус почти прямой; t=1 — позвоночник скручен, локти к бёдрам. Таз неподвижен. */
   cablecrunch: {
     keys: [0, .25, .5, .75, 1],
-    get equipment() { return tuned(this, () => [CR_TOWER, CR_MAT, cable(CR_TOWER, '', { id: 'cab', attach: 'rope', knob: 'thumb', hands: ['L', 'R'], ropeLen: 26 }), colRun(CR_TOWER)]); },
+    get equipment() { return tuned(this, () => [CR_TOWER, CR_MAT, cable(CR_TOWER, '', { id: 'cab', attach: 'rope', knob: 'thumb', hands: ['L', 'R'], ropeLen: 26 })]); },
     contacts: [{ body: 'kneeL', prop: 'mat' }, { body: 'kneeR', prop: 'mat' }, { body: 'footL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
@@ -756,7 +754,7 @@ module.exports = {
      t=0 — нога под тазом, колено согнуто, стопа над полом; t=1 — бедро отведено назад до полного разгибания. */
   glutekick: {
     keys: [0, .25, .5, .75, 1],
-    get equipment() { return tuned(this, () => [GK_TOWER, cable(GK_TOWER, '', { id: 'cab', attach: 'ankle', foot: 'L' }), colRun(GK_TOWER)]); },
+    get equipment() { return tuned(this, () => [GK_TOWER, cable(GK_TOWER, '', { id: 'cab', attach: 'ankle', foot: 'L' })]); },
     contacts: [{ body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'col:grabR' }, { body: 'gripR', prop: 'col:grabL' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
@@ -772,7 +770,7 @@ module.exports = {
   /* Прямая нога отводится назад (работает левая), лёгкий наклон, руки на стойке; стопа не касается пола. */
   cablekickback: {
     keys: [0, .25, .5, .75, 1],
-    get equipment() { return tuned(this, () => [KB_TOWER, cable(KB_TOWER, '', { id: 'cab', attach: 'ankle', foot: 'L' }), colRun(KB_TOWER)]); },
+    get equipment() { return tuned(this, () => [KB_TOWER, cable(KB_TOWER, '', { id: 'cab', attach: 'ankle', foot: 'L' })]); },
     contacts: [{ body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'col:grabR' }, { body: 'gripR', prop: 'col:grabL' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
@@ -792,7 +790,7 @@ module.exports = {
      правого, поэтому под тазом нога проходит над полом за счёт сгибания бедра (до 25° к концу) и колена (не больше 15°). */
   cableadduct: {
     keys: [0, .2, .4, .6, .8, 1],
-    get equipment() { return tuned(this, () => [AD_TOWER(), cable(AD_TOWER(), '', { id: 'cab', attach: 'ankle', foot: 'L', wrap: [0, -1, 0] }), colRun(AD_TOWER())]); },
+    get equipment() { return tuned(this, () => [AD_TOWER(), cable(AD_TOWER(), '', { id: 'cab', attach: 'ankle', foot: 'L', wrap: [0, -1, 0] })]); },
     contacts: [{ body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'col:grabL' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
@@ -808,7 +806,7 @@ module.exports = {
      от направления вперёд. Локоть неподвижен у бока, кисть — продолжение предплечья, корпус не поворачивается. */
   cableextrot: {
     keys: [0, .2, .4, .6, .8, 1],
-    get equipment() { return tuned(this, () => [ER_TOWER, ER_TOWEL, cable(ER_TOWER, '', { id: 'cab', attach: 'D', hands: ['R'] }), colRun(ER_TOWER)]); },
+    get equipment() { return tuned(this, () => [ER_TOWER, ER_TOWEL, cable(ER_TOWER, '', { id: 'cab', attach: 'D', hands: ['R'] })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripR', prop: 'cab' }, { body: 'uaR', prop: 'towel' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
@@ -835,7 +833,7 @@ module.exports = {
   /* Спиной к блоку, шаг вперёд, корпус наклонён, локти у ушей. t=0 — канат за головой; t=1 — руки выпрямлены вперёд-вверх, концы разведены. */
   cableohext: {
     keys: [0, .25, .5, .75, 1],
-    get equipment() { return tuned(this, () => [OH_TOWER, cable(OH_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26 }), colRun(OH_TOWER)]); },
+    get equipment() { return tuned(this, () => [OH_TOWER, cable(OH_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
@@ -858,7 +856,7 @@ module.exports = {
      t=1 — руки у правого колена, корпус и таз развёрнуты вправо, руки почти прямые. */
   cablewood: {
     keys: [0, .2, .4, .6, .8, 1],
-    get equipment() { return tuned(this, () => [WD_TOWER, cable(WD_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26, plane: 'swivel' }), colRun(WD_TOWER)]); },
+    get equipment() { return tuned(this, () => [WD_TOWER, cable(WD_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26, plane: 'swivel' })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
@@ -884,7 +882,7 @@ module.exports = {
   /* Спиной к нижнему блоку, канат между ног. t=0 — стоя прямо, кисти у паха; t=1 — наклон с отведением таза назад, колени мягкие, спина прямая. */
   pullthrough: {
     keys: [0, .25, .5, .75, 1],
-    get equipment() { return tuned(this, () => [PT_TOWER, cable(PT_TOWER, '', { id: 'cab', attach: 'rope', knob: 'thumb', hands: ['L', 'R'], ropeLen: 26 }), colRun(PT_TOWER)]); },
+    get equipment() { return tuned(this, () => [PT_TOWER, cable(PT_TOWER, '', { id: 'cab', attach: 'rope', knob: 'thumb', hands: ['L', 'R'], ropeLen: 26 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
@@ -906,7 +904,7 @@ module.exports = {
   /* t=0 — руки выпрямлены, рукоять у бёдер (хват снизу); t=1 — рукоять у груди, локти у корпуса. */
   cablecurl: {
     keys: [0, .25, .5, .75, 1],
-    get equipment() { return tuned(this, () => [CC_TOWER, cable(CC_TOWER, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 11 }), colRun(CC_TOWER)]); },
+    get equipment() { return tuned(this, () => [CC_TOWER, cable(CC_TOWER, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 11 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = C.M.clone(CC().q);
@@ -929,7 +927,7 @@ module.exports = {
      t=0 — руки выпрямлены, кисти перед бёдрами; t=1 — кисти у груди, локти у корпуса. */
   ropecurl: {
     keys: [0, .25, .5, .75, 1],
-    get equipment() { return tuned(this, () => [CC_TOWER, cable(CC_TOWER, '', { id: 'cab', attach: 'rope', knob: 'thumb', hands: ['L', 'R'], ropeLen: 26 }), colRun(CC_TOWER)]); },
+    get equipment() { return tuned(this, () => [CC_TOWER, cable(CC_TOWER, '', { id: 'cab', attach: 'rope', knob: 'thumb', hands: ['L', 'R'], ropeLen: 26 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
@@ -951,7 +949,7 @@ module.exports = {
      по прямой вдоль троса (раскладка и источники — «Тяга каната к лицу» выше). */
   facepull: {
     keys: [0, .25, .5, .75, 1],
-    get equipment() { return tuned(this, () => [FP_TOWER, cable(FP_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26, wrap: [0, -1, 0] }), colRun(FP_TOWER)]); },
+    get equipment() { return tuned(this, () => [FP_TOWER, cable(FP_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26, wrap: [0, -1, 0] })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
@@ -964,7 +962,7 @@ module.exports = {
   /* t=0 — прямые руки на уровне головы; t=1 — рукоять у бёдер, лопатки опущены. */
   straightpull: {
     keys: [0, .2, .4, .6, .8, 1],
-    get equipment() { return tuned(this, () => [SP_TOWER, cable(SP_TOWER, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 12 }), colRun(SP_TOWER)]); },
+    get equipment() { return tuned(this, () => [SP_TOWER, cable(SP_TOWER, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 12 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = C.M.clone(SP().q);
@@ -982,7 +980,7 @@ module.exports = {
   /* t=0 — локти согнуты под 90°, рукоять на уровне низа груди; t=1 — руки выпрямлены, рукоять у бёдер. */
   pushdown: {
     keys: [0, .25, .5, .75, 1],
-    get equipment() { return tuned(this, () => [PD_TOWER, cable(PD_TOWER, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 11 }), colRun(PD_TOWER)]); },
+    get equipment() { return tuned(this, () => [PD_TOWER, cable(PD_TOWER, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 11 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = C.M.clone(PD().q), f = C.fk(q);
@@ -1003,7 +1001,7 @@ module.exports = {
      разведены к бёдрам, предплечья чуть повёрнуты ладонями назад. Локти у корпуса всю амплитуду. */
   ropepushdown: {
     keys: [0, .25, .5, .75, 1],
-    get equipment() { return tuned(this, () => [PD_TOWER, cable(PD_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26 }), colRun(PD_TOWER)]); },
+    get equipment() { return tuned(this, () => [PD_TOWER, cable(PD_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {

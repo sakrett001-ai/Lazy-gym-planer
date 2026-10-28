@@ -16,7 +16,10 @@ function equipmentDraws(view) {
 
 test('static parts are merged by material; moving parts stay separate meshes', async () => {
   const {createCatalogScene, isStaticProp} = await import('../src/volume/scene.mjs'), {checkMerged} = await import('./catalog-render-audit.mjs');
-  for (const [id, before, after] of [['latpulluh', 61, 25], ['legpress', 46, 21], ['smithsquat', 20, 11], ['cablefly', 129, 42], ['dbcurl', 10, 10]]) {
+  /* cablefly: у каждой колонны кроссовера стек 2:1 — подвижный блок на верхней плите (две щеки вилки, ось, колесо вместо
+     стема; трос стека — четыре отрезка вместо одного) и неподвижный путь троса внутри каретки и направляющей (свой материал
+     в объединении): 129 → 149 сеток, 42 → 55 вызовов отрисовки */
+  for (const [id, before, after] of [['latpulluh', 61, 25], ['legpress', 46, 21], ['smithsquat', 20, 11], ['cablefly', 149, 55], ['dbcurl', 10, 10]]) {
     const d = catalogVolumeData(anim(id), .5, 0), view = createCatalogScene(d);
     try {
       const statics = d.props.filter(isStaticProp), parts = new Set();
