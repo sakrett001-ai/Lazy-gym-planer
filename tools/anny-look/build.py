@@ -222,6 +222,12 @@ def build(out_path, mannequin=None, shape='look'):
         # обратный ход купола (корректирующая форма «плавки при сгибании бедра», ниже): к прежнему клину; сваренные вершины —
         # по средней линии (x не меняется)
         pouch_back = V0 - V; pouch_back[[i for i, _ in body.pouch_welded], 0] = 0
+        # разложенные по передней поверхности (верх купола): их сдвиг к клину у каждой свой (из глубины клина), и при сгибании
+        # бедра верх купола сминался бы; ход назад здесь — гармоническое продолжение хода соседей (гладкий), раскладка по x
+        # и высоте остаётся
+        if body.pouch_front is not None and body.pouch_layout.any():
+            from anny_look import fair
+            pouch_back[body.pouch_layout, :2] = 0
     F = body.skin_faces; used = np.unique(F); remap = -np.ones(len(V), np.int64); remap[used] = np.arange(len(used))
     V = V[used]; F = remap[F]; W = body.weights[used]          # плотные веса Anny по 104 костям
     if pouch_back is not None: pouch_back = pouch_back[used]; pin = body.pouch_pin[used]
