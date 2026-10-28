@@ -3052,6 +3052,7 @@ function buildSpatialFigure(anim,opts={}){
   if(s.kind==='beam')line3(s.a,s.b,s.r?2*s.r:Math.max(s.w,s.h),TONE3[s.tone]||TONE3.frame,0,{'data-prop':s.id||'beam'});
   else if(s.kind==='obox')obox(s.c,[s.x,s.y,s.z].map(V3.unit),s.size,s.tone,{'data-prop':s.id||'box'});
   else if(s.kind==='cyl')cylinder(s.c,s.axis,s.r,s.len,s.tone,{'data-prop':s.id||'cyl'});
+  else if(s.kind==='prism'){const P=[];for(const k of [-.5,.5])for(const q of s.pts)P.push(V3.add(V3.add(V3.add(s.c,s.u,q[0]),s.v,q[1]),s.w,k*s.len));silhouette(P,shade(TONE3[s.tone]||TONE3.frame,.9),{'data-prop':s.id||'prism'});}
   else if(s.kind==='sphere'){const q=project(s.c);queue('circle',{cx:f1(q[0]),cy:f1(q[1]),r:f1(s.r),fill:TONE3[s.tone]||TONE3.frame},[s.c]);}
   else if(s.kind==='cable')for(let i=1;i<s.pts.length;i++)line3(s.pts[i-1],s.pts[i],Math.max(1,2*s.r),TONE3[s.tone]||TONE3.cable,0,{'data-prop':s.id||'cable'});
   else if(s.kind==='barbell'&&s.len){
@@ -5989,33 +5990,43 @@ if(typeof module!=='undefined'&&module.exports){module.exports=GymEquipment;cons
       const st = e.stack, hands = e.hands || ['L', 'R'];
       const end = e.attach === 'ankle' ? R['an' + (e.foot || 'L')] : V.mix(R['grip' + hands[0]], R['grip' + (hands[1] || hands[0])], .5);
       const lift = Math.max(0, Math.min(st.maxLift, (V.dist(end, P) - (e.rest || 0)) * (e.ratio ?? 1)));
-      const o = toCat(st.o), X = dirCat(M3.col(st.R, 0)), Y = dirCat(M3.col(st.R, 1)), Z = dirCat(M3.col(st.R, 2));
-      /* плиты и верхняя плита скользят по обеим направляющим: rides — детали, сквозь которые они проходят по устройству */
-      const at = (y) => V.add(o, Y, y + lift), sid = id + ':stk', rides = [e.rodPart, e.rodPart.replace(/L$/, 'R')];
-      for (let i = 0; i < st.sel; i++) out.push({ kind: 'obox', c: at(i * st.pitch + st.size[1] / 2), x: X, y: Y, z: Z, size: [...st.size], round: .35, tone: 'stack', role: 'frame', id: sid + i, mount: e.rodPart, rides });
-      const topC = at(st.sel * st.pitch + 2);
-      out.push({ kind: 'obox', c: topC, x: X, y: Y, z: Z, size: [st.size[0] + 1, 4, st.size[2] + 1], round: .5, tone: 'frame', role: 'frame', id: sid + 'Top', mount: e.rodPart, rides });
-      const top = V.add(o, Y, st.topY - st.o[1]), fl = st.float;
-      if (fl) {
-        /* 2:1: подвижный блок на верхней плите — вилка из двух щёк по сторонам колеса, ось, колесо (ось колеса — по Z стека);
-           трос из оси верхней балки (fl.into над topY, там кончается путь cableRun) вниз по стороне −X, под колесом (по хордам
-           внутри обода — отрезков меньше, хорды скрыты колесом и щёками вилки) и вверх по стороне +X к проушине */
-        const fh = fl.gap + fl.r + 1.6, fc = V.add(topC, Y, 2 + fh / 2), wc = V.add(topC, Y, 2 + fl.gap + fl.r);
-        for (const [k, sg] of [['A', 1], ['B', -1]]) out.push({ kind: 'obox', c: V.add(fc, Z, sg * 1.9), x: X, y: Y, z: Z, size: [2 * fl.r + 1, fh, .7], round: .3, tone: 'frame', role: 'frame', id: sid + 'Fork' + k, mount: sid + 'Top' });
-        out.push({ kind: 'cyl', c: wc, axis: Z, r: .6, len: 4.6, tone: 'chrome', role: 'frame', id: sid + 'Axle', mount: sid + 'ForkA' });
-        out.push({ kind: 'cyl', c: wc, axis: Z, r: fl.r, len: 2.4, tone: 'chrome', role: 'frame', id: sid + 'Float', mount: sid + 'Axle' });
-        const pts = [V.add(V.add(top, X, -fl.r), Y, fl.into || 0)];
-        for (let j = 0; j <= 2; j++) { const a = j / 2 * Math.PI; pts.push(V.add(V.add(wc, X, -fl.r * Math.cos(a)), Y, -fl.r * Math.sin(a))); }
-        pts.push(V.add(V.add(top, X, fl.r), Y, -fl.dead));
-        out.push({ kind: 'cable', pts, r: .35, tone: 'cable', role: 'cable', id: sid + 'Cable', mount: sid + 'Float' });
-      } else {
-        const stemTop = V.add(topC, Y, 8);
-        out.push({ kind: 'beam', a: V.add(topC, Y, 2), b: stemTop, r: 1.1, tone: 'chrome', role: 'frame', id: sid + 'Stem', mount: sid + 'Top' });
-        out.push({ kind: 'cable', pts: [stemTop, top], r: .35, tone: 'cable', role: 'cable', id: sid + 'Cable', mount: sid + 'Stem' });
-      }
+      out.push(...stackParts(st, lift, id, e.rodPart));
     }
     return out;
   };
+  /* Подвижная часть стека (общая для блочных и рычажных тренажёров): выбранные плиты, верхняя плита и над ней шток с тросом
+     (1:1) или подвижный блок (2:1, st.float). st — стек из stackInfo и рамки 'stack' (o, R — во внутренних координатах),
+     lift — подъём плит, см; детали — id + ':stk…', скользят по направляющим rodPart и парной (…R); cableR — радиус троса. */
+  function stackParts(st, lift, id, rodPart, cableR = .35) {
+    const out = [], o = toCat(st.o), X = dirCat(M3.col(st.R, 0)), Y = dirCat(M3.col(st.R, 1)), Z = dirCat(M3.col(st.R, 2));
+    /* плиты и верхняя плита скользят по обеим направляющим: rides — детали, сквозь которые они проходят по устройству */
+    const at = (y) => V.add(o, Y, y + lift), sid = id + ':stk', rides = [rodPart, rodPart.replace(/L$/, 'R')];
+    for (let i = 0; i < st.sel; i++) out.push({ kind: 'obox', c: at(i * st.pitch + st.size[1] / 2), x: X, y: Y, z: Z, size: [...st.size], round: .35, tone: 'stack', role: 'frame', id: sid + i, mount: rodPart, rides });
+    const topC = at(st.sel * st.pitch + 2);
+    out.push({ kind: 'obox', c: topC, x: X, y: Y, z: Z, size: [st.size[0] + 1, 4, st.size[2] + 1], round: .5, tone: 'frame', role: 'frame', id: sid + 'Top', mount: rodPart, rides });
+    const top = V.add(o, Y, st.topY - st.o[1]), fl = st.float;
+    if (fl) {
+      /* 2:1: подвижный блок на верхней плите — вилка из двух щёк по сторонам колеса, ось, колесо (ось колеса — по Z стека);
+         трос из оси верхней балки (fl.into над topY, там кончается путь cableRun) вниз по стороне −X, под колесом (по хордам
+         внутри обода — отрезков меньше, хорды скрыты колесом и щёками вилки) и вверх по стороне +X к проушине */
+      const fh = fl.gap + fl.r + 1.6, fc = V.add(topC, Y, 2 + fh / 2), wc = V.add(topC, Y, 2 + fl.gap + fl.r);
+      for (const [k, sg] of [['A', 1], ['B', -1]]) out.push({ kind: 'obox', c: V.add(fc, Z, sg * 1.9), x: X, y: Y, z: Z, size: [2 * fl.r + 1, fh, .7], round: .3, tone: 'frame', role: 'frame', id: sid + 'Fork' + k, mount: sid + 'Top' });
+      out.push({ kind: 'cyl', c: wc, axis: Z, r: .6, len: 4.6, tone: 'chrome', role: 'frame', id: sid + 'Axle', mount: sid + 'ForkA' });
+      out.push({ kind: 'cyl', c: wc, axis: Z, r: fl.r, len: 2.4, tone: 'chrome', role: 'frame', id: sid + 'Float', mount: sid + 'Axle' });
+      const pts = [V.add(V.add(top, X, -fl.r), Y, fl.into || 0)];
+      for (let j = 0; j <= 2; j++) { const a = j / 2 * Math.PI; pts.push(V.add(V.add(wc, X, -fl.r * Math.cos(a)), Y, -fl.r * Math.sin(a))); }
+      pts.push(V.add(V.add(top, X, fl.r), Y, -fl.dead));
+      out.push({ kind: 'cable', pts, r: cableR, tone: 'cable', role: 'cable', id: sid + 'Cable', mount: sid + 'Float' });
+    } else {
+      const stemTop = V.add(topC, Y, 8);
+      out.push({ kind: 'beam', a: V.add(topC, Y, 2), b: stemTop, r: 1.1, tone: 'chrome', role: 'frame', id: sid + 'Stem', mount: sid + 'Top' });
+      out.push({ kind: 'cable', pts: [stemTop, top], r: cableR, tone: 'cable', role: 'cable', id: sid + 'Cable', mount: sid + 'Stem' });
+    }
+    return out;
+  }
+  /* общие узлы стека для рычажных тренажёров (09bo-g4-lever.js): Sub — узел со сдвигом и разворотом, stack — неподвижная часть
+     (направляющие, нижние плиты, рамка и stackInfo), stackParts — подвижная (плиты, верхняя плита, шток или подвижный блок) */
+  E.cableStack = { Sub, stack, parts: stackParts, FLOAT, PITCH, PLATE };
   /* Эспандер от крепления (кольцо на двери): обе ветви от одной точки к кольцам стремён рукоятей (E.stirrup, как у
      эспандера под стопами); ветви крепятся к детали mountTo */
   BIND.g3band = (e, R) => {
@@ -6040,6 +6051,205 @@ if(typeof module!=='undefined'&&module.exports){module.exports=GymEquipment;cons
   };
   /* Неподвижный трос между точками (внутри тренажёра: вдоль вылета, к колонне) */
   BIND.g3line = e => [{ kind: 'cable', pts: e.pts.map(toCat), r: e.r || .35, tone: 'cable', role: 'cable', id: e.id || 'g3line', mount: e.mountTo || 'floor' }];
+})(typeof GymEquipment !== 'undefined' ? GymEquipment : require('./09bn-equipment.js'));
+
+/* Рычажные тренажёры (G4): общий узел передачи «рычаг → кулачок → блоки → стек».
+   Физика одна на все тренажёры. Кулачок жёстко сидит на оси рычага, ось рычага совпадает с осью сустава. Трос 4,8 мм
+   закреплён на кулачке (зажим у начала профиля), лежит в его канавке и сходит по касательной к первому неподвижному блоку,
+   дальше — по касательным между блоками (колёса Ø9–11,5 на кронштейнах рамы) и вниз к верхней плите стека (1:1) или
+   к подвижному блоку на ней (2:1, общий стек G3 — E.cableStack). Весь путь троса лежит в одной плоскости, перпендикулярной
+   оси рычага (плоскость канавки кулачка).
+   * Плечо троса p — расстояние от оси рычага до прямой схода троса с кулачка. Момент сопротивления на оси τ = m·g·k·p,
+     где k — передаточное отношение стека (1 — 1:1, 0,5 — 2:1).
+   * Длина пути троса L — дуга на кулачке от зажима до точки схода + отрезки и дуги на блоках до точки, откуда трос идёт
+     к стеку. Поворот рычага на dφ наматывает dL = p·dφ (виртуальная работа), поэтому подъём стека Δh = k·(L − L₀) = k·∫p dφ
+     и m·g·Δh = ∫τ dφ. Здесь подъём считается из длины пути (как у настоящего троса), а проверка (tools/lever-stacks.test.js)
+     сверяет его с k·∫p dφ, длину троса со стеком — на постоянство, касание — на каждом конце дуги.
+   * Профиль кулачка — цепочка дуг с общими касательными (выпуклый, радиус кривизны не меньше радиуса самого малого блока):
+     опорная функция h(ψ) = C_k·n(ψ) + ρ_k — плечо троса, когда нормаль к профилю в точке схода смотрит под углом ψ (в рамке
+     рычага). Профиль подбирается по кривой «угол — момент» сустава (tools/mannequin/cam-design.js), здесь только геометрия.
+   Внутренние координаты: Y вверх, пол Y = 0, см. */
+((E) => {
+const M = typeof Mannequin !== 'undefined' ? Mannequin : require('./09bm-mannequin.js');
+const { V, toCat, dirCat } = M, { BIND } = E, unit = V.unit;
+/* трос 4,8 мм (3/16″, 7×19 — как у селекторных тренажёров) */
+const CABLE_R = .24;
+const TAU = 2 * Math.PI, rot90 = v => [-v[1], v[0]], ang2 = v => Math.atan2(v[1], v[0]), wrapPi = a => a - TAU * Math.floor((a + Math.PI) / TAU);
+const add2 = (a, b, k = 1) => [a[0] + b[0] * k, a[1] + b[1] * k], sub2 = (a, b) => [a[0] - b[0], a[1] - b[1]], dot2 = (a, b) => a[0] * b[0] + a[1] * b[1], scale2 = (a, k) => [a[0] * k, a[1] * k];
+const dirAt = a => [Math.cos(a), Math.sin(a)], rotate2 = (p, a) => { const c = Math.cos(a), s = Math.sin(a); return [c * p[0] - s * p[1], s * p[0] + c * p[1]]; };
+const bodyInt = (R, bind) => { const p = E.bodyPoint(R, bind); return [p[0], M.FLOOR - p[1], p[2]]; };
+
+/* Плоскость троса: ось рычага (pivot, axis); e1 — направление ref (по умолчанию вперёд, +Z) в плоскости, e2 = e1 × A
+   (для оси +X: e1 = +Z, e2 = +Y). 2D-координаты — от оси рычага; плоскость троса сдвинута вдоль оси на e.plane см. */
+function plane(e) {
+  const P = e.pivot, A = unit(e.axis || [1, 0, 0]);
+  let e1 = V.perp(e.ref || [0, 0, 1], A); if (V.len(e1) < 1e-6) e1 = V.perp([0, 1, 0], A); e1 = unit(e1);
+  const e2 = V.cross(e1, A), O = V.add(P, A, e.plane || 0);
+  return { P, A, e1, e2, O, to2: p => { const d = V.sub(p, P); return [V.dot(d, e1), V.dot(d, e2)]; }, to3: q => V.add(V.add(O, e1, q[0]), e2, q[1]), dir3: q => V.add(V.scale(e1, q[0]), e2, q[1]) };
+}
+/* Угол рычага в плоскости: направление от оси к точке тела bind (как у BIND.g4lever) плюс доворот rot */
+function leverAngle(e, R, pl = plane(e)) {
+  const d = V.perp(V.sub(bodyInt(R, e.bind), pl.P), pl.A);
+  return ang2([V.dot(d, pl.e1), V.dot(d, pl.e2)]) + (e.rot || 0) * Math.PI / 180;
+}
+/* Общая касательная двух окружностей со знаковыми радиусами (R > 0 — трос огибает окружность против часовой стрелки в
+   плоскости e1, e2, R < 0 — по часовой; R = 0 — точка): трос идёт от i к j, центр окружности — слева от направления троса
+   на R. Возвращает левую нормаль nl и точки касания. */
+function tangent(Ci, Ri, Cj, Rj) {
+  const D = sub2(Cj, Ci), L = Math.hypot(D[0], D[1]), c = (Rj - Ri) / L;
+  if (!(L > 1e-9) || Math.abs(c) >= 1) return null;
+  const u = [D[0] / L, D[1] / L], n = add2(scale2(u, c), rot90(u), Math.sqrt(1 - c * c));
+  return { nl: n, Ti: add2(Ci, n, -Ri), Tj: add2(Cj, n, -Rj) };
+}
+/* дуга профиля, в которую попадает угол нормали ψ (рамка кулачка); вне профиля — ближайшая крайняя */
+function arcOf(arcs, psi) {
+  for (const k of arcs) if (psi >= k.a0 - 1e-9 && psi <= k.a1 + 1e-9) return k;
+  return psi < arcs[0].a0 ? arcs[0] : arcs[arcs.length - 1];
+}
+const support = (arcs, psi) => { const k = arcOf(arcs, psi); return dot2(k.c, dirAt(psi)) + k.r; };
+const camPoint = (arcs, psi, off = 0) => { const k = arcOf(arcs, psi); return add2(k.c, dirAt(psi), k.r + off); };
+/* точки и длина троса на кулачке между углами нормали from и to (по дугам профиля, шаг не больше 4°) */
+function camWrap(arcs, from, to) {
+  const lo = Math.min(from, to), hi = Math.max(from, to), cuts = [lo];
+  for (const k of arcs) for (const a of [k.a0, k.a1]) if (a > lo + 1e-9 && a < hi - 1e-9) cuts.push(a);
+  cuts.push(hi); cuts.sort((a, b) => a - b);
+  const pts = [camPoint(arcs, lo)]; let len = 0;
+  for (let i = 1; i < cuts.length; i++) {
+    const a = cuts[i - 1], b = cuts[i], k = arcOf(arcs, (a + b) / 2), n = Math.max(1, Math.ceil((b - a) / (4 * Math.PI / 180)));
+    for (let j = 1; j <= n; j++) pts.push(add2(k.c, dirAt(a + (b - a) * j / n), k.r));
+    len += k.r * (b - a);
+  }
+  return { pts: from <= to ? pts : pts.reverse(), len };
+}
+/* дуга на блоке от точки a к точке b в направлении s (+1 — против часовой) */
+function pulleyWrap(C, r, s, a, b) {
+  const t0 = ang2(sub2(a, C)), t1 = ang2(sub2(b, C)), d = s > 0 ? (t1 - t0 + TAU) % TAU : -((t0 - t1 + TAU) % TAU);
+  const n = Math.max(1, Math.ceil(Math.abs(d) / (8 * Math.PI / 180))), pts = [];
+  for (let j = 0; j <= n; j++) pts.push(add2(C, dirAt(t0 + d * j / n), r));
+  return { pts, len: r * Math.abs(d) };
+}
+
+/* Состояние узла по позе. e: pivot, axis, bind, rot — как у рычага; plane — сдвиг плоскости троса вдоль оси; cam {arcs: [{c:
+   [u, v], r, a0, a1}] — профиль по оси троса (рамка кулачка: u — от оси к точке тела, v — поворот от u к e2 при угле
+   рычага 0), anchor — угол нормали у зажима, sense — направление огибания кулачка тросом (±1, как у блоков)};
+   route [{c, r, s, id}] — неподвижные блоки по порядку (центры во внутренних координатах, в плоскости троса; id — деталь
+   колеса, по ней аудит сверяет нарисованное колесо с расчётным); ratio — k;
+   rest — длина пути троса, при которой стек стоит на остальных плитах; stack — общий стек G3 (o, R, sel, pitch, size, topY,
+   maxLift, float). Возвращает угол рычага, точку схода и плечо троса, путь троса (3D) и его длину, подъём стека. */
+function state(e, R) {
+  const pl = plane(e), al = leverAngle(e, R, pl), cam = e.cam, sc = cam.sense, arcs = cam.arcs;
+  const route = e.route.map(p => ({ C: pl.to2(p.c), r: p.r, s: p.s, R: p.s * p.r }));
+  /* сход с кулачка к первому блоку: дуга профиля, на которой лежит точка касания */
+  const mid = (arcs[0].a0 + arcs[arcs.length - 1].a1) / 2;
+  let best = null;
+  for (const k of arcs) {
+    const Ck = rotate2(k.c, al), t = tangent(Ck, sc * k.r, route[0].C, route[0].R);
+    if (!t) continue;
+    const psi = mid + wrapPi(ang2(scale2(t.nl, -sc)) - al - mid), viol = Math.max(k.a0 - psi, psi - k.a1, 0);
+    if (!best || viol < best.viol) best = { k, t, psi, viol };
+    if (viol === 0) break;
+  }
+  const Tc = best.t.Ti, nl = best.t.nl, p = Math.abs(dot2(nl, Tc));
+  /* трос на кулачке: от зажима до точки схода */
+  const wrapC = camWrap(arcs, cam.anchor, best.psi), pts = wrapC.pts.map(q => rotate2(q, al));
+  pts[pts.length - 1] = Tc;
+  let L = wrapC.len, arrive = best.t.Tj;
+  L += Math.hypot(...sub2(arrive, Tc));
+  /* блоки: дуга на каждом, касательная к следующему; с последнего — вниз к стеку */
+  const down = (() => { const d = [V.dot([0, -1, 0], pl.e1), V.dot([0, -1, 0], pl.e2)], l = Math.hypot(d[0], d[1]); return [d[0] / l, d[1] / l]; })();
+  const segs = [{ from: Tc, to: arrive }], wraps = [];
+  for (let i = 0; i < route.length; i++) {
+    const q = route[i];
+    let leave, next = null;
+    if (i + 1 < route.length) { const t = tangent(q.C, q.R, route[i + 1].C, route[i + 1].R); leave = t.Ti; next = t.Tj; }
+    else leave = add2(q.C, rot90(down), -q.R);
+    const w = pulleyWrap(q.C, q.r, q.s, arrive, leave);
+    pts.push(...w.pts); L += w.len; wraps.push({ C: q.C, r: q.r, s: q.s, a: arrive, b: leave, len: w.len });
+    if (next) { L += Math.hypot(...sub2(next, leave)); segs.push({ from: leave, to: next }); arrive = next; }
+    else arrive = leave;
+  }
+  const k = e.ratio ?? 1, raw = (L - (e.rest || 0)) * k, lift = Math.max(0, Math.min(e.stack ? e.stack.maxLift : Infinity, raw));
+  const u = pl.dir3(dirAt(al)), v = pl.dir3(dirAt(al + Math.PI / 2));
+  return { pl, alpha: al, psi: best.psi, viol: best.viol, contact: pl.to3(Tc), contact2: Tc, nl, momentArm: p, camLen: wrapC.len, segs, wraps,
+    L, rawLift: raw, lift, pts3: pts.map(pl.to3), leave3: pl.to3(arrive), camO: pl.O, u, v };
+}
+
+/* ---------- Кулачок: контур (рамка кулачка) и детали ---------- */
+/* выпуклая оболочка (монотонная цепь), против часовой стрелки */
+function hull(P) {
+  const p = P.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]), cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]), lo = [], up = [];
+  for (const q of p) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 1e-9) lo.pop(); lo.push(q); }
+  for (let i = p.length - 1; i >= 0; i--) { const q = p[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], q) <= 1e-9) up.pop(); up.push(q); }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+/* Контур кулачка: профиль (дуги, сдвинутые на off от оси троса — дно канавки или обод щёк) с запасом за краями и ступица
+   радиуса hub вокруг оси, выпуклая оболочка. Кэш по профилю. */
+const OUTLINE = new WeakMap();
+function outline(cam, off) {
+  let m = OUTLINE.get(cam); if (!m) OUTLINE.set(cam, m = new Map());
+  if (m.has(off)) return m.get(off);
+  const pts = [], arcs = cam.arcs;
+  for (const k of arcs) { const n = Math.max(2, Math.ceil((k.a1 - k.a0) / (3 * Math.PI / 180))); for (let j = 0; j <= n; j++) pts.push(add2(k.c, dirAt(k.a0 + (k.a1 - k.a0) * j / n), k.r + off)); }
+  const hub = (cam.hub || 4.5) + Math.min(0, off);
+  for (let j = 0; j < 36; j++) pts.push(scale2(dirAt(j / 36 * TAU), hub));
+  const out = hull(pts).map(q => [+q[0].toFixed(3), +q[1].toFixed(3)]);
+  m.set(off, out); return out;
+}
+/* Детали кулачка в позе: сердцевина (по дну канавки), две щеки (обод на 0,6 см за осью троса — трос лежит в канавке между
+   ними), зажим троса у начала профиля. Рамка: c — центр в плоскости троса, u, v — оси профиля, w — ось рычага. */
+function camParts(e, S) {
+  const cam = e.cam, id = e.id, core = cam.core || 2, fl = cam.flange || .5, groove = CABLE_R + .1, rim = cam.rim || .6, out = [];
+  const w = S.pl.A, frame = { u: dirCat(S.u), v: dirCat(S.v), w: dirCat(w) };
+  const prism = (k, off, len, shift, tone, mount) => out.push({ kind: 'prism', c: toCat(V.add(S.camO, w, shift)), ...frame, pts: outline(cam, off), len, tone, role: 'frame', id: id + ':' + k, mount });
+  prism('cam', -groove, core, 0, 'frame', e.mountTo);
+  prism('flangeA', rim, fl, core / 2 + fl / 2, 'chrome', id + ':cam');
+  prism('flangeB', rim, fl, -core / 2 - fl / 2, 'chrome', id + ':cam');
+  /* зажим: колодка на дне канавки у начала профиля */
+  const n2 = dirAt(cam.anchor), a2 = camPoint(cam.arcs, cam.anchor, -groove - .6), n3 = V.add(V.scale(S.u, n2[0]), S.v, n2[1]), t3 = V.cross(w, n3);
+  const c3 = V.add(V.add(S.camO, S.u, a2[0]), S.v, a2[1]);
+  out.push({ kind: 'obox', c: toCat(c3), x: dirCat(n3), y: dirCat(t3), z: dirCat(w), size: [1.2, 2.6, core + 2 * fl + .4], round: .3, tone: 'chrome', role: 'frame', id: id + ':clamp', mount: id + ':cam' });
+  return out;
+}
+/* Трос с кулачком и стек. Детали: кулачок (id:cam, id:flangeA/B, id:clamp), трос (id:cable — от зажима по кулачку, по блокам
+   до точки, откуда идёт к стеку), стек — общий G3 (id:stk…, трос от штока верхней плиты к последнему блоку). */
+BIND.g4camCable = (e, R) => {
+  const S = state(e, R), out = camParts(e, S);
+  out.push({ kind: 'cable', pts: S.pts3.map(toCat), r: CABLE_R, tone: 'cable', role: 'cable', id: e.id + ':cable', mount: e.id + ':cam' });
+  if (e.stack) out.push(...E.cableStack.parts(e.stack, S.lift, e.id, e.rodPart, CABLE_R));
+  return out;
+};
+
+/* ---------- Неподвижные узлы рамы ---------- */
+/* Блок на кронштейне: колесо радиуса r (ось axis), ось колеса в двух щеках вилки, мостик вилки на расстоянии r + 1,5 см
+   от оси в сторону dir (в плоскости колеса, со стороны, свободной от троса) крепится к детали mount. t — сборщик снаряда
+   или узел E.cableStack.Sub (те же tube/box/cyl). Возвращает точку, куда упирается мостик (там должна быть деталь mount). */
+function pulley(t, k, c, r, { axis = [1, 0, 0], dir, mount, half = 1.9 }) {
+  const A = unit(axis), d = unit(dir), w = V.cross(A, d), L = r + 1.5;
+  t.cyl(k, c, A, r, 2.4, { mount: k + 'Axle', tone: 'chrome' });
+  t.cyl(k + 'Axle', c, A, .6, 2 * half + 1.2, { mount: k + 'ForkA', tone: 'chrome' });
+  for (const [kk, sg] of [['A', 1], ['B', -1]]) t.box(k + 'Fork' + kk, V.add(V.add(c, A, sg * half), d, (L - 1.2) / 2), [.7, L + 1.2, 3], { axes: [A, d, w], mount: k + 'Bridge', round: .2 });
+  t.box(k + 'Bridge', V.add(c, d, L + .75), [2 * half + .7, 1.5, 3], { axes: [A, d, w], mount, round: .3 });
+  return V.add(c, d, L + 1.5);
+}
+/* Колонна стека: поперечина основания на балке рамы (mount), две стойки 7,5 × 7,5, верхняя балка, общий стек G3 (направляющие,
+   нижние плиты, рамка и stackInfo), блок под верхней балкой — его колесо сходом вниз попадает в ось стека (трос к нему
+   подходит со стороны +Z узла, перед плитами). at — центр стека на полу, H — высота колонны, r — радиус верхнего блока.
+   Ключи деталей — с префиксом pre; возвращает центр верхнего блока и высоту схода (topY) во внутренних координатах. */
+function column(b, pre, { at, H, n = 15, sel = 5, r = 5, mount, X = 27, yaw = 0 }) {
+  const t = E.cableStack.Sub(b, pre, at, yaw);
+  t.tube('baseM', [-X - 4, 3.75, 0], [X + 4, 3.75, 0], [8, 7.5], { mount: '/' + mount });
+  for (const [k, x] of [['L', X], ['R', -X]]) {
+    t.tube('foot' + k, [x, 3.75, -26], [x, 3.75, 22], [7.5, 7.5], { mount: 'baseM' });
+    t.tube('up' + k, [x, 7.5, 0], [x, H, 0], [7.5, 7.5], { mount: 'baseM', up: [0, 0, 1] });
+    t.tube('brace' + k, [x, 7.5, -24], [x, 58, -3.75], [5, 5], { mount: 'foot' + k, up: [1, 0, 0] });
+  }
+  t.tube('top', [-X - 3.75, H - 3.75, 0], [X + 3.75, H - 3.75, 0], [7.5, 7.5], { mount: 'upL' });
+  const topY = H - 7.5 - 3 - r, wc = [0, topY, r];
+  E.cableStack.stack(t, { H, n, sel, base: 'baseM', topY });
+  pulley(t, 'pulley', wc, r, { dir: [0, 1, 0], mount: 'top' });
+  return { wheel: t.P(wc), r, topY, H };
+}
+E.leverStack = { CABLE_R, plane, leverAngle, tangent, support, camPoint, camWrap, state, outline, hull, camParts, pulley, column };
 })(typeof GymEquipment !== 'undefined' ? GymEquipment : require('./09bn-equipment.js'));
 
 /* Тренажёры группы G4: силовые тренажёры с рычагами и каретками, гравитрон, «капитанский стул», брусья,
@@ -6148,16 +6358,33 @@ BIND.g4sled = (e, R) => {
   return rigid(e.id || 'sled', O, X, Y, Z, e.parts || [], e.mountTo);
 };
 
+/* Ось рычага на стойке сбоку: стойка с корпусом подшипника снаружи кулачка, стальная ось сквозь подшипник к ступице рычага.
+   Слева направо (sx = +1): плечо рычага (hubX − 1), ступица рычага и кулачок (до hubX + 6), зазор, стойка (hubX + 11,5). */
+function leverAxle(b, s, mount) {
+  const py = s.pivot[0], pz = s.pivot[1], hx = s.hubX, sx = Math.sign(hx), xb = hx + sx * 11.5;
+  b.tube('pivotPost', [xb, 7.5, pz], [xb, py - 4, pz], [7, 7], { mount });
+  b.cyl('bearing', [xb, py, pz], [1, 0, 0], 4.5, 7, { mount: 'pivotPost' });
+  const xa = hx - sx * 3, xe = xb + sx * 4.5;
+  b.cyl('axle', [(xa + xe) / 2, py, pz], [1, 0, 0], 1.6, Math.abs(xe - xa), { mount: 'bearing', tone: 'chrome' });
+  b.anchor('pivot', [hx, py, pz]);
+  return xb;
+}
 /* ---------- Разгибание ног сидя ----------
    s: seatH — верх сиденья; seatZ — [задний, передний] край сиденья; back — {z0 (низ спинки у сиденья), ang (наклон
-   от вертикали), len}; pivot — [y, z] оси колен; hubX — сторона рычага (−X — правая); handle — {x, y, z}. */
+   от вертикали), len}; pivot — [y, z] оси колен; hubX — сторона рычага (−X — правая); handle — {x, y, z};
+   stack — {z, H} колонна стека за спинкой; p1y — высота оси нижнего блока.
+   Передача (09bo-g4-lever.js): трос сходит с низа кулачка назад к нижнему блоку за сиденьем (p1, огибает его снизу и сзади),
+   поднимается перед плитами к верхнему блоку колонны (p2) и опускается к верхней плите стека (1:1). Плоскость троса —
+   канавка кулачка (hubX + 4,5); колонна стека стоит в ней же. Габариты класса: Legend Fitness 911 Leg Extension —
+   182 × 91 × 189 см, стек 91 кг (200 lb, плиты по 10 lb). */
 TYPES.legExtension = (s, b) => {
-  const H = s.seatH, [z0, z1] = s.seatZ, T = 7, py = s.pivot[0], pz = s.pivot[1], hx = s.hubX, sx = Math.sign(hx);
+  const H = s.seatH, [z0, z1] = s.seatZ, T = 7, hx = s.hubX, sx = Math.sign(hx), xc = hx + sx * 4.5, xb = hx + sx * 11.5, zs = s.stack.z;
   const a = s.back.ang * D2R, up = [0, Math.cos(a), -Math.sin(a)], nb = [0, Math.sin(a), Math.cos(a)];
-  /* основание */
-  b.tube('base', [0, 3.75, z0 - 32], [0, 3.75, z1 - 4], [8, 7.5], { mount: 'floor' });
-  b.tube('baseB', [-34, 3.75, z0 - 26], [34, 3.75, z0 - 26], [8, 7.5], { mount: 'base' });
-  b.tube('baseM', [-30, 3.75, z1 - 10], [30, 3.75, z1 - 10], [8, 7.5], { mount: 'base' });
+  /* основание: средняя балка до колонны стека, поперечины, боковая балка под осью рычага и блоком */
+  b.tube('base', [0, 3.75, zs - 4], [0, 3.75, z1 - 4], [8, 7.5], { mount: 'floor' });
+  b.tube('baseB', [-30, 3.75, z0 - 26], [30, 3.75, z0 - 26], [8, 7.5], { mount: 'base' });
+  b.tube('baseM', [-30, 3.75, z1 - 10], [xb + sx * 4, 3.75, z1 - 10], [8, 7.5], { mount: 'base' });
+  b.tube('baseS', [xb, 3.75, zs], [xb, 3.75, Math.max(z1 - 10, s.pivot[1] + 6)], [7.5, 7.5], { mount: 'baseM' });
   /* сиденье */
   const seatC = [0, H - T / 2, (z0 + z1) / 2];
   const under = pad(b, 'seat', seatC, [34, T, z1 - z0], [[1, 0, 0], [0, 1, 0], [0, 0, 1]], 'seatPost');
@@ -6166,11 +6393,8 @@ TYPES.legExtension = (s, b) => {
   const bl = s.back.len || 58, bot = [0, H + 2, s.back.z0], bc = V.add(V.add(bot, up, bl / 2), nb, -T / 2);
   const behind = pad(b, 'back', bc, [32, T, bl], [[1, 0, 0], nb, up], 'backStrut');
   b.tube('backStrut', [0, 7.5, z0 - 22], V.add(behind, nb, -.5), [6, 6], { mount: 'baseB' });
-  /* стойка оси рычага сбоку, кулачок (диск) снаружи от рычага */
-  b.tube('baseM2', [hx + sx * 7, 3.75, z1 - 10], [hx + sx * 7, 3.75, pz + 6], [7.5, 7.5], { mount: 'baseM' });
-  b.tube('pivotPost', [hx + sx * 7, 7.5, pz - 2], [hx + sx * 7, py + 4, pz - 2], [7, 7], { mount: 'baseM2' });
-  b.cyl('cam', [hx + sx * 3.5, py, pz], [1, 0, 0], 10, 3, { mount: 'pivotPost', sides: 28 });
-  b.cyl('hub', [hx + sx * .5, py, pz], [1, 0, 0], 4.2, 3.4, { mount: 'cam', tone: 'chrome' });
+  /* ось рычага: стойка с подшипником на боковой балке */
+  leverAxle(b, s, 'baseS');
   /* рукояти по бокам сиденья */
   for (const sg of [1, -1]) {
     const k = sg > 0 ? 'L' : 'R', hxp = sg * s.handle.x, hz = s.handle.z - 5;
@@ -6178,11 +6402,14 @@ TYPES.legExtension = (s, b) => {
     b.tube('hPost' + k, [hxp, H - T - 1.5, hz], [hxp, s.handle.y, hz], [3.5, 3.5], { mount: 'hArm' + k });
     handle(b, 'handle' + k, [hxp, s.handle.y, hz], [hxp, s.handle.y, hz + 18], 1.6, 'hPost' + k);
   }
-  /* стек грузов позади спинки */
-  const sz = z0 - 46;
-  stack(b, 'stk', [0, 0, sz], 150, { w: 30 });
-  b.tube('stkLink', [0, 3.75, sz + 4], [0, 3.75, z0 - 30], [8, 7.5], { mount: 'stkBaseS' });
-  b.anchor('pivot', [hx, py, pz]);
+  /* колонна стека за спинкой (плоскость троса), поперечина колонны — на средней балке основания */
+  const col = E.leverStack.column(b, 'stk', { at: [xc, 0, zs], H: s.stack.H, mount: 'base', r: 5 });
+  /* нижний блок за сиденьем: ось на 15 см перед осью стека (ветвь вверх — в 3 см перед плитами), кронштейн вперёд
+     к стойке на боковой балке */
+  const p1 = [xc, s.p1y, zs + 2 * col.r + 5], at = E.leverStack.pulley(b, 'p1', p1, 5, { dir: [0, 0, 1], mount: 'p1Arm' });
+  b.tube('p1Post', [xb, 7.5, at[2] - .75], [xb, s.p1y + 2.5, at[2] - .75], [5, 5], { mount: 'baseS' });
+  b.tube('p1Arm', [xc, s.p1y, at[2] - .75], [xb - sx * 2.5, s.p1y, at[2] - .75], [3, 3], { mount: 'p1Post' });
+  b.anchor('p1', p1); b.anchor('p2', col.wheel);
 };
 
 /* Наклонная подушка между двумя точками поверхности: from → to вдоль подушки, n — нормаль (вверх от поверхности),
@@ -6194,10 +6421,14 @@ function padAlong(b, k, from, to, n, w, T, mount, opts = {}) {
 }
 /* ---------- Сгибание ног лёжа: скамья с изломом под тазом ----------
    s: hump [y, z] — линия излома (верх подушек); knee — [y, z] конец бедренной подушки; head — [y, z] конец грудной;
-   nTh, nT — нормали подушек; pivot — [y, z] оси колен; hubX — сторона рычага; handle — {x, y, z}. */
+   nTh, nT — нормали подушек; pivot — [y, z] оси колен; hubX — сторона рычага; handle — {x, y, z}; stack — {z, H} колонна
+   стека за стопами.
+   Передача (09bo-g4-lever.js): трос сходит с верха кулачка назад прямо к верхнему блоку колонны (огибает его сверху и сзади)
+   и опускается к верхней плите стека (1:1). Плоскость троса — канавка кулачка (hubX + 4,5). Габариты класса: Hammer Strength
+   Select Full Prone Leg Curl — 165 × 99 × 140 см, стек 95 кг; BLK BOX Selectorised Prone Leg Curl — 182 × 93,5 × 152 см. */
 TYPES.legCurl = (s, b) => {
   const T = 7, W = 32, H = [0, ...s.hump], Kp = [0, ...s.knee], Hd = [0, ...s.head], nTh = [0, ...s.nTh], nT = [0, ...s.nT];
-  const [py, pz] = s.pivot, hx = s.hubX, sx = Math.sign(hx);
+  const hx = s.hubX, sx = Math.sign(hx), xc = hx + sx * 4.5, xb = hx + sx * 11.5, zs = s.stack.z;
   const thB = padAlong(b, 'thighPad', Kp, H, nTh, W, T, 'beamTh');
   const toB = padAlong(b, 'chestPad', V.add(H, [0, 0, 1], .5), Hd, nT, W, T, 'beamT');
   /* балки под подушками и стойки */
@@ -6211,13 +6442,11 @@ TYPES.legCurl = (s, b) => {
   b.tube('base', [0, 3.75, s.knee[1] > 0 ? Kp[2] + 8 : Kp[2] + 8], [0, 3.75, Hd[2] + 30], [8, 7.5], { mount: 'floor' });
   b.tube('frontLeg', [0, 7.5, Hd[2] - 8], V.add(tZ, nTU, -2.5), [7, 7], { mount: 'base' });
   b.tube('baseF', [-32, 3.75, Hd[2] + 24], [32, 3.75, Hd[2] + 24], [8, 7.5], { mount: 'base' });
-  b.tube('baseB', [-30, 3.75, Kp[2] + 12], [hx + sx * 11, 3.75, Kp[2] + 12], [8, 7.5], { mount: 'base' });
+  b.tube('baseB', [-30, 3.75, Kp[2] + 12], [xb + sx * 4, 3.75, Kp[2] + 12], [8, 7.5], { mount: 'base' });
   b.tube('rearLeg', [0, 7.5, Kp[2] + 16], V.add(V.add(thA, dTh, 10), nThU, -2.5), [7, 7], { mount: 'baseB' });
-  /* ось рычага: стойка от пола сбоку от колен, кулачок снаружи */
-  b.tube('baseP', [hx + sx * 7, 3.75, Kp[2] + 12], [hx + sx * 7, 3.75, pz - 6], [7.5, 7.5], { mount: 'baseB' });
-  b.tube('pivotUp', [hx + sx * 7, 7.5, pz], [hx + sx * 7, py + 4, pz], [6, 6], { mount: 'baseP' });
-  b.cyl('cam', [hx + sx * 3.5, py, pz], [1, 0, 0], 10, 3, { mount: 'pivotUp', sides: 28 });
-  b.cyl('hub', [hx + sx * .5, py, pz], [1, 0, 0], 4.2, 3.4, { mount: 'cam', tone: 'chrome' });
+  /* ось рычага: стойка с подшипником на боковой балке, балка — назад до колонны стека */
+  b.tube('baseS', [xb, 3.75, zs], [xb, 3.75, Kp[2] + 12], [7.5, 7.5], { mount: 'baseB' });
+  leverAxle(b, s, 'baseS');
   /* рукояти под передним краем грудной подушки: наклонные стойки на поперечине, поперечина — на стойке от основания */
   const ha = unit([0, ...s.handle.ax]), top = [0, s.handle.y + ha[1] * 9, s.handle.z + ha[2] * 9];
   b.tube('hPost', [0, 7.5, top[2]], [0, top[1] + 2, top[2]], [6, 6], { mount: 'base' });
@@ -6226,10 +6455,9 @@ TYPES.legCurl = (s, b) => {
     const k = sg > 0 ? 'L' : 'R', g = [sg * s.handle.x, s.handle.y, s.handle.z];
     handle(b, 'handle' + k, V.add(g, ha, 9), V.add(g, ha, -8), 1.6, 'hBar');
   }
-  /* стек грузов сбоку у грудной подушки */
-  stack(b, 'stk', [hx + sx * 28, 0, (H[2] + Hd[2]) / 2], 140, { along: 'z', w: 30 });
-  b.tube('stkLink', [hx + sx * 11, 3.75, Kp[2] + 12], [hx + sx * 11, 3.75, (H[2] + Hd[2]) / 2], [7.5, 7.5], { mount: 'baseB' });
-  b.tube('stkLink2', [hx + sx * 11, 3.75, (H[2] + Hd[2]) / 2], [hx + sx * 24, 3.75, (H[2] + Hd[2]) / 2], [7.5, 7.5], { mount: 'stkBase' });
+  /* колонна стека за стопами (плоскость троса), поперечина колонны — на боковой балке */
+  const col = E.leverStack.column(b, 'stk', { at: [xc, 0, zs], H: s.stack.H, mount: 'baseS', r: 5 });
+  b.anchor('p2', col.wheel);
 };
 
 /* ---------- Гиперэкстензия 45° ----------
@@ -7108,8 +7336,8 @@ const CATALOG_POSES={
 "legpresshigh":{"keys":[{"t":0,"v":[0,50,0,0.85717,-0.51504,0,0,0,0,0,0,0,0,-21.59,0,0,-2.03,-3.99,-4.34,0.78,-0.36,2.33,12.81,-20.46,18.3,-24.41,0.03,8.42,92.69,7.37,15.17,30,-15.03,-4.16,0,-2.03,-3.99,-4.34,0.78,-0.36,2.33,12.81,-20.46,18.3,-24.41,0.03,8.42,92.69,7.37,15.17,30,-15.03,-4.16,0],"hands":{"L":"grip","R":"grip"}},{"t":0.25,"v":[0,50,0,0.85717,-0.51504,0,0,0,0,0,0,0,0,-21.59,0,0,-2.03,-3.99,-4.34,0.78,-0.36,2.33,12.81,-20.46,18.3,-24.41,0.03,8.42,98.16,9.69,16.37,41.02,-9.76,-4.14,0,-2.03,-3.99,-4.34,0.78,-0.36,2.33,12.81,-20.46,18.3,-24.41,0.03,8.42,98.16,9.69,16.37,41.02,-9.76,-4.14,0],"hands":{"L":"grip","R":"grip"}},{"t":0.5,"v":[0,50,0,0.85717,-0.51504,0,0,0,0,0,0,0,0,-21.59,0,0,-2.03,-3.99,-4.34,0.78,-0.36,2.33,12.81,-20.46,18.3,-24.41,0.03,8.42,107.58,14.46,18.83,60.02,-0.86,-4.09,0,-2.03,-3.99,-4.34,0.78,-0.36,2.33,12.81,-20.46,18.3,-24.41,0.03,8.42,107.58,14.46,18.83,60.02,-0.86,-4.09,0],"hands":{"L":"grip","R":"grip"}},{"t":0.75,"v":[0,50,0,0.85717,-0.51504,0,0,0,0,0,0,0,0,-21.59,0,0,-2.03,-3.99,-4.34,0.78,-0.36,2.33,12.81,-20.46,18.3,-24.41,0.03,8.42,114.78,19.06,21.24,74.64,5.78,-4.03,0,-2.03,-3.99,-4.34,0.78,-0.36,2.33,12.81,-20.46,18.3,-24.41,0.03,8.42,114.78,19.06,21.24,74.64,5.78,-4.03,0],"hands":{"L":"grip","R":"grip"}},{"t":1,"v":[0,50,0,0.85717,-0.51504,0,0,0,0,0,0,0,0,-21.59,0,0,-2.03,-3.99,-4.34,0.78,-0.36,2.33,12.81,-20.46,18.3,-24.41,0.03,8.42,117.4,21.02,22.28,80,8.16,-4,0,-2.03,-3.99,-4.34,0.78,-0.36,2.33,12.81,-20.46,18.3,-24.41,0.03,8.42,117.4,21.02,22.28,80,8.16,-4,0],"hands":{"L":"grip","R":"grip"}}],"equipment":[{"type":"legPress45","id":"lp","rx":28,"seat":{"c":[43.71769742199726,17.38410280540092],"ang":18,"len":40},"back":{"c0":[37.22834054012336,-2.5880840367973015],"ang":28,"len":86},"rail":{"a":[20.301515190165002,15.556349186104047],"b":[158.89444430272832,154.14927829866738]},"handle":{"x":26,"y":56,"z":16,"ax":[1,0]}},{"type":"g4sled","id":"sled","rail":[[0,20.301515190165002,15.556349186104047],[0,158.89444430272832,154.14927829866738]],"up":[0,0.7071067811865476,-0.7071067811865476],"bind":{"mix":["ballL","ballR"]},"mountTo":"lp:railL","parts":[{"name":"plate","kind":"obox","c":[0,35.529532328372,-1.868806254482493],"size":[74,4,58],"axes":[[1,0,0],[0,0.4226182617406995,-0.90630778703665],[0,0.90630778703665,0.4226182617406995]],"tone":"rubber","mount":"deck","round":0.5},{"name":"deck","kind":"obox","c":[0,33.8390592814092,1.7564248936641071],"size":[66,4,54],"axes":[[1,0,0],[0,0.4226182617406995,-0.90630778703665],[0,0.90630778703665,0.4226182617406995]],"mount":"carL","round":0.4},{"name":"carL","kind":"obox","c":[28,5,23.500495303183822],"size":[8,6,80],"mount":"lp:railL","round":0.6},{"name":"strutL","kind":"beam","a":[28,7,-9.499504696816178],"b":[28,8.556133457346348,-9.499504696816178],"w":6,"h":6,"mount":"carL"},{"name":"braceL","kind":"beam","a":[28,7,41.500495303183826],"b":[28,58.12198510547205,15.012354484144392],"w":6,"h":6,"mount":"carL"},{"name":"hornL","kind":"cyl","c":[45,18,51.500495303183826],"axis":[1,0,0],"r":2.5,"len":26,"tone":"chrome","mount":"hornBar"},{"name":"discL","kind":"cyl","c":[42.6,18,51.500495303183826],"axis":[1,0,0],"r":22.5,"len":5.6,"tone":"plate","mount":"hornL","sides":32},{"name":"disc2L","kind":"cyl","c":[48.4,18,51.500495303183826],"axis":[1,0,0],"r":22.5,"len":5.6,"tone":"plate","mount":"discL","sides":32},{"name":"carR","kind":"obox","c":[-28,5,23.500495303183822],"size":[8,6,80],"mount":"lp:railR","round":0.6},{"name":"strutR","kind":"beam","a":[-28,7,-9.499504696816178],"b":[-28,8.556133457346348,-9.499504696816178],"w":6,"h":6,"mount":"carR"},{"name":"braceR","kind":"beam","a":[-28,7,41.500495303183826],"b":[-28,58.12198510547205,15.012354484144392],"w":6,"h":6,"mount":"carR"},{"name":"hornR","kind":"cyl","c":[-45,18,51.500495303183826],"axis":[1,0,0],"r":2.5,"len":26,"tone":"chrome","mount":"hornBar"},{"name":"discR","kind":"cyl","c":[-42.6,18,51.500495303183826],"axis":[1,0,0],"r":22.5,"len":5.6,"tone":"plate","mount":"hornR","sides":32},{"name":"disc2R","kind":"cyl","c":[-48.4,18,51.500495303183826],"axis":[1,0,0],"r":22.5,"len":5.6,"tone":"plate","mount":"discR","sides":32},{"name":"hornBar","kind":"beam","a":[-32,18,51.500495303183826],"b":[32,18,51.500495303183826],"w":6,"h":6,"mount":"hornPostL"},{"name":"hornPostL","kind":"beam","a":[28,7,51.500495303183826],"b":[28,21,51.500495303183826],"w":6,"h":6,"mount":"carL"},{"name":"hornPostR","kind":"beam","a":[-28,7,51.500495303183826],"b":[-28,21,51.500495303183826],"w":6,"h":6,"mount":"carR"}]}],"contacts":[{"body":"buttocks","prop":"lp:seat"},{"body":"back","prop":"lp:back"},{"body":"soleL","prop":"sled:plate"},{"body":"soleR","prop":"sled:plate"},{"body":"gripL","prop":"lp:handleL"},{"body":"gripR","prop":"lp:handleR"}]},
 "legpresslow":{"keys":[{"t":0,"v":[0,50,0,0.85717,-0.51504,0,0,0,0,0,0,0,0,-21.59,0,0,-2.03,-3.99,-4.34,0.78,-0.36,2.33,12.81,-20.46,18.3,-24.41,0.03,8.42,74.62,4.65,13.82,18,-8.88,-1.99,0,-2.03,-3.99,-4.34,0.78,-0.36,2.33,12.81,-20.46,18.3,-24.41,0.03,8.42,74.62,4.65,13.82,18,-8.88,-1.99,0],"hands":{"L":"grip","R":"grip"}},{"t":0.25,"v":[0,50,0,0.85717,-0.51504,0,0,0,0,0,0,0,0,-21.59,0,0,-2.03,-3.99,-4.34,0.78,-0.36,2.33,12.81,-20.46,18.3,-24.41,0.03,8.42,84.79,8.32,15.48,39.6,2.11,-1.85,0,-2.03,-3.99,-4.34,0.78,-0.36,2.33,12.81,-20.46,18.3,-24.41,0.03,8.42,84.79,8.32,15.48,39.6,2.11,-1.85,0],"hands":{"L":"grip","R":"grip"}},{"t":0.5,"v":[0,50,0,0.85717,-0.51504,0,0,0,0,0,0,0,0,-21.59,0,0,-2.03,-3.99,-4.34,0.78,-0.36,2.33,12.81,-20.46,18.3,-24.41,0.03,8.42,97.46,14.27,18.15,68.21,17.15,-1.45,0,-2.03,-3.99,-4.34,0.78,-0.36,2.33,12.81,-20.46,18.3,-24.41,0.03,8.42,97.46,14.27,18.15,68.21,17.15,-1.45,0],"hands":{"L":"grip","R":"grip"}},{"t":0.75,"v":[0,50,0,0.85717,-0.51504,0,0,0,0,0,0,0,0,-21.59,0,0,-2.03,-3.99,-4.34,0.78,-0.36,2.33,12.81,-20.46,18.3,-24.41,0.03,8.42,105.66,19.5,20.45,88.62,28.4,-0.91,0,-2.03,-3.99,-4.34,0.78,-0.36,2.33,12.81,-20.46,18.3,-24.41,0.03,8.42,105.66,19.5,20.45,88.62,28.4,-0.91,0],"hands":{"L":"grip","R":"grip"}},{"t":1,"v":[0,50,0,0.85717,-0.51504,0,0,0,0,0,0,0,0,-21.59,0,0,-2.03,-3.99,-4.34,0.78,-0.36,2.33,12.81,-20.46,18.3,-24.41,0.03,8.42,108.35,21.62,21.36,96,32.65,-0.64,0,-2.03,-3.99,-4.34,0.78,-0.36,2.33,12.81,-20.46,18.3,-24.41,0.03,8.42,108.35,21.62,21.36,96,32.65,-0.64,0],"hands":{"L":"grip","R":"grip"}}],"equipment":[{"type":"legPress45","id":"lp","rx":28,"seat":{"c":[43.71769742199726,17.38410280540092],"ang":18,"len":40},"back":{"c0":[37.22834054012336,-2.5880840367973015],"ang":28,"len":86},"rail":{"a":[20.301515190165002,15.556349186104047],"b":[158.89444430272832,154.14927829866738]},"handle":{"x":26,"y":56,"z":16,"ax":[1,0]}},{"type":"g4sled","id":"sled","rail":[[0,20.301515190165002,15.556349186104047],[0,158.89444430272832,154.14927829866738]],"up":[0,0.7071067811865476,-0.7071067811865476],"bind":{"mix":["ballL","ballR"]},"mountTo":"lp:railL","parts":[{"name":"plate","kind":"obox","c":[0,35.52953232837201,6.160940718590798],"size":[74,4,58],"axes":[[1,0,0],[0,0.4226182617406995,-0.90630778703665],[0,0.90630778703665,0.4226182617406995]],"tone":"rubber","mount":"deck","round":0.5},{"name":"deck","kind":"obox","c":[0,33.839059281409206,9.786171866737398],"size":[66,4,54],"axes":[[1,0,0],[0,0.4226182617406995,-0.90630778703665],[0,0.90630778703665,0.4226182617406995]],"mount":"carL","round":0.4},{"name":"carL","kind":"obox","c":[28,5,31.530242276257113],"size":[8,6,80],"mount":"lp:railL","round":0.6},{"name":"strutL","kind":"beam","a":[28,7,-1.4697577237428874],"b":[28,8.556133457346352,-1.4697577237428874],"w":6,"h":6,"mount":"carL"},{"name":"braceL","kind":"beam","a":[28,7,49.53024227625711],"b":[28,58.121985105472056,23.042101457217683],"w":6,"h":6,"mount":"carL"},{"name":"hornL","kind":"cyl","c":[45,18,59.53024227625711],"axis":[1,0,0],"r":2.5,"len":26,"tone":"chrome","mount":"hornBar"},{"name":"discL","kind":"cyl","c":[42.6,18,59.53024227625711],"axis":[1,0,0],"r":22.5,"len":5.6,"tone":"plate","mount":"hornL","sides":32},{"name":"disc2L","kind":"cyl","c":[48.4,18,59.53024227625711],"axis":[1,0,0],"r":22.5,"len":5.6,"tone":"plate","mount":"discL","sides":32},{"name":"carR","kind":"obox","c":[-28,5,31.530242276257113],"size":[8,6,80],"mount":"lp:railR","round":0.6},{"name":"strutR","kind":"beam","a":[-28,7,-1.4697577237428874],"b":[-28,8.556133457346352,-1.4697577237428874],"w":6,"h":6,"mount":"carR"},{"name":"braceR","kind":"beam","a":[-28,7,49.53024227625711],"b":[-28,58.121985105472056,23.042101457217683],"w":6,"h":6,"mount":"carR"},{"name":"hornR","kind":"cyl","c":[-45,18,59.53024227625711],"axis":[1,0,0],"r":2.5,"len":26,"tone":"chrome","mount":"hornBar"},{"name":"discR","kind":"cyl","c":[-42.6,18,59.53024227625711],"axis":[1,0,0],"r":22.5,"len":5.6,"tone":"plate","mount":"hornR","sides":32},{"name":"disc2R","kind":"cyl","c":[-48.4,18,59.53024227625711],"axis":[1,0,0],"r":22.5,"len":5.6,"tone":"plate","mount":"discR","sides":32},{"name":"hornBar","kind":"beam","a":[-32,18,59.53024227625711],"b":[32,18,59.53024227625711],"w":6,"h":6,"mount":"hornPostL"},{"name":"hornPostL","kind":"beam","a":[28,7,59.53024227625711],"b":[28,21,59.53024227625711],"w":6,"h":6,"mount":"carL"},{"name":"hornPostR","kind":"beam","a":[-28,7,59.53024227625711],"b":[-28,21,59.53024227625711],"w":6,"h":6,"mount":"carR"}]}],"contacts":[{"body":"buttocks","prop":"lp:seat"},{"body":"back","prop":"lp:back"},{"body":"soleL","prop":"sled:plate"},{"body":"soleR","prop":"sled:plate"},{"body":"gripL","prop":"lp:handleL"},{"body":"gripR","prop":"lp:handleR"}]},
 "hyper":{"keys":[{"t":0,"v":[0,100,0,0.92388,0.38268,0,0,-1,0,0,0,0,0,-8,0,0,0.31,9.59,12.01,1.17,4.68,26.24,-9.38,-74.76,112.5,60,0,0,-0.02,3.3,5.7,6,3.99,0.1,0,0.32,9.58,12.16,1.59,5.05,30.24,-3.22,-70.28,97.65,60,0,0,-0.02,3.3,5.7,6,3.99,0.1,0],"hands":{"L":"relaxed","R":"relaxed"}},{"t":0.25,"v":[0,100,0,0.886,0.46369,0,0,1.05,0,0,1.17,0,0,-5.07,0,0,0.31,9.59,12.01,1.17,4.68,26.24,-9.38,-74.76,112.5,60,0,0,10.22,3.32,6,6,3.99,0.1,0,0.32,9.58,12.16,1.59,5.05,30.24,-3.22,-70.28,97.65,60,0,0,10.22,3.32,6,6,3.99,0.1,0],"hands":{"L":"relaxed","R":"relaxed"}},{"t":0.5,"v":[0,100,0,0.76604,0.64279,0,0,6,0,0,4,0,0,2,0,0,0.31,9.59,12.01,1.17,4.68,26.24,-9.38,-74.76,112.5,60,0,0,34.94,3.52,6.74,6,3.99,0.1,0,0.32,9.58,12.16,1.59,5.05,30.24,-3.22,-70.28,97.65,60,0,0,34.94,3.52,6.74,6,3.99,0.1,0],"hands":{"L":"relaxed","R":"relaxed"}},{"t":0.75,"v":[0,100,0,0.6105,0.79202,0,0,10.95,0,0,6.83,0,0,9.07,0,0,0.31,9.59,12.01,1.17,4.68,26.24,-9.38,-74.76,112.5,60,0,0,59.66,3.99,7.6,6,3.99,0.1,0,0.32,9.58,12.16,1.59,5.05,30.24,-3.22,-70.28,97.65,60,0,0,59.66,3.99,7.6,6,3.99,0.1,0],"hands":{"L":"relaxed","R":"relaxed"}},{"t":1,"v":[0,100,0,0.5373,0.84339,0,0,13,0,0,8,0,0,12,0,0,0.31,9.59,12.01,1.17,4.68,26.24,-9.38,-74.76,112.5,60,0,0,69.89,4.29,8.01,6,3.99,0.1,0,0.32,9.58,12.16,1.59,5.05,30.24,-3.22,-70.28,97.65,60,0,0,69.89,4.29,8.01,6,3.99,0.1,0],"hands":{"L":"relaxed","R":"relaxed"}}],"equipment":[{"type":"hyper45","id":"hy","H":[100,0],"ang":45,"beamV":36,"uEnd":-46,"plate":{"c":[37.18949193427441,-64.42305460600582],"n":[0.6810298851224554,0.7303852266791274],"size":[44,34]},"roll":{"u":-72.15826565932014,"v":-12.31067406368236,"r":5},"pad":{"u0":-7,"u1":-31,"v":10.185714285714285,"w":42}}],"contacts":[{"body":"soleL","prop":"hy:plate"},{"body":"soleR","prop":"hy:plate"},{"body":"thL","prop":"hy:pad"},{"body":"thR","prop":"hy:pad"},{"body":"skL","prop":"hy:rollL"},{"body":"skR","prop":"hy:rollR"}]},
-"legcurl":{"keys":[{"t":0,"v":[0,74,0,0.60182,0.79864,0,0,2,0,0,0,0,0,-22,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,6,6,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,6,6,0,0],"hands":{"L":"grip","R":"grip"}},{"t":0.2,"v":[0,74,0,0.60182,0.79864,0,0,2,0,0,0,0,0,-22,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,17.27,5.62,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,17.27,5.62,0,0],"hands":{"L":"grip","R":"grip"}},{"t":0.4,"v":[0,74,0,0.60182,0.79864,0,0,2,0,0,0,0,0,-22,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,46.77,4.62,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,46.77,4.62,0,0],"hands":{"L":"grip","R":"grip"}},{"t":0.6,"v":[0,74,0,0.60182,0.79864,0,0,2,0,0,0,0,0,-22,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,83.23,3.38,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,83.23,3.38,0,0],"hands":{"L":"grip","R":"grip"}},{"t":0.8,"v":[0,74,0,0.60182,0.79864,0,0,2,0,0,0,0,0,-22,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,112.73,2.38,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,112.73,2.38,0,0],"hands":{"L":"grip","R":"grip"}},{"t":1,"v":[0,74,0,0.60182,0.79864,0,0,2,0,0,0,0,0,-22,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,124,2,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,124,2,0,0],"hands":{"L":"grip","R":"grip"}}],"equipment":[{"type":"legCurl","id":"lc","hump":[63.0548545189077,-6.025791419977395],"knee":[58.79954240454874,-36.303910397781905],"head":[47.27978921024886,48.98839918997309],"nTh":[0.9902680687415704,-0.13917310096006544],"nT":[0.9612616959383189,0.27563735581699916],"pivot":[68.33565479092533,-40.303910397781905],"hubX":27,"handle":{"x":20,"y":19.280157846676744,"z":66.98839918997308,"ax":[1,0.5]}},{"type":"g4lever","id":"lcArm","pivot":[27,68.33565479092533,-40.303910397781905],"axis":[1,0,0],"mountTo":"lc:hub","bind":{"mix":["anL","anR"],"frame":"skL","off":[0,7,-8.2]},"parts":[{"name":"arm","kind":"beam","a":[-1,-4,0],"b":[-1,38.753041828633265,0],"w":4,"h":7,"up":[0,0,1]},{"name":"bar","kind":"beam","a":[-1,35.753041828633265,0],"b":[-11,35.753041828633265,0],"r":1.6,"mount":"arm","tone":"chrome"},{"name":"roller","kind":"cyl","c":[-27,35.753041828633265,0],"axis":[1,0,0],"r":5.5,"len":36,"mount":"bar","tone":"pad","role":"pad"}]}],"contacts":[{"body":"thL","prop":"lc:thighPad"},{"body":"thR","prop":"lc:thighPad"},{"body":"chest","prop":"lc:chestPad"},{"body":"skL","prop":"lcArm:roller"},{"body":"skR","prop":"lcArm:roller"},{"body":"gripL","prop":"lc:handleL"},{"body":"gripR","prop":"lc:handleR"}]},
-"legext":{"keys":[{"t":0,"v":[0,59.27,-13.2,0.99452,-0.10453,0,0,3,0,0,2,0,0,-4,0,0,-1.82,-4.66,-3.56,3.88,1.72,-1.13,35.49,-71.87,53.46,-80.43,0.03,-20.26,78,0,0,85,4,0,0,-1.82,-4.66,-3.56,3.88,1.72,-1.13,35.49,-71.87,53.46,-80.43,0.03,-20.26,78,0,0,85,4,0,0],"hands":{"L":"grip","R":"grip"}},{"t":0.25,"v":[0,59.27,-13.2,0.99452,-0.10453,0,0,3,0,0,2,0,0,-4,0,0,-1.82,-4.66,-3.56,3.88,1.72,-1.13,35.49,-71.87,53.46,-80.43,0.03,-20.26,78,0,0,73.87,4.88,0,0,-1.82,-4.66,-3.56,3.88,1.72,-1.13,35.49,-71.87,53.46,-80.43,0.03,-20.26,78,0,0,73.87,4.88,0,0],"hands":{"L":"grip","R":"grip"}},{"t":0.5,"v":[0,59.27,-13.2,0.99452,-0.10453,0,0,3,0,0,2,0,0,-4,0,0,-1.82,-4.66,-3.56,3.88,1.72,-1.13,35.49,-71.87,53.46,-80.43,0.03,-20.26,78,0,0,47,7,0,0,-1.82,-4.66,-3.56,3.88,1.72,-1.13,35.49,-71.87,53.46,-80.43,0.03,-20.26,78,0,0,47,7,0,0],"hands":{"L":"grip","R":"grip"}},{"t":0.75,"v":[0,59.27,-13.2,0.99452,-0.10453,0,0,3,0,0,2,0,0,-4,0,0,-1.82,-4.66,-3.56,3.88,1.72,-1.13,35.49,-71.87,53.46,-80.43,0.03,-20.26,78,0,0,20.13,9.12,0,0,-1.82,-4.66,-3.56,3.88,1.72,-1.13,35.49,-71.87,53.46,-80.43,0.03,-20.26,78,0,0,20.13,9.12,0,0],"hands":{"L":"grip","R":"grip"}},{"t":1,"v":[0,59.27,-13.2,0.99452,-0.10453,0,0,3,0,0,2,0,0,-4,0,0,-1.82,-4.66,-3.56,3.88,1.72,-1.13,35.49,-71.87,53.46,-80.43,0.03,-20.26,78,0,0,9,10,0,0,-1.82,-4.66,-3.56,3.88,1.72,-1.13,35.49,-71.87,53.46,-80.43,0.03,-20.26,78,0,0,9,10,0,0],"hands":{"L":"grip","R":"grip"}}],"equipment":[{"type":"legExtension","id":"lx","seatH":50,"seatZ":[-28,18.501354749187655],"back":{"z0":-25.5,"ang":12,"len":60},"pivot":[59.26556171093059,27.501354749187655],"hubX":27,"handle":{"x":23,"y":53,"z":-15.19864525081235}},{"type":"g4lever","id":"lxArm","pivot":[27,59.26556171093059,27.501354749187655],"axis":[1,0,0],"mountTo":"lx:hub","bind":{"mix":["anL","anR"],"frame":"skL","off":[0,9,7.4]},"parts":[{"name":"arm","kind":"beam","a":[-1,-4,0],"b":[-1,36.62439590535419,0],"w":4,"h":7,"up":[0,0,1]},{"name":"bar","kind":"beam","a":[-1,33.62439590535419,0],"b":[-11,33.62439590535419,0],"r":1.6,"mount":"arm","tone":"chrome"},{"name":"roller","kind":"cyl","c":[-27,33.62439590535419,0],"axis":[1,0,0],"r":5.5,"len":36,"mount":"bar","tone":"pad","role":"pad"}]}],"contacts":[{"body":"buttocks","prop":"lx:seat"},{"body":"back","prop":"lx:back"},{"body":"shinL","prop":"lxArm:roller"},{"body":"shinR","prop":"lxArm:roller"},{"body":"gripL","prop":"lx:handleL"},{"body":"gripR","prop":"lx:handleR"}]},
+"legcurl":{"keys":[{"t":0,"v":[0,74,0,0.60182,0.79864,0,0,2,0,0,0,0,0,-22,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,6,6,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,6,6,0,0],"hands":{"L":"grip","R":"grip"}},{"t":0.2,"v":[0,74,0,0.60182,0.79864,0,0,2,0,0,0,0,0,-22,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,17.27,5.62,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,17.27,5.62,0,0],"hands":{"L":"grip","R":"grip"}},{"t":0.4,"v":[0,74,0,0.60182,0.79864,0,0,2,0,0,0,0,0,-22,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,46.77,4.62,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,46.77,4.62,0,0],"hands":{"L":"grip","R":"grip"}},{"t":0.6,"v":[0,74,0,0.60182,0.79864,0,0,2,0,0,0,0,0,-22,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,83.23,3.38,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,83.23,3.38,0,0],"hands":{"L":"grip","R":"grip"}},{"t":0.8,"v":[0,74,0,0.60182,0.79864,0,0,2,0,0,0,0,0,-22,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,112.73,2.38,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,112.73,2.38,0,0],"hands":{"L":"grip","R":"grip"}},{"t":1,"v":[0,74,0,0.60182,0.79864,0,0,2,0,0,0,0,0,-22,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,124,2,0,0,0.42,7.48,16.32,22.17,24.47,79.16,30.18,10.28,99.23,-21.21,0.01,-8.46,24,0,0,124,2,0,0],"hands":{"L":"grip","R":"grip"}}],"equipment":[{"type":"legCurl","id":"lc","hump":[63.0548545189077,-6.025791419977395],"knee":[58.79954240454874,-36.303910397781905],"head":[47.27978921024886,48.98839918997309],"nTh":[0.9902680687415704,-0.13917310096006544],"nT":[0.9612616959383189,0.27563735581699916],"pivot":[68.33565479092533,-40.303910397781905],"hubX":27,"handle":{"x":20,"y":19.280157846676744,"z":66.98839918997308,"ax":[1,0.5]},"stack":{"z":-100.3039103977819,"H":120}},{"type":"g4lever","id":"lcArm","pivot":[27,68.33565479092533,-40.303910397781905],"axis":[1,0,0],"mountTo":"lc:axle","bind":{"mix":["anL","anR"],"frame":"skL","off":[0,7,-8.2]},"parts":[{"name":"hub","kind":"cyl","c":[2.5,0,0],"axis":[1,0,0],"r":4.5,"len":7},{"name":"arm","kind":"beam","a":[-1,-4,0],"b":[-1,24,0],"w":4,"h":7,"up":[0,0,1],"mount":"hub"},{"name":"slide","kind":"beam","a":[-1,20,0],"b":[-1,38.753041828633265,0],"w":3,"h":5.4,"up":[0,0,1],"mount":"arm"},{"name":"pin","kind":"cyl","c":[-3.6,22,0],"axis":[1,0,0],"r":0.5,"len":2.4,"mount":"arm","tone":"chrome"},{"name":"knob","kind":"sphere","c":[-5.2,22,0],"r":1.2,"mount":"pin","tone":"rubber"},{"name":"bar","kind":"beam","a":[-1,35.753041828633265,0],"b":[-11,35.753041828633265,0],"r":1.6,"mount":"slide","tone":"chrome"},{"name":"roller","kind":"cyl","c":[-27,35.753041828633265,0],"axis":[1,0,0],"r":5.5,"len":36,"mount":"bar","tone":"pad","role":"pad"}]},{"type":"g4camCable","id":"lcCam","pivot":[27,68.33565479092533,-40.303910397781905],"axis":[1,0,0],"bind":{"mix":["anL","anR"],"frame":"skL","off":[0,7,-8.2]},"plane":4.5,"mountTo":"lcArm:hub","curve":"kneeFlexionProne","kg":95,"kgSrc":"Hammer Strength Select Full Prone Leg Curl","route":[{"c":[31.5,104.5,-95.3],"r":5,"s":1,"id":"lc:stkpulley"}],"ratio":1,"rodPart":"lc:stkrodL","stack":{"o":[31.5,37.5,-100.3],"R":[1,0,0,0,1,0,0,0,1],"sel":5,"pitch":2.6,"size":[32,2.4,14],"topY":104.5,"maxLift":38},"cam":{"arcs":[{"c":[0.5578,-5.5983],"r":9.3863,"a0":-2.366635,"a1":-2.173745},{"c":[0.5578,-5.5983],"r":9.3863,"a0":-2.173745,"a1":-1.980854},{"c":[0.5578,-5.5983],"r":9.3863,"a0":-1.980854,"a1":-1.787964},{"c":[0.5578,-5.5984],"r":9.3862,"a0":-1.787964,"a1":-1.595073},{"c":[0.5574,-5.6144],"r":9.3701,"a0":-1.595073,"a1":-1.402182},{"c":[0.5664,-5.6673],"r":9.3165,"a0":-1.402182,"a1":-1.209292},{"c":[0.5966,-5.7471],"r":9.2311,"a0":-1.209292,"a1":-1.016401},{"c":[0.6458,-5.8265],"r":9.1378,"a0":-1.016401,"a1":-0.82351},{"c":[0.6979,-5.8828],"r":9.0611,"a0":-0.82351,"a1":-0.63062},{"c":[0.7357,-5.9104],"r":9.0142,"a0":-0.63062,"a1":-0.437729},{"c":[0.7528,-5.9184],"r":8.9954,"a0":-0.437729,"a1":-0.244839},{"c":[0.7555,-5.9191],"r":8.9926,"a0":-0.244839,"a1":-0.051948},{"c":[0.7546,-5.919],"r":8.9935,"a0":-0.051948,"a1":0.140943},{"c":[0.7546,-5.919],"r":8.9935,"a0":0.140943,"a1":0.333833},{"c":[0.7546,-5.919],"r":8.9935,"a0":0.333833,"a1":0.526724},{"c":[0.7546,-5.919],"r":8.9935,"a0":0.526724,"a1":0.719614}],"anchor":-2.227009,"sense":1},"rest":76.2}],"contacts":[{"body":"thL","prop":"lc:thighPad"},{"body":"thR","prop":"lc:thighPad"},{"body":"chest","prop":"lc:chestPad"},{"body":"skL","prop":"lcArm:roller"},{"body":"skR","prop":"lcArm:roller"},{"body":"gripL","prop":"lc:handleL"},{"body":"gripR","prop":"lc:handleR"}]},
+"legext":{"keys":[{"t":0,"v":[0,59.27,-13.2,0.99452,-0.10453,0,0,3,0,0,2,0,0,-4,0,0,-1.82,-4.66,-3.56,3.88,1.72,-1.13,35.49,-71.87,53.46,-80.43,0.03,-20.26,78,0,0,85,4,0,0,-1.82,-4.66,-3.56,3.88,1.72,-1.13,35.49,-71.87,53.46,-80.43,0.03,-20.26,78,0,0,85,4,0,0],"hands":{"L":"grip","R":"grip"}},{"t":0.25,"v":[0,59.27,-13.2,0.99452,-0.10453,0,0,3,0,0,2,0,0,-4,0,0,-1.82,-4.66,-3.56,3.88,1.72,-1.13,35.49,-71.87,53.46,-80.43,0.03,-20.26,78,0,0,73.87,4.88,0,0,-1.82,-4.66,-3.56,3.88,1.72,-1.13,35.49,-71.87,53.46,-80.43,0.03,-20.26,78,0,0,73.87,4.88,0,0],"hands":{"L":"grip","R":"grip"}},{"t":0.5,"v":[0,59.27,-13.2,0.99452,-0.10453,0,0,3,0,0,2,0,0,-4,0,0,-1.82,-4.66,-3.56,3.88,1.72,-1.13,35.49,-71.87,53.46,-80.43,0.03,-20.26,78,0,0,47,7,0,0,-1.82,-4.66,-3.56,3.88,1.72,-1.13,35.49,-71.87,53.46,-80.43,0.03,-20.26,78,0,0,47,7,0,0],"hands":{"L":"grip","R":"grip"}},{"t":0.75,"v":[0,59.27,-13.2,0.99452,-0.10453,0,0,3,0,0,2,0,0,-4,0,0,-1.82,-4.66,-3.56,3.88,1.72,-1.13,35.49,-71.87,53.46,-80.43,0.03,-20.26,78,0,0,20.13,9.12,0,0,-1.82,-4.66,-3.56,3.88,1.72,-1.13,35.49,-71.87,53.46,-80.43,0.03,-20.26,78,0,0,20.13,9.12,0,0],"hands":{"L":"grip","R":"grip"}},{"t":1,"v":[0,59.27,-13.2,0.99452,-0.10453,0,0,3,0,0,2,0,0,-4,0,0,-1.82,-4.66,-3.56,3.88,1.72,-1.13,35.49,-71.87,53.46,-80.43,0.03,-20.26,78,0,0,9,10,0,0,-1.82,-4.66,-3.56,3.88,1.72,-1.13,35.49,-71.87,53.46,-80.43,0.03,-20.26,78,0,0,9,10,0,0],"hands":{"L":"grip","R":"grip"}}],"equipment":[{"type":"legExtension","id":"lx","seatH":50,"seatZ":[-28,18.501354749187655],"back":{"z0":-25.5,"ang":12,"len":60},"pivot":[59.26556171093059,27.501354749187655],"hubX":27,"handle":{"x":23,"y":53,"z":-15.19864525081235},"stack":{"z":-62,"H":135},"p1y":45},{"type":"g4lever","id":"lxArm","pivot":[27,59.26556171093059,27.501354749187655],"axis":[1,0,0],"mountTo":"lx:axle","bind":{"mix":["anL","anR"],"frame":"skL","off":[0,9,7.4]},"parts":[{"name":"hub","kind":"cyl","c":[2.5,0,0],"axis":[1,0,0],"r":4.5,"len":7},{"name":"arm","kind":"beam","a":[-1,-4,0],"b":[-1,24,0],"w":4,"h":7,"up":[0,0,1],"mount":"hub"},{"name":"slide","kind":"beam","a":[-1,20,0],"b":[-1,36.62439590535419,0],"w":3,"h":5.4,"up":[0,0,1],"mount":"arm"},{"name":"pin","kind":"cyl","c":[-3.6,22,0],"axis":[1,0,0],"r":0.5,"len":2.4,"mount":"arm","tone":"chrome"},{"name":"knob","kind":"sphere","c":[-5.2,22,0],"r":1.2,"mount":"pin","tone":"rubber"},{"name":"bar","kind":"beam","a":[-1,33.62439590535419,0],"b":[-11,33.62439590535419,0],"r":1.6,"mount":"slide","tone":"chrome"},{"name":"roller","kind":"cyl","c":[-27,33.62439590535419,0],"axis":[1,0,0],"r":5.5,"len":36,"mount":"bar","tone":"pad","role":"pad"}]},{"type":"g4camCable","id":"lxCam","pivot":[27,59.26556171093059,27.501354749187655],"axis":[1,0,0],"bind":{"mix":["anL","anR"],"frame":"skL","off":[0,9,7.4]},"plane":4.5,"mountTo":"lxArm:hub","curve":"kneeExtension","kg":91,"kgSrc":"Legend Fitness 911 Leg Extension","route":[{"c":[31.5,45,-47],"r":5,"s":-1,"id":"lx:p1"},{"c":[31.5,119.5,-57],"r":5,"s":1,"id":"lx:stkpulley"}],"ratio":1,"rodPart":"lx:stkrodL","stack":{"o":[31.5,37.5,-62],"R":[1,0,0,0,1,0,0,0,1],"sel":5,"pitch":2.6,"size":[32,2.4,14],"topY":119.5,"maxLift":53},"cam":{"arcs":[{"c":[18.7407,-0.1727],"r":4.5,"a0":-2.026182,"a1":-1.886411},{"c":[18.7407,-0.1727],"r":4.5,"a0":-1.886411,"a1":-1.746641},{"c":[18.7407,-0.1727],"r":4.5,"a0":-1.746641,"a1":-1.606871},{"c":[18.7407,-0.1727],"r":4.5,"a0":-1.606871,"a1":-1.4671},{"c":[18.7407,-0.1727],"r":4.5,"a0":-1.4671,"a1":-1.32733},{"c":[18.7407,-0.1727],"r":4.5,"a0":-1.32733,"a1":-1.187559},{"c":[18.7407,-0.1727],"r":4.5,"a0":-1.187559,"a1":-1.047789},{"c":[18.7407,-0.1727],"r":4.5,"a0":-1.047789,"a1":-0.908019},{"c":[18.7407,-0.1727],"r":4.5,"a0":-0.908019,"a1":-0.768248},{"c":[18.7407,-0.1727],"r":4.5,"a0":-0.768248,"a1":-0.628478},{"c":[18.7407,-0.1727],"r":4.5,"a0":-0.628478,"a1":-0.488707},{"c":[18.7407,-0.1727],"r":4.5,"a0":-0.488707,"a1":-0.348937},{"c":[18.7407,-0.1727],"r":4.5,"a0":-0.348937,"a1":-0.209167},{"c":[18.7407,-0.1727],"r":4.5,"a0":-0.209167,"a1":-0.069396},{"c":[18.7407,-0.1727],"r":4.5,"a0":-0.069396,"a1":0.070374},{"c":[18.7407,-0.1727],"r":4.5,"a0":0.070374,"a1":0.210145}],"anchor":0.070518,"sense":-1},"rest":178.87}],"contacts":[{"body":"buttocks","prop":"lx:seat"},{"body":"back","prop":"lx:back"},{"body":"shinL","prop":"lxArm:roller"},{"body":"shinR","prop":"lxArm:roller"},{"body":"gripL","prop":"lx:handleL"},{"body":"gripR","prop":"lx:handleR"}]},
 "crunch":{"keys":[{"t":0,"v":[0,13.52,-10,0,0,0.682,0.73135,4,0,0,0,0,0,3.92,0,0,3.9,-1.13,5.45,39.9,44.74,52.46,138.26,83.03,125.45,-11.06,3.8,-21.92,48.41,10.48,6.09,118,-24.72,-8.51,0,3.9,-1.13,5.45,39.9,44.74,52.46,138.26,83.03,125.45,-11.06,3.8,-21.92,48.41,10.48,6.09,118,-24.72,-8.51,0],"hands":{"L":"relaxed","R":"relaxed"}},{"t":0.25,"v":[0,13.46,-10,0,0,0.67449,0.73829,5.17,0,0,4.1,0,0,5.97,0,0,4.54,0.33,6.73,39.72,44.66,51.7,138.65,83.77,125.29,-13.06,3.62,-22.99,47.33,10.41,5.98,118,-24.81,-8.51,0,4.54,0.33,6.73,39.72,44.66,51.7,138.65,83.77,125.29,-13.06,3.62,-22.99,47.33,10.41,5.98,118,-24.81,-8.51,0],"hands":{"L":"relaxed","R":"relaxed"}},{"t":0.5,"v":[0,13.29,-10,0,0,0.65606,0.75471,8,0,0,14,0,0,10.92,0,0,6.01,3.87,9.57,39.35,44.76,49.8,139.46,85.61,125.02,-17.91,3.07,-25.51,44.77,10.26,5.72,118,-25.05,-8.51,0,6.01,3.87,9.57,39.35,44.76,49.8,139.46,85.61,125.02,-17.91,3.07,-25.51,44.77,10.26,5.72,118,-25.05,-8.51,0],"hands":{"L":"relaxed","R":"relaxed"}},{"t":0.75,"v":[0,13.36,-10,0,0,0.63723,0.77067,10.83,0,0,23.9,0,0,15.87,0,0,7.46,7.38,12.34,38.94,44.81,48.09,139.96,87.24,124.91,-22.72,2.34,-27.96,41.87,10.13,5.45,118,-24.94,-8.51,0,7.46,7.38,12.34,38.94,44.81,48.09,139.96,87.24,124.91,-22.72,2.34,-27.96,41.87,10.13,5.45,118,-24.94,-8.51,0],"hands":{"L":"relaxed","R":"relaxed"}},{"t":1,"v":[0,13.69,-10,0,0,0.62932,0.77715,12,0,0,28,0,0,17.92,0,0,8.06,8.83,13.51,38.74,44.75,47.47,140.06,87.82,124.92,-24.69,1.99,-28.96,40.26,10.09,5.32,118,-24.49,-8.51,0,8.06,8.83,13.51,38.74,44.75,47.47,140.06,87.82,124.92,-24.69,1.99,-28.96,40.26,10.09,5.32,118,-24.49,-8.51,0],"hands":{"L":"relaxed","R":"relaxed"}}],"equipment":[{"type":"mat","id":"mat","len":190,"width":70,"at":[0,0,5]}],"contacts":[{"body":"buttocks","prop":"mat"},{"body":"back","prop":"mat"},{"body":"soleL","prop":"mat"},{"body":"soleR","prop":"mat"},{"body":"upperBack","prop":"mat","when":[0,0.05]},{"body":"handL","prop":"mat","when":[0,0.05]},{"body":"handR","prop":"mat","when":[0,0.05]}]},
 "bridge":{"keys":[{"t":0,"v":[0,13.65,-9.36,0,0,0.69318,0.72077,0,0,0,0,0,0,-6,0,0,0,-0.01,0,0.03,0.01,-12.92,9.28,-74.29,10.28,16.63,-7.85,-8.65,48.22,10.24,6.46,113.81,-26.99,-8.51,0,0,-0.01,0,0.03,0.01,-12.92,9.28,-74.29,10.28,16.63,-7.85,-8.65,48.22,10.24,6.46,113.81,-26.99,-8.51,0],"hands":{"L":"flat","R":"flat"}},{"t":0.25,"v":[0,15.8,-9.1,0,0,0.66892,0.74333,0,0,0,2.05,0,0,-0.72,0,0,0,0,0,0.01,0.01,-14.54,9.64,-74.44,10.99,16.69,-7.53,-9.01,41.32,10.03,6.06,112.84,-24.78,-8.51,0,0,0,0,0.01,0.01,-14.54,9.64,-74.44,10.99,16.69,-7.53,-9.01,41.32,10.03,6.06,112.84,-24.78,-8.51,0],"hands":{"L":"flat","R":"flat"}},{"t":0.5,"v":[0,21.08,-7.93,0,0,0.60739,0.79441,0,0,0,7,0,0,10.4,0,0,0,0,0,0,0,-18.55,10.13,-74.82,11.88,16.75,-7.12,-9.44,24.22,9.67,5.31,108.94,-20.59,-8.5,0,0,0,0,0,0,-18.55,10.13,-74.82,11.88,16.75,-7.12,-9.44,24.22,9.67,5.31,108.94,-20.59,-8.5,0],"hands":{"L":"flat","R":"flat"}},{"t":0.75,"v":[0,26.24,-6.06,0,0,0.54197,0.8404,0,0,0,11.95,0,0,20.94,0,0,0,0,0,0,0,-22.61,10.46,-75.22,12.38,16.78,-6.87,-9.68,7.09,9.46,4.77,103.02,-18.41,-8.49,0,0,0,0,0,0,-22.61,10.46,-75.22,12.38,16.78,-6.87,-9.68,7.09,9.46,4.77,103.02,-18.41,-8.49,0],"hands":{"L":"flat","R":"flat"}},{"t":1,"v":[0,28.35,-5.08,0,0,0.51384,0.85789,0,0,0,14,0,0,25.05,0,0,0,0,0,0,0,-24.34,10.5,-75.39,12.37,16.78,-6.88,-9.68,0,9.39,4.6,100,-18.08,-8.48,0,0,0,0,0,0,-24.34,10.5,-75.39,12.37,16.78,-6.88,-9.68,0,9.39,4.6,100,-18.08,-8.48,0],"hands":{"L":"flat","R":"flat"}}],"equipment":[{"type":"mat","id":"mat","len":190,"width":70,"at":[0,0,5]}],"contacts":[{"body":"upperBack","prop":"mat"},{"body":"headBack","prop":"mat"},{"body":"soleL","prop":"mat"},{"body":"soleR","prop":"mat"},{"body":"palmL","prop":"mat"},{"body":"palmR","prop":"mat"},{"body":"buttocks","prop":"mat","when":[0,0.02]}]},
 "glutebridge1":{"keys":[{"t":0,"v":[0,13.65,-9.36,0,0,0.69318,0.72077,0,0,0,0,0,0,-6,0,0,0,-0.01,0,0.03,0.01,-12.92,9.28,-74.29,10.28,16.63,-7.85,-8.65,48.04,8.41,7.72,113.73,-27.03,-8.53,0,0,-0.01,0,0.03,0.01,-12.92,9.28,-74.29,10.28,16.63,-7.85,-8.65,50.9,8.01,-5.97,5.64,-10,0,0],"hands":{"L":"flat","R":"flat"}},{"t":0.25,"v":[0,15.79,-9.1,0,0,0.669,0.74326,0,0,0,2.05,0,0,-0.75,0,0,0,0,0,0.01,0.01,-14.53,9.64,-74.44,10.99,16.69,-7.54,-9,41.17,8.15,7.31,112.76,-24.84,-8.53,0,0,0,0,0.01,0.01,-14.53,9.64,-74.44,10.99,16.69,-7.54,-9,44.03,7.81,-5.54,5.64,-10,0,0],"hands":{"L":"flat","R":"flat"}},{"t":0.5,"v":[0,21.05,-7.94,0,0,0.60768,0.79418,0,0,0,7,0,0,10.29,0,0,0,0,0,0,0,-18.51,10.13,-74.82,11.87,16.75,-7.12,-9.43,24.13,7.71,6.5,108.88,-20.67,-8.52,0,0,0,0,0,0,-18.51,10.13,-74.82,11.87,16.75,-7.12,-9.43,26.99,7.44,-4.75,5.64,-10,0,0],"hands":{"L":"flat","R":"flat"}},{"t":0.75,"v":[0,26.18,-6.08,0,0,0.54251,0.84005,0,0,0,11.95,0,0,20.77,0,0,0,0,0,0,0,-22.54,10.46,-75.22,12.38,16.78,-6.87,-9.68,7.07,7.43,5.92,103,-18.49,-8.52,0,0,0,0,0,0,-22.54,10.46,-75.22,12.38,16.78,-6.87,-9.68,9.93,7.22,-4.24,5.64,-10,0,0],"hands":{"L":"flat","R":"flat"}},{"t":1,"v":[0,28.28,-5.11,0,0,0.51447,0.85751,0,0,0,14,0,0,24.85,0,0,0,0,0,0,0,-24.25,10.5,-75.38,12.37,16.78,-6.88,-9.68,0,7.35,5.73,100,-18.16,-8.51,0,0,0,0,0,0,-24.25,10.5,-75.38,12.37,16.78,-6.88,-9.68,2.86,7.15,-4.09,5.64,-10,0,0],"hands":{"L":"flat","R":"flat"}}],"equipment":[{"type":"mat","id":"mat","len":190,"width":70,"at":[0,0,5]}],"contacts":[{"body":"upperBack","prop":"mat"},{"body":"headBack","prop":"mat"},{"body":"soleL","prop":"mat"},{"body":"palmL","prop":"mat"},{"body":"palmR","prop":"mat"},{"body":"buttocks","prop":"mat","when":[0,0.02]}]},
@@ -17816,4 +18044,4 @@ logInit();
 plural = (n, a, b, c) => n === 1 ? a : c;
 DEC = '.';
 
-window.PODHOD_VERSION='4.66.0';window.PODHOD_BUILD='4.66.0-c0ab63f44ab7';window.PODHOD_LANG='en';
+window.PODHOD_VERSION='4.67.0';window.PODHOD_BUILD='4.67.0-4eff37476c54';window.PODHOD_LANG='en';
