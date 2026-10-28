@@ -290,7 +290,15 @@ BIND.cable=(e,R)=>{
   if(e.bend){for(const[p,sg]of [[a,1],[b,-1]]){const tip=V.add(V.add(p,ax,sg*ext),V.unit(V.sub(clip,mid)),-e.bend);out.push({kind:'beam',a:V.add(p,ax,sg*ext),b:tip,r:1.4,tone:'chrome',role:'grip',id:id+':bend'+(sg>0?'L':'R'),mount:id+':bar'});}}
  }else if(e.attach==='V'){
   const a=grips[0],b=grips[1]??grips[0],mid=V.mix(a,b,.5);clip=towards(mid,e.clip??11);
-  hands.forEach((s,i)=>{const g=grips[i],hz=R.frames['hand'+s].z;out.push({kind:'beam',a:V.add(g,hz,-5.5),b:V.add(g,hz,5.5),r:1.5,tone:'rubber',role:'grip',id:id+':grip'+s,mount:id+':v'+s});
+  hands.forEach((s,i)=>{const g=grips[i],hz=R.frames['hand'+s].z;
+   /* closed (см) — рукоять для тяги сидя «двойное D»: от обоих концов ручки рама идёт на closed см поперёк неё в сторону карабина
+      (мимо пальцев) и сходится к карабину; не перескакивает с конца на конец, когда ручка поворачивается поперёк троса */
+   if(e.closed){const n=V.unit(V.perp(V.sub(clip,g),hz)),fr={kind:'beam',r:1.3,tone:'chrome',role:'frame'};
+    out.push({kind:'beam',a:V.add(g,hz,-5.5),b:V.add(g,hz,5.5),r:1.5,tone:'rubber',role:'grip',id:id+':grip'+s,mount:id+':v'+s+'a'});
+    [5.5,-5.5].forEach((k,j)=>{const p=V.add(g,hz,k),c=V.add(p,n,e.closed),arm=id+':v'+s+(j?'B':'');
+     out.push({...fr,a:c,b:clip,id:arm,mount:j?id+':v'+s:id+':line'});out.push({...fr,a:p,b:c,id:id+':v'+s+(j?'b':'a'),mount:arm});});
+    return;}
+   out.push({kind:'beam',a:V.add(g,hz,-5.5),b:V.add(g,hz,5.5),r:1.5,tone:'rubber',role:'grip',id:id+':grip'+s,mount:id+':v'+s});
    const far=V.dot(V.sub(V.add(g,hz,5.5),clip),V.sub(V.add(g,hz,5.5),clip))>V.dot(V.sub(V.add(g,hz,-5.5),clip),V.sub(V.add(g,hz,-5.5),clip))?V.add(g,hz,5.5):V.add(g,hz,-5.5);
    out.push({kind:'beam',a:far,b:clip,r:1.3,tone:'chrome',role:'frame',id:id+':v'+s,mount:id+':line'});});
  }else{ /* D-рукоять на каждую кисть (в кроссовере у каждой руки свой трос): стремя вокруг кисти, карабин — в его вершине */

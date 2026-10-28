@@ -289,13 +289,25 @@ const LP = once(() => {
   return { padH, padZ, barZ, chest };
 });
 const LP_EQ = once(() => { const L = LP(); return { type: 'g3LatPulldown', id: 'lat', seatH: 46, padH: r1(L.padH), padZ: r1(L.padZ), pulleyZ: r1(L.barZ + 3) }; });
-/* ---------- Тяга горизонтального блока ---------- */
+/* ---------- Тяга горизонтального блока ----------
+   Техника — подсказки каталога (05-motion-cues.js, 01-exercises-base.js), ACE «Seated Row» (06-motion-sources.js: грудь
+   поднята, спина прямая, локти идут назад близко к рёбрам, рукоять — к животу) и NSCA «Low Pulley Seated Row» (колени слегка
+   согнуты и не меняют угол весь подход; в растяжке руки разогнуты, груз стека не ложится на остальные плиты; рукоять — к
+   грудине или верху живота). Наклон корпуса — по каталогу: в растяжке небольшой наклон вперёд от таза (спина нейтральна,
+   лопатки разведены), в конце — назад на 10–15°, лопатки сведены и опущены (NSCA держит корпус вертикально весь подход).
+   Рукоять идёт по прямой вдоль троса (rowLine): от точки у корпуса в конце тяги к колесу блока по касательной сверху —
+   трос в любой фазе на одной прямой с ходом рукояти, без дуги вверх; в растяжке руки вытянуты вперёд-вниз к блоку, кисти над
+   голенями. Стек 1:1, как у селекторных тяг (Sorinex Lat Pull/Low Row, REP 1000, BodyKore GR603): плиты поднимаются ровно на
+   длину вытянутого троса, в растяжке висят на ROW_HOVER см над остальными. */
 const ROW_EQ = { type: 'g3SeatedRow', id: 'row', seatH: 44, plateZ: 86, plateH: 31, tilt: 28, pulleyH: 52 };
-function rowBody(C, lean, hipZ) {
+const ROW_KNEE = 28, ROW_HOVER = 1, ROW_WHEEL = 4.5;
+/* Посадка: таз наклонён вперёд от вертикали на lean° (назад — минус), поясница и грудной отдел — сгибание lumbar, thoracic
+   (разгибание — минус); стопы на упорах, колени слегка согнуты (ROW: таз так, чтобы колени были согнуты на ~ROW_KNEE°) */
+function rowBody(C, { lean, lumbar = 0, thoracic = 0 }) {
   const { V, M } = C, q = C.base(), a = lean * C.D2R;
-  C.root(q, [0, 54, hipZ], [0, Math.cos(a), Math.sin(a)], [0, -Math.sin(a), Math.cos(a)]);
-  q.lumbar = [lean > 0 ? lean * .3 : lean * .2, 0, 0]; q.thoracic = [lean > 0 ? lean * .2 : 0, 0, 0];
-  for (const s of S) { q[s].hip = [80 + lean * .5, 6, 4]; q[s].knee = 20; }
+  C.root(q, [0, 54, ROW().hipZ], [0, Math.cos(a), Math.sin(a)], [0, -Math.sin(a), Math.cos(a)]);
+  q.lumbar = [lumbar, 0, 0]; q.thoracic = [thoracic, 0, 0];
+  for (const s of S) { q[s].hip = [80 + lean, 6, 4]; q[s].knee = ROW_KNEE; }
   const n = C.point('row', 'plateNormal');
   for (let i = 0; i < 3; i++) {
     C.restOn(q, 'buttocks', [0, 44, 0], [0, 1, 0], -1.4);
@@ -307,11 +319,64 @@ function rowBody(C, lean, hipZ) {
   return q;
 }
 const ROW = once(() => {
-  const C = ctx([ROW_EQ]), { V, M } = C, n = C.point('row', 'plateNormal');
-  /* таз ставится так, чтобы колени были согнуты на ~20° при стопах на упорах */
-  const reach = hz => { const q = C.base(); C.root(q, [0, 52.7, hz], [0, 1, 0], [0, 0, 1]); const f = C.fk(q), pf = C.frame('row', 'plateL'), along = M.M3.col(pf.R, 2), ff = M.footFrame(V.add(V.add(pf.o, along, 4), n, 1), 0, { up: n, forward: along }); return V.dist(f.P.hipL, ff.o) - (M.B.th + M.B.sk - 2); };
+  const C = ctx([ROW_EQ]), { V, M } = C, n = C.point('row', 'plateNormal'), k = ROW_KNEE * C.D2R;
+  /* таз ставится так, чтобы колени были согнуты на ~ROW_KNEE° при стопах на упорах (тазобедренный — голеностоп по углу колена) */
+  const span = Math.sqrt(M.B.th ** 2 + M.B.sk ** 2 + 2 * M.B.th * M.B.sk * Math.cos(k));
+  const reach = hz => { const q = C.base(); C.root(q, [0, 52.7, hz], [0, 1, 0], [0, 0, 1]); const f = C.fk(q), pf = C.frame('row', 'plateL'), along = M.M3.col(pf.R, 2), ff = M.footFrame(V.add(V.add(pf.o, along, 4), n, 1), 0, { up: n, forward: along }); return V.dist(f.P.hipL, ff.o) - span; };
   return { hipZ: C.solve1D(hz => -reach(hz), -30, 20) };
 });
+/* Ход рукояти: прямая от точки у корпуса E (середина хвата в конце тяги) к колесу блока по касательной сверху (так трос сходит
+   с колеса, BIND.g3cable wrap [0, 1, 0]). place(q, g, e) ставит руки с серединой хвата в g; в растяжке середина хвата на этой
+   прямой там, где локти разогнуты до el°. Возвращает начало E, направление u к блоку, ход s0 и длину троса rest (центр
+   колеса — середина хвата) при плитах в ROW_HOVER см над остальными. */
+function rowLine(C, bodyAt, endAt, place, el) {
+  const { V } = C, W = C.point('row', 'pulley');
+  return C.unhinted(() => {
+    const E = endAt(bodyAt(1)), d = V.sub(W, E), L = V.len(d), a = Math.asin(ROW_WHEEL / L);
+    /* поворот направления на блок вверх (в плоскости y–z) на угол касательной */
+    const dz = Math.hypot(d[0], d[2]), ang = Math.atan2(d[1], dz) + a, u = V.unit([d[0] / dz * Math.cos(ang), Math.sin(ang), d[2] / dz * Math.cos(ang)]);
+    const elbow = s0 => { const q = bodyAt(0); place(q, V.add(E, u, s0), 0, true); place(q, V.add(E, u, s0), 0, true); return (q.L.elbow + q.R.elbow) / 2; };
+    const s0 = C.solve1D(s => elbow(s) - el, 10, Math.sqrt(L * L - ROW_WHEEL * ROW_WHEEL) - 14);
+    return { E, u, s0, rest: V.dist(V.add(E, u, s0), W) - ROW_HOVER };
+  });
+}
+/* Корпус по фазе: P — пары [растяжка, конец тяги] для наклона таза, поясницы, грудного отдела, плечевого пояса и шеи */
+function rowAt(C, P, t) {
+  const e = C.ease(t), L = a => C.lerp(a[0], a[1], e), q = rowBody(C, { lean: L(P.lean), lumbar: L(P.lumbar), thoracic: L(P.thoracic) });
+  for (const s of S) q[s].girdle = [L(P.elev), L(P.prot)];
+  q.neck = [L(P.neck), 0, 0];
+  return q;
+}
+/* неподвижные ветви троса тренажёра: от оси поворота блока через нижний и верхний блоки стека (g3SeatedRow, cableRun) */
+const ROW_RUN = once(() => ({ type: 'g3line', id: 'run', pts: EQ.anchors([ROW_EQ]).row.cableRun.map(rp) }));
+/* V-рукоять для тяги сидя («двойное D», closed: рама от обоих концов ручек мимо пальцев к карабину): кисти в 6,5 см от середины, хват
+   нейтральный (ладони друг к другу). Ручки наклонены верхом вперёд на ROW_TILT° — поперёк предплечья: в растяжке руки
+   вытянуты вперёд-вниз и ручки наклонены вместе с ними, у живота предплечья горизонтальны и ручки почти вертикальны; кисть
+   продолжает предплечье весь повтор (локтевое отклонение 3–6°). Прежде ручки стояли вертикально при любом наклоне руки.
+   Локти в растяжке смотрят вниз и чуть в стороны, в конце уходят назад вдоль корпуса. */
+const ROWV = { lean: [8, -9], lumbar: [0, -2], thoracic: [2, -2], elev: [2, -3], prot: [14, -16], neck: [-9, 12] };
+const ROW_TILT = [38, 4];
+function rowGripV(C, q, g, e, allowShort) {
+  const { V } = C, a = C.lerp(ROW_TILT[0], ROW_TILT[1], e) * C.D2R;
+  for (const s of S) {
+    const lat = C.lat(q, s), p = V.add(g, [C.M.SIGN[s], 0, 0], 6.5);
+    const thumb = V.unit([C.M.SIGN[s] * -.12, Math.cos(a), Math.sin(a)]);
+    const pole = V.unit(V.mix(V.add(V.add([0, -1, 0], lat, .45), [0, 0, -1], .15), V.add([0, -.3, -1], lat, .6), e));
+    C.grip(q, s, p, thumb, pole, { wristExt: 4, allowShort });
+  }
+}
+const ROWL_V = once(() => { const C = ctx([ROW_EQ]); return rowLine(C, t => rowAt(C, ROWV, t), q => C.V.add(C.chestPoint(q, 14), [0, 2, 11]), (q, g, e, sh) => rowGripV(C, q, g, e, sh), 10); });
+/* Широкая прямая рукоять: хват сверху, кисти в 31 см от середины; локти в растяжке вниз и в стороны, в конце — в стороны и назад */
+const ROWW = { lean: [8, -8], lumbar: [0, -2], thoracic: [2, -2], elev: [2, -1], prot: [14, -16], neck: [-9, 11] };
+function rowGripW(C, q, g, e, allowShort) {
+  const { V } = C;
+  for (const s of S) {
+    const lat = C.lat(q, s), p = V.add(g, [C.M.SIGN[s], 0, 0], 31);
+    const pole = V.unit(V.mix(V.add(V.add([0, -1, 0], lat, .8), [0, 0, -1], .2), V.add([0, -.3, -1], lat, 1.2), e));
+    C.grip(q, s, p, [-C.M.SIGN[s], 0, 0], pole, { wristExt: 4, allowShort });
+  }
+}
+const ROWL_W = once(() => { const C = ctx([ROW_EQ]); return rowLine(C, t => rowAt(C, ROWW, t), q => C.V.add(C.chestPoint(q, 28), [0, 0, 9]), (q, g, e, sh) => rowGripW(C, q, g, e, sh), 8); });
 
 /* ---------- Эспандеры ---------- */
 const BAND_FEET = { L: [10.5, 13, 7], R: [-10.5, 13, -7] };
@@ -491,49 +556,32 @@ module.exports = {
     }
   },
 
-  /* Сидя на скамье, стопы на упорах, колени слегка согнуты, V-рукоять. t=0 — руки вытянуты, корпус чуть наклонён вперёд;
-     t=1 — рукоять у живота, лопатки сведены, корпус отклонён назад на ~10°, спина нейтральна. */
+  /* Сидя на скамье, стопы на упорах, колени слегка согнуты, V-рукоять (раскладка и источники — «Тяга горизонтального блока»
+     выше). t=0 — руки вытянуты к блоку, лопатки разведены, корпус наклонён вперёд от таза; t=1 — рукоять у живота, локти
+     назад вдоль корпуса, лопатки сведены, корпус отклонён назад на ~13°, спина нейтральна. Рукоять — по прямой вдоль троса. */
   cablerow: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [ROW_EQ, cable(ROW_EQ, '', { id: 'cab', attach: 'V', hands: ['L', 'R'], wrap: [0, 1, 0], rest: 33 })],
+    get equipment() { return [ROW_EQ, cable(ROW_EQ, '', { id: 'cab', attach: 'V', closed: 4, hands: ['L', 'R'], wrap: [0, 1, 0], ratio: 1, rest: r1(ROWL_V().rest) }), ROW_RUN()]; },
     contacts: [{ body: 'buttocks', prop: 'row:seat' }, { body: 'soleL', prop: 'row:plateL' }, { body: 'soleR', prop: 'row:plateR' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.5, R: 1.5 },
     pose(t, C) {
-      const { V } = C, e = C.ease(t), q = rowBody(C, C.lerp(7, -10, e), ROW().hipZ);
-      for (const s of S) q[s].girdle = [C.lerp(4, -2, e), C.lerp(18, -16, e)];
-      q.neck = [C.lerp(-8, 4, e), 0, 0];
-      const f = C.fk(q), gm = V.mix(f.P.ghL, f.P.ghR, .5), belly = C.chestPoint(q, 14);
-      const g0 = [0, gm[1] - 14, gm[2] + 58], g1 = [0, belly[1] + 2, belly[2] + 11];
-      const mid = V.add(V.mix(g0, g1, e), [0, 1, 0], 3 * Math.sin(Math.PI * e));
-      for (const s of S) {
-        const lat = C.lat(q, s), g = V.add(mid, [C.M.SIGN[s], 0, 0], 6.5);
-        const pole = V.unit(V.mix(V.add(V.add([0, -1, 0], lat, .4), [0, 0, -.2], 1), V.add([0, -.2, -1], lat, .6), e));
-        C.grip(q, s, g, V.unit([C.M.SIGN[s] * -.12, 1, .1]), pole, { wristExt: 4 });
-      }
+      const { V } = C, e = C.ease(t), L = ROWL_V(), q = rowAt(C, ROWV, t);
+      rowGripV(C, q, V.add(L.E, L.u, C.lerp(L.s0, 0, e)), e);
       return q;
     }
   },
 
   /* Тяга горизонтального блока широкой прямой рукоятью (гриф 90 см) хватом сверху, кисти шире плеч. t=0 — руки
-     вытянуты, лопатки разведены, корпус чуть наклонён вперёд; t=1 — гриф у нижней части груди, локти разведены
-     в стороны и уведены назад, лопатки сведены, корпус отклонён назад. */
+     вытянуты к блоку, лопатки разведены, корпус наклонён вперёд от таза; t=1 — гриф у нижней части груди, локти разведены
+     в стороны и уведены назад, лопатки сведены, корпус отклонён назад. Гриф — по прямой вдоль троса. */
   cablerowwide: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [ROW_EQ, cable(ROW_EQ, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 14, wrap: [0, 1, 0], rest: 33 })],
+    get equipment() { return [ROW_EQ, cable(ROW_EQ, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 14, wrap: [0, 1, 0], ratio: 1, rest: r1(ROWL_W().rest) }), ROW_RUN()]; },
     contacts: [{ body: 'buttocks', prop: 'row:seat' }, { body: 'soleL', prop: 'row:plateL' }, { body: 'soleR', prop: 'row:plateR' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.5, R: 1.5 },
     pose(t, C) {
-      const { V } = C, e = C.ease(t), q = rowBody(C, C.lerp(7, -8, e), ROW().hipZ);
-      for (const s of S) q[s].girdle = [C.lerp(4, 0, e), C.lerp(18, -16, e)];
-      q.neck = [C.lerp(-8, 4, e), 0, 0];
-      const f = C.fk(q), gm = V.mix(f.P.ghL, f.P.ghR, .5), lo = C.chestPoint(q, 28);
-      const g0 = [0, gm[1] - 12, gm[2] + 60], g1 = [0, lo[1], lo[2] + 9];
-      const mid = V.add(V.mix(g0, g1, e), [0, 1, 0], 3 * Math.sin(Math.PI * e));
-      for (const s of S) {
-        const lat = C.lat(q, s), g = V.add(mid, [C.M.SIGN[s], 0, 0], 31);
-        const pole = V.unit(V.mix(V.add(V.add([0, -1, 0], lat, .8), [0, 0, -.2], 1), V.add(V.add([0, -.3, -1], lat, 1.2), [0, 0, 0], 1), e));
-        C.grip(q, s, g, [-C.M.SIGN[s], 0, 0], pole, { wristExt: 4 });
-      }
+      const { V } = C, e = C.ease(t), L = ROWL_W(), q = rowAt(C, ROWW, t);
+      rowGripW(C, q, V.add(L.E, L.u, C.lerp(L.s0, 0, e)), e);
       return q;
     }
   },

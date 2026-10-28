@@ -172,7 +172,22 @@
     c.tube('upR', [-X, 7.5, 0], [-X, H, 0], [7.5, 7.5], { mount: 'baseM', up: [0, 0, 1] });
     c.tube('top', [-X - 3.75, H - 3.75, 0], [X + 3.75, H - 3.75, 0], [7.5, 7.5], { mount: 'upL' });
     for (const [k, x] of [['L', X], ['R', -X]]) c.tube('brace' + k, [x, 7.5, 26], [x, 60, 3.75], [5, 5], { mount: 'base' + k, up: [1, 0, 0] });
-    stack(c, { H });
+    /* Путь троса по блокам рамы (как у селекторных тяг): от поворотного блока у упоров — в стойку упоров через ось поворота,
+       внутри стойки вниз, над балкой назад к нижнему блоку перед стеком, вверх перед плитами к верхнему блоку и вниз к верхней
+       плите стека. Трос от верхнего блока идёт прямо к плите (1:1): плиты поднимаются ровно на вытянутую длину троса.
+       Колёса Ø10; ветви перед стеком — в 2,5 см от плит, ветвь над балкой — в 2 см над ней. */
+    const wr = 5, runY = 12.5, upZ = -10, topW = [0, H - 7.5 - 2.5 - wr - .5, upZ + wr], lowW = [0, runY + wr, upZ - wr];
+    c.box('topWheelMount', [0, H - 7.5 - 1.25, topW[2]], [6, 2.5, 6], { mount: 'top', round: .4 });
+    c.box('topWheelFork', [0, H - 10 - (wr + 1) / 2, topW[2]], [5.2, wr + 1, 3], { mount: 'topWheelMount', round: .3 });
+    c.cyl('topWheel', topW, [1, 0, 0], wr, 2.4, { mount: 'topWheelFork', tone: 'chrome' });
+    c.box('lowWheelMount', [0, 11, lowW[2]], [6, 2, 8], { mount: '/beam', round: .3 });
+    for (const [k, x] of [['L', 1.75], ['R', -1.75]]) c.box('lowWheelPlate' + k, [x, (12 + lowW[1] + 2) / 2, lowW[2]], [.6, lowW[1] + 2 - 12, 6], { mount: 'lowWheelMount', round: .2 });
+    c.cyl('lowWheelAxle', lowW, [1, 0, 0], .6, 4.6, { mount: 'lowWheelPlateL', tone: 'chrome' });
+    c.cyl('lowWheel', lowW, [1, 0, 0], wr, 2.4, { mount: 'lowWheelAxle', tone: 'chrome' });
+    stack(c, { H, topY: topW[1] });
+    /* неподвижные ветви троса (BIND.g3line в спецификации): от оси поворота блока до нижнего блока стека и от него к верхнему */
+    b.anchors.cableRun = [[0, pulleyH, backZ - 7.9], [0, pulleyH, backZ], [0, runY, backZ], c.P([0, runY, lowW[2]]), c.P([0, lowW[1], upZ]),
+      c.P([0, topW[1], upZ]), c.P([0, topW[1] + wr, topW[2]]), c.P([0, topW[1], 0])].map(b.P);
     b.anchor('seatTop', [0, seatH, 0]);
   };
   /* Стена с дверью и креплением для эспандера. Плоскость двери z = 0 (сторона пользователя), стена уходит в +Z.
