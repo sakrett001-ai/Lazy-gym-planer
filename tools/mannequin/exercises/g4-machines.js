@@ -273,14 +273,37 @@ function gvKneel(C, phi, { thigh = 0, lean = 0, lumbar = 0, thor = 0, neck = 0 }
 }
 /* хват на брусьях гравитрона — под плечами в верхнем положении */
 const GV_DIPZ = () => -6;
-const GV_EQ = () => [{ type: 'gravitron', id: 'gv', tz: GV.tz, pivot: [GV.P[1] + GV.d0[1], GV.P[2] + GV.d0[2]], linkV: GV.v[1], pull: GV.pull, dip: GV.dip, step: GV.step },
-  { type: 'g4link', id: 'gvPad', pivot: GV.P, axis: [1, 0, 0], d0: GV.d0, v: GV.v, armX: [-12, 12], mountTo: 'gv:shaftU', mountTo2: 'gv:shaftD', bind: { mix: ['knL', 'knR'], frame: 'skL', off: [0, 0, 5.4] },
-    carrier: [
-      { name: 'pad', kind: 'obox', c: [0, -3.5, -12], size: [40, 7, 40], tone: 'pad', role: 'support', mount: 'plate', round: 1.6 },
-      { name: 'plate', kind: 'obox', c: [0, -8, -12], size: [34, 2, 36], mount: 'frame' },
-      { name: 'frame', kind: 'beam', a: [-13, -11, 2], b: [13, -11, 2], w: 6, h: 6, mount: 'post0' },
-      { name: 'frameB', kind: 'beam', a: [0, -11, 2], b: [0, -11, -26], w: 6, h: 4, mount: 'frame' }
-    ] }];
+/* Противовес гравитрона (09bo-g4-lever.js, привод 'block'): подвижный блок Ø9 на поперечине верхних плеч, в RA = 22 см от вала U.
+   Ближе к площадке нельзя: в нижней точке отжиманий голова наклонённого вперёд человека доходит до z ≈ 53 см, передняя ветвь
+   троса блока при RA = 22 — в z ≈ 57. На площадку блок давит с силой 2T·RA/r = 0,51·m·g (r = 86 — плечо площадки): стек 100 кг
+   (паспорт Life Fitness Insignia Assist Dip Chin, тяжёлый стек; у Signature — 85 кг) помогает до 51 кг. */
+const GV_RA = 22, GV_WHEEL = 4.5, GV_FORK = 3;
+const GV_MACHINE = () => { const u0 = [0, 0, -1], W = V3([0, GV.P[1] + GV.d0[1], GV.P[2] + GV.d0[2]], u0, GV_RA);
+  return { type: 'gravitron', id: 'gv', tz: GV.tz, pivot: [GV.P[1] + GV.d0[1], GV.P[2] + GV.d0[2]], linkV: GV.v[1], pull: GV.pull, dip: GV.dip, step: GV.step,
+    stack: { z: GV.P[2] + 18 }, cab: { dead: r2(W[2] - GV_WHEEL), live: r2(W[2] + GV_WHEEL), r: 5 } }; };
+const GV_LINK = () => ({ type: 'g4link', id: 'gvPad', pivot: GV.P, axis: [1, 0, 0], d0: GV.d0, v: GV.v, armX: [-12, 12], mountTo: 'gv:shaftU', mountTo2: 'gv:shaftD', bind: { mix: ['knL', 'knR'], frame: 'skL', off: [0, 0, 5.4] },
+  carrier: [
+    { name: 'pad', kind: 'obox', c: [0, -3.5, -12], size: [40, 7, 40], tone: 'pad', role: 'support', mount: 'plate', round: 1.6 },
+    { name: 'plate', kind: 'obox', c: [0, -8, -12], size: [34, 2, 36], mount: 'frame' },
+    { name: 'frame', kind: 'beam', a: [-13, -11, 2], b: [13, -11, 2], w: 6, h: 6, mount: 'post0' },
+    { name: 'frameB', kind: 'beam', a: [0, -11, 2], b: [0, -11, -26], w: 6, h: 4, mount: 'frame' }
+  ],
+  /* поперечина под вилкой подвижного блока: от вала U на RA − (колесо + вилка) − 2,5 см */
+  armParts: [{ name: 'xbar', kind: 'beam', a: [-12, GV_RA - GV_WHEEL - GV_FORK - 2.5, 0], b: [12, GV_RA - GV_WHEEL - GV_FORK - 2.5, 0], w: 6, h: 6, up: [0, 0, 1], mount: 'armU0' }] });
+const GV_EQS = new WeakMap();
+function GV_EQ(spec) {
+  if (GV_EQS.has(spec)) return GV_EQS.get(spec);
+  const m = GV_MACHINE(), link = GV_LINK(), A = EQ.anchors([m]).gv, info = A.stkstackInfo, st = A.stkstack;
+  const tr = { type: 'g4camCable', id: 'gvCab', kind: 'block', pivot: [0, GV.P[1] + GV.d0[1], GV.P[2] + GV.d0[2]], anglePivot: GV.P, axis: [1, 0, 0], bind: link.bind,
+    at: [GV_RA, 0], wheel: GV_WHEEL, sense: 1, fork: GV_FORK, dead: rp(A.dead), mountTo: 'gvPad:xbar', kg: 100, kgSrc: 'Life Fitness Insignia Assist Dip Chin (тяжёлый стек)',
+    route: [{ c: rp(A.p1), r: 5, s: -1, id: 'gv:p1' }, { c: rp(A.p2), r: 5, s: -1, id: 'gv:stkpulley' }], ratio: info.ratio, rodPart: 'gv:' + info.rod,
+    stack: { o: rp(st.o), R: st.R.map(v => Math.round(v * 1e4) / 1e4), sel: info.sel, pitch: info.pitch, size: info.size, topY: r2(info.topY), maxLift: r1(info.maxLift) } };
+  const poses = bakedPoses(spec, [m, link]);
+  tr.rest = r2(Math.min(...poses.map(R => EQ.leverStack.state({ ...tr, rest: 0 }, R).L)) - HOVER / tr.ratio);
+  const out = [m, link, tr];
+  GV_EQS.set(spec, out);
+  return out;
+}
 
 /* ================= «Капитанский стул» ================= */
 /* Предплечья на упорах (верх 128 см), плечо вертикально, кисти на вертикальных рукоятях. Грудная клетка прижата
@@ -813,7 +836,7 @@ module.exports = {
      t=0 — вис на почти прямых руках, t=1 — подбородок над рукоятями; платформа поднимается вместе с коленями. */
   assistpull: {
     keys: [0, .2, .4, .6, .8, 1],
-    equipment: GV_EQ(),
+    get equipment() { return GV_EQ(this); },
     contacts: [{ body: 'kneeL', prop: 'gvPad:pad' }, { body: 'kneeR', prop: 'gvPad:pad' }, { body: 'gripL', prop: 'gv:pullL' }, { body: 'gripR', prop: 'gv:pullR' }],
     pose(t, C) {
       const { V } = C, e = C.ease(t), g = GV.pull;
@@ -834,7 +857,7 @@ module.exports = {
      Колени на платформе, корпус слегка наклонён вперёд. */
   assistdip: {
     keys: [0, .25, .5, .75, 1],
-    equipment: GV_EQ(),
+    get equipment() { return GV_EQ(this); },
     contacts: [{ body: 'kneeL', prop: 'gvPad:pad' }, { body: 'kneeR', prop: 'gvPad:pad' }, { body: 'gripL', prop: 'gv:dipL' }, { body: 'gripR', prop: 'gv:dipR' }],
     pose(t, C) {
       const { V } = C, e = C.ease(t), d = GV.dip;

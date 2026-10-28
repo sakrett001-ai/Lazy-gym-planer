@@ -369,7 +369,8 @@
       out.push({ kind: 'cyl', c: wc, axis: Z, r: fl.r, len: 2.4, tone: 'chrome', role: 'frame', id: sid + 'Float', mount: sid + 'Axle' });
       const pts = [V.add(V.add(top, X, -fl.r), Y, fl.into || 0)];
       for (let j = 0; j <= 2; j++) { const a = j / 2 * Math.PI; pts.push(V.add(V.add(wc, X, -fl.r * Math.cos(a)), Y, -fl.r * Math.sin(a))); }
-      pts.push(V.add(V.add(top, X, fl.r), Y, -fl.dead));
+      /* twin — дифференциал рычажного тренажёра (09bo-g4-lever.js): второй конец тоже уходит вверх к неподвижному блоку */
+      pts.push(fl.twin ? V.add(V.add(top, X, fl.r), Y, fl.into || 0) : V.add(V.add(top, X, fl.r), Y, -fl.dead));
       out.push({ kind: 'cable', pts, r: cableR, tone: 'cable', role: 'cable', id: sid + 'Cable', mount: sid + 'Float' });
     } else {
       const stemTop = V.add(topC, Y, 8);

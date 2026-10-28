@@ -93,7 +93,9 @@ BIND.g4link = (e, R) => {
     if (p.a) { q.a = V.add(Tp, p.a); q.b = V.add(Tp, p.b); }
     parts.push(q);
   }
-  return rigid(e.id || 'link', [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], parts, e.mountTo);
+  /* детали на верхних плечах (поворачиваются с ними): рамка от оси верхнего плеча, X — вдоль оси, Y — вдоль плеча */
+  const arm = rigid(e.id || 'link', p1, A, u, V.cross(A, u), e.armParts || [], (e.id || 'link') + ':armU0');
+  return rigid(e.id || 'link', [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], parts, e.mountTo).concat(arm);
 };
 /* Каретка на прямой направляющей rail [от, до]: положение — проекция точки тела + shift.
    Рамка: Z — вдоль направляющей, Y — ближе всего к up, X = Y × Z. */
@@ -303,17 +305,25 @@ TYPES.dipStation = (s, b) => {
 };
 
 /* ---------- Гравитрон (подтягивания и брусья с противовесом) ----------
-   Пользователь стоит коленями на платформе лицом к башне (+Z). Рычаг платформы вращается вокруг оси в башне.
-   s: tz — передняя плоскость башни; pivot [y, z]; pull {y, z, x0, x1} — рукояти подтягиваний (вдоль X);
-   dip {y, x, z0} — брусья (вдоль Z до башни); step {y}. */
+   Пользователь стоит коленями на платформе лицом к башне (+Z). Платформа — на параллелограмме, плечи вращаются вокруг осей
+   в башне (вал U и вал D). s: tz — передняя плоскость башни; pivot [y, z] — вал U; pull {y, z, x0, x1} — рукояти подтягиваний
+   (вдоль X); dip {y, x, z0} — брусья (вдоль Z до башни); step {y}; stack {z} — плоскость стека; cab {dead, live, r} —
+   ветви троса у подвижного блока на плечах (z) и радиус блоков.
+   Противовес (09bo-g4-lever.js, привод 'block'): подвижный блок на поперечине верхних плеч; трос от проушины под верхней
+   передней балкой огибает блок снизу и идёт вверх к блоку p1 под балкой pulBeam, по верху башни к блоку стека p2 и вниз
+   к верхней плите (1:1). Площадка вниз — блок вниз, обе ветви длиннее — плиты вверх; человек вверх — плиты опускаются
+   и толкают площадку (помощь). Кулачка у гравитрона нет: противовес должен помогать одинаково по всему ходу (как вес
+   тела, который он уравновешивает); подвижная точка на плече даёт силу у площадки 2T·r_a/r при любом угле (обе ветви
+   почти вертикальны). Габариты класса: Life Fitness Signature Assist Dip/Chin — 134 × 170 × 225 см, стек 85 кг (170 lb);
+   Insignia Assist Dip Chin — 162 × 147 × 221 см, стек 85 или 100 кг. */
 TYPES.gravitron = (s, b) => {
-  const tz = s.tz, X = 30, H = 240, [py, pz] = s.pivot;
+  const tz = s.tz, X = 30, H = 240, [py, pz] = s.pivot, zs = s.stack.z, zb = zs + 16, cab = s.cab, r = cab.r;
   for (const sg of [1, -1]) {
     const k = sg > 0 ? 'L' : 'R', x = sg * X;
-    b.tube('base' + k, [x, 3.75, tz - 30], [x, 3.75, pz + 40], [8, 7.5], { mount: 'floor' });
+    b.tube('base' + k, [x, 3.75, tz - 30], [x, 3.75, zb + 6], [8, 7.5], { mount: 'floor' });
     b.tube('up' + k, [x, 7.5, tz], [x, H, tz], [8, 8], { mount: 'base' + k });
-    b.tube('upB' + k, [x, 7.5, pz + 34], [x, H - 30, pz + 34], [7, 7], { mount: 'base' + k });
-    b.tube('topS' + k, [x, H - 34, tz], [x, H - 34, pz + 34], [6, 6], { mount: 'up' + k });
+    b.tube('upB' + k, [x, 7.5, zb], [x, H, zb], [7, 7], { mount: 'base' + k });
+    b.tube('topS' + k, [x, H - 4, tz], [x, H - 4, zb], [8, 8], { mount: 'up' + k });
     /* рукояти подтягиваний: кронштейн от башни назад, рукоять вдоль X */
     const ox = sg * (s.pull.x1 + 2);
     b.tube('pullArm' + k, [x, s.pull.y + 5, tz], [ox, s.pull.y + 5, s.pull.z], [6, 6], { mount: 'up' + k });
@@ -327,17 +337,30 @@ TYPES.gravitron = (s, b) => {
     b.box('step' + k, [sg * (X - 4), s.step.y - .5, (tz + s.step.z0) / 2 - 8], [18, 3, tz - s.step.z0 - 16], { mount: 'stepArm' + k, tone: 'rubber', round: .5 });
   }
   b.tube('top', [-X - 4, H - 4, tz], [X + 4, H - 4, tz], [8, 8], { mount: 'upL' });
-  b.tube('topB', [-X - 3, H - 34, pz + 34], [X + 3, H - 34, pz + 34], [6, 6], { mount: 'upBL' });
+  b.tube('topB', [-X - 3.5, H - 4, zb], [X + 3.5, H - 4, zb], [7, 7], { mount: 'upBL' });
   b.tube('baseF', [-X - 4, 3.75, tz - 26], [X + 4, 3.75, tz - 26], [8, 7.5], { mount: 'baseL' });
-  b.tube('baseB', [-X - 4, 3.75, pz + 38], [X + 4, 3.75, pz + 38], [8, 7.5], { mount: 'baseL' });
-  /* ось рычага платформы: вал между стойками башни */
+  b.tube('baseB', [-X - 4, 3.75, zb + 2], [X + 4, 3.75, zb + 2], [8, 7.5], { mount: 'baseL' });
   /* оси параллелограмма платформы: две поперечные трубы между стойками башни */
   for (const [k, y] of [['U', py], ['D', py + s.linkV]]) {
     b.tube('shaft' + k, [-X, y, pz], [X, y, pz], 2.5, { mount: 'br' + k + 'L', tone: 'chrome' });
-    for (const sg of [1, -1]) b.tube('br' + k + (sg > 0 ? 'L' : 'R'), [sg * X, y, tz], [sg * X, y, pz + 34], [6, 6], { mount: 'up' + (sg > 0 ? 'L' : 'R') });
+    for (const sg of [1, -1]) b.tube('br' + k + (sg > 0 ? 'L' : 'R'), [sg * X, y, tz], [sg * X, y, zb], [6, 6], { mount: 'up' + (sg > 0 ? 'L' : 'R') });
   }
-  /* стек грузов в башне за осью */
-  stack(b, 'stk', [0, 0, pz + 18], H - 40, { w: 28, stackH: 70 });
+  /* противовес: проушина неподвижного конца под передней балкой, блок p1 под балкой pulBeam (над задней ветвью у блока),
+     стек в плоскости zs между валами и задними стойками, блок стека p2 под балкой стека */
+  b.tube('deadBeam', [-X - 4, H - 4, cab.dead], [X + 4, H - 4, cab.dead], [6, 8], { mount: 'topSL' });
+  b.box('deadEnd', [0, H - 9, cab.dead], [2.5, 2, 2.5], { mount: 'deadBeam', tone: 'chrome', round: .4 });
+  b.anchor('dead', [0, H - 10, cab.dead]);
+  const z1 = cab.live + r;
+  b.tube('pulBeam', [-X - 4, H - 4, z1], [X + 4, H - 4, z1], [8, 8], { mount: 'topSL' });
+  const c1 = [0, H - 8 - 3 - r, z1];
+  E.leverStack.pulley(b, 'p1', c1, r, { dir: [0, 1, 0], mount: 'pulBeam' });
+  const t = E.cableStack.Sub(b, 'stk', [0, 0, zs]);
+  t.tube('baseM', [-X - 4, 3.75, 0], [X + 4, 3.75, 0], [8, 7.5], { mount: '/baseL' });
+  t.tube('top', [-X - 4, H - 3.75, 0], [X + 4, H - 3.75, 0], [7.5, 7.5], { mount: '/topSL' });
+  const topY = H - 7.5 - 3 - r;
+  E.cableStack.stack(t, { H, n: 15, sel: 5, base: 'baseM', topY });
+  E.leverStack.pulley(t, 'pulley', [0, topY, -r], r, { dir: [0, 1, 0], mount: 'top' });
+  b.anchor('p1', c1); b.anchor('p2', t.P([0, topY, -r]));
 };
 
 /* ---------- «Капитанский стул» (станция для подъёма коленей) ----------
