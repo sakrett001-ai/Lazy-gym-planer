@@ -41,8 +41,12 @@ const KIND = {
 const LIM = {
   hoverMin: .5, hoverMax: 3,  // см: подъём стека в растяжке
   lineDev: 3,                 // см: путь рукояти дальше от прямой «рукоять → блок»
-  lineSwing: 10,              // °: трос поворачивается за повтор (рукоять идёт не вдоль троса)
-  lineMove: 15,               // °: трос под углом к ходу рукояти (в середине повтора)
+  lineSwing: 15,              // °: трос поворачивается за повтор (рукоять идёт не вдоль троса). У прямого хода остаётся
+                              //    поворот у самого блока: карабин в 11–13 см от кисти к центру колеса, трос сходит
+                              //    по касательной — asin(r/d), до 12° в растяжке тяги сидя (cablerow, d = 22 см)
+  lineMove: 15,               // °: трос под углом к ходу рукояти
+  moving: .5,                 // доля наибольшей скорости: углы к ходу — в кадрах быстрее (у краёв повтора ход мал,
+                              //    а между ключами позы кисть идёт по дуге интерполяции углов)
   arcPlane: 20,               // °: трос выходит из плоскости движения
   bandShrink: 1,              // см: ветвь ленты короче, чем в растяжке
   bandStretch: 3,             // раз: растяжение ленты max/min
@@ -102,7 +106,7 @@ function auditEntry(id, entry, { samples = 41 } = {}) {
     });
     /* ход рукояти: центральная разность по кадрам */
     fr.forEach((f, i) => { const a = fr[Math.max(0, i - 1)], b = fr[Math.min(fr.length - 1, i + 1)]; f.v = V.sub(b.end, a.end); });
-    const vmax = Math.max(...fr.map(f => V.len(f.v))), moving = fr.filter(f => V.len(f.v) > .25 * vmax);
+    const vmax = Math.max(...fr.map(f => V.len(f.v))), moving = fr.filter(f => V.len(f.v) > LIM.moving * vmax);
     const row = { id, kind, part: e.id, type: 'трос', attach: e.attach || 'D', ratio, rest: e.rest, frames: [] };
     row.floorAng = [Math.min(...fr.map(f => elev(f.dir))), Math.max(...fr.map(f => elev(f.dir)))];
     row.moveAng = Math.max(...moving.map(f => angleLine(f.dir, f.v)));
@@ -140,7 +144,7 @@ function auditEntry(id, entry, { samples = 41 } = {}) {
         return { t, A, K, L, end: fromCat(R['grip' + s]), dir: V.sub(K, A) };
       });
       fr.forEach((f, i) => { const a = fr[Math.max(0, i - 1)], b = fr[Math.min(fr.length - 1, i + 1)]; f.v = V.sub(b.end, a.end); });
-      const vmax = Math.max(...fr.map(f => V.len(f.v))), moving = fr.filter(f => V.len(f.v) > .25 * vmax);
+      const vmax = Math.max(...fr.map(f => V.len(f.v))), moving = fr.filter(f => V.len(f.v) > LIM.moving * vmax);
       const row = { id, kind, part: (e.id || 'band') + ':' + s, type: 'лента', side: s };
       row.floorAng = [Math.min(...fr.map(f => elev(f.dir))), Math.max(...fr.map(f => elev(f.dir)))];
       row.moveAng = Math.max(...moving.map(f => angleLine(f.dir, f.v)));
