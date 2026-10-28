@@ -166,6 +166,47 @@ test('distance to the procedural skin: within the limits in the stance and the s
   const P = Float32Array.from(A.skin(R0, { d, floor: false })); for (let v = 0; v < d.nv; v++) if (zones[v] === 'грудь') P[v * 3 + 2] += 8;
   assert(check([[R0, P]]).some(s => s.startsWith('грудь')));
 });
+/* ---------- пальцы по хвату (AnnySkin.digitPose, tools/anny-look/hands.js и holds.js) ---------- */
+test('fingers: the Anny hand rig and the grip table are in the data; joints stay within their limits in every mode; relaxed hands are the stance', () => {
+  for (const s of M.SIDES) { const H = header.hands?.[s]; assert(H && H.digits.length === 5 && H.grip.length >= 10 && H.fist && H.flat, `hand data ${s}`); }
+  const { lim } = A.DIG, within = (x, [a, b]) => x >= a - 1e-6 && x <= b + 1e-6, cases = [['fist', 1.4], ['flat', 1.4], ['hook', 1.4], ['relaxed', 1.4]];
+  for (let r = 1.1; r <= 2.5 + 1e-9; r += .05) cases.push(['grip', +r.toFixed(2)]);
+  for (const s of M.SIDES) for (const [mode, r] of cases) {
+    const P = A.digitPose(d, s, mode, r);
+    P.ang.slice(1).forEach((a, f) => a.forEach((t, k) => assert(within(t, lim.finger[k]), `${s} ${mode} r=${r} finger ${f + 1} joint ${k}: ${t.toFixed(1)}°`)));
+    [1, 2].forEach(k => assert(within(P.ang[0][k], lim.thumb[k]), `${s} ${mode} r=${r} thumb joint ${k}: ${P.ang[0][k].toFixed(1)}°`));
+    /* повороты фаланг — собственные (ортонормированные, без отражения) */
+    for (const T of P.T.flat()) { const Q = T.Q, det = Q[0] * (Q[4] * Q[8] - Q[5] * Q[7]) - Q[1] * (Q[3] * Q[8] - Q[5] * Q[6]) + Q[2] * (Q[3] * Q[7] - Q[4] * Q[6]); assert(Math.abs(det - 1) < 1e-3, `${s} ${mode} det ${det}`); }
+  }
+  /* обе кисти — зеркальные: углы хвата слева и справа почти равны */
+  for (const r of [1.4, 1.6]) { const L = A.digitPose(d, 'L', 'grip', r).ang, Rr = A.digitPose(d, 'R', 'grip', r).ang; L.forEach((a, f) => a.forEach((t, k) => t != null && assert(Math.abs(t - Rr[f][k]) < 3, `L/R r=${r} ${f}.${k}: ${t} vs ${Rr[f][k]}`))); }
+  /* расслабленная кисть — стойка: рамки фаланг совпадают со стойкой, кожа кисти — сама сетка */
+  const R0 = M.catalogPose(M.neutral()), S = A.skinMats(R0, d);
+  for (let i = 0; i < d.frames.length; i++) for (let k = 0; k < 12; k++) assert(Math.abs(S[i * 12 + k] - [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0][k]) < 1e-6, `stance frame ${d.frames[i]}`);
+  /* рамок на видеокарте — 55 (по два vec4 на рамку = 110 векторов): в WebGL2 (three.js 0.180 только на нём) у вершинного шейдера
+     не меньше 256 векторов, у телефонов — 256 и больше; остальное — матрицы, свет, тени three.js */
+  assert(d.frames.length * 2 <= 128, `${d.frames.length} frames — ${d.frames.length * 2} uniform vectors`);
+});
+test('grip: Anny fingers close around the handle — the ring is closed, no finger deep in it, no fingertip spike; resting fingers and the 4.63.0 skinning fail', () => {
+  const HO = require('./anny-look/holds.js'), L = HO.LIM;
+  for (const id of ['bbbench', 'deadlift', 'dbpress', 'chinup', 'hammer', 'kbswing', 'ropepushdown', 'latpull', 'squat', 'farmer']) for (const t of [0, .5, 1]) {
+    const { R, e } = pose(id, t), rows = HO.framesHolds(R, A.skin(R, { d, floor: false }), d, e, () => true);
+    assert(rows.length >= 1, `${id} t=${t}: a hand on a handle`);
+    for (const o of rows) assert.deepEqual(HO.problems(o), [], `${id} t=${t} ${o.side}`);
+  }
+  const { R, e } = pose('bbbench', 0);
+  /* отрицательные: пальцы в позе покоя на грифе (кольца нет, кончики торчат) */
+  const rest = HO.framesHolds(R, A.skin({ ...R, hands: { L: 'relaxed', R: 'relaxed' } }, { d, floor: false }), d, e, () => true, R.hands);
+  assert(rest.length === 2 && rest.every(o => o.cover < L.COVER_MIN && o.tipFinger > L.TIP_FINGER && o.tipThumb > L.TIP_THUMB), JSON.stringify(rest.map(o => [o.cover, o.tipFinger, o.tipThumb])));
+  /* скиннинг 4.63.0: фаланги — вокруг суставов процедурной кисти (данные без рига кисти) — кончики и большой палец торчат */
+  const old = { ...d, hands: null }; for (const k of ['_digits', '_bind', '_rig', '_handVerts']) delete old[k];
+  const o63 = HO.framesHolds(R, A.skin(R, { d: old, floor: false }), d, e, () => true);
+  assert(o63.length === 2 && o63.every(o => o.tipFinger > L.TIP_FINGER && o.tipThumb > L.TIP_THUMB), JSON.stringify(o63.map(o => [o.tipFinger, o.tipThumb])));
+  /* пальцы вдавлены в гриф на 1,5 см — глубина сверх допуска */
+  const P = Float32Array.from(A.skin(R, { d, floor: false })), h = HO.handleAt(R, 'L', e, () => true);
+  for (const hv of HO.handVerts(d).L) if (!hv.palm) { const p = [P[hv.v * 3], P[hv.v * 3 + 1], P[hv.v * 3 + 2]], t = M.V.sub(p, h.c0), rad = M.V.perp(t, h.e), n = M.V.unit(rad); for (let i = 0; i < 3; i++) P[hv.v * 3 + i] -= 1.5 * n[i]; }
+  assert(HO.problems(HO.holdOf(R, P, d, 'L', e, () => true)).some(x => /пальцы в ручке/.test(x)), 'fingers pushed 1.5 cm into the bar must fail');
+});
 test('extreme poses: inverted triangles and skin folds do not grow beyond the recorded counts; broken weights fail', () => {
   const base = JSON.parse(fs.readFileSync(path.join(root, 'tools/anny-look/fixtures/folds.json'), 'utf8'));
   for (const [id, t] of [['squat', 1], ['bbcurl', 1], ['latpull', 0], ['pushup', 1]]) {
