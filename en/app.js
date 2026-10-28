@@ -10239,13 +10239,20 @@ const AnnySkin = (() => {
     const hl = dv.getUint32(4, true), H = JSON.parse(new TextDecoder().decode(u8.subarray(8, 8 + hl)));
     let off = 8 + hl;
     const take = (T, n) => { const a = new T(u8.buffer.slice(u8.byteOffset + off, u8.byteOffset + off + n * T.BYTES_PER_ELEMENT)); off += n * T.BYTES_PER_ELEMENT; return a; };
-    const nv = H.nv, nf = H.nf, q = take(Int16Array, nv * 3), idx = take(Uint16Array, nf * 3), wi = take(Uint8Array, nv * 4), wq = take(Uint8Array, nv * 4);
+    const nv = H.nv, nf = H.nf, q = take(Int16Array, nv * 3);
+    /* треугольники: разностями (index: 'delta', tools/anny-look/pack.js) или номерами подряд (прежний файл) */
+    let idx;
+    if (H.index === 'delta') { const e = take(Int16Array, nf * 3); idx = new Uint16Array(nf * 3); let prev = 0; for (let t = 0; t < e.length; t += 3) { const a = prev + e[t]; idx[t] = a; idx[t + 1] = a + e[t + 1]; idx[t + 2] = a + e[t + 2]; prev = a; } }
+    else idx = take(Uint16Array, nf * 3);
+    const wi = take(Uint8Array, nv * 4), wq = take(Uint8Array, nv * 4);
     const code = take(Uint8Array, nv), side = take(Uint8Array, nv), a1q = take(Int16Array, nv), a2q = take(Int16Array, nv);
+    /* затенённость впадин: доля открытого неба (запечена в стойке, tools/anny-look/build.py bake_shade); без неё — 1 */
+    let shade = null; if (H.shade) { const s = take(Uint8Array, nv); if (nv % 2) off += 1; shade = new Float32Array(nv); for (let i = 0; i < nv; i++) shade[i] = s[i] / 255; }
     const pos = new Float32Array(nv * 3); for (let i = 0; i < pos.length; i++) pos[i] = q[i] / H.scale;
     const ww = new Float32Array(nv * 4); for (let i = 0; i < ww.length; i++) ww[i] = wq[i] / 255;
     const a1 = new Float32Array(nv), a2 = new Float32Array(nv); for (let i = 0; i < nv; i++) { a1[i] = a1q[i] / H.rscale; a2[i] = a2q[i] / H.rscale; }
     const correctives = H.correctives.map(c => { const i = take(Uint16Array, c.n); if (c.n % 2) off += 2; const dq = take(Int16Array, c.n * 3), d = new Float32Array(c.n * 3); for (let k = 0; k < d.length; k++) d[k] = dq[k] / H.scale; return { ...c, i, d }; });
-    return { source: H.source, frames: H.frames, nv, nf, pos, idx, wi, ww, region: { code, side, a1, a2 }, correctives };
+    return { source: H.source, frames: H.frames, nv, nf, pos, idx, wi, ww, region: { code, side, a1, a2 }, shade, correctives };
   }
   async function gunzip(bytes) {
     if (typeof DecompressionStream === 'undefined') throw Error('anny: DecompressionStream is unavailable');
@@ -17640,4 +17647,4 @@ logInit();
 plural = (n, a, b, c) => n === 1 ? a : c;
 DEC = '.';
 
-window.PODHOD_VERSION='4.62.0';window.PODHOD_BUILD='4.62.0-07a83501a667';window.PODHOD_LANG='en';
+window.PODHOD_VERSION='4.63.0';window.PODHOD_BUILD='4.63.0-edc97b820594';window.PODHOD_LANG='en';
