@@ -266,8 +266,8 @@ function leverFlags(r) {
 function auditEntry(id, entry, { samples = 41 } = {}) {
   const ev = EQ.variantEntry(entry), rig = EQ.rig(ev), eqs = (ev.equipment || []);
   const cablesEq = eqs.filter(e => e.type === 'g3cable'), bandsEq = eqs.filter(e => e.type === 'g3band' || e.type === 'band');
-  /* стек рычажных тренажёров (09bo-g4-machines.js, stack): плиты одним неподвижным блоком, трос от головы стека — до блока
-     на верхней балке; к рычагу трос не идёт, плиты за рычагом не поднимаются */
+  /* неподвижный стек (прежний stack() рычажных тренажёров: плиты одним блоком, трос от головы стека — до блока на балке,
+     к рычагу не идёт); все рычажные тренажёры теперь на общем узле 09bo-g4-lever.js, проверка остаётся сторожем */
   const fixedStacks = EQ.build(eqs, EQ.rig(ev)(0)).filter(p => !p.dyn && /stkPlates$/.test(p.id));
   const levers = eqs.some(e => e.type === 'g4camCable') ? auditLever(id, entry, { samples }) : [];
   if (!cablesEq.length && !bandsEq.length && !fixedStacks.length) return levers;

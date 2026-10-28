@@ -17,23 +17,6 @@ function pad(b, k, c, size, axes, mount, opts = {}) {
   b.box(k + 'Plate', V.add(c, n, -(t / 2 + pt / 2 - .2)), [size[0] - 4, pt, size[2] - 4], { axes, mount });
   return V.add(c, n, -(t / 2 + pt - .2)); /* точка крепления за пластиной */
 }
-/* Колонна стека грузов: стойки, направляющие, плиты, верхняя плита; основание на полу.
-   c — центр стека на полу [x, 0, z], w — ширина плит, h — высота колонны, along — ось ширины ('x' или 'z'). */
-function stack(b, k, c, h, opts = {}) {
-  const w = opts.w || 30, d = opts.d || 16, ax = opts.along === 'z' ? [0, 0, 1] : [1, 0, 0], side = opts.along === 'z' ? [1, 0, 0] : [0, 0, 1];
-  const P = (u, y, v) => V.add(V.add(V.add(c, ax, u), [0, 1, 0], y), side, v);
-  const hw = w / 2 + 7;
-  b.tube(k + 'Base', P(-hw - 4, 3.75, 0), P(hw + 4, 3.75, 0), [8, 7.5], { mount: 'floor', up: [0, 1, 0] });
-  b.tube(k + 'BaseS', P(0, 3.75, -d), P(0, 3.75, d), [8, 7.5], { mount: k + 'Base' });
-  for (const sg of [-1, 1]) b.tube(k + 'Post' + (sg > 0 ? 'A' : 'B'), P(sg * hw, 7.5, 0), P(sg * hw, h, 0), [6, 6], { mount: k + 'Base' });
-  b.tube(k + 'Top', P(-hw - 3, h - 3, 0), P(hw + 3, h - 3, 0), [6, 6], { mount: k + 'PostA' });
-  const sh = opts.stackH || 62;
-  b.box(k + 'Plates', P(0, 7.5 + sh / 2, 0), [w, sh, 12], { axes: [ax, [0, 1, 0], side], mount: k + 'Base', tone: 'stack', round: .4 });
-  for (const sg of [-1, 1]) b.tube(k + 'Rod' + (sg > 0 ? 'A' : 'B'), P(sg * (w / 2 - 6), 7.5, 0), P(sg * (w / 2 - 6), h - 6, 0), .9, { mount: k + 'Base', tone: 'chrome', role: 'guide' });
-  b.box(k + 'Head', P(0, 7.5 + sh + 2.5, 0), [w - 2, 4, 10], { axes: [ax, [0, 1, 0], side], mount: k + 'Plates', tone: 'chrome', round: .4 });
-  b.cyl(k + 'Pulley', P(0, h - 9, 0), side, 4.8, 2.4, { mount: k + 'Top', tone: 'chrome' });
-  b.tube(k + 'Cable', P(0, 7.5 + sh + 4.5, 0), P(0, h - 13.5, 0), .35, { mount: k + 'Head', tone: 'cable', role: 'cable' });
-}
 /* Рукоять-труба с прорезиненным хватом: от a к b, держатель — mount */
 function handle(b, k, a, c, r, mount) { b.tube(k, a, c, r || 1.6, { mount, role: 'grip', tone: 'rubber' }); }
 

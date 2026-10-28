@@ -99,7 +99,10 @@ function leverStackEq(spec, { L, lever, curve, sense, scale, kg, kgSrc }) {
   return out;
 }
 /* Сидячие рычажные тренажёры (seatedLever): оба рычага на общем валу m.id:axle, кулачок посередине вала (x = 0), трос — к блоку
-   колонны стека (p2) и вниз к верхней плите (1:1). s2 — направление огибания блока колонны (+1 — трос приходит со стороны +Z). */
+   колонны стека (p2) и вниз к обойме подвижного блока 1:2 (k = 2: плиты поднимаются вдвое больше, чем выбирается трос
+   кулачка). s2 — направление огибания блока колонны (+1 — трос приходит со стороны +Z). Рычаг поворачивается на 19–34°,
+   поэтому запас профиля за краями хода меньше, чем у ножных машин (14° и 12° у зажима вместо 32° и 24°): за краями хода трос
+   кулачка не касается, а длинный «хвост» спирали только увеличивал бы кулачок. */
 function seatedCamEq(spec, { m, levers, bind, curve, sense, scale, kg, kgSrc, s2 }) {
   if (LEVER_EQ.has(spec)) return LEVER_EQ.get(spec);
   const mm = { ...m, stack: { ...m.stack, mult: MULT_R } }, A = EQ.anchors([mm])[m.id], info = A.stkstackInfo, st = A.stkstack;
@@ -107,7 +110,7 @@ function seatedCamEq(spec, { m, levers, bind, curve, sense, scale, kg, kgSrc, s2
     route: [{ c: rp(A.p2), r: 5, s: s2, id: m.id + ':stkpulley' }], ratio: 2, rodPart: m.id + ':' + info.rod,
     stack: { o: rp(st.o), R: st.R.map(v => Math.round(v * 1e4) / 1e4), sel: info.sel, pitch: info.pitch, size: info.size, topY: r2(info.topY), maxLift: 0 } };
   const poses = bakedPoses(spec, [mm, ...levers]);
-  tr.cam = CAM.design(tr, poses, { curve: CURVES[curve], sense, scale }).cam;
+  tr.cam = CAM.design(tr, poses, { curve: CURVES[curve], sense, scale, margin: 14 * D2R, anchorMargin: 12 * D2R }).cam;
   const Ls = poses.map(R => EQ.leverStack.state({ ...tr, rest: 0 }, R).L), dL = Math.max(...Ls) - Math.min(...Ls);
   tr.rest = r2(Math.min(...Ls) - HOVER / tr.ratio);
   /* подвижный блок: в начале повтора центр — посередине между блоком колонны и штоком верхней плиты (stem), к концу поднимается
