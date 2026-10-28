@@ -4,7 +4,7 @@ python3 tools/anny-look/proportions.py [--json out.json]
 
 Три формы в той же стойке манекена 4.61.0 (поза рига — fit.json): эталон (Anny по умолчанию — мужчина 27 лет, мышечность,
 вес и пропорции 0,5, без местных форм, рост 174,4 см: anny_look.REFERENCE), 4.62.0 (одобренная подтянутая форма без
-шлифовки) и новая (look.json, с куполом плавок). Замеры — по правилам ANSUR II, как tools/skin-anny/anny_measure.py
+шлифовки) и новая (look.json: эталон на нашем скелете — рост и формы длин, lengths.py). Замеры — по правилам ANSUR II, как tools/skin-anny/anny_measure.py
 (уровни — медианы ANSUR II, обхват — периметр выпуклой оболочки сечения); обхват бедра — на высоте промежности
 процедурной кожи 4.61.0 − 1 см (83,5 − 1: у сетки Anny бёдра касаются друг друга до 70 см, «промежность» по сетке ниже
 настоящей), левая половина сечения.
@@ -67,7 +67,6 @@ def run():
         body = AnnyLook(shape); M = Measurer(body, ref); M.patella_top = 52.0
         phen, local = body.params(fit); rest = body.rest(phen, local)
         V, H = body.stance(rest, P.J, q, None, groin=False)[:2]
-        if shape == 'look': V = body.pouch(V, body.look['pouch'])
         out[shape] = measure(body, M, V, H)
     out['ansur'] = {k: ref['values'][k] for k, _ in ROWS if k in ref['values']}
     out['ansur']['shr'] = [None, round(49.7 / 33.6, 2), None]; out['ansur']['whr'] = [None, round(88.7 / 98.4, 2), None]
