@@ -30,7 +30,8 @@ ROWS = [('stature', 'Рост'), ('chestcircumference', 'Обхват груди
         ('buttockcircumference', 'Обхват ягодиц'), ('buttockdepth', 'Глубина ягодиц'), ('waistdepth', 'Глубина талии'),
         ('hipbreadth', 'Ширина бёдер'), ('bideltoidbreadth', 'Ширина по дельтам'), ('thighcircumference', 'Обхват бедра'),
         ('bicepscircumferenceflexed', 'Обхват плеча'), ('forearmcircumferenceflexed', 'Обхват предплечья'),
-        ('wristcircumference', 'Обхват запястья'), ('calfcircumference', 'Обхват голени'), ('anklecircumference', 'Обхват над лодыжкой'),
+        ('wristcircumference', 'Обхват запястья'), ('handlength', 'Длина кисти'), ('handbreadth', 'Ширина кисти'),
+        ('handcircumference', 'Обхват кисти'), ('calfcircumference', 'Обхват голени'), ('anklecircumference', 'Обхват над лодыжкой'),
         ('shr', 'Дельты / бёдра'), ('whr', 'Талия / ягодицы'), ('bproj', 'Выступ ягодиц сверх живота'),
         ('buttock_peak_h', 'Высота наибольшего выступа ягодиц'), ('troch_depr', 'Впадина у вертела')]
 
@@ -41,8 +42,23 @@ def hull_depth(Q):
     return (-(Q @ eq[:, :2].T + eq[:, 2])).min(1)
 
 
-def measure(body, M, V, H):
+def hand(body, rest):
+    """кисть (левая) в покое рига Anny — пальцы прямые, как при замере ANSUR II: длина — от сустава запястья (≈ линия
+    шиловидных отростков) до кончика среднего пальца по оси «запястье — средний пястно-фаланговый сустав»; ширина и обхват —
+    сечение ладони у головок пястных костей (на 0,8 см ближе к запястью, чем суставы рига), без большого пальца"""
+    from scipy.spatial import ConvexHull
+    L = body.idx; n0 = body.vw.shape[0]
+    sel = np.array([n.endswith('.L') and n.startswith(('wrist', 'metacarpal', 'finger')) and not n.startswith('finger1') for n in body.labels])[body.dominant[:n0]]
+    V = rest['rest_vertices'][0].cpu().numpy()[sel] * 100; Hr = rest['rest_bone_heads'][0].cpu().numpy() * 100
+    wr, m3, i2, l5 = (Hr[L[n + '.L']] for n in ('wrist', 'finger3-1', 'finger2-1', 'finger5-1'))
+    ax = (m3 - wr) / np.linalg.norm(m3 - wr); side = i2 - l5; side -= ax * (side @ ax); side /= np.linalg.norm(side); up = np.cross(ax, side)
+    S = V[np.abs((V - m3) @ ax + .8) < .6]; P2 = np.stack([(S - m3) @ side, (S - m3) @ up], 1); hv = P2[ConvexHull(P2).vertices]
+    return {'handlength': ((V - wr) @ ax).max(), 'handbreadth': np.ptp(P2[:, 0]), 'handcircumference': np.linalg.norm(hv - np.roll(hv, 1, 0), axis=1).sum()}
+
+
+def measure(body, M, V, H, rest=None):
     m = M.measure(V, H); Fn = M.F_noarm
+    if rest is not None: m.update(hand(body, rest))
     used = np.zeros(len(V), bool); used[np.unique(Fn)] = True
     S = section(V, Fn, np.array([0, 83.5 - 1, 0]), np.array([0, 1.0, 0])); S = S[(S[:, 0] > 0) & (S[:, 0] < 17)]
     m['thighcircumference'] = hull_perimeter(S[:, [0, 2]])
@@ -68,7 +84,7 @@ def run():
         body = AnnyLook(shape); M = Measurer(body, ref); M.patella_top = 52.0
         phen, local = body.params(fit); rest = body.rest(phen, local)
         V, H = body.stance(rest, P.J, q, None, groin=False)[:2]
-        out[shape] = measure(body, M, V, H)
+        out[shape] = measure(body, M, V, H, rest)
     out['ansur'] = {k: ref['values'][k] for k, _ in ROWS if k in ref['values']}
     out['ansur']['shr'] = [None, round(49.7 / 33.6, 2), None]; out['ansur']['whr'] = [None, round(88.7 / 98.4, 2), None]
     out['ansur']['bproj'] = [None, round(23.4 - 22.0, 1), None]

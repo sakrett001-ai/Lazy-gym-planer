@@ -79,11 +79,16 @@ class AnnyLook(AnnyPosed):
         out = dict(out); out['rest_vertices'] = V
         return out
 
+    LIMB_BONES = {'arms': ('upperarm', 'lowerarm', 'wrist', 'finger', 'metacarpal'), 'upperarms': ('upperarm',),
+                  'forearms': ('lowerarm', 'wrist', 'finger', 'metacarpal'), 'legs': ('upperleg', 'lowerleg', 'foot', 'toe'),
+                  'thighs': ('upperleg',), 'shanks': ('lowerleg', 'foot', 'toe')}
+
     def limb_blend(self, kind):
-        """доля фенотипа конечности у вершины: по весам рига Anny на кости руки (arms) или ноги (legs), обе стороны;
-        малые доли (у Anny доли кости плеча 0,02–0,2 лежат по груди и спине, бедра — по крестцу) не берутся: плавно от 0,1
-        до 0,9"""
-        w = sum(self.arm_w[s] if kind == 'arms' else self.leg_w[s] for s in 'LR')
+        """доля фенотипа конечности у вершины: по весам рига Anny на кости руки (arms) или ноги (legs) — или их части, обе
+        стороны; малые доли (у Anny доли кости плеча 0,02–0,2 лежат по груди и спине, бедра — по крестцу) не берутся: плавно
+        от 0,1 до 0,9"""
+        pre = self.LIMB_BONES[kind]; n0 = self.vw.shape[0]       # вершины сетки Anny (без заплаток век)
+        w = sum(self.weights[:n0, i] for n, i in self.idx.items() if n[-2:] in ('.L', '.R') and n.startswith(pre))
         u = np.clip((w - .1) / .8, 0, 1)
         return u * u * (3 - 2 * u)
 
