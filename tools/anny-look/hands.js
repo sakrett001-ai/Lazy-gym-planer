@@ -30,7 +30,12 @@ const TRUE_PRESS = .3;        // см: то же по всем вершинам 
 const FIST = [88, 100, 75];
 const THUMB_GAPS = [0, .2, .4, .6, .8];   // см: зазоры большого пальца до пальцев и ладони, из которых выбирается по складкам
 const W_PREV = .2, W_COUPLE = .5, COUPLE = 2 / 3;   // тяга к соседней строке таблицы и сцепление ДМФС с ПМФС
-const ALPHA = 60;            // °: поворот пясти большого пальца от стойки — не больше (ладонное отведение до 50° и сгибание до 40°: AAOS 1965)
+const ALPHA = 80;            // °: конус направлений пясти большого пальца вокруг стойки (перебор); анатомический предел — ниже
+/* концевая фаланга большого пальца — поперёк средних фаланг пальцев, к локтевой стороне (не меньше 30° от направления пальцев),
+   как в силовом хвате (Napier 1956): вдоль пальцев она торчит кончиком из кулака */
+const W_ULNAR = 4, ULNAR = .5, ROLLS = [-50, -25, 0, 25, 50];   // ° разворота пясти вокруг её оси (перебор)
+const TIP_REACH = 2.8;       // см: кончик большого пальца от поверхности ручки (проверка holds.js — 3,2)
+const PALMAR_ABD = 70;       // °: ладонное отведение пясти большого пальца (угол с плоскостью ладони) — не больше (AAOS 1965: 0–70°)
 const sq = x => x * x, INF = Infinity;
 
 /* данные из anny.json (вход pack.js) — те же числа, что даёт AnnySkin.decode */
@@ -99,6 +104,9 @@ function solveThumb(mr, bar, fingers, press = PRESS, prev = null, gapF = 0) {
   const rig = mr.rig, dg = rig.digits[0], S = mr.segs[0], lim = A.DIG.lim.thumb, j0 = dg.j[0], y0 = dg.segs[0].y, a0 = dg.segs[0].a;
   const caps = [];
   for (let i = 0; i < 3; i++) { const fd = rig.digits[i + 1], T = fingers[i]; for (let k = 0; k < 3; k++) caps.push({ A: T[k].o, B: k < 2 ? T[k + 1].o : at(T[2], V.add(V.sub(fd.j[3], fd.j[2]), fd.segs[2].y, -mr.segs[i + 1][2].rho)), r: mr.segs[i + 1][k].rmax + gapF }); }
+  /* промежутки между соседними пальцами (указательный — средний — безымянный) по средним и концевым фалангам — тоже препятствие:
+     пальцы Anny в кулаке стоят на 2–3 см друг от друга, и большой палец уходил в щель между ними, торча из неё кончиком */
+  for (let i = 0; i < 2; i++) for (let k = 1; k < 3; k++) { const a = caps[i * 3 + k], b = caps[(i + 1) * 3 + k]; caps.push({ A: V.mix(a.A, a.B, .5), B: V.mix(b.A, b.B, .5), r: Math.min(a.r, b.r) }); }
   const segD = (p, A_, B) => { const ab = V.sub(B, A_), l2 = V.dot(ab, ab), k = l2 < 1e-9 ? 0 : Math.max(0, Math.min(1, V.dot(V.sub(p, A_), ab) / l2)); return V.dist(p, V.add(A_, ab, k)); };
   const sdFing = p => { let m = INF; for (const c of caps) { const v = segD(p, c.A, c.B) - c.r; if (v < m) m = v; } return m; };
   const sdBar = barSd(bar), center = rig.grip;
@@ -110,11 +118,13 @@ function solveThumb(mr, bar, fingers, press = PRESS, prev = null, gapF = 0) {
   const target = V.add(m, out, mr.segs[1][1].rho + S[2].rho), edge = Math.max(...fingers.map(T => -T[1].o[1]));
   const tipQ = S[2].all.reduce((b, q) => V.dot(q, dg.segs[2].y) > V.dot(b, dg.segs[2].y) ? q : b, S[2].all[0]);
   const e1 = V.unit(V.perp(a0, y0)), e2 = V.cross(y0, e1), L0 = V.dist(dg.j[1], j0);
-  const aim = (al, be) => {
+  const aim = (al, be, ro = 0) => {
     const dir = V.add(V.scale(y0, Math.cos(al * Math.PI / 180)), V.add(V.scale(e1, Math.cos(be * Math.PI / 180)), e2, Math.sin(be * Math.PI / 180)), Math.sin(al * Math.PI / 180));
     /* ось сгибания — вдоль ручки (z кисти без составляющей вдоль пясти); знак — ладонной стороной (a × y) к оси ручки */
     let x = V.unit(V.perp([0, 0, 1], dir)); const mcp = V.add(j0, dir, L0);
     if (V.dot(V.cross(x, dir), [center[0] - mcp[0], center[1] - mcp[1], 0]) < 0) x = V.scale(x, -1);
+    /* разворот вокруг пясти на ro: ось сгибания наискось к ручке — палец ложится поперёк пальцев, а не в плоскости кольца */
+    if (ro) x = R3.ap(R3.axis(dir, ro * Math.PI / 180), x);
     return R3.frame(y0, a0, dir, x);
   };
   const segCost = (T, k) => {
@@ -125,24 +135,29 @@ function solveThumb(mr, bar, fingers, press = PRESS, prev = null, gapF = 0) {
     return c;
   };
   const padCenter = T => { let c = [0, 0, 0]; for (const q of S[2].pad) c = V.add(c, at(T, q), 1 / S[2].pad.length); return c; };
+  /* кончик большого пальца — середина дальней трети концевой фаланги (как в holds.js); не дальше TIP_REACH от поверхности
+     ручки: лежит на пальцах, а не торчит из кулака */
+  const L2 = V.dot(V.sub(dg.j[3], dg.j[2]), dg.segs[2].y), tipPts = S[2].all.filter(q => V.dot(q, dg.segs[2].y) > .67 * L2);
+  const tipGap = T => { if (!bar || !tipPts.length) return 0; let c = [0, 0, 0]; for (const q of tipPts) c = V.add(c, at(T, q), 1 / tipPts.length); return Math.hypot(c[0] - bar.c[0], c[1] - bar.c[1]) - bar.r; };
   let best = null;
-  const search = (als, bes, t1s, t2s) => {
-    for (const al of als) for (const be of (al ? bes : [0])) {
-      const R0 = aim(al, be), T0 = step(null, dg, 0, R0), dir = R3.ap(R0, y0);
+  const search = (als, bes, t1s, t2s, ros) => {
+    for (const al of als) for (const be of (al ? bes : [0])) for (const ro of ros) {
+      const R0 = aim(al, be, ro), T0 = step(null, dg, 0, R0), dir = R3.ap(R0, y0);
+      if (Math.asin(Math.max(-1, Math.min(1, -rig.g * dir[0]))) * 180 / Math.PI > PALMAR_ABD) continue;
       const c0 = segCost(T0, 0) + .002 * al + (prev ? W_PREV * sq(V.angle(dir, prev.dir) / 20) : 0); if (best && c0 >= best.c) continue;
       for (const t1 of t1s) {
         const T1 = step(T0, dg, 1, flexRot(dg, 1, t1)), c1 = c0 + segCost(T1, 1) + (prev ? W_PREV * sq((t1 - prev.t[0]) / 20) : 0); if (best && c1 >= best.c) continue;
         for (const t2 of t2s) {
           const T2 = step(T1, dg, 2, flexRot(dg, 2, t2)), pc = padCenter(T2), tip = at(T2, tipQ);
-          const c = c1 + segCost(T2, 2) + .3 * V.dot(V.sub(pc, target), V.sub(pc, target)) + 2 * sq(Math.max(0, -tip[1] - edge)) + (prev ? W_PREV * sq((t2 - prev.t[1]) / 20) : 0);
-          if (!best || c < best.c) best = { c, al, be, t: [t1, t2], R0, dir };
+          const c = c1 + segCost(T2, 2) + .3 * V.dot(V.sub(pc, target), V.sub(pc, target)) + 2 * sq(Math.max(0, -tip[1] - edge)) + 10 * sq(Math.max(0, tipGap(T2) - TIP_REACH)) + W_ULNAR * sq(Math.max(0, V.unit(V.sub(tip, T2.o))[2] + ULNAR)) + (prev ? W_PREV * sq((t2 - prev.t[1]) / 20) : 0);
+          if (!best || c < best.c) best = { c, al, be, ro, t: [t1, t2], R0, dir, miss: V.dist(pc, target) };
         }
       }
     }
   };
-  search(range(0, ALPHA, 10), range(0, 345, 15), range(lim[1][0], lim[1][1], 10), range(lim[2][0], lim[2][1], 10));
+  search(range(0, ALPHA, 10), range(0, 330, 30), range(lim[1][0], lim[1][1], 10), range(lim[2][0], lim[2][1], 10), ROLLS);
   const b = best, cl = (x, k) => Math.max(lim[k][0], Math.min(lim[k][1], x));
-  search(range(Math.max(0, b.al - 6), Math.min(ALPHA, b.al + 6), 3), range(b.be - 9, b.be + 9, 4.5), range(cl(b.t[0] - 6, 1), cl(b.t[0] + 6, 1), 2), range(cl(b.t[1] - 6, 2), cl(b.t[1] + 6, 2), 2));
+  search(range(Math.max(0, b.al - 6), Math.min(ALPHA, b.al + 6), 3), range(b.be - 15, b.be + 15, 7.5), range(cl(b.t[0] - 6, 1), cl(b.t[0] + 6, 1), 2), range(cl(b.t[1] - 6, 2), cl(b.t[1] + 6, 2), 2), [b.ro - 8, b.ro, b.ro + 8]);
   return { ...best, target };
 }
 
@@ -171,7 +186,9 @@ function solveHand(mr, mode, r, d = null, prev = null) {
     for (const gapF of d ? THUMB_GAPS : [0]) {
       const c = solveThumb(mr, bar, fingers, PRESS - clr[0], prev?.thumb, gapF);
       const trial = { ...(bar ? { r } : {}), f, th: { q: R3.quat(c.R0).map(r5), t: c.t.map(r2) } }, nf = d ? handFolds(d, mr, mode, trial, 'thumb').thumb : 0;
-      if (nf < bestF) { bestF = nf; th = c; }
+      /* выбор: складки плюс квадрат промаха подушечки мимо цели (см²) — кольцо поверх пальцев важнее нескольких складок */
+      const sel = nf + c.miss * c.miss;
+      if (sel < bestF) { bestF = sel; th = c; }
       if (!nf) break;
     }
     row = { ...(bar ? { r } : {}), f, th: { q: R3.quat(th.R0).map(r5), t: th.t.map(r2) } };
@@ -254,7 +271,7 @@ function table(d, log = () => {}) {
   }
   return out;
 }
-module.exports = { RADII, PRESS, TRUE_PRESS, FIST, trueGaps, solveFlat, handFolds, fromJson, meshRig, solveFinger, solveThumb, solveHand, table };
+module.exports = { PALMAR_ABD, RADII, PRESS, TRUE_PRESS, FIST, trueGaps, solveFlat, handFolds, fromJson, meshRig, solveFinger, solveThumb, solveHand, table };
 if (require.main === module) {
   const file = path.resolve(root, process.argv[2] || 'qa/anny-look/anny.json'), src = JSON.parse(fs.readFileSync(file, 'utf8'));
   const T = table(fromJson(src), m => process.stderr.write(m + '\n'));
