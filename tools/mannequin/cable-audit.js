@@ -49,7 +49,9 @@ const LIM = {
                               //    а между ключами позы кисть идёт по дуге интерполяции углов)
   arcPlane: 20,               // °: трос выходит из плоскости движения
   bandShrink: 1,              // см: ветвь ленты короче, чем в растяжке
-  bandStretch: 3,             // раз: растяжение ленты max/min
+  bandStretch: 3,             // раз: растяжение ленты max/min — TheraBand (Performance Health), инструкция к лентам: «не
+                              //    растягивать больше чем в 3 раза от длины в покое»; в растяжке лента не короче длины покоя
+  wristDev: 12,               // °: локтевое или лучевое отклонение запястья на рукояти (у тяги сидя после правки — 3–6°)
   join: 2                     // см: концы тросов в цепочке
 };
 const deg = r => r * 180 / Math.PI;
@@ -94,6 +96,13 @@ function auditEntry(id, entry, { samples = 41 } = {}) {
   const frames = [];
   for (let i = 0; i < samples; i++) { const t = i / (samples - 1), R = rig(t); frames.push({ t, R }); }
   const kind = KIND[id] || '—', rows = [];
+  /* кисть на рукояти: отклонение и сгибание запястья по кадрам (Mannequin.jointAngles, как в валидаторе) — рукоять, не
+     повёрнутая вслед за предплечьем, выворачивает запястье */
+  const ja = frames.map(({ R }) => M.jointAngles(R));
+  const wristOf = hs => {
+    const dev = hs.flatMap(s => ja.map(a => a[s].wristDev)), flex = hs.flatMap(s => ja.map(a => a[s].wristFlex));
+    return { dev: [Math.min(...dev), Math.max(...dev)], flex: [Math.min(...flex), Math.max(...flex)] };
+  };
   for (const e of cablesEq) {
     const hands = e.hands || ['L', 'R'], P = fromCat(frames[0].R.props.find(p => p.id === e.id + ':wheel').c), S = e.swivel;
     const st = e.stack, ratio = e.ratio ?? 1, Y = st ? M3.col(st.R, 1) : [0, 1, 0];
@@ -108,6 +117,7 @@ function auditEntry(id, entry, { samples = 41 } = {}) {
     fr.forEach((f, i) => { const a = fr[Math.max(0, i - 1)], b = fr[Math.min(fr.length - 1, i + 1)]; f.v = V.sub(b.end, a.end); });
     const vmax = Math.max(...fr.map(f => V.len(f.v))), moving = fr.filter(f => V.len(f.v) > LIM.moving * vmax);
     const row = { id, kind, part: e.id, type: 'трос', attach: e.attach || 'D', ratio, rest: e.rest, frames: [] };
+    if (e.attach !== 'ankle') row.wrist = wristOf(hands);
     row.floorAng = [Math.min(...fr.map(f => elev(f.dir))), Math.max(...fr.map(f => elev(f.dir)))];
     row.moveAng = Math.max(...moving.map(f => angleLine(f.dir, f.v)));
     row.moveAngMid = angleLine(fr[Math.floor(fr.length / 2)].dir, fr[Math.floor(fr.length / 2)].v);
@@ -154,6 +164,7 @@ function auditEntry(id, entry, { samples = 41 } = {}) {
       fr.forEach((f, i) => { const a = fr[Math.max(0, i - 1)], b = fr[Math.min(fr.length - 1, i + 1)]; f.v = V.sub(b.end, a.end); });
       const vmax = Math.max(...fr.map(f => V.len(f.v))), moving = fr.filter(f => V.len(f.v) > LIM.moving * vmax);
       const row = { id, kind: shared && s !== 'mid' ? 'ветвь' : kind, part: (e.id || 'band') + ':' + s, type: 'лента', side: s };
+      row.wrist = wristOf(s === 'mid' ? hands : [s]);
       row.floorAng = [Math.min(...fr.map(f => elev(f.dir))), Math.max(...fr.map(f => elev(f.dir)))];
       row.moveAng = Math.max(...moving.map(f => angleLine(f.dir, f.v)));
       row.moveAngMid = angleLine(fr[Math.floor(fr.length / 2)].dir, fr[Math.floor(fr.length / 2)].v);
@@ -184,6 +195,7 @@ function flagsOf(r) {
     if (r.moveAng > LIM.lineMove) f.push(`${r.type} под ${r.moveAng.toFixed(0)}° к ходу рукояти`);
   }
   if (r.kind === 'arc' && r.planeAng > LIM.arcPlane) f.push(`${r.type} выходит из плоскости движения на ${r.planeAng.toFixed(0)}°`);
+  if (r.wrist && Math.max(-r.wrist.dev[0], r.wrist.dev[1]) > LIM.wristDev) f.push(`запястье отклонено до ${Math.max(-r.wrist.dev[0], r.wrist.dev[1]).toFixed(0)}° (рукоять не по предплечью?)`);
   if (r.type === 'трос' && r.liftMin != null) {
     if (r.liftAtStretch < LIM.hoverMin || r.liftAtStretch > LIM.hoverMax) f.push(`стек в растяжке (t=${r.stretchT.toFixed(3)}) на ${r.liftAtStretch.toFixed(1)} см над плитами (норма ${LIM.hoverMin}–${LIM.hoverMax})`);
     if (r.lying.length) f.push(`стек лежит на плитах в ${r.lying.length} кадр. (t=${r.lying[0].toFixed(3)}…${r.lying[r.lying.length - 1].toFixed(3)})`);
@@ -208,7 +220,8 @@ const f1 = v => v == null ? '—' : (+v).toFixed(1), f0 = v => v == null ? '—'
 function describe(r) {
   const out = [`${r.type} ${r.part} [${r.kind}]`, `к полу ${rng(r.floorAng)}°`, `к ходу ≤${f0(r.moveAng)}° (середина ${f0(r.moveAngMid)}°)`,
     `${r.type === 'трос' ? (r.attach === 'ankle' ? 'голеностоп' : 'кисть') + ' над осью блока' : 'кисть над креплением'} ${rng(r.height)} см`,
-    r.kind === 'line' ? `от прямой ${f1(r.lineDev)} см, поворот ${f0(r.swing)}°` : `из плоскости ${f0(r.planeAng)}°`];
+    r.kind === 'line' ? `от прямой ${f1(r.lineDev)} см, поворот ${f0(r.swing)}°` : `из плоскости ${f0(r.planeAng)}°`,
+    r.wrist ? `запястье: отклонение ${rng(r.wrist.dev)}°, сгибание ${rng(r.wrist.flex)}°` : ''].filter(Boolean);
   if (r.type === 'трос') {
     out.push(`рукоять—колесо ${rng(r.span)} см`);
     if (r.liftMin != null) out.push(`ratio ${r.ratio}${r.floating ? ' (подвижный блок)' : ''}, rest ${r.rest}, стек: в растяжке ${f1(r.liftAtStretch)} см @${r.stretchT.toFixed(3)}, min ${f1(r.liftMin)} @${r.liftMinT.toFixed(3)}, max ${f1(r.liftMax)} из ${r.maxLift}`, `проводка ${r.route.ok ? 'до стека' : 'обрыв'} (${r.route.chain.join(', ') || '—'})`);

@@ -607,7 +607,13 @@ module.exports = {
       for (const s of S) {
         const lat = C.lat(q, s), g = [C.M.SIGN[s] * 6.5, y, z];
         const pole = V.unit(V.add(V.add(lat, [0, 0, 1], C.lerp(.9, 1.1, e)), [0, -1, 0], C.lerp(.2, .9, e)));
-        C.grip(q, s, g, V.unit([-C.M.SIGN[s] * .1, C.lerp(.35, .05, e), -1]), pole, { wristExt: 4 });
+        /* ручки поперёк предплечья: V-рукоять висит на карабине и качается вокруг него, ручки наклоняются вслед за
+           предплечьями (как у тяги сидя, rowGripV), кисть продолжает предплечье. Прежде ручки держали наклон по фазе,
+           а предплечья к середине тяги уходят внутрь — отклонение запястья доходило до 27° */
+        const thumb = V.unit([-C.M.SIGN[s] * .1, C.lerp(.35, .05, e), -1]);
+        C.grip(q, s, g, thumb, pole, { wristExt: 4, allowShort: true });
+        const f = C.fk(q), fore = V.unit(V.sub(f.P['wr' + s], f.P['el' + s]));
+        C.grip(q, s, g, V.unit(V.perp(thumb, fore)), pole, { wristExt: 4 });
       }
       return q;
     }
