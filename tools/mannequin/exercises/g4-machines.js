@@ -50,9 +50,10 @@ const LC = once(() => {
   const onTh = z => (oTh - nTh[2] * z) / nTh[1], onT = z => (oT - nT[2] * z) / nT[1];
   const kz = K[2] + 4, headZ = f.P.ghL[2] + 2;
   const hubX = 27;
-  /* колонна стека за стопами (в 75 см за осью колен — вне хода валика и стоп), высота 120 см */
+  /* колонна стека за стопами: в 60 см за осью колен — стойка в 5,6 см за носками в крайнем положении (t = 0,3, z = −91 см)
+     и вне хода валика (до −81 см); высота 120 см */
   const machine = { type: 'legCurl', id: 'lc', hump: [hy, hz], knee: [onTh(kz), kz], head: [onT(headZ), headZ], nTh: nTh.slice(1), nT: nT.slice(1), pivot: [K[1], K[2]], hubX,
-    handle: { x: 20, y: f.P.ghL[1] - 40, z: f.P.ghL[2] + 20, ax: [1, .5] }, stack: { z: K[2] - 75, H: 120 } };
+    handle: { x: 20, y: f.P.ghL[1] - 40, z: f.P.ghL[2] + 20, ax: [1, .5] }, stack: { z: K[2] - 60, H: 120 } };
   const off = [0, 7, -8.2], rR = Math.hypot(C.M.B.sk - off[1], off[2]);
   return { q, K, off, rR, hubX, machine };
 });
