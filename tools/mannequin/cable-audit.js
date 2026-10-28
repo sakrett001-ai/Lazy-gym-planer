@@ -132,20 +132,28 @@ function auditEntry(id, entry, { samples = 41 } = {}) {
       row.floating = props.some(p => p.id === e.id + ':stkFloat');
       row.route = routeOf(props, e, P, S);
     }
-    row.frames = fr.map(f => ({ t: +f.t.toFixed(3), floor: +elev(f.dir).toFixed(1), move: V.len(f.v) > .25 * vmax ? +angleLine(f.dir, f.v).toFixed(1) : null, h: +(f.end[1] - P[1]).toFixed(1), lift: f.raw != null ? +f.raw.toFixed(2) : null }));
+    row.frames = fr.map(f => ({ t: +f.t.toFixed(3), floor: +elev(f.dir).toFixed(1), move: V.len(f.v) > LIM.moving * vmax ? +angleLine(f.dir, f.v).toFixed(1) : null, h: +(f.end[1] - P[1]).toFixed(1), lift: f.raw != null ? +f.raw.toFixed(2) : null }));
     row.flags = flagsOf(row);
     rows.push(row);
   }
   for (const e of bandsEq) {
-    for (const s of e.hands || ['L', 'R']) {
+    /* две ветви от одной точки крепления (дверь): ход — по середине кистей, как у каната (концы ленты расходятся, и каждая
+       кисть идёт к своей ветви под углом); у ветвей — длина и растяжение */
+    const hands = e.hands || ['L', 'R'], shared = e.type === 'g3band' && hands.length > 1;
+    const branch = (R, s) => {
+      const b = R.props.find(p => p.id === (e.id || 'band') + ':' + s), pts = b.pts.map(fromCat);
+      let L = 0; for (let i = 1; i < pts.length; i++) L += V.dist(pts[i - 1], pts[i]);
+      return { A: pts[pts.length - 2], K: pts[pts.length - 1], L, end: fromCat(R['grip' + s]) };
+    };
+    for (const s of shared ? [...hands, 'mid'] : hands) {
       const fr = frames.map(({ t, R }) => {
-        const b = R.props.find(p => p.id === (e.id || 'band') + ':' + s), pts = b.pts.map(fromCat), A = pts[pts.length - 2], K = pts[pts.length - 1];
-        let L = 0; for (let i = 1; i < pts.length; i++) L += V.dist(pts[i - 1], pts[i]);
-        return { t, A, K, L, end: fromCat(R['grip' + s]), dir: V.sub(K, A) };
+        if (s !== 'mid') { const b = branch(R, s); return { t, ...b, dir: V.sub(b.K, b.A) }; }
+        const a = branch(R, hands[0]), b = branch(R, hands[1]), K = V.mix(a.K, b.K, .5);
+        return { t, A: a.A, K, L: (a.L + b.L) / 2, end: V.mix(a.end, b.end, .5), dir: V.sub(K, a.A) };
       });
       fr.forEach((f, i) => { const a = fr[Math.max(0, i - 1)], b = fr[Math.min(fr.length - 1, i + 1)]; f.v = V.sub(b.end, a.end); });
       const vmax = Math.max(...fr.map(f => V.len(f.v))), moving = fr.filter(f => V.len(f.v) > LIM.moving * vmax);
-      const row = { id, kind, part: (e.id || 'band') + ':' + s, type: 'лента', side: s };
+      const row = { id, kind: shared && s !== 'mid' ? 'ветвь' : kind, part: (e.id || 'band') + ':' + s, type: 'лента', side: s };
       row.floorAng = [Math.min(...fr.map(f => elev(f.dir))), Math.max(...fr.map(f => elev(f.dir)))];
       row.moveAng = Math.max(...moving.map(f => angleLine(f.dir, f.v)));
       row.moveAngMid = angleLine(fr[Math.floor(fr.length / 2)].dir, fr[Math.floor(fr.length / 2)].v);
@@ -161,7 +169,7 @@ function auditEntry(id, entry, { samples = 41 } = {}) {
       row.swing = Math.max(...fr.map(f => angleLine(f.dir, far.dir)));
       const pl = pca(fr.map(f => f.end)), n = pl.axes[2];
       row.planeAng = Math.max(...moving.map(f => deg(Math.asin(Math.min(1, Math.abs(V.dot(V.unit(f.dir), n)))))));
-      row.frames = fr.map(f => ({ t: +f.t.toFixed(3), floor: +elev(f.dir).toFixed(1), move: V.len(f.v) > .25 * vmax ? +angleLine(f.dir, f.v).toFixed(1) : null, h: +(f.end[1] - f.A[1]).toFixed(1), len: +f.L.toFixed(1) }));
+      row.frames = fr.map(f => ({ t: +f.t.toFixed(3), floor: +elev(f.dir).toFixed(1), move: V.len(f.v) > LIM.moving * vmax ? +angleLine(f.dir, f.v).toFixed(1) : null, h: +(f.end[1] - f.A[1]).toFixed(1), len: +f.L.toFixed(1) }));
       row.flags = flagsOf(row);
       rows.push(row);
     }
