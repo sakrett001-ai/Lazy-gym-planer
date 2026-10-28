@@ -320,7 +320,7 @@ function GV_EQ(spec) {
   if (GV_EQS.has(spec)) return GV_EQS.get(spec);
   const m = GV_MACHINE(), link = GV_LINK(), A = EQ.anchors([m]).gv, info = A.stkstackInfo, st = A.stkstack;
   const tr = { type: 'g4camCable', id: 'gvCab', kind: 'block', pivot: [0, GV.P[1] + GV.d0[1], GV.P[2] + GV.d0[2]], anglePivot: GV.P, axis: [1, 0, 0], bind: link.bind,
-    at: [GV_RA, 0], wheel: GV_WHEEL, sense: 1, fork: GV_FORK, dead: rp(A.dead), mountTo: 'gvPad:xbar', lever: 'gvPad', anchorParts: ['gv:deadEnd'], kg: 100, kgSrc: 'Life Fitness Insignia Assist Dip Chin (тяжёлый стек)',
+    at: [GV_RA, 0], wheel: GV_WHEEL, sense: 1, fork: GV_FORK, dead: rp(A.dead), mountTo: 'gvPad:xbar', lever: 'gvPad', anchorParts: ['gv:deadEnd'], kg: 100, kgSrc: 'Life Fitness Insignia Assist Dip Chin (heavy stack)',
     route: [{ c: rp(A.p1), r: 5, s: -1, id: 'gv:p1' }, { c: rp(A.p2), r: 5, s: -1, id: 'gv:stkpulley' }], ratio: info.ratio, rodPart: 'gv:' + info.rod,
     stack: { o: rp(st.o), R: st.R.map(v => Math.round(v * 1e4) / 1e4), sel: info.sel, pitch: info.pitch, size: info.size, topY: r2(info.topY), maxLift: r1(info.maxLift) } };
   const poses = bakedPoses(spec, [m, link]);
