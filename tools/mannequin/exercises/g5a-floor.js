@@ -253,9 +253,46 @@ function pushLayout(o) {
   const palmsBy = G => S.reduce((o, s) => ({ ...o, [s]: [C.M.SIGN[s] * L.get('x', s), MAT, G['gh' + s][2] + L.get('ahead', s)] }), {});
   const palmAt = th => { let P = palmsBy(ghTop(th)); for (let k = 0; k < 2; k++) P = palmsBy(ghTop(th, P)); return P; };
   const reachTop = th => { const P = palmAt(th), G = ghTop(th, P); return Math.max(...S.filter(s => L.slide?.s !== s).map(s => V.dist(G['gh' + s], palmWrist(C, s, P[s], L.fingers(s), [0, 1, 0])) - armSpan(C, L.get('elTop', s)))); };
-  L.thTop = C.unhinted(() => C.solve1D(reachTop, 5, 60));
-  L.palms = C.unhinted(() => palmAt(L.thTop));
-  L.thBot = C.solve1D(th => lowest(C, L.body(C, th, 1), 'chest') - L.low, -15, L.thTop);
+  if (L.get('tilt', 'L') == null && L.get('tilt', 'R') == null) {
+    L.thTop = C.unhinted(() => C.solve1D(reachTop, 5, 60));
+    L.palms = C.unhinted(() => palmAt(L.thTop));
+    L.thBot = C.solve1D(th => lowest(C, L.body(C, th, 1), 'chest') - L.low, -15, L.thTop);
+    return L;
+  }
+  /* Раскладка от нижней точки (tilt — наклон предплечья внизу от вертикали, град). Внизу предплечье стоит почти вертикально,
+     локоть над кистью: так в отжиманиях ставят руки (ACE, NSCA; «предплечья под локтями» — Contreras, Ethier). Локоть
+     отклонён на tilt назад против пальцев: при ладони на полу отведение запястья — угол между пальцами и линией «локоть →
+     кисть» сверху (Mannequin.jointAngles), вдоль пальцев оно нулевое, а разгибание запястья — 90° − tilt (ладонь на опоре
+     разгибается пассивно до 90°, валидатор). Ладонь ставится там, где такой локоть внизу — на длине плеча от плечевого
+     сустава (сустав — при поставленной руке: ритм пояса); полюс локтя внизу — к нему. Сторона без tilt («лучник»: скользящая
+     рука) — по ahead от сустава вверху, как прежде. Вверху тело поднято до elTop. */
+  const Y = [0, 1, 0];
+  L.thBot = C.solve1D(th => lowest(C, L.body(C, th, 1), 'chest') - L.low, -15, 60);
+  const qb = C.unhinted(() => L.body(C, L.thBot, 1)), axB = V.scale(proneAxes(L.thBot).up, -1);
+  const bottomArm = (s, z) => {
+    const F = L.fingers(s), P = [C.M.SIGN[s] * L.get('x', s), MAT, z], W = palmWrist(C, s, P, F, Y), a = L.get('tilt', s) * C.D2R;
+    const E = V.add(W, V.add(V.scale(F, -Math.sin(a)), Y, Math.cos(a)), C.M.B.fa);
+    let gh = C.fk(qb).P['gh' + s];
+    for (let k = 0; k < 3; k++) gh = C.ghToward(qb, s, W, V.unit(V.perp(V.sub(E, gh), V.unit(V.sub(W, gh)))));
+    return { P, W, E, gh };
+  };
+  const det = (x, y, z) => V.dot(x, V.cross(y, z));
+  L.palms = {};
+  for (const s of S.filter(s => L.get('tilt', s) != null)) {
+    const g = C.fk(qb).P['gh' + s][2], z = C.unhinted(() => C.solve1D(z => C.M.B.ua - V.dist(bottomArm(s, z).gh, bottomArm(s, z).E), g - 45, g + 5));
+    const b = C.unhinted(() => bottomArm(s, z)), pv = V.unit(V.perp(V.sub(b.E, b.gh), V.unit(V.sub(b.W, b.gh)))), lat = C.lat(qb, s), D = det(lat, Y, axB);
+    L.palms[s] = b.P; L['bottom' + s] = b;
+    /* полюс внизу в базисе позы [наружу, вверх, к стопам] (pushPose) */
+    L['pole1' + s] = [det(pv, Y, axB) / D, det(lat, pv, axB) / D, det(lat, Y, pv) / D];
+  }
+  for (const s of S.filter(s => L.get('tilt', s) == null)) { const P = C.unhinted(() => palmAt(C.solve1D(reachTop, 5, 60))); L.palms[s] = P[s]; }
+  const reachFixed = th => { const G = ghTop(th, L.palms); return Math.max(...S.filter(s => L.slide?.s !== s).map(s => V.dist(G['gh' + s], palmWrist(C, s, L.palms[s], L.fingers(s), Y)) - armSpan(C, L.get('elTop', s)))); };
+  L.thTop = C.unhinted(() => C.solve1D(reachFixed, 5, 60));
+  /* ладонь на ребре (roll) приподнимает запястье: угол тела вверху — по локтю готовой позы */
+  if (L.roll) {
+    const th0 = L.thTop, bend = th => { L.thTop = th; try { const q = pushPose(C, L, 0); return Math.max(...S.filter(s => L.slide?.s !== s).map(s => q[s].elbow)) - L.get('elTop', 'L'); } catch (e) { return -L.get('elTop', 'L'); } };
+    L.thTop = C.unhinted(() => C.solve1D(bend, th0 + 6, th0 - 4));
+  }
   return L;
 }
 /* Поза отжимания: e — 0 верх, 1 низ.
@@ -271,7 +308,18 @@ function pushPose(C, L, e) {
       const x = C.solve1D(x => V.dist(gh, palmWrist(C, s, at(x), L.fingers(s), [0, 1, 0])) - armSpan(C, L.slide.el), Math.abs(palm[0]) - 5, Math.abs(palm[0]) + 60);
       palm = at(x);
     }
-    C.palm(q, s, palm, L.fingers(s), [0, 1, 0], pole);
+    /* с ладонью на ребре плоская ладонь — только начальное приближение (она ниже, рука может до неё не дотянуться) */
+    try { C.palm(q, s, palm, L.fingers(s), [0, 1, 0], pole); } catch (err) { if (!L.roll) throw err; }
+    if (L.roll) {
+      /* ладонь чуть заваливается на ребро вслед за боковым наклоном предплечья (доля L.roll, не больше rollMax°) */
+      const F = L.fingers(s), Y = [0, 1, 0];
+      for (let k = 0; k < 3; k++) {
+        const f = C.fk(q), a = V.unit(V.sub(f.P['el' + s], f.P['wr' + s])), side = V.cross(F, Y), lean = Math.asin(Math.max(-1, Math.min(1, V.dot(a, side))));
+        const rho = Math.max(-L.rollMax, Math.min(L.rollMax, L.roll * lean * 180 / Math.PI)) * C.D2R;
+        const n = V.add(V.scale(Y, Math.cos(rho)), side, Math.sin(rho)), lift = C.M.B.palm.width / 2 * Math.abs(Math.sin(rho));
+        C.palm(q, s, V.add(palm, Y, lift), F, n, pole);
+      }
+    }
   }
   return q;
 }
