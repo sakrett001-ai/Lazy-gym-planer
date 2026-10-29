@@ -224,6 +224,8 @@ export function createVolumeFigure(options){
   const cam=o?o.cam:cameras[v.camera];
   if(!copy)renderer.render(scene.scene,cam);
   else{
+   /* контекст WebGL потерян: холст ракурса хранит прежнюю картинку (кадр — после webglcontextrestored) */
+   if(renderer.getContext?.()?.isContextLost?.())return;
    renderer.setViewport(0,0,v.w,v.h);renderer.setScissor(0,0,v.w,v.h);renderer.setScissorTest(true);
    try{renderer.render(scene.scene,cam);}finally{renderer.setScissorTest(false);}
    const c=v.canvas;if(v.ctx&&c.width&&c.height)v.ctx.drawImage(canvas,0,canvas.height-c.height,c.width,c.height,0,0,c.width,c.height);
