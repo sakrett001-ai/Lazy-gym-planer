@@ -292,3 +292,21 @@ test('a prewarmed renderer: compiled ahead, lent to the first figure, its materi
   assert(released>0,'warm materials released after the first frame');
  }finally{figure?.dispose();r.dom.window.close();delete globalThis.Skeleton;}
 });
+/* Рамка нового упражнения (13 положений повторения) считается кадрами «только точки» (scene.apply, how.shape: без нормалей кожи
+   и областей мышц) — рамка та же до последнего знака: и ортографические рамки ракурсов, и рамка свободной камеры */
+test('the motion fit from shape-only frames equals the fit from full frames',async()=>{
+ const {createCatalogScene,CAMERA_SETTINGS}=await import('../src/volume/scene.mjs'),orbit=await import('../src/volume/orbit.mjs');
+ const dom=new JSDOM('<body></body>');globalThis.window=dom.window;globalThis.document=dom.window.document;
+ try{
+  const m=loadModel(),{catalogVolumeData,muscleColor}=m.get('({catalogVolumeData,muscleColor})'),VIEW={fov:orbit.PERSPECTIVE_FOV,pad:orbit.FRAME_PAD,settings:CAMERA_SETTINGS};
+  for(const id of ['frontraise','deadlift','latpull','pushup']){
+   const anim=m.EX.find(e=>e.id===id).anim,fits=[];
+   for(const shape of [false,true]){
+    const scene=createCatalogScene(catalogVolumeData(anim,0,0)),collect=orbit.frameCollector(CAMERA_SETTINGS,VIEW);
+    for(let i=0;i<=12;i++){scene.apply(catalogVolumeData(anim,i/12,0),{color:muscleColor},{shape});scene.includeBounds(undefined,collect.add);}
+    fits.push(JSON.stringify([scene.bounds,collect.data()]));scene.dispose();
+   }
+   assert.equal(fits[1],fits[0],id);
+  }
+ }finally{delete globalThis.window;delete globalThis.document;dom.window.close();}
+});
