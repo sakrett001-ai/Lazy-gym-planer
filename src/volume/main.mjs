@@ -468,9 +468,13 @@ function prewarm(options){
  const{renderer}=slot,layers=options.layers||null;let scene;
  try{
   scene=createCatalogScene(options.data(0,0,false,false));
-  /* без ключа позы: кадр заготовки не попадает в память кожи мышц по фазе — первый кадр разбора считается, как раньше, заново */
-  const d=options.data(options.t||0,0,false,!!layers);d.poseKey=null;
-  scene.apply(d,{color:options.color,selected:'all',muscles:options.muscles!==false,joints:!!options.joints,stress:options.stress!==false,skeleton:layers?.bones||null,anatomy:layers?.body||null});
+  /* без ключа позы: кадры заготовки не попадают в память кожи мышц по фазе — первый кадр разбора считается, как раньше, заново */
+  const look={color:options.color,selected:'all',muscles:options.muscles!==false,joints:!!options.joints,stress:options.stress!==false};
+  const frame=lean=>{const d=options.data(options.t||0,0,false,lean);d.poseKey=null;return d;};
+  /* вид «Анатомия» или «Скелет», а данные кожи Anny уже есть: сетка кожи строится тоже (скрыта) — её программы собираются вместе
+     с остальными, и переключение разбора на «Манекен» их не ждёт */
+  if(layers&&globalThis.AnnySkin?.data)scene.apply(frame(false),{...look,skeleton:null,anatomy:null});
+  scene.apply(frame(!!layers),{...look,skeleton:layers?.bones||null,anatomy:layers?.body||null});
   scene.studio?.(renderer);if(lowPower)scene.setShadows?.(false);
  }catch(e){dropRenderer(slot);return Promise.resolve(false);}
  const cam=scene.cameras.angle;scene.resize(1,1);renderer.setSize(1,1,false);
