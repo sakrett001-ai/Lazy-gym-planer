@@ -11796,6 +11796,8 @@ function createMotionFigure(anim,opts){
   const at=f.at;f.at=(t,frame)=>{at(t,frame);root.dataset.pose=String(t);root.dataset.phase=String(frame?.index||0);};
   const setJoints=show=>svg.classList.toggle('show-joints',!!show);f.setJoints=setJoints;setJoints(motionPrefs.joints);f.at(opts.t||0);
  }
+ /* свободная камера (разбор, экран тренировки): сцену можно повернуть, приблизить и сдвинуть жестами и клавишами */
+ if(f.orbit){f.svg.setAttribute('role','application');f.svg.setAttribute('aria-roledescription','объёмная сцена');f.svg.setAttribute('aria-description','Стрелки — повернуть, плюс и минус — приблизить, 0 — вернуть ракурс');}
  f.setTrace(motionPrefs.trace);f.setVectors(motionPrefs.vectors);return f;
 }
 function disposeMotion(F){F?.f?.dispose?.();F?.extra?.dispose?.();}
@@ -17210,7 +17212,7 @@ function mountDetailCameras(){
  const F=detailMotion,ex=F.it.ex,a=ex.anim,key=motionCamera(ex),cameras=a.catalogCameras||a.cameras||[];
  disposeMotion(F);
  const m=motionFrame(F),make=camera=>{
-  const f=createMotionFigure(a,{primary:ex.pri,has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera,muscles:motionPrefs.muscles});
+  const f=createMotionFigure(a,{primary:ex.pri,has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera,muscles:motionPrefs.muscles,interactive:true,onCamera:paintDetailCamera,onGesture:orbitGesture});
   f.svg.classList.toggle('show-joints',!!motionPrefs.joints);f.setTrace(!!motionPrefs.trace);f.setVectors(!!motionPrefs.vectors);return f;
  };
  F.f=make(key);$('#mv-stage').replaceChildren(F.f.svg);
@@ -17226,7 +17228,7 @@ function mountDetailCameras(){
   const other=pairCamera(a,key);F.extra=make(other);$('#mv-second-stage').replaceChildren(F.extra.svg);
   $('#mv-second-label').textContent=CAMERA3[other].label;$('#mv-second-hint').textContent=a.cameraHints?.[other]||'';
  }else $('#mv-second-stage').replaceChildren();
- configureMusclePanel('mv',F.it);configureStressPanel('mv',F);applyFigureView(F);paintMotion(F,true);
+ configureMusclePanel('mv',F.it);configureStressPanel('mv',F);applyFigureView(F);paintMotion(F,true);paintOrbitHint(F);
 }
 /* второй ракурс пары: из профиля мышц упражнения, иначе первый другой */
 function pairCamera(a,key){const cameras=a.catalogCameras||a.cameras||[],preferred=motionProfile(a)?.pair;return preferred!==key&&cameras.includes(preferred)?preferred:cameras.find(c=>c!==key);}
@@ -17234,23 +17236,55 @@ function pairCamera(a,key){const cameras=a.catalogCameras||a.cameras||[],preferr
    компьютере, втрое дольше на слабом телефоне). Плоская запасная схема и смена числа видов пересобирают окно. */
 function switchDetailCamera(){
  const F=detailMotion,a=F.it.ex.anim,key=motionCamera(F.it.ex),pair=(a.catalogCameras||a.cameras||[]).length>1&&!!motionPrefs.dual,other=pair?pairCamera(a,key):null;
- if(!F.f?.setCamera||(pair?!F.extra?.setCamera:!!F.extra)||!F.f.setCamera(key)||(pair&&!F.extra.setCamera(other)))return mountDetailCameras();
- pressCamera('#mv-cameras',key);
- $('#mv-view').textContent=CAMERA3[key]?.label||F.it.ex.viewNote||(a.view==='front'?'Вид спереди':'Вид сбоку');
+ /* второй ракурс пары, повёрнутый вручную, не сбрасывается, если его предустановка та же */
+ if(!F.f?.setCamera||(pair?!F.extra?.setCamera:!!F.extra)||!F.f.setCamera(key)||(pair&&F.extra.camera!==other&&!F.extra.setCamera(other)))return mountDetailCameras();
+ paintDetailCamera();
  $('#mv-camera-hint').textContent=a.cameraHints?.[key]||'';
- if(pair){$('#mv-second-label').textContent=CAMERA3[other].label;$('#mv-second-hint').textContent=a.cameraHints?.[other]||'';}
+ if(pair)$('#mv-second-hint').textContent=a.cameraHints?.[other]||'';
 }
 function switchWorkoutCamera(){
- const F=workout.motion,ex=F.it.ex,key=motionCamera(ex);
+ const F=workout.motion,key=motionCamera(F.it.ex);
  if(!F.f?.setCamera||!F.f.setCamera(key))return mountWorkoutCameras();
- pressCamera('#wv-cameras',key);$('#wv-angle').textContent=CAMERA3[key]?.label||(ex.anim.view==='front'?'Вид спереди':'Вид сбоку');
+ paintWorkoutCamera();
 }
-/* кнопки ракурсов не перерисовываются — фокус остаётся на нажатой */
+/* кнопки ракурсов не перерисовываются — фокус остаётся на нажатой; key = null — ни одна не нажата (свободный ракурс) */
 function pressCamera(sel,key){for(const b of $(sel).querySelectorAll('[data-motion-camera]'))b.setAttribute('aria-pressed',String(b.dataset.motionCamera===key));}
+/* Свободная камера сцены (src/volume/main.mjs, orbit.mjs): повернули вручную — подпись «Свободный ракурс», кнопки ракурсов
+   без нажатой; кнопка или двойное касание возвращают предустановку. Запоминается по-прежнему последняя нажатая кнопка
+   (motionPrefs.views): поворот её не меняет. Приближение и сдвиг без поворота ракурс не меняют. */
+const FREE_VIEW_LABEL='Свободный ракурс';
+function paintDetailCamera(){
+ const F=detailMotion;if(!F?.f)return;
+ const a=F.it.ex.anim,key=motionCamera(F.it.ex),free=!!F.f.free;
+ pressCamera('#mv-cameras',free?null:key);
+ $('#mv-view').textContent=free?FREE_VIEW_LABEL:CAMERA3[key]?.label||F.it.ex.viewNote||(a.view==='front'?'Вид спереди':'Вид сбоку');
+ if(F.extra?.orbit)$('#mv-second-label').textContent=F.extra.free?FREE_VIEW_LABEL:CAMERA3[F.extra.camera]?.label||'';
+}
+function paintWorkoutCamera(){
+ const F=workout?.motion;if(!F?.f)return;
+ const ex=F.it.ex,key=motionCamera(ex),free=!!F.f.free;
+ pressCamera('#wv-cameras',free?null:key);
+ $('#wv-angle').textContent=free?FREE_VIEW_LABEL:CAMERA3[key]?.label||(ex.anim.view==='front'?'Вид спереди':'Вид сбоку');
+}
+/* Подсказка под сценой разбора — одна строка, пока человек ни разу не повернул и не приблизил сцену (флаг в localStorage;
+   без хранилища — до конца сеанса). Первый жест на любой сцене её убирает. */
+const ORBIT_HINT_STORE='podhod.orbit-hint.v1';
+let orbitHintDone=null;
+function orbitHintSeen(){if(orbitHintDone===null){try{orbitHintDone=localStorage.getItem(ORBIT_HINT_STORE)==='1';}catch(e){orbitHintDone=false;}}return orbitHintDone;}
+function orbitGesture(){
+ if(orbitHintSeen())return;orbitHintDone=true;
+ try{localStorage.setItem(ORBIT_HINT_STORE,'1');}catch(e){}
+ const el=$('#mv-orbit-hint');if(el)el.hidden=true;
+}
+function paintOrbitHint(F){
+ const el=$('#mv-orbit-hint');if(!el)return;
+ const on=!!F?.f?.orbit&&!orbitHintSeen();el.hidden=!on;
+ if(on)el.textContent=coarsePointer()?'Потяните вбок — повернуть, щипок — приблизить':'Потяните — повернуть, колесо — приблизить, двойной щелчок — вернуть ракурс';
+}
 function mountWorkoutCameras(){
  if(!workout?.motion)return;
  const F=workout.motion,ex=F.it.ex,key=motionCamera(ex),m=motionFrame(F);
- disposeMotion(F);F.f=createMotionFigure(ex.anim,{has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera:key,muscles:motionPrefs.muscles,memoBones:true});F.f.setVectors(!!motionPrefs.vectors);
+ disposeMotion(F);F.f=createMotionFigure(ex.anim,{has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera:key,muscles:motionPrefs.muscles,memoBones:true,interactive:true,onCamera:paintWorkoutCamera,onGesture:orbitGesture});F.f.setVectors(!!motionPrefs.vectors);
  $('#wv-stage').replaceChildren(F.f.svg);$('#wv-cameras').innerHTML=cameraButtons(ex,key);$('#wv-cameras').hidden=!(ex.anim.catalogCameras||ex.anim.cameras);
  $('#wv-angle').textContent=CAMERA3[key]?.label||(ex.anim.view==='front'?'Вид спереди':'Вид сбоку');configureMusclePanel('wv',F.it);configureStressPanel('wv',F);workoutFigure.pace.settle();applyWorkoutView(F);paintWorkoutMotion();
 }
@@ -18351,4 +18385,4 @@ renderPlan();
 prefetchStressIds();
 logInit();
 
-window.PODHOD_VERSION='4.70.0';window.PODHOD_BUILD='4.70.0-c4cf035f9c29';window.PODHOD_LANG='ru';
+window.PODHOD_VERSION='4.71.0';window.PODHOD_BUILD='4.71.0-fa0b6e537518';window.PODHOD_LANG='ru';
