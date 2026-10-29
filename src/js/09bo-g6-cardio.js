@@ -7,6 +7,74 @@
   const { V, M3, D2R, toCat, dirCat } = M, { TYPES, BIND } = E;
   const lerp = (a, b, t) => a + (b - a) * t;
   const end = (a, b, k) => V.add(a, V.unit(V.sub(b, a)), k); /* точка на отрезке a→b в k см от a */
+  const toI = p => [p[0], M.FLOOR - p[1], p[2]], dI = d => [d[0], -d[1], d[2]];
+  /* степпер: ось параллельной тяги — на 14 см выше и на 2 см позади оси рычага (внутренние оси) */
+  const STEP_LINK = [0, 14, -2];
+  /* опорная точка под подушечкой стопы (M.footFrame: сустав «мяча» на 1,65 см над подошвой по нормали пальцев) */
+  const soleAt = (R, s) => V.add(toI(R['ball' + s]), dI(R.frames['toes' + s].y), M.B.toeSole);
+
+  /* ---------- Общие модели механизмов ----------
+     Один источник правды для спецификации и для отрисовки: спецификация ставит стопы и кисти на детали механизма при угле
+     кривошипа phi = 2π·t, BIND находит phi по стопам и рисует все детали из той же модели. Звенья жёсткие, шарниры
+     совпадают, ролик — на направляющей; стопа и кисть, которые отходят от детали между ключами позы, видны в аудите
+     (tools/mannequin/mech-audit.js) как проскальзывание, а не как растянутое звено. Внутренние координаты, см. */
+  const G6 = E.g6 = {};
+  const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+  /* угол кривошипа по стопам: грубый перебор и золотое сечение; err(phi) — невязка стоп против модели */
+  function fitPhase(err) {
+    let best = 0, be = Infinity;
+    for (let i = 0; i < 72; i++) { const a = i / 72 * 2 * Math.PI, v = err(a); if (v < be) { be = v; best = a; } }
+    let a = best - Math.PI / 36, b = best + Math.PI / 36; const k = (Math.sqrt(5) - 1) / 2;
+    let c = b - k * (b - a), d = a + k * (b - a), fc = err(c), fd = err(d);
+    for (let i = 0; i < 40; i++) { if (fc < fd) { b = d; d = c; fd = fc; c = b - k * (b - a); fc = err(c); } else { a = c; c = d; fc = fd; d = a + k * (b - a); fd = err(d); } }
+    return wrap((a + b) / 2);
+  }
+  G6.fitPhase = fitPhase;
+  /* Шатуны велотренажёра: ось [0, y, z], плечо rc; phi — угол левого шатуна от верхней точки к +Z, правый — на 180° дальше.
+     pin — центр оси педали; педаль поворачивается только вокруг своей оси (параллельной оси каретки). */
+  G6.crank = {
+    pin: (e, s, phi) => { const a = phi + (s === 'R' ? Math.PI : 0); return [(s === 'L' ? 1 : -1) * (e.pedalX ?? 13.6), e.axle[1] + e.rc * Math.cos(a), e.axle[2] + e.rc * Math.sin(a)]; },
+    /* угол по стопам: центр педали под подошвой — опора минус толщина педали над осью (top) по нормали подошвы */
+    phase: (e, R) => {
+      const P = s => V.add(soleAt(R, s), dI(R.frames['toes' + s].y), -(e.top ?? 1.2));
+      const err = phi => ['L', 'R'].reduce((sum, s) => { const p = P(s), q = G6.crank.pin(e, s, phi); return sum + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2; }, 0);
+      return fitPhase(err);
+    }
+  };
+  /* Эллипс (передний привод). Кривошип phi (0 — палец вверху, 90° — впереди); тяга педали длиной barLen от пальца шатуна
+     к ролику радиуса rollR на направляющей (центр ролика на высоте rollerY); педаль на кронштейне тяги: основание в frac
+     длины тяги от ролика, площадка на standoff по нормали тяги, повёрнута к тяге на delta. Рукоять качается на оси pivot;
+     нижний рычаг lever связан тягой длиной Lk с тягой педали в linkAt позади пальца (шарнирный четырёхзвенник). */
+  G6.ellipse = {
+    foot(e, s, phi) {
+      const g = s === 'L' ? 1 : -1, cp = [g * e.barX, e.axle[0] + e.rc * Math.cos(phi), e.axle[1] + e.rc * Math.sin(phi)];
+      const dy = cp[1] - e.rollerY, rr = [cp[0], e.rollerY, cp[2] - Math.sqrt(e.barLen ** 2 - dy * dy)];
+      const ub = [0, (cp[1] - rr[1]) / e.barLen, (cp[2] - rr[2]) / e.barLen], nb = [0, ub[2], -ub[1]], dl = e.delta * D2R;
+      const up = [0, nb[1] * Math.cos(dl) + ub[1] * Math.sin(dl), nb[2] * Math.cos(dl) + ub[2] * Math.sin(dl)];
+      const fw = [0, ub[1] * Math.cos(dl) - nb[1] * Math.sin(dl), ub[2] * Math.cos(dl) - nb[2] * Math.sin(dl)];
+      const pb = V.add(rr, V.sub(cp, rr), e.frac), pc = V.add(pb, nb, e.standoff);
+      const sole = V.add(pc, up, 1.3), ball = V.add(sole, fw, 10);
+      return { cp, rr, ub, nb, up, fw, pb, pc, sole, ball, link: [g * (e.barX + 2.3), cp[1] - ub[1] * e.linkAt, cp[2] - ub[2] * e.linkAt] };
+    },
+    handle(e, s, phi) {
+      const g = s === 'L' ? 1 : -1, H = [g * e.pivot[0], e.pivot[1], e.pivot[2]], c = G6.ellipse.foot(e, s, phi).link, Lk = e.Lk;
+      const dx = H[0] - c[0], k = Math.sqrt(Lk * Lk - dx * dx), d = Math.hypot(c[1] - H[1], c[2] - H[2]);
+      const a = (e.lever ** 2 - k * k + d * d) / (2 * d), h = Math.sqrt(Math.max(0, e.lever ** 2 - a * a));
+      const ey = (c[1] - H[1]) / d, ez = (c[2] - H[2]) / d, my = H[1] + a * ey, mz = H[2] + a * ez;
+      /* из двух решений — рычаг впереди линии ось — палец */
+      const E1 = [H[0], my - h * ez, mz + h * ey], E2 = [H[0], my + h * ez, mz - h * ey], Ee = E1[2] > E2[2] ? E1 : E2;
+      /* рукоять: от оси вверх-назад (upper), затем почти вертикальная ручка, повёрнутая на bend относительно рычага */
+      const n = Math.hypot(H[1] - Ee[1], H[2] - Ee[2]), u = [0, (H[1] - Ee[1]) / n, (H[2] - Ee[2]) / n], b = e.bend * D2R;
+      const w = [0, u[1] * Math.cos(b) - u[2] * Math.sin(b), u[2] * Math.cos(b) + u[1] * Math.sin(b)];
+      const K = V.add(H, u, e.upper);
+      return { H, E: Ee, K, u, w, c, G: V.add(K, w, e.grip) };
+    },
+    /* угол левого кривошипа по опорным точкам обеих стоп (правый — на 180° дальше) */
+    phase(e, R) {
+      const sL = soleAt(R, 'L'), sR = soleAt(R, 'R');
+      return fitPhase(phi => V.dist(G6.ellipse.foot(e, 'L', phi).ball, sL) ** 2 + V.dist(G6.ellipse.foot(e, 'R', phi + Math.PI).ball, sR) ** 2);
+    }
+  };
 
   /* ---------- Вертикальный велотренажёр ----------
      Начало координат — на полу под осью каретки, вперёд +Z. Параметры из раскладки позы:
@@ -57,16 +125,21 @@
     b.tube('consoleArm', V.add(pTop, [0, -2, 0]), [0, bar[1] + 6, bar[2] + 13], [3, 3], { mount: 'post' });
     b.anchor('axle', bb); b.anchor('saddleTop', [0, sad[0], sad[1]]);
   };
-  /* Шатуны велотренажёра: плечи шатунов в плоскостях x = ±armX, ось педали — к педали под подушечкой стопы */
+  /* Шатуны велотренажёра (G6.crank): угол — по стопам, шатуны жёсткие (плечо rc, 170–175 мм) и в противофазе, плечи
+     в плоскостях x = ±armX, ось педали — на пальце шатуна, педаль (центр на x = ±pedalX) поворачивается только вокруг
+     своей оси: её наклон — наклон подошвы в сагиттальной плоскости. Раньше педаль ставилась под стопу целиком (рамка
+     пальцев): плечо шатуна менялось на 0,7 см, шатуны расходились с противофазой на 5°, педаль поворачивалась вбок
+     до 13° вокруг косой оси пальцев, ось педали удлинялась на 0,75 см. */
   BIND.bikeCrank = (e, R) => {
-    const A = toCat(e.axle), id = e.id || 'crank', out = [], ax = e.armX || 8.2;
+    const id = e.id || 'crank', out = [], ax = e.armX || 8.2, phi = G6.crank.phase(e, R), A = [0, e.axle[1], e.axle[2]];
     for (const s of ['L', 'R']) {
-      const g = s === 'L' ? 1 : -1, t = R.frames['toes' + s], ped = V.add(R['ball' + s], t.y, M.B.toeSole - 1.3);
-      const a0 = [g * ax, A[1], A[2]], a1 = [g * ax, ped[1], ped[2]];
-      out.push({ kind: 'beam', a: a0, b: a1, w: 3.6, h: 1.8, up: [1, 0, 0], tone: 'chrome', role: 'linkage', id: id + ':arm' + s, mount: e.mountTo });
-      out.push({ kind: 'cyl', c: a0, axis: [1, 0, 0], r: 2.6, len: 1.8, tone: 'chrome', role: 'linkage', id: id + ':boss' + s, mount: id + ':arm' + s });
-      out.push({ kind: 'beam', a: [g * (ax + .9), ped[1], ped[2]], b: ped, r: .75, tone: 'chrome', role: 'linkage', id: id + ':spindle' + s, mount: id + ':arm' + s });
-      out.push({ kind: 'obox', c: ped, x: t.x, y: t.y, z: t.z, size: [10, 2.4, 9.5], round: .5, tone: 'rubber', role: 'pedal', id: id + ':pedal' + s, mount: id + ':spindle' + s });
+      const g = s === 'L' ? 1 : -1, pin = G6.crank.pin(e, s, phi), n = dI(R.frames['toes' + s].y), a = Math.atan2(n[2], n[1]);
+      const up = [0, Math.cos(a), Math.sin(a)], fw = [0, -Math.sin(a), Math.cos(a)], P = p => toCat(p), D = d => dirCat(d);
+      const a0 = [g * ax, A[1], A[2]], a1 = [g * ax, pin[1], pin[2]];
+      out.push({ kind: 'beam', a: P(a0), b: P(a1), w: 3.6, h: 1.8, up: [1, 0, 0], tone: 'chrome', role: 'linkage', id: id + ':arm' + s, mount: e.mountTo });
+      out.push({ kind: 'cyl', c: P(a0), axis: [1, 0, 0], r: 2.6, len: 1.8, tone: 'chrome', role: 'linkage', id: id + ':boss' + s, mount: id + ':arm' + s });
+      out.push({ kind: 'beam', a: P([g * (ax + .9), pin[1], pin[2]]), b: P(pin), r: .75, tone: 'chrome', role: 'linkage', id: id + ':spindle' + s, mount: id + ':arm' + s });
+      out.push({ kind: 'obox', c: P(pin), x: [1, 0, 0], y: D(up), z: D(fw), size: [10, 2 * (e.top ?? 1.2), 9.5], round: .5, tone: 'rubber', role: 'pedal', id: id + ':pedal' + s, mount: id + ':spindle' + s });
     }
     return out;
   };
@@ -203,38 +276,29 @@
     b.tube('fixedArm', colAt(fy), [0, fy, fz], [4, 4], { mount: 'column' });
     b.anchor('axle', A);
   };
-  /* Тяги эллипса по позе: педаль — под стопой, тяга от ролика на направляющей к пальцу шатуна, шатун на оси;
-     рукоять — от кисти через ось качания к нижнему рычагу и тяге к тяге педали. */
+  /* Тяги эллипса (G6.ellipse): угол кривошипа — по обеим стопам, детали — из модели при этом угле: шатун на оси, палец,
+     тяга педали от пальца к ролику на направляющей, кронштейн и педаль на тяге (поворачивается только вместе с тягой),
+     рукоять — рычаг на оси качания и тяга от его нижнего конца к тяге педали. Раньше всё ставилось по рамке пальцев стопы
+     и по кисти: плечо кривошипа менялось на 3,7 см, тяга рукояти — на 3,3, ролик уходил в направляющую на 1,7 см и вбок
+     на 3,5, педаль наклонялась вбок до 7°. */
   BIND.ellipticalLinks = (e, R) => {
-    const id = e.id || 'ell', out = [], toI = p => [p[0], M.FLOOR - p[1], p[2]], dI = d => [d[0], -d[1], d[2]];
-    const dl = (e.delta || 8) * D2R, A = [0, e.axle[0], e.axle[1]];
+    const id = e.id || 'ell', out = [], A = [0, e.axle[0], e.axle[1]], phi = G6.ellipse.phase(e, R), P = p => toCat(p), D = d => dirCat(V.unit(d)), side = [1, 0, 0];
     for (const s of ['L', 'R']) {
-      /* рамка пальцев стопы лежит на педали (пятка может слегка приподниматься в конце шага) */
-      const g = s === 'L' ? 1 : -1, f = R.frames['toes' + s], up = dI(f.y), fw = dI(f.z), side = dI(f.x);
-      const sole = V.add(V.add(toI(R['ball' + s]), up, -2), fw, -10);
-      const pc = V.add(sole, up, -1.3), ub = V.add(V.scale(fw, Math.cos(dl)), up, Math.sin(dl)), nb = V.add(V.scale(up, Math.cos(dl)), fw, -Math.sin(dl));
-      const pb = V.add(pc, nb, -e.standoff), cp = V.add(pb, ub, (1 - e.frac) * e.barLen), rr = V.add(pb, ub, -e.frac * e.barLen);
-      const P = p => toCat(p), D = d => dirCat(V.unit(d));
+      const g = s === 'L' ? 1 : -1, a = phi + (s === 'R' ? Math.PI : 0), f = G6.ellipse.foot(e, s, a), h = G6.ellipse.handle(e, s, a);
+      const { cp, rr, ub, nb, up, fw, pb, pc } = f;
       const ax = [g * e.armX, A[1], A[2]], pin = [g * e.armX, cp[1], cp[2]];
       out.push({ kind: 'beam', a: P(ax), b: P(pin), w: 4, h: 2, up: [1, 0, 0], tone: 'chrome', role: 'linkage', id: id + ':crank' + s, mount: e.mountTo });
       out.push({ kind: 'beam', a: P(V.add(pin, [g * 1, 0, 0])), b: P(cp), r: 1.2, tone: 'chrome', role: 'linkage', id: id + ':pin' + s, mount: id + ':crank' + s });
       out.push({ kind: 'beam', a: P(V.add(rr, ub, -3)), b: P(V.add(cp, ub, 3)), w: 4.5, h: 4, up: D(side), tone: 'frame', role: 'linkage', id: id + ':bar' + s, mount: id + ':pin' + s });
-      out.push({ kind: 'cyl', c: P(rr), axis: [1, 0, 0], r: 4, len: 3.4, tone: 'rubber', role: 'linkage', id: id + ':roller' + s, mount: id + ':bar' + s });
+      out.push({ kind: 'cyl', c: P(rr), axis: [1, 0, 0], r: e.rollR ?? 4, len: 3.4, tone: 'rubber', role: 'linkage', id: id + ':roller' + s, mount: id + ':bar' + s });
       out.push({ kind: 'beam', a: P(V.add(pb, nb, 1.5)), b: P(V.add(pc, nb, -1)), w: 6, h: 6, up: D(fw), tone: 'frame', role: 'linkage', id: id + ':bracket' + s, mount: id + ':bar' + s });
       out.push({ kind: 'obox', c: P(pc), x: D(side), y: D(up), z: D(fw), size: [15, 2.4, 36], round: .8, tone: 'rubber', role: 'pedal', id: id + ':pedal' + s, mount: id + ':bracket' + s });
       out.push({ kind: 'obox', c: P(V.add(V.add(pc, fw, -17.4), up, 2.4)), x: D(side), y: D(up), z: D(fw), size: [15, 3, 1.4], round: .4, tone: 'frame', role: 'pedal', id: id + ':heelStop' + s, mount: id + ':pedal' + s });
-      /* рукоять: положение рычага восстанавливается по кисти G и оси качания H (рукоять жёсткая: G − H
-         повёрнут относительно рычага на постоянный угол), ручка повёрнута относительно рычага на bend */
-      const H = [g * e.pivot[0], e.pivot[1], e.pivot[2]], G = toI(R['grip' + s]), bd = e.bend * D2R;
-      const ga = Math.atan2(e.grip * Math.sin(bd), e.upper + e.grip * Math.cos(bd)), vn = Math.hypot(G[1] - H[1], G[2] - H[2]), vy = (G[1] - H[1]) / vn, vz = (G[2] - H[2]) / vn;
-      const u = [0, vy * Math.cos(ga) + vz * Math.sin(ga), vz * Math.cos(ga) - vy * Math.sin(ga)];
-      const w = [0, u[1] * Math.cos(bd) - u[2] * Math.sin(bd), u[2] * Math.cos(bd) + u[1] * Math.sin(bd)];
-      const E = V.add(H, u, -e.lever), K = V.add(H, u, e.upper);
-      out.push({ kind: 'beam', a: P(E), b: P(K), r: 2, tone: 'frame', role: 'linkage', id: id + ':arm' + s, mount: e.mountHub + s });
+      const { E: Ee, K, w, G } = h;
+      out.push({ kind: 'beam', a: P(Ee), b: P(K), r: 2, tone: 'frame', role: 'linkage', id: id + ':arm' + s, mount: e.mountHub + s });
       out.push({ kind: 'beam', a: P(K), b: P(V.add(G, w, -7)), r: 2, tone: 'frame', role: 'linkage', id: id + ':upright' + s, mount: id + ':arm' + s });
       out.push({ kind: 'beam', a: P(V.add(G, w, -7)), b: P(V.add(G, w, 10)), r: 1.9, tone: 'rubber', role: 'grip', id: id + ':handle' + s, mount: id + ':upright' + s });
-      const lb = V.add(V.add(cp, ub, -e.linkAt), [g * 2.3, 0, 0]);
-      out.push({ kind: 'beam', a: P(E), b: P(lb), r: 1.3, tone: 'chrome', role: 'linkage', id: id + ':link' + s, mount: id + ':arm' + s });
+      out.push({ kind: 'beam', a: P(Ee), b: P(f.link), r: 1.3, tone: 'chrome', role: 'linkage', id: id + ':link' + s, mount: id + ':arm' + s });
     }
     return out;
   };
@@ -251,10 +315,13 @@
     for (const [k, z] of [['F', pv[2] + 18], ['R', zb + 4]]) for (const sx of [-1, 1]) b.box('cap' + k + (sx > 0 ? 'L' : 'R'), [sx * 35, 3.5, z], [3, 7, 9], { mount: 'stab' + k, tone: 'rubber', round: .8 });
     b.box('pivotBlock', [0, pv[1], pv[2] + 4], [12, 16, 14], { mount: 'base', round: 1.5 });
     b.cyl('pivotAxle', [0, pv[1], pv[2]], [1, 0, 0], 2, 2 * pv[0] + 8, { mount: 'pivotBlock', tone: 'chrome' });
-    b.cyl('linkAxle', [0, pv[1] + 14, pv[2] + 10 - (pv[1] + 6) * 16 / 134], [1, 0, 0], 1.4, 2 * pv[0] + 6, { mount: 'column', tone: 'chrome' });
+    /* ось параллельной тяги: смещена от оси рычага на STEP_LINK (тяга и рычаг — параллелограмм), держится на кронштейне
+       задней стенки стойки. Раньше ось стояла в стойке, на 9,4 см впереди конца тяги: тяга висела в воздухе. */
+    const la = V.add(pv, STEP_LINK), cB = [0, 8, pv[2] + 10], cT = [0, 142, pv[2] - 6], colZ = V.mix(cB, cT, (la[1] - cB[1]) / (cT[1] - cB[1]))[2];
+    b.box('linkBracket', [0, la[1], (la[2] - 2 + colZ) / 2], [8, 6, colZ - la[2] + 2], { mount: 'column', round: .8 });
+    b.cyl('linkAxle', [0, la[1], la[2]], [1, 0, 0], 1.4, 2 * pv[0] + 6, { mount: 'linkBracket', tone: 'chrome' });
     b.tube('dampBase', [-pv[0] - 4, 3.5, zb + 22], [pv[0] + 4, 3.5, zb + 22], [6, 7], { mount: 'base' });
     /* передняя стойка, консоль, поручни */
-    const cB = [0, 8, pv[2] + 10], cT = [0, 142, pv[2] - 6];
     b.tube('column', cB, cT, [10, 12], { mount: 'base' });
     const ca = 30 * D2R, cy = [0, Math.cos(ca), -Math.sin(ca)], cz = [0, Math.sin(ca), Math.cos(ca)];
     b.box('console', V.add(cT, [0, 6, -4]), [42, 22, 8], { axes: [[1, 0, 0], cy, cz], mount: 'column', round: 2 });
@@ -271,21 +338,29 @@
     }
     b.anchor('pivot', pv);
   };
-  /* Педали степпера: площадка под стопой (рамка пальцев), рычаг к оси, параллельная тяга, цилиндр-демпфер */
+  /* Педали степпера: площадка под стопой, рычаг к оси, стойка педали и параллельная тяга (параллелограмм: тяга — рычаг,
+     сдвинутый на STEP_LINK, поэтому стойка и площадка не поворачиваются), гидроцилиндр: корпус и шток постоянной длины,
+     шток уходит в корпус. Раньше неподвижный конец тяги висел в 9,4 см от оси на раме, тяга была на 2 см короче рычага,
+     а корпус и шток демпфера растягивались вместе с ходом. */
   BIND.stepPedals = (e, R) => {
-    const id = e.id || 'step', out = [], toI = p => [p[0], M.FLOOR - p[1], p[2]], dI = d => [d[0], -d[1], d[2]], P = p => toCat(p), D = d => dirCat(V.unit(d));
+    const id = e.id || 'step', out = [], P = p => toCat(p), D = d => dirCat(V.unit(d));
     for (const s of ['L', 'R']) {
-      const g = s === 'L' ? 1 : -1, f = R.frames['toes' + s], up = dI(f.y), fw = dI(f.z), side = dI(f.x);
-      const pc = V.add(V.add(V.add(toI(R['ball' + s]), up, -2), fw, -9), up, -1.4);
-      const pv = [g * e.pivot[0], e.pivot[1], e.pivot[2]], le = [pv[0], pc[1] - 6, pc[2] + 21], lt = V.add(le, [0, 14, 0]), la = [pv[0], pv[1] + 14, pv[2] - 2];
+      /* угол рычага — по высоте подошвы на педали (верх площадки на 1,4 см над её центром), рычаг длиной lever от оси,
+         конец рычага на 6 см ниже и 21 см впереди центра площадки; площадка горизонтальна и смотрит вперёд (параллелограмм) */
+      const g = s === 'L' ? 1 : -1, h = soleAt(R, s)[1] - 1.4, pv = [g * e.pivot[0], e.pivot[1], e.pivot[2]];
+      const le = [pv[0], h - 6, pv[2] - Math.sqrt(Math.max(0, e.lever ** 2 - (h - 6 - pv[1]) ** 2))], pc = [pv[0], h, le[2] - 21];
+      const lt = V.add(le, STEP_LINK), la = V.add(pv, STEP_LINK), up = [0, 1, 0], fw = [0, 0, 1], side = [1, 0, 0];
       out.push({ kind: 'obox', c: P(pc), x: D(side), y: D(up), z: D(fw), size: [17, 2.8, 36], round: .8, tone: 'rubber', role: 'pedal', id: id + ':pedal' + s, mount: id + ':bracket' + s });
       out.push({ kind: 'obox', c: P(V.add(V.add(pc, up, -2.8), [0, 0, 4])), x: [1, 0, 0], y: [0, -1, 0], z: [0, 0, 1], size: [12, 3, 38], round: .6, tone: 'frame', role: 'linkage', id: id + ':bracket' + s, mount: id + ':post' + s });
-      out.push({ kind: 'beam', a: P(V.add(le, [0, -2, 0])), b: P(V.add(lt, [0, 2, 0])), w: 4, h: 4, up: [0, 0, 1], tone: 'frame', role: 'linkage', id: id + ':post' + s, mount: id + ':lever' + s });
+      const pu = V.unit(STEP_LINK);
+      out.push({ kind: 'beam', a: P(V.add(le, pu, -2)), b: P(V.add(lt, pu, 2)), w: 4, h: 4, up: [0, 0, 1], tone: 'frame', role: 'linkage', id: id + ':post' + s, mount: id + ':lever' + s });
       out.push({ kind: 'beam', a: P(pv), b: P(le), w: 5, h: 4, up: [1, 0, 0], tone: 'frame', role: 'linkage', id: id + ':lever' + s, mount: e.mountTo });
-      out.push({ kind: 'beam', a: P(la), b: P(lt), r: 1.1, tone: 'chrome', role: 'linkage', id: id + ':link' + s, mount: id + ':post' + s });
-      const db = [pv[0], 7, e.dampZ], dt = V.mix(pv, le, .55), dm = V.mix(db, dt, .55);
-      out.push({ kind: 'beam', a: P(db), b: P(dm), r: 2.3, tone: 'stack', role: 'linkage', id: id + ':damper' + s, mount: e.mountDamp });
-      out.push({ kind: 'beam', a: P(V.add(dm, V.unit(V.sub(dm, db)), -2)), b: P(V.add(dt, [0, -2, 0])), r: 1, tone: 'chrome', role: 'linkage', id: id + ':rod' + s, mount: id + ':damper' + s });
+      out.push({ kind: 'beam', a: P(la), b: P(lt), r: 1.1, tone: 'chrome', role: 'linkage', id: id + ':link' + s, mount: e.mountLink || id + ':post' + s });
+      /* гидроцилиндр между опорой на основании (db) и проушиной на рычаге (dt): корпус 48 см, шток 44 см (при ходе педали
+         расстояние между опорами 87,5…89 см — шток всегда в корпусе) */
+      const db = [pv[0], 7, e.dampZ], dt = V.add(V.mix(pv, le, .55), [0, -2, 0]), u = V.unit(V.sub(dt, db)), Lb = e.damperBody ?? 48, Lr = e.damperRod ?? 44;
+      out.push({ kind: 'beam', a: P(db), b: P(V.add(db, u, Lb)), r: 2.3, tone: 'stack', role: 'linkage', id: id + ':damper' + s, mount: e.mountDamp });
+      out.push({ kind: 'beam', a: P(V.add(dt, u, -Lr)), b: P(dt), r: 1, tone: 'chrome', role: 'linkage', id: id + ':rod' + s, mount: id + ':damper' + s });
     }
     return out;
   };

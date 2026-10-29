@@ -98,12 +98,13 @@ function partOf(f, prop, P) {
   for (const p of cand) { const F = frameOf(p); if (!F) continue; const d = V.dist(F.o, P); if (d < bd) { bd = d; best = p; } }
   return best;
 }
-/* проскальзывание: точка тела в рамке детали за окно контакта */
+/* проскальзывание: точка тела в рамке детали за окно контакта. На коробке (педаль, сиденье, площадка, упор) — в плоскости
+   опоры (x, z): по нормали — зазор, его проверяет валидатор (контакты), а таз, наклоняясь, перекатывается по сиденью */
 function slipOf(fr, c) {
   const win = fr.filter(f => inWin(c, f.t)); if (win.length < 2) return null;
   const P0 = bodyPoint(win[0].R, c.body); if (!P0) return null;
   const part = partOf(win[0], c.prop, P0); if (!part) return null;
-  const pts = win.map(f => { const p = f.get(part.id), F = p && frameOf(p); return F ? local(F, bodyPoint(f.R, c.body)) : null; }).filter(Boolean);
+  const pts = win.map(f => { const p = f.get(part.id), F = p && frameOf(p); if (!F) return null; const q = local(F, bodyPoint(f.R, c.body)); return F.full && p.kind === 'obox' ? [q[0], q[2]] : q; }).filter(Boolean);
   let d = 0, at = win[0].t;
   pts.forEach((q, i) => { const x = Math.hypot(...q.map((v, k) => v - pts[0][k])); if (x > d) { d = x; at = win[i].t; } });
   return { body: c.body, part: part.id, dyn: !!part.dyn, d, at };
@@ -399,7 +400,10 @@ const AUDIT = { bikeCrank: auditCrank, ellipticalLinks: auditElliptical, stepPed
 function relevant(entry) { const eqs = EQ.variantEntry(entry).equipment || []; return eqs.some(e => AUDIT[e.type] || e.type === 'rowerChain' || e.type === 'treadmill'); }
 function auditEntry(id, entry, { samples = 41 } = {}) {
   if (!relevant(entry)) return [];
-  const { ev, fr } = sample(entry, samples), rows = [];
+  /* кадры и между ключами позы: при 40 ключах 41 кадр совпал бы с ключами, а стопа и кисть уходят с детали как раз между
+     ними (углы суставов интерполируются) — кадров не меньше 4 на промежуток между ключами */
+  const nk = (EQ.variantEntry(entry).keys || []).length;
+  const { ev, fr } = sample(entry, Math.max(samples, 4 * (nk - 1) + 1)), rows = [];
   for (const e of ev.equipment || []) if (AUDIT[e.type]) rows.push(AUDIT[e.type](id, ev, fr, e));
   if (eqOf(ev, 'rowerChain').length) rows.push(auditRower(id, ev, fr));
   if (eqOf(ev, 'treadmill').length) rows.push(auditTreadmill(id, ev, fr));

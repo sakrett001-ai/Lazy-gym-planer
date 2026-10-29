@@ -4,6 +4,8 @@
    Циклические движения — замкнутый цикл (loop: true), прыжки — dynamic: true,
    опора стоп в части цикла — контакты с when. */
 const { ctx } = require('../compose.js');
+/* общие модели механизмов кардиотренажёров (шатуны, эллипс) — те же, по которым рисуются детали */
+const G6 = require('../../../src/js/09bn-equipment.js').g6;
 const S = ['L', 'R'];
 const once = f => { let v; return () => v ?? (v = f()); };
 const TAU = 2 * Math.PI, D2R = Math.PI / 180;
@@ -45,6 +47,20 @@ function swingArm(C, q, s, a, { reach = 54.5, out = 8, pron = 0, mode = 'relaxed
   C.armTo(q, s, V.add(gh, dir, reach), pole, { pron, mode, wrist });
 }
 function ankleOf(C, s, ball, o) { return C.M.footFrame(ball, 0, footOpts(s, o)).o; }
+/* стопа на подвижной детали (педаль): опора под подушечкой — точно в точке support. Решение ноги не всегда выходит на
+   заданный разворот стопы (вращение бедра и голеностоп ограничены), и тогда подушечка уходит вбок от цели — на велотренажёре
+   до 2,7 см, и сдвигается по педали за оборот. Цель сдвигается на невязку, пока подошва не встанет в support. */
+function footOn(C, q, s, support, pole, opts, iters = 4) {
+  const { V, M } = C;
+  let at = support;
+  for (let k = 0; k < iters; k++) {
+    C.foot(q, s, at, 0, pole, opts);
+    const f = C.fk(q), sole = V.add(f.P['ball' + s], M.M3.col(f.F['toes' + s].R, 1), M.B.toeSole), d = V.sub(support, sole);
+    if (V.len(d) < .02) break;
+    at = V.add(at, d);
+  }
+  return q;
+}
 /* высота таза, при которой колено стороны s согнуто на k при данной постановке стопы (таз горизонтален) */
 function hipYFor(C, s, ball, o, k, rootXZ = [0, 0], tiltX = 0) {
   const an = ankleOf(C, s, ball, o), hx = rootXZ[0] + sgn(s) * C.M.B.hipHalf * Math.cos(tiltX * D2R), d = legSpan(C.M, k);
@@ -224,12 +240,20 @@ function burpeePose(C, t) {
 }
 
 /* ---------- Вертикальный велотренажёр ---------- */
-const BIKE = { bbY: 30, rc: 17.5, footX: 13.6, pelvis: 18, lumbar: 12, thoracic: 12, hipZ: -17, kneeBottom: 31, barX: 22 };
-/* педаль: угол шатуна phi (0 — вверху, 90° — впереди); наклон стопы носком вниз 16…34°: в рабочей фазе пятка опущена */
+/* шатун 175 мм — в пределах 170–175 мм шатунов велотренажёров (Bowflex C6 — 170 мм, ряд Shimano — 165–175 мм) */
+const BIKE = { bbY: 30, rc: 17.5, pelvis: 18, lumbar: 12, thoracic: 12, hipZ: -17, kneeBottom: 31, barX: 22 };
+/* шатуны — общая модель с отрисовкой (09bo-g6-cardio.js, G6.crank): ось каретки, плечо, центр педали по x, толщина педали
+   над осью; опора стопы — верх педали над осью педали по нормали подошвы. Центр педали в 15,5 см от середины: торец шатуна
+   9,1 см и ось педали 6,4 см. Стопа стоит по центру педали; ближе к шатуну (13,6 см, как было задано прежде) голень
+   в нижней точке задевает шатун на 0,8–1,2 см — прежде стопа и не вставала туда: решение ноги уводило подушечку
+   на 2,7 см наружу. */
+const BIKE_CRANK = { axle: [0, BIKE.bbY, 0], rc: BIKE.rc, pedalX: 15.5, top: 1.2 };
+/* педаль: угол левого шатуна phi (0 — вверху, 90° — впереди), правый — на 180° дальше; наклон стопы носком вниз 16…34°:
+   в рабочей фазе пятка опущена */
 function bikePedal(s, phi) {
-  const a = (25 + 4 * Math.cos(phi) - 9 * Math.sin(phi)) * D2R, P = [sgn(s) * BIKE.footX, BIKE.bbY + BIKE.rc * Math.cos(phi), BIKE.rc * Math.sin(phi)];
+  const a0 = phi + (s === 'R' ? Math.PI : 0), a = (25 + 4 * Math.cos(a0) - 9 * Math.sin(a0)) * D2R, P = G6.crank.pin(BIKE_CRANK, s, phi);
   const up = [0, Math.cos(a), Math.sin(a)], fwd = [0, -Math.sin(a), Math.cos(a)];
-  return { support: [P[0], P[1] + 1.2 * up[1], P[2] + 1.2 * up[2]], o: { up, forward: fwd } };
+  return { support: [P[0], P[1] + BIKE_CRANK.top * up[1], P[2] + BIKE_CRANK.top * up[2]], o: { up, forward: fwd } };
 }
 function bikeBody(C, y) {
   const q = C.base(), a = BIKE.pelvis * D2R;
@@ -270,10 +294,13 @@ const runLayout = once(() => {
   const y = C.solve1D(y => V.dist(C.fk(runBody(C, (.4 * RUN.stance), y)).P.hipL, an) - legSpan(M, RUN.kneeMid), 90, 125);
   return { y };
 });
-/* маховая нога: голеностоп идёт по кривой от отрыва носка к постановке «под себя» */
+/* маховая нога: голеностоп идёт по кривой от отрыва носка к постановке «под себя». Перед постановкой стопа уже идёт назад
+   (возврат маховой ноги): голеностоп выносится на 4 см впереди точки постановки и опускается к ней сверху-спереди, и
+   в касании стопа движется вместе с лентой. Прежде голеностоп подходил сзади (из 5 см позади), стопа в касании ещё шла
+   вперёд навстречу ленте, и в первом промежутке опоры отходила от равномерного хода ленты на 0,6 см. */
 function runSwing(C, q, s, u, A0, A1, d0, d1) {
   const { V } = C, H = RUN.hipZ, g = sgn(s), x = g * RUN.footX + g * .4;
-  const pts = [A0, [x, RUN.belt + 36, H - 40], [x, RUN.belt + 44, H - 20], [x, RUN.belt + 34, H + 4], [x, RUN.belt + 17, H + 6], A1];
+  const pts = [A0, [x, RUN.belt + 36, H - 40], [x, RUN.belt + 44, H - 20], [x, RUN.belt + 34, H + 10], [x, RUN.belt + 15, H + 15], A1];
   const n = pts.length - 1, f = Math.min(n - 1e-9, u * n), i = Math.floor(f), w = f - i;
   const P = k => pts[Math.max(0, Math.min(n, k))];
   const cr = (p0, p1, p2, p3) => [0, 1, 2].map(j => .5 * (2 * p1[j] + (-p0[j] + p2[j]) * w + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * w * w + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * w * w * w));
@@ -357,35 +384,15 @@ function rowPose(C, t) {
 }
 
 /* ---------- Эллиптический тренажёр ---------- */
-const ELL = { axle: [42, 40], rc: 21, rollerY: 12, barLen: 128, frac: .3, standoff: 9, delta: 20, barX: 12, armX: 8.5, pivot: [19, 95, 0], lever: 60, upper: 30, grip: 12, bend: 52, linkAt: 30, lean: 4, kneeLow: 12 };
+/* Механизм — общая модель с отрисовкой (09bo-g6-cardio.js, G6.ellipse). Длина шага — 51 см (20″), как у коммерческих
+   эллипсов класса: Life Fitness Club Series+ — «20 in (51 cm)», Prime Front-Drive Elliptical (передний привод) — «20 inches».
+   Шаг — ход педали по горизонтали ≈ 2·rc, поэтому кривошип 25,5 см (было 21: шаг 42 см, 16,6″ — как у домашних
+   моделей); основание педали ближе к ролику (frac 0,24 вместо 0,3), чтобы подъём стопы за шаг остался прежним (≈15 см). */
+const ELL = { axle: [42, 40], rc: 25.5, rollerY: 12, rollR: 4, barLen: 128, frac: .24, standoff: 9, delta: 20, barX: 12, armX: 8.5, pivot: [19, 95, 0], lever: 60, upper: 30, grip: 12, bend: 52, linkAt: 30, lean: 4, kneeLow: 12 };
 /* шатун phi (0 — палец вверху, 90° — впереди) → палец, ролик, точка тяги, рамка педали и опора под подушечкой */
-function ellFoot(s, phi) {
-  const g = sgn(s), A = [0, ELL.axle[0], ELL.axle[1]], cp = [g * ELL.barX, A[1] + ELL.rc * Math.cos(phi), A[2] + ELL.rc * Math.sin(phi)];
-  const dy = cp[1] - ELL.rollerY, rr = [cp[0], ELL.rollerY, cp[2] - Math.sqrt(ELL.barLen ** 2 - dy * dy)];
-  const ub = [0, (cp[1] - rr[1]) / ELL.barLen, (cp[2] - rr[2]) / ELL.barLen], nb = [0, ub[2], -ub[1]], dl = ELL.delta * D2R;
-  const up = [0, nb[1] * Math.cos(dl) + ub[1] * Math.sin(dl), nb[2] * Math.cos(dl) + ub[2] * Math.sin(dl)];
-  const fw = [0, ub[1] * Math.cos(dl) - nb[1] * Math.sin(dl), ub[2] * Math.cos(dl) - nb[2] * Math.sin(dl)];
-  const pb = [cp[0], rr[1] + ELL.frac * (cp[1] - rr[1]), rr[2] + ELL.frac * (cp[2] - rr[2])];
-  const pc = [pb[0], pb[1] + nb[1] * ELL.standoff, pb[2] + nb[2] * ELL.standoff];
-  const sole = [pc[0], pc[1] + up[1] * 1.3, pc[2] + up[2] * 1.3], ball = [sole[0], sole[1] + fw[1] * 10, sole[2] + fw[2] * 10];
-  /* тяга рукояти крепится к тяге педали в linkAt см позади пальца шатуна */
-  return { cp, rr, ball, o: { up, forward: fw }, link: [g * (ELL.barX + 2.3), cp[1] - ub[1] * ELL.linkAt, cp[2] - ub[2] * ELL.linkAt] };
-}
-/* рукоять: качается на оси H; нижний рычаг (lever) связан тягой с тягой педали (шарнирный четырёхзвенник,
-   Lk — длина тяги в плоскости движения) */
-function ellHandle(s, phi, Lk) {
-  const g = sgn(s), H = [g * ELL.pivot[0], ELL.pivot[1], ELL.pivot[2]], c = ellFoot(s, phi).link;
-  const dx = H[0] - c[0], k = Math.sqrt(Lk * Lk - dx * dx), d = Math.hypot(c[1] - H[1], c[2] - H[2]);
-  const a = (ELL.lever ** 2 - k * k + d * d) / (2 * d), h = Math.sqrt(Math.max(0, ELL.lever ** 2 - a * a));
-  const ey = (c[1] - H[1]) / d, ez = (c[2] - H[2]) / d, my = H[1] + a * ey, mz = H[2] + a * ez;
-  /* из двух решений — рычаг впереди линии ось — палец */
-  const E = [H[0], my - h * ez, mz + h * ey], E2 = [H[0], my + h * ez, mz - h * ey], Ee = E[2] > E2[2] ? E : E2;
-  /* рукоять: от оси вверх-назад (upper), затем почти вертикальная ручка, повёрнутая на bend относительно рычага */
-  const n = Math.hypot(H[1] - Ee[1], H[2] - Ee[2]), u = [0, (H[1] - Ee[1]) / n, (H[2] - Ee[2]) / n], b = ELL.bend * D2R;
-  const w = [0, u[1] * Math.cos(b) - u[2] * Math.sin(b), u[2] * Math.cos(b) + u[1] * Math.sin(b)];
-  const K = [H[0], H[1] + u[1] * ELL.upper, H[2] + u[2] * ELL.upper];
-  return { G: [H[0], K[1] + w[1] * ELL.grip, K[2] + w[2] * ELL.grip], axis: w, H, E: Ee };
-}
+function ellFoot(s, phi) { const f = G6.ellipse.foot(ELL, s, phi); return { ...f, o: { up: f.up, forward: f.fw } }; }
+/* рукоять: качается на оси; нижний рычаг (lever) связан тягой длиной Lk с тягой педали (шарнирный четырёхзвенник) */
+function ellHandle(s, phi, Lk) { const h = G6.ellipse.handle({ ...ELL, Lk }, s, phi); return { ...h, axis: h.w }; }
 function ellBody(C, y, z) {
   const q = C.base(), a = ELL.lean * D2R;
   C.root(q, [0, y, z], [0, Math.cos(a), Math.sin(a)], [0, -Math.sin(a), Math.cos(a)]);
@@ -530,17 +537,19 @@ module.exports = {
      Седло выставлено так, что в нижней точке колено согнуто на ≈30°; корпус наклонён к рулю,
      руки на руле без упора, стопы на педалях подушечками. */
   bike: {
-    keys: keysN(16), loop: true,
+    /* 32 ключа на оборот: между ключами углы суставов интерполируются, и стопа отходит от педали на круге шатуна —
+       при 16 ключах до 0,7 см */
+    keys: keysN(32), loop: true,
     equipment: (() => { const L = bikeLayout(); return [{ type: 'uprightBike', id: 'bike', bbY: BIKE.bbY, saddle: L.saddle, bar: L.bar },
-      { type: 'bikeCrank', id: 'crank', axle: [0, BIKE.bbY, 0], armX: 8.2, mountTo: 'bike:axle' }]; })(),
+      { type: 'bikeCrank', id: 'crank', ...BIKE_CRANK, armX: 8.2, mountTo: 'bike:axle' }]; })(),
     contacts: [{ body: 'buttocks', prop: 'bike:saddle' }, { body: 'soleL', prop: 'crank:pedalL' }, { body: 'soleR', prop: 'crank:pedalR' },
       { body: 'gripL', prop: 'bike:bar' }, { body: 'gripR', prop: 'bike:bar' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
       const { V } = C, L = bikeLayout(), q = bikeBody(C, L.y);
       for (const s of S) {
-        const ped = bikePedal(s, TAU * t + (s === 'R' ? Math.PI : 0)), lat = C.latP(q, s);
-        C.foot(q, s, ped.support, 0, V.unit(V.add([0, .25, 1], lat, .18)), ped.o);
+        const ped = bikePedal(s, TAU * t), lat = C.latP(q, s);
+        footOn(C, q, s, ped.support, V.unit(V.add([0, .25, 1], lat, .18)), ped.o);
       }
       for (const s of S) {
         const g = sgn(s), lat = C.lat(q, s);
@@ -554,7 +563,9 @@ module.exports = {
      на середину стопы; опора 35% цикла (стопа уезжает назад вместе с лентой, затем отрыв с носка), далее мах;
      правая нога — в противофазе. Корпус почти вертикален, руки работают вдоль тела. */
   treadmill: {
-    keys: keysN(20), loop: true,
+    /* 40 ключей: опорная стопа едет назад вместе с лентой равномерно, а между ключами углы суставов интерполируются
+       и стопа уходит с равномерного хода — при 20 ключах до 1,1 см (скорость стопы 104…203 см за цикл при ленте 155) */
+    keys: keysN(40), loop: true,
     equipment: [{ type: 'treadmill', id: 'tm', deckH: RUN.belt }],
     contacts: [{ body: 'soleL', prop: 'tm:belt', when: [0, RUN.stance] }, { body: 'soleR', prop: 'tm:belt', when: [.5, .5 + RUN.stance] }],
     pose(t, C) { return runPose(C, t); }
@@ -579,11 +590,11 @@ module.exports = {
      Стопы целиком на педалях всё время, педали идут по эллипсу (вперёд вверху, назад внизу); рукояти связаны с
      шатунами: левая нога впереди — левая рука сзади. Корпус почти вертикален, вес на ногах, руки толкают и тянут. */
   elliptical: {
-    keys: keysN(16), loop: true,
+    keys: keysN(32), loop: true,
     equipment: (() => { const L = ellLayout(); return [
-      { type: 'elliptical', id: 'ell', axle: ELL.axle, pivot: ELL.pivot, trackY: ELL.rollerY - 4, trackZ: L.track, barX: ELL.barX },
-      { type: 'ellipticalLinks', id: 'link', axle: ELL.axle, barLen: ELL.barLen, frac: ELL.frac, standoff: ELL.standoff, delta: ELL.delta, armX: ELL.armX,
-        pivot: ELL.pivot, lever: ELL.lever, upper: ELL.upper, grip: ELL.grip, bend: ELL.bend, linkAt: ELL.linkAt, mountTo: 'ell:axle', mountHub: 'ell:hub' }]; })(),
+      { type: 'elliptical', id: 'ell', axle: ELL.axle, pivot: ELL.pivot, trackY: ELL.rollerY - ELL.rollR, trackZ: L.track, barX: ELL.barX },
+      { type: 'ellipticalLinks', id: 'link', ...Object.fromEntries(['axle', 'rc', 'rollerY', 'rollR', 'barLen', 'frac', 'standoff', 'delta', 'barX', 'armX', 'pivot', 'lever', 'upper', 'grip', 'bend', 'linkAt'].map(k => [k, ELL[k]])),
+        Lk: L.Lk, mountTo: 'ell:axle', mountHub: 'ell:hub' }]; })(),
     contacts: [{ body: 'soleL', prop: 'link:pedalL' }, { body: 'soleR', prop: 'link:pedalR' }, { body: 'gripL', prop: 'link:handleL' }, { body: 'gripR', prop: 'link:handleR' }],
     gripRadius: { L: 1.9, R: 1.9 },
     pose(t, C) {
@@ -592,12 +603,14 @@ module.exports = {
         /* стопа на педали; в заднем положении пятка чуть отрывается (тыльное сгибание стопы не больше 18°) */
         const f = ellFoot(s, TAU * t + (s === 'R' ? Math.PI : 0)), lat = C.latP(q, s), pole = V.unit(V.add([0, .1, 1], lat, .1));
         const put = h => { C.foot(q, s, f.ball, 0, pole, { ...f.o, heel: h }); return q[s].ankle[0] - 18; };
-        if (put(0) > 0) put(C.solve1D(put, 0, 40));
+        let heel = 0;
+        if (put(0) > 0) heel = C.solve1D(put, 0, 40);
+        footOn(C, q, s, f.ball, pole, { ...f.o, heel });
       }
       for (const s of S) {
         const h = ellHandle(s, TAU * t + (s === 'R' ? Math.PI : 0), L.Lk), lat = C.lat(q, s);
         /* кисть держит ручку, слегка поворачиваясь на ней (не более ≈12°): ось хвата — между ручкой и вертикалью */
-        C.grip(q, s, h.G, V.unit(V.add(h.axis, [0, 1, .35])), V.unit(V.add([0, -1, -.6], lat, .6)));
+        C.grip(q, s, h.G, V.unit(V.add(h.axis, [0, 1, .45])), V.unit(V.add([0, -1, -.6], lat, .6)));
       }
       return q;
     }
@@ -610,7 +623,7 @@ module.exports = {
     keys: keysN(16), loop: true,
     equipment: (() => { const L = stepLayout(); return [
       { type: 'stepper', id: 'stp', pivot: STEP.pivot, railY: L.railY, railX: STEP.railX, railZ: L.railZ },
-      { type: 'stepPedals', id: 'step', pivot: STEP.pivot, dampZ: L.railZ + 10, mountTo: 'stp:pivotAxle', mountDamp: 'stp:dampBase' }]; })(),
+      { type: 'stepPedals', id: 'step', pivot: STEP.pivot, lever: STEP.lever, dampZ: L.railZ + 10, mountTo: 'stp:pivotAxle', mountDamp: 'stp:dampBase', mountLink: 'stp:linkAxle' }]; })(),
     contacts: [{ body: 'soleL', prop: 'step:pedalL' }, { body: 'soleR', prop: 'step:pedalR' }, { body: 'gripL', prop: 'stp:railL' }, { body: 'gripR', prop: 'stp:railR' }],
     gripRadius: { L: 2, R: 2 },
     pose(t, C) {
