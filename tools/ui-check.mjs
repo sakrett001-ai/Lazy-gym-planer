@@ -552,6 +552,127 @@ await page.close();
   check(await a.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'план с подписью отката (390 px) без прокрутки вбок');
   await a.close();
 }
+/* Свободная камера сцены (src/volume/orbit.mjs, controls.mjs) — настоящая объёмная графика (программный WebGL):
+   компьютер — на воспроизведении перетаскивание поворачивает камеру, а фаза движения идёт дальше; подпись «Свободный
+   ракурс», кнопки ракурсов без нажатой; колесо приближает; кнопка ракурса плавно возвращает предустановку (при уменьшении
+   движения — сразу); двойной щелчок и клавиша 0 сбрасывают; стрелки поворачивают; подсказка под сценой уходит после
+   первого жеста и больше не показывается. Телефон (касания через CDP): палец вбок — поворот без листания, вверх — листание
+   без поворота, щипок — приближение, два пальца — сдвиг кадра, двойное касание — вернуть ракурс. Экран тренировки — та же
+   камера. Программная графика рисует медленно: проверки по состоянию камеры и фазе, а не по скорости кадров. */
+{
+  const d = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  d.on('pageerror', e => errors.push(String(e)));
+  await d.goto('file://' + file); await d.waitForTimeout(400);
+  await d.waitForFunction(() => window.GymVolume, null, { timeout: 30000 });
+  await d.evaluate(() => { localStorage.removeItem('podhod.orbit-hint.v1'); motionPrefs.view = 'mannequin'; motionPrefs.dual = false; motionPrefs.views = { latpull: 'above' }; openMotionItem(previewItem('latpull')); detailMotion.paused = false; });
+  await d.waitForFunction(() => document.querySelector('#mv-stage .volume-figure')?.dataset.renderer === 'webgl', null, { timeout: 60000 });
+  const cam = page => page.evaluate(() => { const F = detailMotion, s = F.f.cameraState(); return { ...s, label: $('#mv-view').textContent, pressed: [...document.querySelectorAll('#mv-cameras [aria-pressed="true"]')].map(b => b.dataset.motionCamera).join(), hint: $('#mv-orbit-hint').hidden ? '' : $('#mv-orbit-hint').textContent, clock: F.clock, pose: document.querySelector('#mv-stage .volume-figure').dataset.pose, scroll: $('#motion-view').scrollTop, views: motionPrefs.views.latpull }; });
+  const c0 = await cam(d);
+  check(c0.camera === 'above' && !c0.free && c0.pressed === 'above' && c0.label === 'Сверху под углом' && c0.zoom === 1, `свободная камера: разбор открывается в предустановке «Сверху под углом» (${c0.label}, ${c0.pressed})`);
+  check(/колесо — приблизить/.test(c0.hint), `компьютер: под сценой подсказка про колесо (${c0.hint})`);
+  check(await d.evaluate(() => { const r = document.querySelector('#mv-stage .volume-figure'); return r.tabIndex === 0 && r.getAttribute('role') === 'application' && getComputedStyle(r).touchAction === 'pan-y'; }), 'сцена фокусируема, роль — приложение, на касание — листание по вертикали');
+  const b = await d.locator('#mv-stage .volume-figure').boundingBox(), mx = b.x + b.width / 2, my = b.y + b.height / 2;
+  await d.mouse.move(mx, my); await d.mouse.down();
+  for (let i = 1; i <= 8; i++) { await d.mouse.move(mx + i * 14, my + i * 3); await d.waitForTimeout(40); }
+  await d.mouse.up(); await d.waitForTimeout(600);
+  const c1 = await cam(d);
+  check(Math.abs(c1.yaw - c0.yaw) > .3 && c1.free && c1.label === 'Свободный ракурс' && c1.pressed === '' && c1.views === 'above', `перетаскивание поворачивает камеру: подпись «${c1.label}», кнопки без нажатой, запомнен прежний ракурс`);
+  check(c1.clock > c0.clock && c1.pose !== c0.pose, `на воспроизведении фаза движения идёт дальше (часы ${Math.round(c0.clock)} → ${Math.round(c1.clock)} мс)`);
+  check(c1.hint === '' && await d.evaluate(() => localStorage.getItem('podhod.orbit-hint.v1') === '1'), 'после первого жеста подсказка исчезла и запомнена');
+  await d.mouse.move(mx, my - 40);
+  for (let i = 0; i < 5; i++) { await d.mouse.wheel(0, -120); await d.waitForTimeout(60); }
+  await d.waitForTimeout(300);
+  const c2 = await cam(d);
+  check(c2.zoom > 1.5 && c2.zoom <= 4 && c2.scroll === c1.scroll, `колесо приближает (×${c2.zoom.toFixed(2)}), страница не листается`);
+  /* кнопка ракурса — плавный переход к предустановке */
+  const mid = await d.evaluate(() => { document.querySelector('#mv-cameras [data-motion-camera="side"]').click(); return detailMotion.f.cameraState(); });
+  await d.waitForTimeout(900);
+  const c3 = await cam(d);
+  check(mid.moving && !c3.moving && c3.camera === 'side' && !c3.free && c3.zoom === 1 && c3.pressed === 'side' && c3.label === 'Сбоку' && c3.views === 'side', `кнопка «Сбоку» плавно переводит камеру в предустановку (переход шёл: ${mid.moving}; ${c3.label})`);
+  await d.evaluate(() => { const r = document.querySelector('#mv-stage .volume-figure'); r.focus(); });
+  await d.keyboard.press('ArrowRight'); await d.keyboard.press('ArrowRight'); await d.keyboard.press('+');
+  await d.waitForTimeout(500);
+  const c4 = await cam(d);
+  check(c4.free && Math.abs(c4.yaw - c3.yaw) > .4 && c4.zoom > 1.2, `клавиатура: стрелки поворачивают, «+» приближает (×${c4.zoom.toFixed(2)})`);
+  await d.keyboard.press('0'); await d.waitForTimeout(800);
+  const c5 = await cam(d);
+  check(!c5.free && c5.zoom === 1 && Math.abs(c5.yaw - c3.yaw) < 1e-9, 'клавиша 0 возвращает ракурс');
+  /* двойной щелчок: на паузе тоже перерисовывается */
+  await d.evaluate(() => { detailMotion.paused = true; });
+  await d.mouse.move(mx, my); await d.mouse.down(); for (let i = 1; i <= 5; i++) await d.mouse.move(mx - i * 15, my); await d.mouse.up();
+  await d.waitForTimeout(300);
+  /* программная графика рисует кадр за сотни миллисекунд: ждём простоя, потом жест — и первый кадр после него */
+  await d.waitForTimeout(1500);
+  const renders = await d.evaluate(() => new Promise(r => { const R = document.querySelector('#mv-stage canvas'), gl = R.getContext('webgl2'), f = gl.drawElements.bind(gl); let n = 0; gl.drawElements = (...a) => { n++; return f(...a); };
+    setTimeout(() => { const before = n; detailMotion.f.svg.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })); const end = performance.now() + 8000, wait = () => { if (n > before || performance.now() > end) { gl.drawElements = f; r({ idle: before, after: n }); } else setTimeout(wait, 50); }; wait(); }, 1200); }));
+  check(renders.idle === 0 && renders.after > 0, `на паузе без жеста кадр не перерисовывается, жест — перерисовывает (${renders.idle} → ${renders.after} вызовов отрисовки)`);
+  const c6 = await cam(d);
+  await d.mouse.dblclick(mx, my); await d.waitForTimeout(900);
+  const c7 = await cam(d);
+  check(c6.free && !c7.free && c7.camera === 'side' && c7.zoom === 1 && c7.pressed === 'side', 'двойной щелчок возвращает текущую предустановку');
+  /* уменьшение движения: переход сразу */
+  await d.emulateMedia({ reducedMotion: 'reduce' });
+  await d.click('#mv-cameras [data-motion-camera="front"]');
+  const c8 = await cam(d);
+  check(!c8.moving && c8.camera === 'front' && c8.label === 'Спереди', 'при уменьшении движения ракурс меняется сразу');
+  await d.emulateMedia({ reducedMotion: 'no-preference' });
+  /* подсказка больше не показывается; без WebGL-фигуры (схема) её нет */
+  await d.evaluate(() => selectMotion(previewItem('squat'))); await d.waitForTimeout(300);
+  check(await d.evaluate(() => $('#mv-orbit-hint').hidden), 'подсказка не возвращается при следующем разборе');
+  /* экран тренировки — та же камера */
+  await d.evaluate(() => { closeMotion(); S.mode = 'custom'; S.customs = [{ id: 'fc', name: 'Камера', items: [{ id: 'squat' }] }]; S.custom = 'fc'; ensureCustoms(S); openCustom('fc'); regen(); startWorkout('squat'); workout.motion.paused = true; });
+  await d.waitForFunction(() => document.querySelector('#wv-stage .volume-figure')?.dataset.orbit === '', null, { timeout: 60000 });
+  const wb = await d.locator('#wv-stage .volume-figure').boundingBox();
+  await d.mouse.move(wb.x + wb.width / 2, wb.y + wb.height / 2); await d.mouse.down(); for (let i = 1; i <= 6; i++) await d.mouse.move(wb.x + wb.width / 2 + i * 15, wb.y + wb.height / 2); await d.mouse.up();
+  await d.waitForTimeout(300);
+  const w1 = await d.evaluate(() => ({ free: workout.motion.f.free, label: $('#wv-angle').textContent, pressed: [...document.querySelectorAll('#wv-cameras [aria-pressed="true"]')].length }));
+  check(w1.free && w1.label === 'Свободный ракурс' && w1.pressed === 0, `экран тренировки: сцена поворачивается, подпись «${w1.label}»`);
+  await d.evaluate(() => closeWorkout());
+  await d.close();
+
+  /* телефон: настоящие касания (CDP) */
+  const pc = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const t = await pc.newPage();
+  t.on('pageerror', e => errors.push(String(e)));
+  await t.goto('file://' + file); await t.waitForTimeout(400);
+  await t.waitForFunction(() => window.GymVolume, null, { timeout: 30000 });
+  await t.evaluate(() => { localStorage.removeItem('podhod.orbit-hint.v1'); motionPrefs.view = 'mannequin'; motionPrefs.dual = false; motionPrefs.views = {}; openMotionItem(previewItem('latpull')); detailMotion.paused = false; });
+  await t.waitForFunction(() => document.querySelector('#mv-stage .volume-figure')?.dataset.renderer === 'webgl', null, { timeout: 60000 });
+  check(/щипок — приблизить/.test(await t.evaluate(() => $('#mv-orbit-hint').hidden ? '' : $('#mv-orbit-hint').textContent)), 'телефон: под сценой подсказка про касания');
+  const cdp = await pc.newCDPSession(t);
+  const touch = async (fingers, steps = 10) => {
+    const at = k => fingers.map(([x0, y0, x1, y1], id) => ({ x: x0 + (x1 - x0) * k, y: y0 + (y1 - y0) * k, id }));
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(0) });
+    for (let i = 1; i <= steps; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(i / steps) }); await t.waitForTimeout(16); }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await t.waitForTimeout(300);
+  };
+  const centre = async () => { const r = await t.locator('#mv-stage .volume-figure').boundingBox(); return [r.x + r.width / 2, r.y + r.height / 2]; };
+  let [x, y] = await centre();
+  const p0 = await cam(t);
+  await touch([[x - 80, y, x + 80, y + 8]]);
+  const p1 = await cam(t);
+  check(Math.abs(p1.yaw - p0.yaw) > .3 && p1.free && p1.scroll === p0.scroll && p1.clock > p0.clock, `телефон: палец вбок поворачивает сцену, страница стоит, движение идёт (листание ${p0.scroll} → ${p1.scroll})`);
+  await touch([[x, y + 60, x + 4, y - 140]]);
+  const p2 = await cam(t);
+  check(p2.scroll > p1.scroll + 40 && Math.abs(p2.yaw - p1.yaw) < 1e-9 && Math.abs(p2.pitch - p1.pitch) < 1e-9, `телефон: палец вверх листает разбор и не трогает камеру (листание ${p1.scroll} → ${p2.scroll})`);
+  await t.evaluate(() => { $('#motion-view').scrollTop = 0; }); await t.waitForTimeout(200);
+  [x, y] = await centre();
+  await touch([[x - 30, y, x - 95, y - 8], [x + 30, y, x + 95, y + 8]]);
+  const p3 = await cam(t);
+  check(p3.zoom > 1.6 && p3.scroll === 0, `телефон: щипок приближает (×${p3.zoom.toFixed(2)}) и не листает`);
+  await touch([[x - 40, y - 30, x - 40, y + 50], [x + 40, y - 30, x + 40, y + 50]]);
+  const p4 = await cam(t);
+  check(p4.oy > p3.oy + .02 && p4.scroll === 0 && Math.abs(p4.zoom - p3.zoom) < .05, 'телефон: два пальца сдвигают кадр и не листают');
+  await t.evaluate(() => { detailMotion.paused = true; }); await t.waitForTimeout(1500);
+  /* метки времени касаний — как у живого двойного касания (программная графика задерживает события) */
+  const t0 = Date.now() / 1000;
+  for (const [type, dt] of [['touchStart', 0], ['touchEnd', .05], ['touchStart', .16], ['touchEnd', .21]]) await cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 0 }], timestamp: t0 + dt });
+  await t.waitForTimeout(900);
+  const p5 = await cam(t);
+  check(!p5.free && p5.zoom === 1 && p5.pressed === 'above', 'телефон: двойное касание возвращает ракурс');
+  check(await t.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'телефон: разбор с подсказкой без прокрутки вбок');
+  await pc.close();
+}
 /* без WebGL — как раньше: карточки SVG, в тренировке плоская схема, виды с костями недоступны */
 {
   const n = await browser.newPage({ viewport: { width: 390, height: 844 } });
@@ -783,4 +904,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа (в «Анатомии» и «Манекене» — кадры из общего рендерера, кеш между сеансами, без WebGL — SVG), виды фигуры «Анатомия», «Скелет» и «Манекен» (кожа Anny в карточках и витрине, без её данных — SVG), анатомия в карточках плана и на экране тренировки (откат на манекен, без WebGL — SVG), первый экран и разбор на телефоне, карточка, журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования, панель замера скорости ?perf работают на телефоне и компьютере.');
+console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа (в «Анатомии» и «Манекене» — кадры из общего рендерера, кеш между сеансами, без WebGL — SVG), виды фигуры «Анатомия», «Скелет» и «Манекен» (кожа Anny в карточках и витрине, без её данных — SVG), анатомия в карточках плана и на экране тренировки (откат на манекен, без WebGL — SVG), свободная камера сцены (поворот на воспроизведении, колесо, кнопки ракурсов, двойной щелчок, клавиатура, касания на телефоне), первый экран и разбор на телефоне, карточка, журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования, панель замера скорости ?perf работают на телефоне и компьютере.');

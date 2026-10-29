@@ -8,7 +8,7 @@
    · клавиатура (сцена фокусируема): стрелки — поворот и наклон, +/− — приближение, 0 — вернуть ракурс.
    h: start() — жест начат (переход камеры останавливается), rotate(dx, dy) и pan(dx, dy) — в точках экрана,
    zoom(factor, x, y) — x, y от левого верхнего угла сцены, true — масштаб сменился; reset(), key(действие). */
-const SLOP=8,TAP_MS=300,TAP_GAP=350,TAP_DIST=30;
+const SLOP=8,TAP_MS=350,TAP_GAP=400,TAP_DIST=30;
 const KEYS={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down','+':'in','=':'in','-':'out','_':'out','0':'reset'};
 export function attachOrbit(el,h){
  const touches=new Map();let mode=null,mouse=null,pinch=null,lastTap=null,lastType='';

@@ -172,7 +172,8 @@ export function createVolumeFigure(options){
   reset:()=>{reset();try{options.onGesture?.();}catch(e){}},
   key(a){
    if(a==='reset'){reset();return;}
-   settle();const v=orbit.v,lim=limits(v),D=Math.PI/180;
+   /* шаг — от цели идущего перехода: частые нажатия и удержание клавиши складываются, а не теряются */
+   const v=orbit.go?orbit.go.to:orbit.v,lim=limits(v),D=Math.PI/180;
    const n=a==='left'||a==='right'?rotateView(v,(a==='left'?-1:1)*KEY_YAW*D,0,lim):a==='up'||a==='down'?rotateView(v,0,(a==='down'?1:-1)*KEY_PITCH*D,lim):zoomView(v,a==='in'?KEY_ZOOM:1/KEY_ZOOM,0,0,orbit.aspect,lim);
    if(sameView(n,v))return;orbit.user=true;glide(n,KEY_MS);try{options.onGesture?.();}catch(e){}
   }
