@@ -196,7 +196,8 @@ module.exports = {
           C.grip(q, s, V.add(bar, lat, 28), V.scale(lat, -1), pole, { allowShort });
         }
       };
-      /* t=0 «руки выпрямлены» (ExRx «Inverted Row»: «Return until arms are extended»; ACE «Inverted Row»): наклон тела — тот,
+      /* t=0 «руки выпрямлены» (Snarr R. L., Esco M. R. «Exercise Technique: Inverted Row», J. Aust. Strength Cond. 21(4), 2013:
+         «Arms should be fully extended», «until the arms are fully extended»; Bodybuilding.com «Inverted Row»): наклон тела — тот,
          при котором руки, поставленные к грифу с поясом по ритму, разогнуты до 8°. Прежде досягаемость мерилась от плечевого
          сустава при опущенных руках (61,8 см): с поднятой к грифу рукой сустав уходит за лопаткой к грифу, и внизу локти
          оставались согнуты на 46° */
