@@ -341,7 +341,7 @@ function auditSmith(id, ev, fr, e) {
   /* центр грифа по оси направляющих: отклонение от прямой по направляющей */
   row.barLine = Math.max(...bc.map(c => V.len(V.perp(V.sub(c, bc[0]), rd))));
   row.travel = spread(bc.map(c => V.dot(c, rd)));
-  row.hooks = fr[0].R.props.filter(p => p.id && p.id.startsWith(pre) && /hook/i.test(p.id)).length;
+  row.hooks = fr[0].R.props.filter(p => p.id && p.id.startsWith(pre) && /:hook[LR]$/.test(p.id)).length;
   row.slips = (ev.contacts || []).filter(c => c.prop === e.id).map(c => slipOf(fr, c));
   if (row.gripAxis > LIM.barAxis) row.flags.push(`хват в ${row.gripAxis.toFixed(2)} см от оси грифа`);
   if (row.barTilt > LIM.pedalAxis) row.flags.push(`гриф наклоняется до ${row.barTilt.toFixed(1)}°`);

@@ -100,15 +100,21 @@ TYPES.powerRack=(s,b)=>{
  if(s.hook){for(const x of [X,-X]){const k=x>0?'L':'R';b.box('hook'+k,[x,s.hook-2,zf-6],[5,4,6],{mount:'upF'+k,tone:'chrome'});b.box('hookLip'+k,[x,s.hook+1.5,zf-8.6],[5,5,1.2],{mount:'hook'+k,tone:'chrome'});}b.anchor('hook',[0,s.hook,zf-6]);}
  b.anchor('front',[0,0,zf]);
 };
-/* Машина Смита: направляющие вертикальны, гриф ходит вдоль них */
+/* упоры Смита: планка в z см позади оси направляющих, первый упор на высоте y0, шаг step, всего n */
+const SMITH_CATCH={z:5,y0:30,step:16,n:11};
+/* Машина Смита: направляющие вертикальны, гриф ходит вдоль них (вертикальный Смит, как Hammer Strength Plate-Loaded
+   Vertical Smith Machine — «zero-degree bar travel», 11 положений для грифа). За каждой направляющей — планка ловителей
+   с 11 упорами через 16 см (Life Fitness Smith Machine: 16 см между упорами); на них гриф вешается крюками (BIND.smithBar). */
 TYPES.smith=(s,b)=>{
  const X=s.halfWidth||62,H=s.height||228,Z=s.z||0,zb=Z+26;
- for(const x of [X,-X]){const k=x>0?'L':'R';
+ for(const x of [X,-X]){const k=x>0?'L':'R',sx=Math.sign(x);
   b.tube('rod'+k,[x,6,Z],[x,H-8,Z],1.6,{mount:'base'+k,tone:'chrome',role:'guide'});
   b.tube('up'+k,[x+Math.sign(x)*9,0,zb],[x+Math.sign(x)*9,H,zb],[7.5,7.5],{mount:'floor'});
   b.tube('base'+k,[x,3.75,Z-55],[x,3.75,zb+30],[7.5,7.5],{mount:'floor'});
   b.tube('rodTop'+k,[x,H-8,Z],[x+Math.sign(x)*9,H-8,zb],[5,5],{mount:'up'+k});
   b.tube('rodBase'+k,[x,6,Z-5],[x,6,Z+5],[6,6],{mount:'base'+k});
+  b.tube('catch'+k,[x,7.5,Z+SMITH_CATCH.z],[x,H-8,Z+SMITH_CATCH.z],[3,2],{mount:'base'+k,up:[0,0,1]});
+  for(let i=0;i<SMITH_CATCH.n;i++)b.cyl('peg'+k+i,[x-sx*2.4,SMITH_CATCH.y0+i*SMITH_CATCH.step,Z+SMITH_CATCH.z],[1,0,0],.9,3.6,{mount:'catch'+k,tone:'chrome'});
  }
  b.tube('top',[-X-9,H-3.75,zb],[X+9,H-3.75,zb],[7.5,7.5],{mount:'upL'});
  b.anchor('rodL',[X,0,Z]);b.anchor('rodR',[-X,0,Z]);
@@ -154,8 +160,15 @@ BIND.barbell=(e,R)=>{
 BIND.smithBar=(e,R)=>{
  const rodL=toCat(e.rodL),rodR=toCat(e.rodR),y=(R.gripL[1]+R.gripR[1])/2,c=[(rodL[0]+rodR[0])/2,y,(rodL[2]+rodR[2])/2],axis=V.unit(V.sub(rodL,rodR));
  const bar=barbellPart(c,axis,e.plates||[10],{id:e.id||'smithBar'});bar.free=false;bar.role='guided';bar.mount=(e.id||'smithBar')+':carL';bar.len=e.len||216;bar.inner=e.inner||69;
- const out=[bar];
- for(const[k,rod]of [['L',rodL],['R',rodR]])out.push({kind:'obox',c:[rod[0],y,rod[2]],x:[1,0,0],y:[0,-1,0],z:[0,0,1],size:[6,9,7],round:.8,tone:'frame',role:'carriage',id:(e.id||'smithBar')+':car'+k,mount:e.mountTo+':rod'+k});
+ const out=[bar],id=e.id||'smithBar';
+ for(const[k,rod]of [['L',rodL],['R',rodR]]){
+  out.push({kind:'obox',c:[rod[0],y,rod[2]],x:[1,0,0],y:[0,-1,0],z:[0,0,1],size:[6,9,7],round:.8,tone:'frame',role:'carriage',id:id+':car'+k,mount:e.mountTo+':rod'+k});
+  /* крюк грифа у каретки, напротив упоров планки ловителей (TYPES.smith): в рабочем положении смотрит вверх-вперёд и проходит
+     мимо упоров; повернув гриф назад, его вешают на ближайший упор */
+  const hx=rod[0]-Math.sign(rod[0])*4,top=[hx,y-6,rod[2]];
+  out.push({kind:'beam',a:[hx,y,rod[2]],b:top,w:3,h:1,up:[0,0,1],tone:'chrome',role:'frame',id:id+':hook'+k,mount:id});
+  out.push({kind:'beam',a:top,b:[hx,y-6.6,rod[2]-3],w:3,h:1,up:[0,-1,0],tone:'chrome',role:'frame',id:id+':hookLip'+k,mount:id+':hook'+k});
+ }
  return out;
 };
 BIND.dumbbell=(e,R)=>{
@@ -164,11 +177,22 @@ BIND.dumbbell=(e,R)=>{
 };
 /* Гантель на опоре (пол, скамья): c — центр рукояти во внутренних координатах */
 BIND.restingDumbbell=e=>[{...dumbbellPart(toCat(e.c),dirCat(V.unit(e.axis||[1,0,0])),{id:e.id||'dumbbellRest'}),mount:e.on||'floor'}];
-/* Рычаг «бабочки»: от оси вниз и наружу к рукояти в руке */
+/* Рычаг «бабочки»: жёсткий — плечо от вертикальной оси наружу, опуск вниз к рукояти, рукоять. Угол поворота — по кисти
+   (направление от оси к хвату по горизонтали), форма — постоянная: центр рукояти на радиусе radius и высоте gripY
+   (внутренние, см), рукоять вертикальна (tilt 90°) или идёт по касательной к дуге с наклоном внутрь-вниз на tilt градусов.
+   Прежде рукоять, опуск и плечо ставились по рамке кисти: опуск менялся на 1,3 см, плечо — на 0,2. */
 BIND.pecArm=(e,R)=>{
- const s=e.hand,pivot=toCat(e.pivot),grip=R['grip'+s],top=[pivot[0],pivot[1],pivot[2]];
- const hand=R.frames['hand'+s],hAxis=hand.z,handleHalf=9;
- const hTop=V.add(grip,hAxis,V.dot(hAxis,[0,-1,0])>0?handleHalf:-handleHalf),hBot=V.add(grip,hAxis,V.dot(hAxis,[0,-1,0])>0?-handleHalf:handleHalf);
+ const s=e.hand,pivot=toCat(e.pivot),grip=R['grip'+s],top=[pivot[0],pivot[1],pivot[2]],handleHalf=9;
+ let hTop,hBot;
+ if(e.radius){
+  const hx=grip[0]-pivot[0],hz=grip[2]-pivot[2],hl=Math.hypot(hx,hz)||1,u=[hx/hl,0,hz/hl],g=pivot[0]>=0?1:-1;
+  const c=[pivot[0]+u[0]*e.radius,e.gripY!=null?toCat([0,e.gripY,0])[1]:grip[1],pivot[2]+u[2]*e.radius];
+  const tl=(e.tilt??90)*D2R,tH=[-g*u[2],0,g*u[0]],ax=V.add(V.scale(tH,Math.cos(tl)),[0,1,0],Math.sin(tl)); /* +y каталога — вниз */
+  hTop=V.add(c,ax,-handleHalf);hBot=V.add(c,ax,handleHalf);
+ }else{
+  const hAxis=R.frames['hand'+s].z;
+  hTop=V.add(grip,hAxis,V.dot(hAxis,[0,-1,0])>0?handleHalf:-handleHalf);hBot=V.add(grip,hAxis,V.dot(hAxis,[0,-1,0])>0?-handleHalf:handleHalf);
+ }
  const elbow=[hTop[0],pivot[1],hTop[2]];
  const id=e.id||'pec'+s;
  return[

@@ -307,6 +307,9 @@ const GM = memo(t => {
 
 /* ---------- Приседания в машине Смита ---------- */
 const SMITH_PLATES = [[20, 3.4]];  /* «десятки» Ø40: диски проходят внутри рамы */
+/* жимы в Смите: 9 ключей — у почти прямых рук углы между ключами интерполируются, и кисти при 5 ключах уходили с оси грифа
+   (он ходит строго по направляющим) до 1,45 см на наклонной скамье и до 0,7 см на горизонтальной */
+const SMITH_KEYS = [0, .125, .25, .375, .5, .625, .75, .875, 1];
 const SSQ_ST = { ax: 15, az: 14, out: 12, kneeOut: 0 };
 const SSQ = memo(t => {
   const C = ctx([]), e = t;
@@ -703,7 +706,7 @@ module.exports = {
   /* Жим лёжа в машине Смита: гриф идёт по направляющим вертикально и опускается на нижнюю часть груди.
      t=0 — руки выпрямлены, t=1 — гриф у груди. */
   smithbench: {
-    keys: [0, .25, .5, .75, 1],
+    keys: SMITH_KEYS,
     equipment: (() => { const L = SBENCH(); return [{ type: 'flatBench', id: 'bench' }, { type: 'smith', id: 'smith', z: L.z, halfWidth: 62 },
       { type: 'smithBar', id: 'bar', rodL: [62, 0, L.z], rodR: [-62, 0, L.z], mountTo: 'smith', plates: SMITH_PLATES }]; })(),
     contacts: [{ body: 'back', prop: 'bench:pad' }, { body: 'headBack', prop: 'bench:pad' }, ...FEET, ...GRIPS('bar')],
@@ -790,7 +793,7 @@ module.exports = {
   /* Жим в машине Смита на наклонной скамье (спинка 30°): скамья стоит так, что гриф опускается на верх груди.
      t=0 — руки выпрямлены, t=1 — гриф у верха груди; гриф идёт по направляющим вертикально. */
   smithincline: {
-    keys: [0, .25, .5, .75, 1],
+    keys: SMITH_KEYS,
     equipment: (() => { const L = SINC(); return [SINC_BENCH, { type: 'smith', id: 'smith', z: L.z, halfWidth: 62 },
       { type: 'smithBar', id: 'bar', rodL: [62, 0, L.z], rodR: [-62, 0, L.z], mountTo: 'smith', plates: SMITH_PLATES }]; })(),
     contacts: [{ body: 'back', prop: 'bench:back' }, { body: 'buttocks', prop: 'bench:seat' }, ...FEET, ...GRIPS('bar')],
