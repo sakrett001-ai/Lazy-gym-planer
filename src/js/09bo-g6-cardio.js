@@ -231,14 +231,16 @@
       { kind: 'cyl', c: C(rt + 1.4, -7), axis: [1, 0, 0], r: 1.4, len: 12, tone: 'rubber', role: 'carriage', id: id + ':wheelB', mount: e.mountTo }
     ];
   };
-  /* Рукоять на цепи: прямая рукоять с резиновыми ручками под кистями, цепь от выхода корпуса к середине рукояти */
+  /* Рукоять на цепи: прямая рукоять постоянной ширины (жёсткая: 30 см между резиновыми ручками по 12 см — 54 см всего),
+     середина — между кистями, цепь от выхода корпуса к середине рукояти. Прежде рукоять тянулась за кистями: ширина
+     менялась на 0,8 см. */
   BIND.rowerChain = (e, R) => {
-    const id = e.id || 'chain', ex = toCat(e.exit), a = R.gripL, c = R.gripR, ax = V.unit(V.sub(a, c)), mid = V.mix(a, c, .5), ext = e.ext || 7;
-    const hook = V.add(mid, V.unit(V.sub(ex, mid)), 2.2);
+    const id = e.id || 'chain', ex = toCat(e.exit), a = R.gripL, c = R.gripR, ax = V.unit(V.sub(a, c)), mid = V.mix(a, c, .5), half = e.half || 15, grip = e.gripLen || 12;
+    const hook = V.add(mid, V.unit(V.sub(ex, mid)), 2.2), iL = V.add(mid, ax, half), iR = V.add(mid, ax, -half);
     return [
-      { kind: 'beam', a: V.add(a, ax, -5), b: V.add(c, ax, 5), r: 1.5, tone: 'chrome', role: 'frame', id: id + ':bar', mount: id + ':link' },
-      { kind: 'beam', a: V.add(a, ax, -5), b: V.add(a, ax, ext), r: 1.8, tone: 'rubber', role: 'grip', id: id + ':handleL', mount: id + ':bar' },
-      { kind: 'beam', a: V.add(c, ax, 5), b: V.add(c, ax, -ext), r: 1.8, tone: 'rubber', role: 'grip', id: id + ':handleR', mount: id + ':bar' },
+      { kind: 'beam', a: iL, b: iR, r: 1.5, tone: 'chrome', role: 'frame', id: id + ':bar', mount: id + ':link' },
+      { kind: 'beam', a: iL, b: V.add(iL, ax, grip), r: 1.8, tone: 'rubber', role: 'grip', id: id + ':handleL', mount: id + ':bar' },
+      { kind: 'beam', a: iR, b: V.add(iR, ax, -grip), r: 1.8, tone: 'rubber', role: 'grip', id: id + ':handleR', mount: id + ':bar' },
       { kind: 'beam', a: mid, b: hook, r: 1.1, tone: 'chrome', role: 'frame', id: id + ':link', mount: id + ':line' },
       { kind: 'cable', pts: [ex, hook], r: .6, tone: 'cable', role: 'cable', id: id + ':line', mount: e.mountTo }
     ];

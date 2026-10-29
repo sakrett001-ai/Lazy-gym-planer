@@ -321,11 +321,23 @@ BIND.kettlebell=(e,R)=>{
  const r=e.r||10.5,c=V.add(g,down,(e.drop||15)+(hands.length>1?2:0));
  return[{kind:'kettlebell',c,grip:g,axis,handleAxis:axis,radius:r,role:'free',tone:'plate',free:true,id:e.id||'kb',mount:'hands'}];
 };
-/* Ролик для пресса: ось проходит через хваты */
+/* Ролик для пресса: колесо Ø18 × 5 см между хватами, ось-рукоять постоянной длины (2·half, по умолчанию 32 см) по центру
+   между кистями. Колесо катится без проскальзывания: поворот вокруг оси × радиус = путь центра по полу, поэтому на боковинах
+   колеса — ступица и три спицы (первая — метка :mark для аудита), повёрнутые на путь/радиус. Прежде колесо было гладким
+   цилиндром (ехало 90 см не поворачиваясь), а ось тянулась за кистями (длина менялась на 0,8 см). */
 BIND.abWheel=(e,R)=>{
- const a=R.gripL,b=R.gripR,ax=V.unit(V.sub(a,b)),c=V.mix(a,b,.5),id=e.id||'wheel';
- return[{kind:'cyl',c,axis:ax,r:e.r||9,len:5,tone:'rubber',role:'free',free:true,id:id+':wheel',mount:'hands'},
-  {kind:'beam',a:V.add(a,ax,6),b:V.add(b,ax,-6),r:1.6,tone:'rubber',role:'grip',id:id+':axle',mount:id+':wheel'}];
+ const a=R.gripL,b=R.gripR,ax=V.unit(V.sub(a,b)),c=V.mix(a,b,.5),id=e.id||'wheel',r=e.r||9,half=e.half||16,w=e.width||5;
+ /* во внутренних осях (Y вверх): вперёд по полу — ось × вверх; поворот вокруг оси на путь/радиус; спица — вверх при пути 0 */
+ const axI=dirCat(ax),up=[0,1,0],fw=V.unit(V.cross(axI,up)),th=V.dot(toCat(c),fw)/r;
+ const out=[{kind:'cyl',c,axis:ax,r,len:w,tone:'rubber',role:'free',free:true,id:id+':wheel',mount:'hands'},
+  {kind:'beam',a:V.add(c,ax,half),b:V.add(c,ax,-half),r:1.6,tone:'rubber',role:'grip',id:id+':axle',mount:id+':wheel'}];
+ for(const sg of [1,-1]){
+  const f=V.add(c,ax,sg*(w/2+.15));
+  out.push({kind:'cyl',c:f,axis:ax,r:3.2,len:.6,tone:'chrome',role:'frame',id:id+':hub'+(sg>0?'L':'R'),mount:id+':wheel'});
+  for(let k=0;k<3;k++){const t=th+k*2*Math.PI/3,dI=V.add(V.scale(up,Math.cos(t)),fw,Math.sin(t)),d=dirCat(dI);
+   out.push({kind:'beam',a:V.add(f,d,3),b:V.add(f,d,r-1.4),w:1.4,h:.5,up:ax,tone:'frame',role:'frame',id:id+(sg>0&&!k?':mark':':spoke'+(sg>0?'L':'R')+k),mount:id+':hub'+(sg>0?'L':'R')});}
+ }
+ return out;
 };
 /* Шатуны велотренажёра: педали под подушечками стоп */
 BIND.crank=(e,R)=>{

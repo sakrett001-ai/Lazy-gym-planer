@@ -374,17 +374,16 @@ function auditWheel(id, ev, fr, e) {
   const mat = eqOf(ev, 'mat')[0], top = mat ? (mat.at?.[1] || 0) + 1 : 0;
   const w = fr.map(f => f.get(pre + 'wheel')), c = w.map(p => I(p.c)), ax = w.map(p => V.unit(Id(p.axis)));
   row.gap = range(c.map(p => p[1] - r - top)); row.tilt = Math.max(...ax.map(a => Math.asin(Math.min(1, Math.abs(a[1]))) * DEG));
-  /* путь — по горизонтали поперёк оси; поворот — по метке колеса (деталь :mark, направление от центра) */
-  const dir = V.unit(V.cross([0, 1, 0], ax[0])), s = c.map(p => V.dot(V.sub(p, c[0]), dir));
+  /* путь — по полу поперёк оси (вперёд = ось × вверх); поворот — по метке колеса (деталь :mark, направление от центра).
+     Колесо катится вперёд, нижняя точка неподвижна: поворот вокруг оси (правая тройка) на +путь/радиус */
+  const dir = V.unit(V.cross(ax[0], [0, 1, 0])), s = c.map(p => V.dot(V.sub(p, c[0]), dir));
   row.path = spread(s);
   const mk = fr.map(f => f.get(pre + 'mark'));
   if (mk.every(Boolean)) {
     const m = mk.map((p, i) => V.unit(V.perp(V.sub(I(p.c || p.b), c[i]), ax[i])));
     let th = 0; const turn = [0];
     for (let i = 1; i < m.length; i++) { th += Math.atan2(V.dot(V.cross(m[i - 1], m[i]), ax[i]), V.dot(m[i - 1], m[i])); turn.push(th); }
-    /* знак: колесо катится вперёд, низ колеса неподвижен — поворот вокруг оси на −s/r в правой тройке (ось, вверх, вперёд) */
-    const k = Math.sign(V.dot(V.cross(ax[0], [0, 1, 0]), dir)) || 1;
-    row.roll = Math.max(...turn.map((a, i) => Math.abs(a * r * k + s[i])));
+    row.roll = Math.max(...turn.map((a, i) => Math.abs(a * r - s[i])));
     if (row.roll > LIM.roll) row.flags.push(`колесо проскальзывает: поворот × радиус расходится с путём на ${row.roll.toFixed(2)} см (путь ${row.path.toFixed(1)} см)`);
   } else { row.roll = null; row.flags.push(`вращение колеса не изображено (нет метки): колесо едет ${row.path.toFixed(0)} см, не поворачиваясь`); }
   if (Math.max(-row.gap[0], row.gap[1]) > LIM.floor) row.flags.push(`колесо ${row.gap[1] > LIM.floor ? 'над опорой' : 'в опоре'}: ${row.gap.map(v => v.toFixed(2)).join('…')} см`);

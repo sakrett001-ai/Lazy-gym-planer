@@ -339,7 +339,7 @@ function runPose(C, t) {
 }
 
 /* ---------- Гребной тренажёр ---------- */
-const ROW = { seatTop: 36, railTop: 27, hipUp: 10, beta: 42, footX: 11, plateY: 18, kneeFin: 8, kneeCatch: 100, heelCatch: 22, leanCatch: 24, leanFin: -14, gripX: 20, armDrop: 28, shift: -13 };
+const ROW = { seatTop: 36, railTop: 27, hipUp: 10, beta: 42, footX: 11, plateY: 18, kneeFin: 8, kneeCatch: 100, heelCatch: 22, leanCatch: 24, leanFin: -14, gripX: 20, armDrop: 28, reach: 61.5, shift: -13 };
 /* тело сидя на подвижном сиденье: z — положение таза, lean — наклон корпуса (вперёд +), вращение идёт в тазу */
 function rowBody(C, z, lean) {
   const q = C.base(), P = (lean * .38) * D2R;
@@ -361,8 +361,13 @@ const rowLayout = once(() => {
   const zC = C.solve1D(z => legSpan(M, ROW.kneeCatch) - V.dist(C.fk(rowBody(C, z, ROW.leanCatch)).P.hipL, anC), 0, zP);
   /* выход цепи — на высоте рукояти в захвате, впереди упоров */
   const qc = rowBody(C, zC, ROW.leanCatch), gh = C.fk(qc).P.ghL;
-  return { zP, zC, n, f, opts, exit: [0, gh[1] - ROW.armDrop - 4, zP + 32] };
+  /* путь рукояти — прямая от захвата (прямые руки) к низу рёбер в конце гребка */
+  const qf = rowBody(C, 0, ROW.leanFin); for (const s of S) { qc[s].girdle = [4, 14]; qf[s].girdle = [-2, -14]; }
+  const ghc = V.mix(C.fk(qc).P.ghL, C.fk(qc).P.ghR, .5), Hc = V.add(ghc, V.unit([0, -ROW.armDrop, 55]), ROW.reach), Hf = rowRibs(C, qf);
+  return { zP, zC, n, f, opts, exit: [0, gh[1] - ROW.armDrop - 4, zP + 32], Hc, Hf };
 });
+/* рукоять в конце гребка: у низа рёбер, на 3,5 см впереди груди */
+function rowRibs(C, q) { const { V } = C, T = C.axes(q), r = V.add(V.add(C.chestPoint(q, 20), T.z, 3.5), T.y, -1); return [0, r[1], r[2]]; }
 function rowPose(C, t) {
   const { V } = C, L = rowLayout();
   /* гребок: ноги (0…0,55) → корпус (0,3…0,75) → руки (0,55…1) */
@@ -371,11 +376,13 @@ function rowPose(C, t) {
   const heel = ROW.heelCatch * (1 - smooth(t / .35));
   for (const s of S) { const lat = C.latP(q, s); place(C, q, s, [sgn(s) * ROW.footX, ROW.plateY, L.zP], { up: L.n, heel }, V.unit(V.add([0, .55, 1], lat, .12))); }
   for (const s of S) q[s].girdle = [C.lerp(4, -2, arms), C.lerp(14, -14, arms)];
-  /* рукоять: на прямых руках — по линии цепи впереди плеч, в конце — у низа рёбер */
-  const f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5), T = C.axes(q);
-  const straight = V.add(gh, V.unit([0, -ROW.armDrop, 55]), 61.5);
-  const ribs = V.add(V.add(C.chestPoint(q, 20), T.z, 3.5), T.y, -1);
-  const H = V.mix(straight, [0, ribs[1], ribs[2]], arms);
+  /* рукоять идёт по прямой от захвата к низу рёбер (цепь от направляющей корпуса — почти по этой прямой): пока руки прямые —
+     там, где прямая пересекает сферу досягаемости прямых рук вокруг плечевых суставов, затем руки сгибаются и подтягивают
+     её по той же прямой к рёбрам. Прежде рукоять на прямых руках шла за плечами под постоянным углом к полу и уходила
+     от прямой «захват — финиш» вверх на 4,7 см (цепь к полу от 4,3 до 10,3°). */
+  const f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5), u = V.unit(V.sub(L.Hf, L.Hc)), Ls = V.dist(L.Hf, L.Hc), d = V.sub(L.Hc, gh), du = V.dot(d, u);
+  const disc = du * du - V.dot(d, d) + ROW.reach ** 2, sStraight = disc > 0 ? -du - Math.sqrt(disc) : -du;
+  const H = V.add(L.Hc, u, C.lerp(Math.min(sStraight, Ls), Ls, arms));
   for (const s of S) {
     const lat = C.lat(q, s), pole = V.unit(V.mix(V.add([0, -1, -.25], lat, .5), V.add([0, -.45, -1], lat, .22), arms));
     C.grip(q, s, V.add(H, [sgn(s), 0, 0], ROW.gripX), [-sgn(s), 0, 0], pole, { wristExt: 0 });
