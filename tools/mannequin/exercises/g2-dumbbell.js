@@ -128,7 +128,7 @@ function cup(C, q, P, n, fingers, { w = 4, stag = 4.4, yaw = [0, 90], pole, pole
     if (cands) {
       /* явные варианты {yaw, pole(s, lat), key}; lam — штраф за отход от варианта предыдущего ключа (непрерывность) */
       let best = null, bv = Infinity;
-      for (const c of cands(s)) { const v = put(c.yaw, c.pole(s, lat)) + (prev && prev[s] ? lam * c.dist(prev[s]) : 0); if (v < bv) { bv = v; best = c; } }
+      for (const c of cands(s)) { let v; try { v = put(c.yaw, c.pole(s, lat)); } catch (err) { continue; } v += prev && prev[s] ? lam * c.dist(prev[s]) : 0; if (v < bv) { bv = v; best = c; } }
       put(best.yaw, best.pole(s, lat)); chosen[s] = best; continue;
     }
     const cl = poles ? poles.map(f => f(s, lat)) : [pole ? pole(s, lat) : V.unit(V.add(lat, [0, -1, 0], .3))];
@@ -180,10 +180,10 @@ function ohextKey(t, C, prev, force) {
   const { V } = C, q = C.base(), e = C.ease(t);
   C.root(q, [0, 89.2, 0], [0, 1, 0], [0, 0, 1]); q.lumbar = [1, 0, 0]; q.thoracic = [0, 0, 0]; q.neck = [C.lerp(4, 10, e), 0, 0];
   const feet = q => { for (const s of S) plant(C, q, s, [C.M.SIGN[s] * 11, 0, -1]); };
-  for (const s of S) q[s].girdle = [C.lerp(26, 22, e), C.lerp(2, 0, e)];
+  for (const s of S) q[s].girdle = [C.lerp(+(process.env.OH_GE || 26), 22, e), C.lerp(+(process.env.OH_GP || 2), 0, e)];
   const mk = (yw, fz, lx) => ({ yaw: yw, fz, lx, pole: (s, lat) => V.unit(V.add(V.add(V.scale(lat, lx), [0, 1, 0], C.lerp(.2, 4, e)), [0, 0, 1], fz)), dist: o => Math.abs(yw - o.yaw) / 10 + Math.abs(fz - o.fz) * 2 + Math.abs(lx - o.lx) * 2 });
   const grid = [];
-  for (let yw = 20; yw <= 90; yw += 5) for (const fz of [-.4, 0, .3, .6, 1, 1.6]) for (const lx of [1, .4, -.2]) grid.push(mk(yw, fz, lx));
+  for (let yw = 20; yw <= +(process.env.OH_YMAX || 90); yw += 5) for (const fz of [-.4, 0, .3, .6, 1, 1.6]) for (const lx of [1, .4, -.2]) grid.push(mk(yw, fz, lx));
   const cands = force ? s => [mk(force[s].yaw, force[s].fz, force[s].lx)] : () => grid;
   let chosen = null;
   const arms = q => {
@@ -195,9 +195,9 @@ function ohextKey(t, C, prev, force) {
        прежде 6,9 — в 0,6 см от края диска радиусом 7,5); верхний ключ (t=0) — прежний: при любой
        другой раскладке ладоней (6,6–6,9 см) кисти над головой выворачивают кожу Anny сильнее — вывернутых треугольников 35–36
        против записанных 34 (tools/anny-look/fixtures/folds.json, числа только убывают) */
-    const E = [0, gh[1] + 25, head[2] + 1.9], th = C.lerp(-15.6, 96, Math.pow(e, .8)) * C.D2R, r = e < .5 ? 26 + 2 * Math.sin(Math.PI * e) : C.lerp(28, 20, (e - .5) * 2);
-    const P = V.add(E, [0, Math.cos(th), -Math.sin(th)], r), tilt = C.lerp(18, 12, e) * C.D2R;
-    chosen = cup(C, q, P, [0, Math.cos(tilt), Math.sin(tilt)], [0, 0, -1], { w: t === 0 ? 5.8 : 5.4, stag: 3.8, cands, prev, lam: 25,
+    const R0 = +(process.env.OH_R0 || 26), E = [0, gh[1] + 25, head[2] + 1.9], th = C.lerp(+(process.env.OH_TH0 || -15.6), 96, Math.pow(e, .8)) * C.D2R, r = e < .5 ? R0 + (28 - R0) * Math.sin(Math.PI * e) : C.lerp(28, 20, (e - .5) * 2);
+    const P = V.add(E, [0, Math.cos(th), -Math.sin(th)], r), tilt = C.lerp(+(process.env.OH_TILT || 18), 12, e) * C.D2R;
+    chosen = cup(C, q, P, [0, Math.cos(tilt), Math.sin(tilt)], [0, 0, -1], { w: t === 0 ? +(process.env.OH_W || 5.8) : 5.4, stag: t === 0 ? +(process.env.OH_STAG || 3.8) : 3.8, cands, prev, lam: 25,
       prefer: (q, s) => { const el = C.fk(q).P['el' + s]; return 1.2 * Math.max(0, Math.abs(el[0]) - 12) ** 2; } });
   };
   settle(C, q, { lo: 1, hi: 7, loads: q => [[C.fk(q).P.gripL, 12]], resolve: q => { feet(q); arms(q); } });

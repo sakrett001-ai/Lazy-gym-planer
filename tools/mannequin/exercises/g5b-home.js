@@ -223,8 +223,16 @@ const TROW = once(() => {
 
 /* Тяга под столом: тело прямое, пятки на полу, вращается вокруг пяток (как австралийские подтягивания).
    Столешница над ногами и тазом, длинный край — над грудью; кисти держат край прямым хватом (большой палец вдоль ребра,
-   к другой руке), голова за краем стола — не упирается ни в столешницу, ни в ножки. */
-const TBL = { h: 75, t: 3, edge: 0, gx: 28, gr: 1.5, chestDy: -1, chestDz: 6 };
+   к другой руке), голова за краем стола — не упирается ни в столешницу, ни в ножки.
+   Техника: лёжа на спине под столом, держась за край, подтянуть грудь к столу, сохраняя тело прямым, и с контролем опустить
+   тело обратно на пол (Physitrack, «Table row»); внизу руки и ноги прямые (Fitness Volt, «How To Do Inverted Rows At Home»:
+   «lean back, so your arms and legs are straight»; подсказка каталога — «Опуститесь до прямых рук»). Под обеденным столом
+   75 см у человека 175 см это несовместимо: тело, опущенное на пол, держит локти согнутыми на 55° (плечевой сустав — в
+   55 см от хвата при прямой руке 61,6), а с прямыми руками тело ушло бы в пол на 4 см — прежде внизу локти были согнуты на
+   72°, тело висело в 2 см над полом. Поэтому стол выше — 82 см (высокий обеденный стол; барные и «островные» — 90 и
+   выше): внизу тело опускается до касания пола спиной и ягодицами (поджатие мягких тканей floor) или до локтей elBot,
+   если руки выпрямятся раньше. */
+const TBL = { h: 82, t: 3, edge: 0, gx: 28, gr: 1.5, chestDy: -1, chestDz: 6, floor: -.5, elBot: 10 };
 function tableBody(C, theta, Zh) {
   const { V, M } = C, q = C.base(), a = theta * D;
   C.root(q, [0, 50, 0], [0, Math.sin(a), Math.cos(a)], [0, Math.cos(a), -Math.sin(a)]);
@@ -238,13 +246,23 @@ const TROWL = once(() => {
   /* t=1: грудь у края столешницы — сразу за ребром (chestDz) на уровне верхней грани (chestDy) */
   const chest = (th, Zh) => { const q = tableBody(C, th, Zh); let best = null; for (let h = 24; h <= 47.2; h += 1) { const p = C.chestPoint(q, h); if (!best || p[1] > best[1]) best = p; } return best; };
   const th1 = C.solve1D(th => chest(th, 0)[1] - (TBL.h + TBL.chestDy), 5, 60), Zh = TBL.edge + TBL.chestDz - chest(th1, 0)[2];
-  /* t=0: руки выпрямлены */
-  /* стол низкий (75 см): внизу руки почти прямые, тело висит в 2–3 см над полом, не лёжа на нём */
+  /* t=0: тело опущено на пол — спина и ягодицы касаются его (поджатие мягких тканей TBL.floor), руки почти прямые;
+     если руки выпрямляются раньше (локоть elBot), тело останавливается над полом */
   const clear = th => Math.min(...C.region(tableBody(C, th, Zh), 'back').map(p => p[1]), ...C.region(tableBody(C, th, Zh), 'buttocks').map(p => p[1]));
-  const thClear = C.solve1D(th => clear(th) - 2, 0, th1);
-  const th0 = Math.max(thClear, C.solve1D(th => { const q = tableBody(C, th, Zh), f = C.fk(q); return V.dist(f.P.ghL, grip('L')) - 61.6; }, 0, th1));
+  const elbow = th => { const q = tableBody(C, th, Zh); try { tableArms(C, q, grip, 0); } catch (e) { return -TBL.elBot; } return q.L.elbow - TBL.elBot; };
+  const th0 = Math.max(C.solve1D(th => clear(th) - TBL.floor, 0, th1), C.unhinted(() => C.solve1D(elbow, 0, th1)));
   return { th0, th1, Zh, grip };
 });
+/* руки в тяге под столом: e — 0 внизу, 1 вверху; пояс — от протракции внизу к сведённым лопаткам вверху */
+function tableArms(C, q, grip, e) {
+  const { V } = C;
+  for (const s of S) q[s].girdle = [C.lerp(12, -2, e), C.lerp(22, -15, e)];
+  for (const s of S) {
+    const lat = C.lat(q, s), pole = V.unit(V.add(V.add([0, -1, 0], [0, 0, -1], .8), lat, .7));
+    C.grip(q, s, grip(s), V.scale(lat, -1), pole);
+  }
+  return q;
+}
 
 /* Скандинавские сгибания: колени на сложенном коврике (4 см), стопы на носках за коленями, пятки заведены
    под низ дивана за спиной и упираются в нижнюю грань его каркаса. Тело прямое от колен до головы, наклон phi вперёд от вертикали.
@@ -378,22 +396,18 @@ module.exports = {
     }
   },
 
-  /* Тяга под столом: лёжа под обеденным столом лицом вверх, кисти держат длинный край столешницы прямым хватом,
-     пятки на полу, тело прямое. t=0 — руки выпрямлены, t=1 — грудь у края столешницы, лопатки сведены. */
+  /* Тяга под столом: лёжа под столом лицом вверх, кисти держат длинный край столешницы прямым хватом, пятки на полу,
+     тело прямое. t=0 — тело опущено на пол, руки почти прямые; t=1 — грудь у края столешницы, лопатки сведены. */
   tablerow: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [{ type: 'homeTable', id: 'table', at: [0, 0, TBL.edge - 37.5] }],
-    contacts: [{ body: 'footL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'gripL', prop: 'table:top' }, { body: 'gripR', prop: 'table:top' }],
+    equipment: [{ type: 'homeTable', id: 'table', h: TBL.h, at: [0, 0, TBL.edge - 37.5] }],
+    contacts: [{ body: 'footL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'gripL', prop: 'table:top' }, { body: 'gripR', prop: 'table:top' },
+      { body: 'buttocks', prop: 'floor', when: [0, .02] }, { body: 'back', prop: 'floor', when: [0, .02] }],
     gripRadius: { L: 1.5, R: 1.5 },
     pose(t, C) {
       const { V } = C, L = TROWL(), e = C.ease(t), q = tableBody(C, C.lerp(L.th0, L.th1, e), L.Zh);
       q.neck = [C.lerp(0, 6, e), 0, 0];
-      for (const s of S) q[s].girdle = [C.lerp(12, -2, e), C.lerp(22, -15, e)];
-      for (const s of S) {
-        const lat = C.lat(q, s), pole = V.unit(V.add(V.add([0, -1, 0], [0, 0, -1], .8), lat, .7));
-        C.grip(q, s, L.grip(s), V.scale(lat, -1), pole);
-      }
-      return q;
+      return tableArms(C, q, L.grip, e);
     }
   },
 

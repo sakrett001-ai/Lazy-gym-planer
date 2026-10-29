@@ -163,17 +163,21 @@ function fpBody(C, base, t) {
 }
 /* Кисти тяги к лицу: середина хвата mid, кисти разведены на half (концы каната или ленты расходятся к ушам), хват сверху
    (пронация 70° → 5°), локти в стороны и к концу — высоко */
-function fpGrip(C, q, mid, e, allowShort, halves = [5.5, 17.5]) {
+function fpGrip(C, q, mid, e, allowShort, halves = [5.5, 17.5], pron0 = 70) {
   const { V } = C, half = C.lerp(halves[0], halves[1], e);
   for (const s of S) {
     const lat = C.lat(q, s), g = V.add(mid, lat, half);
     const pole = V.unit(V.add(V.add(lat, [0, 1, 0], C.lerp(-.6, .25, e)), [0, 0, -1], C.lerp(-.2, .35, e)));
-    C.hold(q, s, g, pole, { pron: C.lerp(70, 5, e), flex: C.lerp(0, -10, e), allowShort });
+    C.hold(q, s, g, pole, { pron: C.lerp(pron0, 5, e), flex: C.lerp(0, -10, e), allowShort });
   }
 }
 /* середина хвата в конце тяги: у лица, на 1 см выше центра головы и на 4 см впереди (кисти — у ушей) */
 const fpEnd = (C, q, fwd = 4) => { const head = C.fk(q).P.head; return [0, head[1] + 1, head[2] + fwd]; };
-const FPL = once(() => { const C = ctx([FP_TOWER]); return pullLine(C, pulleyOf(FP_TOWER), 4.5, -1, t => fpBody(C, FP().q, t), q => fpEnd(C, q), (q, g, e, sh) => fpGrip(C, q, g, e, sh), 10, 30); });
+/* хват каната в растяжке: пронация 30° — ладони смотрят в пол, большие пальцы — друг к другу (NSCA Kinetic Select «Face Pull
+   (Machine)»: «closed, pronated grip and the palms facing the floor»); при 70°, как у эспандера, кисти были перекручены —
+   ладони смотрели вниз-наружу под 48° к полу, большие пальцы — вниз и внутрь */
+const FP_PRON0 = 30;
+const FPL = once(() => { const C = ctx([FP_TOWER]); return pullLine(C, pulleyOf(FP_TOWER), 4.5, -1, t => fpBody(C, FP().q, t), q => fpEnd(C, q), (q, g, e, sh) => fpGrip(C, q, g, e, sh, undefined, FP_PRON0), 10, 30); });
 /* направление между двумя единичными векторами (сферическая интерполяция) */
 function slerpDir(V, a, b, t) { const d = Math.max(-1, Math.min(1, V.dot(a, b))), th = Math.acos(d); if (th < 1e-4) return a; const s = Math.sin(th); return V.add(V.scale(a, Math.sin((1 - t) * th) / s), b, Math.sin(t * th) / s); }
 /* ---------- Пуловер на блоке прямыми руками ---------- */
@@ -1017,7 +1021,7 @@ module.exports = {
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
       const { V } = C, e = C.ease(t), L = FPL(), q = fpBody(C, FP().q, t);
-      fpGrip(C, q, V.add(L.E, L.u, C.lerp(L.s0, 0, e)), e);
+      fpGrip(C, q, V.add(L.E, L.u, C.lerp(L.s0, 0, e)), e, false, undefined, FP_PRON0);
       return q;
     }
   },
