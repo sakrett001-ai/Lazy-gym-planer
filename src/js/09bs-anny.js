@@ -235,31 +235,157 @@ const AnnySkin = (() => {
   }
 
   /* ---------- корректирующие формы: вес по углу сустава — «шатёр»: 0 при a0, 1 при a1 (угол позы формы), 0 при a2
-     (без a2 — 1 и дальше) ---------- */
+     (без a2 — 1 и дальше); у формы со вторым углом (angle2) — ещё доля по нему: 0 при b0, 1 при b1 ---------- */
   function correctiveWeights(R, d = data) {
     if (!d.correctives.length) return [];
     const A = M.jointAngles(R);
     return d.correctives.map(c => {
       const src = c.side ? A[c.side] : A, v = c.angle.split('.').reduce((o, k) => o?.[k], src);
       if (typeof v !== 'number') return 0;
-      if (v <= c.a1) return Math.max(0, Math.min(1, (v - c.a0) / (c.a1 - c.a0)));
-      return c.a2 == null ? 1 : Math.max(0, Math.min(1, (c.a2 - v) / (c.a2 - c.a1)));
+      const w = v <= c.a1 ? Math.max(0, Math.min(1, (v - c.a0) / (c.a1 - c.a0))) : c.a2 == null ? 1 : Math.max(0, Math.min(1, (c.a2 - v) / (c.a2 - c.a1)));
+      if (!c.angle2 || !(w > 0)) return w;
+      /* второй угол (касание в локте: доля по пронации) — b0 → 0, b1 → 1 */
+      const v2 = src?.[c.angle2]; return typeof v2 === 'number' ? w * Math.max(0, Math.min(1, (v2 - c.b0) / (c.b1 - c.b0))) : 0;
     });
   }
 
+  /* ---------- опоры: кожа ложится на заявленную опору, а не висит над ней ----------
+     Позы ставят на опору процедурную кожу (контакты упражнения: таз на сиденье, спина на скамье, предплечья на коврике), а
+     форма Anny другая: ягодицы круглее, предплечье тоньше у локтя, и кожа Anny местами висит над опорой (концентрированное
+     сгибание — ягодицы на 2 см над скамьёй, планка — предплечья на 1,5 см над ковриком). Мягкие ткани под весом тела ложатся
+     на опору, поэтому кожа части тела из контакта (рамки SUP_BODY, доля — по весам вершины) у опоры притягивается к ней по
+     нормали опоры (градиент её знакового расстояния): слой высотой a над опорой (зазор + SUP.PRESS) ложится на неё, выше —
+     плавно (кубический переход на SUP.RAMP см с непрерывной производной; отображение высоты монотонно — без складок), кожа
+     дальше a + RAMP — на месте. Кожу в опоре не трогает (её проверяет check.js). Зазор больше SUP.GAP_MAX — это не касание
+     (поза или инвентарь, а не форма кожи): опора не применяется. Кисти, стопы и голова — не мягкие ткани (у кистей и стоп
+     свои позы по опоре и хвату). Опора — деталь контакта (видимая): коробка со скруглением, труба (капсула), цилиндр, шар;
+     пол — полупространство. Тот же расчёт — в шейдере (src/volume/anny.mjs, annySupport): опоры кадра — массив из SUP.MAX
+     по 6 vec4. SUP.PRESS = 0,5 см — меньше толщины мягких тканей над опорными зонами (ягодицы — 2–4 см, спина над лопатками
+     — 1–2; см. DEPTH_EXTRA в tools/anny-look/check.js). */
+  const SUP = { MAX: 4, GAP_MAX: 2.5, PRESS: .5, RAMP: 3, GAP_VERTS: 250, LEN: 24 };
+  const SUP_TRUNK = ['thorax', 'lumbar', 'pelvis', 'clL', 'clR', 'spL', 'spR'];
+  /* рамки части тела контакта: [кожа, которая ложится на опору; по какой мерится зазор] */
+  function supportBody(body) {
+    const m = /^(th|sk|shin|knee|ua|fa)(L|R)$/.exec(body);
+    if (m) { const s = m[2], k = m[1]; const f = k === 'th' ? ['th' + s] : k === 'fa' ? ['fa' + s, 'fd' + s] : k === 'ua' ? ['ua' + s] : k === 'knee' ? ['th' + s, 'sk' + s] : ['sk' + s]; return [f, f]; }
+    /* ягодицы: ложится таз с бёдрами, зазор — по ягодицам (вершины таза): бёдра у края сиденья касаются раньше */
+    if (body === 'buttocks') return [['pelvis', 'thL', 'thR'], ['pelvis']];
+    if (body === 'thighsBack') return [['thL', 'thR'], ['thL', 'thR']];
+    if (body === 'back' || body === 'upperBack' || body === 'shoulders') return [SUP_TRUNK, SUP_TRUNK];
+    if (body === 'chest' || body === 'front' || body === 'belly') return [['thorax', 'lumbar', 'pelvis', 'clL', 'clR'], ['thorax', 'lumbar', 'pelvis']];
+    return null;
+  }
+  /* форма опоры: [c (3), тип (0 — коробка со скруглением, 1 — цилиндр по оси y), оси x, y, z с полуразмерами, скругление] */
+  function supportShape(p) {
+    if (p === 'floor') return { c: [0, M.FLOOR + 500, 0], type: 0, ax: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], half: [5000, 500, 5000], rr: 0 };
+    if (p.kind === 'obox') { const half = p.size.map(v => v / 2); return { c: p.c, type: 0, ax: [p.x, p.y, p.z].map(V.unit), half, rr: Math.min(p.round || 0, ...half) }; }
+    if (p.kind === 'beam') {
+      const y = V.unit(V.sub(p.b, p.a)), c = V.mix(p.a, p.b, .5), L = V.dist(p.a, p.b) / 2;
+      let z = V.perp(p.up || [0, -1, 0], y); if (V.len(z) < 1e-6) z = V.perp([0, 0, 1], y); if (V.len(z) < 1e-6) z = V.perp([1, 0, 0], y); z = V.unit(z);
+      const x = V.unit(V.cross(y, z));
+      return p.r ? { c, type: 0, ax: [x, y, z], half: [p.r, L + p.r, p.r], rr: p.r } : { c, type: 0, ax: [x, y, z], half: [p.w / 2, L, p.h / 2], rr: 0 };
+    }
+    if (p.kind === 'cyl') { const y = V.unit(p.axis); let x = V.perp([1, 0, 0], y); if (V.len(x) < .1) x = V.perp([0, 0, 1], y); x = V.unit(x); return { c: p.c, type: 1, ax: [x, y, V.cross(x, y)], half: [p.r, p.len / 2, p.r], rr: 0 }; }
+    if (p.kind === 'sphere') return { c: p.c, type: 0, ax: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], half: [p.r, p.r, p.r], rr: p.r };
+    return null;
+  }
+  /* знаковое расстояние до опоры u[o…] (плюс — снаружи) и его градиент в g — как annySupport в шейдере */
+  function supportSD(u, o, x, y, z, g) {
+    const dx = x - u[o], dy = y - u[o + 1], dz = z - u[o + 2];
+    const l0 = dx * u[o + 4] + dy * u[o + 5] + dz * u[o + 6], l1 = dx * u[o + 8] + dy * u[o + 9] + dz * u[o + 10], l2 = dx * u[o + 12] + dy * u[o + 13] + dz * u[o + 14];
+    const h0 = u[o + 7], h1 = u[o + 11], h2 = u[o + 15], rr = u[o + 16]; let h, a, b, c;
+    if (u[o + 3] < .5) {
+      const q0 = Math.abs(l0) - h0 + rr, q1 = Math.abs(l1) - h1 + rr, q2 = Math.abs(l2) - h2 + rr, p0 = Math.max(q0, 0), p1 = Math.max(q1, 0), p2 = Math.max(q2, 0), lo = Math.sqrt(p0 * p0 + p1 * p1 + p2 * p2);
+      h = lo + Math.min(Math.max(q0, q1, q2), 0) - rr;
+      if (lo > 0) { a = p0 / lo * Math.sign(l0); b = p1 / lo * Math.sign(l1); c = p2 / lo * Math.sign(l2); }
+      else if (q0 >= q1 && q0 >= q2) { a = Math.sign(l0); b = 0; c = 0; } else if (q1 >= q2) { a = 0; b = Math.sign(l1); c = 0; } else { a = 0; b = 0; c = Math.sign(l2); }
+    } else {
+      const rd = Math.sqrt(l0 * l0 + l2 * l2), e0 = rd - h0, e1 = Math.abs(l1) - h1, p0 = Math.max(e0, 0), p1 = Math.max(e1, 0), lo = Math.sqrt(p0 * p0 + p1 * p1);
+      h = Math.min(Math.max(e0, e1), 0) + lo;
+      const r0 = rd > 1e-6 ? l0 / rd : 1, r2 = rd > 1e-6 ? l2 / rd : 0, sy = Math.sign(l1);
+      if (lo > 0) { a = r0 * p0 / lo; b = sy * p1 / lo; c = r2 * p0 / lo; } else if (e0 >= e1) { a = r0; b = 0; c = r2; } else { a = 0; b = sy; c = 0; }
+    }
+    g[0] = u[o + 4] * a + u[o + 8] * b + u[o + 12] * c; g[1] = u[o + 5] * a + u[o + 9] * b + u[o + 13] * c; g[2] = u[o + 6] * a + u[o + 10] * b + u[o + 14] * c;
+    return h;
+  }
+  /* доля вершины v в части тела опоры (биты рамок u[o+20…22] — по 19 рамок в числе) */
+  const supBit = (u, o, i) => { const c = Math.floor(i / 19); return (Math.floor(u[o + 20 + c] / 2 ** (i - c * 19)) % 2); };
+  function supportMove(sup, d, v, out, k) {
+    if (!sup || !sup.n) return;
+    const u = sup.u, g = [0, 0, 0];
+    for (let s = 0; s < sup.n; s++) {
+      const o = s * SUP.LEN; let m = 0;
+      for (let j = 0; j < 4; j++) { const w = d.ww[v * 4 + j]; if (w > 0) m += w * supBit(u, o, d.wi[v * 4 + j]); }
+      if (!(m > 0)) continue;
+      const h = supportSD(u, o, out[k * 3], out[k * 3 + 1], out[k * 3 + 2], g), a = u[o + 17], H = u[o + 18], b = a + H;
+      if (h < 0 || h >= b) continue;
+      const t = Math.max(0, Math.min(1, (h - a) / H)), f = h <= a ? 0 : b * t * t * (3 - 2 * t) + H * t * t * (t - 1), dm = (f - h) * m;
+      out[k * 3] += g[0] * dm; out[k * 3 + 1] += g[1] * dm; out[k * 3 + 2] += g[2] * dm;
+    }
+  }
+  /* опоры кадра: R.contacts (кроме хвата, кистей, стоп и головы) с видимыми деталями props (по умолчанию — детали R.props, кроме
+     скрываемых при «всём инвентаре»); зазор — по коже без опор; mats — {S, DQ} кадра, если уже посчитаны. Возвращает
+     {n, u: Float32Array(SUP.MAX·24), list} */
+  function supports(R, d = data, props = null, cw = null, mats = null) {
+    const out = { n: 0, u: new Float32Array(SUP.MAX * SUP.LEN), list: [] };
+    const contacts = R.contacts || []; if (!contacts.length || !d) return out;
+    const parts = props || (R.props || []).filter(p => !p.optionalNot), fi = d._fi || (d._fi = Object.fromEntries(d.frames.map((f, i) => [f, i])));
+    const C = d._sup || (d._sup = new Map());
+    for (const k of contacts) {
+      if (out.n >= SUP.MAX || !k.body || !k.prop || (k.when && R.t != null && (R.t < k.when[0] - 1e-6 || R.t > k.when[1] + 1e-6))) continue;
+      const B = supportBody(k.body); if (!B) continue;
+      const cand = k.prop === 'floor' ? ['floor'] : parts.filter(p => p.id === k.prop || p.id?.startsWith(k.prop + ':')); if (!cand.length) continue;
+      /* вершины зазора: у кого доля рамок зазора больше половины, не больше ≈ SUP.GAP_VERTS (через равный шаг по номеру) */
+      let vs = C.get(k.body);
+      if (!vs) { const set = new Set(B[1].map(f => fi[f])), all = []; for (let v = 0; v < d.nv; v++) { let w = 0; for (let j = 0; j < 4; j++) if (set.has(d.wi[v * 4 + j])) w += d.ww[v * 4 + j]; if (w > .5) all.push(v); }
+        const st = Math.max(1, Math.round(all.length / SUP.GAP_VERTS)); vs = all.filter((_, i) => i % st === 0); C.set(k.body, vs); }
+      if (!mats) { const S = skinMats(R, d); mats = { S, DQ: dualQuats(S, d.frames.length) }; }
+      const P = skin(R, { d, only: vs, corr: cw, floor: false, sup: null, mats }), g = [0, 0, 0];
+      let best = null;
+      for (const p of cand) {
+        const sh = supportShape(p); if (!sh) continue;
+        const u = new Float32Array(SUP.LEN); u.set(sh.c, 0); u[3] = sh.type; for (let a = 0; a < 3; a++) { u.set(sh.ax[a], 4 + a * 4); u[7 + a * 4] = sh.half[a]; } u[16] = sh.rr;
+        let gap = Infinity; for (let i = 0; i < vs.length; i++) gap = Math.min(gap, supportSD(u, 0, P[i * 3], P[i * 3 + 1], P[i * 3 + 2], g));
+        if (!best || gap < best.gap) best = { u, gap };
+      }
+      if (!best || !(best.gap <= SUP.GAP_MAX)) continue;
+      const u = best.u; u[17] = Math.max(best.gap, 0) + SUP.PRESS; u[18] = SUP.RAMP;
+      const bits = [0, 0, 0]; for (const f of B[0]) { const i = fi[f]; if (i == null) continue; const c = Math.floor(i / 19); bits[c] += 2 ** (i - c * 19); }
+      u[20] = bits[0]; u[21] = bits[1]; u[22] = bits[2];
+      out.u.set(u, out.n * SUP.LEN); out.list.push({ body: k.body, prop: k.prop, gap: best.gap }); out.n++;
+    }
+    return out;
+  }
+
+  /* формы вершины: по вершине — номера форм и записей в них (по порядку форм), один раз на данные */
+  function corrIndex(d) {
+    if (d._ci) return d._ci;
+    const cnt = new Int32Array(d.nv + 1); d.correctives.forEach(c => { for (let j = 0; j < c.n; j++) cnt[c.i[j] + 1]++; });
+    for (let v = 0; v < d.nv; v++) cnt[v + 1] += cnt[v];
+    const at = cnt.slice(0, d.nv), K = new Int32Array(cnt[d.nv]), J = new Int32Array(cnt[d.nv]);
+    d.correctives.forEach((c, k) => { for (let j = 0; j < c.n; j++) { const e = at[c.i[j]]++; K[e] = k; J[e] = j; } });
+    return d._ci = { start: cnt, k: K, j: J };
+  }
   /* ---------- скиннинг на процессоре: проверки и рамка кадра (на экране — видеокарта, src/volume/anny.mjs) ----------
      method 'dq' (как в приложении) или 'lbs' (линейное смешение — для сравнения); only — номера вершин (по умолчанию все);
      floor — кожа прижата к полу (как на экране): вершины ниже пола — на полу. Мягкие ткани, лёжа на полу, сплющиваются о
      него; кожа Anny полнее процедурной (подтянутое телосложение), а суставы — те же, поэтому там, где процедурная кожа
      касается пола, предплечье, плечо или спина Anny ушли бы под пол. floor: false — без прижатия (насколько прижато —
-     проверка tools/anny-look/check.js). */
-  function skin(R, { d = data, method = 'dq', hands = null, only = null, corr = null, floor = true } = {}) {
-    const S = skinMats(R, d, hands), nfr = d.frames.length, DQ = method === 'dq' ? dualQuats(S, nfr) : null, cw = corr || correctiveWeights(R, d);
+     проверка tools/anny-look/check.js). sup — опоры кадра (supports; по умолчанию — по контактам позы и деталям props,
+     null — без опор). */
+  function skin(R, { d = data, method = 'dq', hands = null, only = null, corr = null, floor = true, sup, props = null, mats = null } = {}) {
+    const S = mats?.S || skinMats(R, d, hands), nfr = d.frames.length, DQ = method === 'dq' ? mats?.DQ || dualQuats(S, nfr) : null, cw = corr || correctiveWeights(R, d);
+    if (sup === undefined) sup = supports(R, d, props, cw, { S, DQ: DQ || dualQuats(S, nfr) });
     let P = d.pos;
-    if (cw.some(w => w > 0)) { P = Float32Array.from(d.pos); d.correctives.forEach((c, k) => { const w = cw[k]; if (!(w > 0)) return; for (let j = 0; j < c.n; j++) { const v = c.i[j]; P[v * 3] += w * c.d[j * 3]; P[v * 3 + 1] += w * c.d[j * 3 + 1]; P[v * 3 + 2] += w * c.d[j * 3 + 2]; } }); }
-    const list = only || null, n = list ? list.length : d.nv, out = new Float32Array(n * 3);
+    const list = only || null, n = list ? list.length : d.nv, out = new Float32Array(n * 3), active = cw.some(w => w > 0);
+    /* формы: для всей сетки — копия стойки с формами; для нескольких вершин (only) — только их (те же числа: сумма в float32
+       в порядке форм) */
+    const sparse = active && list && n < d.nv / 4, CI = sparse ? corrIndex(d) : null;
+    if (active && !sparse) { P = d.pos.slice(); d.correctives.forEach((c, k) => { const w = cw[k]; if (!(w > 0)) return; for (let j = 0; j < c.n; j++) { const v = c.i[j]; P[v * 3] += w * c.d[j * 3]; P[v * 3 + 1] += w * c.d[j * 3 + 1]; P[v * 3 + 2] += w * c.d[j * 3 + 2]; } }); }
+    const f32 = Math.fround;
     for (let k = 0; k < n; k++) {
-      const v = list ? list[k] : k, px = P[v * 3], py = P[v * 3 + 1], pz = P[v * 3 + 2];
+      const v = list ? list[k] : k; let px = P[v * 3], py = P[v * 3 + 1], pz = P[v * 3 + 2];
+      if (sparse) for (let e = CI.start[v]; e < CI.start[v + 1]; e++) { const c = d.correctives[CI.k[e]], w = cw[CI.k[e]], j = CI.j[e]; if (!(w > 0)) continue; px = f32(px + w * c.d[j * 3]); py = f32(py + w * c.d[j * 3 + 1]); pz = f32(pz + w * c.d[j * 3 + 2]); }
       if (DQ) {
         let x = 0, y = 0, z = 0, w = 0, dx = 0, dy = 0, dz = 0, dw = 0, r0 = -1;
         for (let j = 0; j < 4; j++) {
@@ -277,6 +403,7 @@ const AnnySkin = (() => {
         for (let j = 0; j < 4; j++) { const wt = d.ww[v * 4 + j]; if (!wt) continue; const o = d.wi[v * 4 + j] * 12; ox += wt * (S[o] * px + S[o + 1] * py + S[o + 2] * pz + S[o + 3]); oy += wt * (S[o + 4] * px + S[o + 5] * py + S[o + 6] * pz + S[o + 7]); oz += wt * (S[o + 8] * px + S[o + 9] * py + S[o + 10] * pz + S[o + 11]); }
         out[k * 3] = ox; out[k * 3 + 1] = oy; out[k * 3 + 2] = oz;
       }
+      if (sup?.n) supportMove(sup, d, v, out, k);
       if (floor && out[k * 3 + 1] > M.FLOOR) out[k * 3 + 1] = M.FLOOR;
     }
     return out;
@@ -297,7 +424,7 @@ const AnnySkin = (() => {
     }
     return d._regions = { fn: regionOf, ids, rid };
   }
-  return { load, decode, frameMats, skinMats, dualQuats, correctiveWeights, skin, regions, bindInv, digitRig, digitPose, DIG, _digit: { R3, chain, xf, flexRot, flexAngle, flatThumb }, get data() { return data; }, set data(x) { data = x; } };
+  return { load, decode, frameMats, skinMats, dualQuats, correctiveWeights, skin, supports, supportShape, supportSD, SUP, regions, bindInv, digitRig, digitPose, DIG, _digit: { R3, chain, xf, flexRot, flexAngle, flatThumb }, get data() { return data; }, set data(x) { data = x; } };
 })();
 if (typeof window !== 'undefined') window.AnnySkin = AnnySkin; /* объёмная сцена (volume.js) берёт данные и рамки отсюда */
 if (typeof module !== 'undefined' && module.exports) module.exports = AnnySkin;

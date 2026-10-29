@@ -145,7 +145,7 @@ function run({ ids = null, ts = [0, .25, .5, .75, 1], d = CMP.loadAnny(), log = 
     for (const [hn, has] of [['всё', () => true], ['ничего', () => false]]) {
       const e = EQ.variantEntry(POSES[id], has), rig = EQ.rig(e), cache = { cv: {} };
       for (const t of ts) {
-        const R = rig(t), P = A.skin(R, { d, floor: false }); cache.t = t;
+        const R = rig(t), P = A.skin(R, { d, floor: false, props: (R.props || []).filter(p => EQ.visible(p, has)) }); cache.t = t;
         const fd = floorDepth(d, R, P), pf = procFloor(R);
         for (const [part, o] of Object.entries(fd)) {
           const row = { id, t, has: hn, part, depth: o.depth, proc: pf[part] || 0, zone: zones[o.v] };

@@ -122,7 +122,7 @@ function run({ ids = null, ts = [0, .25, .5, .75, 1], d, POSES, log = () => {} }
     if (!POSES[id] || id.startsWith('_')) continue;
     for (const [hn, has] of [['всё', () => true], ['ничего', () => false]]) {
       const e = EQ.variantEntry(POSES[id], has), rig = EQ.rig(e);
-      for (const t of ts) { const R = rig(t); if (!M.SIDES.some(s => R.hands?.[s] === 'grip')) continue; const P = A.skin(R, { d, floor: false }); for (const o of framesHolds(R, P, d, e, has)) rows.push({ id, t, has: hn, ...o, bad: problems(o) }); }
+      for (const t of ts) { const R = rig(t); if (!M.SIDES.some(s => R.hands?.[s] === 'grip')) continue; const P = A.skin(R, { d, floor: false, props: (R.props || []).filter(p => EQ.visible(p, has)) }); for (const o of framesHolds(R, P, d, e, has)) rows.push({ id, t, has: hn, ...o, bad: problems(o) }); }
     }
     log(id);
   }

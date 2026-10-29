@@ -170,7 +170,7 @@ function run({ ids = null, ts = [0, .25, .5, .75, 1], d = CMP.loadAnny(), log = 
     for (const [hn, has] of invs) {
       const e = EQ.variantEntry(entry, has), rig = EQ.rig(e);
       for (const t of ts) {
-        const R = rig(t), P = A.skin(R, { d, floor: false });
+        const R = rig(t), P = A.skin(R, { d, floor: false, props: (R.props || []).filter(p => EQ.visible(p, has)) });
         for (const p of penetration(R, P, d, kind, e, has)) if (p.depth > p.limit) res.penetration.push({ ex: id, t, has: hn, ...p });
         for (const o of HOLDS.framesHolds(R, P, d, e, has)) res.holds.push({ id, t, has: hn, ...o, bad: HOLDS.problems(o) });
         if (hn === 'всё') {

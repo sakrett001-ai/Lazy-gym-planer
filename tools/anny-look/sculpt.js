@@ -18,6 +18,8 @@ const POSES = {
   armsSide: q => { for (const s of M.SIDES) { q[s].shoulder = [0, 90, 0]; q[s].elbow = 6; } },
   /* локоть в полном сгибе (сгибание на бицепс, верх) */
   elbows: q => { for (const s of M.SIDES) { q[s].elbow = 145; q[s].pron = -60; } },
+  /* локоть в полном сгибе при пронации (жим над головой внизу, отжимания внизу: пронация 47–70°) */
+  elbowsPro: q => { for (const s of M.SIDES) { q[s].elbow = 145; q[s].pron = 60; } },
   /* колено в полном сгибе при бедре в стойке (сгибание ног) */
   knees: q => { for (const s of M.SIDES) { q[s].knee = 140; } },
   /* бедро в глубоком сгибании, колено согнуто (присед, «велосипед», подъём коленей) */
@@ -42,7 +44,7 @@ if (require.main === module) {
     const out = {};
     for (const name of Object.keys(POSES)) {
       const R = poseR(name), S = A.skinMats(R, { frames }), J = M.jointAngles(R);
-      const joints = {}; for (const s of M.SIDES) for (const k of ['sh', 'el', 'hip', 'kn']) joints[k + s] = R[k + s];
+      const joints = {}; for (const s of M.SIDES) for (const k of ['sh', 'el', 'wr', 'hip', 'kn', 'an']) joints[k + s] = R[k + s];
       out[name] = { S: Array.from(S, v => Math.round(v * 1e9) / 1e9), angles: { L: J.L, R: J.R }, joints };
     }
     fs.writeFileSync(process.argv[3], JSON.stringify(out));
