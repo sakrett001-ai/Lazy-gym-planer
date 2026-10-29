@@ -306,7 +306,7 @@ const GV_RA = 22, GV_WHEEL = 4.5, GV_FORK = 3;
 const GV_MACHINE = () => { const u0 = [0, 0, -1], W = V3([0, GV.P[1] + GV.d0[1], GV.P[2] + GV.d0[2]], u0, GV_RA);
   return { type: 'gravitron', id: 'gv', tz: GV.tz, pivot: [GV.P[1] + GV.d0[1], GV.P[2] + GV.d0[2]], linkV: GV.v[1], pull: GV.pull, dip: GV.dip, step: GV.step,
     stack: { z: GV.P[2] + 18 }, cab: { dead: r2(W[2] - GV_WHEEL), live: r2(W[2] + GV_WHEEL), r: 5 } }; };
-const GV_LINK = () => ({ type: 'g4link', id: 'gvPad', pivot: GV.P, axis: [1, 0, 0], d0: GV.d0, v: GV.v, armX: [-12, 12], mountTo: 'gv:shaftU', mountTo2: 'gv:shaftD', bind: { mix: ['knL', 'knR'], frame: 'skL', off: [0, 0, 5.4] },
+const GV_LINK = () => ({ type: 'g4link', id: 'gvPad', pivot: GV.P, axis: [1, 0, 0], radius: GV.r, d0: GV.d0, v: GV.v, armX: [-12, 12], mountTo: 'gv:shaftU', mountTo2: 'gv:shaftD', bind: { mix: ['knL', 'knR'], frame: 'skL', off: [0, 0, 5.4] },
   carrier: [
     { name: 'pad', kind: 'obox', c: [0, -3.5, -12], size: [40, 7, 40], tone: 'pad', role: 'support', mount: 'plate', round: 1.6 },
     { name: 'plate', kind: 'obox', c: [0, -8, -12], size: [34, 2, 36], mount: 'frame' },
@@ -852,7 +852,7 @@ module.exports = {
   /* Жим сидя в тренажёре: t=0 — рукояти на уровне ушей, t=1 — руки почти выпрямлены вверх.
      Поясница прижата к спинке, рычаги ходят по дуге вокруг осей позади спинки. */
   shoulderpressm: {
-    keys: [0, .25, .5, .75, 1],
+    keys: [0, .125, .25, .375, .5, .625, .75, .875, 1], /* 9 ключей: при 5 кисть между ключами уходила с рукояти рычага на 0,7 см */
     /* кулачок по кривой подъёма плеча (Timmons 2005 до 90°, Aronis 2026 выше) */
     get equipment() { const L = SPM(); return seatedCamEq(this, { m: L.machine, levers: S.map(s => handleLever('sp', s, [C_SIGN[s] * L.P[0], L.P[1], L.P[2]], [C_SIGN[s] * L.hx, ...arcPt(L.P, L.R, L.th0, 0).slice(1)], 'x', 'sp:hub' + s)),
       bind: 'gripL', curve: 'shoulderElevation', sense: SPM_CAM.sense, scale: SPM_CAM.scale, kg: 95, kgSrc: 'Hammer Strength Select Shoulder Press', s2: 1 }); },
