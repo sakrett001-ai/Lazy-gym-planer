@@ -628,9 +628,8 @@ module.exports = {
      вперёд, кисти лежат на поручнях только для равновесия. */
   stairs: {
     keys: keysN(16), loop: true,
-    equipment: (() => { const L = stepLayout(); return [
-      { type: 'stepper', id: 'stp', pivot: STEP.pivot, railY: L.railY, railX: STEP.railX, railZ: L.railZ },
-      { type: 'stepPedals', id: 'step', pivot: STEP.pivot, lever: STEP.lever, dampZ: L.railZ + 10, mountTo: 'stp:pivotAxle', mountDamp: 'stp:dampBase', mountLink: 'stp:linkAxle' }]; })(),
+    equipment: (() => { const L = stepLayout(), base = { type: 'stepper', id: 'stp', pivot: STEP.pivot, railY: L.railY, railX: STEP.railX, railZ: L.railZ }; return [base,
+      { type: 'stepPedals', id: 'step', pivot: STEP.pivot, lever: STEP.lever, dampZ: ctx([base]).A.stp.dampTop[2], mountTo: 'stp:pivotAxle', mountDamp: 'stp:dampTop', mountLink: 'stp:linkAxle' }]; })(),
     contacts: [{ body: 'soleL', prop: 'step:pedalL' }, { body: 'soleR', prop: 'step:pedalR' }, { body: 'gripL', prop: 'stp:railL' }, { body: 'gripR', prop: 'stp:railR' }],
     gripRadius: { L: 2, R: 2 },
     pose(t, C) {

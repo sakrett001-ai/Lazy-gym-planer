@@ -214,6 +214,9 @@ function auditStepper(id, ev, fr, e) {
   row.parallel = Math.max(...fr.flatMap(f => S.map(s => { const a = V.sub(I(lv(f, s).b), I(lv(f, s).a)), b = V.sub(I(lk(f, s).b), I(lk(f, s).a)); return ang(a, b); })));
   row.level = Math.max(...fr.flatMap(f => S.map(s => ang(Id(f.get(pre + 'pedal' + s).y), [0, 1, 0])).map(a => Math.min(a, 180 - a))));
   row.stroke = spread(fr.map(f => I(f.get(pre + 'pedalL').c)[1]));
+  /* ход штока демпфера: расстояние между его опорами (корпус на основании, шток на рычаге) */
+  const dmp = fr.map(f => { const d = f.get(pre + 'damperL'), r = f.get(pre + 'rodL'); return d && r ? V.dist(I(d.a), I(r.b)) : NaN; }).filter(Number.isFinite);
+  row.damperStroke = dmp.length ? spread(dmp) : null;
   row.slips = (ev.contacts || []).filter(c => c.prop.startsWith(pre)).map(c => slipOf(fr, c));
   row.rigid = rigidOf(fr, [pre]);
   row.close = closeOf(fr, [pre]);
@@ -428,7 +431,7 @@ function describe(r) {
   const out = [`${r.type} ${r.part || ''}`];
   if (r.type === 'шатуны') out.push(`плечо ${rng(r.radius)} см (номинал ${f1(r.rc)}), противофаза ±${f1(r.phase)}°, ось педали ${f1(r.pedalAxis)}°, неравномерность ${(r.uneven * 100).toFixed(0)}%`);
   if (r.type === 'эллипс') out.push(`кривошип ${rng(r.radius)} см (номинал ${f1(r.rc)}), противофаза ±${f1(r.phase)}°, ролик по высоте ${rng(r.rollerY)} / вбок ${rng(r.rollerX)} см, рычаг мимо оси ${f2(r.pivotOff)} см, педаль к тяге ${f1(r.pedalBar)}°, шаг ${f1(r.stride)} см, подъём ${f1(r.rise)} см`);
-  if (r.type === 'степпер') out.push(`рычаг ${rng(r.lever)} см, тяга ${rng(r.link)} см, конец тяги от оси ${f2(r.linkJoin)} см, площадка ${f1(r.level)}°, ход педали ${f1(r.stroke)} см`);
+  if (r.type === 'степпер') out.push(`рычаг ${rng(r.lever)} см, тяга ${rng(r.link)} см, конец тяги от оси ${f2(r.linkJoin)} см, площадка ${f1(r.level)}°, ход педали ${f1(r.stroke)} см, ход штока демпфера ${f1(r.damperStroke)} см`);
   if (r.type === 'гребной') out.push(`цепь из направляющей ${f2(r.exitOff)} см, путь рукояти от прямой ${f1(r.pathDev)} см, цепь к полу ${rng(r.chainAng, f1)}°, ход ${f1(r.stroke)} см, рукоять к цепи ${f1(r.square)}°, сиденье: ролики ${rng(r.seatWheel)} см, ход ${f1(r.seatTravel)} см, запас рельса ${f1(r.seatOut)} см, фазы ${JSON.stringify(r.order)}`);
   if (r.type === 'дорожка') out.push(r.feet.map(q => `${q.body}: лента ${f1(q.speed)} см/цикл, от равномерного ${f2(q.slip)} см, по высоте ${rng(q.y)} см, вбок ${f2(q.sideways)} см`).join('; '));
   if (r.type === 'каретка') out.push(`направляющие ${f1(r.angle)}° к полу, ход ${f1(r.travel)} см (${rng(r.s, f1)} из ${f1(r.railLen)}), от линии ${f2(r.lineDev)} см`);

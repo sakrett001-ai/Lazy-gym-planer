@@ -10,6 +10,8 @@
   const toI = p => [p[0], M.FLOOR - p[1], p[2]], dI = d => [d[0], -d[1], d[2]];
   /* степпер: ось параллельной тяги — на 14 см выше и на 2 см позади оси рычага (внутренние оси) */
   const STEP_LINK = [0, 14, -2];
+  /* степпер: верхние опоры гидроцилиндров — на поперечине стойки на высоте y, в x от середины; длины корпуса и штока */
+  const STEP_DAMP = { y: 62, x: 16.5, body: 34, rod: 32 };
   /* опорная точка под подушечкой стопы (M.footFrame: сустав «мяча» на 1,65 см над подошвой по нормали пальцев) */
   const soleAt = (R, s) => V.add(toI(R['ball' + s]), dI(R.frames['toes' + s].y), M.B.toeSole);
 
@@ -322,7 +324,10 @@
     const la = V.add(pv, STEP_LINK), cB = [0, 8, pv[2] + 10], cT = [0, 142, pv[2] - 6], colZ = V.mix(cB, cT, (la[1] - cB[1]) / (cT[1] - cB[1]))[2];
     b.box('linkBracket', [0, la[1], (la[2] - 2 + colZ) / 2], [8, 6, colZ - la[2] + 2], { mount: 'column', round: .8 });
     b.cyl('linkAxle', [0, la[1], la[2]], [1, 0, 0], 1.4, 2 * pv[0] + 6, { mount: 'linkBracket', tone: 'chrome' });
-    b.tube('dampBase', [-pv[0] - 4, 3.5, zb + 22], [pv[0] + 4, 3.5, zb + 22], [6, 7], { mount: 'base' });
+    /* поперечина верхних опор гидроцилиндров — сквозь стойку на высоте STEP_DAMP.y */
+    const dz = V.mix(cB, cT, (STEP_DAMP.y - cB[1]) / (cT[1] - cB[1]))[2];
+    b.tube('dampTop', [-STEP_DAMP.x - 2, STEP_DAMP.y, dz], [STEP_DAMP.x + 2, STEP_DAMP.y, dz], [4, 4], { mount: 'column' });
+    b.anchor('dampTop', [STEP_DAMP.x, STEP_DAMP.y, dz]);
     /* передняя стойка, консоль, поручни */
     b.tube('column', cB, cT, [10, 12], { mount: 'base' });
     const ca = 30 * D2R, cy = [0, Math.cos(ca), -Math.sin(ca)], cz = [0, Math.sin(ca), Math.cos(ca)];
@@ -343,7 +348,8 @@
   /* Педали степпера: площадка под стопой, рычаг к оси, стойка педали и параллельная тяга (параллелограмм: тяга — рычаг,
      сдвинутый на STEP_LINK, поэтому стойка и площадка не поворачиваются), гидроцилиндр: корпус и шток постоянной длины,
      шток уходит в корпус. Раньше неподвижный конец тяги висел в 9,4 см от оси на раме, тяга была на 2 см короче рычага,
-     а корпус и шток демпфера растягивались вместе с ходом. */
+     корпус и шток демпфера растягивались вместе с ходом, а сам демпфер шёл от заднего края основания почти горизонтально,
+     поперёк хода своей проушины: при ходе педали 18 см шток ходил на 1,3 см. */
   BIND.stepPedals = (e, R) => {
     const id = e.id || 'step', out = [], P = p => toCat(p), D = d => dirCat(V.unit(d));
     for (const s of ['L', 'R']) {
@@ -358,9 +364,12 @@
       out.push({ kind: 'beam', a: P(V.add(le, pu, -2)), b: P(V.add(lt, pu, 2)), w: 4, h: 4, up: [0, 0, 1], tone: 'frame', role: 'linkage', id: id + ':post' + s, mount: id + ':lever' + s });
       out.push({ kind: 'beam', a: P(pv), b: P(le), w: 5, h: 4, up: [1, 0, 0], tone: 'frame', role: 'linkage', id: id + ':lever' + s, mount: e.mountTo });
       out.push({ kind: 'beam', a: P(la), b: P(lt), r: 1.1, tone: 'chrome', role: 'linkage', id: id + ':link' + s, mount: e.mountLink || id + ':post' + s });
-      /* гидроцилиндр между опорой на основании (db) и проушиной на рычаге (dt): корпус 48 см, шток 44 см (при ходе педали
-         расстояние между опорами 87,5…89 см — шток всегда в корпусе) */
-      const db = [pv[0], 7, e.dampZ], dt = V.add(V.mix(pv, le, .55), [0, -2, 0]), u = V.unit(V.sub(dt, db)), Lb = e.damperBody ?? 48, Lr = e.damperRod ?? 44;
+      /* гидроцилиндр: корпус висит на поперечине стойки (db), шток — на пальце сверху рычага в 0,55 его длины (dt), снаружи
+         рычага; линия цилиндра идёт вверх-вперёд под ≈50°, и проушина, которая ходит почти вертикально, двигает шток на ≈8 см
+         при ходе педали 18 см. Корпус 34 см, шток 32 см (расстояние между опорами 52…60 см — шток всегда в корпусе). */
+      const dx = g * STEP_DAMP.x, ey = V.add(V.mix(pv, le, .55), [0, 2, 0]), dt = [dx, ey[1], ey[2]], db = [dx, STEP_DAMP.y, e.dampZ];
+      const u = V.unit(V.sub(dt, db)), Lb = e.damperBody ?? STEP_DAMP.body, Lr = e.damperRod ?? STEP_DAMP.rod;
+      out.push({ kind: 'beam', a: P(V.add(ey, [-g * 2, 0, 0])), b: P(V.add(dt, [g * 1, 0, 0])), r: .8, tone: 'chrome', role: 'linkage', id: id + ':dampPin' + s, mount: id + ':lever' + s });
       out.push({ kind: 'beam', a: P(db), b: P(V.add(db, u, Lb)), r: 2.3, tone: 'stack', role: 'linkage', id: id + ':damper' + s, mount: e.mountDamp });
       out.push({ kind: 'beam', a: P(V.add(dt, u, -Lr)), b: P(dt), r: 1, tone: 'chrome', role: 'linkage', id: id + ':rod' + s, mount: id + ':damper' + s });
     }

@@ -832,7 +832,7 @@ module.exports = {
   /* Рычажная тяга к поясу с упором грудью: t=0 — руки вытянуты вперёд, лопатки разведены; t=1 — кисти у пояса,
      локти назад вдоль корпуса, лопатки сведены. Грудь не отрывается от упора. */
   leverrowm: {
-    keys: [0, .25, .5, .75, 1],
+    keys: [0, .125, .25, .375, .5, .625, .75, .875, 1], /* 9 ключей: при 5 кисть между ключами уходила с окружности рукояти рычага на 0,5 см */
     /* кулачок по кривой разгибания плеча (Bober 2002) */
     get equipment() { const L = LRM(); return seatedCamEq(this, { m: L.machine, levers: S.map(s => handleLever('lr', s, [C_SIGN[s] * L.P[0], L.P[1], L.P[2]], [C_SIGN[s] * L.hx, ...arcPt(L.P, L.R, L.th0, 0).slice(1)], 'rt', 'lr:hub' + s, LRM_T.beta)),
       bind: 'gripL', curve: 'shoulderExtension', sense: LRM_CAM.sense, scale: LRM_CAM.scale, kg: 138, kgSrc: 'Hammer Strength Select Seated Row', s2: -1 }); },
