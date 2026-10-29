@@ -123,8 +123,15 @@ export function createVolumeFigure(options){
     Тогда и материалы прежней фигуры на этом рендерере отпускаются после кадра в нужном виде — их собранные программы
     шейдеров переходят к этой фигуре (раньше первым был кадр манекена, и программы костей и мышц собирались заново).
     Данные кожи Anny грузятся, как и раньше, при создании фигуры */
- if(options.layers){skeleton=options.layers.bones||null;anatomy=options.layers.body||null;root.dataset.skeleton=skeleton?'on':'off';root.dataset.anatomy=anatomy?'on':'off';loadAnny();}
- apply(lastT,0);scene.studio?.(renderer);if(lowPower)scene.setShadows?.(false);
+ if(!options.layers){apply(lastT,0);scene.studio?.(renderer);}
+ else{
+  /* свет и рамка тени (studio → fitShadow — по сетям сцены) — по кадру без костей и мышц, как раньше, когда первым был кадр
+     манекена: рамка тени та же, та же и картинка. Этот кадр — только точки (рамке тени нормали не нужны) и не рисуется */
+  apply(lastT,0,true);scene.studio?.(renderer);
+  skeleton=options.layers.bones||null;anatomy=options.layers.body||null;root.dataset.skeleton=skeleton?'on':'off';root.dataset.anatomy=anatomy?'on':'off';loadAnny();
+  apply(lastT,0);
+ }
+ if(lowPower)scene.setShadows?.(false);
  /* замер скорости (?perf, src/js/19-perf-panel.js): обёртки вызовов этой фигуры; выключенный — одна проверка при создании */
  globalThis.GymPerf?.volume({scene,renderer,options,root,low:()=>lowPower});
  const pace=[];let lastAt=0;
