@@ -174,16 +174,21 @@ function instepOn(C, q, s, x, ankleZ, top, phi, pole, squash = 1) {
   return r;
 }
 
+/* Разгибание из-за головы: хват «ромбом» — гантель вертикально, обе ладони под верхним диском рядом, без нахлёста (stag 0,
+   центры ладоней в w см по сторонам рукояти), большие и указательные пальцы смыкаются вокруг рукояти; вверху руки почти
+   прямые (дуга начинается с радиуса r0) и плечи чуть подняты (ge0 — подъём ключицы вверху, град). Вверху хват задан (top:
+   разворот пальцев к середине, полюс локтя вперёд fz и наружу lx), ниже — выбор из сетки с непрерывностью. */
+const OHX = { r0: 32, w: 5.5, stag: 0, ge0: 30, top: { yaw: 70, fz: .4, lx: .55 } };
 /* Разгибание из-за головы: поза одного ключа; prev — варианты хвата предыдущего ключа; force — заданный вариант хвата
    по сторонам ({ L: { yaw, fz, lx }, R: … }) вместо выбора из сетки */
 function ohextKey(t, C, prev, force) {
   const { V } = C, q = C.base(), e = C.ease(t);
   C.root(q, [0, 89.2, 0], [0, 1, 0], [0, 0, 1]); q.lumbar = [1, 0, 0]; q.thoracic = [0, 0, 0]; q.neck = [C.lerp(4, 10, e), 0, 0];
   const feet = q => { for (const s of S) plant(C, q, s, [C.M.SIGN[s] * 11, 0, -1]); };
-  for (const s of S) q[s].girdle = [C.lerp(+(process.env.OH_GE || 26), 22, e), C.lerp(+(process.env.OH_GP || 2), 0, e)];
+  for (const s of S) q[s].girdle = [C.lerp(OHX.ge0, 22, e), C.lerp(2, 0, e)];
   const mk = (yw, fz, lx) => ({ yaw: yw, fz, lx, pole: (s, lat) => V.unit(V.add(V.add(V.scale(lat, lx), [0, 1, 0], C.lerp(.2, 4, e)), [0, 0, 1], fz)), dist: o => Math.abs(yw - o.yaw) / 10 + Math.abs(fz - o.fz) * 2 + Math.abs(lx - o.lx) * 2 });
   const grid = [];
-  for (let yw = 20; yw <= +(process.env.OH_YMAX || 90); yw += 5) for (const fz of [-.4, 0, .3, .6, 1, 1.6]) for (const lx of [1, .4, -.2]) grid.push(mk(yw, fz, lx));
+  for (let yw = 20; yw <= 90; yw += 5) for (const fz of [-.4, 0, .3, .6, 1, 1.6]) for (const lx of [1, .4, -.2]) grid.push(mk(yw, fz, lx));
   const cands = force ? s => [mk(force[s].yaw, force[s].fz, force[s].lx)] : () => grid;
   let chosen = null;
   const arms = q => {
@@ -195,9 +200,9 @@ function ohextKey(t, C, prev, force) {
        прежде 6,9 — в 0,6 см от края диска радиусом 7,5); верхний ключ (t=0) — прежний: при любой
        другой раскладке ладоней (6,6–6,9 см) кисти над головой выворачивают кожу Anny сильнее — вывернутых треугольников 35–36
        против записанных 34 (tools/anny-look/fixtures/folds.json, числа только убывают) */
-    const R0 = +(process.env.OH_R0 || 26), E = [0, gh[1] + 25, head[2] + 1.9], th = C.lerp(+(process.env.OH_TH0 || -15.6), 96, Math.pow(e, .8)) * C.D2R, r = e < .5 ? R0 + (28 - R0) * Math.sin(Math.PI * e) : C.lerp(28, 20, (e - .5) * 2);
-    const P = V.add(E, [0, Math.cos(th), -Math.sin(th)], r), tilt = C.lerp(+(process.env.OH_TILT || 18), 12, e) * C.D2R;
-    chosen = cup(C, q, P, [0, Math.cos(tilt), Math.sin(tilt)], [0, 0, -1], { w: t === 0 ? +(process.env.OH_W || 5.8) : 5.4, stag: t === 0 ? +(process.env.OH_STAG || 3.8) : 3.8, cands, prev, lam: 25,
+    const E = [0, gh[1] + 25, head[2] + 1.9], th = C.lerp(-15.6, 96, Math.pow(e, .8)) * C.D2R, r = e < .5 ? OHX.r0 + (28 - OHX.r0) * Math.sin(Math.PI * e) : C.lerp(28, 20, (e - .5) * 2);
+    const P = V.add(E, [0, Math.cos(th), -Math.sin(th)], r), tilt = C.lerp(18, 12, e) * C.D2R;
+    chosen = cup(C, q, P, [0, Math.cos(tilt), Math.sin(tilt)], [0, 0, -1], { w: OHX.w, stag: OHX.stag, cands, prev, lam: 25,
       prefer: (q, s) => { const el = C.fk(q).P['el' + s]; return 1.2 * Math.max(0, Math.abs(el[0]) - 12) ** 2; } });
   };
   settle(C, q, { lo: 1, hi: 7, loads: q => [[C.fk(q).P.gripL, 12]], resolve: q => { feet(q); arms(q); } });
@@ -728,7 +733,7 @@ module.exports = {
       const chain = this._chain || (this._chain = (() => {
         const out = new Map(), base = Array.from({ length: 13 }, (_, i) => i / 12), ch = [];
         let prev = null;
-        for (const tk of base) { const r = ohextKey(tk, C, prev); out.set(key(tk), r.q); ch.push(r.chosen); prev = r.chosen; }
+        for (const tk of base) { const r = ohextKey(tk, C, prev, tk === 0 ? { L: OHX.top, R: OHX.top } : undefined); out.set(key(tk), r.q); ch.push(r.chosen); prev = r.chosen; }
         for (let i = 0; i < 12; i++) {
           const mid = s => ({ yaw: (ch[i][s].yaw + ch[i + 1][s].yaw) / 2, fz: (ch[i][s].fz + ch[i + 1][s].fz) / 2, lx: (ch[i][s].lx + ch[i + 1][s].lx) / 2 });
           out.set(key((2 * i + 1) / 24), ohextKey((2 * i + 1) / 24, C, null, { L: mid('L'), R: mid('R') }).q);
