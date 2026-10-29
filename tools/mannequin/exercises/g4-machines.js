@@ -84,7 +84,7 @@ function legLever(id, L, mountTo) {
    направление огибания кулачка тросом, scale — плечо троса на пике целевой кривой, см; kg — масса всего стека по паспорту
    тренажёра этого класса (kgSrc) — для проверки энергией (tools/lever-stacks.test.js). Блоки: p1 (если есть) и верхний блок
    колонны p2, оба Ø10. */
-const HOVER = 1, LEVER_EQ = new WeakMap();
+const HOVER = 1, LEVER_EQ = new WeakMap(), MULT_R = 5;
 function leverStackEq(spec, { L, lever, curve, sense, scale, kg, kgSrc }) {
   if (LEVER_EQ.has(spec)) return LEVER_EQ.get(spec);
   const m = L.machine, A = EQ.anchors([m])[m.id], info = A.stkstackInfo, st = A.stkstack;
@@ -95,6 +95,31 @@ function leverStackEq(spec, { L, lever, curve, sense, scale, kg, kgSrc }) {
   tr.cam = CAM.design(tr, poses, { curve: CURVES[curve], sense, scale }).cam;
   tr.rest = r2(Math.min(...poses.map(R => EQ.leverStack.state({ ...tr, rest: 0 }, R).L)) - HOVER / tr.ratio);
   const out = [m, lever, tr];
+  LEVER_EQ.set(spec, out);
+  return out;
+}
+/* Сидячие рычажные тренажёры (seatedLever): оба рычага на общем валу m.id:axle, кулачок посередине вала (x = 0), трос — к блоку
+   колонны стека (p2) и вниз к обойме подвижного блока 1:2 (k = 2: плиты поднимаются вдвое больше, чем выбирается трос
+   кулачка). s2 — направление огибания блока колонны (+1 — трос приходит со стороны +Z). Рычаг поворачивается на 19–34°,
+   поэтому запас профиля за краями хода меньше, чем у ножных машин (14° и 12° у зажима вместо 32° и 24°): за краями хода трос
+   кулачка не касается, а длинный «хвост» спирали только увеличивал бы кулачок. */
+function seatedCamEq(spec, { m, levers, bind, curve, sense, scale, kg, kgSrc, s2 }) {
+  if (LEVER_EQ.has(spec)) return LEVER_EQ.get(spec);
+  const mm = { ...m, stack: { ...m.stack, mult: MULT_R } }, A = EQ.anchors([mm])[m.id], info = A.stkstackInfo, st = A.stkstack;
+  const tr = { type: 'g4camCable', id: m.id + 'Cam', pivot: rp(A.pivot), axis: [1, 0, 0], bind, plane: 0, mountTo: m.id + ':axle', lever: levers[0].id, curve, kg, kgSrc, anchorParts: [m.id + ':stkdeadEnd'],
+    route: [{ c: rp(A.p2), r: 5, s: s2, id: m.id + ':stkpulley' }], ratio: 2, rodPart: m.id + ':' + info.rod,
+    stack: { o: rp(st.o), R: st.R.map(v => Math.round(v * 1e4) / 1e4), sel: info.sel, pitch: info.pitch, size: info.size, topY: r2(info.topY), maxLift: 0 } };
+  const poses = bakedPoses(spec, [mm, ...levers]);
+  tr.cam = CAM.design(tr, poses, { curve: CURVES[curve], sense, scale, margin: 14 * D2R, anchorMargin: 12 * D2R }).cam;
+  const Ls = poses.map(R => EQ.leverStack.state({ ...tr, rest: 0 }, R).L), dL = Math.max(...Ls) - Math.min(...Ls);
+  tr.rest = r2(Math.min(...Ls) - HOVER / tr.ratio);
+  /* подвижный блок: в начале повтора центр — посередине между блоком колонны и штоком верхней плиты (stem), к концу поднимается
+     на dL, плиты — на 2·dL; maxLift — пока шток не подошёл к блоку на 5 см */
+  const stem0 = st.o[1] + info.sel * info.pitch + 10, top0 = info.topY, c0 = (top0 + stem0) / 2;
+  tr.mult = { r: MULT_R, d0: r2(top0 - c0 - MULT_R - 3 - HOVER / tr.ratio), dead: rp(A.stkdead) };
+  tr.stack.maxLift = r1(2 * (c0 - MULT_R - stem0 - 5));
+  if (2 * dL + HOVER >= tr.stack.maxLift) throw new Error(m.id + ': подвижный блок упирается в шток');
+  const out = [mm, ...levers, tr];
   LEVER_EQ.set(spec, out);
   return out;
 }
@@ -273,14 +298,37 @@ function gvKneel(C, phi, { thigh = 0, lean = 0, lumbar = 0, thor = 0, neck = 0 }
 }
 /* хват на брусьях гравитрона — под плечами в верхнем положении */
 const GV_DIPZ = () => -6;
-const GV_EQ = () => [{ type: 'gravitron', id: 'gv', tz: GV.tz, pivot: [GV.P[1] + GV.d0[1], GV.P[2] + GV.d0[2]], linkV: GV.v[1], pull: GV.pull, dip: GV.dip, step: GV.step },
-  { type: 'g4link', id: 'gvPad', pivot: GV.P, axis: [1, 0, 0], d0: GV.d0, v: GV.v, armX: [-12, 12], mountTo: 'gv:shaftU', mountTo2: 'gv:shaftD', bind: { mix: ['knL', 'knR'], frame: 'skL', off: [0, 0, 5.4] },
-    carrier: [
-      { name: 'pad', kind: 'obox', c: [0, -3.5, -12], size: [40, 7, 40], tone: 'pad', role: 'support', mount: 'plate', round: 1.6 },
-      { name: 'plate', kind: 'obox', c: [0, -8, -12], size: [34, 2, 36], mount: 'frame' },
-      { name: 'frame', kind: 'beam', a: [-13, -11, 2], b: [13, -11, 2], w: 6, h: 6, mount: 'post0' },
-      { name: 'frameB', kind: 'beam', a: [0, -11, 2], b: [0, -11, -26], w: 6, h: 4, mount: 'frame' }
-    ] }];
+/* Противовес гравитрона (09bo-g4-lever.js, привод 'block'): подвижный блок Ø9 на поперечине верхних плеч, в RA = 22 см от вала U.
+   Ближе к площадке нельзя: в нижней точке отжиманий голова наклонённого вперёд человека доходит до z ≈ 53 см, передняя ветвь
+   троса блока при RA = 22 — в z ≈ 57. На площадку блок давит с силой 2T·RA/r = 0,51·m·g (r = 86 — плечо площадки): стек 100 кг
+   (паспорт Life Fitness Insignia Assist Dip Chin, тяжёлый стек; у Signature — 85 кг) помогает до 51 кг. */
+const GV_RA = 22, GV_WHEEL = 4.5, GV_FORK = 3;
+const GV_MACHINE = () => { const u0 = [0, 0, -1], W = V3([0, GV.P[1] + GV.d0[1], GV.P[2] + GV.d0[2]], u0, GV_RA);
+  return { type: 'gravitron', id: 'gv', tz: GV.tz, pivot: [GV.P[1] + GV.d0[1], GV.P[2] + GV.d0[2]], linkV: GV.v[1], pull: GV.pull, dip: GV.dip, step: GV.step,
+    stack: { z: GV.P[2] + 18 }, cab: { dead: r2(W[2] - GV_WHEEL), live: r2(W[2] + GV_WHEEL), r: 5 } }; };
+const GV_LINK = () => ({ type: 'g4link', id: 'gvPad', pivot: GV.P, axis: [1, 0, 0], d0: GV.d0, v: GV.v, armX: [-12, 12], mountTo: 'gv:shaftU', mountTo2: 'gv:shaftD', bind: { mix: ['knL', 'knR'], frame: 'skL', off: [0, 0, 5.4] },
+  carrier: [
+    { name: 'pad', kind: 'obox', c: [0, -3.5, -12], size: [40, 7, 40], tone: 'pad', role: 'support', mount: 'plate', round: 1.6 },
+    { name: 'plate', kind: 'obox', c: [0, -8, -12], size: [34, 2, 36], mount: 'frame' },
+    { name: 'frame', kind: 'beam', a: [-13, -11, 2], b: [13, -11, 2], w: 6, h: 6, mount: 'post0' },
+    { name: 'frameB', kind: 'beam', a: [0, -11, 2], b: [0, -11, -26], w: 6, h: 4, mount: 'frame' }
+  ],
+  /* поперечина под вилкой подвижного блока: от вала U на RA − (колесо + вилка) − 2,5 см */
+  armParts: [{ name: 'xbar', kind: 'beam', a: [-12, GV_RA - GV_WHEEL - GV_FORK - 2.5, 0], b: [12, GV_RA - GV_WHEEL - GV_FORK - 2.5, 0], w: 6, h: 6, up: [0, 0, 1], mount: 'armU0' }] });
+const GV_EQS = new WeakMap();
+function GV_EQ(spec) {
+  if (GV_EQS.has(spec)) return GV_EQS.get(spec);
+  const m = GV_MACHINE(), link = GV_LINK(), A = EQ.anchors([m]).gv, info = A.stkstackInfo, st = A.stkstack;
+  const tr = { type: 'g4camCable', id: 'gvCab', kind: 'block', pivot: [0, GV.P[1] + GV.d0[1], GV.P[2] + GV.d0[2]], anglePivot: GV.P, axis: [1, 0, 0], bind: link.bind,
+    at: [GV_RA, 0], wheel: GV_WHEEL, sense: 1, fork: GV_FORK, dead: rp(A.dead), mountTo: 'gvPad:xbar', lever: 'gvPad', anchorParts: ['gv:deadEnd'], kg: 100, kgSrc: 'Life Fitness Insignia Assist Dip Chin (heavy stack)',
+    route: [{ c: rp(A.p1), r: 5, s: -1, id: 'gv:p1' }, { c: rp(A.p2), r: 5, s: -1, id: 'gv:stkpulley' }], ratio: info.ratio, rodPart: 'gv:' + info.rod,
+    stack: { o: rp(st.o), R: st.R.map(v => Math.round(v * 1e4) / 1e4), sel: info.sel, pitch: info.pitch, size: info.size, topY: r2(info.topY), maxLift: r1(info.maxLift) } };
+  const poses = bakedPoses(spec, [m, link]);
+  tr.rest = r2(Math.min(...poses.map(R => EQ.leverStack.state({ ...tr, rest: 0 }, R).L)) - HOVER / tr.ratio);
+  const out = [m, link, tr];
+  GV_EQS.set(spec, out);
+  return out;
+}
 
 /* ================= «Капитанский стул» ================= */
 /* Предплечья на упорах (верх 128 см), плечо вертикально, кисти на вертикальных рукоятях. Грудная клетка прижата
@@ -350,7 +398,7 @@ const CPM = once(() => {
   const R = 88, hx = 28, ys = gh[1] - 10, zs = gh[2] + 32, ze = gh[2] + 61, zm = (zs + ze) / 2, P = [38, ys + Math.sqrt(R * R - (ze - zm) ** 2), zm];
   const th0 = arcAng(P, [0, ys, zs]), th1 = arcAng(P, [0, ys, ze]);
   const machine = { type: 'seatedLever', id: 'cp', front, seat: { h: seatH, z0: padZ - 14, z1: padZ + 30 }, pad: { kind: 'back', z: padAt(padZ, seatH + 4, lean, 'back', seatH), ang: lean, y0: seatH + 4, y1: seatH + 74 },
-    hub: { x: P[0], y: P[1], z: P[2] }, tower: { z: padZ - 34, h: P[1] + 14 } };
+    hub: { x: P[0], y: P[1], z: P[2] }, tower: { z: padZ - 34, h: P[1] + 14 }, stack: { z: padZ - 58, H: r1(P[1] + 10.5) } };
   return { q, P, R, hx, th0, th1, machine };
 });
 
@@ -363,10 +411,12 @@ const SPM = once(() => {
   const R = 72, hx = SPM_T.hx, A0 = [0, gh[1] + SPM_T.y0, gh[2] + SPM_T.z0], A1 = [0, gh[1] + SPM_T.y1, gh[2] + SPM_T.z1], P = [42, ...arcCenter(A0, A1, R, [0, -1])];
   const th0 = arcAng(P, A0), th1 = arcAng(P, A1);
   const machine = { type: 'seatedLever', id: 'sp', seat: { h: seatH, z0: padZ - 14, z1: padZ + 30 }, pad: { kind: 'back', z: padAt(padZ, seatH + 4, lean, 'back', seatH), ang: lean, y0: seatH + 4, y1: seatH + 74 },
-    hub: { x: P[0], y: P[1], z: P[2] }, tower: { z: P[2] - 6, h: P[1] + 40 } };
+    hub: { x: P[0], y: P[1], z: P[2] }, tower: { z: P[2] - 6, h: P[1] + 40 }, stack: { z: r1(P[2] - 45), H: r1(P[1] + 10.5) } };
   return { q, P, R, hx, th0, th1, machine, gh };
 });
 const SPM_T = { hx: 34, y0: 18, z0: 4, y1: 61, z1: -2 };
+/* кулачки сидячих рычажных: направление огибания и плечо троса на пике кривой, см */
+const CPM_CAM = { sense: -1, scale: 20 }, SPM_CAM = { sense: -1, scale: 18 }, LRM_CAM = { sense: 1, scale: 20 };
 
 /* Рычажная тяга с упором грудью: сидя, грудь на вертикальном упоре, оси рычагов над головой,
    рукояти вертикальные (нейтральный хват), идут по дуге назад-вниз к поясу. */
@@ -377,7 +427,7 @@ const LRM = once(() => {
   const R = 100, hx = T.hx, A0 = [0, gh[1] + T.y0, gh[2] + T.z0], A1 = [0, gh[1] + T.y1, gh[2] + T.z1], P = [44, ...arcCenter(A0, A1, R, [1, 0])];
   const th0 = arcAng(P, A0), th1 = arcAng(P, A1), py = padZ + (seatH + 6 - seatH - 40) * Math.tan(-lean * D2R);
   const machine = { type: 'seatedLever', id: 'lr', seat: { h: seatH, z0: -24, z1: padZ - 8 }, pad: { kind: 'chest', z: padAt(padZ, seatH + 22, -lean, 'chest', seatH), ang: -lean, y0: seatH + 22, y1: seatH + 66, w: 30 },
-    hub: { x: P[0], y: P[1], z: P[2] }, tower: { z: padZ + 62, h: P[1] + 14 } };
+    hub: { x: P[0], y: P[1], z: P[2] }, tower: { z: padZ + 62, h: P[1] + 14 }, stack: { z: padZ + 86, H: r1(P[1] + 10.5), yaw: 180 } };
   return { q, P, R, hx, th0, th1, machine, gh };
 });
 const LRM_T = { hx: 22, y0: -9, z0: 63, y1: -20, z1: 8, beta: 14 };
@@ -434,6 +484,8 @@ function haLever(L, s, side) {
   return { type: 'g4lever', id: 'ha' + s, pivot: P, axis: [0, 1, 0], mountTo: 'ha:hub' + s, bind: 'kn' + s,
     parts: [
       { name: 'hub', kind: 'cyl', c: [-3, 0, 0], axis: [1, 0, 0], r: 5, len: 7, mount: 'ha:hub' + s },
+      /* зубчатый сектор под ступицей: секторы левого и правого рычагов в зацеплении посередине (рычаги ходят зеркально) */
+      { name: 'gear', kind: 'cyl', c: [-7.5, 0, 0], axis: [1, 0, 0], r: 8.6, len: 2, mount: 'hub', tone: 'chrome', sides: 40 },
       { name: 'arm', kind: 'beam', a: [-3, 0, 0], b: [-3, rk - 2, tpost], w: 5, h: 5, up: [1, 0, 0], mount: 'hub' },
       { name: 'post', kind: 'beam', a: [ab - 6, rk - 2, tpost], b: [ak + 7, rk - 2, tpost], w: 4.5, h: 4.5, up: [0, 1, 0], mount: 'arm' },
       /* подушка у колена; нижний край выше сиденья (сиденье кончается под бедром) */
@@ -442,6 +494,33 @@ function haLever(L, s, side) {
       { name: 'pegArm', kind: 'beam', a: [ab - 5, rk - 2, tpost], b: [ab - 5, rb, 0], w: 3, h: 3, up: [1, 0, 0], mount: 'post' },
       { name: 'peg', kind: 'obox', c: [ab - 2.4, rb - 1, 0], size: [3, 16, 11], tone: 'rubber', mount: 'pegArm', round: .5 }
     ] };
+}
+
+/* Передача тренажёра отведения/приведения (09bo-g4-lever.js): рычаги связаны зубчатыми секторами, кулачок — на оси левого
+   рычага в плоскости HA_CAB.y, трос — к блоку p1, к середине на p1b, назад по оси к колонне стека за спинкой (1:1). Стек 138 кг —
+   паспорт Hammer Strength Select Hip Abduction / Adduction. Кулачок по кривой отведения (пик 13°) или приведения (пик 36°)
+   бедра, плечо на пике HA_CAM.scale. Наматывается трос на кулачок с наружной стороны: при отведении — уходя вперёд (p1 перед
+   осью), при приведении — назад (p1 за осью). */
+const HA_STACK = { z: -80, H: 140 };
+const HA_CAM = {
+  out: { curve: 'hipAbduction', sense: 1, scale: 14, cab: { y: 13, p1: { c: [17.3, 10.7], dir: [-1, -1], s: 1 }, p1b: { c: [5.5, 10.7], dir: [1, -1], s: 1 } } },
+  in: { curve: 'hipAdduction', sense: -1, scale: 11, cab: { y: 13, p1: { c: [14.3, -33.3], dir: [-1, 1], s: -1 }, p1b: { c: [5.5, -44.3], dir: [1, -1], s: 1 } } }
+};
+function haEq(spec, side) {
+  if (LEVER_EQ.has(spec)) return LEVER_EQ.get(spec);
+  const L = HA(), cfg = HA_CAM[side], m = { ...L.machine, cab: cfg.cab, stack: HA_STACK }, levers = [haLever(L, 'L', side), haLever(L, 'R', side)];
+  const A = EQ.anchors([m]).ha, info = A.stkstackInfo, st = A.stkstack, lv = levers[0];
+  const tr = { type: 'g4camCable', id: 'haCam', pivot: lv.pivot, axis: [0, 1, 0], bind: lv.bind, plane: r2(cfg.cab.y - lv.pivot[1]), mountTo: 'ha:hubL', lever: lv.id,
+    tail: { id: 'ha:tail', wheels: ['ha:stkp2', 'ha:stkpulley'] },
+    route: ['p1', 'p1b'].map(k => ({ c: rp(A[k]), r: 5.5, s: cfg.cab[k].s, id: 'ha:' + k })), depart: [0, 0, -1],
+    curve: cfg.curve, kg: 138, kgSrc: 'Hammer Strength Select Hip ' + (side === 'out' ? 'Abduction' : 'Adduction'), ratio: info.ratio, rodPart: 'ha:' + info.rod,
+    stack: { o: rp(st.o), R: st.R.map(v => Math.round(v * 1e4) / 1e4), sel: info.sel, pitch: info.pitch, size: info.size, topY: r2(info.topY), maxLift: r1(info.maxLift) } };
+  const poses = bakedPoses(spec, [m, ...levers]);
+  tr.cam = CAM.design(tr, poses, { curve: CURVES[cfg.curve], sense: cfg.sense, scale: cfg.scale }).cam;
+  tr.rest = r2(Math.min(...poses.map(R => EQ.leverStack.state({ ...tr, rest: 0 }, R).L)) - HOVER / tr.ratio);
+  const out = [m, ...levers, tr];
+  LEVER_EQ.set(spec, out);
+  return out;
 }
 
 /* ================= Подъём на носки сидя ================= */
@@ -517,6 +596,43 @@ const SCS_L = once(() => {
      валика у основания шеи глубже на 0,5 см (по вертикали до кожи — те же 3,6 см) */
   return { dz: gh[2] - SCS.zr, padZ: yc - .3, th };
 });
+/* Каретка с плечевыми упорами и передача к стеку (09bo-g4-lever.js, привод 'sled'): трос из проушины под нижней поперечиной
+   каретки — вниз к блоку pa, по полу к pb, вверх к блоку стека pc, вниз к верхней плите (1:1). Стек — 100 кг (паспорт Panatta
+   1SC089 Calf Machine). Длина троса — чтобы в начале повтора (пятки внизу) плиты висели на HOVER см. */
+const SCS_STACK = { z: -72, H: 140 }, SCS_EQS = new WeakMap();
+function SCS_EQ(spec) {
+  if (SCS_EQS.has(spec)) return SCS_EQS.get(spec);
+  const L = SCS_L(), y = -L.dz, z = L.padZ, rx = 24, c = Math.cos(L.th), sn = Math.sin(L.th), top = z + 12;
+  const m = { type: 'standingCalf', id: 'cs', zr: SCS.zr, rx, step: SCS.step, stack: SCS_STACK };
+  const sled = { type: 'g4sled', id: 'csSled', rail: [[0, 38, SCS.zr], [0, 214, SCS.zr]], up: [0, 0, -1], bind: { mix: ['shL', 'shR'] }, mountTo: 'cs:rodL',
+    parts: [
+      ...[1, -1].flatMap(g => { const k = g > 0 ? 'L' : 'R', ax = [g * c, 0, -sn], n = [g * sn, 0, c], pc = [g * 12.5 + n[0] * 3.5, y, z + n[2] * 3.5];
+        const hl = Math.hypot(.4, .9), ha = [0, .4 / hl, .9 / hl], hc = [g * SCS_HD.x, y - SCS_HD.dz, SCS_HD.dy];
+        return [
+        { name: 'car' + k, kind: 'obox', c: [g * rx, 0, top - 4], size: [6, 7, 16], mount: 'cs:rod' + k },
+        { name: 'arm' + k, kind: 'beam', a: [g * rx, 0, top], b: [g * rx, y - SCS_HD.dz - 6, top], w: 5, h: 6, mount: 'car' + k },
+        { name: 'pad' + k, kind: 'obox', c: pc, size: [14, 7, 17], axes: [ax, n, [0, 1, 0]], tone: 'pad', role: 'support', mount: 'padPlate' + k, round: 2 },
+        { name: 'padPlate' + k, kind: 'obox', c: [pc[0] + n[0] * 4.4, y, pc[2] + n[2] * 4.4], size: [11, 2, 14], axes: [ax, n, [0, 1, 0]], mount: 'padArm' + k },
+        { name: 'padArm' + k, kind: 'beam', a: [g * rx, y, top], b: [pc[0] + n[0] * 5.2, y, pc[2] + n[2] * 5.2], w: 4, h: 4, mount: 'arm' + k },
+        { name: 'hDrop' + k, kind: 'beam', a: [g * SCS_HD.x, hc[1] + ha[1] * 9, top], b: [g * SCS_HD.x, hc[1] + ha[1] * 9, hc[2] + ha[2] * 9], w: 3.5, h: 3.5, mount: 'arm' + k },
+        { name: 'handle' + k, kind: 'beam', a: [g * SCS_HD.x, hc[1] + ha[1] * 9, hc[2] + ha[2] * 9], b: [g * SCS_HD.x, hc[1] - ha[1] * 8, hc[2] - ha[2] * 8], r: 1.6, tone: 'rubber', role: 'grip', mount: 'hDrop' + k }
+      ]; }),
+      { name: 'cross', kind: 'beam', a: [-rx, 0, top], b: [rx, 0, top], w: 6, h: 6, mount: 'carL' },
+      /* нижняя поперечина между каретками и проушина троса под ней (на оси между направляющими) */
+      { name: 'crossLo', kind: 'beam', a: [-rx + 2.5, 0, top - 10], b: [rx - 2.5, 0, top - 10], w: 5, h: 5, mount: 'carL' },
+      { name: 'eye', kind: 'obox', c: [0, 0, top - 14], size: [2.5, 2.5, 3], mount: 'crossLo', tone: 'chrome', round: .4 }
+    ] };
+  const A = EQ.anchors([m]).cs, info = A.stkstackInfo, st = A.stkstack;
+  const tr = { type: 'g4camCable', id: 'csCab', kind: 'sled', pivot: [0, 0, SCS.zr], axis: [1, 0, 0], bind: sled.bind, rail: sled.rail, at: [0, top - 15.3, 0], mountTo: 'csSled:eye',
+    lever: 'csSled', jointCurve: 'plantarFlexion', kg: 100, kgSrc: 'Panatta 1SC089 Calf Machine',
+    route: [{ c: rp(A.pa), r: 5, s: -1, id: 'cs:pa' }, { c: rp(A.pb), r: 5, s: -1, id: 'cs:pb' }, { c: rp(A.pc), r: 5, s: 1, id: 'cs:stkpulley' }], ratio: info.ratio, rodPart: 'cs:' + info.rod,
+    stack: { o: rp(st.o), R: st.R.map(v => Math.round(v * 1e4) / 1e4), sel: info.sel, pitch: info.pitch, size: info.size, topY: r2(info.topY), maxLift: r1(info.maxLift) } };
+  const poses = bakedPoses(spec, [m, sled]);
+  tr.rest = r2(Math.min(...poses.map(R => EQ.leverStack.state({ ...tr, rest: 0 }, R).L)) - HOVER / tr.ratio);
+  const out = [m, sled, tr];
+  SCS_EQS.set(spec, out);
+  return out;
+}
 
 /* ================= Гакк-машина ================= */
 /* Спина и таз на каретке под 45°, ноги вынесены вперёд (линия таз–стопа 55° от вертикали), площадка с подъёмом
@@ -641,32 +757,13 @@ module.exports = {
      t=0 — пятки опущены ниже ступени, t=1 — подъём на носки максимально высоко; каретка идёт вверх вместе с плечами. */
   standcalf: {
     keys: [0, .25, .5, .75, 1],
-    equipment: (() => {
-      const L = SCS_L(), y = -L.dz, z = L.padZ, rx = 24, c = Math.cos(L.th), sn = Math.sin(L.th);
-      return [{ type: 'standingCalf', id: 'cs', zr: SCS.zr, rx, step: SCS.step },
-        { type: 'g4sled', id: 'csSled', rail: [[0, 38, SCS.zr], [0, 214, SCS.zr]], up: [0, 0, -1], bind: { mix: ['shL', 'shR'] }, mountTo: 'cs:rodL',
-          parts: [
-            ...[1, -1].flatMap(g => { const k = g > 0 ? 'L' : 'R', ax = [g * c, 0, -sn], n = [g * sn, 0, c], pc = [g * 12.5 + n[0] * 3.5, y, z + n[2] * 3.5], top = z + 12;
-              const hl = Math.hypot(.4, .9), ha = [0, .4 / hl, .9 / hl], hc = [g * SCS_HD.x, y - SCS_HD.dz, SCS_HD.dy];
-              return [
-              { name: 'car' + k, kind: 'obox', c: [g * rx, 0, top - 4], size: [6, 7, 16], mount: 'cs:rod' + k },
-              { name: 'arm' + k, kind: 'beam', a: [g * rx, 0, top], b: [g * rx, y - SCS_HD.dz - 6, top], w: 5, h: 6, mount: 'car' + k },
-              { name: 'pad' + k, kind: 'obox', c: pc, size: [14, 7, 17], axes: [ax, n, [0, 1, 0]], tone: 'pad', role: 'support', mount: 'padPlate' + k, round: 2 },
-              { name: 'padPlate' + k, kind: 'obox', c: [pc[0] + n[0] * 4.4, y, pc[2] + n[2] * 4.4], size: [11, 2, 14], axes: [ax, n, [0, 1, 0]], mount: 'padArm' + k },
-              { name: 'padArm' + k, kind: 'beam', a: [g * rx, y, top], b: [pc[0] + n[0] * 5.2, y, pc[2] + n[2] * 5.2], w: 4, h: 4, mount: 'arm' + k },
-              { name: 'hDrop' + k, kind: 'beam', a: [g * SCS_HD.x, hc[1] + ha[1] * 9, top], b: [g * SCS_HD.x, hc[1] + ha[1] * 9, hc[2] + ha[2] * 9], w: 3.5, h: 3.5, mount: 'arm' + k },
-              { name: 'handle' + k, kind: 'beam', a: [g * SCS_HD.x, hc[1] + ha[1] * 9, hc[2] + ha[2] * 9], b: [g * SCS_HD.x, hc[1] - ha[1] * 8, hc[2] - ha[2] * 8], r: 1.6, tone: 'rubber', role: 'grip', mount: 'hDrop' + k }
-            ]; }),
-            { name: 'cross', kind: 'beam', a: [-rx, 0, z + 12], b: [rx, 0, z + 12], w: 6, h: 6, mount: 'carL' }
-          ] }];
-    })(),
+    get equipment() { return SCS_EQ(this); },
     contacts: [{ body: 'soleL', prop: 'cs:stepTop' }, { body: 'soleR', prop: 'cs:stepTop' }, { body: 'upperBack', prop: 'csSled:padL' }, { body: 'upperBack', prop: 'csSled:padR' },
       { body: 'gripL', prop: 'csSled:handleL' }, { body: 'gripR', prop: 'csSled:handleR' }],
     pose(t, C) {
       return scsArms(C, scsPose(C, C.lerp(-6.5, 30, C.ease(t)), SCS_Z()));
     }
   },
-
   /* Подъём на носки сидя: подушечки на краю ступени, упор рычага на бёдрах над коленями.
      t=0 — пятки опущены ниже ступени (растяжение), t=1 — подъём на носки до упора. */
   seatedcalf: {
@@ -716,7 +813,7 @@ module.exports = {
      Корпус неподвижен, спина у спинки, руки на рукоятях. */
   abduction: {
     keys: [0, .25, .5, .75, 1],
-    equipment: (() => { const L = HA(); return [L.machine, haLever(L, 'L', 'out'), haLever(L, 'R', 'out')]; })(),
+    get equipment() { return haEq(this, 'out'); },
     contacts: [{ body: 'buttocks', prop: 'ha:seat' }, { body: 'back', prop: 'ha:back' }, { body: 'kneeL', prop: 'haL:pad' }, { body: 'kneeR', prop: 'haR:pad' },
       { body: 'soleL', prop: 'haL:peg' }, { body: 'soleR', prop: 'haR:peg' }, { body: 'gripL', prop: 'ha:handleL' }, { body: 'gripR', prop: 'ha:handleR' }],
     pose(t, C) { return haPose(C, C.lerp(2, 38, C.ease(t))); }
@@ -726,7 +823,7 @@ module.exports = {
      t=1 — колени сведены до касания подушек. */
   adduction: {
     keys: [0, .25, .5, .75, 1],
-    equipment: (() => { const L = HA(); return [L.machine, haLever(L, 'L', 'in'), haLever(L, 'R', 'in')]; })(),
+    get equipment() { return haEq(this, 'in'); },
     contacts: [{ body: 'buttocks', prop: 'ha:seat' }, { body: 'back', prop: 'ha:back' }, { body: 'kneeL', prop: 'haL:pad' }, { body: 'kneeR', prop: 'haR:pad' },
       { body: 'soleL', prop: 'haL:peg' }, { body: 'soleR', prop: 'haR:peg' }, { body: 'gripL', prop: 'ha:handleL' }, { body: 'gripR', prop: 'ha:handleR' }],
     pose(t, C) { return haPose(C, C.lerp(36, 12, C.ease(t))); }
@@ -736,7 +833,9 @@ module.exports = {
      локти назад вдоль корпуса, лопатки сведены. Грудь не отрывается от упора. */
   leverrowm: {
     keys: [0, .25, .5, .75, 1],
-    equipment: (() => { const L = LRM(); return [L.machine, ...S.map(s => handleLever('lr', s, [C_SIGN[s] * L.P[0], L.P[1], L.P[2]], [C_SIGN[s] * L.hx, ...arcPt(L.P, L.R, L.th0, 0).slice(1)], 'rt', 'lr:hub' + s, LRM_T.beta))]; })(),
+    /* кулачок по кривой разгибания плеча (Bober 2002) */
+    get equipment() { const L = LRM(); return seatedCamEq(this, { m: L.machine, levers: S.map(s => handleLever('lr', s, [C_SIGN[s] * L.P[0], L.P[1], L.P[2]], [C_SIGN[s] * L.hx, ...arcPt(L.P, L.R, L.th0, 0).slice(1)], 'rt', 'lr:hub' + s, LRM_T.beta)),
+      bind: 'gripL', curve: 'shoulderExtension', sense: LRM_CAM.sense, scale: LRM_CAM.scale, kg: 138, kgSrc: 'Hammer Strength Select Seated Row', s2: -1 }); },
     contacts: [{ body: 'buttocks', prop: 'lr:seat' }, { body: 'chest', prop: 'lr:pad' }, { body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' },
       { body: 'gripL', prop: 'lrL:handle' }, { body: 'gripR', prop: 'lrR:handle' }],
     pose(t, C) {
@@ -754,7 +853,9 @@ module.exports = {
      Поясница прижата к спинке, рычаги ходят по дуге вокруг осей позади спинки. */
   shoulderpressm: {
     keys: [0, .25, .5, .75, 1],
-    equipment: (() => { const L = SPM(); return [L.machine, ...S.map(s => handleLever('sp', s, [C_SIGN[s] * L.P[0], L.P[1], L.P[2]], [C_SIGN[s] * L.hx, ...arcPt(L.P, L.R, L.th0, 0).slice(1)], 'x', 'sp:hub' + s))]; })(),
+    /* кулачок по кривой подъёма плеча (Timmons 2005 до 90°, Aronis 2026 выше) */
+    get equipment() { const L = SPM(); return seatedCamEq(this, { m: L.machine, levers: S.map(s => handleLever('sp', s, [C_SIGN[s] * L.P[0], L.P[1], L.P[2]], [C_SIGN[s] * L.hx, ...arcPt(L.P, L.R, L.th0, 0).slice(1)], 'x', 'sp:hub' + s)),
+      bind: 'gripL', curve: 'shoulderElevation', sense: SPM_CAM.sense, scale: SPM_CAM.scale, kg: 95, kgSrc: 'Hammer Strength Select Shoulder Press', s2: 1 }); },
     contacts: [{ body: 'buttocks', prop: 'sp:seat' }, { body: 'back', prop: 'sp:pad' }, { body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' },
       { body: 'gripL', prop: 'spL:handle' }, { body: 'gripR', prop: 'spR:handle' }],
     pose(t, C) {
@@ -773,7 +874,9 @@ module.exports = {
      Лопатки и поясница прижаты к спинке. Рычаги идут по дуге вокруг верхних осей. */
   chestpressm: {
     keys: [0, .25, .5, .75, 1],
-    equipment: (() => { const L = CPM(); return [L.machine, ...S.map(s => handleLever('cp', s, [C_SIGN[s] * L.P[0], L.P[1], L.P[2]], [C_SIGN[s] * L.hx, ...arcPt(L.P, L.R, L.th0, 0).slice(1)], 'r', 'cp:hub' + s))]; })(),
+    /* кулачок по кривой разгибания локтя (Bober 2002) */
+    get equipment() { const L = CPM(); return seatedCamEq(this, { m: L.machine, levers: S.map(s => handleLever('cp', s, [C_SIGN[s] * L.P[0], L.P[1], L.P[2]], [C_SIGN[s] * L.hx, ...arcPt(L.P, L.R, L.th0, 0).slice(1)], 'r', 'cp:hub' + s)),
+      bind: 'gripL', curve: 'elbowExtension', sense: CPM_CAM.sense, scale: CPM_CAM.scale, kg: 145, kgSrc: 'Life Fitness Signature Series Chest Press', s2: 1 }); },
     contacts: [{ body: 'buttocks', prop: 'cp:seat' }, { body: 'back', prop: 'cp:pad' }, { body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' },
       { body: 'gripL', prop: 'cpL:handle' }, { body: 'gripR', prop: 'cpR:handle' }],
     pose(t, C) {
@@ -813,7 +916,7 @@ module.exports = {
      t=0 — вис на почти прямых руках, t=1 — подбородок над рукоятями; платформа поднимается вместе с коленями. */
   assistpull: {
     keys: [0, .2, .4, .6, .8, 1],
-    equipment: GV_EQ(),
+    get equipment() { return GV_EQ(this); },
     contacts: [{ body: 'kneeL', prop: 'gvPad:pad' }, { body: 'kneeR', prop: 'gvPad:pad' }, { body: 'gripL', prop: 'gv:pullL' }, { body: 'gripR', prop: 'gv:pullR' }],
     pose(t, C) {
       const { V } = C, e = C.ease(t), g = GV.pull;
@@ -834,7 +937,7 @@ module.exports = {
      Колени на платформе, корпус слегка наклонён вперёд. */
   assistdip: {
     keys: [0, .25, .5, .75, 1],
-    equipment: GV_EQ(),
+    get equipment() { return GV_EQ(this); },
     contacts: [{ body: 'kneeL', prop: 'gvPad:pad' }, { body: 'kneeR', prop: 'gvPad:pad' }, { body: 'gripL', prop: 'gv:dipL' }, { body: 'gripR', prop: 'gv:dipR' }],
     pose(t, C) {
       const { V } = C, e = C.ease(t), d = GV.dip;

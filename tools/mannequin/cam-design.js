@@ -63,12 +63,14 @@ function arcsFrom({ psa, w, K, a, b, rho }) {
   }
   return arcs;
 }
+const CURVES = require('./strength-curves.js');
 const kneeOf = R => { const a = M.jointAngles(R); return (a.L.knee + a.R.knee) / 2; };
-/* e — узел передачи без кулачка (pivot, axis, bind, plane, route); poses — кадры повторения (bakedPoses); curve — кривая
-   силы (strength-curves.js); sense — направление огибания кулачка; scale — плечо на пике целевой кривой, см. */
+/* e — привод без кулачка (pivot, axis, bind, plane, route); poses — кадры повторения (bakedPoses); curve — кривая
+   силы (strength-curves.js; угол главного сустава кривой — curve.joint, CURVES.angleOf); sense — направление огибания
+   кулачка; scale — плечо на пике целевой кривой, см. */
 function design(e, poses, { curve, sense, scale, rhoMin = 4.5, hMin = 5, K = 16, margin = 32 * D2R, anchorMargin = 24 * D2R, lam = .2, wHub = 30, iters = 20 }) {
-  const knees = poses.map(kneeOf), fmax = Math.max(...knees.map(curve.f)), y = knees.map(th => scale * curve.f(th) / fmax);
-  const at = (cam, R) => LS.state({ ...e, cam, rest: 0, stack: null }, R);
+  const knees = poses.map(R => CURVES.angleOf(curve, R)), fmax = Math.max(...knees.map(curve.f)), y = knees.map(th => scale * curve.f(th) / fmax);
+  const at = (cam, R) => LS.driveState({ ...e, kind: 'cam', cam }, R);
   /* начальный профиль — круг радиуса scale вокруг оси */
   let cam = { arcs: [{ c: [0, 0], r: scale, a0: -4 * Math.PI, a1: 4 * Math.PI }], anchor: 0, sense }, ps = poses.map(R => at(cam, R).psi), par;
   for (let it = 0; it < iters; it++) {

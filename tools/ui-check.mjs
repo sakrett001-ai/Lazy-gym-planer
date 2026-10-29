@@ -522,13 +522,15 @@ await page.close();
   await a.click('.card .illus.anatomy-on'); await a.waitForTimeout(200);
   check(await a.evaluate(() => $('#motion-view').open && !!detailMotion && detailMotion.it.ex.id === figs.find(F => F.btn === document.querySelector('.card .illus.anatomy-on'))?.it.ex.id), '«↗» в карточке с анатомией открывает разбор этого упражнения');
   await a.evaluate(() => { $('[data-mv-figure="mannequin"]').disabled = false; $('[data-mv-figure="mannequin"]').click(); }); await a.click('#mv-close'); await a.waitForTimeout(200);
-  /* «Манекен» — кожа Anny тем же общим рендерером (без костей и мышц); без её данных — снова SVG-манекен */
-  const skin = await a.waitForFunction(() => motionPrefs.view === 'mannequin' && cardAnatomy.view === 'skin' && figs.filter(F => F.vis && F.av?.on).length >= 2, null, { timeout: 60000 }).then(() => true, () => false);
+  /* «Манекен» — кожа Anny тем же общим рендерером (без костей и мышц); без её данных — снова SVG-манекен.
+     Ждём карточки, перерисованные кожей: до первого кадра цикла после закрытия разбора у карточек ещё кадр «Анатомии»
+     (av.on с прошлого вида), а кадры анимации в безголовом браузере под нагрузкой идут реже чем раз в 200 мс */
+  const skin = await a.waitForFunction(() => motionPrefs.view === 'mannequin' && cardAnatomy.view === 'skin' && figs.filter(F => F.vis && F.av?.on && F.av.layers?.startsWith('skin')).length >= 2, null, { timeout: 60000 }).then(() => true, () => false);
   check(skin && await a.evaluate(() => figs.filter(F => F.av?.on).every(F => F.av.layers.startsWith('skin')) && GymVolume.cards().stats().scenes <= 3), '«Манекен» в разборе — карточки: кожа Anny кадрами общего рендерера, без костей и мышц');
   check(await a.evaluate(() => { const A = AnnySkin, d = A.data; A.data = null; cardAnatomy.annyFailed = true; applyCardsView(); const r = cardAnatomy.view === 'mannequin' && figs.every(F => !F.av?.on && (!F.f || getComputedStyle(F.f.svg).visibility !== 'hidden')); A.data = d; cardAnatomy.annyFailed = false; applyCardsView(); return r; }), '«Манекен» без данных кожи Anny — карточки снова SVG-манекен');
   await a.evaluate(() => openMotion(0)); await a.waitForTimeout(100);
   await a.evaluate(() => $('[data-mv-figure="anatomy"]').click()); await a.click('#mv-close');
-  check(await a.waitForFunction(() => cardAnatomy.view === 'anatomy' && figs.filter(F => F.vis && F.av?.on).length >= 2, null, { timeout: 60000 }).then(() => true, () => false), 'и обратно «Анатомия» — кадры костей и мышц возвращаются');
+  check(await a.waitForFunction(() => cardAnatomy.view === 'anatomy' && figs.filter(F => F.vis && F.av?.on && F.av.layers?.startsWith('anatomy')).length >= 2, null, { timeout: 60000 }).then(() => true, () => false), 'и обратно «Анатомия» — кадры костей и мышц возвращаются');
   /* экран тренировки */
   await a.evaluate(() => startWorkout('squat'));
   const wv = await a.waitForFunction(() => document.querySelector('#wv-stage .volume-figure')?.dataset.anatomy === 'on', null, { timeout: 60000 }).then(() => true, () => false);

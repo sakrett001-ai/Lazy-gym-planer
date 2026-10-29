@@ -13,10 +13,21 @@
    * Профиль кулачка — цепочка дуг с общими касательными (выпуклый, радиус кривизны не меньше радиуса самого малого блока):
      опорная функция h(ψ) = C_k·n(ψ) + ρ_k — плечо троса, когда нормаль к профилю в точке схода смотрит под углом ψ (в рамке
      рычага). Профиль подбирается по кривой «угол — момент» сустава (tools/mannequin/cam-design.js), здесь только геометрия.
+   Привод троса (drive) бывает четырёх видов (kind):
+   * 'cam' — кулачок на оси рычага (выше);
+   * 'point' — трос закреплён в точке рычага at (без кулачка): плечо — расстояние от оси до прямой троса, меняется с углом;
+   * 'block' — подвижный блок на рычаге в точке at: трос приходит от неподвижной точки dead, огибает блок и уходит к первому
+     неподвижному блоку; на рычаг тянут обе ветви (сила 2T, ход троса вдвое больше хода блока);
+   * 'sled' — трос закреплён на каретке, которая идёт по прямой направляющей rail (рычага нет).
+   Общий стек могут тянуть несколько приводов (drives): подъём = k·(ΣL − L₀). Подвижный блок 1:2 в колонне (mult): трос
+   привода с блока колонны висит вниз до обоймы подвижного блока, трос стека от штока верхней плиты огибает этот блок сверху
+   и уходит к неподвижной проушине — плиты поднимаются вдвое больше, чем выбирается трос привода (k = 2, сила на тросе 2·m·g).
+   С последнего неподвижного блока трос уходит вниз к стеку или по направлению depart (дальше — неподвижный хвост по раме,
+   его рисует тип тренажёра).
    Внутренние координаты: Y вверх, пол Y = 0, см. */
 ((E) => {
 const M = typeof Mannequin !== 'undefined' ? Mannequin : require('./09bm-mannequin.js');
-const { V, toCat, dirCat } = M, { BIND } = E, unit = V.unit;
+const { V, M3, toCat, dirCat } = M, { BIND } = E, unit = V.unit;
 /* трос 4,8 мм (3/16″, 7×19 — как у селекторных тренажёров) */
 const CABLE_R = .24;
 const TAU = 2 * Math.PI, rot90 = v => [-v[1], v[0]], ang2 = v => Math.atan2(v[1], v[0]), wrapPi = a => a - TAU * Math.floor((a + Math.PI) / TAU);
@@ -32,9 +43,10 @@ function plane(e) {
   const e2 = V.cross(e1, A), O = V.add(P, A, e.plane || 0);
   return { P, A, e1, e2, O, to2: p => { const d = V.sub(p, P); return [V.dot(d, e1), V.dot(d, e2)]; }, to3: q => V.add(V.add(O, e1, q[0]), e2, q[1]), dir3: q => V.add(V.scale(e1, q[0]), e2, q[1]) };
 }
-/* Угол рычага в плоскости: направление от оси к точке тела bind (как у BIND.g4lever) плюс доворот rot */
+/* Угол рычага в плоскости: направление от оси к точке тела bind (как у BIND.g4lever) плюс доворот rot. anglePivot — точка,
+   от которой берётся направление (у параллелограмма BIND.g4link — его виртуальная ось: плечи параллельны радиусу от неё) */
 function leverAngle(e, R, pl = plane(e)) {
-  const d = V.perp(V.sub(bodyInt(R, e.bind), pl.P), pl.A);
+  const d = V.perp(V.sub(bodyInt(R, e.bind), e.anglePivot || pl.P), pl.A);
   return ang2([V.dot(d, pl.e1), V.dot(d, pl.e2)]) + (e.rot || 0) * Math.PI / 180;
 }
 /* Общая касательная двух окружностей со знаковыми радиусами (R > 0 — трос огибает окружность против часовой стрелки в
@@ -81,28 +93,64 @@ function pulleyWrap(C, r, s, a, b) {
    колеса, по ней аудит сверяет нарисованное колесо с расчётным); ratio — k;
    rest — длина пути троса, при которой стек стоит на остальных плитах; stack — общий стек G3 (o, R, sel, pitch, size, topY,
    maxLift, float). Возвращает угол рычага, точку схода и плечо троса, путь троса (3D) и его длину, подъём стека. */
-function state(e, R) {
-  const pl = plane(e), al = leverAngle(e, R, pl), cam = e.cam, sc = cam.sense, arcs = cam.arcs;
-  const route = e.route.map(p => ({ C: pl.to2(p.c), r: p.r, s: p.s, R: p.s * p.r }));
-  /* сход с кулачка к первому блоку: дуга профиля, на которой лежит точка касания */
-  const mid = (arcs[0].a0 + arcs[arcs.length - 1].a1) / 2;
-  let best = null;
-  for (const k of arcs) {
-    const Ck = rotate2(k.c, al), t = tangent(Ck, sc * k.r, route[0].C, route[0].R);
-    if (!t) continue;
-    const psi = mid + wrapPi(ang2(scale2(t.nl, -sc)) - al - mid), viol = Math.max(k.a0 - psi, psi - k.a1, 0);
-    if (!best || viol < best.viol) best = { k, t, psi, viol };
-    if (viol === 0) break;
+/* Состояние одного привода d (поля — как у узла с одним приводом; kind — вид привода). Для 'point' и 'block' at — точка
+   (центр подвижного блока) в рамке рычага: [вдоль радиуса к точке тела, поперёк], для 'sled' — смещение от точки на
+   направляющей во внутренних осях. depart — направление троса с последнего блока (внутр. оси; по умолчанию вниз, к стеку).
+   momentArm: у кулачка — плечо троса p; у точки и блока — |dL/dφ| (у блока — сумма плеч обеих ветвей); у каретки —
+   доля хода каретки, идущая в трос (косинус между тросом и направляющей). */
+function driveState(d, R) {
+  const pl = plane(d), kind = d.kind || 'cam';
+  const route = d.route.map(p => ({ C: pl.to2(p.c), r: p.r, s: p.s, R: p.s * p.r }));
+  let al = null, psi = null, viol = 0, Tc, nl, p, pts, camLen = 0, L = 0, arrive, s = null, block = null;
+  const segs = [], wraps = [];
+  if (kind === 'cam') {
+    const cam = d.cam, sc = cam.sense, arcs = cam.arcs;
+    al = leverAngle(d, R, pl);
+    /* сход с кулачка к первому блоку: дуга профиля, на которой лежит точка касания */
+    const mid = (arcs[0].a0 + arcs[arcs.length - 1].a1) / 2;
+    let best = null;
+    for (const k of arcs) {
+      const Ck = rotate2(k.c, al), t = tangent(Ck, sc * k.r, route[0].C, route[0].R);
+      if (!t) continue;
+      const ps = mid + wrapPi(ang2(scale2(t.nl, -sc)) - al - mid), vi = Math.max(k.a0 - ps, ps - k.a1, 0);
+      if (!best || vi < best.viol) best = { k, t, psi: ps, viol: vi };
+      if (vi === 0) break;
+    }
+    Tc = best.t.Ti; nl = best.t.nl; p = Math.abs(dot2(nl, Tc)); psi = best.psi; viol = best.viol;
+    /* трос на кулачке: от зажима до точки схода */
+    const wrapC = camWrap(arcs, cam.anchor, best.psi);
+    pts = wrapC.pts.map(q => rotate2(q, al)); pts[pts.length - 1] = Tc;
+    camLen = wrapC.len; L = wrapC.len; arrive = best.t.Tj;
+  } else if (kind === 'point' || kind === 'block') {
+    al = leverAngle(d, R, pl);
+    const W = rotate2(d.at, al), vel = rot90(W);
+    if (kind === 'point') {
+      const t = tangent(W, 0, route[0].C, route[0].R);
+      Tc = W; nl = t.nl; arrive = t.Tj; pts = [W];
+      p = Math.abs(dot2(vel, sub2(arrive, W))) / Math.hypot(...sub2(arrive, W));
+    } else {
+      /* подвижный блок: ветвь от неподвижной точки dead к блоку, дуга на блоке, ветвь к первому неподвижному блоку */
+      const D = pl.to2(d.dead), Rw = d.sense * d.wheel, t1 = tangent(D, 0, W, Rw), t2 = tangent(W, Rw, route[0].C, route[0].R);
+      const w = pulleyWrap(W, d.wheel, d.sense, t1.Tj, t2.Ti);
+      pts = [D, ...w.pts]; L = Math.hypot(...sub2(t1.Tj, D)) + w.len;
+      segs.push({ from: D, to: t1.Tj }); block = { C: W, r: d.wheel, s: d.sense, a: t1.Tj, b: t2.Ti, len: w.len };
+      Tc = t2.Ti; nl = t2.nl; arrive = t2.Tj;
+      const u1 = scale2(sub2(t1.Tj, D), 1 / Math.hypot(...sub2(t1.Tj, D))), u2 = scale2(sub2(arrive, Tc), 1 / Math.hypot(...sub2(arrive, Tc)));
+      p = Math.abs(dot2(vel, sub2(u1, u2)));
+    }
+  } else {
+    /* каретка: проекция точки тела на направляющую (+ shift), точка крепления — со смещением at */
+    const A = d.rail[0], B = d.rail[1], Z = unit(V.sub(B, A)), T = bodyInt(R, d.bind);
+    s = Math.max(0, Math.min(V.dist(A, B), V.dot(V.sub(T, A), Z) + (d.shift || 0)));
+    const W = pl.to2(V.add(V.add(A, Z, s), d.at || [0, 0, 0])), t = tangent(W, 0, route[0].C, route[0].R);
+    Tc = W; nl = t.nl; arrive = t.Tj; pts = [W];
+    const z2 = [V.dot(Z, pl.e1), V.dot(Z, pl.e2)], u = sub2(arrive, W);
+    p = Math.abs(dot2(z2, u)) / Math.hypot(...u);
   }
-  const Tc = best.t.Ti, nl = best.t.nl, p = Math.abs(dot2(nl, Tc));
-  /* трос на кулачке: от зажима до точки схода */
-  const wrapC = camWrap(arcs, cam.anchor, best.psi), pts = wrapC.pts.map(q => rotate2(q, al));
-  pts[pts.length - 1] = Tc;
-  let L = wrapC.len, arrive = best.t.Tj;
   L += Math.hypot(...sub2(arrive, Tc));
-  /* блоки: дуга на каждом, касательная к следующему; с последнего — вниз к стеку */
-  const down = (() => { const d = [V.dot([0, -1, 0], pl.e1), V.dot([0, -1, 0], pl.e2)], l = Math.hypot(d[0], d[1]); return [d[0] / l, d[1] / l]; })();
-  const segs = [{ from: Tc, to: arrive }], wraps = [];
+  segs.push({ from: Tc, to: arrive });
+  /* блоки: дуга на каждом, касательная к следующему; с последнего — по depart (по умолчанию вниз, к стеку) */
+  const dep = d.depart || [0, -1, 0], down = (() => { const q = [V.dot(dep, pl.e1), V.dot(dep, pl.e2)], l = Math.hypot(q[0], q[1]); return [q[0] / l, q[1] / l]; })();
   for (let i = 0; i < route.length; i++) {
     const q = route[i];
     let leave, next = null;
@@ -113,10 +161,24 @@ function state(e, R) {
     if (next) { L += Math.hypot(...sub2(next, leave)); segs.push({ from: leave, to: next }); arrive = next; }
     else arrive = leave;
   }
+  const u = al == null ? null : pl.dir3(dirAt(al)), v = al == null ? null : pl.dir3(dirAt(al + Math.PI / 2));
+  return { kind, pl, alpha: al, psi, viol, contact: pl.to3(Tc), contact2: Tc, nl, momentArm: p, camLen, segs, wraps, block, s,
+    L, pts3: pts.map(pl.to3), leave3: pl.to3(arrive), camO: pl.O, u, v };
+}
+/* Приводы узла: drives (у каждого — свои ось, точка тела, кулачок или точка, блоки и id деталей) или сам узел (один привод) */
+const drivesOf = e => e.drives || [e];
+/* Состояние узла: приводы и подъём стека k·(ΣL − rest). У одного привода поля привода — на верхнем уровне (как в этапе 1). */
+function state(e, R) {
+  const ds = drivesOf(e).map(d => driveState(d, R)), L = ds.reduce((s, q) => s + q.L, 0);
   const k = e.ratio ?? 1, raw = (L - (e.rest || 0)) * k, lift = Math.max(0, Math.min(e.stack ? e.stack.maxLift : Infinity, raw));
-  const u = pl.dir3(dirAt(al)), v = pl.dir3(dirAt(al + Math.PI / 2));
-  return { pl, alpha: al, psi: best.psi, viol: best.viol, contact: pl.to3(Tc), contact2: Tc, nl, momentArm: p, camLen: wrapC.len, segs, wraps,
-    L, rawLift: raw, lift, pts3: pts.map(pl.to3), leave3: pl.to3(arrive), camO: pl.O, u, v };
+  /* подвижный блок 1:2 в колонне (mult): трос привода с блока колонны висит вниз на d = d0 − (L − rest) до проушины обоймы
+     блока B; трос стека — от штока верхней плиты вверх, через верх B и вниз к неподвижной проушине dead (k = 2) */
+  let mult = null;
+  if (e.mult) {
+    const d = e.mult.d0 - (L - (e.rest || 0)), top = V.add(ds[0].leave3, [0, -1, 0], d);
+    mult = { d, top, c: V.add(top, [0, -1, 0], e.mult.r + 3) };
+  }
+  return { ...ds[0], drives: ds, L, rawLift: raw, lift, mult };
 }
 
 /* ---------- Кулачок: контур (рамка кулачка) и детали ---------- */
@@ -158,11 +220,40 @@ function camParts(e, S) {
 /* Трос с кулачком и стек. Детали: кулачок (id:cam, id:flangeA/B, id:clamp), трос (id:cable — от зажима по кулачку, по блокам
    до точки, откуда идёт к стеку), стек — общий G3 (id:stk…, трос от штока верхней плиты к последнему блоку). */
 BIND.g4camCable = (e, R) => {
-  const S = state(e, R), out = camParts(e, S);
-  out.push({ kind: 'cable', pts: S.pts3.map(toCat), r: CABLE_R, tone: 'cable', role: 'cable', id: e.id + ':cable', mount: e.id + ':cam' });
-  if (e.stack) out.push(...E.cableStack.parts(e.stack, S.lift, e.id, e.rodPart, CABLE_R));
+  const S = state(e, R), out = [];
+  drivesOf(e).forEach((d, i) => {
+    const q = S.drives[i], id = d.id || e.id, kind = d.kind || 'cam';
+    if (kind === 'cam') out.push(...camParts({ ...d, id }, q));
+    /* подвижный блок на рычаге: колесо, ось в двух щеках, щёки — на детали рычага mountTo */
+    if (kind === 'block') {
+      const A = q.pl.A, c3 = q.pl.to3(q.block.C), w = dirCat(A), half = 1.9, fd = q.pl.dir3(dirAt(q.alpha + Math.PI)), fl = d.wheel + (d.fork || 3);
+      out.push({ kind: 'cyl', c: toCat(c3), axis: w, r: d.wheel, len: 2.4, sides: 24, tone: 'chrome', role: 'frame', id: id + ':block', mount: id + ':blockAxle' });
+      out.push({ kind: 'cyl', c: toCat(c3), axis: w, r: .6, len: 2 * half + 1.2, sides: 12, tone: 'chrome', role: 'frame', id: id + ':blockAxle', mount: id + ':blockForkA' });
+      for (const [k, sg] of [['A', 1], ['B', -1]]) out.push({ kind: 'obox', c: toCat(V.add(V.add(c3, A, sg * half), fd, (fl - 1.2) / 2)), x: w, y: dirCat(fd), z: dirCat(V.cross(A, fd)), size: [.7, fl + 1.2, 3], round: .2, tone: 'frame', role: 'frame', id: id + ':blockFork' + k, mount: d.mountTo });
+    }
+    const pts = q.pts3.concat(i === 0 && S.mult ? [S.mult.top] : []);
+    out.push({ kind: 'cable', pts: pts.map(toCat), r: CABLE_R, tone: 'cable', role: 'cable', id: id + ':cable', mount: kind === 'cam' ? id + ':cam' : kind === 'block' ? id + ':block' : d.mountTo });
+  });
+  if (e.stack) out.push(...E.cableStack.parts(e.stack, S.lift, e.id, e.rodPart, CABLE_R, !!S.mult));
+  if (S.mult) out.push(...multParts(e, S));
   return out;
 };
+/* Подвижный блок 1:2 в колонне: колесо B (ось — X стека), ось в обойме из двух щёк, мостик обоймы с проушиной троса привода;
+   трос стека от штока верхней плиты вверх к B (сторона −Z стека), по верху B и вниз к проушине dead (сторона +Z, перед плитами) */
+function multParts(e, S) {
+  const st = e.stack, mu = e.mult, sid = e.id + ':stk', X = M3.col(st.R, 0), Y = M3.col(st.R, 1), Z = M3.col(st.R, 2), r = mu.r, half = 1.9, out = [];
+  const c = S.mult.c, fl = r + 1.5, ax = dirCat(X), up = [0, 1, 0];
+  out.push({ kind: 'cyl', c: toCat(c), axis: ax, r, len: 2.4, sides: 24, tone: 'chrome', role: 'frame', id: sid + 'Mult', mount: sid + 'MultAxle' });
+  out.push({ kind: 'cyl', c: toCat(c), axis: ax, r: .6, len: 2 * half + 1.2, sides: 12, tone: 'chrome', role: 'frame', id: sid + 'MultAxle', mount: sid + 'MultForkA' });
+  for (const [k, sg] of [['A', 1], ['B', -1]]) out.push({ kind: 'obox', c: toCat(V.add(V.add(c, X, sg * half), up, (fl - 1.2) / 2)), x: ax, y: dirCat(up), z: dirCat(Z), size: [.7, fl + 1.2, 3], round: .2, tone: 'frame', role: 'frame', id: sid + 'MultFork' + k, mount: sid + 'MultBridge' });
+  out.push({ kind: 'obox', c: toCat(V.add(c, up, fl + .75)), x: ax, y: dirCat(up), z: dirCat(Z), size: [2 * half + .7, 1.5, 3], round: .3, tone: 'frame', role: 'frame', id: sid + 'MultBridge', mount: e.id + ':cable' });
+  /* трос стека: шток → B → dead */
+  const stem = V.add(st.o, Y, S.lift + st.sel * st.pitch + 2 + 8), pts = [stem];
+  for (let j = 0; j <= 8; j++) { const a = Math.PI * j / 8; pts.push(V.add(V.add(c, Z, -r * Math.cos(a)), up, r * Math.sin(a))); }
+  pts.push(mu.dead);
+  out.push({ kind: 'cable', pts: pts.map(toCat), r: CABLE_R, tone: 'cable', role: 'cable', id: sid + 'Cable', mount: sid + 'Stem' });
+  return out;
+}
 
 /* ---------- Неподвижные узлы рамы ---------- */
 /* Блок на кронштейне: колесо радиуса r (ось axis), ось колеса в двух щеках вилки, мостик вилки на расстоянии r + 1,5 см
@@ -180,8 +271,15 @@ function pulley(t, k, c, r, { axis = [1, 0, 0], dir, mount, half = 1.9 }) {
    нижние плиты, рамка и stackInfo), блок под верхней балкой — его колесо сходом вниз попадает в ось стека (трос к нему
    подходит со стороны +Z узла, перед плитами). at — центр стека на полу, H — высота колонны, r — радиус верхнего блока.
    Ключи деталей — с префиксом pre; возвращает центр верхнего блока и высоту схода (topY) во внутренних координатах. */
-function column(b, pre, { at, H, n = 15, sel = 5, r = 5, mount, X = 27, yaw = 0 }) {
+function column(b, pre, { at, H, n = 15, sel = 5, r = 5, mount, X = 27, yaw = 0, mult = 0 }) {
   const t = E.cableStack.Sub(b, pre, at, yaw);
+  /* подвижный блок 1:2 (mult — его радиус): блок колонны сдвинут вперёд на mult — трос с него висит над осью блока B;
+     проушина неподвижного конца троса стека — на кронштейне основания перед плитами (сторона +Z, на 2·mult от оси стека) */
+  if (mult) {
+    t.tube('deadArm', [0, 3.75, 3.5], [0, 3.75, 2 * mult + 2], [4, 7.5], { mount: 'baseM' });
+    t.box('deadEnd', [0, 8.5, 2 * mult], [2.5, 2, 2.5], { mount: 'deadArm', tone: 'chrome', round: .4 });
+    t.anchor('dead', [0, 9.3, 2 * mult]);
+  }
   t.tube('baseM', [-X - 4, 3.75, 0], [X + 4, 3.75, 0], [8, 7.5], { mount: '/' + mount });
   for (const [k, x] of [['L', X], ['R', -X]]) {
     t.tube('foot' + k, [x, 3.75, -26], [x, 3.75, 22], [7.5, 7.5], { mount: 'baseM' });
@@ -189,10 +287,12 @@ function column(b, pre, { at, H, n = 15, sel = 5, r = 5, mount, X = 27, yaw = 0 
     t.tube('brace' + k, [x, 7.5, -24], [x, 58, -3.75], [5, 5], { mount: 'foot' + k, up: [1, 0, 0] });
   }
   t.tube('top', [-X - 3.75, H - 3.75, 0], [X + 3.75, H - 3.75, 0], [7.5, 7.5], { mount: 'upL' });
-  const topY = H - 7.5 - 3 - r, wc = [0, topY, r];
+  const topY = H - 7.5 - 3 - r, wc = [0, topY, r + mult];
   E.cableStack.stack(t, { H, n, sel, base: 'baseM', topY });
-  pulley(t, 'pulley', wc, r, { dir: [0, 1, 0], mount: 'top' });
+  /* блок, сдвинутый вперёд (mult), — на консоли от верхней балки */
+  if (mult) t.tube('wheelArm', [0, H - 3.75, 3], [0, H - 3.75, r + mult + 2.5], [6, 7.5], { mount: 'top' });
+  pulley(t, 'pulley', wc, r, { dir: [0, 1, 0], mount: mult ? 'wheelArm' : 'top' });
   return { wheel: t.P(wc), r, topY, H };
 }
-E.leverStack = { CABLE_R, plane, leverAngle, tangent, support, camPoint, camWrap, state, outline, hull, camParts, pulley, column };
+E.leverStack = { CABLE_R, plane, leverAngle, tangent, support, camPoint, camWrap, driveState, drivesOf, state, outline, hull, camParts, pulley, column };
 })(typeof GymEquipment !== 'undefined' ? GymEquipment : require('./09bn-equipment.js'));

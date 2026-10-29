@@ -17,23 +17,6 @@ function pad(b, k, c, size, axes, mount, opts = {}) {
   b.box(k + 'Plate', V.add(c, n, -(t / 2 + pt / 2 - .2)), [size[0] - 4, pt, size[2] - 4], { axes, mount });
   return V.add(c, n, -(t / 2 + pt - .2)); /* точка крепления за пластиной */
 }
-/* Колонна стека грузов: стойки, направляющие, плиты, верхняя плита; основание на полу.
-   c — центр стека на полу [x, 0, z], w — ширина плит, h — высота колонны, along — ось ширины ('x' или 'z'). */
-function stack(b, k, c, h, opts = {}) {
-  const w = opts.w || 30, d = opts.d || 16, ax = opts.along === 'z' ? [0, 0, 1] : [1, 0, 0], side = opts.along === 'z' ? [1, 0, 0] : [0, 0, 1];
-  const P = (u, y, v) => V.add(V.add(V.add(c, ax, u), [0, 1, 0], y), side, v);
-  const hw = w / 2 + 7;
-  b.tube(k + 'Base', P(-hw - 4, 3.75, 0), P(hw + 4, 3.75, 0), [8, 7.5], { mount: 'floor', up: [0, 1, 0] });
-  b.tube(k + 'BaseS', P(0, 3.75, -d), P(0, 3.75, d), [8, 7.5], { mount: k + 'Base' });
-  for (const sg of [-1, 1]) b.tube(k + 'Post' + (sg > 0 ? 'A' : 'B'), P(sg * hw, 7.5, 0), P(sg * hw, h, 0), [6, 6], { mount: k + 'Base' });
-  b.tube(k + 'Top', P(-hw - 3, h - 3, 0), P(hw + 3, h - 3, 0), [6, 6], { mount: k + 'PostA' });
-  const sh = opts.stackH || 62;
-  b.box(k + 'Plates', P(0, 7.5 + sh / 2, 0), [w, sh, 12], { axes: [ax, [0, 1, 0], side], mount: k + 'Base', tone: 'stack', round: .4 });
-  for (const sg of [-1, 1]) b.tube(k + 'Rod' + (sg > 0 ? 'A' : 'B'), P(sg * (w / 2 - 6), 7.5, 0), P(sg * (w / 2 - 6), h - 6, 0), .9, { mount: k + 'Base', tone: 'chrome', role: 'guide' });
-  b.box(k + 'Head', P(0, 7.5 + sh + 2.5, 0), [w - 2, 4, 10], { axes: [ax, [0, 1, 0], side], mount: k + 'Plates', tone: 'chrome', round: .4 });
-  b.cyl(k + 'Pulley', P(0, h - 9, 0), side, 4.8, 2.4, { mount: k + 'Top', tone: 'chrome' });
-  b.tube(k + 'Cable', P(0, 7.5 + sh + 4.5, 0), P(0, h - 13.5, 0), .35, { mount: k + 'Head', tone: 'cable', role: 'cable' });
-}
 /* Рукоять-труба с прорезиненным хватом: от a к b, держатель — mount */
 function handle(b, k, a, c, r, mount) { b.tube(k, a, c, r || 1.6, { mount, role: 'grip', tone: 'rubber' }); }
 
@@ -93,7 +76,9 @@ BIND.g4link = (e, R) => {
     if (p.a) { q.a = V.add(Tp, p.a); q.b = V.add(Tp, p.b); }
     parts.push(q);
   }
-  return rigid(e.id || 'link', [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], parts, e.mountTo);
+  /* детали на верхних плечах (поворачиваются с ними): рамка от оси верхнего плеча, X — вдоль оси, Y — вдоль плеча */
+  const arm = rigid(e.id || 'link', p1, A, u, V.cross(A, u), e.armParts || [], (e.id || 'link') + ':armU0');
+  return rigid(e.id || 'link', [0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], parts, e.mountTo).concat(arm);
 };
 /* Каретка на прямой направляющей rail [от, до]: положение — проекция точки тела + shift.
    Рамка: Z — вдоль направляющей, Y — ближе всего к up, X = Y × Z. */
@@ -303,17 +288,25 @@ TYPES.dipStation = (s, b) => {
 };
 
 /* ---------- Гравитрон (подтягивания и брусья с противовесом) ----------
-   Пользователь стоит коленями на платформе лицом к башне (+Z). Рычаг платформы вращается вокруг оси в башне.
-   s: tz — передняя плоскость башни; pivot [y, z]; pull {y, z, x0, x1} — рукояти подтягиваний (вдоль X);
-   dip {y, x, z0} — брусья (вдоль Z до башни); step {y}. */
+   Пользователь стоит коленями на платформе лицом к башне (+Z). Платформа — на параллелограмме, плечи вращаются вокруг осей
+   в башне (вал U и вал D). s: tz — передняя плоскость башни; pivot [y, z] — вал U; pull {y, z, x0, x1} — рукояти подтягиваний
+   (вдоль X); dip {y, x, z0} — брусья (вдоль Z до башни); step {y}; stack {z} — плоскость стека; cab {dead, live, r} —
+   ветви троса у подвижного блока на плечах (z) и радиус блоков.
+   Противовес (09bo-g4-lever.js, привод 'block'): подвижный блок на поперечине верхних плеч; трос от проушины под верхней
+   передней балкой огибает блок снизу и идёт вверх к блоку p1 под балкой pulBeam, по верху башни к блоку стека p2 и вниз
+   к верхней плите (1:1). Площадка вниз — блок вниз, обе ветви длиннее — плиты вверх; человек вверх — плиты опускаются
+   и толкают площадку (помощь). Кулачка у гравитрона нет: противовес должен помогать одинаково по всему ходу (как вес
+   тела, который он уравновешивает); подвижная точка на плече даёт силу у площадки 2T·r_a/r при любом угле (обе ветви
+   почти вертикальны). Габариты класса: Life Fitness Signature Assist Dip/Chin — 134 × 170 × 225 см, стек 85 кг (170 lb);
+   Insignia Assist Dip Chin — 162 × 147 × 221 см, стек 85 или 100 кг. */
 TYPES.gravitron = (s, b) => {
-  const tz = s.tz, X = 30, H = 240, [py, pz] = s.pivot;
+  const tz = s.tz, X = 30, H = 240, [py, pz] = s.pivot, zs = s.stack.z, zb = zs + 16, cab = s.cab, r = cab.r;
   for (const sg of [1, -1]) {
     const k = sg > 0 ? 'L' : 'R', x = sg * X;
-    b.tube('base' + k, [x, 3.75, tz - 30], [x, 3.75, pz + 40], [8, 7.5], { mount: 'floor' });
+    b.tube('base' + k, [x, 3.75, tz - 30], [x, 3.75, zb + 6], [8, 7.5], { mount: 'floor' });
     b.tube('up' + k, [x, 7.5, tz], [x, H, tz], [8, 8], { mount: 'base' + k });
-    b.tube('upB' + k, [x, 7.5, pz + 34], [x, H - 30, pz + 34], [7, 7], { mount: 'base' + k });
-    b.tube('topS' + k, [x, H - 34, tz], [x, H - 34, pz + 34], [6, 6], { mount: 'up' + k });
+    b.tube('upB' + k, [x, 7.5, zb], [x, H, zb], [7, 7], { mount: 'base' + k });
+    b.tube('topS' + k, [x, H - 4, tz], [x, H - 4, zb], [8, 8], { mount: 'up' + k });
     /* рукояти подтягиваний: кронштейн от башни назад, рукоять вдоль X */
     const ox = sg * (s.pull.x1 + 2);
     b.tube('pullArm' + k, [x, s.pull.y + 5, tz], [ox, s.pull.y + 5, s.pull.z], [6, 6], { mount: 'up' + k });
@@ -327,17 +320,30 @@ TYPES.gravitron = (s, b) => {
     b.box('step' + k, [sg * (X - 4), s.step.y - .5, (tz + s.step.z0) / 2 - 8], [18, 3, tz - s.step.z0 - 16], { mount: 'stepArm' + k, tone: 'rubber', round: .5 });
   }
   b.tube('top', [-X - 4, H - 4, tz], [X + 4, H - 4, tz], [8, 8], { mount: 'upL' });
-  b.tube('topB', [-X - 3, H - 34, pz + 34], [X + 3, H - 34, pz + 34], [6, 6], { mount: 'upBL' });
+  b.tube('topB', [-X - 3.5, H - 4, zb], [X + 3.5, H - 4, zb], [7, 7], { mount: 'upBL' });
   b.tube('baseF', [-X - 4, 3.75, tz - 26], [X + 4, 3.75, tz - 26], [8, 7.5], { mount: 'baseL' });
-  b.tube('baseB', [-X - 4, 3.75, pz + 38], [X + 4, 3.75, pz + 38], [8, 7.5], { mount: 'baseL' });
-  /* ось рычага платформы: вал между стойками башни */
+  b.tube('baseB', [-X - 4, 3.75, zb + 2], [X + 4, 3.75, zb + 2], [8, 7.5], { mount: 'baseL' });
   /* оси параллелограмма платформы: две поперечные трубы между стойками башни */
   for (const [k, y] of [['U', py], ['D', py + s.linkV]]) {
     b.tube('shaft' + k, [-X, y, pz], [X, y, pz], 2.5, { mount: 'br' + k + 'L', tone: 'chrome' });
-    for (const sg of [1, -1]) b.tube('br' + k + (sg > 0 ? 'L' : 'R'), [sg * X, y, tz], [sg * X, y, pz + 34], [6, 6], { mount: 'up' + (sg > 0 ? 'L' : 'R') });
+    for (const sg of [1, -1]) b.tube('br' + k + (sg > 0 ? 'L' : 'R'), [sg * X, y, tz], [sg * X, y, zb], [6, 6], { mount: 'up' + (sg > 0 ? 'L' : 'R') });
   }
-  /* стек грузов в башне за осью */
-  stack(b, 'stk', [0, 0, pz + 18], H - 40, { w: 28, stackH: 70 });
+  /* противовес: проушина неподвижного конца под передней балкой, блок p1 под балкой pulBeam (над задней ветвью у блока),
+     стек в плоскости zs между валами и задними стойками, блок стека p2 под балкой стека */
+  b.tube('deadBeam', [-X - 4, H - 4, cab.dead], [X + 4, H - 4, cab.dead], [6, 8], { mount: 'topSL' });
+  b.box('deadEnd', [0, H - 9, cab.dead], [2.5, 2, 2.5], { mount: 'deadBeam', tone: 'chrome', round: .4 });
+  b.anchor('dead', [0, H - 10, cab.dead]);
+  const z1 = cab.live + r;
+  b.tube('pulBeam', [-X - 4, H - 4, z1], [X + 4, H - 4, z1], [8, 8], { mount: 'topSL' });
+  const c1 = [0, H - 8 - 3 - r, z1];
+  E.leverStack.pulley(b, 'p1', c1, r, { dir: [0, 1, 0], mount: 'pulBeam' });
+  const t = E.cableStack.Sub(b, 'stk', [0, 0, zs]);
+  t.tube('baseM', [-X - 4, 3.75, 0], [X + 4, 3.75, 0], [8, 7.5], { mount: '/baseL' });
+  t.tube('top', [-X - 4, H - 3.75, 0], [X + 4, H - 3.75, 0], [7.5, 7.5], { mount: '/topSL' });
+  const topY = H - 7.5 - 3 - r;
+  E.cableStack.stack(t, { H, n: 15, sel: 5, base: 'baseM', topY });
+  E.leverStack.pulley(t, 'pulley', [0, topY, -r], r, { dir: [0, 1, 0], mount: 'top' });
+  b.anchor('p1', c1); b.anchor('p2', t.P([0, topY, -r]));
 };
 
 /* ---------- «Капитанский стул» (станция для подъёма коленей) ----------
@@ -372,11 +378,17 @@ TYPES.captainsChair = (s, b) => {
 
 /* ---------- Сидячий рычажный тренажёр (жим от груди, жим вверх, тяга с упором грудью) ----------
    s: seat {h, z0, z1}; pad {kind 'back' | 'chest', z — плоскость на высоте y0, ang — наклон назад от вертикали, y0, y1, w};
-   hub {x, y, z} — оси рычагов (±x); tower {z, h} — башня со стеком (позади спинки или перед упором);
-   foot {z, y} — подножка (необязательно). */
+   hub {x, y, z} — оси рычагов (±x); tower {z, h} — башня (позади спинки или перед упором); stack {z, H, yaw} — колонна стека
+   (E.leverStack.column, блок колонны принимает трос со стороны +Z узла: yaw = 180 (градусы), если кулачок — со стороны −Z);
+   foot {z, y} — подножка (необязательно).
+   Передача (09bo-g4-lever.js): оба рычага сидят на общем валу (axle) между подшипниками башни и ходят вместе; кулачок —
+   на валу посередине (x = 0), трос с кулачка идёт к блоку колонны стека и вниз к обойме подвижного блока 1:2 (stack.mult —
+   радиус блока): трос стека от штока верхней плиты огибает подвижный блок сверху и уходит к проушине у основания, плиты
+   поднимаются вдвое больше, чем выбирается трос кулачка (k = 2). Рычаг жима поворачивается всего на 20–35°, и без
+   удвоения кулачок с плечом 18–20 см давал бы у рукоятей лишь 0,2–0,25 веса стека. Плоскость троса — x = 0, в ней же колонна. */
 TYPES.seatedLever = (s, b) => {
   const T = 7, st = s.seat, pd = s.pad, hb = s.hub, tw = s.tower, TX = hb.x + 9;
-  const zLo = Math.min(st.z0, tw.z) - 20, zHi = Math.max(st.z1, tw.z) + 20;
+  const zLo = Math.min(st.z0, tw.z, s.stack.z - 30) - 4, zHi = Math.max(st.z1, tw.z, s.stack.z + 30) + 4;
   for (const sg of [1, -1]) b.tube('base' + (sg > 0 ? 'L' : 'R'), [sg * 30, 3.75, zLo], [sg * 30, 3.75, zHi], [8, 7.5], { mount: 'floor' });
   b.tube('baseS', [-34, 3.75, (st.z0 + st.z1) / 2], [34, 3.75, (st.z0 + st.z1) / 2], [8, 7.5], { mount: 'baseL' });
   b.tube('baseT', [-TX - 4, 3.75, tw.z], [TX + 4, 3.75, tw.z], [8, 7.5], { mount: 'baseL' });
@@ -401,10 +413,13 @@ TYPES.seatedLever = (s, b) => {
     b.cyl('hub' + k, [sg * (hb.x + 3), hb.y, hb.z], [1, 0, 0], 5, 9, { mount: 'hubDrop' + k, tone: 'chrome' });
   }
   b.tube('topX', [-TX - 4, top - 4, tw.z], [TX + 4, top - 4, tw.z], [8, 8], { mount: 'upL' });
-  /* стек грузов за башней (со стороны от сиденья) */
-  const sz = tw.z + (tw.z > st.z1 ? 24 : -24);
-  stack(b, 'stk', [0, 0, sz], top - 8, { w: 30 });
-  b.tube('stkLink', [0, 3.75, tw.z], [0, 3.75, sz + (sz > tw.z ? -10 : 10)], [8, 7.5], { mount: 'baseT' });
+  /* общий вал рычагов: сквозь подшипники башни, ступицы рычагов и кулачок посередине */
+  b.cyl('axle', [0, hb.y, hb.z], [1, 0, 0], 2.5, 2 * hb.x + 15, { mount: 'hubL', tone: 'chrome' });
+  b.anchor('pivot', [0, hb.y, hb.z]);
+  /* колонна стека (со стороны от сиденья за башней); поперечина колонны — на продольных балках основания, связь с башней */
+  const sk = s.stack, col = E.leverStack.column(b, 'stk', { at: [0, 0, sk.z], H: sk.H, mount: 'baseL', r: 5, X: 22.5, yaw: sk.yaw || 0, mult: sk.mult || 0 });
+  b.tube('stkLink', [0, 3.75, tw.z], [0, 3.75, sk.z], [8, 7.5], { mount: 'baseT' });
+  b.anchor('p2', col.wheel);
   /* подножка */
   if (s.foot) { b.tube('footBar', [-24, s.foot.y, s.foot.z], [24, s.foot.y, s.foot.z], 2, { mount: 'footPostL', tone: 'chrome' });
     for (const sg of [1, -1]) b.tube('footPost' + (sg > 0 ? 'L' : 'R'), [sg * 26, 3.75, s.foot.z], [sg * 26, s.foot.y + 2, s.foot.z], [5, 5], { mount: 'base' + (sg > 0 ? 'L' : 'R') }); }
@@ -412,21 +427,34 @@ TYPES.seatedLever = (s, b) => {
 
 /* ---------- Тренажёр отведения/приведения бёдер ----------
    Рычаги вращаются вокруг вертикальных осей под тазобедренными суставами. s: seat {c [y, z], ang, len};
-   back {c0 [y, z], ang (от вертикали), len}; hub {x, y, z} — оси (±x), y — верх ступиц; handle {x, y, z}. */
+   back {c0 [y, z], ang (от вертикали), len}; hub {x, y, z} — оси (±x), y — верх ступиц; handle {x, y, z};
+   cab {y — плоскость кулачка, p1, p1b — блоки с вертикальной осью {c [x, z], dir [x, z] — сторона вилки}};
+   stack {z, H} — колонна стека за спинкой.
+   Передача (09bo-g4-lever.js): рычаги связаны зубчатыми секторами на осях (сектор Ø17,2 у каждого рычага, зацепление
+   посередине) и поворачиваются зеркально; кулачок — на оси левого рычага под сектором, в горизонтальной плоскости cab.y.
+   Трос с кулачка идёт к блоку p1, поворачивает к середине тренажёра, на блоке p1b — назад по оси (x = 0) над основанием,
+   к блоку p2 у колонны стека, вверх перед плитами к блоку колонны и вниз к верхней плите (1:1). От p1b до стека трос
+   неподвижен относительно рамы (хвост tail). Моменты обеих ног складываются на оси кулачка (каждой ноге — половина).
+   Блоки Ø11 — как в паспорте Hammer Strength Select Hip Abduction / Adduction (155 × 66 × 140 см, стек 138 кг). */
 TYPES.hipAbductor = (s, b) => {
-  const T = 7, W = 40, hb = s.hub;
+  const T = 7, W = 40, hb = s.hub, cab = s.cab, sk = s.stack, R1 = 5.5, yc = cab.y;
+  /* неподвижный трос (хвост) — ломаная во внутренних координатах тренажёра */
+  const wire = (k, pts, mount) => b.parts.push({ kind: 'cable', pts: pts.map(p => toCat(b.P(p))), r: E.leverStack.CABLE_R, tone: 'cable', role: 'cable', id: b.id(k), mount: b.id(mount) });
   const sa = s.seat.ang * D2R, sz = [0, Math.sin(sa), Math.cos(sa)], sy = [0, Math.cos(sa), -Math.sin(sa)], sl = s.seat.len;
   const sc = V.add([0, ...s.seat.c], sy, -T / 2), seatB = pad(b, 'seat', sc, [W, T, sl], [[1, 0, 0], sy, sz], 'hubPlate');
   const ba = s.back.ang * D2R, bz = [0, Math.cos(ba), -Math.sin(ba)], by = [0, Math.sin(ba), Math.cos(ba)], bl = s.back.len;
-  const backB = pad(b, 'back', V.add(V.add([0, ...s.back.c0], bz, bl / 2), by, -T / 2), [W - 4, T, bl], [[1, 0, 0], by, bz], 'backStrut');
-  /* плита ступиц под сиденьем, центральная стойка, основание */
-  b.box('hubPlate', [0, seatB[1] - 1.5, hb.z], [30, 3, 24], { mount: 'post' });
-  b.tube('post', [0, 7.5, hb.z - 14], [0, seatB[1] - 3, hb.z - 14], [8, 8], { mount: 'baseC' });
-  b.tube('baseC', [0, 3.75, hb.z - 60], [0, 3.75, hb.z + 10], [8, 7.5], { mount: 'baseX' });
+  const backB = pad(b, 'back', V.add(V.add([0, ...s.back.c0], bz, bl / 2), by, -T / 2), [W - 4, T, bl], [[1, 0, 0], by, bz], 'backBar');
+  /* основание: средняя балка (над ней по оси идёт трос), поперечины; плита ступиц под сиденьем стоит на осях рычагов */
+  b.tube('baseC', [0, 3.75, sk.z - 4], [0, 3.75, hb.z + 10], [8, 7.5], { mount: 'baseX' });
   b.tube('baseX', [-36, 3.75, hb.z - 50], [36, 3.75, hb.z - 50], [8, 7.5], { mount: 'floor' });
   b.tube('baseXF', [-30, 3.75, hb.z + 6], [30, 3.75, hb.z + 6], [8, 7.5], { mount: 'baseC' });
-  for (const sg of [1, -1]) b.cyl('hub' + (sg > 0 ? 'L' : 'R'), [sg * hb.x, (hb.y - 12 + seatB[1] - 3) / 2, hb.z], [0, 1, 0], 4.2, seatB[1] - 3 - (hb.y - 12), { mount: 'hubPlate', tone: 'chrome' });
-  b.tube('backStrut', [0, 7.5, hb.z - 46], V.add(backB, by, .5), [7, 7], { mount: 'baseX' });
+  b.tube('baseH', [-hb.x - 6, 3.75, hb.z], [hb.x + 6, 3.75, hb.z], [8, 7.5], { mount: 'baseC' });
+  b.box('hubPlate', [0, seatB[1] - 1.5, hb.z], [30, 3, 24], { mount: 'hubL' });
+  for (const sg of [1, -1]) b.cyl('hub' + (sg > 0 ? 'L' : 'R'), [sg * hb.x, (7.5 + seatB[1] - 3) / 2, hb.z], [0, 1, 0], 4.2, seatB[1] - 3 - 7.5, { mount: 'baseH', tone: 'chrome' });
+  /* спинка: две стойки по бокам от оси (по оси внизу идёт трос) и поперечина под подушкой */
+  const bb = V.add(backB, by, .5);
+  b.tube('backBar', V.add(bb, [1, 0, 0], -14), V.add(bb, [1, 0, 0], 14), [5, 5], { mount: 'backStrutL' });
+  for (const sg of [1, -1]) b.tube('backStrut' + (sg > 0 ? 'L' : 'R'), [sg * 12, 7.5, hb.z - 46], V.add(bb, [1, 0, 0], sg * 12), [6, 6], { mount: 'baseX' });
   /* рукояти по бокам сиденья */
   for (const sg of [1, -1]) {
     const k = sg > 0 ? 'L' : 'R', x = sg * s.handle.x, hz = s.handle.z - 9;
@@ -434,9 +462,31 @@ TYPES.hipAbductor = (s, b) => {
     b.tube('hPost' + k, [x, seatB[1] - 1, hz], [x, s.handle.y, hz], [3.5, 3.5], { mount: 'hArm' + k });
     handle(b, 'handle' + k, [x, s.handle.y, hz], [x, s.handle.y, hz + 18], 1.6, 'hPost' + k);
   }
-  /* стек грузов позади спинки */
-  stack(b, 'stk', [0, 0, hb.z - 70], 140, { w: 30 });
-  b.tube('stkLink', [0, 3.75, hb.z - 60], [0, 3.75, hb.z - 54], [8, 7.5], { mount: 'baseX' });
+  /* блоки p1, p1b (вертикальная ось, в плоскости кулачка): вилка — на свободную от троса сторону, к стойке от пола */
+  for (const k of ['p1', 'p1b']) {
+    const q = cab[k], c = [q.c[0], yc, q.c[1]], d = V.unit([q.dir[0], 0, q.dir[1]]), at = E.leverStack.pulley(b, k, c, R1, { axis: [0, 1, 0], dir: [d[0], 0, d[2]], mount: k + 'Post' });
+    const pc = V.add(at, d, 1.8);
+    b.tube(k + 'Post', [pc[0], 0, pc[2]], [pc[0], yc + 2.25, pc[2]], [4, 4], { mount: 'floor' });
+    b.anchor(k, c);
+  }
+  /* колонна стека за спинкой: блок p2 у основания (трос по оси приходит понизу и уходит вверх перед плитами), блок колонны */
+  const t = E.cableStack.Sub(b, 'stk', [0, 0, sk.z]), H = sk.H, X = 27, r = 5, topY = H - 7.5 - 3 - r;
+  t.tube('baseM', [-X - 4, 3.75, 0], [X + 4, 3.75, 0], [8, 7.5], { mount: '/baseC' });
+  for (const [k, x] of [['L', X], ['R', -X]]) {
+    t.tube('foot' + k, [x, 3.75, -26], [x, 3.75, 32], [7.5, 7.5], { mount: 'baseM' });
+    t.tube('up' + k, [x, 7.5, 0], [x, H, 0], [7.5, 7.5], { mount: 'baseM', up: [0, 0, 1] });
+    t.tube('p2Post' + k, [x, 7.5, 27], [x, yc + R1 + 3, 27], [5, 5], { mount: 'foot' + k });
+  }
+  t.tube('top', [-X - 3.75, H - 3.75, 0], [X + 3.75, H - 3.75, 0], [7.5, 7.5], { mount: 'upL' });
+  t.tube('p2Bar', [-X - 2.5, yc + R1, 27], [X + 2.5, yc + R1, 27], [6, 6], { mount: 'p2PostL' });
+  E.cableStack.stack(t, { H, n: 15, sel: 5, base: 'baseM', topY });
+  E.leverStack.pulley(t, 'pulley', [0, topY, r], r, { dir: [0, 1, 0], mount: 'top' });
+  E.leverStack.pulley(t, 'p2', [0, yc + R1, 2 * r + R1], R1, { axis: [1, 0, 0], dir: [0, 0, 1], mount: 'p2Bar' });
+  /* хвост: с p1b назад по оси до p2, по p2 вверх, перед плитами до блока колонны, через его верх — к оси стека */
+  const z2 = sk.z + 2 * r + R1, pts = [[0, yc, cab.p1b.c[1]], [0, yc, z2]];
+  for (let j = 1; j <= 6; j++) { const a = j / 6 * Math.PI / 2; pts.push([0, yc + R1 - R1 * Math.cos(a), z2 - R1 * Math.sin(a)]); }
+  for (let j = 0; j <= 8; j++) { const a = j / 8 * Math.PI; pts.push([0, topY + r * Math.sin(a), sk.z + r + r * Math.cos(a)]); }
+  wire('tail', pts, 'p1b');
 };
 
 /* ---------- Подъём на носки сидя (рычаг с упором на бёдра) ----------
@@ -459,12 +509,19 @@ TYPES.seatedCalf = (s, b) => {
 };
 
 /* ---------- Подъём на носки стоя (вертикальная каретка с плечевыми упорами) ----------
-   s: zr — плоскость направляющих позади тела; rx — полурасстояние между направляющими; step {y, z — край, w}; top. */
+   s: zr — плоскость направляющих позади тела; rx — полурасстояние между направляющими; step {y, z — край, w}; top;
+   stack {z, H} — стек позади направляющих.
+   Передача (09bo-g4-lever.js, привод 'sled'): трос закреплён в проушине под нижней поперечиной каретки, идёт вниз по оси
+   между направляющими к нижнему блоку pa (огибает его снизу), назад по полу к блоку pb, вверх перед плитами к блоку стека pc
+   и вниз к верхней плите (1:1). Каретка вверх — трос от проушины к pa длиннее — плиты вверх на столько же. Кулачка нет:
+   у вертикальных кареток с плечевыми упорами передача линейная (трос от каретки через блоки, 1:1 — Nautilus Impact Standing
+   Calf; elitefts Standing Calf — направляющие и стек 300 lb), сила на плечах постоянна по ходу. Габариты класса: Panatta
+   1SC089 Calf Machine — 75 × 65 × 185 см, стек 100 кг (до 120). */
 TYPES.standingCalf = (s, b) => {
-  const zr = s.zr, rx = s.rx || 24, top = s.top || 222, sp = s.step;
+  const zr = s.zr, rx = s.rx || 24, top = s.top || 222, sp = s.step, zs = s.stack.z, Hs = s.stack.H, r = 5, py = 17;
   for (const sg of [1, -1]) {
     const k = sg > 0 ? 'L' : 'R';
-    b.tube('base' + k, [sg * (rx + 10), 3.75, zr - 40], [sg * (rx + 10), 3.75, sp.z + 30], [8, 7.5], { mount: 'floor' });
+    b.tube('base' + k, [sg * (rx + 10), 3.75, zs - 8], [sg * (rx + 10), 3.75, sp.z + 30], [8, 7.5], { mount: 'floor' });
     b.tube('up' + k, [sg * (rx + 10), 7.5, zr - 6], [sg * (rx + 10), top, zr - 6], [8, 8], { mount: 'base' + k });
     b.tube('rodLo' + k, [sg * (rx + 10), 40, zr - 6], [sg * rx, 40, zr], [5, 5], { mount: 'up' + k });
     b.tube('rodHi' + k, [sg * (rx + 10), top - 10, zr - 6], [sg * rx, top - 10, zr], [5, 5], { mount: 'up' + k });
@@ -476,8 +533,21 @@ TYPES.standingCalf = (s, b) => {
   /* ступень: подушечки стоп на заднем крае, пятки свисают назад */
   b.box('step', [0, sp.y / 2, sp.z + 12], [sp.w || 56, sp.y, 24], { mount: 'floor', round: .6 });
   b.box('stepTop', [0, sp.y + .5, sp.z + 12], [(sp.w || 56) - 2, 1, 23], { mount: 'step', tone: 'rubber', round: .3 });
-  /* стек грузов позади направляющих */
-  stack(b, 'stk', [0, 0, zr - 30], top - 10, { w: 30 });
+  /* блоки у пола: pa — под осью каретки (трос сходит вниз по плоскости направляющих), pb — перед стеком (трос поднимается
+     в 3 см перед плитами); вилки — вниз, на продольную балку pBase (трос огибает колёса снизу, между щеками вилок) */
+  const zb = zs + 3 * r, pa = [0, py, zr - r], pb = [0, py, zb];
+  b.tube('pBase', [0, 4.5, zr - 2], [0, 4.5, zr - 36 + 4], [8, 9], { mount: 'baseB' });
+  E.leverStack.pulley(b, 'pa', pa, r, { dir: [0, -1, 0], mount: 'pBase' });
+  E.leverStack.pulley(b, 'pb', pb, r, { dir: [0, -1, 0], mount: 'pBase' });
+  /* стек: задние стойки, поперечина основания и верхняя балка в плоскости стека, блок pc под балкой */
+  for (const sg of [1, -1]) b.tube('upS' + (sg > 0 ? 'L' : 'R'), [sg * (rx + 10), 7.5, zs], [sg * (rx + 10), Hs, zs], [7.5, 7.5], { mount: 'base' + (sg > 0 ? 'L' : 'R') });
+  const t = E.cableStack.Sub(b, 'stk', [0, 0, zs]);
+  t.tube('baseM', [-rx - 14, 3.75, 0], [rx + 14, 3.75, 0], [8, 7.5], { mount: '/baseL' });
+  t.tube('top', [-rx - 13.75, Hs - 3.75, 0], [rx + 13.75, Hs - 3.75, 0], [7.5, 7.5], { mount: '/upSL' });
+  const topY = Hs - 7.5 - 3 - r;
+  E.cableStack.stack(t, { H: Hs, n: 15, sel: 5, base: 'baseM', topY });
+  E.leverStack.pulley(t, 'pulley', [0, topY, r], r, { dir: [0, 1, 0], mount: 'top' });
+  b.anchor('pa', pa); b.anchor('pb', pb); b.anchor('pc', t.P([0, topY, r]));
 };
 
 /* ---------- Гакк-машина ----------
