@@ -468,7 +468,9 @@ function prewarm(options){
  const{renderer}=slot,layers=options.layers||null;let scene;
  try{
   scene=createCatalogScene(options.data(0,0,false,false));
-  scene.apply(options.data(options.t||0,0,false,!!layers),{color:options.color,selected:'all',muscles:options.muscles!==false,joints:!!options.joints,stress:options.stress!==false,skeleton:layers?.bones||null,anatomy:layers?.body||null});
+  /* без ключа позы: кадр заготовки не попадает в память кожи мышц по фазе — первый кадр разбора считается, как раньше, заново */
+  const d=options.data(options.t||0,0,false,!!layers);d.poseKey=null;
+  scene.apply(d,{color:options.color,selected:'all',muscles:options.muscles!==false,joints:!!options.joints,stress:options.stress!==false,skeleton:layers?.bones||null,anatomy:layers?.body||null});
   scene.studio?.(renderer);if(lowPower)scene.setShadows?.(false);
  }catch(e){dropRenderer(slot);return Promise.resolve(false);}
  const cam=scene.cameras.angle;scene.resize(1,1);renderer.setSize(1,1,false);
