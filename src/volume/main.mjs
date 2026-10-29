@@ -95,11 +95,23 @@ export function createVolumeFigure(options){
  const bonesMemo=options.memoBones?{map:new Map(),data:null}:null;
  /* кожа Anny (вид «Манекен», src/js/09bs-anny.js): данные грузятся при первом кадре фигуры без костей и мышц; пришли — кадр
     заново (до того и при ошибке — процедурная кожа) */
- let annyAsked=false;
+ let annyAsked=false,annyWarm=false;
  const loadAnny=()=>{
   const A=globalThis.AnnySkin;if(annyAsked||!A||A.data)return;annyAsked=true;
-  A.load().then(()=>{if(!disposed&&!skeleton&&!anatomy)at(lastT,{index:lastIndex});},()=>{});
+  A.load().then(()=>{if(disposed)return;if(!skeleton&&!anatomy)at(lastT,{index:lastIndex});else warmAnny();},()=>{});
  };
+ /* Фигура в «Анатомии» или «Скелете», а данные кожи Anny уже есть: в простое строится (скрытая) сетка кожи и собираются её
+    программы (compileAsync — без остановки главного потока): переключение на «Манекен» потом не ждёт сборки шейдеров.
+    Картинка не меняется — сетка скрыта, сцена та же */
+ function warmAnny(){
+  const A=globalThis.AnnySkin;if(annyWarm||disposed||!A?.data||!(skeleton||anatomy)||!renderer.compileAsync||!scene.anny)return;annyWarm=true;
+  const idle=cb=>typeof requestIdleCallback==='function'?requestIdleCallback(cb,{timeout:3000}):setTimeout(cb,200);
+  idle(()=>{
+   if(disposed||!(skeleton||anatomy)||renderer.getContext?.()?.isContextLost?.())return;
+   try{const d=data(lastT,lastIndex,false);scene.anny.update(A.data,d,{on:muscles,color:options.color,values:d.values,sideValues:d.sideValues,regions:d.regions,selected});scene.anny.hide();
+    renderer.compileAsync(scene.scene,cameras.angle).catch(()=>{});}catch(e){}
+  });
+ }
  const wantAnny=()=>{if(!skeleton&&!anatomy)loadAnny();};
  /* shape — кадр только для рамки (без нормалей, scene.apply) */
  const apply=(t,index,shape=false)=>{const d=data(t,index,!!(skeleton||anatomy));if(bonesMemo)memoBones(bonesMemo,anatomy?.skeleton||skeleton,t,d);scene.apply(d,{color:options.color,selected,muscles,joints,stress,skeleton,anatomy},{shape});updateVectors(t,index,d.pose);wantAnny();};
@@ -303,6 +315,7 @@ export function createVolumeFigure(options){
  const setTrace=show=>{if(trace.visible===!!show)return;trace.visible=!!show;draw();};
  const setVectors=show=>{if(vectors.visible===!!show)return;vectors.visible=!!show;draw();};
  at(lastT,{index:lastIndex});
+ if(skeleton||anatomy)warmAnny();
  /* закрыта, не нарисовав ни кадра: материалы прежней фигуры отпускаются вместе с её — после первого кадра следующей */
  function dispose(){if(disposed)return;disposed=true;for(const v of views)v.close();canvas.removeEventListener('webglcontextrestored',restore);scene.disposeGeometry();
   slot.release=firstDrawn||!releasePrevious?scene.disposeMaterials:()=>{try{releasePrevious();}catch(e){}scene.disposeMaterials();};spareRenderer(slot);}
