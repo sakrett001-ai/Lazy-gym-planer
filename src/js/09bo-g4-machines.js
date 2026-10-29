@@ -57,11 +57,12 @@ BIND.g4lever = (e, R) => {
   return rigid(e.id || 'lever', P, A, Y, Z, e.parts || [], e.mountTo);
 };
 /* Параллелограмм: два параллельных рычага (оси pivot + d0 и pivot + d0 + v) несут площадку, которая движется по дуге
-   без поворота. Угол задаёт точка тела bind относительно pivot. carrier — детали площадки во внутренних осях,
-   координаты от точки тела на дуге. */
+   без поворота. Угол задаёт точка тела bind относительно pivot, плечо — radius (жёсткие рычаги; без него — расстояние
+   точки тела до оси, и тогда плечи меняли длину на 0,18 см вместе с коленями). carrier — детали площадки во внутренних
+   осях, координаты от точки на дуге. */
 BIND.g4link = (e, R) => {
   const P = e.pivot, A = unit(e.axis), T = bodyInt(R, e.bind), d = V.sub(T, P), rad = V.sub(d, V.scale(A, V.dot(d, A)));
-  const rl = V.len(rad), u = unit(rad), Tp = V.add(V.add(P, A, V.dot(d, A)), u, rl);
+  const rl = e.radius ?? V.len(rad), u = unit(rad), Tp = V.add(V.add(P, A, V.dot(d, A)), u, rl);
   const p1 = V.add(P, e.d0), p2 = V.add(p1, e.v), E1 = V.add(p1, u, rl), E2 = V.add(p2, u, rl), w = e.armW || 6, xs = e.armX || [0];
   const parts = [];
   xs.forEach((x, i) => {

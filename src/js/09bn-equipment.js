@@ -100,15 +100,21 @@ TYPES.powerRack=(s,b)=>{
  if(s.hook){for(const x of [X,-X]){const k=x>0?'L':'R';b.box('hook'+k,[x,s.hook-2,zf-6],[5,4,6],{mount:'upF'+k,tone:'chrome'});b.box('hookLip'+k,[x,s.hook+1.5,zf-8.6],[5,5,1.2],{mount:'hook'+k,tone:'chrome'});}b.anchor('hook',[0,s.hook,zf-6]);}
  b.anchor('front',[0,0,zf]);
 };
-/* Машина Смита: направляющие вертикальны, гриф ходит вдоль них */
+/* упоры Смита: планка в z см позади оси направляющих, первый упор на высоте y0, шаг step, всего n */
+const SMITH_CATCH={z:5,y0:30,step:16,n:11};
+/* Машина Смита: направляющие вертикальны, гриф ходит вдоль них (вертикальный Смит, как Hammer Strength Plate-Loaded
+   Vertical Smith Machine — «zero-degree bar travel», 11 положений для грифа). За каждой направляющей — планка ловителей
+   с 11 упорами через 16 см (Life Fitness Smith Machine: 16 см между упорами); на них гриф вешается крюками (BIND.smithBar). */
 TYPES.smith=(s,b)=>{
  const X=s.halfWidth||62,H=s.height||228,Z=s.z||0,zb=Z+26;
- for(const x of [X,-X]){const k=x>0?'L':'R';
+ for(const x of [X,-X]){const k=x>0?'L':'R',sx=Math.sign(x);
   b.tube('rod'+k,[x,6,Z],[x,H-8,Z],1.6,{mount:'base'+k,tone:'chrome',role:'guide'});
   b.tube('up'+k,[x+Math.sign(x)*9,0,zb],[x+Math.sign(x)*9,H,zb],[7.5,7.5],{mount:'floor'});
   b.tube('base'+k,[x,3.75,Z-55],[x,3.75,zb+30],[7.5,7.5],{mount:'floor'});
   b.tube('rodTop'+k,[x,H-8,Z],[x+Math.sign(x)*9,H-8,zb],[5,5],{mount:'up'+k});
   b.tube('rodBase'+k,[x,6,Z-5],[x,6,Z+5],[6,6],{mount:'base'+k});
+  b.tube('catch'+k,[x,7.5,Z+SMITH_CATCH.z],[x,H-8,Z+SMITH_CATCH.z],[3,2],{mount:'base'+k,up:[0,0,1]});
+  for(let i=0;i<SMITH_CATCH.n;i++)b.cyl('peg'+k+i,[x-sx*2.4,SMITH_CATCH.y0+i*SMITH_CATCH.step,Z+SMITH_CATCH.z],[1,0,0],.9,3.6,{mount:'catch'+k,tone:'chrome'});
  }
  b.tube('top',[-X-9,H-3.75,zb],[X+9,H-3.75,zb],[7.5,7.5],{mount:'upL'});
  b.anchor('rodL',[X,0,Z]);b.anchor('rodR',[-X,0,Z]);
@@ -154,8 +160,15 @@ BIND.barbell=(e,R)=>{
 BIND.smithBar=(e,R)=>{
  const rodL=toCat(e.rodL),rodR=toCat(e.rodR),y=(R.gripL[1]+R.gripR[1])/2,c=[(rodL[0]+rodR[0])/2,y,(rodL[2]+rodR[2])/2],axis=V.unit(V.sub(rodL,rodR));
  const bar=barbellPart(c,axis,e.plates||[10],{id:e.id||'smithBar'});bar.free=false;bar.role='guided';bar.mount=(e.id||'smithBar')+':carL';bar.len=e.len||216;bar.inner=e.inner||69;
- const out=[bar];
- for(const[k,rod]of [['L',rodL],['R',rodR]])out.push({kind:'obox',c:[rod[0],y,rod[2]],x:[1,0,0],y:[0,-1,0],z:[0,0,1],size:[6,9,7],round:.8,tone:'frame',role:'carriage',id:(e.id||'smithBar')+':car'+k,mount:e.mountTo+':rod'+k});
+ const out=[bar],id=e.id||'smithBar';
+ for(const[k,rod]of [['L',rodL],['R',rodR]]){
+  out.push({kind:'obox',c:[rod[0],y,rod[2]],x:[1,0,0],y:[0,-1,0],z:[0,0,1],size:[6,9,7],round:.8,tone:'frame',role:'carriage',id:id+':car'+k,mount:e.mountTo+':rod'+k});
+  /* крюк грифа у каретки, напротив упоров планки ловителей (TYPES.smith): в рабочем положении смотрит вверх-вперёд и проходит
+     мимо упоров; повернув гриф назад, его вешают на ближайший упор */
+  const hx=rod[0]-Math.sign(rod[0])*4,top=[hx,y-6,rod[2]];
+  out.push({kind:'beam',a:[hx,y,rod[2]],b:top,w:3,h:1,up:[0,0,1],tone:'chrome',role:'frame',id:id+':hook'+k,mount:id});
+  out.push({kind:'beam',a:top,b:[hx,y-6.6,rod[2]-3],w:3,h:1,up:[0,-1,0],tone:'chrome',role:'frame',id:id+':hookLip'+k,mount:id+':hook'+k});
+ }
  return out;
 };
 BIND.dumbbell=(e,R)=>{
@@ -164,11 +177,22 @@ BIND.dumbbell=(e,R)=>{
 };
 /* Гантель на опоре (пол, скамья): c — центр рукояти во внутренних координатах */
 BIND.restingDumbbell=e=>[{...dumbbellPart(toCat(e.c),dirCat(V.unit(e.axis||[1,0,0])),{id:e.id||'dumbbellRest'}),mount:e.on||'floor'}];
-/* Рычаг «бабочки»: от оси вниз и наружу к рукояти в руке */
+/* Рычаг «бабочки»: жёсткий — плечо от вертикальной оси наружу, опуск вниз к рукояти, рукоять. Угол поворота — по кисти
+   (направление от оси к хвату по горизонтали), форма — постоянная: центр рукояти на радиусе radius и высоте gripY
+   (внутренние, см), рукоять вертикальна (tilt 90°) или идёт по касательной к дуге с наклоном внутрь-вниз на tilt градусов.
+   Прежде рукоять, опуск и плечо ставились по рамке кисти: опуск менялся на 1,3 см, плечо — на 0,2. */
 BIND.pecArm=(e,R)=>{
- const s=e.hand,pivot=toCat(e.pivot),grip=R['grip'+s],top=[pivot[0],pivot[1],pivot[2]];
- const hand=R.frames['hand'+s],hAxis=hand.z,handleHalf=9;
- const hTop=V.add(grip,hAxis,V.dot(hAxis,[0,-1,0])>0?handleHalf:-handleHalf),hBot=V.add(grip,hAxis,V.dot(hAxis,[0,-1,0])>0?-handleHalf:handleHalf);
+ const s=e.hand,pivot=toCat(e.pivot),grip=R['grip'+s],top=[pivot[0],pivot[1],pivot[2]],handleHalf=9;
+ let hTop,hBot;
+ if(e.radius){
+  const hx=grip[0]-pivot[0],hz=grip[2]-pivot[2],hl=Math.hypot(hx,hz)||1,u=[hx/hl,0,hz/hl],g=pivot[0]>=0?1:-1;
+  const c=[pivot[0]+u[0]*e.radius,e.gripY!=null?toCat([0,e.gripY,0])[1]:grip[1],pivot[2]+u[2]*e.radius];
+  const tl=(e.tilt??90)*D2R,tH=[-g*u[2],0,g*u[0]],ax=V.add(V.scale(tH,Math.cos(tl)),[0,1,0],Math.sin(tl)); /* +y каталога — вниз */
+  hTop=V.add(c,ax,-handleHalf);hBot=V.add(c,ax,handleHalf);
+ }else{
+  const hAxis=R.frames['hand'+s].z;
+  hTop=V.add(grip,hAxis,V.dot(hAxis,[0,-1,0])>0?handleHalf:-handleHalf);hBot=V.add(grip,hAxis,V.dot(hAxis,[0,-1,0])>0?-handleHalf:handleHalf);
+ }
  const elbow=[hTop[0],pivot[1],hTop[2]];
  const id=e.id||'pec'+s;
  return[
@@ -321,11 +345,23 @@ BIND.kettlebell=(e,R)=>{
  const r=e.r||10.5,c=V.add(g,down,(e.drop||15)+(hands.length>1?2:0));
  return[{kind:'kettlebell',c,grip:g,axis,handleAxis:axis,radius:r,role:'free',tone:'plate',free:true,id:e.id||'kb',mount:'hands'}];
 };
-/* Ролик для пресса: ось проходит через хваты */
+/* Ролик для пресса: колесо Ø18 × 5 см между хватами, ось-рукоять постоянной длины (2·half, по умолчанию 32 см) по центру
+   между кистями. Колесо катится без проскальзывания: поворот вокруг оси × радиус = путь центра по полу, поэтому на боковинах
+   колеса — ступица и три спицы (первая — метка :mark для аудита), повёрнутые на путь/радиус. Прежде колесо было гладким
+   цилиндром (ехало 90 см не поворачиваясь), а ось тянулась за кистями (длина менялась на 0,8 см). */
 BIND.abWheel=(e,R)=>{
- const a=R.gripL,b=R.gripR,ax=V.unit(V.sub(a,b)),c=V.mix(a,b,.5),id=e.id||'wheel';
- return[{kind:'cyl',c,axis:ax,r:e.r||9,len:5,tone:'rubber',role:'free',free:true,id:id+':wheel',mount:'hands'},
-  {kind:'beam',a:V.add(a,ax,6),b:V.add(b,ax,-6),r:1.6,tone:'rubber',role:'grip',id:id+':axle',mount:id+':wheel'}];
+ const a=R.gripL,b=R.gripR,ax=V.unit(V.sub(a,b)),c=V.mix(a,b,.5),id=e.id||'wheel',r=e.r||9,half=e.half||16,w=e.width||5;
+ /* во внутренних осях (Y вверх): вперёд по полу — ось × вверх; поворот вокруг оси на путь/радиус; спица — вверх при пути 0 */
+ const axI=dirCat(ax),up=[0,1,0],fw=V.unit(V.cross(axI,up)),th=V.dot(toCat(c),fw)/r;
+ const out=[{kind:'cyl',c,axis:ax,r,len:w,tone:'rubber',role:'free',free:true,id:id+':wheel',mount:'hands'},
+  {kind:'beam',a:V.add(c,ax,half),b:V.add(c,ax,-half),r:1.6,tone:'rubber',role:'grip',id:id+':axle',mount:id+':wheel'}];
+ for(const sg of [1,-1]){
+  const f=V.add(c,ax,sg*(w/2+.15));
+  out.push({kind:'cyl',c:f,axis:ax,r:3.2,len:.6,tone:'chrome',role:'frame',id:id+':hub'+(sg>0?'L':'R'),mount:id+':wheel'});
+  for(let k=0;k<3;k++){const t=th+k*2*Math.PI/3,dI=V.add(V.scale(up,Math.cos(t)),fw,Math.sin(t)),d=dirCat(dI);
+   out.push({kind:'beam',a:V.add(f,d,3),b:V.add(f,d,r-1.4),w:1.4,h:.5,up:ax,tone:'frame',role:'frame',id:id+(sg>0&&!k?':mark':':spoke'+(sg>0?'L':'R')+k),mount:id+':hub'+(sg>0?'L':'R')});}
+ }
+ return out;
 };
 /* Шатуны велотренажёра: педали под подушечками стоп */
 BIND.crank=(e,R)=>{
@@ -393,7 +429,8 @@ function rig(entry){
  return t=>{
   if(!Number.isFinite(t)||t<0||t>1)throw Error('Pose must be in [0,1]');
   const k=track(t),q=M.unpack(k.v,k.hands);if(entry.gripRadius)q.gripRadius=entry.gripRadius;
-  const R=M.catalogPose(q);R.props=build(entry.equipment||[],R);R.contacts=(entry.contacts||[]).map(c=>({...c}));R.exerciseBasis='mannequin';
+  /* R.t — фаза повтора: по ней движется то, что не следует за телом (лента дорожки, BIND.treadBelt) */
+  const R=M.catalogPose(q);R.t=t;R.props=build(entry.equipment||[],R);R.contacts=(entry.contacts||[]).map(c=>({...c}));R.exerciseBasis='mannequin';
   return R;
  };
 }

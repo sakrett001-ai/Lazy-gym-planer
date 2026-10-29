@@ -306,7 +306,7 @@ const GV_RA = 22, GV_WHEEL = 4.5, GV_FORK = 3;
 const GV_MACHINE = () => { const u0 = [0, 0, -1], W = V3([0, GV.P[1] + GV.d0[1], GV.P[2] + GV.d0[2]], u0, GV_RA);
   return { type: 'gravitron', id: 'gv', tz: GV.tz, pivot: [GV.P[1] + GV.d0[1], GV.P[2] + GV.d0[2]], linkV: GV.v[1], pull: GV.pull, dip: GV.dip, step: GV.step,
     stack: { z: GV.P[2] + 18 }, cab: { dead: r2(W[2] - GV_WHEEL), live: r2(W[2] + GV_WHEEL), r: 5 } }; };
-const GV_LINK = () => ({ type: 'g4link', id: 'gvPad', pivot: GV.P, axis: [1, 0, 0], d0: GV.d0, v: GV.v, armX: [-12, 12], mountTo: 'gv:shaftU', mountTo2: 'gv:shaftD', bind: { mix: ['knL', 'knR'], frame: 'skL', off: [0, 0, 5.4] },
+const GV_LINK = () => ({ type: 'g4link', id: 'gvPad', pivot: GV.P, axis: [1, 0, 0], radius: GV.r, d0: GV.d0, v: GV.v, armX: [-12, 12], mountTo: 'gv:shaftU', mountTo2: 'gv:shaftD', bind: { mix: ['knL', 'knR'], frame: 'skL', off: [0, 0, 5.4] },
   carrier: [
     { name: 'pad', kind: 'obox', c: [0, -3.5, -12], size: [40, 7, 40], tone: 'pad', role: 'support', mount: 'plate', round: 1.6 },
     { name: 'plate', kind: 'obox', c: [0, -8, -12], size: [34, 2, 36], mount: 'frame' },
@@ -536,7 +536,20 @@ const SCF = once(() => {
   C.restOn(q, 'buttocks', [0, seatH, 0], [0, 1, 0], -1.3);
   const f = C.fk(q), stepY = 13, ballZ = V.mix(f.P.knL, f.P.knR, .5)[2] + 12;
   const sup = s => [C.M.SIGN[s] * 11, stepY, ballZ];
-  const legs = (qq, heel) => { for (const s of S) C.foot(qq, s, sup(s), 0, V.unit(V.add([0, .3, 1], C.latP(qq, s), .12)), { forward: V.unit(V.add([0, 0, 1], C.latP(qq, s), .1)), heel }); return qq; };
+  /* стопа на ступени: опора под подушечкой — точно в sup. Решение ноги не выходит на заданный разворот стопы, и с подъёмом
+     пятки подушечка уезжала по ступени внутрь на 0,95 см; цель сдвигается на невязку, пока подошва не встанет на место */
+  const legs = (qq, heel) => {
+    for (const s of S) {
+      let at = sup(s);
+      for (let k = 0; k < 4; k++) {
+        C.foot(qq, s, at, 0, V.unit(V.add([0, .3, 1], C.latP(qq, s), .12)), { forward: V.unit(V.add([0, 0, 1], C.latP(qq, s), .1)), heel });
+        const ff = C.fk(qq), d = V.sub(sup(s), V.add(ff.P['ball' + s], C.M3.col(ff.F['toes' + s].R, 1), M.B.toeSole));
+        if (V.len(d) < .02) break;
+        at = V.add(at, d);
+      }
+    }
+    return qq;
+  };
   const off = [0, 8, 5.7], bindAt = heel => { const qq = legs(C.M.clone(q), heel), R = C.M.catalogPose(qq); return C.EQ.bodyPoint ? (p => [p[0], C.M.FLOOR - p[1], p[2]])(C.EQ.bodyPoint(R, { mix: ['knL', 'knR'], frame: 'thL', off })) : null; };
   const H0 = -16, H1 = 32, b0 = bindAt(H0), b1 = bindAt(H1), mid = V.mix(b0, b1, .5), d = V.unit(V.sub(b1, b0)), n = [0, d[2], -d[1]];
   /* ось на серединном перпендикуляре к пути точки контакта, на 46 см впереди неё */
@@ -832,7 +845,7 @@ module.exports = {
   /* Рычажная тяга к поясу с упором грудью: t=0 — руки вытянуты вперёд, лопатки разведены; t=1 — кисти у пояса,
      локти назад вдоль корпуса, лопатки сведены. Грудь не отрывается от упора. */
   leverrowm: {
-    keys: [0, .25, .5, .75, 1],
+    keys: [0, .125, .25, .375, .5, .625, .75, .875, 1], /* 9 ключей: при 5 кисть между ключами уходила с окружности рукояти рычага на 0,5 см */
     /* кулачок по кривой разгибания плеча (Bober 2002) */
     get equipment() { const L = LRM(); return seatedCamEq(this, { m: L.machine, levers: S.map(s => handleLever('lr', s, [C_SIGN[s] * L.P[0], L.P[1], L.P[2]], [C_SIGN[s] * L.hx, ...arcPt(L.P, L.R, L.th0, 0).slice(1)], 'rt', 'lr:hub' + s, LRM_T.beta)),
       bind: 'gripL', curve: 'shoulderExtension', sense: LRM_CAM.sense, scale: LRM_CAM.scale, kg: 138, kgSrc: 'Hammer Strength Select Seated Row', s2: -1 }); },
@@ -852,7 +865,7 @@ module.exports = {
   /* Жим сидя в тренажёре: t=0 — рукояти на уровне ушей, t=1 — руки почти выпрямлены вверх.
      Поясница прижата к спинке, рычаги ходят по дуге вокруг осей позади спинки. */
   shoulderpressm: {
-    keys: [0, .25, .5, .75, 1],
+    keys: [0, .125, .25, .375, .5, .625, .75, .875, 1], /* 9 ключей: при 5 кисть между ключами уходила с рукояти рычага на 0,7 см */
     /* кулачок по кривой подъёма плеча (Timmons 2005 до 90°, Aronis 2026 выше) */
     get equipment() { const L = SPM(); return seatedCamEq(this, { m: L.machine, levers: S.map(s => handleLever('sp', s, [C_SIGN[s] * L.P[0], L.P[1], L.P[2]], [C_SIGN[s] * L.hx, ...arcPt(L.P, L.R, L.th0, 0).slice(1)], 'x', 'sp:hub' + s)),
       bind: 'gripL', curve: 'shoulderElevation', sense: SPM_CAM.sense, scale: SPM_CAM.scale, kg: 95, kgSrc: 'Hammer Strength Select Shoulder Press', s2: 1 }); },

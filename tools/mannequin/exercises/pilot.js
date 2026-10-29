@@ -25,6 +25,12 @@ const RFLY = once(() => {
   const C = ctx([]), q = seatedAgainstPad(C, { seatH: 50, padZ: 26, facing: 'pad', padRegion: 'chest', lean: 4 }), f = C.fk(q);
   return { q, gh: { L: f.P.ghL, R: f.P.ghR } };
 });
+/* обратные разведения: рукоять по касательной к дуге, внутренний конец ниже на 15° (запястье без локтевого отведения) —
+   форма рукояти на рычаге (BIND.pecArm, tilt) и ось хвата в позе */
+const RFLY_TILT = Math.atan(.27) * 180 / Math.PI;
+/* «бабочка»: 9 ключей — рукоять на жёстком рычаге держит постоянную высоту, а между 5 ключами кисть по дуге вокруг
+   плечевого сустава проседала вдоль рукояти до 1 см */
+const PEC_KEYS = [0, .125, .25, .375, .5, .625, .75, .875, 1];
 const SMITH_BENCH = { type: 'adjBench', id: 'bench', back: 82, seat: 4, at: [0, 0, 0] };
 const SOHP = once(() => {
   const C = ctx([SMITH_BENCH]), { V } = C, q = C.base(), bp = C.frame('bench', 'backPad'), sp = C.frame('bench', 'seatPad');
@@ -230,9 +236,9 @@ module.exports = {
 
   /* «Бабочка»: сидя спиной к подушке, рукояти вертикальные. t=0 — руки разведены, t=1 — рукояти сведены перед грудью. */
   pecdeck: {
-    keys: [0, .25, .5, .75, 1],
+    keys: PEC_KEYS,
     equipment: (() => { const L = PEC(); return [{ type: 'pecDeck', id: 'deck', seatH: 48, padZ: 18, padY: 96, padH: 62, pivot: [Math.abs(L.gh.L[0]), 176, L.gh.L[2]] },
-      ...S.map(s => ({ type: 'pecArm', id: 'pec' + s, hand: s, pivot: [L.gh[s][0], 176, L.gh[s][2]], mountTo: 'deck:hub' + (L.gh[s][0] > 0 ? 'L' : 'R') }))]; })(),
+      ...S.map(s => ({ type: 'pecArm', id: 'pec' + s, hand: s, pivot: [L.gh[s][0], 176, L.gh[s][2]], radius: 50, gripY: L.gh[s][1] - 4, tilt: 90, mountTo: 'deck:hub' + (L.gh[s][0] > 0 ? 'L' : 'R') }))]; })(),
     contacts: [{ body: 'back', prop: 'deck:pad' }, { body: 'buttocks', prop: 'deck:seat' }, { body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'pecL' }, { body: 'gripR', prop: 'pecR' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
@@ -243,7 +249,8 @@ module.exports = {
         const gh = f.P['gh' + s], lat = C.lat(q, s), fwd = [0, 0, -1], back = [0, 0, 1];
         const ang = C.lerp(-14, 76, e) * C.D2R, rad = 50;
         const dir = V.unit(V.add(V.scale(lat, Math.cos(ang)), Math.sin(ang) >= 0 ? fwd : back, Math.abs(Math.sin(ang))));
-        const grip = V.add(V.add([L.gh[s][0], gh[1] - 4, L.gh[s][2]], dir, rad), [0, 0, 0]);
+        /* рукоять на жёстком рычаге: высота постоянна (по раскладке), а не идёт за плечевым суставом */
+        const grip = V.add([L.gh[s][0], L.gh[s][1] - 4, L.gh[s][2]], dir, rad);
         const pole = V.unit(V.add(V.add([0, -.45, 0], back, 1), lat, .2));
         C.grip(q, s, grip, [0, 1, 0], pole);
       }
@@ -253,9 +260,9 @@ module.exports = {
 
   /* Обратные разведения в «бабочке»: грудью к упору. t=0 — руки впереди, t=1 — руки разведены в стороны. */
   reversefly: {
-    keys: [0, .25, .5, .75, 1],
+    keys: PEC_KEYS,
     equipment: (() => { const L = RFLY(); return [{ type: 'pecDeck', id: 'deck', seatH: 50, padZ: 26, padY: 101, padH: 44, padW: 28, pivot: [Math.abs(L.gh.L[0]), 178, L.gh.L[2]] },
-      ...S.map(s => ({ type: 'pecArm', id: 'pec' + s, hand: s, pivot: [L.gh[s][0], 178, L.gh[s][2]], mountTo: 'deck:hub' + (L.gh[s][0] > 0 ? 'L' : 'R') }))]; })(),
+      ...S.map(s => ({ type: 'pecArm', id: 'pec' + s, hand: s, pivot: [L.gh[s][0], 178, L.gh[s][2]], radius: 58, gripY: L.gh[s][1] - 3, tilt: RFLY_TILT, mountTo: 'deck:hub' + (L.gh[s][0] > 0 ? 'L' : 'R') }))]; })(),
     contacts: [{ body: 'chest', prop: 'deck:pad' }, { body: 'buttocks', prop: 'deck:seat' }, { body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'pecL' }, { body: 'gripR', prop: 'pecR' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
@@ -266,9 +273,9 @@ module.exports = {
         const gh = f.P['gh' + s], lat = C.lat(q, s), fwd = [0, 0, 1];
         const ang = C.lerp(62, -4, e) * C.D2R, rad = 58;
         const dir = V.unit(V.add(V.scale(lat, Math.cos(ang)), fwd, Math.sin(ang)));
-        const grip = V.add([L.gh[s][0], gh[1] - 3, L.gh[s][2]], dir, rad);
+        const grip = V.add([L.gh[s][0], L.gh[s][1] - 3, L.gh[s][2]], dir, rad);
         /* рукоять чуть наклонена внутренним концом вниз — запястье без локтевого отведения */
-        const tangent = V.unit(V.add(V.add(V.scale(lat, -Math.sin(ang)), fwd, Math.cos(ang)), [0, -1, 0], .27));
+        const tangent = V.unit(V.add(V.add(V.scale(lat, -Math.sin(ang)), fwd, Math.cos(ang)), [0, -1, 0], Math.tan(RFLY_TILT * C.D2R)));
         const pole = V.unit(V.add(V.add([0, -.3, 0], lat, 1), [0, 0, -1], .2));
         C.grip(q, s, grip, tangent, pole);
       }
