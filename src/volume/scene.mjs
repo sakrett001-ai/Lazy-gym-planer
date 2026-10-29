@@ -397,6 +397,6 @@ export function createCatalogScene(first,{coarse=false}={}){
   anny,dispose(){disposeGeometry();disposeMaterials();},disposeGeometry,disposeMaterials};
  /* геометрия, текстуры и карты теней освобождаются сразу; материалы — отдельно: пока они живы, рендерер держит их
     собранные программы для следующей фигуры (main.mjs) */
- function disposeGeometry(){scene.traverse(o=>{o.geometry?.dispose();if(o.isLight&&o.shadow?.map)o.shadow.dispose();if(o.material)for(const m of [].concat(o.material))m.map?.dispose();});for(const t of studioTextures)t.dispose();studioTextures=[];}
+ function disposeGeometry(){scene.traverse(o=>{o.geometry?.dispose();if(o.isLight&&o.shadow?.map)o.shadow.dispose();if(o.material)for(const m of [].concat(o.material))m.map?.dispose();});for(const t of studioTextures)t.dispose();studioTextures=[];skeletonLayer.disposeTexture();}
  function disposeMaterials(){const materials=new Set([ghostSkin,ghostDepth]);scene.traverse(o=>{if(o.material)for(const m of [].concat(o.material))materials.add(m);if(o.customDepthMaterial)materials.add(o.customDepthMaterial);});for(const m of materials)m.dispose();}
 }

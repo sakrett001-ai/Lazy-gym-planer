@@ -169,11 +169,11 @@ test('anatomy cards remember bone matrices of a phase: the second repetition doe
     for (const t of [.1, .2, .3]) f.paint(r.target(), t, 0);
     assert.equal(calls, 3, 'второй круг — матрицы из памяти');
     /* кадр из памяти тот же, что посчитанный заново */
-    const femur = s.getObjectByName('bone-humerusL') || s.getObjectByName('skeleton').children[40], kept = Array.from(femur.matrix.elements);
+    const kept = Array.from(s.getObjectByName('skeleton').userData.layer.matrixOf('humerusL').elements);
     Skeleton.frames = frames; const fresh = r.stage().figure(r.opts('dbcurl', 'dbcurl-fresh'));
     fresh.setLayers(bones, { skeleton: bones, muscles, level: { biceps: 1 } }); fresh.paint(r.target(), .3, 0);
-    const again = r.n.scene.getObjectByName(femur.name) || r.n.scene.getObjectByName('skeleton').children[40];
-    assert.deepEqual(Array.from(again.matrix.elements).map(v => +v.toFixed(6)), kept.map(v => +v.toFixed(6)));
+    const again = r.n.scene.getObjectByName('skeleton').userData.layer.matrixOf('humerusL');
+    assert.deepEqual(Array.from(again.elements).map(v => +v.toFixed(6)), kept.map(v => +v.toFixed(6)));
     assert.equal(r.n.scene.getObjectByName('muscles').visible, true, 'мышцы на месте');
     /* силуэт кожи — один проход на обе стороны (иначе three.js на каждой сетке дважды за кадр ищет программу шейдера) */
     const mats = new Set(); r.n.scene.traverse(o => { if (o.material && /^ghost-/.test(o.material.name)) mats.add(o.material); });

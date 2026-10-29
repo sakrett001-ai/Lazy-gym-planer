@@ -123,7 +123,10 @@ test('skeleton mode: bones follow the pose inside a see-through silhouette, phas
   assert(regions.children.some(o=>o.visible),'phase muscle colours are on');
   figure.setSkeleton(data);
   assert.equal(figure.svg.dataset.skeleton,'on');
-  assert.equal(layer.visible,true);assert.equal(layer.children.length,data.bones.length);
+  /* все кости — одна сетка (4.72.0): один вызов отрисовки и один в проходе тени */
+  const bones=layer.userData.layer;
+  assert.equal(layer.visible,true);assert.equal(layer.children.length,1);assert.equal(bones.names.length,data.bones.length);
+  assert.equal(layer.children[0].geometry.attributes.position.count,data.bones.reduce((s,b)=>s+b.nv,0));
   /* силуэт: цветной проход рисует один ближний слой кожи (прозрачная середина, плотнее к контуру), невидимый двойник
      сетки пишет глубину кожи раньше него и после костей */
   const twin=torso.getObjectByName('ghost-depth');
@@ -135,10 +138,10 @@ test('skeleton mode: bones follow the pose inside a see-through silhouette, phas
   assert.equal(torso.castShadow,false,'the skin does not shadow the bones');
   assert(regions.children.every(o=>!o.visible),'phase muscle colours hide while the skeleton is on');
   /* бедренная кость: начало рамки — тазобедренный сустав позы */
-  const R=r.model.EX.find(e=>e.id==='squat').anim.catalogRig(1),femur=layer.getObjectByName('bone-femurL'),e=femur.matrix.elements;
+  const R=r.model.EX.find(e=>e.id==='squat').anim.catalogRig(1),femur=bones.matrixOf('femurL'),e=femur.elements;
   const hip=[R.hipL[0]/100,(186-R.hipL[1])/100,R.hipL[2]/100];
   assert(Math.hypot(e[12]-hip[0],e[13]-hip[1],e[14]-hip[2])<1e-6,'the femur hangs from the hip joint');
-  for(const m of layer.children)assert(m.matrix.elements.every(Number.isFinite),'finite matrix: '+m.name);
+  for(const name of bones.names)assert(bones.matrixOf(name).elements.every(Number.isFinite),'finite matrix: '+name);
   figure.setSkeleton(null);
   assert.equal(layer.visible,false);assert.equal(torso.material.transparent,false);assert.equal(torso.material.opacity,1);assert.equal(torso.castShadow,true);
   assert.notEqual(torso.material.name,'ghost-skin');assert.equal(torso.getObjectByName('ghost-depth').visible,false,'the depth twin hides with the silhouette');
