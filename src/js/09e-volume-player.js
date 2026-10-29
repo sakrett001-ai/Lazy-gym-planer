@@ -35,6 +35,8 @@ function createMotionFigure(anim,opts){
   const at=f.at;f.at=(t,frame)=>{at(t,frame);root.dataset.pose=String(t);root.dataset.phase=String(frame?.index||0);};
   const setJoints=show=>svg.classList.toggle('show-joints',!!show);f.setJoints=setJoints;setJoints(motionPrefs.joints);f.at(opts.t||0);
  }
+ /* свободная камера (разбор, экран тренировки): сцену можно повернуть, приблизить и сдвинуть жестами и клавишами */
+ if(f.orbit){f.svg.setAttribute('role','application');f.svg.setAttribute('aria-roledescription','объёмная сцена');f.svg.setAttribute('aria-description','Стрелки — повернуть, плюс и минус — приблизить, 0 — вернуть ракурс');}
  f.setTrace(motionPrefs.trace);f.setVectors(motionPrefs.vectors);return f;
 }
 function disposeMotion(F){F?.f?.dispose?.();F?.extra?.dispose?.();}

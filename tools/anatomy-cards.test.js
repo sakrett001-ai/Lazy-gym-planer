@@ -103,7 +103,7 @@ test('card canvas size: device pixels, but not more than ×2', () => {
 /* ---------- 2. общий рендерер карточек на заглушке WebGL ---------- */
 const mainSrc = fs.readFileSync(path.join(root, 'src/volume/main.mjs'), 'utf8').replace(/^import[^\n]*\n/gm, '').replace('export function createVolumeFigure', 'function createVolumeFigure');
 async function stageRuntime({ available = true } = {}) {
-  const THREE = await import('three'), { createCatalogScene, world } = await import('../src/volume/scene.mjs');
+  const THREE = await import('three'), { createCatalogScene, world, CAMERA_SETTINGS } = await import('../src/volume/scene.mjs'), orbit = await import('../src/volume/orbit.mjs'), { attachOrbit } = await import('../src/volume/controls.mjs');
   const dom = new JSDOM('<body></body>'), w = dom.window, n = { constructors: 0, renders: 0, losses: 0, sizes: [] };
   if (available) w.WebGL2RenderingContext = function () {};
   w.HTMLCanvasElement.prototype.getContext = function () { return available ? {} : null; };
@@ -113,7 +113,7 @@ async function stageRuntime({ available = true } = {}) {
     setPixelRatio() {} setSize(a, b) { n.sizes.push([a, b]); } render(scene, camera) { n.renders++; n.scene = scene; n.camera = camera; } dispose() {} forceContextLoss() { n.losses++; }
   }
   /* Skeleton — как в браузере, глобальный (кости — приложения, src/js/09bq-skeleton.js) */
-  const env = { window: w, document: w.document, performance, THREE: { ...THREE, WebGLRenderer: Renderer }, createCatalogScene, world, GymPerf: null, get Skeleton() { return globalThis.Skeleton; } };
+  const env = { window: w, document: w.document, performance, THREE: { ...THREE, WebGLRenderer: Renderer }, createCatalogScene, world, CAMERA_SETTINGS, ...orbit, attachOrbit, GymPerf: null, get Skeleton() { return globalThis.Skeleton; } };
   vm.runInNewContext(mainSrc, env);
   const m = loadModel(), { catalogVolumeData, muscleColor, catalogAnimFor } = m.get('({catalogVolumeData,muscleColor,catalogAnimFor})');
   let datas = 0;

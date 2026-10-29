@@ -6,3 +6,9 @@
 .muscle-list{max-height:360px;overflow:auto;overscroll-behavior:contain}.muscle-region-row[data-deep=true] .muscle-swatch{opacity:.3}
 #mv-stage:has(.volume-figure),#mv-second-stage:has(.volume-figure){padding:34px 0 30px}
 @media(max-width:700px){.volume-figure{border-radius:0}.muscle-region-select select{font-size:14px}}
+/* свободная камера (разбор, экран тренировки): страница листается вертикальным свайпом, вбок — поворот (controls.mjs) */
+.volume-figure[data-orbit]{touch-action:pan-y;cursor:grab;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+.volume-figure[data-orbit][data-drag]{cursor:grabbing}
+.volume-figure[data-orbit]:focus{outline:none}
+.volume-figure[data-orbit]:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.mv-orbit-hint{margin:7px 3px 0;font-size:12px;line-height:1.45;color:var(--muted)}
