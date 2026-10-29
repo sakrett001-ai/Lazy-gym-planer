@@ -54,6 +54,16 @@ window.Sheet = {
         for (let t = 0; t < d.nf; t++) { const i0 = d.idx[t * 3], i1 = d.idx[t * 3 + 1], i2 = d.idx[t * 3 + 2], n0 = nrm(d.pos, i0, i1, i2), n1 = nrm(P, i0, i1, i2), l0 = V.len(n0), l1 = V.len(n1); if (l0 < 1e-9 || l1 < 1e-9) continue; if (V.dot(rotate(rot(i0), n0), n1) / (l0 * l1) < -.2) for (const v of [i0, i1, i2]) a.array.set([255, 30, 30, 255], v * 4); }
         a.needsUpdate = true;
       }
+      /* отладка: p.marks === 'crease' — вершины рёбер с изломом сверх стойки больше p.crease° (по умолчанию 25; как
+         tools/anny-look/tails.js): жёлтым, больше 40° — красным */
+      if (p.marks === 'crease' && view.anny?.mesh && AnnySkin.data) {
+        const d = AnnySkin.data, R = rig(p.t), P = AnnySkin.skin(R, { d }), a = view.anny.mesh.geometry.attributes.annyColor, V = Mannequin.V, lim = p.crease || 25;
+        const fn = (Q, t) => { const i = d.idx[t * 3] * 3, j = d.idx[t * 3 + 1] * 3, k = d.idx[t * 3 + 2] * 3; return V.unit(V.cross([Q[j] - Q[i], Q[j + 1] - Q[i + 1], Q[j + 2] - Q[i + 2]], [Q[k] - Q[i], Q[k + 1] - Q[i + 1], Q[k + 2] - Q[i + 2]])); };
+        const ang = (Q, s, t) => Math.acos(Math.max(-1, Math.min(1, V.dot(fn(Q, s), fn(Q, t))))) * 180 / Math.PI;
+        const m = new Map(); a.array.fill(0);
+        for (let t = 0; t < d.nf; t++) for (let k = 0; k < 3; k++) { const u = d.idx[t * 3 + k], w = d.idx[t * 3 + (k + 1) % 3], key = Math.min(u, w) * 65536 + Math.max(u, w), e = m.get(key); if (e == null) m.set(key, t); else { const c = ang(P, e, t) - ang(d.pos, e, t); if (c > lim) for (const v of [u, w]) a.array.set(c > 40 ? [255, 40, 40, 255] : [255, 210, 40, 255], v * 4); } }
+        a.needsUpdate = true;
+      }
       view.studio(renderer); view.scene.updateMatrixWorld(true); view.fitShadow();
       renderer.render(view.scene, cam);
       out.push({ url: renderer.domElement.toDataURL('image/png'), cam: [cam.left, cam.right, cam.top, cam.bottom] });

@@ -108,7 +108,8 @@ function penetration(R, P, d, kind, entry, has) {
   if (fl) out.push(fl);
   return out;
 }
-/* вывернутые треугольники и складки (см. шапку) */
+/* вывернутые треугольники и складки (см. шапку); opts.region — только треугольники области, opts.all — все пары и все
+   вывернутые (иначе — по 5 для примера) */
 function folds(d, R, P, opts = {}) {
   const S = A.skinMats(R, d), DQ = A.dualQuats(S, d.frames.length), n = d.nf, idx = d.idx, B = d.pos;
   /* поворот вершины — смешанный кватернион (как в skin) */
@@ -120,7 +121,7 @@ function folds(d, R, P, opts = {}) {
     const a = idx[t * 3], b = idx[t * 3 + 1], c = idx[t * 3 + 2], n0 = nrm(B, a, b, c), n1 = nrm(P, a, b, c), l0 = V.len(n0), l1 = V.len(n1);
     if (l0 < 1e-9 || l1 < 1e-9) continue;
     const q = rot(a), ref = rotate(q, n0);
-    if (V.dot(ref, n1) / (l0 * l1) < -.2) { inverted++; if (bad.length < 5) bad.push(t); }
+    if (V.dot(ref, n1) / (l0 * l1) < -.2) { inverted++; if (opts.all || bad.length < 5) bad.push(t); }
   }
   /* складки: пересечения треугольников, близких в стойке (сетка-решётка 2 см) */
   const cell = 2, grid = new Map(), key = (i, j, k) => i + ',' + j + ',' + k, tri = t => [at(P, idx[t * 3]), at(P, idx[t * 3 + 1]), at(P, idx[t * 3 + 2])];
@@ -135,7 +136,7 @@ function folds(d, R, P, opts = {}) {
       const vs = [idx[s * 3], idx[s * 3 + 1], idx[s * 3 + 2]], vt = [idx[t * 3], idx[t * 3 + 1], idx[t * 3 + 2]];
       if (vs.some(v => vt.includes(v))) continue;
       if (V.dist(cen(B, s), cen(B, t)) > FOLD_NEAR) continue;
-      if (triTri(tri(s), tri(t))) { foldPairs++; if (pairs.length < 5) pairs.push([s, t]); }
+      if (triTri(tri(s), tri(t))) { foldPairs++; if (opts.all || pairs.length < 5) pairs.push([s, t]); }
     }
   }
   return { inverted, folds: foldPairs, bad, pairs };

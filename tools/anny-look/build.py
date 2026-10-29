@@ -42,6 +42,7 @@ CAVITY_CODE = 7          # выстилка рта: вершина не на в�
 
 
 SMOOTH_ITERS = 10
+AXILLA_ALT = None
 
 
 def rigid_mask(W, frames):
@@ -49,6 +50,25 @@ def rigid_mask(W, frames):
     (иначе на сгибе запястья кожа складывается), стопа — по правилу процедурной стопы (foot_split)"""
     idx = [i for i, f in enumerate(frames) if f.startswith('head') or (f[0] == 'f' and f[1].isdigit())]
     return W[:, idx].sum(1) > .5
+
+
+def top4(W):
+    """четыре наибольших веса — непрерывно (из них вычитается пятый: иначе на границе, где пятый становится четвёртым, —
+    скачок), округление до 1/255 с суммой ровно 255 (в файле — байты)"""
+    order = np.argsort(-W, 1); w5 = np.take_along_axis(W, order[:, 4:5], 1); order = order[:, :4]
+    wv = np.maximum(np.take_along_axis(W, order, 1) - w5, 0); wv = wv / wv.sum(1, keepdims=True)
+    wq = np.floor(wv * 255 + .5).astype(int); wq[:, 0] += 255 - wq.sum(1)
+    return np.where(wq > 0, order, 0), wq
+
+
+def axilla_alt(W, V, F, J, fi):
+    r_, it_ = AXILLA_ALT; W = W.copy()
+    for s in 'LR':
+        arm = W[:, [fi[k + s] for k in ('ua', 'cl', 'sp')]].sum(1)
+        u = np.clip(1 - np.linalg.norm(V - J['sh' + s], axis=1) / r_, 0, 1)
+        m = (u > 0) & (arm > .005) & (arm < .995) & ~rigid_mask(W, FRAMES)
+        W = smooth_weights(W, F, m, it_)
+    return W
 
 
 SH_GEO = 4.0             # доля плеча (ua) на стороне корпуса — до 0 на 4 см по коже от линии сгиба Anny (доля руки 0,5)
@@ -285,14 +305,14 @@ def build(out_path, mannequin=None, shape='look'):
     # после (сглаживание заново разносит долю бедра на крестец)
     Wo = limb_limit(Wo, V, F, J, fi, Wa, ('arm',))
     Wo = smooth_weights(Wo, F, ~rigid_mask(Wo, FRAMES), SMOOTH_ITERS)
+    # веса для формы «руки вверх» (только цель формы, в файле — прежние): у подмышки — сглаженные (AXILLA_ALT)
+    Walt = axilla_alt(Wo, V, F, J, fi) if AXILLA_ALT else None
     Wo = limb_limit(Wo, V, F, J, fi, Wa, ('leg',))
     Wo = foot_split(Wo, V, FRAMES, D)
-    # четыре наибольших — непрерывно: из них вычитается пятый (иначе на границе, где пятый становится четвёртым, — скачок)
-    order = np.argsort(-Wo, 1); w5 = np.take_along_axis(Wo, order[:, 4:5], 1); order = order[:, :4]
-    wv = np.maximum(np.take_along_axis(Wo, order, 1) - w5, 0); wv = wv / wv.sum(1, keepdims=True)
-    # округление до 1/255 с суммой ровно 255 (в файле — байты)
-    wq = np.floor(wv * 255 + .5).astype(int); wq[:, 0] += 255 - wq.sum(1)
-    order = np.where(wq > 0, order, 0)
+    order, wq = top4(Wo)
+    alt = None
+    if Walt is not None:
+        Walt = foot_split(limb_limit(Walt, V, F, J, fi, Wa, ('leg',)), V, FRAMES, D); oa, qa = top4(Walt); alt = {'wi': oa, 'ww': qa / 255.0}
 
     # ---------- адрес на процедурной коже ----------
     code = np.zeros(n, int); side = np.zeros(n, int); a1 = np.zeros(n); a2 = np.zeros(n)
@@ -336,7 +356,7 @@ def build(out_path, mannequin=None, shape='look'):
     cat = np.round(cat, 2)
 
     # ---------- корректирующие формы (по тем же данным, что попадут в файл: координаты до 0,01 см, доли — байты) ----------
-    corr = CR.build(cat, F, order, wq / 255.0, FRAMES)
+    corr = CR.build(cat, F, order, wq / 255.0, FRAMES, alt)
     inputs = json.loads(subprocess.run(['node', os.path.join(C.ROOT, 'tools/anny-look/inputs.js')], check=True, capture_output=True, text=True).stdout)
     out = {'version': 1, 'source': {'anny': '0.6.1', 'toned': 'tools/skin-anny/result/anny-toned.json', 'fit': fit.get('pose'), 'local_delta': fit.get('local_delta', {}),
                                     # версия приложения в файл не пишется: стойку и инструменты уже отпечатывает inputs,

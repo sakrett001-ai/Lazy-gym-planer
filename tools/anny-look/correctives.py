@@ -38,6 +38,10 @@ SPECS = [
 ]
 CONFORM_ITERS, CONFORM_TAUBIN = 8, 4   # шагов «подтянуть избыток (с долей круга) — сгладить» и проходов Таубина на шаг
 TAUBIN = (.5, -.53, 30)   # λ, μ, проходов
+BAND_RINGS = 0
+ALT_SHAPES = ('armsUp', 'armsOverhead')
+ALT_TAPER = .4
+SMOOTH_R = {}
 
 
 def dq_from(S):
@@ -105,7 +109,7 @@ def tent(c, v):
     return 1.0 if c.get('a2') is None else float(np.clip((c['a2'] - v) / (c['a2'] - c['a1']), 0, 1))
 
 
-def build(Vcat, F, wi, ww, frames):
+def build(Vcat, F, wi, ww, frames, alt=None):
     """Vcat — вершины в стойке (каталог), wi/ww — четыре рамки и доли на вершину. Возвращает список форм для anny.json."""
     n = len(Vcat); A = adjacency(F, n); poses = sculpt_poses(frames); deg = np.asarray(A.sum(1)).ravel()
     fi = {f: i for i, f in enumerate(frames)}
@@ -119,20 +123,38 @@ def build(Vcat, F, wi, ww, frames):
                 w = tent(c, poses[pose]['angles'][c['side']][c['angle']])
                 if w > 0: V0[c['i']] += w * np.array(c['d']).reshape(-1, 3)
             Pp, Rm = skin(V0, wi, ww, DQ)
+            Pa = skin(V0, alt['wi'], alt['ww'], DQ)[0] if alt is not None and name in ALT_SHAPES else Pp
             band = np.zeros(n, bool) if chains else np.ones(n, bool)
             for chain in chains or ():
                 ids = [fi[c + s] for c in chain]; wc = np.zeros(n)
                 for k in range(4): wc += np.where(np.isin(wi[:, k], ids), ww[:, k], 0)
                 band |= (wc > .02) & (wc < .98)
             dist = np.linalg.norm(Pp - np.array(poses[pose]['joints'][jk + s]), axis=1)
-            fall = np.clip(1 - dist / r, 0, 1); fall = fall * fall * (3 - 2 * fall); fall[~band] = 0
-            if not chains:   # полоса без цепочки (сидя): только своя сторона, переход через середину на ±2 см
-                m = np.clip((Pp[:, 0] * (1 if s == 'L' else -1) + 2) / 4, 0, 1); fall *= m * m * (3 - 2 * m)
-            ri = np.where(fall > 0)[0]
+
+            def falloff(rad):
+                f = np.clip(1 - dist / rad, 0, 1); f = f * f * (3 - 2 * f)
+                if BAND_RINGS and chains:
+                    ring = np.full(n, np.inf); ring[band] = 0; cur = band.copy()
+                    for k in range(1, BAND_RINGS + 1):
+                        cur = (A @ cur.astype(float) > 0) & ~np.isfinite(ring); ring[cur] = k; cur = np.isfinite(ring)
+                    u = np.clip(1 - ring / (BAND_RINGS + 1), 0, 1); f *= u * u * (3 - 2 * u)
+                else:
+                    f[~band] = 0
+                if not chains:   # полоса без цепочки (сидя): только своя сторона, переход через середину на ±2 см
+                    m = np.clip((Pp[:, 0] * (1 if s == 'L' else -1) + 2) / 4, 0, 1); f *= m * m * (3 - 2 * m)
+                return f
+            fall = falloff(r)
+            fs_ = falloff(SMOOTH_R[name]) if name in SMOOTH_R else fall
+            ta = np.zeros(n)
+            if Pa is not Pp:
+                u = np.clip(1 - dist / r, 0, 1); ta = np.clip(u / ALT_TAPER, 0, 1); ta = ta * ta * (3 - 2 * ta)
+                ta[np.linalg.norm(Pa - Pp, axis=1) < .01] = 0
+                Pa = Pp + ta[:, None] * (Pa - Pp)
+            ri = np.where((fall > 0) | (ta > 0) | (fs_ > 0))[0]
             if not len(ri): continue
-            Q = Pp
+            Q = Pa
             if conf:
-                parts, keep_, keep_in, where = conf[0]; Q = Pp.copy()
+                parts, keep_, keep_in, where = conf[0]; Q = Pa.copy()
                 if where == 'below':   # ниже сустава (каталог: Y вниз)
                     fall[Pp[:, 1] < poses[pose]['joints'][jk + s][1] - 1.0] = 0; ri = np.where(fall > 0)[0]
                 for _ in range(CONFORM_ITERS):
@@ -141,7 +163,7 @@ def build(Vcat, F, wi, ww, frames):
                     if np.abs(e).max() < .2: break
                     Q[ri] -= gg * (e * fall[ri])[:, None]
                     Q = taubin(Q, A, fall, CONFORM_TAUBIN)
-            X = taubin(Q, A, fall)
+            X = taubin(Q, A, fs_)
             D = np.einsum('nji,nj->ni', Rm[ri], X[ri] - Pp[ri])          # Rᵀ (x − p)
             keep = np.linalg.norm(D, axis=1) > .05
             a1 = float(poses[pose]['angles'][s][angle])
