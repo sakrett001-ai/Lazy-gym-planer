@@ -275,11 +275,13 @@ export function createCatalogScene(first,{coarse=false}={}){
    const h=g.children[1],d=unit(sub(c,s.grip)),x=[1,0,0],z=unit(cross(x,d));h.position.fromArray(world(add(s.grip,d,3)));h.quaternion.copy(quaternion(direction(x),direction(d).map(v=>-v),direction(z)));
   }
  }
- function apply(data,nextOptions={}){
-  lastData=data;options={...options,...nextOptions};const R=data.pose;
+ /* how.shape — кадр только для рамки (13 положений повторения, main.mjs): точки те же, нормали кожи и областей не считаются
+    (их досчитывает следующий обычный кадр) */
+ function apply(data,nextOptions={},how={}){
+  lastData=data;options={...options,...nextOptions};const R=data.pose,shape=!!how.shape;
   const bonesOn=!!(mannequin&&options.skeleton&&data.body),musclesOn=!!(mannequin&&options.anatomy&&data.body),skeletonOn=bonesOn||musclesOn;
   const annyData=mannequin&&!skeletonOn&&options.anny!==false&&data.pose?.frames?globalThis.AnnySkin?.data:null;annyShown=!!annyData;
-  if(mannequin){mannequin.group.visible=!annyData;if(annyData)mannequin.dots(data,options);else mannequin.apply(data,options);}
+  if(mannequin){mannequin.group.visible=!annyData;if(annyData)mannequin.dots(data,options);else mannequin.apply(data,options,shape);}
   if(annyData)anny.update(annyData,data,{on:options.muscles!==false,color:options.color,values:data.values,sideValues:data.sideValues,regions:data.regions,selected:options.selected});else anny?.hide();
   /* матрицы костей кадра: готовые (data.boneFrames — память кадров карточек плана, main.mjs) или посчитанные здесь */
   const frames=musclesOn?data.boneFrames||globalThis.Skeleton.frames(R,data.body,options.anatomy.skeleton.bones):null;
@@ -314,7 +316,7 @@ export function createCatalogScene(first,{coarse=false}={}){
   for(const[key,faces]of groups){
    let o=regionMeshes.get(key);if(!o){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(faces.length*6*3),3));const m=material('#a7b3c6',{roughness:.82});m.polygonOffset=true;m.polygonOffsetFactor=-1;m.polygonOffsetUnits=-1;o=mesh(regionsGroup,g,m,key);o.receiveShadow=false;o.userData={region:faces[0].id,side:faces[0].side};regionMeshes.set(key,o);}
    if(o.geometry.attributes.position.count!==faces.length*6){o.geometry.dispose();o.geometry=new THREE.BufferGeometry();o.geometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array(faces.length*6*3),3));}
-   let i=0;const p=o.geometry.attributes.position;for(const f of faces)for(const j of [0,1,2,0,2,3])p.setXYZ(i++,...world(f.points[j]));p.needsUpdate=true;o.geometry.computeVertexNormals();o.geometry.computeBoundingSphere();o.geometry.computeBoundingBox();
+   let i=0;const p=o.geometry.attributes.position;for(const f of faces)for(const j of [0,1,2,0,2,3])p.setXYZ(i++,...world(f.points[j]));p.needsUpdate=true;if(!shape){o.geometry.computeVertexNormals();o.geometry.computeBoundingSphere();}o.geometry.computeBoundingBox();
    const id=faces[0].id,side=faces[0].side,muscles=options.muscles!==false&&!skeletonOn,active=muscles&&(!options.selected||options.selected==='all'||options.selected===id||options.selected===faces[0].parent);o.visible=muscles;o.material.color.set(active?options.color(data.sideValues?.[side]?.[id]??data.values[id]??.28):'#a0adc0');
    /* собственное свечение участка: жёлтый и оранжевый в тени не уходят в коричневый */
    if(active)o.material.emissive.copy(o.material.color).multiplyScalar(STUDIO.muscleGlow);else o.material.emissive.setRGB(0,0,0);
