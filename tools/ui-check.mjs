@@ -652,6 +652,8 @@ await page.close();
   await touch([[x - 80, y, x + 80, y + 8]]);
   const p1 = await cam(t);
   check(Math.abs(p1.yaw - p0.yaw) > .3 && p1.free && p1.scroll === p0.scroll && p1.clock > p0.clock, `телефон: палец вбок поворачивает сцену, страница стоит, движение идёт (листание ${p0.scroll} → ${p1.scroll})`);
+  const label = () => t.evaluate(() => { const l = $('#mv-view'); return l.offsetHeight > 0 ? l.textContent : ''; });
+  check(await label() === 'Свободный ракурс' && p1.pressed === '' && p0.pressed === 'above' && await t.evaluate(() => getComputedStyle($('#mv-view')).pointerEvents === 'none'), 'телефон: повернули — поверх сцены подпись «Свободный ракурс», кнопки без нажатой');
   await touch([[x, y + 60, x + 4, y - 140]]);
   const p2 = await cam(t);
   check(p2.scroll > p1.scroll + 40 && Math.abs(p2.yaw - p1.yaw) < 1e-9 && Math.abs(p2.pitch - p1.pitch) < 1e-9, `телефон: палец вверх листает разбор и не трогает камеру (листание ${p1.scroll} → ${p2.scroll})`);
@@ -669,7 +671,7 @@ await page.close();
   for (const [type, dt] of [['touchStart', 0], ['touchEnd', .05], ['touchStart', .16], ['touchEnd', .21]]) await cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 0 }], timestamp: t0 + dt });
   await t.waitForTimeout(900);
   const p5 = await cam(t);
-  check(!p5.free && p5.zoom === 1 && p5.pressed === 'above', 'телефон: двойное касание возвращает ракурс');
+  check(!p5.free && p5.zoom === 1 && p5.pressed === 'above' && await label() === '', 'телефон: двойное касание возвращает ракурс (подпись над сценой снова скрыта, как раньше)');
   check(await t.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'телефон: разбор с подсказкой без прокрутки вбок');
   await pc.close();
 }

@@ -52,6 +52,9 @@
   .mv-demo:has(#mv-camera-controls:not([hidden])) #mv-projections:not(.is-dual) #mv-view { display:none; }
   .mv-demo:has(#mv-camera-controls:not([hidden])) #mv-projections:not(.is-dual) #mv-stage { padding-top:8px; }
   .mv-demo:has(#mv-camera-controls:not([hidden])) #mv-projections:not(.is-dual) #mv-stage:has(.volume-figure) { padding-top:0; }
+  /* сцену повернули вручную (свободная камера, src/volume/orbit.mjs): кнопки ракурсов без нажатой, а подпись «Свободный
+     ракурс» — поверх сцены, не мешая жестам */
+  .mv-demo:has(#mv-camera-controls:not([hidden])) #mv-projections:not(.is-dual):has(#mv-stage .volume-figure[data-free="1"]) #mv-view { display:block; z-index:1; top:8px; left:8px; padding:3px 8px; border-radius:7px; background:rgba(11,17,25,.66); color:#d9e3f0; pointer-events:none; }
   #mv-camera-controls { margin:10px 0 0; gap:2px 10px; }
   #mv-cameras { flex:1 1 100%; min-width:0; flex-wrap:nowrap; gap:1px; overflow-x:auto; padding:3px; border-radius:11px; background:var(--surface-2); scrollbar-width:none; }
   #mv-cameras::-webkit-scrollbar { display:none; }
