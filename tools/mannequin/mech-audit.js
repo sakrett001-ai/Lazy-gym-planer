@@ -15,8 +15,8 @@
      горизонтальна, демпфер: корпус и шток постоянной длины (шток уходит в корпус);
    * гребной тренажёр: цепь выходит из направляющей корпуса, путь рукояти — прямая, рукоять поперёк цепи, сиденье на
      монорельсе в пределах его длины, порядок фаз «ноги → корпус → руки»;
-   * беговая дорожка: опорная стопа едет назад равномерно — со скоростью ленты, одинаковой для обеих стоп, и не уходит
-     с ленты по высоте;
+   * беговая дорожка: опорная стопа едет назад равномерно — со скоростью ленты (полос на ленте), одинаковой для обеих стоп,
+     стоит на ленте (не сдвигается по ней за опору) и не уходит с ленты по высоте;
    * каретка на направляющей: точка тела, которая её ведёт, остаётся на линии хода (ход — по оси направляющих), каретка
      не упирается в концы направляющих;
    * рычаг (ось неподвижна): точка тела, которая задаёт угол, идёт по окружности вокруг оси (иначе упор скользит по телу);
@@ -278,6 +278,23 @@ function auditTreadmill(id, ev, fr) {
   }
   const sp = row.feet.map(q => q.speed);
   row.speed = sp; row.speedDiff = sp.length > 1 ? spread(sp) / (sp.reduce((s, x) => s + x, 0) / sp.length) * 100 : 0;
+  /* лента: полосы (BIND.treadBelt) — скорость по перемещению полосы за кадр (с переходом через ролик); стопа по ленте —
+     разброс z стопы + путь ленты за окно опоры (стопа стоит на ленте — величина постоянна) */
+  const bl = eqOf(ev, 'treadBelt')[0];
+  if (bl) {
+    const mk = fr.map(f => f.get((bl.id || 'belt') + ':mark0')), z = mk.map(p => I(p.c)[2]);
+    /* шаг полосы за кадр; кадр, где полоса ушла за задний ролик и вернулась к переднему (скачок вперёд), — по медиане */
+    const dz = z.slice(1).map((v, i) => z[i] - v), good = dz.filter(d => d >= 0).sort((a, b) => a - b), med = good[good.length >> 1] || 0;
+    row.beltSpeed = dz.reduce((s, d) => s + (d < 0 ? med : d), 0) / (fr[fr.length - 1].t - fr[0].t);
+    row.beltJump = Math.max(0, ...good.map(d => Math.abs(d - med)));
+    for (const q of row.feet) {
+      const c = (ev.contacts || []).find(cc => cc.body === q.body && /:belt$/.test(cc.prop)), win = fr.filter(f => inWin(c, f.t));
+      q.onBelt = spread(win.map(f => bodyPoint(f.R, q.body)[2] + row.beltSpeed * f.t));
+      if (q.onBelt > 2 * LIM.belt) row.flags.push(`${q.body}: стопа сдвигается по ленте на ${q.onBelt.toFixed(2)} см за опору`);
+    }
+    row.beltDiff = Math.max(...sp.map(v => Math.abs(v - row.beltSpeed) / row.beltSpeed * 100));
+    if (row.beltDiff > LIM.beltSpeed) row.flags.push(`лента ${row.beltSpeed.toFixed(1)} см за цикл, стопа в опоре — ${sp.map(v => v.toFixed(1)).join(' / ')}`);
+  } else row.flags.push('лента не движется (нет полос BIND.treadBelt): опорная стопа едет назад по неподвижной на вид ленте');
   for (const q of row.feet) {
     if (q.slip > LIM.belt) row.flags.push(`${q.body}: опорная стопа отходит от равномерного хода ленты на ${q.slip.toFixed(2)} см (скорость стопы ${q.vel[0].toFixed(0)}…${q.vel[1].toFixed(0)} см за цикл при ленте ${q.speed.toFixed(0)})`);
     if (Math.max(Math.abs(q.y[0]), Math.abs(q.y[1])) > LIM.beltY) row.flags.push(`${q.body}: подошва по высоте ленты ${q.y[0].toFixed(2)}…${q.y[1].toFixed(2)} см`);
@@ -435,7 +452,7 @@ function describe(r) {
   if (r.type === 'эллипс') out.push(`кривошип ${rng(r.radius)} см (номинал ${f1(r.rc)}), противофаза ±${f1(r.phase)}°, ролик по высоте ${rng(r.rollerY)} / вбок ${rng(r.rollerX)} см, рычаг мимо оси ${f2(r.pivotOff)} см, педаль к тяге ${f1(r.pedalBar)}°, шаг ${f1(r.stride)} см, подъём ${f1(r.rise)} см`);
   if (r.type === 'степпер') out.push(`рычаг ${rng(r.lever)} см, тяга ${rng(r.link)} см, конец тяги от оси ${f2(r.linkJoin)} см, площадка ${f1(r.level)}°, ход педали ${f1(r.stroke)} см, ход штока демпфера ${f1(r.damperStroke)} см`);
   if (r.type === 'гребной') out.push(`цепь из направляющей ${f2(r.exitOff)} см, путь рукояти от прямой ${f1(r.pathDev)} см, цепь к полу ${rng(r.chainAng, f1)}°, ход ${f1(r.stroke)} см, рукоять к цепи ${f1(r.square)}°, сиденье: ролики ${rng(r.seatWheel)} см, ход ${f1(r.seatTravel)} см, запас рельса ${f1(r.seatOut)} см, фазы ${JSON.stringify(r.order)}`);
-  if (r.type === 'дорожка') out.push(r.feet.map(q => `${q.body}: лента ${f1(q.speed)} см/цикл, от равномерного ${f2(q.slip)} см, по высоте ${rng(q.y)} см, вбок ${f2(q.sideways)} см`).join('; '));
+  if (r.type === 'дорожка') out.push(`полосы ленты ${r.beltSpeed == null ? 'нет' : f1(r.beltSpeed) + ' см/цикл'}; ` + r.feet.map(q => `${q.body}: стопа в опоре ${f1(q.speed)} см/цикл, от равномерного ${f2(q.slip)} см, по ленте ${q.onBelt == null ? '—' : f2(q.onBelt)} см, по высоте ${rng(q.y)} см, вбок ${f2(q.sideways)} см`).join('; '));
   if (r.type === 'каретка') out.push(`направляющие ${f1(r.angle)}° к полу, ход ${f1(r.travel)} см (${rng(r.s, f1)} из ${f1(r.railLen)}), от линии ${f2(r.lineDev)} см`);
   if (r.type === 'рычаг' || r.type === 'параллелограмм') out.push(`поворот ${rng(r.turn, f1)}°, радиус точки тела ${rng(r.radius)} см, вдоль оси ${f2(r.alongDev)} см`);
   if (r.type === 'рычаг «бабочки»') out.push(`хват: радиус ${rng(r.gripRadius)} см, высота ${rng(r.gripY)} см; плечевой сустав от оси ${rng(r.shoulderOff)} см`);

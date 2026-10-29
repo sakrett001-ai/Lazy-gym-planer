@@ -573,7 +573,8 @@ module.exports = {
     /* 40 ключей: опорная стопа едет назад вместе с лентой равномерно, а между ключами углы суставов интерполируются
        и стопа уходит с равномерного хода — при 20 ключах до 1,1 см (скорость стопы 104…203 см за цикл при ленте 155) */
     keys: keysN(40), loop: true,
-    equipment: [{ type: 'treadmill', id: 'tm', deckH: RUN.belt }],
+    /* полосы ленты едут назад с той же скоростью, что опорная стопа: (zTD − zTO) / доля опоры, см за цикл */
+    equipment: [{ type: 'treadmill', id: 'tm', deckH: RUN.belt }, { type: 'treadBelt', id: 'belt', deckH: RUN.belt, speed: (RUN.zTD - RUN.zTO) / RUN.stance, mountTo: 'tm:belt' }],
     contacts: [{ body: 'soleL', prop: 'tm:belt', when: [0, RUN.stance] }, { body: 'soleR', prop: 'tm:belt', when: [.5, .5 + RUN.stance] }],
     pose(t, C) { return runPose(C, t); }
   },

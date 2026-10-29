@@ -58,6 +58,9 @@ test('mech: treadmill — the stance foot rides the belt evenly at one belt spee
   assert.equal(r.feet.length, 2);
   for (const q of r.feet) assert(q.slip <= LIM.belt && Math.max(Math.abs(q.y[0]), Math.abs(q.y[1])) <= LIM.beltY, `${q.body}: ${q.slip} см`);
   assert(r.speedDiff <= LIM.beltSpeed);
+  /* полосы ленты едут с той же скоростью; стопа за опору сдвигается по ленте не больше 1 см (от пика до пика) */
+  assert(r.beltSpeed > 100 && r.beltDiff <= LIM.beltSpeed && r.beltJump < .01, `лента ${r.beltSpeed} см/цикл, против стопы ${r.beltDiff} %`);
+  for (const q of r.feet) assert(q.onBelt <= 2 * LIM.belt, `${q.body}: по ленте ${q.onBelt} см`);
 });
 
 test('mech: rower — chain from the housing guide, straight handle path, seat on the monorail, legs → body → arms', () => {
@@ -105,7 +108,7 @@ const ELSEWHERE = {
   g3towelRoll: 'валик полотенца у тела', homeTowel: 'полотенце в руках', homeTowelFoot: 'полотенце в руках и под стопой', towel: 'полотенце в руках',
   rowerSeat: 'вместе с rowerChain (узел «гребной»)'
 };
-const AUDITED = ['bikeCrank', 'ellipticalLinks', 'stepPedals', 'rowerChain', 'g4sled', 'sled', 'g4lever', 'lever', 'g4link', 'pecArm', 'smithBar', 'g1LandmineBar', 'abWheel'];
+const AUDITED = ['bikeCrank', 'ellipticalLinks', 'stepPedals', 'treadBelt', 'rowerChain', 'g4sled', 'sled', 'g4lever', 'lever', 'g4link', 'pecArm', 'smithBar', 'g1LandmineBar', 'abWheel'];
 test('mech: every moving equipment type in the catalog is audited here or listed with a reason', () => {
   const used = new Set(Object.entries(POSES).filter(([id]) => !id.startsWith('_')).flatMap(([, e]) => (e.equipment || []).map(q => q.type)).filter(t => EQ.BIND[t]));
   const missing = [...used].filter(t => !AUDITED.includes(t) && !ELSEWHERE[t]);
