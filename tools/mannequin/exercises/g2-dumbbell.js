@@ -343,7 +343,9 @@ module.exports = {
      eccFirst: t=0 — гантель над грудью на почти прямых руках, t=1 — гантель опущена по дуге за голову
      (за торцом скамьи), локти слегка согнуты, поясница без прогиба. */
   pullover: {
-    keys: Array.from({ length: 13 }, (_, i) => i / 12),
+    /* 25 ключей: при 13 между ключами 0,5 и 0,58 правая ладонь отходила от диска на 1,0 см (касание 24 %), левая у 0,61 —
+       на 1,0 см (18 %): ключи интерполируются по углам суставов, а кисти идут по дуге вокруг плеч (аудит хватов) */
+    keys: Array.from({ length: 25 }, (_, i) => i / 24),
     equipment: [{ type: 'flatBench', id: 'bench' }, { type: 'g2CupDumbbell', id: 'cup', hands: ['L', 'R'] }],
     contacts: [{ body: 'back', prop: 'bench:pad' }, { body: 'headBack', prop: 'bench:pad' }, { body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, ...CUP_CONTACTS],
     pose(t, C) {

@@ -189,20 +189,26 @@ module.exports = {
         q.root.p = V.add(q.root.p, [0, -low, Zh - heelZ]);
         return q;
       };
-      const L = this._layout || (this._layout = (() => {
+      const arms = (q, e, allowShort) => {
+        for (const s of S) q[s].girdle = [C.lerp(4, -2, e), C.lerp(10, -15, e)];
+        for (const s of S) {
+          const lat = C.lat(q, s), pole = V.unit(V.add(V.add([0, -1, 0], [0, 0, -1], .8), lat, .7));
+          C.grip(q, s, V.add(bar, lat, 28), V.scale(lat, -1), pole, { allowShort });
+        }
+      };
+      /* t=0 «руки выпрямлены» (ExRx «Inverted Row»: «Return until arms are extended»; ACE «Inverted Row»): наклон тела — тот,
+         при котором руки, поставленные к грифу с поясом по ритму, разогнуты до 8°. Прежде досягаемость мерилась от плечевого
+         сустава при опущенных руках (61,8 см): с поднятой к грифу рукой сустав уходит за лопаткой к грифу, и внизу локти
+         оставались согнуты на 46° */
+      const L = this._layout || (this._layout = C.unhinted(() => {
         const chestY = th => C.chestPoint(body(th, 0), 32)[1];
         const th1 = C.solve1D(th => chestY(th) - (bar[1] - 1.9), 5, 60);
         const Zh = bar[2] - C.chestPoint(body(th1, 0), 32)[2];
-        const reach = th => { const q = body(th, Zh), f = C.fk(q); return V.dist(f.P.ghL, V.add(bar, C.lat(q, 'L'), 28)) - 61.8; };
-        const th0 = C.solve1D(reach, 0, th1);
+        const th0 = C.solve1D(th => { const q = body(th, Zh); arms(q, 0, true); return (q.L.elbow + q.R.elbow) / 2 - 8; }, 0, th1);
         return { th0, th1, Zh };
-      })());
+      }));
       const e = C.ease(t), q = body(C.lerp(L.th0, L.th1, e), L.Zh);
-      for (const s of S) q[s].girdle = [C.lerp(4, -2, e), C.lerp(10, -15, e)];
-      for (const s of S) {
-        const lat = C.lat(q, s), pole = V.unit(V.add(V.add([0, -1, 0], [0, 0, -1], .8), lat, .7));
-        C.grip(q, s, V.add(bar, lat, 28), V.scale(lat, -1), pole);
-      }
+      arms(q, e, false);
       return q;
     }
   },
