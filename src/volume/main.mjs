@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {createCatalogScene,world,CAMERA_SETTINGS} from './scene.mjs';
 import {phaseMemory} from './muscles.mjs';
-import {PERSPECTIVE_FOV,FRAME_PAD,PRESET_MS,KEY_MS,KEY_YAW,KEY_PITCH,KEY_ZOOM,frameCollector,validFrame,presetView,presetAngles,cameraPose,viewLimits,rotateView,panView,zoomView,blendView,sameAngles,sameView,dragAngle} from './orbit.mjs';
+import {PERSPECTIVE_FOV,FRAME_PAD,PRESET_MS,KEY_MS,KEY_YAW,KEY_PITCH,KEY_ZOOM,frameCollector,validFrame,presetView,presetAngles,cameraPose,projectPoint,viewLimits,rotateView,panView,zoomView,blendView,sameAngles,sameView,dragAngle} from './orbit.mjs';
 import {attachOrbit} from './controls.mjs';
 
 let rendererUnavailable=false;
@@ -172,9 +172,10 @@ export function createVolumeFigure(options){
   reset:()=>{reset();try{options.onGesture?.();}catch(e){}},
   key(a){
    if(a==='reset'){reset();return;}
-   /* шаг — от цели идущего перехода: частые нажатия и удержание клавиши складываются, а не теряются */
+   /* шаг — от цели идущего перехода: частые нажатия и удержание клавиши складываются, а не теряются. Стрелки вбок
+      поворачивают фигуру, как перетаскивание вбок; вверх — камера выше (взгляд сверху), вниз — ниже */
    const v=orbit.go?orbit.go.to:orbit.v,lim=limits(v),D=Math.PI/180;
-   const n=a==='left'||a==='right'?rotateView(v,(a==='left'?-1:1)*KEY_YAW*D,0,lim):a==='up'||a==='down'?rotateView(v,0,(a==='down'?1:-1)*KEY_PITCH*D,lim):zoomView(v,a==='in'?KEY_ZOOM:1/KEY_ZOOM,0,0,orbit.aspect,lim);
+   const n=a==='left'||a==='right'?rotateView(v,(a==='left'?-1:1)*KEY_YAW*D,0,lim):a==='up'||a==='down'?rotateView(v,0,(a==='up'?1:-1)*KEY_PITCH*D,lim):zoomView(v,a==='in'?KEY_ZOOM:1/KEY_ZOOM,0,0,orbit.aspect,lim);
    if(sameView(n,v))return;orbit.user=true;glide(n,KEY_MS);try{options.onGesture?.();}catch(e){}
   }
  }):null;
@@ -213,6 +214,8 @@ export function createVolumeFigure(options){
  return{svg:root,at,get camera(){return camera;},setCamera,setMuscles,setRegion,setJoints,setStress,setSkeleton,setAnatomy,setLayers,setTrace(show){trace.visible=!!show;draw();},setVectors(show){vectors.visible=!!show;draw();},
   /* свободная камера: есть ли она, повёрнута ли вручную, вернуть предустановку, положение (для проверок) */
   get orbit(){return !!orbit;},get free(){return !!orbit?.free;},resetCamera:reset,cameraState:()=>orbit?{...viewNow(),aspect:orbit.aspect,free:orbit.free,moving:!!orbit.go,camera}:null,
+  /* точка мира (м) — в доли половины кадра (−1…1) и глубину: где она на экране сейчас */
+  projectWorld:p=>orbit?projectPoint(fit,viewNow(),orbit.aspect,p,VIEW):null,
   dispose(){if(disposed)return;disposed=true;if(pending&&typeof cancelAnimationFrame==='function')cancelAnimationFrame(pending);pending=0;detach?.();canvas.removeEventListener('webglcontextrestored',restore);observer?.disconnect();scene.disposeGeometry();slot.release=scene.disposeMaterials;spareRenderer(slot);}};
 }
 

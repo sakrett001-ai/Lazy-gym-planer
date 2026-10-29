@@ -373,7 +373,7 @@ function paintDetailCamera(){
  const a=F.it.ex.anim,key=motionCamera(F.it.ex),free=!!F.f.free;
  pressCamera('#mv-cameras',free?null:key);
  $('#mv-view').textContent=free?FREE_VIEW_LABEL:CAMERA3[key]?.label||F.it.ex.viewNote||(a.view==='front'?'Вид спереди':'Вид сбоку');
- if(F.extra)$('#mv-second-label').textContent=F.extra.free?FREE_VIEW_LABEL:CAMERA3[F.extra.camera]?.label||'';
+ if(F.extra?.orbit)$('#mv-second-label').textContent=F.extra.free?FREE_VIEW_LABEL:CAMERA3[F.extra.camera]?.label||'';
 }
 function paintWorkoutCamera(){
  const F=workout?.motion;if(!F?.f)return;
