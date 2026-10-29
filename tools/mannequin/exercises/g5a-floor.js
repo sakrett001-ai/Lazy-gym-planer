@@ -289,7 +289,7 @@ function pushLayout(o) {
   const reachFixed = th => { const G = ghTop(th, L.palms); return Math.max(...S.filter(s => L.slide?.s !== s).map(s => V.dist(G['gh' + s], palmWrist(C, s, L.palms[s], L.fingers(s), Y)) - armSpan(C, L.get('elTop', s)))); };
   L.thTop = C.unhinted(() => C.solve1D(reachFixed, 5, 60));
   /* ладонь на ребре (roll) приподнимает запястье: угол тела вверху — по локтю готовой позы */
-  if (L.roll) {
+  if (L.palmRoll) {
     const th0 = L.thTop, bend = th => { L.thTop = th; try { const q = pushPose(C, L, 0); return Math.max(...S.filter(s => L.slide?.s !== s).map(s => q[s].elbow)) - L.get('elTop', 'L'); } catch (e) { return -L.get('elTop', 'L'); } };
     L.thTop = C.unhinted(() => C.solve1D(bend, th0 + 6, th0 - 4));
   }
@@ -309,13 +309,13 @@ function pushPose(C, L, e) {
       palm = at(x);
     }
     /* с ладонью на ребре плоская ладонь — только начальное приближение (она ниже, рука может до неё не дотянуться) */
-    try { C.palm(q, s, palm, L.fingers(s), [0, 1, 0], pole); } catch (err) { if (!L.roll) throw err; }
-    if (L.roll) {
-      /* ладонь чуть заваливается на ребро вслед за боковым наклоном предплечья (доля L.roll, не больше rollMax°) */
+    try { C.palm(q, s, palm, L.fingers(s), [0, 1, 0], pole); } catch (err) { if (!L.palmRoll) throw err; }
+    if (L.palmRoll) {
+      /* ладонь чуть заваливается на ребро вслед за боковым наклоном предплечья (доля L.palmRoll, не больше palmRollMax°) */
       const F = L.fingers(s), Y = [0, 1, 0];
       for (let k = 0; k < 3; k++) {
         const f = C.fk(q), a = V.unit(V.sub(f.P['el' + s], f.P['wr' + s])), side = V.cross(F, Y), lean = Math.asin(Math.max(-1, Math.min(1, V.dot(a, side))));
-        const rho = Math.max(-L.rollMax, Math.min(L.rollMax, L.roll * lean * 180 / Math.PI)) * C.D2R;
+        const rho = Math.max(-L.palmRollMax, Math.min(L.palmRollMax, L.palmRoll * lean * 180 / Math.PI)) * C.D2R;
         const n = V.add(V.scale(Y, Math.cos(rho)), side, Math.sin(rho)), lift = C.M.B.palm.width / 2 * Math.abs(Math.sin(rho));
         C.palm(q, s, V.add(palm, Y, lift), F, n, pole);
       }
@@ -327,13 +327,13 @@ function pushPose(C, L, e) {
    в опускании; ключица вверху опущена и без протракции (g0 [−6,5; 0]), лопатка — по ритму сгибания (с внутренней ротацией).
    С поясом этапа Д при локтях наружу (.39) и ключице, выведенной вперёд на 3°, пучки широчайшей у подмышки и ромбовидные
    у медиального края расходились — между полосами открывались щели 0,73 и 0,80 см (лента не растягивается без щелей) */
-const PUSH = once(() => pushLayout({ x: 36, tilt: 10, out: 13.3, elTop: 12, roll: 1, rollMax: 12, pole0: [.223, .76, .61], g0: [-6.5, 0], g1: [9.3, -13] }));
+const PUSH = once(() => pushLayout({ x: 36, tilt: 10, out: 13.3, elTop: 12, palmRoll: 1, palmRollMax: 12, pole0: [.223, .76, .61], g0: [-6.5, 0], g1: [9.3, -13] }));
 /* Узкий хват: ладони на ширине плеч (уже — пронация предплечья за пределом при прижатых локтях), пальцы внутрь; вверху
    ключица опущена на 6° (при 8,2° с поясом этапа Д кожа надплечья ложилась на первые межрёберные) */
-const DIAMOND = once(() => pushLayout({ x: 16.5, ahead: 12, out: -35, elTop: 10.8, low: 5, pole0: [1.22, .94, 1.32], pole1: [.38, 1.97, 1.5], g0: [-6, 6.3], g1: [0, -15] }));
-const KNEEPUSH = once(() => pushLayout({ base: 'knees', kneeZ: -22, x: 36, tilt: 14, out: 13, low: 5.5, elTop: 8.6, roll: 1, rollMax: 12, pole0: [-.245, .97, -.001], g0: [-.8, 9.9], g1: [10, -3.7] }));
+const DIAMOND = once(() => pushLayout({ x: 22, tilt: 26, out: 0, elTop: 10.8, low: 5, palmRoll: 1, palmRollMax: 10, pole0: [.151, -.56, .815], g0: [-6, 6.3], g1: [9, -15] }));
+const KNEEPUSH = once(() => pushLayout({ base: 'knees', kneeZ: -22, x: 36, tilt: 14, out: 13, low: 5.5, elTop: 8.6, palmRoll: 1, palmRollMax: 12, pole0: [-.245, .97, -.001], g0: [-.8, 9.9], g1: [10, -3.7] }));
 /* вверху ключица опущена на 7° (при 9,4° с поясом этапа Д первые межрёберные под ключицей выходили над кожей на 1 мм) */
-const WIDEPUSH = once(() => pushLayout({ x: 40, ahead: 18, out: 25, low: 4.2, elTop: 10.9, pole0: [.81, -.22, 1.1], pole1: [.16, 1.32, 1.42], g0: [-7, 6.2], g1: [3.8, -15] }));
+const WIDEPUSH = once(() => pushLayout({ x: 40, tilt: 10, out: 25, low: 4.2, elTop: 10.9, palmRoll: 1, palmRollMax: 14, pole0: [.343, .65, .678], g0: [-7, 6.2], g1: [3.8, -15] }));
 /* «Лучник»: работает правая рука (ладонь неподвижна, локоть вдоль корпуса), левая выпрямляется и ладонь скользит в сторону;
    внизу корпус смещён к правой ладони поворотом тела вокруг стоп; вверху правая ключица опущена на 7° (при 9,8° с поясом
    этапа Д первые межрёберные под ключицей выходили над кожей на 1–2 мм) */
