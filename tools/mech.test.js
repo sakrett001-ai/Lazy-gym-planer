@@ -86,7 +86,7 @@ test('mech: Smith — vertical rails, bar on the rail axis and in the hands, hoo
 });
 
 test('mech: levers turn about real axes; pec deck arms are rigid; landmine hook stays put; ab wheel rolls without slip', () => {
-  for (const r of rows.filter(r => r.type === 'рычаг' || r.type === 'параллелограмм')) assert(Math.hypot(r.radiusDev, r.alongDev) <= LIM.lever, `${r.id} ${r.part}`);
+  for (const r of rows.filter(r => r.type === 'рычаг' || r.type === 'параллелограмм')) assert(r.radiusDev <= LIM.lever && r.alongDev <= LIM.leverAlong, `${r.id} ${r.part}: радиус ±${r.radiusDev}, вдоль оси ${r.alongDev} см`);
   for (const r of rows.filter(r => r.type === 'рычаг «бабочки»')) assert(r.gripRadius[1] - r.gripRadius[0] <= .1 && r.rigid.every(q => q.d <= .01), `${r.id} ${r.part}`);
   const lm = one('tbarrow', '«мина»');
   assert(lm.hookDist[1] - lm.hookDist[0] <= .2 && lm.plane <= .1);

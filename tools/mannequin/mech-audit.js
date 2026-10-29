@@ -48,7 +48,8 @@ const LIM = {
   beltSpeed: 2,    // %: скорость ленты под левой и правой стопой
   beltY: .5,       // см: опорная стопа по высоте ленты
   line: .5,        // см: точка тела, которая ведёт каретку, уходит с линии хода
-  lever: .5,       // см: точка тела, которая задаёт угол рычага, уходит с окружности вокруг оси
+  lever: .5,       // см: точка тела, которая задаёт угол рычага, уходит с окружности вокруг оси (по радиусу: упор давит или отходит)
+  leverAlong: 1,   // см: она же ездит вдоль оси — по широкому упору или валику; скольжение кисти по рукояти — в контактах (slip)
   path: 3,         // см: путь рукояти гребного тренажёра от прямой
   square: 3,       // °: рукоять гребного тренажёра не поперёк цепи
   barAxis: 1,      // см: хват дальше от оси грифа Смита
@@ -295,7 +296,8 @@ function auditSled(id, ev, fr, e) {
   row.angle = Math.asin(Math.max(-1, Math.min(1, Z[1]))) * DEG; row.travel = spread(s); row.s = range(s); row.railLen = Lr;
   row.lineDev = Math.max(...off.map(o => V.dist(o, off[0])));
   row.clamp = s.filter(x => x + (e.shift || 0) <= 0 || x + (e.shift || 0) >= Lr).length;
-  row.slips = (ev.contacts || []).filter(c => c.prop.startsWith(pre)).map(c => slipOf(fr, c));
+  /* и стопы на неподвижной площадке тренажёра (гакк-машина): по ней они тоже не скользят */
+  row.slips = (ev.contacts || []).filter(c => c.prop.startsWith(pre) || /^sole/.test(c.body)).map(c => slipOf(fr, c));
   row.rigid = rigidOf(fr, [pre]);
   if (row.lineDev > LIM.line) row.flags.push(`точка тела уходит с линии хода каретки на ${row.lineDev.toFixed(2)} см`);
   if (row.clamp) row.flags.push(`каретка упирается в конец направляющих в ${row.clamp} кадр.`);
@@ -311,9 +313,9 @@ function auditLever(id, ev, fr, e) {
   const T = fr.map(f => I(EQ.bodyPoint(f.R, e.bind))), rad = T.map(p => V.len(V.perp(V.sub(p, P), A))), al = T.map(p => V.dot(V.sub(p, P), A));
   const u0 = V.unit(V.perp(V.sub(T[0], P), A)), an = T.map(p => { const u = V.unit(V.perp(V.sub(p, P), A)); return Math.atan2(V.dot(V.cross(u0, u), A), V.dot(u0, u)) * DEG; });
   row.radius = range(rad); row.radiusDev = spread(rad); row.alongDev = spread(al); row.turn = range(an);
-  row.slips = (ev.contacts || []).filter(c => c.prop.startsWith(pre)).map(c => slipOf(fr, c));
+  row.slips = (ev.contacts || []).filter(c => c.prop.startsWith(pre) || /^sole/.test(c.body)).map(c => slipOf(fr, c));
   row.rigid = rigidOf(fr, [pre]);
-  if (Math.hypot(row.radiusDev, row.alongDev) > LIM.lever) row.flags.push(`точка тела уходит с окружности вокруг оси: радиус ${row.radius[0].toFixed(2)}…${row.radius[1].toFixed(2)} см, вдоль оси ${row.alongDev.toFixed(2)} см`);
+  if (row.radiusDev > LIM.lever || row.alongDev > LIM.leverAlong) row.flags.push(`точка тела уходит с окружности вокруг оси: радиус ${row.radius[0].toFixed(2)}…${row.radius[1].toFixed(2)} см, вдоль оси ${row.alongDev.toFixed(2)} см`);
   flagSlip(row, row.slips); flagRigid(row, row.rigid);
   row.frames = fr.map((f, i) => ({ t: f.t, main: `угол ${an[i].toFixed(1)}°, радиус ${rad[i].toFixed(2)} см` }));
   return row;
