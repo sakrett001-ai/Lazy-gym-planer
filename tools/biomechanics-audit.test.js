@@ -17,7 +17,7 @@ function chestRow(mutate) {
   return {...model, EX:[{...ex,anim}]};
 }
 test('all poses and cameras satisfy declared geometry and contact constraints', () => {
-  const r = auditModel(model);
+  const r = auditModel(model), rigs = model.EX.reduce((n, ex) => n + 1 + Object.keys(ex.anim.catalogVariants || {}).length, 0);
   /* 151: +5 прицельных на приводящие и манжету (cableadduct, copenhagen, copenhagenknee, cableextrot, bandextrot) */
   assert.equal(r.stats.exercises,151);
   assert.equal(r.stats.poses,151*101);
@@ -27,7 +27,33 @@ test('all poses and cameras satisfy declared geometry and contact constraints', 
   assert.equal(r.stats.muscleProfiles,9);
   assert.equal(r.stats.musclePoses,3*101);
   assert.deepEqual(r.failures,[]);
-  assert(r.warnings.some(f => f.exercise === 'invrow' && f.rule.startsWith('projected-elbow')));
+  /* локоть — по 3D-позам манекена, по всем кадрам и вариантам инвентаря (4.72.0) */
+  assert.equal(r.stats.mannequinPoses,rigs*101);
+  assert(rigs > 151, 'equipment variants are checked too');
+});
+/* Переразгибание локтя по 3D-позе манекена (4.72.0). Отрицательный пример: шесть упражнений, которые старое правило
+   projected-elbow помечало по плоским 2D-описаниям (12 ложных пометок), в 3D согнуты в локте 3,6–113° — пометок нет. */
+test('elbow hyperextension: no flags on the 3D poses the app shows, including the old projected-elbow false flags', () => {
+  const ids = ['invrow', 'goodmorning', 'burpee', 'tablerow', 'plankup', 'cableohext'];
+  const r = auditModel({...model, EX:model.EX.filter(ex => ids.includes(ex.id))});
+  assert.equal(r.warnings.filter(f => /elbow/.test(f.rule)).length, 0, JSON.stringify(r.warnings));
+  assert(!r.warnings.some(f => f.rule.startsWith('projected-elbow')), 'the 2D rule is gone');
+  for (const id of ids) {
+    const ex = model.EX.find(e => e.id === id);
+    for (const t of [0, .28, .5, .63, 1]) for (const s of ['L', 'R']) assert(model.Mannequin.jointAngles(ex.anim.catalogRig(t))[s].elbow > 0, `${id} t=${t} ${s}`);
+  }
+});
+/* Положительный пример: подложенная поза — тот же манекен с локтем, разогнутым кинематикой на 25° за прямую линию (не сдвигом
+   точек), между ключами (t 0,37–0,39), — правило её ловит; на 4° (в пределах нормы) — молчит */
+test('elbow hyperextension: a substituted 3D pose with the elbow bent backwards is flagged between keyframes', () => {
+  const M = model.Mannequin, bent = deg => { const q = M.neutral(); q.L.elbow = deg; return M.catalogPose(q); };
+  const pose = deg => ({...model, EX:model.EX.filter(ex => ex.id === 'invrow').map(ex => ({...ex, anim:{...ex.anim, catalogVariants:null,
+    catalogRig:t => t >= .37 && t <= .39 ? bent(deg) : ex.anim.catalogRig(t)}}))});
+  assert(M.jointAngles(bent(-25)).L.elbow < -24, 'the substituted elbow really is hyperextended');
+  const r = auditModel(pose(-25)), flag = r.warnings.find(f => f.rule === 'elbow-hyperextension:L');
+  assert(flag && flag.t >= .37 && flag.t <= .39 && flag.magnitude > 19, JSON.stringify(r.warnings));
+  assert(!r.warnings.some(f => f.rule === 'elbow-hyperextension:R'), 'the other arm is fine');
+  assert(!auditModel(pose(-4)).warnings.some(f => /elbow/.test(f.rule)), '4° is within the limit (validator: −5°)');
 });
 test('detects a transient hand leaving the bar between the old audit keyframes', () => {
   detects('bbrow',(R,t) => {if(t >= .37 && t <= .39) R.gripL[1] += 10;},'grip:L');

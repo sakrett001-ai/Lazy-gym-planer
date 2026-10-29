@@ -4,6 +4,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+/* пределы суставов валидатора манекена: переразгибание локтя — тот же предел, что у mannequin:check */
+const {LIM} = require('./biomech/validator2.js');
 
 /* Test the model, not a browser projection. No build, DOM package or Playwright needed. */
 function loadModel({root = path.resolve(__dirname, '..'), fullApp = false} = {}) {
@@ -20,7 +22,7 @@ function loadModel({root = path.resolve(__dirname, '..'), fullApp = false} = {})
   const files = fs.readdirSync(dir).filter(f => /^\d.*\.js$/.test(f) && Number.parseInt(f) < (fullApp ? 99 : 11)).sort();
   for (const file of files) vm.runInContext(fs.readFileSync(path.join(dir, file), 'utf8'), context, {filename:file, timeout:10000});
   const get = expression => vm.runInContext(expression, context, {timeout:10000});
-  const api = get('({EX, FL, SIDE_CHEST, torsoPoint, PROPS, prepAnim, poseAt, solvePose, spatialPose, camera3, CAMERA3, muscleFrame, muscleSurfaces})');
+  const api = get('({EX, FL, SIDE_CHEST, torsoPoint, PROPS, prepAnim, poseAt, solvePose, spatialPose, camera3, CAMERA3, muscleFrame, muscleSurfaces, Mannequin:typeof Mannequin === "undefined" ? null : Mannequin})');
   return {...api, get};
 }
 
@@ -52,9 +54,9 @@ const CONTACT_RULES = {
 function auditModel(model, {samples = 101, only = 'all'} = {}) {
   if (!Number.isInteger(samples) || samples < 9 || samples > 2001) throw new Error('samples must be an integer from 9 to 2001');
   if (!['all','side','spatial'].includes(only)) throw new Error('only must be all, side or spatial');
-  const {EX, FL, SIDE_CHEST, torsoPoint, PROPS, prepAnim, poseAt, solvePose, spatialPose, camera3, CAMERA3, muscleFrame, muscleSurfaces} = model;
+  const {EX, FL, SIDE_CHEST, torsoPoint, PROPS, prepAnim, poseAt, solvePose, spatialPose, camera3, CAMERA3, muscleFrame, muscleSurfaces, Mannequin} = model;
   const failures = new Map(), warnings = new Map();
-  const stats = {exercises:0, spatialExercises:0, poses:0, cameraPoses:0, muscleProfiles:0, musclePoses:0, checks:0};
+  const stats = {exercises:0, spatialExercises:0, poses:0, cameraPoses:0, muscleProfiles:0, musclePoses:0, mannequinPoses:0, checks:0};
   function check(ok, ex, rule, t, detail, magnitude = 1) {
     stats.checks++;
     if (ok) return;
@@ -205,18 +207,34 @@ function auditModel(model, {samples = 101, only = 'all'} = {}) {
             check(error < 1e-4, ex, 'bone:'+x+'-'+y, t, `Length error ${error.toFixed(6)}`, error);
           }
           /* A 2D bend sign is a visual-review flag, not proof of an anatomical violation.
-             Shoulder rotation and out-of-plane limbs can reverse the projected sign. */
-          const elbow = (angle2(J['el'+side],J['wr'+side])-angle2(J.sh,J['el'+side])+360)%360;
-          if (elbow > 10 && elbow < 170) warn(ex, 'projected-elbow:'+side, t, 'Review elbow in another projection', Math.min(elbow,180-elbow));
+             Shoulder rotation and out-of-plane limbs can reverse the projected sign. The elbow is checked on the
+             3D mannequin pose below (elbow-hyperextension); the old 2D projected-elbow flagged 12 legacy sources. */
           const knee = (angle2(J['kn'+side],J['an'+side])-angle2(J.hip,J['kn'+side])+360)%360;
           if (knee > 190 && knee < 350) warn(ex, 'projected-knee:'+side, t, 'Review knee in another projection', Math.min(knee-180,360-knee));
         }
       }
       previous = J;
     }
+    /* Переразгибание локтя — по 3D-позе манекена, которую показывает приложение (все 151 упражнение, 4.72.0): угол локтя —
+       Mannequin.jointAngles, тот же расчёт, что у валидатора манекена (tools/biomech/validator2.js), предел — его же
+       (LIM.elbow: меньше −5° — переразгибание больше 5°), по всем кадрам выборки и всем вариантам инвентаря. До 4.72.0
+       правило (projected-elbow) смотрело на знак изгиба в старых плоских 2D-описаниях, которых приложение не показывает:
+       12 ложных пометок при углах манекена 3,6–113°. */
+    if (Mannequin && typeof a.catalogRig === 'function') {
+      const rigs = [['', a.catalogRig], ...Object.entries(a.catalogVariants || {})];
+      for (const [variant, rig] of rigs) for (let i=0; i<samples; i++) {
+        const t = i/(samples-1), R = rig(t), A = Mannequin.jointAngles(R);
+        stats.mannequinPoses++;
+        for (const side of ['L','R']) {
+          const elbow = A[side].elbow;
+          check(Number.isFinite(elbow), ex, 'elbow-angle:'+side, t, 'Elbow angle of the 3D pose must be finite');
+          if (elbow < LIM.elbow[0]) warn(ex, 'elbow-hyperextension:'+side, t, `Elbow hyperextended by ${(-elbow).toFixed(1)}° in the 3D pose${variant ? ' ('+variant+')' : ''} (limit ${-LIM.elbow[0]}°)`, LIM.elbow[0]-elbow);
+        }
+      }
+    }
   }
   return {stats, failures:[...failures.values()], warnings:[...warnings.values()],
-    limitations:['This audits schematic geometry and declared contacts; it does not validate medical safety, individual mobility, muscle force or unmodeled collisions.', 'Front-view 2D poses have no anatomical depth; projected limb lengths and bend signs are not used as 3D evidence.', 'Muscle checks validate illustrative brightness curves and finite attached surfaces, not physiological activation or force.']};
+    limitations:['This audits schematic geometry and declared contacts; it does not validate medical safety, individual mobility, muscle force or unmodeled collisions.', 'Front-view 2D poses have no anatomical depth; projected limb lengths and bend signs are not used as 3D evidence.', 'Elbow hyperextension is checked on the 3D mannequin poses the app shows (Mannequin.jointAngles), not on the legacy 2D sources.', 'Muscle checks validate illustrative brightness curves and finite attached surfaces, not physiological activation or force.']};
 }
 
 function elbowProfile(model) {
@@ -248,7 +266,7 @@ function main(args) {
   const report = auditModel(model,opts);
   if (json) console.log(JSON.stringify(report,null,2));
   else {
-    console.log(`Biomechanics: ${report.stats.exercises} exercises, ${report.stats.poses} poses, ${report.stats.cameraPoses} camera poses, ${report.stats.muscleProfiles} muscle profiles; ${report.failures.length} errors, ${report.warnings.length} review flags.`);
+    console.log(`Biomechanics: ${report.stats.exercises} exercises, ${report.stats.poses} poses, ${report.stats.mannequinPoses} 3D mannequin poses, ${report.stats.cameraPoses} camera poses, ${report.stats.muscleProfiles} muscle profiles; ${report.failures.length} errors, ${report.warnings.length} review flags.`);
     for (const f of report.failures) console.log(`ERROR ${f.exercise} / ${f.rule} @ ${f.t.toFixed(3)}: ${f.detail}`);
     for (const f of report.warnings) console.log(`REVIEW ${f.exercise} / ${f.rule} @ ${f.t.toFixed(3)}: ${f.detail}`);
   }
