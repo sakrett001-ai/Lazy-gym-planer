@@ -12,7 +12,8 @@ const unit=a=>{const l=len(a);if(l<1e-8)throw Error('Degenerate scene direction'
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 export const world=p=>[p[0]/100,(186-p[1])/100,p[2]/100];
 const direction=p=>[p[0],-p[1],p[2]],vec=p=>new THREE.Vector3(...p);
-const CAMERA_SETTINGS={above:[35,-55],angle:[55,-15],side:[90,0],front:[0,0],back:[180,0],rear:[235,-15]};
+/* ракурсы: [yaw, elev] в градусах (elev < 0 — камера выше); те же углы — у свободной камеры разбора (orbit.mjs) */
+export const CAMERA_SETTINGS={above:[35,-55],angle:[55,-15],side:[90,0],front:[0,0],back:[180,0],rear:[235,-15]};
 function frame(a,b,reference){
  const z=unit(sub(b,a));let x=sub(reference,z.map(v=>v*dot(reference,z)));
  if(len(x)<1e-5)x=cross(z,Math.abs(z[0])<.8?[1,0,0]:[0,0,1]);x=unit(x);return{x,y:unit(cross(z,x)),z};
@@ -337,9 +338,10 @@ export function createCatalogScene(first,{coarse=false}={}){
  /* скрытая кожа тела: процедурная при показанной Anny и наоборот (их сетки остаются в сцене) */
  const under=(o,g)=>{for(let p=o;p;p=p.parent)if(p===g)return true;return false;};
  const offBody=o=>!!mannequin&&(annyShown?under(o,mannequin.group):under(o,anny.group));
- function includeBounds(only){
+ /* visit(x, y, z) — каждая точка рамки в мире (рамка свободной камеры разбора, orbit.mjs) */
+ function includeBounds(only,visit){
   const root=only==='body'&&mannequin?(annyShown?anny.group:mannequin.group):scene;
-  const add=p=>{for(const[id,c]of Object.entries(cameras)){const q=p.clone().applyMatrix4(c.matrixWorldInverse),e=bounds[id];e.minX=Math.min(e.minX,q.x);e.maxX=Math.max(e.maxX,q.x);e.minY=Math.min(e.minY,q.y);e.maxY=Math.max(e.maxY,q.y);}};
+  const add=p=>{visit?.(p.x,p.y,p.z);for(const[id,c]of Object.entries(cameras)){const q=p.clone().applyMatrix4(c.matrixWorldInverse),e=bounds[id];e.minX=Math.min(e.minX,q.x);e.maxX=Math.max(e.maxX,q.x);e.minY=Math.min(e.minY,q.y);e.maxY=Math.max(e.maxY,q.y);}};
   root.traverse(o=>{if(!o.isMesh||!o.visible||o===floor||o.name==='dot-ring'||o.parent===dots||o.parent?.name==='joint-dots'||o.parent?.parent===stressGroup||o.userData.merged||o.userData.ghostTwin||offBody(o))return;
    /* кожа Anny — сетка в стойке, скиннинг на видеокарте: её место в кадре — по точкам выборки (сцена, м) */
    if(o.userData.boundsPoints){for(const p of o.userData.boundsPoints)add(p);return;}

@@ -5,7 +5,7 @@ const {JSDOM}=require('jsdom');
 const {loadModel}=require('./biomechanics-audit');
 const source=fs.readFileSync(path.join(__dirname,'../src/volume/main.mjs'),'utf8').replace(/^import[^\n]*\n/gm,'').replace('export function createVolumeFigure','function createVolumeFigure');
 async function runtime({available=true}={}){
- const THREE=await import('three'),{createCatalogScene,world}=await import('../src/volume/scene.mjs');
+ const THREE=await import('three'),{createCatalogScene,world,CAMERA_SETTINGS}=await import('../src/volume/scene.mjs'),orbit=await import('../src/volume/orbit.mjs'),{attachOrbit}=await import('../src/volume/controls.mjs');
  const dom=new JSDOM('<body></body>'),w=dom.window,counters={probes:0,constructors:0,renders:0,disposals:0,losses:0};
  w.WebGL2RenderingContext=function(){};
  w.HTMLCanvasElement.prototype.getContext=function(){counters.probes++;return available?{}:null;};
@@ -13,7 +13,7 @@ async function runtime({available=true}={}){
   constructor({canvas}){counters.constructors++;this.domElement=canvas;}
   setPixelRatio(){} setSize(){} render(scene){counters.renders++;counters.scene=scene;} dispose(){counters.disposals++;} forceContextLoss(){counters.losses++;}
  }
- const env={window:w,document:w.document,THREE:{...THREE,WebGLRenderer:Renderer},createCatalogScene,world};
+ const env={window:w,document:w.document,THREE:{...THREE,WebGLRenderer:Renderer},createCatalogScene,world,CAMERA_SETTINGS,...orbit,attachOrbit};
  vm.runInNewContext(source,env);
  const m=loadModel(),{catalogVolumeData,muscleColor}=m.get('({catalogVolumeData,muscleColor})');
  const options=(id='bbbench',camera='above',has)=>({label:id,camera,t:.43,trace:[],vectors:[],color:muscleColor,data:(t,index)=>catalogVolumeData(m.EX.find(ex=>ex.id===id).anim,t,index,has)});

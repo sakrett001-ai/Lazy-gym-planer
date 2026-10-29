@@ -108,7 +108,7 @@ test('view: the person\'s choice («Mannequin» — the Anny skin); no WebGL, a 
 /* ---------- 2. общий рендерер: неподвижный кадр и сборка сцены заранее ---------- */
 const mainSrc = fs.readFileSync(path.join(root, 'src/volume/main.mjs'), 'utf8').replace(/^import[^\n]*\n/gm, '').replace('export function createVolumeFigure', 'function createVolumeFigure');
 async function stageRuntime() {
-  const THREE = await import('three'), { createCatalogScene, world } = await import('../src/volume/scene.mjs');
+  const THREE = await import('three'), { createCatalogScene, world, CAMERA_SETTINGS } = await import('../src/volume/scene.mjs'), orbit = await import('../src/volume/orbit.mjs'), { attachOrbit } = await import('../src/volume/controls.mjs');
   const dom = new JSDOM('<body></body>'), w = dom.window, n = { renders: 0, saved: 0 };
   w.WebGL2RenderingContext = function () {};
   w.HTMLCanvasElement.prototype.getContext = function () { return {}; };
@@ -119,7 +119,7 @@ async function stageRuntime() {
   }
   const store = { getItem: () => null, setItem: () => { n.saved++; } };
   const env = { window: Object.assign(w, { PODHOD_BUILD: 'test' }), document: w.document, performance, localStorage: store, setTimeout: f => f(), clearTimeout() {},
-    THREE: { ...THREE, WebGLRenderer: Renderer }, createCatalogScene, world, GymPerf: null };
+    THREE: { ...THREE, WebGLRenderer: Renderer }, createCatalogScene, world, CAMERA_SETTINGS, ...orbit, attachOrbit, GymPerf: null };
   vm.runInNewContext(mainSrc, env);
   const m = loadModel(), { catalogVolumeData, muscleColor } = m.get('({catalogVolumeData,muscleColor})');
   let datas = 0;
