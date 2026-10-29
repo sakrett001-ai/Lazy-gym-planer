@@ -60,7 +60,8 @@ test('service worker waits for explicit activation and preserves other applicati
   const handlers={},deleted=[]; let skip=0,claimed=0,waiting;
   const scope='https://test.invalid/atlas-preview/',prefix='podhod@'+scope+':';
   const self={addEventListener:(n,f)=>handlers[n]=f,skipWaiting:()=>{skip++;},clients:{claim:()=>{claimed++;}},location:{origin:'https://test.invalid'},registration:{scope}};
-  const caches={open:async()=>({addAll:async()=>{}}),keys:async()=>[prefix+'old',prefix+'__VERSION__','podhod@https://test.invalid/:4.1.8','podhod-old','other-project'],delete:async k=>{deleted.push(k);}};
+  /* кеш: при установке иконки ищутся в кеше прежней версии (match), найденные кладутся в новый (put) — sw.js, fillShell */
+  const caches={open:async()=>({addAll:async()=>{},match:async()=>undefined,put:async()=>{}}),keys:async()=>[prefix+'old',prefix+'__VERSION__','podhod@https://test.invalid/:4.1.8','podhod-old','other-project'],delete:async k=>{deleted.push(k);}};
   vm.runInNewContext(fs.readFileSync(path.join(root,'src/sw.js'),'utf8'),{self,caches});
   handlers.install({waitUntil:p=>waiting=p}); await waiting; assert.equal(skip,0);
   handlers.message({data:'skipWaiting'}); assert.equal(skip,1);
