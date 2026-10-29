@@ -7,6 +7,7 @@
    (withRest), чтобы в растяжке плиты висели на HOVER см. Проверка проводки, хода рукояти и стека — tools/mannequin/cable-audit.js. */
 const { ctx, bakedPoses } = require('../compose.js');
 const EQ = require('../../../src/js/09bn-equipment.js');
+const V2 = require('../../biomech/validator2.js');
 const S = ['L', 'R'];
 const once = f => { let v; return () => v ?? (v = f()); };
 const r1 = v => Math.round(v * 10) / 10;
@@ -262,8 +263,13 @@ const AD_TOWER = () => AD().tower;
 const ER_TOWER = { type: 'g3Tower', id: 'col', h: 110, at: [78, 0, 32], yaw: -90 };
 const ER_FEET = { L: [11, 12, 7], R: [-11, 12, -7] };
 const ER_TOWEL = { type: 'g3towelRoll', id: 'towel', side: 'R' };
-/* лента в притворе двери слева (дверь — в плоскости x ≈ 60, сторона замка ближе к пользователю), крепление на высоте кисти */
-const ER_DOOR = { type: 'g3Door', id: 'door', anchor: 'side', h: 112, at: [61, 0, 69.5], yaw: 90 };
+/* лента в притворе двери слева (дверь — в плоскости x ≈ 60, сторона замка ближе к пользователю), крепление на уровне талии:
+   MSD Manual, «Standing Resisted Shoulder External Rotation» — «Place band to secure object at waist level», валик между локтем
+   и корпусом, локоть 90°. Высота талии (omphalion) по ANSUR II у мужчин 170–180 см — 103,5 см (медиана, anthro-ansur2.json);
+   крепление — на 106 см, в 6 см над защёлкой (ручка двери — 100 см). Прежде лента крепилась на 112 см, выше кисти в начале
+   движения: кисть при повороте наружу поднимается на 12 см (плечо отведено на ширину валика), и лента выходила из плоскости
+   движения на 20°; на уровне талии — 14°. */
+const ER_DOOR = { type: 'g3Door', id: 'door', anchor: 'side', h: 106, at: [61, 0, 69.5], yaw: 90 };
 const ER_BASE = () => {
   const C = ctx([]), q = C.base();
   stand(C, q, { root: [0, 88.5, 0], lean: 1, feet: ER_FEET });
@@ -299,22 +305,74 @@ const ER = once(() => {
   return { q, abd: C.solve1D(a => -squeeze(a), 2, 30) };
 });
 
-/* ---------- Разгибание рук с канатом из-за головы: спиной к блоку, блок выше головы ---------- */
-const OH_TOWER = { type: 'g3Tower', id: 'col', h: 186, at: [0, 0, -118], yaw: 0 };
+/* ---------- Разгибание рук с канатом из-за головы: спиной к блоку, блок выше головы ----------
+   Техника — подсказки каталога (04b-exercises-machines.js, 05-motion-cues.js): блок выше головы, спиной к нему, шаг вперёд,
+   корпус наклонён, локти у ушей, руки разгибаются «вперёд-вверх». Sweat «Cable Overhead Tricep Extension»: блок вверху
+   стойки, полшага от неё, наклон вперёд, плечо — локоть — кисть на одной линии, канат тянется вперёд и в конце оказывается
+   перед лицом; Muscle & Strength «High Pulley Overhead Tricep Extension»: верхний блок, корпус наклонён, плечи почти
+   параллельны полу, руки разгибаются вперёд до конца; Catalyst Athletics: локти держать высоко.
+   Прежде корпус был наклонён на 24°, плечо — на 23° впереди его оси (47° к горизонту), предплечье заканчивало под 66° к
+   горизонту при локте 25°, кисти — на 33 см выше головы, а трос от колеса (186 см, в 1,2 м позади) шёл к ним горизонтально:
+   «вперёд-вверх» выходило почти «вверх», в растяжке трос шёл вдоль предплечья (плечо троса у локтя — 5–9 см, нагрузки почти
+   нет), а в конце — поперёк. Теперь наклон в тазобедренных 46° при нейтральной спине, плечо — на 15° впереди оси грудной
+   клетки (локти у ушей, 28–30° к горизонту), в конце руки выпрямлены (локоть 11°) вперёд-вверх: предплечье под 39°
+   к горизонту, канат перед лицом — в 46 см впереди центра головы и на 19 см выше. Блок — 200 см (выше головы), колонна —
+   на 36 см ближе. Плечо троса у локтя в растяжке по-прежнему мало (5–9 см): кисти за головой выше локтей, и трос от блока
+   сверху-сзади идёт почти вдоль предплечья — так у разгибания на верхнем блоке и есть (нагрузка — к середине и концу). */
+const OH_TOWER = { type: 'g3Tower', id: 'col', h: 200, at: [0, 0, -82], yaw: 0 };
 const OH_FEET = { L: [12, 40, 6], R: [-12, -22, -6, 18] };
 const OH = once(() => {
   const C = ctx([OH_TOWER]), q = C.base();
-  stand(C, q, { root: [0, 84.2, 4], lean: 24, feet: OH_FEET });
-  q.lumbar = [-4, 0, 0]; q.thoracic = [-2, 0, 0]; q.neck = [-8, 0, 0];
+  stand(C, q, { root: [0, 79, 2], lean: 46, feet: OH_FEET });
+  q.lumbar = [0, 0, 0]; q.thoracic = [0, 0, 0]; q.neck = [-12, 0, 0];
   balance(C, q, OH_FEET, { shift: [0, 4] });
   return { q };
 });
 /* ---------- «Дровосек»: колонна слева, верхний блок, тяга к правому колену ---------- */
 const WD_TOWER = { type: 'g3Tower', id: 'col', h: 202, at: [122, 0, 50], yaw: -90 };
 const WD_FEET = { L: [27, 12, 18], R: [-27, 12, -18] };
-/* ---------- Протяжка между ног: спиной к нижнему блоку ---------- */
+/* ---------- Протяжка между ног: спиной к нижнему блоку ----------
+   Техника: блок внизу, спиной к нему, трос между ног, «руки прямые», движение — от таза: «Keeping your arms straight, extend
+   through the hip», «reaching through your legs as far as possible, bending at the hips», «Avoid pulling upward through the
+   shoulders» (Bodybuilding.com «Pull Through»); стопы шире плеч, колени мягкие (Sussex Sport «Cable Pull Throughs»). Руки —
+   крюки: их не поднимают, трос тянет кисти назад, к блоку, и они уходят по дуге вокруг плеч, пока предплечья не лягут на тело:
+   вверху — на переднюю поверхность бёдер (кулаки перед пахом), в наклоне — на внутреннюю (локти 12° → 20°, заход в мягкие
+   ткани ≤ PT_SOFT). Прежде локти были согнуты на 32° по всему ходу (не «руки прямые»), кисти в наклоне — в 5,7 см за коленями;
+   теперь — в 8,5 см (руки тянутся между ног дальше). Путь кистей отходил от прямой троса на 18,7 см, трос шёл под 51° к ходу
+   кистей (аудит тросов); стало 15,8 см и 44°. По прямой троса кисти пройти не могут: вверху прямая начинается перед пахом
+   и идёт назад под 22°, а в наклоне таз уходит назад на 18 см — чтобы остаться на ней, предплечья заходили бы в бёдра на 5–7 см
+   (проба: середина хвата на прямой троса, локти 20°). Остаток замечания аудита — от бёдер манекена, а не от техники. */
 const PT_TOWER = { type: 'g3Tower', id: 'col', h: 20, at: [0, 0, -122], yaw: 0 };
 const PT_FEET = { L: [33, 16, 20], R: [-33, 16, -20] };
+const PT_EL = [12, 20], PT_SOFT = .5;
+/* зазор предплечий и кистей до бёдер и корпуса (как в правиле self-collision валидатора, по коже без складок); < 0 — заход */
+function ptClear(C, q) {
+  const { M } = C;
+  return M.noFolds(() => {
+    const R = M.catalogPose(q), cache = M.torsoCache(R);
+    let m = Infinity;
+    for (const b of V2.bodyPoints(R)) {
+      if (b.seg !== 'fa' && b.seg !== 'hand') continue;
+      const r = (b.r || 0) * .5;
+      m = Math.min(m, M.torsoSDF(R, b.p, cache) + r, ...S.map(s => M.limbSDF(R, 'th', s, b.p) + r));
+    }
+    return m;
+  });
+}
+function ptBody(C, e) {
+  const q = C.base();
+  stand(C, q, { root: [0, C.lerp(86.6, 79.4, e), C.lerp(2, -16, e)], lean: C.lerp(2, 62, e), feet: PT_FEET });
+  q.lumbar = [C.lerp(-2, 2, e), 0, 0]; q.thoracic = [C.lerp(0, 6, e), 0, 0]; q.neck = [C.lerp(2, -24, e), 0, 0];
+  balance(C, q, PT_FEET, { shift: [0, C.lerp(0, -4, e)] });
+  for (const s of S) q[s].girdle = [C.lerp(-4, 4, e), C.lerp(2, 8, e)];
+  return q;
+}
+/* кисти по бокам от середины хвата mid на 4 см (при 3 см вверху ветви каната проходили сквозь кулаки), нейтральный хват,
+   локти к стопам — наружу */
+function ptHands(C, q, mid, e, allowShort) {
+  const { V } = C;
+  for (const s of S) { const lat = C.lat(q, s); C.hold(q, s, V.add(mid, lat, 4), V.unit(V.add([0, 0, -1], lat, C.lerp(1.5, .3, e))), { pron: 0, allowShort }); }
+}
 
 /* ---------- Кроссовер: сведение рук (верхние блоки) и сведение снизу (нижние блоки) ---------- */
 const XO_HI = { type: 'g3Crossover', id: 'xo', span: 330, hL: 200, hR: 200 };
@@ -620,9 +678,14 @@ module.exports = {
       q.neck = [C.lerp(-10, -6, e), 0, 0];
       const f = C.fk(q), gm = V.mix(f.P.ghL, f.P.ghR, .5), top = gm[1] + 60, bot = L.chest[1] + 6;
       const y = C.lerp(top, bot, e), z = L.barZ + C.lerp(0, 7, e);
+      /* локти внизу — перед корпусом, не в стороны (полюс −0,05 к боку; источники — «Локти вниз вдоль корпуса» в 06-motion-sources.js,
+         ACE «Seated Lat Pulldown»): обратный хват на ширине плеч держится супинацией предплечья и наружной ротацией плеча.
+         Прежде локти внизу уходили в стороны (полюс +0,1): плечо поворачивалось внутрь на 11°, супинация доходила до 95° при
+         пределе 90° (предупреждение валидатора), запястье отклонялось к лучу на 16°; стало 88° и 4°. Ближе к середине (−0,1)
+         предплечья ложатся на корпус. */
       for (const s of S) {
         const lat = C.lat(q, s), g = [C.M.SIGN[s] * 16, y, z];
-        const pole = V.unit(V.add(V.add([0, 0, 1], lat, C.lerp(-.15, .1, e)), [0, -1, 0], C.lerp(.1, .7, e)));
+        const pole = V.unit(V.add(V.add([0, 0, 1], lat, C.lerp(-.15, -.05, e)), [0, -1, 0], C.lerp(.1, .7, e)));
         C.grip(q, s, g, [C.M.SIGN[s], 0, 0], pole, { wristExt: 2 });
       }
       return q;
@@ -703,7 +766,14 @@ module.exports = {
   },
 
   /* Правая рука с D-рукоятью: t=0 — кисть перед левым бедром, трос натянут поперёк тела; t=1 — рука отведена до уровня плеча.
-     Левая рука держится за ручку на стойке колонны. */
+     Левая рука держится за ручку на стойке колонны.
+     Техника: блок внизу, боком к колонне, рукоять дальней рукой — рука тянется через корпус, кисть перед телом («Rest your arm in
+     front of you», Bodybuilding.com «Standing Low-Pulley Deltoid Raise»; «reach across your body», Healthline «Cable Lateral
+     Raise», T. Read, CPT, мед. ред. D. Hildreth, RN), подъём в сторону до уровня плеча. Рука идёт в плоскости лопатки — на 31°
+     впереди фронтальной (плоскость лопатки — 30–45°: Magee D. J. «Orthopedic Physical Assessment», 6-е изд., 2014), тогда
+     блок у пола рядом со стопой лежит почти в плоскости движения руки. Прежде кисть начинала в 26 см впереди плечевого сустава,
+     а поднималась на 23,5° впереди фронтальной плоскости: блок оставался далеко от плоскости движения, и трос выходил из неё
+     на 24° (аудит тросов); теперь кисть в начале — в 22 см впереди сустава (перед левым бедром), трос — 17°. */
   cablelat: {
     keys: [0, .2, .4, .6, .8, 1],
     get equipment() { return tuned(this, () => [CL_TOWER, cable(CL_TOWER, '', { id: 'cab', attach: 'D', hands: ['R'] })]); },
@@ -714,7 +784,7 @@ module.exports = {
       C.rhythm(q, 'R', [0, C.lerp(4, 1, e)]); /* пояс по ритму (этап Д: подъём плеч и поворот лопатки — от подъёма руки), сверх него — лёгкая протракция */
       const f = C.fk(q), gh = f.P.ghR;
       C.grip(q, 'L', [grab[0], 128, grab[2]], [0, 1, 0], V.unit([.4, -1, -.3]));
-      const d0 = V.unit(V.sub([4, 86, 34], gh)), d1 = V.unit([-.92, .04, .4]), d = slerpDir(V, d0, d1, e);
+      const d0 = V.unit(V.sub([4, 86, 29], gh)), d1 = V.unit([-.92, .04, .55]), d = slerpDir(V, d0, d1, e);
       const g = V.add(gh, d, 60);
       C.hold(q, 'R', g, V.unit(V.mix([-1, -.3, -.4], [-.1, .5, -1], e)), { pron: C.lerp(10, 45, e) });
       return q;
@@ -821,7 +891,7 @@ module.exports = {
     }
   },
 
-  /* Спиной к блоку, шаг вперёд, корпус наклонён, локти у ушей. t=0 — канат за головой; t=1 — руки выпрямлены вперёд-вверх, концы разведены. */
+  /* Спиной к блоку, шаг вперёд, наклон в тазобедренных, локти у ушей. t=0 — канат за головой; t=1 — руки выпрямлены вперёд-вверх, канат перед лицом, концы разведены (раскладка и источники — OH_TOWER выше). */
   cableohext: {
     keys: [0, .25, .5, .75, 1],
     get equipment() { return tuned(this, () => [OH_TOWER, cable(OH_TOWER, '', { id: 'cab', attach: 'rope', knob: 'pinky', hands: ['L', 'R'], ropeLen: 26 })]); },
@@ -833,10 +903,12 @@ module.exports = {
       const f = C.fk(q), T = C.axes(q, 'thorax');
       for (const s of S) {
         const gh = f.P['gh' + s], lat = C.lat(q, s);
-        const ua = V.unit(V.add(V.add(T.y, T.z, .42), lat, .05)), el = V.add(gh, ua, C.M.B.ua);
-        const bend = C.lerp(132, 8, e) * C.D2R, back = V.unit(V.cross(ua, [1, 0, 0]));
+        /* плечо — на 15° впереди оси грудной клетки (локти у ушей); центр хвата — в 35 см от локтя по предплечью (запястье 27 +
+           хват 8): прежде 34 — в конце локоть оставался согнут на 25° вместо «руки выпрямлены» */
+        const ua = V.unit(V.add(V.add(T.y, T.z, .27), lat, .05)), el = V.add(gh, ua, C.M.B.ua);
+        const bend = C.lerp(132, 6, e) * C.D2R, back = V.unit(V.cross(ua, [1, 0, 0]));
         const fore = V.unit(V.add(V.add(V.scale(ua, Math.cos(bend)), back, Math.sin(bend)), lat, C.lerp(-.16, -.06, e)));
-        const g = V.add(V.add(el, fore, 34), lat, C.lerp(-1.5, 0, e));
+        const g = V.add(V.add(el, fore, 35), lat, C.lerp(-1.5, 0, e));
         C.hold(q, s, g, V.unit(V.add(ua, V.scale(fore, -1), .3)), { pron: C.lerp(10, 30, e) });
       }
       return q;
@@ -877,17 +949,17 @@ module.exports = {
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     gripRadius: { L: 1.3, R: 1.3 },
     pose(t, C) {
-      const { V } = C, e = C.ease(t), q = C.base();
-      stand(C, q, { root: [0, C.lerp(86.6, 79.4, e), C.lerp(2, -16, e)], lean: C.lerp(2, 62, e), feet: PT_FEET });
-      q.lumbar = [C.lerp(-2, 2, e), 0, 0]; q.thoracic = [C.lerp(0, 6, e), 0, 0]; q.neck = [C.lerp(2, -24, e), 0, 0];
-      balance(C, q, PT_FEET, { shift: [0, C.lerp(0, -4, e)] });
-      for (const s of S) q[s].girdle = [C.lerp(-4, 4, e), C.lerp(2, 8, e)];
+      const { V } = C, e = C.ease(t), q = ptBody(C, e), el = C.lerp(PT_EL[0], PT_EL[1], e);
+      /* руки — крюки: почти прямые (локти el°), трос тянет кисти назад, к блоку, — они уходят назад по дуге вокруг плеч, пока
+         предплечья не лягут на тело: вверху — на переднюю поверхность бёдер, в наклоне — на внутреннюю (не глубже PT_SOFT см) */
       const f = C.fk(q), gm = V.mix(f.P.ghL, f.P.ghR, .5);
-      const target = V.mix([0, 72, f.P.hipL[2] + 21], [0, 41, f.P.knL[2] - 9], e);
-      for (const s of S) {
-        const lat = C.lat(q, s), gh = f.P['gh' + s], g0 = V.add(target, lat, 3), g = V.add(gh, V.unit(V.sub(g0, gh)), Math.min(61, V.dist(g0, gh)));
-        C.hold(q, s, g, V.unit(V.add([0, 0, -1], lat, C.lerp(1.5, .3, e))), { pron: 0, allowShort: true });
-      }
+      const place = phi => {
+        const d = [0, -Math.cos(phi * C.D2R), -Math.sin(phi * C.D2R)];
+        const D = C.solve1D(x => { ptHands(C, q, V.add(gm, d, x), e, true); return (q.L.elbow + q.R.elbow) / 2 - el; }, 30, 75, 24);
+        return V.add(gm, d, D);
+      };
+      const phi = C.solve1D(p => { ptHands(C, q, place(p), e, true); return ptClear(C, q) + PT_SOFT; }, -45, 70, 24);
+      ptHands(C, q, place(phi), e, false);
       return q;
     }
   },

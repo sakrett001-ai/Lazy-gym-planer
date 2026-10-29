@@ -174,23 +174,30 @@ function instepOn(C, q, s, x, ankleZ, top, phi, pole, squash = 1) {
   return r;
 }
 
-/* Разгибание из-за головы: поза одного ключа; prev — варианты хвата предыдущего ключа */
-function ohextKey(t, C, prev) {
+/* Разгибание из-за головы: поза одного ключа; prev — варианты хвата предыдущего ключа; force — заданный вариант хвата
+   по сторонам ({ L: { yaw, fz, lx }, R: … }) вместо выбора из сетки */
+function ohextKey(t, C, prev, force) {
   const { V } = C, q = C.base(), e = C.ease(t);
   C.root(q, [0, 89.2, 0], [0, 1, 0], [0, 0, 1]); q.lumbar = [1, 0, 0]; q.thoracic = [0, 0, 0]; q.neck = [C.lerp(4, 10, e), 0, 0];
   const feet = q => { for (const s of S) plant(C, q, s, [C.M.SIGN[s] * 11, 0, -1]); };
   for (const s of S) q[s].girdle = [C.lerp(26, 22, e), C.lerp(2, 0, e)];
-  const cands = [];
-  for (let yw = 20; yw <= 90; yw += 5) for (const fz of [-.4, 0, .3, .6, 1, 1.6]) for (const lx of [1, .4, -.2])
-    cands.push({ yaw: yw, fz, lx, pole: (s, lat) => V.unit(V.add(V.add(V.scale(lat, lx), [0, 1, 0], C.lerp(.2, 4, e)), [0, 0, 1], fz)), dist: o => Math.abs(yw - o.yaw) / 10 + Math.abs(fz - o.fz) * 2 + Math.abs(lx - o.lx) * 2 });
+  const mk = (yw, fz, lx) => ({ yaw: yw, fz, lx, pole: (s, lat) => V.unit(V.add(V.add(V.scale(lat, lx), [0, 1, 0], C.lerp(.2, 4, e)), [0, 0, 1], fz)), dist: o => Math.abs(yw - o.yaw) / 10 + Math.abs(fz - o.fz) * 2 + Math.abs(lx - o.lx) * 2 });
+  const grid = [];
+  for (let yw = 20; yw <= 90; yw += 5) for (const fz of [-.4, 0, .3, .6, 1, 1.6]) for (const lx of [1, .4, -.2]) grid.push(mk(yw, fz, lx));
+  const cands = force ? s => [mk(force[s].yaw, force[s].fz, force[s].lx)] : () => grid;
   let chosen = null;
   const arms = q => {
     const f = C.fk(q), head = f.P.head, gh = V.mix(f.P.ghL, f.P.ghR, .5);
     /* верхний диск идёт по дуге вокруг локтей: над головой → за затылок. Центр дуги — на 1,9 см впереди центра головы
        (до 4.38.0 — 2 см: с осью шеи у тел позвонков голова при наклоне 4–10° стоит на 0,1–0,2 см впереди, дуга — на месте) */
-    const E = [0, gh[1] + 25, head[2] + 1.9], th = C.lerp(-15.6, 96, Math.pow(e, .8)) * C.D2R, r = e < .5 ? 26 + 2 * Math.sin(Math.PI * e) : C.lerp(26, 20, (e - .5) * 2);
+    /* радиус дуги непрерывен: прежде после середины он начинался с 26, а до неё доходил до 28 — скачок 2 см в ключе 0,5,
+       между ключами 0,5 и 0,54 левая ладонь отходила от диска на 1 см. Ладони — в 6,6 см от оси рукояти (w 5,4, stag 3,8;
+       прежде 6,9 — в 0,6 см от края диска радиусом 7,5); верхний ключ (t=0) — прежний: при любой
+       другой раскладке ладоней (6,6–6,9 см) кисти над головой выворачивают кожу Anny сильнее — вывернутых треугольников 35–36
+       против записанных 34 (tools/anny-look/fixtures/folds.json, числа только убывают) */
+    const E = [0, gh[1] + 25, head[2] + 1.9], th = C.lerp(-15.6, 96, Math.pow(e, .8)) * C.D2R, r = e < .5 ? 26 + 2 * Math.sin(Math.PI * e) : C.lerp(28, 20, (e - .5) * 2);
     const P = V.add(E, [0, Math.cos(th), -Math.sin(th)], r), tilt = C.lerp(18, 12, e) * C.D2R;
-    chosen = cup(C, q, P, [0, Math.cos(tilt), Math.sin(tilt)], [0, 0, -1], { w: 5.8, stag: 3.8, cands: () => cands, prev, lam: 25,
+    chosen = cup(C, q, P, [0, Math.cos(tilt), Math.sin(tilt)], [0, 0, -1], { w: t === 0 ? 5.8 : 5.4, stag: 3.8, cands, prev, lam: 25,
       prefer: (q, s) => { const el = C.fk(q).P['el' + s]; return 1.2 * Math.max(0, Math.abs(el[0]) - 12) ** 2; } });
   };
   settle(C, q, { lo: 1, hi: 7, loads: q => [[C.fk(q).P.gripL, 12]], resolve: q => { feet(q); arms(q); } });
@@ -343,7 +350,9 @@ module.exports = {
      eccFirst: t=0 — гантель над грудью на почти прямых руках, t=1 — гантель опущена по дуге за голову
      (за торцом скамьи), локти слегка согнуты, поясница без прогиба. */
   pullover: {
-    keys: Array.from({ length: 13 }, (_, i) => i / 12),
+    /* 25 ключей: при 13 между ключами 0,5 и 0,58 правая ладонь отходила от диска на 1,0 см (касание 24 %), левая у 0,61 —
+       на 1,0 см (18 %): ключи интерполируются по углам суставов, а кисти идут по дуге вокруг плеч (аудит хватов) */
+    keys: Array.from({ length: 25 }, (_, i) => i / 24),
     equipment: [{ type: 'flatBench', id: 'bench' }, { type: 'g2CupDumbbell', id: 'cup', hands: ['L', 'R'] }],
     contacts: [{ body: 'back', prop: 'bench:pad' }, { body: 'headBack', prop: 'bench:pad' }, { body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, ...CUP_CONTACTS],
     pose(t, C) {
@@ -706,17 +715,27 @@ module.exports = {
   /* Разгибание гантели из-за головы стоя: гантель вертикально, ладони под верхним диском, локти у головы.
      eccFirst: t=0 — руки выпрямлены над головой, t=1 — гантель опущена за голову. */
   ohext: {
-    keys: Array.from({ length: 13 }, (_, i) => i / 12),
+    /* 13 основных ключей (i/12) и 12 промежуточных между ними (25 ключей) */
+    keys: Array.from({ length: 25 }, (_, i) => i / 24),
     equipment: [{ type: 'g2CupDumbbell', id: 'cup', hands: ['L', 'R'] }],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, ...CUP_CONTACTS],
     pose(t, C) {
-      /* ключи считаются цепочкой: вариант хвата выбирается с учётом предыдущего ключа (без скачков между ключами) */
+      /* основные ключи считаются цепочкой: вариант хвата (разворот пальцев, полюс локтя) выбирается с учётом предыдущего
+         ключа. Промежуточный ключ — с вариантом посередине между соседними: углы суставов интерполируются между ключами,
+         и при смене варианта (у левой руки полюс −0,4 → 0 к ключу 0,17) ладони между ключами съезжали к краю диска —
+         центр ладони в 7,6–7,8 см от оси при радиусе диска 7,5, левая ладонь касалась краем (наклон 52°, аудит хватов) */
+      const key = x => x.toFixed(6);
       const chain = this._chain || (this._chain = (() => {
-        const out = new Map(); let prev = null;
-        for (const tk of this.keys) { const r = ohextKey(tk, C, prev); out.set(tk, r.q); prev = r.chosen; }
+        const out = new Map(), base = Array.from({ length: 13 }, (_, i) => i / 12), ch = [];
+        let prev = null;
+        for (const tk of base) { const r = ohextKey(tk, C, prev); out.set(key(tk), r.q); ch.push(r.chosen); prev = r.chosen; }
+        for (let i = 0; i < 12; i++) {
+          const mid = s => ({ yaw: (ch[i][s].yaw + ch[i + 1][s].yaw) / 2, fz: (ch[i][s].fz + ch[i + 1][s].fz) / 2, lx: (ch[i][s].lx + ch[i + 1][s].lx) / 2 });
+          out.set(key((2 * i + 1) / 24), ohextKey((2 * i + 1) / 24, C, null, { L: mid('L'), R: mid('R') }).q);
+        }
         return out;
       })());
-      const q = chain.get(t) || ohextKey(t, C, null).q;
+      const q = chain.get(key(t)) || ohextKey(t, C, null).q;
       return C.M.clone(q);
     }
   },

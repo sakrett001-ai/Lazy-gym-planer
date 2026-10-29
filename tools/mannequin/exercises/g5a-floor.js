@@ -448,6 +448,13 @@ function armDir(C, q, s, dir, pole, { el = 8, pron = 0, wrist = [0, 0], mode = '
   const { V } = C, gh = C.fk(q).P['gh' + s];
   return C.armTo(q, s, V.add(gh, V.unit(dir), armSpan(C, el)), pole, { pron, wrist, mode });
 }
+/* высота центра ладони над полом — та же точка, что у аудита хватов (tools/mannequin/holds-audit.js, handGeo) */
+function palmHeight(C, q, s) {
+  const { V, M } = C, f = M.catalogPose(q).frames['hand' + s], g = M.SIGN[s];
+  return M.FLOOR - V.add(V.add(V.add(f.o, f.x, -g * 1.7), f.y, -5.6), f.z, .15)[1];
+}
+/* «лодочка»: наклон рук внизу (t=0) — подбирается по ладоням на коврике; остальные ключи идут от него к подъёму */
+const SUPERMAN_LIFT0 = -.096;
 /* Нога: бедро в направлении thigh (мир), колено согнуто на knee в сторону стоп/коврика (полюс pole) */
 function legBent(C, q, s, thigh, knee, pole, { dorsi = -10 } = {}) {
   const { V, M } = C, hip = C.fk(q).P['hip' + s], K = V.add(hip, V.unit(thigh), M.B.th);
@@ -719,10 +726,15 @@ module.exports = {
       /* руки: впереди головы, ладони вниз; внизу кисти лежат на коврике, вверху подняты вместе с грудью */
       const T = C.axes(q, 'thorax');
       /* плечевой сустав идёт за лопаткой (ритм пояса): руки ставятся дважды — второй раз от сустава поднятой руки */
-      for (const pass of [0, 1]) for (const s of S) {
-        const lift = C.lerp(-.105, .1, e), dir = V.unit([C.M.SIGN[s] * .12, lift, 1]);
+      const arms = lift => { for (const pass of [0, 1]) for (const s of S) {
+        const dir = V.unit([C.M.SIGN[s] * .12, lift, 1]);
         armDir(C, q, s, dir, V.unit(V.add(T.z, V.scale(T.x, C.M.SIGN[s]), 1)), { el: 6, pron: 45, mode: 'flat' });
-      }
+      } };
+      /* внизу ладони лежат на коврике с поджатием 0,15 см (как в отжиманиях и мостике): наклон рук подбирается по центру ладони.
+         Прежде наклон был задан числом (−0,105): центр ладони уходил на 0,7 см в коврик толщиной 1 см (аудит хватов видел ладонь
+         «снизу» коврика — наклон 176°) */
+      if (e < .01) arms(C.solve1D(l => { arms(l); return palmHeight(C, q, 'L') - (MAT - .15); }, -.2, 0));
+      else arms(C.lerp(SUPERMAN_LIFT0, .1, e));
       return q;
     }
   },
