@@ -42,6 +42,11 @@ test('all 3D poses satisfy declared supports, grips, bars and pads', () => {
   assert.deepEqual(r.failures,[]);
   assert.deepEqual(r.warnings,[]);
 });
+/* Прежнее contact-coverage (пространственный риг без правил опор): теперь у каждой позы каталога контакты заявлены
+   в спецификации, валидатор манекена проверяет их в каждом кадре */
+test('every catalog pose declares its contacts', () => {
+  for (const ex of model.EX) assert(ex.anim.catalogRig(.5).contacts.length > 0, ex.id);
+});
 /* Переразгибание локтя по 3D-позе манекена (4.72.0). Отрицательный пример: шесть упражнений, которые старое правило
    projected-elbow помечало по плоским 2D-описаниям (12 ложных пометок), в 3D согнуты в локте 3,6–113° — пометок нет. */
 test('elbow hyperextension: no flags on the 3D poses the app shows, including the old projected-elbow false flags', () => {
