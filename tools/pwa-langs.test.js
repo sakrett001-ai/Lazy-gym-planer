@@ -8,28 +8,30 @@ const root = path.resolve(__dirname, '..');
 const SCOPE = 'https://test.invalid/app/', DAY = 864e5;
 
 function cacheStorage() {
-  const stores = new Map();
+  const stores = new Map(), downloads = [];
   const abs = r => new URL(typeof r === 'string' ? r : r.url, SCOPE).href;
   const open = async name => {
     if (!stores.has(name)) stores.set(name, new Map());
     const m = stores.get(name);
     return {
-      addAll: async list => { for (const u of list) m.set(abs(u), new Response('file ' + abs(u))); },
+      addAll: async list => { for (const u of list) { downloads.push(abs(u)); m.set(abs(u), new Response('file ' + abs(u))); } },
       put: async (r, res) => { m.set(abs(r), res); },
       match: async r => { const hit = m.get(abs(r)); return hit ? hit.clone() : undefined; }
     };
   };
-  return {stores, api:{open, keys:async () => [...stores.keys()], delete:async k => stores.delete(k),
+  return {stores, downloads, api:{open, keys:async () => [...stores.keys()], delete:async k => stores.delete(k),
     match:async r => { for (const m of stores.values()) { const hit = m.get(abs(r)); if (hit) return hit.clone(); } }}};
 }
 /* sw.js в песочнице: открытые окна, сохранённые отметки языков, сеть */
-function worker({windows = [], langs = null, online = true} = {}) {
-  const handlers = {}, {stores, api} = cacheStorage();
+function worker({windows = [], langs = null, online = true, storage = cacheStorage(), version = '9.9.9-test', icons = null} = {}) {
+  const handlers = {}, {stores, api} = storage;
   const self = {addEventListener:(n, f) => handlers[n] = f, skipWaiting() {}, location:{origin:'https://test.invalid'}, registration:{scope:SCOPE},
     clients:{claim() {}, matchAll:async () => windows.map(url => ({url}))}};
   const fetch = async req => { if (!online) throw new TypeError('offline'); return new Response('net ' + req.url); };
   const ctx = {self, caches:api, Response, fetch, URL};
-  vm.runInNewContext(fs.readFileSync(path.join(root, 'src/sw.js'), 'utf8').replace(/__VERSION__/g, '9.9.9-test') + '\n;this.api={shellFor,langOf,LANGS_CACHE,LANGS_URL,CACHE};', ctx);
+  let src = fs.readFileSync(path.join(root, 'src/sw.js'), 'utf8').replace(/__VERSION__/g, version);
+  if (icons) src = src.replace('__ICONS__', JSON.stringify(icons));
+  vm.runInNewContext(src + '\n;this.api={shellFor,langOf,LANGS_CACHE,LANGS_URL,CACHE};', ctx);
   const ready = langs ? api.open(ctx.api.LANGS_CACHE).then(c => c.put(ctx.api.LANGS_URL, new Response(JSON.stringify(langs)))) : Promise.resolve();
   const files = () => [...(stores.get(ctx.api.CACHE) || new Map()).keys()];
   return {handlers, stores, api, ctx, files, ready,
@@ -50,6 +52,24 @@ test('a Russian page caches the Russian shell and shared files only; an English 
   assert(en.files().includes(SCOPE + 'en/index.html') && en.files().includes(SCOPE + 'en/app.js?v=9.9.9-test'));
   assert.equal(en.files().filter(russianPage).length, 0, 'no Russian files for an English user');
   assert(en.files().includes(SCOPE + 'volume.js?v=9.9.9-test'), 'the 3D engine is shared');
+});
+/* Иконки (≈0,3 МБ) — адрес с хэшем содержимого (build.js): новая версия берёт их из кеша прежней, а не из сети; изменённая
+   иконка (новый хэш) скачивается, файлы с версией в адресе — как раньше */
+test('icons are addressed by content: an update takes them from the previous cache instead of the network', async () => {
+  const storage = cacheStorage(), href = u => new URL(u, SCOPE).href, icons = ['./icon-192.png?v=aaaa', './favicon-32.png?v=bbbb'];
+  const v1 = worker({windows:[SCOPE], storage, version:'1.0.0-a', icons}); await v1.install();
+  for (const u of icons) assert(v1.files().includes(href(u)), u);
+  assert(icons.every(u => storage.downloads.includes(href(u))), 'the first install downloads the icons');
+  storage.downloads.length = 0;
+  const v2 = worker({windows:[SCOPE], storage, version:'1.0.1-b', icons}); await v2.install();
+  for (const u of icons) assert(v2.files().includes(href(u)), 'in the new cache: ' + u);
+  assert(!storage.downloads.some(u => icons.map(href).includes(u)), 'the same icons are not downloaded again');
+  assert(storage.downloads.includes(SCOPE + 'app.js?v=1.0.1-b'), 'versioned files are downloaded as before');
+  assert.equal(await (await (await storage.api.open(v2.ctx.api.CACHE)).match(href(icons[0]))).text(), 'file ' + href(icons[0]), 'the copied icon is the cached file');
+  storage.downloads.length = 0;
+  const v3 = worker({windows:[SCOPE], storage, version:'1.0.2-c', icons:['./icon-192.png?v=cccc', './favicon-32.png?v=bbbb']}); await v3.install();
+  assert(storage.downloads.includes(SCOPE + 'icon-192.png?v=cccc'), 'a changed icon is downloaded');
+  assert(!storage.downloads.includes(SCOPE + 'favicon-32.png?v=bbbb'), 'an unchanged one is not');
 });
 test('an update keeps the languages used in the last 30 days, drops older ones, and caches both only when nothing is known', async () => {
   const now = Date.now();

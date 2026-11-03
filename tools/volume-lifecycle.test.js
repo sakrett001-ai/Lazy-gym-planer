@@ -4,16 +4,19 @@ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const {JSDOM}=require('jsdom');
 const {loadModel}=require('./biomechanics-audit');
 const source=fs.readFileSync(path.join(__dirname,'../src/volume/main.mjs'),'utf8').replace(/^import[^\n]*\n/gm,'').replace('export function createVolumeFigure','function createVolumeFigure');
-async function runtime({available=true}={}){
+/* link — рендерер с областью просмотра, размером и сборкой шейдеров (второй ракурс в общем холсте, заготовка) */
+async function runtime({available=true,link=false}={}){
  const THREE=await import('three'),{createCatalogScene,world,CAMERA_SETTINGS}=await import('../src/volume/scene.mjs'),orbit=await import('../src/volume/orbit.mjs'),{attachOrbit}=await import('../src/volume/controls.mjs');
- const dom=new JSDOM('<body></body>'),w=dom.window,counters={probes:0,constructors:0,renders:0,disposals:0,losses:0};
+ const dom=new JSDOM('<body></body>'),w=dom.window,counters={probes:0,constructors:0,renders:0,disposals:0,losses:0,copies:0,compiled:0,viewports:[]};
  w.WebGL2RenderingContext=function(){};
- w.HTMLCanvasElement.prototype.getContext=function(){counters.probes++;return available?{}:null;};
+ w.HTMLCanvasElement.prototype.getContext=function(type){if(type==='2d')return{drawImage:(...a)=>{counters.copies++;counters.copy=a;}};counters.probes++;return available?{}:null;};
  class Renderer{
-  constructor({canvas}){counters.constructors++;this.domElement=canvas;}
-  setPixelRatio(){} setSize(){} render(scene){counters.renders++;counters.scene=scene;} dispose(){counters.disposals++;} forceContextLoss(){counters.losses++;}
+  constructor({canvas}){counters.constructors++;this.domElement=canvas;(counters.canvases||(counters.canvases=[])).push(canvas);this.shadowMap={enabled:true,autoUpdate:true,needsUpdate:false};}
+  setPixelRatio(){} setSize(w,h){this.domElement.width=w;this.domElement.height=h;} render(scene,camera){counters.renders++;counters.scene=scene;counters.camera=camera;(counters.shadows||(counters.shadows=[])).push(this.shadowMap.autoUpdate||this.shadowMap.needsUpdate);} dispose(){counters.disposals++;} forceContextLoss(){counters.losses++;}
  }
- const env={window:w,document:w.document,THREE:{...THREE,WebGLRenderer:Renderer},createCatalogScene,world,CAMERA_SETTINGS,...orbit,attachOrbit};
+ if(link)Object.assign(Renderer.prototype,{getPixelRatio(){return 1;},getSize(v){return v.set(this.domElement.width||0,this.domElement.height||0);},
+  setViewport(x,y,w,h){counters.viewports.push([x,y,w,h]);},setScissor(){},setScissorTest(){},compileAsync(){counters.compiled++;return Promise.resolve();}});
+ const env={window:w,document:w.document,THREE:{...THREE,WebGLRenderer:Renderer},createCatalogScene,world,CAMERA_SETTINGS,...orbit,attachOrbit,setTimeout};
  vm.runInNewContext(source,env);
  const m=loadModel(),{catalogVolumeData,muscleColor}=m.get('({catalogVolumeData,muscleColor})');
  const options=(id='bbbench',camera='above',has)=>({label:id,camera,t:.43,trace:[],vectors:[],color:muscleColor,data:(t,index)=>catalogVolumeData(m.EX.find(ex=>ex.id===id).anim,t,index,has)});
@@ -123,7 +126,10 @@ test('skeleton mode: bones follow the pose inside a see-through silhouette, phas
   assert(regions.children.some(o=>o.visible),'phase muscle colours are on');
   figure.setSkeleton(data);
   assert.equal(figure.svg.dataset.skeleton,'on');
-  assert.equal(layer.visible,true);assert.equal(layer.children.length,data.bones.length);
+  /* все кости — одна сетка (4.72.0): один вызов отрисовки и один в проходе тени */
+  const bones=layer.userData.layer;
+  assert.equal(layer.visible,true);assert.equal(layer.children.length,1);assert.equal(bones.names.length,data.bones.length);
+  assert.equal(layer.children[0].geometry.attributes.position.count,data.bones.reduce((s,b)=>s+b.nv,0));
   /* силуэт: цветной проход рисует один ближний слой кожи (прозрачная середина, плотнее к контуру), невидимый двойник
      сетки пишет глубину кожи раньше него и после костей */
   const twin=torso.getObjectByName('ghost-depth');
@@ -135,10 +141,10 @@ test('skeleton mode: bones follow the pose inside a see-through silhouette, phas
   assert.equal(torso.castShadow,false,'the skin does not shadow the bones');
   assert(regions.children.every(o=>!o.visible),'phase muscle colours hide while the skeleton is on');
   /* бедренная кость: начало рамки — тазобедренный сустав позы */
-  const R=r.model.EX.find(e=>e.id==='squat').anim.catalogRig(1),femur=layer.getObjectByName('bone-femurL'),e=femur.matrix.elements;
+  const R=r.model.EX.find(e=>e.id==='squat').anim.catalogRig(1),femur=bones.matrixOf('femurL'),e=femur.elements;
   const hip=[R.hipL[0]/100,(186-R.hipL[1])/100,R.hipL[2]/100];
   assert(Math.hypot(e[12]-hip[0],e[13]-hip[1],e[14]-hip[2])<1e-6,'the femur hangs from the hip joint');
-  for(const m of layer.children)assert(m.matrix.elements.every(Number.isFinite),'finite matrix: '+m.name);
+  for(const name of bones.names)assert(bones.matrixOf(name).elements.every(Number.isFinite),'finite matrix: '+name);
   figure.setSkeleton(null);
   assert.equal(layer.visible,false);assert.equal(torso.material.transparent,false);assert.equal(torso.material.opacity,1);assert.equal(torso.castShadow,true);
   assert.notEqual(torso.material.name,'ghost-skin');assert.equal(torso.getObjectByName('ghost-depth').visible,false,'the depth twin hides with the silhouette');
@@ -211,4 +217,98 @@ test('13-pose framing keeps every one of 25 poses in frame (exercises with the l
    const g=frame(b);assert(Math.max(Math.abs(g.l-f.l),Math.abs(g.r-f.r),Math.abs(g.t-f.t),Math.abs(g.b-f.b))/g.s<.006,`${id} ${cam}: frame shift under 0.6 %`);
   }
  }
+});
+
+/* Второй ракурс разбора — та же сцена тем же рендерером (4.72.0): без второго WebGL-контекста и второй сборки шейдеров,
+   поза и мышцы — один раз на кадр, карта тени — один раз; кадр каждого ракурса копируется в его 2D-холст */
+test('the second view shares the scene and the renderer: one pose per frame, one shadow pass, a copy per view',async()=>{
+ const r=await runtime({link:true});let first,second;
+ try{
+  let samples=0;const base={...r.options('squat','above'),interactive:true},original=base.data,counted={...base,data:(...a)=>{samples++;return original(...a);}};
+  first=r.create(counted);const scene=r.counters.scene,constructors=r.counters.constructors;
+  second=r.create({...counted,camera:'side',share:first});
+  assert(second.linked,'linked view');assert.equal(r.counters.constructors,constructors,'no second renderer');
+  assert(!first.svg.contains(r.counters.canvases.at(-1)),'the WebGL canvas leaves the page');
+  assert.equal(first.svg.querySelectorAll('canvas').length,1);assert.equal(second.svg.querySelectorAll('canvas').length,1);
+  assert.notEqual(first.svg.querySelector('canvas'),second.svg.querySelector('canvas'),'each view has its own canvas');
+  assert.equal(second.camera,'side');assert.equal(first.camera,'above');assert(second.orbit&&first.orbit);
+  samples=0;const renders=r.counters.renders,copies=r.counters.copies;r.counters.shadows=[];
+  first.at(.6,{index:0});second.at(.6,{index:0});
+  assert.equal(samples,1,'the pose is computed once for both views');
+  assert.equal(r.counters.renders-renders,2,'one render per view');assert.equal(r.counters.copies-copies,2,'each view gets its frame');
+  assert.deepEqual(r.counters.shadows,[true,false],'the shadow map is drawn once per frame');
+  assert.equal(r.counters.scene,scene,'the same scene');
+  assert.equal(second.svg.dataset.pose,'0.6');
+  /* настройки вида — общие: тот же вызов у второй фигуры кадр не повторяет */
+  const before=r.counters.renders;second.setTrace(false);second.setMuscles(true);second.setVectors(false);assert.equal(r.counters.renders,before,'unchanged settings draw nothing');
+  first.setMuscles(false);assert(r.counters.renders>before);const after=r.counters.renders;second.setMuscles(false);assert.equal(r.counters.renders,after);
+  /* свой ракурс у каждой: смена камеры второго первый не трогает */
+  assert(second.setCamera('front',{instant:true}));assert.equal(second.camera,'front');assert.equal(first.camera,'above');
+  /* второй закрыт — первая фигура рисует один свой ракурс */
+  second.dispose();const n=r.counters.renders;first.at(.7,{index:0});assert.equal(r.counters.renders-n,1);
+ }finally{second?.dispose();first?.dispose();r.dom.window.close();}
+});
+test('a view without a free camera cannot be linked: the second view becomes its own figure, as before',async()=>{
+ const r=await runtime({link:true});let first,second;
+ try{
+  first=r.create(r.options('squat','above'));const c=r.counters.constructors;
+  second=r.create({...r.options('squat','side'),share:first});
+  assert(!second.linked);assert.equal(r.counters.constructors,c+1);
+ }finally{second?.dispose();first?.dispose();r.dom.window.close();}
+});
+/* вид с первого кадра (options.layers): рамка — без костей и мышц, как раньше, а первый кадр — уже со скелетом; повторный
+   setLayers с теми же данными кадр не перерисовывает */
+test('figure layers from the first frame: the fit ignores them, the first render shows them, the same layers again draw nothing',async()=>{
+ const r=await runtime();let figure;
+ const zlib=require('node:zlib'),Skeleton=require('../src/js/09bq-skeleton.js');globalThis.Skeleton=Skeleton;
+ const data=Skeleton.decode(zlib.gunzipSync(fs.readFileSync(path.join(__dirname,'../src/data/skeleton.bin'))));
+ try{
+  let renders=0;const base={...r.options('squat','side'),interactive:true};
+  figure=r.create({...base,layers:{bones:data,body:null}});
+  const layer=r.counters.scene.getObjectByName('skeleton');assert.equal(layer.visible,true,'bones on the first frame');
+  assert.equal(figure.svg.dataset.skeleton,'on');assert.equal(figure.svg.dataset.anatomy,'off');
+  renders=r.counters.renders;figure.setLayers(data,null);assert.equal(r.counters.renders,renders,'the same layers draw nothing');
+  figure.setLayers(null,null);assert.equal(layer.visible,false);assert(r.counters.renders>renders);
+  /* рамка та же, что у фигуры без слоёв (отдельная страница: своя память рамок) */
+  const r2=await runtime(),plain=r2.create({...r2.options('squat','side'),interactive:true});
+  const same=x=>JSON.parse(JSON.stringify(x));assert.deepEqual(same(plain.cameraState()),same(figure.cameraState()));plain.dispose();r2.dom.window.close();
+ }finally{figure?.dispose();r.dom.window.close();delete globalThis.Skeleton;}
+});
+/* Заготовка рендерера (первое открытие разбора за сеанс): контекст и программы — заранее, в простое; фигура берёт этот рендерер,
+   материалы заготовки отпускаются после её первого кадра */
+test('a prewarmed renderer: compiled ahead, lent to the first figure, its materials released after that figure\'s first frame',async()=>{
+ const r=await runtime({link:true});let figure;
+ const zlib=require('node:zlib'),Skeleton=require('../src/js/09bq-skeleton.js');globalThis.Skeleton=Skeleton;
+ const data=Skeleton.decode(zlib.gunzipSync(fs.readFileSync(path.join(__dirname,'../src/data/skeleton.bin'))));
+ try{
+  const base=r.options('squat','side'),ready=r.w.GymVolume.prewarm({...base,layers:{bones:data,body:null}});
+  /* три задачи в простое: сцена — сразу, сборка программ — в следующей, кадр 1 × 1 — после неё */
+  assert.equal(r.counters.constructors,1);assert.equal(r.counters.compiled,0,'programs are compiled in a later idle task');assert.equal(r.counters.renders,0,'no frame before idle');
+  assert.equal(await ready,true,'a frame of the warm scene (in idle) builds shadow and background programs');
+  assert.equal(r.counters.compiled,1,'programs compiled ahead');assert.equal(r.counters.renders,1,'one 1×1 frame');
+  const warm=r.counters.scene;let released=0;warm.traverse(o=>{if(o.material)o.material.addEventListener('dispose',()=>released++);});
+  assert(warm.getObjectByName('skeleton').visible,'the warm scene has the chosen view');
+  assert.equal(await r.w.GymVolume.prewarm(base),false,'once per session');
+  figure=r.create({...base,layers:{bones:data,body:null}});
+  assert.equal(r.counters.constructors,1,'the first figure takes the warm renderer');
+  assert(released>0,'warm materials released after the first frame');
+ }finally{figure?.dispose();r.dom.window.close();delete globalThis.Skeleton;}
+});
+/* Рамка нового упражнения (13 положений повторения) считается кадрами «только точки» (scene.apply, how.shape: без нормалей кожи
+   и областей мышц) — рамка та же до последнего знака: и ортографические рамки ракурсов, и рамка свободной камеры */
+test('the motion fit from shape-only frames equals the fit from full frames',async()=>{
+ const {createCatalogScene,CAMERA_SETTINGS}=await import('../src/volume/scene.mjs'),orbit=await import('../src/volume/orbit.mjs');
+ const dom=new JSDOM('<body></body>');globalThis.window=dom.window;globalThis.document=dom.window.document;
+ try{
+  const m=loadModel(),{catalogVolumeData,muscleColor}=m.get('({catalogVolumeData,muscleColor})'),VIEW={fov:orbit.PERSPECTIVE_FOV,pad:orbit.FRAME_PAD,settings:CAMERA_SETTINGS};
+  for(const id of ['frontraise','deadlift','latpull','pushup']){
+   const anim=m.EX.find(e=>e.id===id).anim,fits=[];
+   for(const shape of [false,true]){
+    const scene=createCatalogScene(catalogVolumeData(anim,0,0)),collect=orbit.frameCollector(CAMERA_SETTINGS,VIEW);
+    for(let i=0;i<=12;i++){scene.apply(catalogVolumeData(anim,i/12,0),{color:muscleColor},{shape});scene.includeBounds(undefined,collect.add);}
+    fits.push(JSON.stringify([scene.bounds,collect.data()]));scene.dispose();
+   }
+   assert.equal(fits[1],fits[0],id);
+  }
+ }finally{delete globalThis.window;delete globalThis.document;dom.window.close();}
 });

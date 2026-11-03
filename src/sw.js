@@ -11,9 +11,12 @@ const CACHE = CACHE_PREFIX + VERSION;
 const LANGS_CACHE = 'podhod-langs@' + SCOPE, LANGS_URL = SCOPE + '__podhod-langs.json', LANG_DAYS = 30;
 /* готовые миниатюры витрины атласа (13e-gallery-anatomy.js) — корзина на сборку: при обновлении прежние удаляются */
 const THUMBS_PREFIX = 'podhod-thumbs@' + SCOPE + ':', THUMBS = THUMBS_PREFIX + VERSION;
-const COMMON = ['./volume.js?v=' + VERSION,
-  './icon.svg', './icon-192.png?v=' + VERSION, './icon-512.png?v=' + VERSION, './icon-maskable-512.png?v=' + VERSION,
-  './apple-touch-icon.png?v=' + VERSION, './favicon-32.png?v=' + VERSION,
+/* Иконки — адрес с хэшем содержимого (список подставляет build.js): файл по такому адресу не меняется, поэтому новая версия
+   берёт иконки из кеша прежней, а не из сети (≈0,3 МБ на каждый выпуск; fillShell). В исходнике (проверки) — адреса с версией. */
+const ICON_LIST = '__ICONS__';
+const ICONS = ICON_LIST.startsWith('[') ? JSON.parse(ICON_LIST) : ['./icon.svg?v=' + VERSION, './icon-192.png?v=' + VERSION, './icon-512.png?v=' + VERSION,
+  './icon-maskable-512.png?v=' + VERSION, './apple-touch-icon.png?v=' + VERSION, './favicon-32.png?v=' + VERSION];
+const COMMON = ['./volume.js?v=' + VERSION, ...ICONS,
   'fonts/golos-text-cyrillic-400.woff2', 'fonts/golos-text-cyrillic-500.woff2', 'fonts/golos-text-cyrillic-600.woff2',
   'fonts/golos-text-latin-400.woff2', 'fonts/golos-text-latin-500.woff2', 'fonts/golos-text-latin-600.woff2',
   'fonts/russo-one-cyrillic-400.woff2', 'fonts/russo-one-latin-400.woff2', 'fonts/jetbrains-mono-cyrillic-500.woff2', 'fonts/jetbrains-mono-latin-500.woff2'];
@@ -64,7 +67,17 @@ function notDownloaded(lang) {
 <p><a href="${ru[2]}">Открыть ${ru[1]}</a></p><hr><p lang="en">No connection. ${en[0]} is not downloaded on this device yet. Open it once while online — after that it works offline too. <a href="${ru[2]}">Open ${en[1]}</a></p></main></body></html>`;
   return new Response(html, {status:503, headers:{'Content-Type':'text/html; charset=utf-8', 'Cache-Control':'no-store'}});
 }
-self.addEventListener('install', e => { e.waitUntil(wantedLangs().then(langs => caches.open(CACHE).then(c => c.addAll(shellFor(langs))))); });
+/* оболочка в новый кеш: иконки — из кеша прежней версии, если там есть тот же адрес (тот же хэш — тот же файл), остальное — из сети */
+async function fillShell(files) {
+  const c = await caches.open(CACHE), old = (await caches.keys()).filter(k => k.startsWith(CACHE_PREFIX) && k !== CACHE), net = [];
+  for (const f of files) {
+    let hit = null;
+    if (ICONS.includes(f)) for (const k of old) { hit = await (await caches.open(k)).match(f); if (hit) break; }
+    if (hit) await c.put(f, hit); else net.push(f);
+  }
+  await c.addAll(net);
+}
+self.addEventListener('install', e => { e.waitUntil(wantedLangs().then(langs => fillShell(shellFor(langs)))); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => (k.startsWith(CACHE_PREFIX) && k !== CACHE) || (k.startsWith(THUMBS_PREFIX) && k !== THUMBS)).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || !e.request.url.startsWith(self.location.origin)) return;

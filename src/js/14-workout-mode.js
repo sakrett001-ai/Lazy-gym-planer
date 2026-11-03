@@ -326,8 +326,10 @@ function mountDetailCameras(){
  if(!detailMotion)return;
  const F=detailMotion,ex=F.it.ex,a=ex.anim,key=motionCamera(ex),cameras=a.catalogCameras||a.cameras||[];
  disposeMotion(F);
- const m=motionFrame(F),make=camera=>{
-  const f=createMotionFigure(a,{primary:ex.pri,has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera,muscles:motionPrefs.muscles,interactive:true,onCamera:paintDetailCamera,onGesture:orbitGesture});
+ /* кости и мышцы — с первого кадра фигуры, если уже загружены (иначе их покажет applyFigureView, когда придут); второй ракурс
+    пары — та же сцена первой фигуры (share): без второго WebGL-контекста и второй сборки шейдеров */
+ const m=motionFrame(F),layers=detailLayers(ex),make=(camera,share)=>{
+  const f=createMotionFigure(a,{primary:ex.pri,has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera,muscles:motionPrefs.muscles,interactive:true,onCamera:paintDetailCamera,onGesture:orbitGesture,layers,share});
   f.svg.classList.toggle('show-joints',!!motionPrefs.joints);f.setTrace(!!motionPrefs.trace);f.setVectors(!!motionPrefs.vectors);return f;
  };
  F.f=make(key);$('#mv-stage').replaceChildren(F.f.svg);
@@ -340,10 +342,15 @@ function mountDetailCameras(){
  $('#mv-dual').checked=!!motionPrefs.dual;$('#mv-second').hidden=!pair;$('#mv-projections').classList.toggle('is-dual',pair);
  F.extra=null;
  if(pair){
-  const other=pairCamera(a,key);F.extra=make(other);$('#mv-second-stage').replaceChildren(F.extra.svg);
+  const other=pairCamera(a,key);F.extra=make(other,F.f);$('#mv-second-stage').replaceChildren(F.extra.svg);
   $('#mv-second-label').textContent=CAMERA3[other].label;$('#mv-second-hint').textContent=a.cameraHints?.[other]||'';
  }else $('#mv-second-stage').replaceChildren();
  configureMusclePanel('mv',F.it);configureStressPanel('mv',F);applyFigureView(F);paintMotion(F,true);paintOrbitHint(F);
+}
+/* вид разбора с первого кадра: кости и мышцы (как applyFigureView) или null — манекен либо данные ещё грузятся */
+function detailLayers(ex){
+ const view=figureView();if(view==='mannequin'||!Skeleton.data||(view==='anatomy'&&!Muscles.data))return null;
+ return{bones:Skeleton.data,body:view==='anatomy'?{skeleton:Skeleton.data,muscles:Muscles.data,level:anatomyLevel(ex)}:null};
 }
 /* второй ракурс пары: из профиля мышц упражнения, иначе первый другой */
 function pairCamera(a,key){const cameras=a.catalogCameras||a.cameras||[],preferred=motionProfile(a)?.pair;return preferred!==key&&cameras.includes(preferred)?preferred:cameras.find(c=>c!==key);}
@@ -399,7 +406,7 @@ function paintOrbitHint(F){
 function mountWorkoutCameras(){
  if(!workout?.motion)return;
  const F=workout.motion,ex=F.it.ex,key=motionCamera(ex),m=motionFrame(F);
- disposeMotion(F);F.f=createMotionFigure(ex.anim,{has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera:key,muscles:motionPrefs.muscles,memoBones:true,interactive:true,onCamera:paintWorkoutCamera,onGesture:orbitGesture});F.f.setVectors(!!motionPrefs.vectors);
+ disposeMotion(F);F.f=createMotionFigure(ex.anim,{has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera:key,muscles:motionPrefs.muscles,memoBones:true,interactive:true,onCamera:paintWorkoutCamera,onGesture:orbitGesture,layers:workoutLayers(F)});F.f.setVectors(!!motionPrefs.vectors);
  $('#wv-stage').replaceChildren(F.f.svg);$('#wv-cameras').innerHTML=cameraButtons(ex,key);$('#wv-cameras').hidden=!(ex.anim.catalogCameras||ex.anim.cameras);
  $('#wv-angle').textContent=CAMERA3[key]?.label||(ex.anim.view==='front'?'Вид спереди':'Вид сбоку');configureMusclePanel('wv',F.it);configureStressPanel('wv',F);workoutFigure.pace.settle();applyWorkoutView(F);paintWorkoutMotion();
 }
@@ -412,6 +419,13 @@ function mountWorkoutCameras(){
 const workoutFigure={pace:anatomyPace(),slow:false,failed:false,view:'mannequin'};
 const workoutAnatomyLive=()=>workoutFigure.view!=='mannequin'&&typeof workout?.motion?.f?.setLayers==='function';
 function workoutPaceSample(ms,cold=false){if(workoutFigure.pace.sample(ms,1,cold)==='fallback'){workoutFigure.slow=true;applyWorkoutView();}}
+/* вид экрана тренировки с первого кадра: кости и мышцы, если applyWorkoutView их и покажет (данные готовы, телефон успевает) */
+function workoutLayers(F){
+ const pref=figureView(),need=pref==='anatomy'?[Skeleton,Muscles]:[Skeleton],state=need.every(x=>x.data)?'ready':workoutFigure.failed?'error':'loading';
+ const choice=figureViewFor(motionPrefs.view,{able:true,state,slow:workoutFigure.slow,coarse:coarsePointer()});
+ if(choice.wait||choice.view==='mannequin')return null;
+ return{bones:Skeleton.data,body:choice.view==='anatomy'?{skeleton:Skeleton.data,muscles:Muscles.data,level:anatomyLevel(F.it.ex)}:null};
+}
 function applyWorkoutView(F=workout?.motion){
  const group=$('#wv-figure'),note=$('#wv-figure-note');if(!group||!F?.f)return;
  const able=typeof F.f.setLayers==='function',pref=figureView(),need=pref==='anatomy'?[Skeleton,Muscles]:[Skeleton];
