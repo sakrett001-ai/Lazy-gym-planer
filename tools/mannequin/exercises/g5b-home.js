@@ -159,10 +159,17 @@ function benchPushArms(C, q, L, P, e, ax, n = [0, 1, 0]) {
   S.forEach((s, i) => palmRolled(C, q, s, L.palm[i], L.F[i], n, slerpDir(C, poleTop(C, q, s, ax, P.pole0), L.pole1[i], e), P.roll, P.rollMax));
 }
 
-/* Отжимания от скамьи: скамья поперёк (ось X), ладони у ближнего края, пальцы вперёд. Низ — от кистей под локтями
-   (stackedPalm): ладони в edgeIn см от ближнего края, угол тела — такой, что грудь в gap см от скамьи (над верхней гранью — от
-   неё, перед краем — от ребра). Верх — руки почти прямые (плечевой пояс в протракции). */
-const INCP = { x: 24, out: 8, tilt: 10, edgeIn: 6.5, gap: 4, gBot: [-2, -14], gTop: [3, 12], neck: [-6, -2], pole0: [.4, .3, 1], roll: 0, rollMax: 0 };
+/* Отжимания от скамьи: скамья поперёк (ось X), ладони у ближнего края, пальцы вперёд и чуть наружу. Низ — от кистей под
+   локтями (stackedPalm): ладони в edgeIn см от ближнего края (основание ладони у самого ребра), угол тела — такой, что грудь в
+   gap см от скамьи (над верхней гранью — от неё, перед краем — от ребра). Верх — руки почти прямые, плечи опущены.
+   Техника: ладони на краю скамьи чуть шире плеч, грудь опускается к краю (Bodybuilding.com, Incline Push-Up: «Place hands on
+   edge of bench… slightly wider than shoulder width», «lower chest to edge»; NASM Exercise Library, Incline Push-Up: «slightly
+   wider than shoulder-width», «chest nearly touches the bench», «elbows at approximately 45 degrees», «shoulders back and down»).
+   Раскладка ладоней — как у отжиманий на коврике (g5a-floor.js, PUSH: x 36, пальцы наружу 13°, наклон предплечья внизу 10°).
+   Прежде (4.73.0) ладони стояли по 24 см от середины, край скамьи — под грудью, вверху руки перпендикулярны телу: внизу
+   предплечье было наклонено на 29° (кисть далеко впереди локтя). Теперь внизу 10°, локоть над кистью, локти 36° к корпусу; грудь упирается в ребро
+   нижней частью грудины, поэтому локоть внизу согнут на 96° (на полу — 114°): глубже не пускает скамья. */
+const INCP = { x: 36, out: 13, tilt: 10, edgeIn: 6.5, gap: 3, gBot: [-2, -14], gTop: [-4, 8], neck: [-6, -2], pole0: [.228, .599, .768], roll: 1, rollMax: 12 };
 const INC = once(() => {
   const C = ctx([]), { V } = C, padY = 44, opts = { feetX: 9, dorsi: 6 }, P = INCP, F = S.map(s => fingersOut(s, P.out));
   const bodyB = a => { const q = plankBody(C, a, opts); for (const s of S) q[s].girdle = [...P.gBot]; q.neck = [P.neck[0], 0, 0]; return q; };
@@ -183,9 +190,19 @@ const INC = once(() => {
    Низ: грудь в 5 см от пола, кисти под плечами; верх — руки выпрямлены. */
 const PK = { phi0: 26, phi1: 39, headAhead: 7, opts: { feetX: 10, dorsi: 10, knee: 10 } };
 const PKD = { phi0: 50, phi1: 60, headAhead: 6, opts: { ballY: 44, ballZ: 0, feetX: 9, dorsi: 10, knee: 10 } };
-/* Отжимания с ногами на скамье: низ — грудь (или голова) в low см от пола, кисти под локтями (stackedPalm); верх — руки
-   почти прямые */
-const DECP = { x: 24, out: 4, tilt: 10, low: 3.5, gBot: [-2, -14], gTop: [2, 12], neck: [-8, -12], pole0: [.25, .15, 1], roll: 0, rollMax: 0 };
+/* Отжимания с ногами на скамье: низ — грудь (или голова) в low см от пола, кисти под локтями (stackedPalm, локоть отведён
+   назад и наружу на lean°); верх — руки почти прямые.
+   Техника: ладони на полу чуть шире плеч, плечи над запястьями, локти около 45° к корпусу, грудь почти у пола (NASM Exercise
+   Library, Decline Push-Up: «slightly wider than shoulder-width», «elbows at approximately 45 degrees», «chest nearly touches
+   the floor»; Healthline, Decline Push-Up: «shoulders over your wrists and elbows at 45 degrees»; ExRx, Decline Push-up:
+   «slightly wider than shoulder width»).
+   Тело вращается вокруг подушечек стоп на скамье высотой 44 см, и плечи между верхом и низом почти не смещаются вдоль пола
+   (на полу при опускании они уходят вперёд на ~12 см). Поэтому кисть под локтем внизу — это кисть чуть позади плеча вверху,
+   а там запястье разогнуто почти на предел опоры ладонью (90°). Запас дают ширина ладоней (как на коврике, g5a-floor.js PUSH),
+   ладонь, чуть заваленная на ребро, и плечевой пояс: вверху опущен (−10° — предел), внизу поднят. Прежде (4.73.0) ладони
+   стояли по 24 см от середины, запястья — в 11 см впереди плеч внизу: предплечье внизу было наклонено на ~85°. Теперь внизу 12°, локоть над
+   кистью, локти 40° к корпусу; вверху плечи над запястьями, разгибание запястья 88°. */
+const DECP = { x: 36, out: 13, tilt: 12, lean: 25, low: 3.5, gBot: [12, -14], gTop: [-10, 8], neck: [-8, -12], pole0: [.331, -.296, .896], roll: 1, rollMax: 14 };
 const lowestFront = (C, q, h0 = 26, h1 = 49.8) => { let best = null; for (let h = h0; h <= h1; h += 1) for (const a of [0, .25, -.25]) { const p = C.chestPoint(q, h, a); if (!best || p[1] < best[1]) best = p; } return best; };
 const DEC = once(() => {
   const C = ctx([]), { V } = C, opts = { ballY: 44, ballZ: 0, feetX: 9, dorsi: 12, mtpMax: 58 }, P = DECP, F = S.map(s => fingersOut(s, P.out));
