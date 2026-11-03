@@ -432,7 +432,7 @@ const AnnySkin = (() => {
     }
     return d._regions = { fn: regionOf, ids, rid };
   }
-  return { load, decode, frameMats, skinMats, dualQuats, correctiveWeights, skin, supports, supportShape, supportSD, SUP, regions, bindInv, digitRig, digitPose, DIG, _digit: { R3, chain, xf, flexRot, flexAngle, flatThumb }, get data() { return data; }, set data(x) { data = x; } };
+  return { load, decode, frameMats, skinMats, dualQuats, correctiveWeights, skin, supports, supportBody, supportShape, supportSD, SUP, regions, bindInv, digitRig, digitPose, DIG, _digit: { R3, chain, xf, flexRot, flexAngle, flatThumb }, get data() { return data; }, set data(x) { data = x; } };
 })();
 if (typeof window !== 'undefined') window.AnnySkin = AnnySkin; /* объёмная сцена (volume.js) берёт данные и рамки отсюда */
 if (typeof module !== 'undefined' && module.exports) module.exports = AnnySkin;

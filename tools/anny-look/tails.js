@@ -1,6 +1,7 @@
 'use strict';
 /* Замер хвостов кожи Anny по всему каталогу и по фазам (вид «Манекен»; кожа — та же, что на экране: AnnySkin.skin).
-   node tools/anny-look/tails.js [all|id,id] [0,0.25,0.5,0.75,1] [--bin src/data/anny.bin] [--json файл] [--quiet]
+   node tools/anny-look/tails.js [all|id,id] [0,0.25,0.5,0.75,1] [--bin src/data/anny.bin] [--no-sup] [--json файл] [--quiet]
+   --no-sup — без опор (сравнение с версией до опор: --bin её anny.bin --no-sup — тот же скиннинг, что у неё)
    1. Подмышка при руках вверх (подъём плеча ≥ ARM_UP°): излом кожи — угол между нормалями соседних треугольников в кадре
       сверх угла в стойке (crease, градусы) у рёбер кожи корпуса, плечевого пояса и плеча ближе AXILLA_R см от плечевого
       сустава. Угловатая полоса — цепочка рёбер с изломом: число рёбер с изломом больше 25° и 40°, наибольший излом.
@@ -56,12 +57,18 @@ const BODY_ZONES = {
   palm: ['кисть'], hand: ['кисть'], foot: ['стопа'], sole: ['стопа']
 };
 function sideOf(d, v) { const f = d.frames[d.wi[v * 4]]; return /[LR]$/.test(f) ? f.slice(-1) : d.region.side[v] ? 'R' : 'L'; }
+/* вершины зазора части тела: как у опор приложения (AnnySkin.supportBody — доля рамок части тела больше половины: ягодицы —
+   таз, колено — бедро и голень, живот и грудь — корпус); у остальных (кисть, стопа, голова) — по зонам кожи. По зонам
+   «колено» и «живот» зазор мерился не там, где деталь касается тела: колени под валиками скамьи для скручиваний — 3,98 см
+   (голень касается валика, −1,8), гриф ягодичного моста над животом — 3,56 (таз под ним, −1,0) */
 function contactVerts(d, zones, body) {
+  const B = A.supportBody(body);
+  if (B) { const fi = Object.fromEntries(d.frames.map((f, i) => [f, i])), set = new Set(B[1].map(f => fi[f])), out = [];
+    for (let v = 0; v < d.nv; v++) { let w = 0; for (let j = 0; j < 4; j++) if (set.has(d.wi[v * 4 + j])) w += d.ww[v * 4 + j]; if (w > .5) out.push(v); }
+    return out; }
   const m = /^(sole|palm|knee|shin|hand|ua|fa|th|sk|foot)(L|R)?$/.exec(body), key = m ? m[1] : body, s = m ? m[2] : null, zs = BODY_ZONES[key === 'sk' ? 'shin' : key];
   if (!zs) return null;
-  /* ягодицы — вершины таза (без бёдер: бедро у края сиденья касается раньше, а ягодица висит — концентрированное сгибание) */
-  const own = body === 'buttocks' ? v => d.frames[d.wi[v * 4]] === 'pelvis' : () => true;
-  const out = []; for (let v = 0; v < d.nv; v++) if (zs.includes(zones[v]) && own(v) && (!s || sideOf(d, v) === s)) out.push(v);
+  const out = []; for (let v = 0; v < d.nv; v++) if (zs.includes(zones[v]) && (!s || sideOf(d, v) === s)) out.push(v);
   return out;
 }
 /* опоры: зазор кожи Anny и процедурной кожи до заявленных деталей */
@@ -140,14 +147,14 @@ function foldJoints(d, f) {
   for (const [s, t] of f.pairs) { const fr = [s, t].flatMap(tt => [0, 1, 2].map(k => d.frames[d.wi[d.idx[tt * 3 + k] * 4]])); const j = jointOf(fr); out[j] = (out[j] || 0) + 1; }
   return out;
 }
-function run({ ids = null, ts = [0, .25, .5, .75, 1], d = CMP.loadAnny(), log = () => {} } = {}) {
+function run({ ids = null, ts = [0, .25, .5, .75, 1], d = CMP.loadAnny(), log = () => {}, noSup = false } = {}) {
   const POSES = CMP.loadPoses(), list = (ids || Object.keys(POSES)).filter(id => POSES[id]), zones = CMP.zonesOf(d);
   const res = { axilla: [], supports: [], floor: [], folds: [] };
   for (const id of list) {
     for (const [hn, has] of [['всё', () => true], ['ничего', () => false]]) {
       const e = EQ.variantEntry(POSES[id], has), rig = EQ.rig(e), cache = { cv: {} };
       for (const t of ts) {
-        const R = rig(t), P = A.skin(R, { d, floor: false, props: (R.props || []).filter(p => EQ.visible(p, has)) }); cache.t = t;
+        const R = rig(t), P = A.skin(R, { d, floor: false, props: (R.props || []).filter(p => EQ.visible(p, has)), ...(noSup ? { sup: null } : {}) }); cache.t = t;
         const fd = floorDepth(d, R, P), pf = procFloor(R);
         for (const [part, o] of Object.entries(fd)) {
           const row = { id, t, has: hn, part, depth: o.depth, proc: pf[part] || 0, zone: zones[o.v] };
@@ -164,7 +171,7 @@ function run({ ids = null, ts = [0, .25, .5, .75, 1], d = CMP.loadAnny(), log = 
   }
   for (const [id, t] of CK.EXTREME) {
     if (!POSES[id] || (ids && !ids.includes(id))) continue;
-    const R = EQ.rig(POSES[id])(t), P = A.skin(R, { d, floor: false }), all = CK.folds(d, R, P, { all: true });
+    const R = EQ.rig(POSES[id])(t), P = A.skin(R, { d, floor: false, ...(noSup ? { sup: null } : {}) }), all = CK.folds(d, R, P, { all: true });
     res.folds.push({ id, t, inverted: all.inverted, folds: all.folds, joints: foldJoints(d, all) });
   }
   return res;
@@ -193,7 +200,7 @@ if (require.main === module) {
   const ids = process.argv[2] && process.argv[2] !== 'all' && !process.argv[2].startsWith('--') ? process.argv[2].split(',') : null;
   const ts = process.argv[3] && !process.argv[3].startsWith('--') ? process.argv[3].split(',').map(Number) : [0, .25, .5, .75, 1];
   const d = arg('--bin') ? A.decode(zlib.gunzipSync(fs.readFileSync(arg('--bin')))) : CMP.loadAnny();
-  const res = run({ ids, ts, d, log: process.argv.includes('--quiet') ? () => {} : () => process.stderr.write('.') });
+  const res = run({ ids, ts, d, noSup: process.argv.includes('--no-sup'), log: process.argv.includes('--quiet') ? () => {} : () => process.stderr.write('.') });
   if (arg('--json')) fs.writeFileSync(arg('--json'), JSON.stringify(res));
   console.log('\n' + summary(res));
 }

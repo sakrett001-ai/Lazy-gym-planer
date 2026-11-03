@@ -224,6 +224,9 @@ test('fingers: the Anny hand rig and the grip table are in the data; joints stay
   /* рамок на видеокарте — 55 (по два vec4 на рамку = 110 векторов): в WebGL2 (three.js 0.180 только на нём) у вершинного шейдера
      не меньше 256 векторов, у телефонов — 256 и больше; остальное — матрицы, свет, тени three.js */
   assert(d.frames.length * 2 <= 128, `${d.frames.length} frames — ${d.frames.length * 2} uniform vectors`);
+  /* весь вершинный шейдер кожи: рамки, опоры (по 6 на опору и счётчик), веса морфов (по вектору), матрицы и тени three.js — 31
+     (замер ANGLE: 184 у материала); не больше 256 */
+  const vecs = d.frames.length * 2 + A.SUP.MAX * 6 + 1 + d.correctives.length + 31; assert(vecs <= 256, `${vecs} uniform vectors in the skin vertex shader`);
 });
 test('grip: Anny fingers close around the handle — the ring is closed, no finger deep in it, no fingertip spike; resting fingers and the 4.63.0 skinning fail', () => {
   const HO = require('./anny-look/holds.js'), L = HO.LIM;
