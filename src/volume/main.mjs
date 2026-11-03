@@ -101,15 +101,23 @@ export function createVolumeFigure(options){
   A.load().then(()=>{if(disposed)return;if(!skeleton&&!anatomy)at(lastT,{index:lastIndex});else warmAnny();},()=>{});
  };
  /* Фигура в «Анатомии» или «Скелете», а данные кожи Anny уже есть: в простое строится (скрытая) сетка кожи и собираются её
-    программы (compileAsync — без остановки главного потока): переключение на «Манекен» потом не ждёт сборки шейдеров.
-    Картинка не меняется — сетка скрыта, сцена та же */
+    программы — compileAsync (без остановки главного потока), затем, тоже в простое, кадр 1 × 1 с видимой кожей: программа её
+    тени и загрузка сетки в видеокарту. Сразу за ним — обычный кадр (кожа снова скрыта, карта тени — заново), поэтому на экране
+    тот же кадр. Переключение на «Манекен» потом не ждёт ни сборки шейдеров, ни загрузки сетки */
+ const idleTask=cb=>typeof requestIdleCallback==='function'?requestIdleCallback(cb,{timeout:3000}):setTimeout(cb,200);
  function warmAnny(){
   const A=globalThis.AnnySkin;if(annyWarm||disposed||!A?.data||!(skeleton||anatomy)||!renderer.compileAsync||!scene.anny)return;annyWarm=true;
-  const idle=cb=>typeof requestIdleCallback==='function'?requestIdleCallback(cb,{timeout:3000}):setTimeout(cb,200);
-  idle(()=>{
-   if(disposed||!(skeleton||anatomy)||renderer.getContext?.()?.isContextLost?.())return;
-   try{const d=data(lastT,lastIndex,false);scene.anny.update(A.data,d,{on:muscles,color:options.color,values:d.values,sideValues:d.sideValues,regions:d.regions,selected});scene.anny.hide();
-    renderer.compileAsync(scene.scene,cameras.angle).catch(()=>{});}catch(e){}
+  const usable=()=>!disposed&&(skeleton||anatomy)&&!renderer.getContext?.()?.isContextLost?.();
+  idleTask(()=>{
+   if(!usable())return;
+   try{const d=data(lastT,lastIndex,false);scene.anny.update(A.data,d,{on:muscles,color:options.color,values:d.values,sideValues:d.sideValues,regions:d.regions,selected});scene.anny.hide();}catch(e){return;}
+   renderer.compileAsync(scene.scene,cameras.angle).then(()=>idleTask(()=>{
+    if(!usable()||!renderer.setViewport)return;
+    const g=scene.anny.group;g.visible=true;
+    try{renderer.setViewport(0,0,1,1);renderer.setScissor(0,0,1,1);renderer.setScissorTest(true);renderer.render(scene.scene,cameras.angle);}
+    catch(e){}finally{renderer.setScissorTest(false);g.visible=false;if(!copy)renderer.setViewport(0,0,main.w,main.h);}
+    draw();
+   }),()=>{});
   });
  }
  const wantAnny=()=>{if(!skeleton&&!anatomy)loadAnny();};
