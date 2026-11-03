@@ -12,6 +12,11 @@ for(const lang of ['ru','en']){
  const dom=new JSDOM(html,{url:'https://sakrett001-ai.github.io/Lazy-gym-planer/atlas-preview/'+(lang==='en'?'en/':''),runScripts:'outside-only',pretendToBeVisual:true,virtualConsole:vc}),w=dom.window,d=w.document;
  const base='https://test.invalid/'+(lang==='en'?'en/':'');
  for(const node of d.querySelectorAll('script[src],link[rel=stylesheet],link[rel=manifest],link[rel=icon],link[rel=apple-touch-icon]'))assert(cached.has(new URL(node.getAttribute('src')||node.getAttribute('href'),base).href),'Offline shell misses a rendered asset');
+ /* иконки: адрес — по хэшу содержимого, а не по версии (иначе ≈0,3 МБ заново в каждом выпуске); те же адреса — в манифесте и в оболочке */
+ const sha=f=>require('node:crypto').createHash('sha256').update(fs.readFileSync(path.join(root,'dist',f))).digest('hex').slice(0,16);
+ const manifest=JSON.parse(fs.readFileSync(path.join(dir,'manifest.webmanifest'),'utf8'));
+ const icons=[...manifest.icons.map(i=>i.src),...[...d.querySelectorAll('link[rel=icon],link[rel=apple-touch-icon]')].map(n=>n.getAttribute('href'))];
+ for(const src of icons){const u=new URL(src,base),file=u.pathname.split('/').pop();assert.equal(u.searchParams.get('v'),sha(file),'Icon addressed by its content: '+src);assert(cached.has(u.href),'Offline shell misses an icon: '+src);}
  w.requestAnimationFrame=()=>0;w.cancelAnimationFrame=()=>{};w.HTMLElement.prototype.scrollIntoView=function(){};
  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'));};
  /* объёмная графика не задерживает первый экран: её подгружает встроенный загрузчик после load, из кеша оболочки */

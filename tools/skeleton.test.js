@@ -209,3 +209,55 @@ test('larynx and trachea: inside the neck, clear of the vertebrae and the jaw, f
   assert(Math.abs(rel(m, last, 'ribcage') - rel(m0, last, 'ribcage')) < 1e-3, 'lower trachea moves with the rib cage');
   assert(Math.abs(rel(m, 'hyoid', 'jaw') - rel(m0, 'hyoid', 'jaw')) < Math.abs(rel(m, 'hyoid', 'cervical') - rel(m0, 'hyoid', 'cervical')), 'hyoid follows the jaw more than the spine');
 });
+
+/* Слой костей объёмной сцены (src/volume/skeleton.mjs, с 4.72.0): все кости — одна сетка, у каждой вершины своя кость,
+   матрицы кадра — в текстуре, перевод вершины и нормали — в вершинном шейдере. Сверка с прежним способом (сетка на кость
+   с матрицей Object3D): то же место вершин, те же нормали (normalMatrix), та же рамка кадра и лицевая сторона. */
+test('one mesh for all bones: the same vertices, normals, bounds and front faces as a mesh per bone', async () => {
+  const THREE = await import('three'), { createSkeletonLayer } = await import('../src/volume/skeleton.mjs');
+  const layer = createSkeletonLayer(new THREE.Group()), n = data.bones.length;
+  /* прежняя матрица сетки кости: сцена (м, Y вверх) = C·каталог */
+  const oldMatrix = (A, i) => { const a = k => A[i * 12 + k]; return new THREE.Matrix4().set(a(0) / 100, a(1) / 100, a(2) / 100, a(3) / 100, -a(4) / 100, -a(5) / 100, -a(6) / 100, (186 - a(7)) / 100, a(8) / 100, a(9) / 100, a(10) / 100, a(11) / 100, 0, 0, 0, 1); };
+  const old = data.bones.map(b => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(b.pos, 3)); g.setIndex(new THREE.BufferAttribute(b.idx, 1)); g.computeVertexNormals(); g.computeBoundingBox(); return { normal: g.attributes.normal.array, box: g.boundingBox.clone() }; });
+  for (const { id, t, R } of poses) {
+    const body = M.bodyData(R), A = Skeleton.frames(R, body, data.bones);
+    layer.update(data, R, body, A);
+    assert.equal(layer.group.children.length, 1, 'one mesh'); const mesh = layer.meshes[0], g = mesh.geometry;
+    assert(mesh.castShadow && !mesh.receiveShadow && mesh.customDepthMaterial?.isMeshDepthMaterial && mesh.customDepthMaterial.depthPacking === THREE.RGBADepthPacking, 'casts the same shadow');
+    assert.equal(g.attributes.position.count, data.bones.reduce((s, b) => s + b.nv, 0)); assert.equal(g.index.count, data.bones.reduce((s, b) => s + b.nf * 3, 0));
+    const s0 = { uniforms: {}, vertexShader: THREE.ShaderLib.standard.vertexShader }; mesh.material.onBeforeCompile(s0);
+    const tex = s0.uniforms.skelBones.value.image.data, row = (i, r, k) => tex[(i * 6 + r) * 4 + k];
+    let base = 0;
+    data.bones.forEach((b, i) => {
+      const Mo = oldMatrix(A, i), name = b.name + (b.side || '');
+      /* лицевая сторона: three.js разворачивает обход треугольников у сетки с отрицательным определителем матрицы; у всех
+         костей он положителен — у одной сетки (без своей матрицы) обход тот же */
+      assert(Mo.determinant() > 0, `${id} t=${t}: ${name} keeps its front faces`);
+      assert(layer.matrixOf(name).elements.every((v, k) => Math.abs(v - Mo.elements[k]) < 1e-6), name + ' matrix');
+      const Nm = new THREE.Matrix3().getNormalMatrix(Mo);
+      for (const j of [0, b.nv >> 1, b.nv - 1]) {
+        const v = base + j, p = new THREE.Vector3().fromBufferAttribute(g.attributes.position, v), nrm = new THREE.Vector3().fromBufferAttribute(g.attributes.normal, v);
+        assert.equal(g.attributes.skelBone.getX(v), i);
+        /* шейдер: вершина — строки 0–2 текстуры, нормаль — строки 3–5 */
+        const q = [0, 1, 2].map(r => row(i, r, 0) * p.x + row(i, r, 1) * p.y + row(i, r, 2) * p.z + row(i, r, 3)), was = p.clone().applyMatrix4(Mo);
+        assert(Math.hypot(q[0] - was.x, q[1] - was.y, q[2] - was.z) < 1e-6, `${name} vertex ${j}`);
+        const m = new THREE.Vector3(...[3, 4, 5].map(r => row(i, r, 0) * nrm.x + row(i, r, 1) * nrm.y + row(i, r, 2) * nrm.z)).normalize();
+        const before = new THREE.Vector3(old[i].normal[j * 3], old[i].normal[j * 3 + 1], old[i].normal[j * 3 + 2]).applyMatrix3(Nm).normalize();
+        assert(m.distanceTo(before) < 1e-5, `${name} normal ${j}`);
+      }
+      base += b.nv;
+    });
+    /* рамка кадра: углы рамки каждой кости в её матрице — как Box3 прежней сетки */
+    const pts = mesh.userData.boundsPoints; assert.equal(pts.length, n * 8);
+    const box = new THREE.Box3().setFromPoints(pts), oldBox = new THREE.Box3();
+    data.bones.forEach((b, i) => oldBox.union(old[i].box.clone().applyMatrix4(oldMatrix(A, i))));
+    assert(box.min.distanceTo(oldBox.min) < 1e-6 && box.max.distanceTo(oldBox.max) < 1e-6, id + ' bounds');
+  }
+  /* шейдеры: все места подстановки найдены (обновление three.js не должно их молча потерять) */
+  for (const [mat, src] of [[layer.material, THREE.ShaderLib.standard.vertexShader], [layer.meshes[0].customDepthMaterial, THREE.ShaderLib.depth.vertexShader]]) {
+    const s = { uniforms: {}, vertexShader: src }; mat.onBeforeCompile(s);
+    assert(/attribute float skelBone/.test(s.vertexShader) && /int skelRow/.test(s.vertexShader) && /transformed=vec3\(dot\(skelA0/.test(s.vertexShader), mat.name);
+    if (mat === layer.material) assert(/objectNormal=vec3\(dot\(skelN0/.test(s.vertexShader), 'normals follow the bone');
+  }
+  layer.dispose();
+});

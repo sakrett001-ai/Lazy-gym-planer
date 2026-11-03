@@ -462,6 +462,17 @@ function applyFigureView(F=detailMotion){
     say('Не удалось загрузить кости и мышцы — показан манекен. Проверьте связь и выберите вид ещё раз.');
   });
 }
+/* Заготовка рендерера разбора (GymVolume.prewarm, src/volume/main.mjs): WebGL-контекст и программы шейдеров выбранного вида
+   собираются в простое, пока человек смотрит план, — первое открытие разбора и тренировки их не ждёт. Сцена — первого
+   упражнения плана (без плана — первого в каталоге): программы от упражнения почти не зависят. «Манекен» — с кожей Anny, когда
+   её данные пришли. */
+function prewarmDetail(){
+  const V=window.GymVolume;if(!V?.prewarm||detailMotion||document.hidden)return;
+  const F=figs.find(f=>f.it?.ex?.anim?.catalogRig),it=F?F.it:previewItem(EX[0].id),layers=detailLayers(it.ex);if(!it.ex.anim.catalogRig)return;
+  if(figureView()==='mannequin'?!annySkinModule()?.data:!layers)return;
+  const A=catalogAnimFor(it.ex.anim,it.has);
+  V.prewarm({data:(t,index,coarse,lean)=>catalogVolumeData(A,t,index,it.has,coarse,lean),color:muscleColor,layers,muscles:motionPrefs.muscles,stress:motionPrefs.stress,joints:motionPrefs.joints}).catch(()=>{});
+}
 function openMotion(idx) {
   const F=figs.find(f=>+f.btn.dataset.fig===Number(idx));
   openMotionItem(F?F.it:previewItem(EX[0].id),F?F.clock:0);
@@ -520,7 +531,12 @@ function setupMotionViewer() {
     /* сетка головы (≈55 мс на компьютере) одна на все упражнения: готовится в простое, а не при первом открытии разбора */
     const idle=window.requestIdleCallback||(f=>setTimeout(f,2000));idle(()=>{try{Mannequin.headMesh();}catch(e){}},{timeout:6000});
     /* кости и мышцы для вида «Анатомия» — тоже заранее: первое открытие разбора сразу показывает анатомию */
-    if(figureView()!=='mannequin')idle(()=>{Skeleton.load().catch(()=>{});if(figureView()==='anatomy')Muscles.load().catch(()=>{});},{timeout:8000});
+    if(figureView()!=='mannequin')idle(()=>{
+      const need=figureView()==='anatomy'?[Skeleton,Muscles]:[Skeleton];
+      Promise.all(need.map(x=>x.load())).then(()=>idle(prewarmDetail,{timeout:8000}),()=>{});
+    },{timeout:8000});
+    /* «Манекен»: кожа Anny нужна и карточкам плана (loadCardAnatomy), и разбору — заготовка рендерера, когда она пришла */
+    else idle(()=>{const A=annySkinModule();if(A)A.load().then(()=>idle(prewarmDetail,{timeout:8000}),()=>{});},{timeout:8000});
   });
   $('#motion-view').addEventListener('keydown',e=>{if(e.code==='Space'&&!['INPUT','SELECT','BUTTON','TEXTAREA'].includes(e.target.tagName)){e.preventDefault();if(detailMotion){detailMotion.paused=!detailMotion.paused;paintMotion(detailMotion,true);}}});
 }
