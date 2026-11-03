@@ -111,33 +111,117 @@ function dipLayout(C, o) {
   const yTop = C.solve1D(y => reach(y, 0) - o.reachTop, 20, 90), yBot = C.solve1D(y => reach(y, 1) - o.reachBot, 0, yTop);
   return { yTop, yBot };
 }
-/* Отжимания от скамьи: верх — руки перпендикулярны телу и выпрямлены; скамья поперёк (ось X), ладони у ближнего края */
+/* ---------- Отжимания телом-«доской» (plankBody) с ладонями на опоре: раскладка от нижней точки ----------
+   Так же, как отжимания на коврике (g5a-floor.js, pushLayout с tilt): внизу предплечье почти вертикально, локоть над
+   кистью; наклон tilt — назад против пальцев (тогда отведение запястья нулевое, разгибание — 90° − tilt). */
+/* запястье ладони на опоре (та же рамка, что в C.palm; g5a-floor.js palmWrist) */
+function palmWrist(C, s, point, fingers, up) {
+  const { V, M } = C, M3 = M.M3, g = M.SIGN[s], y = V.scale(V.unit(V.perp(fingers, up)), -1), x = V.scale(V.unit(up), g), z = V.cross(x, y);
+  return V.sub(point, M3.v(M3.cols(x, y, z), [-g * (M.B.palm.thick / 2 + .3), -5.6, 0]));
+}
+/* Ладонь на луче from + k·dir, при которой локоть над запястьем (вдоль нормали опоры n, наклонён на tilt° назад против
+   пальцев F, а с lean° — назад и наружу) лежит на длине плеча от плечевого сустава позы qb (сустав — при поставленной руке: ритм пояса). Возвращает
+   ладонь и полюс локтя (мировой вектор). */
+function stackedPalm(C, qb, s, { from, dir, F, n = [0, 1, 0], tilt, lean = 0, lo = -30, hi = 45 }) {
+  const { V } = C, a = tilt * D, side = V.unit(V.cross(n, F)), b = V.add(V.scale(F, -Math.cos(lean * D)), side, SG[s] * Math.sin(lean * D));
+  const at = k => {
+    const P = V.add(from, dir, k), W = palmWrist(C, s, P, F, n), E = V.add(W, V.add(V.scale(b, Math.sin(a)), n, Math.cos(a)), C.M.B.fa);
+    let gh = C.fk(qb).P['gh' + s];
+    for (let i = 0; i < 3; i++) gh = C.ghToward(qb, s, W, V.unit(V.perp(V.sub(E, gh), V.unit(V.sub(W, gh)))));
+    return { P, W, E, gh };
+  };
+  return C.unhinted(() => {
+    const k = C.solve1D(k => { const b = at(k); return C.M.B.ua - V.dist(b.gh, b.E); }, lo, hi), b = at(k);
+    return { palm: b.P, pole: V.unit(V.perp(V.sub(b.E, b.gh), V.unit(V.sub(b.W, b.gh)))), k };
+  });
+}
+/* направление между двумя единичными векторами (сферически) */
+const slerpDir = (C, a, b, e) => { const { V } = C, d = Math.max(-1, Math.min(1, V.dot(a, b))), w = Math.acos(d); if (w < 1e-4) return a; return V.unit(V.add(V.scale(a, Math.sin((1 - e) * w)), b, Math.sin(e * w))); };
+/* пальцы: развёрнуты наружу на out° от направления «к голове» (+Z) */
+const fingersOut = (s, out) => { const a = out * D * SG[s]; return [Math.sin(a), 0, Math.cos(a)]; };
+/* Ладонь на опоре (нормаль n) с наклоном на ребро вслед за боковым наклоном предплечья (доля roll, не больше rollMax°):
+   как в g5a-floor.js pushPose — при разгибании запястья около 90° поворот кисти вокруг её оси запястью недоступен, и живая
+   ладонь чуть заваливается; центр ладони поднят так, что нижний край касается опоры с поджатием 0,3 см */
+function palmRolled(C, q, s, palm, F, n, pole, roll = 0, rollMax = 0) {
+  const { V } = C;
+  try { C.palm(q, s, palm, F, n, pole); } catch (err) { if (!roll) throw err; }
+  if (!roll) return;
+  for (let k = 0; k < 3; k++) {
+    const f = C.fk(q), a = V.unit(V.sub(f.P['el' + s], f.P['wr' + s])), side = V.unit(V.cross(F, n)), lean = Math.asin(Math.max(-1, Math.min(1, V.dot(a, side))));
+    const rho = Math.max(-rollMax, Math.min(rollMax, roll * lean / D)) * D, m = V.add(V.scale(n, Math.cos(rho)), side, Math.sin(rho));
+    C.palm(q, s, V.add(palm, n, Math.max(0, C.M.B.palm.width / 2 * Math.abs(Math.sin(rho)) - .3)), F, m, pole);
+  }
+}
+/* полюс локтя вверху в базисе тела [наружу, вверх, к стопам] (ax — ось тела от стоп к голове) */
+const poleTop = (C, q, s, ax, p) => C.V.unit(C.V.add(C.V.add(C.V.scale(C.lat(q, s), p[0]), [0, 1, 0], p[1]), ax, -p[2]));
+/* руки отжимания на опоре: полюс — от верхнего (в базисе тела) к нижнему (мировой вектор раскладки) */
+function benchPushArms(C, q, L, P, e, ax, n = [0, 1, 0]) {
+  S.forEach((s, i) => palmRolled(C, q, s, L.palm[i], L.F[i], n, slerpDir(C, poleTop(C, q, s, ax, P.pole0), L.pole1[i], e), P.roll, P.rollMax));
+}
+
+/* Отжимания от скамьи: скамья поперёк (ось X), ладони у ближнего края, пальцы вперёд и чуть наружу. Низ — от кистей под
+   локтями (stackedPalm): ладони в edgeIn см от ближнего края (основание ладони у самого ребра), угол тела — такой, что грудь в
+   gap см от скамьи (над верхней гранью — от неё, перед краем — от ребра). Верх — руки почти прямые, плечи опущены.
+   Техника: ладони на краю скамьи чуть шире плеч, грудь опускается к краю (Bodybuilding.com, Incline Push-Up: «Place hands on
+   edge of bench… slightly wider than shoulder width», «lower chest to edge»; NASM Exercise Library, Incline Push-Up: «slightly
+   wider than shoulder-width», «chest nearly touches the bench», «elbows at approximately 45 degrees», «shoulders back and down»).
+   Раскладка ладоней — как у отжиманий на коврике (g5a-floor.js, PUSH: x 36, пальцы наружу 13°, наклон предплечья внизу 10°).
+   Прежде (4.73.0) ладони стояли по 24 см от середины, край скамьи — под грудью, вверху руки перпендикулярны телу: внизу
+   предплечье было наклонено на 29° (кисть далеко впереди локтя). Теперь внизу 10°, локоть над кистью, локти 36° к корпусу; грудь упирается в ребро
+   нижней частью грудины, поэтому локоть внизу согнут на 96° (на полу — 114°): глубже не пускает скамья. */
+const INCP = { x: 36, out: 13, tilt: 10, edgeIn: 6.5, gap: 3, gBot: [-2, -14], gTop: [-4, 8], neck: [-6, -2], pole0: [.228, .599, .768], roll: 1, rollMax: 12 };
 const INC = once(() => {
-  const C = ctx([]), { V } = C, padY = 44, opts = { feetX: 9, dorsi: 6 };
-  /* низ: нижняя точка груди в 4 см над краем скамьи; край — под грудью; ладони у края, кисти рядом с грудью */
-  const chestLow = a => { const q = plankBody(C, a, opts); let best = null; for (let h = 28; h <= 47.2; h += 1) { const p = C.chestPoint(q, h); if (!best || p[1] < best[1]) best = p; } return best; };
-  const a0 = C.solve1D(a => chestLow(a)[1] - (padY + 4), 2, 45), cl = chestLow(a0), edge = cl[2] - 1.5;
-  const palm = S.map(s => [SG[s] * 24, padY, edge + 6.5]);
-  /* верх: руки выпрямлены (плечевой пояс в протракции, как в позе) */
-  const reach = a => { const q = plankBody(C, a, opts); for (const s of S) q[s].girdle = [3, 12]; const w = V.add(V.sub(palm[0], [0, 0, 5.6]), [0, 1, 0], 1.8); return V.dist(C.ghToward(q, 'L', w), w) - 55.05; };
+  const C = ctx([]), { V } = C, padY = 44, opts = { feetX: 9, dorsi: 6 }, P = INCP, F = S.map(s => fingersOut(s, P.out));
+  const bodyB = a => { const q = plankBody(C, a, opts); for (const s of S) q[s].girdle = [...P.gBot]; q.neck = [P.neck[0], 0, 0]; return q; };
+  const stack = a => { const qb = bodyB(a); return S.map((s, i) => stackedPalm(C, qb, s, { from: [SG[s] * P.x, padY, C.fk(qb).P['gh' + s][2]], dir: [0, 0, -1], F: F[i], tilt: P.tilt, lean: P.lean || 0 })); };
+  const clear = a => {
+    const edge = stack(a)[0].palm[2] - P.edgeIn, q = bodyB(a); let m = Infinity;
+    for (let h = 14; h <= 49.8; h += 1) for (const ang of [0, .25, -.25]) { const p = C.chestPoint(q, h, ang); m = Math.min(m, p[2] >= edge ? p[1] - padY : Math.hypot(p[1] - padY, p[2] - edge)); }
+    return m;
+  };
+  const a0 = C.solve1D(a => clear(a) - P.gap, 2, 45), st = stack(a0), palm = st.map(b => b.palm), edge = palm[0][2] - P.edgeIn;
+  /* верх: руки почти прямые (плечевой пояс в протракции, как в позе) */
+  const reach = a => { const q = plankBody(C, a, opts); for (const s of S) q[s].girdle = [...P.gTop]; const w = palmWrist(C, 'L', palm[0], F[0], [0, 1, 0]); return V.dist(C.ghToward(q, 'L', w), w) - 55.05; };
   const a1 = C.solve1D(reach, a0, 70);
-  return { a0, a1, palm, edge, zb: edge + 14.5, opts };
+  return { a0, a1, palm, F, pole1: st.map(b => b.pole), edge, zb: edge + 14.5, opts };
 });
 
 /* Отжимания с ногами на скамье: подушечки стоп на краю скамьи, пальцы обхватывают край, пятки вверх; ладони на полу.
    Низ: грудь в 5 см от пола, кисти под плечами; верх — руки выпрямлены. */
 const PK = { phi0: 26, phi1: 39, headAhead: 7, opts: { feetX: 10, dorsi: 10, knee: 10 } };
 const PKD = { phi0: 50, phi1: 60, headAhead: 6, opts: { ballY: 44, ballZ: 0, feetX: 9, dorsi: 10, knee: 10 } };
-const DECP = { ahead: 11, pl: .25, pu: .15 };
+/* Отжимания с ногами на скамье: низ — грудь (или голова) в low см от коврика, кисти под локтями (stackedPalm, локоть отведён
+   назад и наружу на lean°); верх — руки почти прямые.
+   Техника: ладони на полу чуть шире плеч, плечи над запястьями, локти около 45° к корпусу, грудь почти у пола (NASM Exercise
+   Library, Decline Push-Up: «slightly wider than shoulder-width», «elbows at approximately 45 degrees», «chest nearly touches
+   the floor»; Healthline, Decline Push-Up: «shoulders over your wrists and elbows at 45 degrees»; ExRx, Decline Push-up:
+   «slightly wider than shoulder width»).
+   Тело вращается вокруг подушечек стоп на скамье высотой 44 см, и плечи между верхом и низом почти не смещаются вдоль пола
+   (на коврике от низа к верху — на ~15 см, здесь — на 5 см с ритмом пояса). Поэтому чем ближе кисть к локтю внизу, тем дальше
+   она позади плеча вверху и тем сильнее там разогнуто запястье (предел опоры ладонью — 90°): наклон внизу 14° — кисть вверху в
+   9,8 см позади плеча, запястье 89°; 20° — 6,8 см и 86°; 30° — 2,0 см и 81°. Выбран наклон 30° (решение владельца по листу
+   вариантов): вверху плечи почти над запястьями, как у Healthline, запястье не на пределе. Внизу предплечье наклонено на 30°
+   назад против пальцев (кисть впереди локтя), локоть 118°, локти 44° к корпусу (каталог: 30–45°).
+   Ширина ладоней — как на коврике (g5a-floor.js PUSH); ладонь вверху чуть заваливается на ребро; плечевой пояс вверху опущен
+   на 6° (сильнее — межрёберные первого промежутка выходят над кожей, npm run muscles:check), внизу поднят на 12°. Прежде
+   (4.73.0) ладони стояли по 24 см от середины, запястья — в 11 см впереди плеч внизу: предплечье внизу было наклонено на ~85°,
+   локти — 55° к корпусу. */
+const DECP = { x: 36, out: 13, tilt: 30, lean: 25, low: 3.5, gBot: [12, -14], gTop: [-6, 8], neck: [-8, -12], pole0: [.331, -.296, .896], roll: 1, rollMax: 14 };
+/* Ладони — на коврике, как у всех отжиманий на полу (g5a-floor.js: MAT = 1 см, PUSH_MAT): вверху ладонь заваливается на
+   ребро, и пальцы видимой кожи Anny (полнее процедурной кисти) на голом полу уходили в него на 3 см при допуске 2,5
+   (npm run anny:check). Скамья стоит на полу перед ковриком. */
+const DEC_MAT = 1, DEC_MAT_E = { type: 'mat', id: 'mat', len: 160, width: 100, at: [0, 0, 120] };
 const lowestFront = (C, q, h0 = 26, h1 = 49.8) => { let best = null; for (let h = h0; h <= h1; h += 1) for (const a of [0, .25, -.25]) { const p = C.chestPoint(q, h, a); if (!best || p[1] < best[1]) best = p; } return best; };
 const DEC = once(() => {
-  const C = ctx([]), { V } = C, opts = { ballY: 44, ballZ: 0, feetX: 9, dorsi: 12, mtpMax: 58 };
-  const low = a => { const q = plankBody(C, a, opts); q.neck = [-12, 0, 0]; return Math.min(lowestFront(C, q)[1], ...C.region(q, 'headAll').map(p => p[1])); };
-  const ab = C.solve1D(a => low(a) - 3.5, -45, 15), fb = C.fk(plankBody(C, ab, opts));
-  const palm = S.map(s => [SG[s] * 24, 0, fb.P['gh' + s][2] + DECP.ahead + 5.6]);
-  const reach = a => { const q = plankBody(C, a, opts); for (const s of S) q[s].girdle = [2, 12]; const w = V.add(V.sub(palm[0], [0, 0, 5.6]), [0, 1, 0], 1.8); return V.dist(C.ghToward(q, 'L', w), w) - 55.05; };
+  const C = ctx([]), { V } = C, opts = { ballY: 44, ballZ: 0, feetX: 9, dorsi: 12, mtpMax: 58 }, P = DECP, F = S.map(s => fingersOut(s, P.out));
+  const low = a => { const q = plankBody(C, a, opts); q.neck = [P.neck[1], 0, 0]; return Math.min(lowestFront(C, q)[1], ...C.region(q, 'headAll').map(p => p[1])); };
+  const ab = C.solve1D(a => low(a) - DEC_MAT - P.low, -45, 15), qb = plankBody(C, ab, opts);
+  qb.neck = [P.neck[1], 0, 0]; for (const s of S) qb[s].girdle = [...P.gBot];
+  const st = S.map((s, i) => stackedPalm(C, qb, s, { from: [SG[s] * P.x, DEC_MAT, C.fk(qb).P['gh' + s][2]], dir: [0, 0, -1], F: F[i], tilt: P.tilt, lean: P.lean || 0 }));
+  const palm = st.map(b => b.palm);
+  const reach = a => { const q = plankBody(C, a, opts); for (const s of S) q[s].girdle = [...P.gTop]; const w = palmWrist(C, 'L', palm[0], F[0], [0, 1, 0]); return V.dist(C.ghToward(q, 'L', w), w) - 55.05; };
   const at = C.solve1D(reach, ab, 40);
-  return { ab, at, palm, opts };
+  return { ab, at, palm, F, pole1: st.map(b => b.pole), opts };
 });
 
 const PIKE = once(() => pikeLayout(ctx([]), PK));
@@ -524,17 +608,13 @@ module.exports = {
      t=0 — руки выпрямлены, t=1 — грудь почти у пола, локти 30–45° к корпусу. */
   declinepush: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [{ type: 'flatBench', id: 'bench', at: [0, 0, -13.3], yaw: 90 }],
-    contacts: [{ body: 'soleL', prop: 'bench:pad' }, { body: 'soleR', prop: 'bench:pad' }, { body: 'palmL', prop: 'floor' }, { body: 'palmR', prop: 'floor' }],
+    equipment: [{ type: 'flatBench', id: 'bench', at: [0, 0, -13.3], yaw: 90 }, DEC_MAT_E],
+    contacts: [{ body: 'soleL', prop: 'bench:pad' }, { body: 'soleR', prop: 'bench:pad' }, { body: 'palmL', prop: 'mat' }, { body: 'palmR', prop: 'mat' }],
     pose(t, C) {
-      const { V } = C, L = DEC(), e = C.ease(t), al = C.lerp(L.at, L.ab, e), q = plankBody(C, al, L.opts);
-      q.neck = [C.lerp(-8, -12, e), 0, 0];
-      const a = al * D, ax = [0, Math.sin(a), Math.cos(a)];
-      S.forEach((s, i) => {
-        q[s].girdle = [C.lerp(2, -2, e), C.lerp(12, -14, e)];
-        const lat = C.lat(q, s), pole = V.unit(V.add(V.add([0, 0, -1], lat, DECP.pl), [0, 1, 0], DECP.pu));
-        C.palm(q, s, L.palm[i], V.unit([-SG[s] * .06, 0, 1]), [0, 1, 0], pole);
-      });
+      const L = DEC(), P = DECP, e = C.ease(t), al = C.lerp(L.at, L.ab, e), q = plankBody(C, al, L.opts), a = al * D;
+      q.neck = [C.lerp(P.neck[0], P.neck[1], e), 0, 0];
+      for (const s of S) q[s].girdle = [C.lerp(P.gTop[0], P.gBot[0], e), C.lerp(P.gTop[1], P.gBot[1], e)];
+      benchPushArms(C, q, L, P, e, [0, Math.sin(a), Math.cos(a)]);
       return q;
     }
   },
@@ -546,15 +626,11 @@ module.exports = {
     equipment: (() => [{ type: 'flatBench', id: 'bench', at: [0, 0, INC().zb], yaw: 90 }])(),
     contacts: [{ body: 'palmL', prop: 'bench:pad' }, { body: 'palmR', prop: 'bench:pad' }, { body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }],
     pose(t, C) {
-      const { V } = C, L = INC(), e = C.ease(t), q = plankBody(C, C.lerp(L.a0, L.a1, e), L.opts);
-      q.neck = [C.lerp(-6, -2, e), 0, 0];
-      const a = C.lerp(L.a0, L.a1, e) * D, ax = [0, Math.sin(a), Math.cos(a)];
-      S.forEach((s, i) => {
-        q[s].girdle = [C.lerp(-2, 3, e), C.lerp(-14, 12, e)];
-        /* вверху локоть чуть наружу (запястье без лучевого отведения сверх 22°: с этапа Д сустав плеча вверху выше и впереди) */
-        const lat = C.lat(q, s), pole = V.unit(V.add(V.add(V.scale(ax, -1), lat, .4 + .5 * e ** 3), [0, 1, 0], .3));
-        C.palm(q, s, L.palm[i], V.unit([-SG[s] * .15, 0, 1]), [0, 1, 0], pole);
-      });
+      const L = INC(), P = INCP, e = C.ease(t), al = C.lerp(L.a0, L.a1, e), q = plankBody(C, al, L.opts), a = al * D;
+      q.neck = [C.lerp(P.neck[0], P.neck[1], e), 0, 0];
+      for (const s of S) q[s].girdle = [C.lerp(P.gBot[0], P.gTop[0], e), C.lerp(P.gBot[1], P.gTop[1], e)];
+      /* полюс: внизу — к локтю над кистью (раскладка), вверху — по pole0 */
+      benchPushArms(C, q, L, P, 1 - e, [0, Math.sin(a), Math.cos(a)]);
       return q;
     }
   },
