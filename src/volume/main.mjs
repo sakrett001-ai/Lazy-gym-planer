@@ -500,10 +500,15 @@ function prewarm(options){
  }catch(e){dropRenderer(slot);return Promise.resolve(false);}
  const cam=scene.cameras.angle;scene.resize(1,1);renderer.setSize(1,1,false);
  slot.release=scene.dispose;spareRenderer(slot);
+ /* три задачи покороче вместо одной длинной: сцена (эта), сборка программ, кадр 1 × 1 — каждая в своём простое. Рендерер
+    взяли раньше (открыли разбор) — дальше не идём: фигура соберёт недостающее сама */
  const idle=cb=>typeof requestIdleCallback==='function'?requestIdleCallback(cb,{timeout:2000}):setTimeout(cb,50);
  const own=()=>spare.includes(slot)&&!renderer.getContext?.()?.isContextLost?.();
- const compiled=renderer.compileAsync?renderer.compileAsync(scene.scene,cam):Promise.resolve();
- return compiled.then(()=>new Promise(done=>idle(()=>{if(own())try{renderer.render(scene.scene,cam);}catch(e){}done(own());})),()=>false);
+ return new Promise(done=>idle(()=>{
+  if(!own()){done(false);return;}
+  const compiled=renderer.compileAsync?renderer.compileAsync(scene.scene,cam):Promise.resolve();
+  compiled.then(()=>idle(()=>{if(own())try{renderer.render(scene.scene,cam);}catch(e){}done(own());}),()=>done(false));
+ }));
 }
 /* boneMisses — сколько раз скелет раскладывался заново или кожа мышц считалась без памяти по фазе (кадр «с холодной памятью»:
    его время — не мерило скорости устройства; первое повторение в «Анатомии» дороже) */

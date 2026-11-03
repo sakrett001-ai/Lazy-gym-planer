@@ -282,8 +282,10 @@ test('a prewarmed renderer: compiled ahead, lent to the first figure, its materi
  const data=Skeleton.decode(zlib.gunzipSync(fs.readFileSync(path.join(__dirname,'../src/data/skeleton.bin'))));
  try{
   const base=r.options('squat','side'),ready=r.w.GymVolume.prewarm({...base,layers:{bones:data,body:null}});
-  assert.equal(r.counters.constructors,1);assert.equal(r.counters.compiled,1,'programs compiled ahead');assert.equal(r.counters.renders,0,'no frame before idle');
+  /* три задачи в простое: сцена — сразу, сборка программ — в следующей, кадр 1 × 1 — после неё */
+  assert.equal(r.counters.constructors,1);assert.equal(r.counters.compiled,0,'programs are compiled in a later idle task');assert.equal(r.counters.renders,0,'no frame before idle');
   assert.equal(await ready,true,'a frame of the warm scene (in idle) builds shadow and background programs');
+  assert.equal(r.counters.compiled,1,'programs compiled ahead');assert.equal(r.counters.renders,1,'one 1×1 frame');
   const warm=r.counters.scene;let released=0;warm.traverse(o=>{if(o.material)o.material.addEventListener('dispose',()=>released++);});
   assert(warm.getObjectByName('skeleton').visible,'the warm scene has the chosen view');
   assert.equal(await r.w.GymVolume.prewarm(base),false,'once per session');
