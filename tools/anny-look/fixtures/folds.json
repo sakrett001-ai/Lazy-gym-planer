@@ -21,7 +21,7 @@
  },
  "chinup 0": {
   "inverted": 83,
-  "folds": 156
+  "folds": 152
  },
  "pullup 0": {
   "inverted": 61,
@@ -36,11 +36,11 @@
   "folds": 145
  },
  "ohext 0": {
-  "inverted": 31,
+  "inverted": 34,
   "folds": 16
  },
  "hollow 1": {
-  "inverted": 35,
+  "inverted": 36,
   "folds": 16
  },
  "bicycle 0.25": {
@@ -76,7 +76,7 @@
   "folds": 231
  },
  "pushup 1": {
-  "inverted": 32,
-  "folds": 54
+  "inverted": 37,
+  "folds": 48
  }
 }
