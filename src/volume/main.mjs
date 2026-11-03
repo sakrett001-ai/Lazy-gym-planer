@@ -113,8 +113,9 @@ export function createVolumeFigure(options){
    try{const d=data(lastT,lastIndex,false);scene.anny.update(A.data,d,{on:muscles,color:options.color,values:d.values,sideValues:d.sideValues,regions:d.regions,selected});scene.anny.hide();}catch(e){return;}
    Promise.all([renderer.compileAsync(scene.scene,cameras.angle),compileShadowDepth(scene.anny.mesh)]).then(()=>idleTask(()=>{
     if(!usable()||!renderer.setViewport)return;
-    const g=scene.anny.group;g.visible=true;
-    try{renderer.setViewport(0,0,1,1);renderer.setScissor(0,0,1,1);renderer.setScissorTest(true);renderer.render(scene.scene,cameras.angle);}
+    /* кадр заготовки — не кадр анимации: мимо обёртки панели замера (?perf, 19-perf-panel.js), в «отрисовку» он не идёт */
+    const g=scene.anny.group,render=renderer.render.perfOrig||renderer.render;g.visible=true;
+    try{renderer.setViewport(0,0,1,1);renderer.setScissor(0,0,1,1);renderer.setScissorTest(true);render.call(renderer,scene.scene,cameras.angle);}
     catch(e){}finally{renderer.setScissorTest(false);g.visible=false;if(!copy)renderer.setViewport(0,0,main.w,main.h);}
     draw();
    }),()=>{});
