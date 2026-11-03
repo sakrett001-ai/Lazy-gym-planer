@@ -81,6 +81,44 @@ test('corrective shapes: zero in the stance, full at the angle they were sculpte
   assert(d.correctives.every(c => c.n > 0 && c.a1 > c.a0));
 });
 
+test('corrective shapes with a second angle: contact in the full elbow flexion — supinated and pronated forms by pronation', () => {
+  const names = d.correctives.map(c => c.name), at = (elbow, pron) => { const q = M.neutral(); for (const s of M.SIDES) { q[s].elbow = elbow; q[s].pron = pron; } return A.correctiveWeights(M.catalogPose(q), d); };
+  for (const s of M.SIDES) {
+    const iS = names.indexOf('elbowIn' + s), iP = names.indexOf('elbowInPro' + s), iK = names.indexOf('kneeIn' + s);
+    assert(iS >= 0 && iP >= 0 && iK >= 0, 'contact shapes in the data');
+    let w = at(145, -60); assert(w[iS] > .95 && w[iP] === 0, `supinated: ${w[iS]} / ${w[iP]}`);
+    w = at(145, 60); assert(w[iP] > .95 && w[iS] === 0, `pronated: ${w[iS]} / ${w[iP]}`);
+    w = at(145, 0); assert(Math.abs(w[iS] - .5) < .05 && Math.abs(w[iP] - .5) < .05, `neutral: ${w[iS]} / ${w[iP]}`);
+    w = at(90, -60); assert(w[iS] === 0 && w[iP] === 0, 'no contact before 100°');
+  }
+});
+test('supports: the skin lies on the declared support where it hovered (buttocks on the bench, forearms on the mat); skin inside a support stays; no contact — no support', () => {
+  const gapOf = (R, P, vs, prop) => { const p = (R.props || []).find(q => q.id === prop || q.id.startsWith(prop + ':')), u = new Float32Array(A.SUP.LEN), sh = A.supportShape(p), g = [0, 0, 0];
+    u.set(sh.c, 0); u[3] = sh.type; for (let a = 0; a < 3; a++) { u.set(sh.ax[a], 4 + a * 4); u[7 + a * 4] = sh.half[a]; } u[16] = sh.rr;
+    let m = Infinity; for (const v of vs) m = Math.min(m, A.supportSD(u, 0, P[v * 3], P[v * 3 + 1], P[v * 3 + 2], g)); return m; };
+  const verts = re => { const o = []; for (let v = 0; v < d.nv; v++) if (re.test(d.frames[d.wi[v * 4]])) o.push(v); return o; };
+  const cases = [['concentration', .5, 'bench:pad', verts(/^pelvis$/), 1.5], ['plank', .5, 'mat', verts(/^(fa|fd)[LR]$/), 1.2], ['sideplank', .5, 'mat', verts(/^(fa|fd)R$/), 1.0]];
+  for (const [id, t, prop, vs, hover] of cases) {
+    const { R } = pose(id, t), P0 = A.skin(R, { d, floor: false, sup: null }), P1 = A.skin(R, { d, floor: false });
+    const g0 = gapOf(R, P0, vs, prop), g1 = gapOf(R, P1, vs, prop);
+    assert(g0 > hover, `${id}: without supports the skin hovers ${g0.toFixed(2)} cm`);
+    assert(g1 < .05 && g1 > -.6, `${id}: with supports the skin lies on ${prop}: ${g1.toFixed(2)} cm`);
+    /* вершины, которые и без опор были в опоре или далеко от неё, — на месте */
+    const sup = A.supports(R, d); let moved = 0; for (let v = 0; v < d.nv; v++) { const dd = Math.hypot(P1[v * 3] - P0[v * 3], P1[v * 3 + 1] - P0[v * 3 + 1], P1[v * 3 + 2] - P0[v * 3 + 2]); if (dd > 1e-4) moved++; }
+    assert(sup.n >= 1 && moved > 20 && moved < d.nv / 4, `${id}: ${moved} vertices moved`);
+  }
+  /* зазор больше SUP.GAP_MAX — не касание (поза или инвентарь): опора не применяется (ягодичный мост — гриф над животом на 3,6 см) */
+  const { R } = pose('hipthrust', 1), sup = A.supports(R, d);
+  assert(!sup.list.some(c => c.body === 'belly'), JSON.stringify(sup.list));
+  /* кожа уже на опоре (зазор ≤ 0) — опоры нет: спина в жиме лёжа, ягодицы на сиденье тяги сверху (там прижатие складывало кожу) */
+  for (const [id, body] of [['bbbench', 'back'], ['latpull', 'buttocks'], ['seatedcalf', 'buttocks']]) { const { R } = pose(id, .5); assert(!A.supports(R, d).list.some(c => c.body === body), `${id}: ${body} already on the support`); }
+  /* в опоре кожа не сдвигается: бедро в подушке скамьи в концентрированном сгибании (опора ягодиц ведёт и бёдра) */
+  const { R: Rc } = pose('concentration', .5), Pc0 = A.skin(Rc, { d, floor: false, sup: null }), Pc1 = A.skin(Rc, { d, floor: false }), u = A.supports(Rc, d), g = [0, 0, 0];
+  let inside = 0;
+  for (const v of verts(/^th[LR]$/)) if (A.supportSD(u.u, 0, Pc0[v * 3], Pc0[v * 3 + 1], Pc0[v * 3 + 2], g) < -.01) { inside++; for (let i = 0; i < 3; i++) assert.equal(Pc1[v * 3 + i], Pc0[v * 3 + i]); }
+  assert(inside > 5, `${inside} thigh vertices inside the bench pad`);
+});
+
 /* ---------- сцена ---------- */
 test('scene: in the Mannequin view the Anny mesh replaces the procedural skin; Anatomy and Skeleton keep the procedural ghost; no data — procedural skin', async () => {
   const { createCatalogScene } = await import('../src/volume/scene.mjs');
@@ -186,6 +224,9 @@ test('fingers: the Anny hand rig and the grip table are in the data; joints stay
   /* рамок на видеокарте — 55 (по два vec4 на рамку = 110 векторов): в WebGL2 (three.js 0.180 только на нём) у вершинного шейдера
      не меньше 256 векторов, у телефонов — 256 и больше; остальное — матрицы, свет, тени three.js */
   assert(d.frames.length * 2 <= 128, `${d.frames.length} frames — ${d.frames.length * 2} uniform vectors`);
+  /* весь вершинный шейдер кожи: рамки, опоры (по 6 на опору и счётчик), веса морфов (по вектору), матрицы и тени three.js — 31
+     (замер ANGLE: 184 у материала); не больше 256 */
+  const vecs = d.frames.length * 2 + A.SUP.MAX * 6 + 1 + d.correctives.length + 31; assert(vecs <= 256, `${vecs} uniform vectors in the skin vertex shader`);
 });
 test('grip: Anny fingers close around the handle — the ring is closed, no finger deep in it, no fingertip spike; resting fingers and the 4.63.0 skinning fail', () => {
   const HO = require('./anny-look/holds.js'), L = HO.LIM;
