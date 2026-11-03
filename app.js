@@ -14491,6 +14491,17 @@ function applyFigureView(F=detailMotion){
     say('Не удалось загрузить кости и мышцы — показан манекен. Проверьте связь и выберите вид ещё раз.');
   });
 }
+/* Заготовка рендерера разбора (GymVolume.prewarm, src/volume/main.mjs): WebGL-контекст и программы шейдеров выбранного вида
+   собираются в простое, пока человек смотрит план, — первое открытие разбора и тренировки их не ждёт. Сцена — первого
+   упражнения плана (без плана — первого в каталоге): программы от упражнения почти не зависят. «Манекен» — с кожей Anny, когда
+   её данные пришли. */
+function prewarmDetail(){
+  const V=window.GymVolume;if(!V?.prewarm||detailMotion||document.hidden)return;
+  const F=figs.find(f=>f.it?.ex?.anim?.catalogRig),it=F?F.it:previewItem(EX[0].id),layers=detailLayers(it.ex);if(!it.ex.anim.catalogRig)return;
+  if(figureView()==='mannequin'?!annySkinModule()?.data:!layers)return;
+  const A=catalogAnimFor(it.ex.anim,it.has);
+  V.prewarm({data:(t,index,coarse,lean)=>catalogVolumeData(A,t,index,it.has,coarse,lean),color:muscleColor,layers,muscles:motionPrefs.muscles,stress:motionPrefs.stress,joints:motionPrefs.joints}).catch(()=>{});
+}
 function openMotion(idx) {
   const F=figs.find(f=>+f.btn.dataset.fig===Number(idx));
   openMotionItem(F?F.it:previewItem(EX[0].id),F?F.clock:0);
@@ -14549,7 +14560,12 @@ function setupMotionViewer() {
     /* сетка головы (≈55 мс на компьютере) одна на все упражнения: готовится в простое, а не при первом открытии разбора */
     const idle=window.requestIdleCallback||(f=>setTimeout(f,2000));idle(()=>{try{Mannequin.headMesh();}catch(e){}},{timeout:6000});
     /* кости и мышцы для вида «Анатомия» — тоже заранее: первое открытие разбора сразу показывает анатомию */
-    if(figureView()!=='mannequin')idle(()=>{Skeleton.load().catch(()=>{});if(figureView()==='anatomy')Muscles.load().catch(()=>{});},{timeout:8000});
+    if(figureView()!=='mannequin')idle(()=>{
+      const need=figureView()==='anatomy'?[Skeleton,Muscles]:[Skeleton];
+      Promise.all(need.map(x=>x.load())).then(()=>idle(prewarmDetail,{timeout:8000}),()=>{});
+    },{timeout:8000});
+    /* «Манекен»: кожа Anny нужна и карточкам плана (loadCardAnatomy), и разбору — заготовка рендерера, когда она пришла */
+    else idle(()=>{const A=annySkinModule();if(A)A.load().then(()=>idle(prewarmDetail,{timeout:8000}),()=>{});},{timeout:8000});
   });
   $('#motion-view').addEventListener('keydown',e=>{if(e.code==='Space'&&!['INPUT','SELECT','BUTTON','TEXTAREA'].includes(e.target.tagName)){e.preventDefault();if(detailMotion){detailMotion.paused=!detailMotion.paused;paintMotion(detailMotion,true);}}});
 }
@@ -17211,8 +17227,10 @@ function mountDetailCameras(){
  if(!detailMotion)return;
  const F=detailMotion,ex=F.it.ex,a=ex.anim,key=motionCamera(ex),cameras=a.catalogCameras||a.cameras||[];
  disposeMotion(F);
- const m=motionFrame(F),make=camera=>{
-  const f=createMotionFigure(a,{primary:ex.pri,has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera,muscles:motionPrefs.muscles,interactive:true,onCamera:paintDetailCamera,onGesture:orbitGesture});
+ /* кости и мышцы — с первого кадра фигуры, если уже загружены (иначе их покажет applyFigureView, когда придут); второй ракурс
+    пары — та же сцена первой фигуры (share): без второго WebGL-контекста и второй сборки шейдеров */
+ const m=motionFrame(F),layers=detailLayers(ex),make=(camera,share)=>{
+  const f=createMotionFigure(a,{primary:ex.pri,has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera,muscles:motionPrefs.muscles,interactive:true,onCamera:paintDetailCamera,onGesture:orbitGesture,layers,share});
   f.svg.classList.toggle('show-joints',!!motionPrefs.joints);f.setTrace(!!motionPrefs.trace);f.setVectors(!!motionPrefs.vectors);return f;
  };
  F.f=make(key);$('#mv-stage').replaceChildren(F.f.svg);
@@ -17225,10 +17243,15 @@ function mountDetailCameras(){
  $('#mv-dual').checked=!!motionPrefs.dual;$('#mv-second').hidden=!pair;$('#mv-projections').classList.toggle('is-dual',pair);
  F.extra=null;
  if(pair){
-  const other=pairCamera(a,key);F.extra=make(other);$('#mv-second-stage').replaceChildren(F.extra.svg);
+  const other=pairCamera(a,key);F.extra=make(other,F.f);$('#mv-second-stage').replaceChildren(F.extra.svg);
   $('#mv-second-label').textContent=CAMERA3[other].label;$('#mv-second-hint').textContent=a.cameraHints?.[other]||'';
  }else $('#mv-second-stage').replaceChildren();
  configureMusclePanel('mv',F.it);configureStressPanel('mv',F);applyFigureView(F);paintMotion(F,true);paintOrbitHint(F);
+}
+/* вид разбора с первого кадра: кости и мышцы (как applyFigureView) или null — манекен либо данные ещё грузятся */
+function detailLayers(ex){
+ const view=figureView();if(view==='mannequin'||!Skeleton.data||(view==='anatomy'&&!Muscles.data))return null;
+ return{bones:Skeleton.data,body:view==='anatomy'?{skeleton:Skeleton.data,muscles:Muscles.data,level:anatomyLevel(ex)}:null};
 }
 /* второй ракурс пары: из профиля мышц упражнения, иначе первый другой */
 function pairCamera(a,key){const cameras=a.catalogCameras||a.cameras||[],preferred=motionProfile(a)?.pair;return preferred!==key&&cameras.includes(preferred)?preferred:cameras.find(c=>c!==key);}
@@ -17284,7 +17307,7 @@ function paintOrbitHint(F){
 function mountWorkoutCameras(){
  if(!workout?.motion)return;
  const F=workout.motion,ex=F.it.ex,key=motionCamera(ex),m=motionFrame(F);
- disposeMotion(F);F.f=createMotionFigure(ex.anim,{has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera:key,muscles:motionPrefs.muscles,memoBones:true,interactive:true,onCamera:paintWorkoutCamera,onGesture:orbitGesture});F.f.setVectors(!!motionPrefs.vectors);
+ disposeMotion(F);F.f=createMotionFigure(ex.anim,{has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera:key,muscles:motionPrefs.muscles,memoBones:true,interactive:true,onCamera:paintWorkoutCamera,onGesture:orbitGesture,layers:workoutLayers(F)});F.f.setVectors(!!motionPrefs.vectors);
  $('#wv-stage').replaceChildren(F.f.svg);$('#wv-cameras').innerHTML=cameraButtons(ex,key);$('#wv-cameras').hidden=!(ex.anim.catalogCameras||ex.anim.cameras);
  $('#wv-angle').textContent=CAMERA3[key]?.label||(ex.anim.view==='front'?'Вид спереди':'Вид сбоку');configureMusclePanel('wv',F.it);configureStressPanel('wv',F);workoutFigure.pace.settle();applyWorkoutView(F);paintWorkoutMotion();
 }
@@ -17297,6 +17320,13 @@ function mountWorkoutCameras(){
 const workoutFigure={pace:anatomyPace(),slow:false,failed:false,view:'mannequin'};
 const workoutAnatomyLive=()=>workoutFigure.view!=='mannequin'&&typeof workout?.motion?.f?.setLayers==='function';
 function workoutPaceSample(ms,cold=false){if(workoutFigure.pace.sample(ms,1,cold)==='fallback'){workoutFigure.slow=true;applyWorkoutView();}}
+/* вид экрана тренировки с первого кадра: кости и мышцы, если applyWorkoutView их и покажет (данные готовы, телефон успевает) */
+function workoutLayers(F){
+ const pref=figureView(),need=pref==='anatomy'?[Skeleton,Muscles]:[Skeleton],state=need.every(x=>x.data)?'ready':workoutFigure.failed?'error':'loading';
+ const choice=figureViewFor(motionPrefs.view,{able:true,state,slow:workoutFigure.slow,coarse:coarsePointer()});
+ if(choice.wait||choice.view==='mannequin')return null;
+ return{bones:Skeleton.data,body:choice.view==='anatomy'?{skeleton:Skeleton.data,muscles:Muscles.data,level:anatomyLevel(F.it.ex)}:null};
+}
 function applyWorkoutView(F=workout?.motion){
  const group=$('#wv-figure'),note=$('#wv-figure-note');if(!group||!F?.f)return;
  const able=typeof F.f.setLayers==='function',pref=figureView(),need=pref==='anatomy'?[Skeleton,Muscles]:[Skeleton];
@@ -18385,4 +18415,4 @@ renderPlan();
 prefetchStressIds();
 logInit();
 
-window.PODHOD_VERSION='4.71.0';window.PODHOD_BUILD='4.71.0-fa0b6e537518';window.PODHOD_LANG='ru';
+window.PODHOD_VERSION='4.72.0';window.PODHOD_BUILD='4.72.0-c4860afd6b68';window.PODHOD_LANG='ru';
