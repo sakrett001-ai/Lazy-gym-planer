@@ -110,12 +110,13 @@ test('supports: the skin lies on the declared support where it hovered (buttocks
   /* зазор больше SUP.GAP_MAX — не касание (поза или инвентарь): опора не применяется (ягодичный мост — гриф над животом на 3,6 см) */
   const { R } = pose('hipthrust', 1), sup = A.supports(R, d);
   assert(!sup.list.some(c => c.body === 'belly'), JSON.stringify(sup.list));
-  /* в опоре кожа не сдвигается: кожа спины в скамье в жиме лёжа */
-  const { R: Rb } = pose('bbbench', .5), Pb0 = A.skin(Rb, { d, floor: false, sup: null }), Pb1 = A.skin(Rb, { d, floor: false }), pad = verts(/^(thorax|lumbar)$/);
-  const u = A.supports(Rb, d), k = u.list.findIndex(c => c.body === 'back'); assert(k >= 0, 'bench press: back on the bench');
-  const g = [0, 0, 0]; let inside = 0;
-  for (const v of pad) if (A.supportSD(u.u, k * A.SUP.LEN, Pb0[v * 3], Pb0[v * 3 + 1], Pb0[v * 3 + 2], g) < -.01) { inside++; for (let i = 0; i < 3; i++) assert.equal(Pb1[v * 3 + i], Pb0[v * 3 + i]); }
-  assert(inside > 10, `${inside} back vertices inside the pad`);
+  /* кожа уже на опоре (зазор ≤ 0) — опоры нет: спина в жиме лёжа, ягодицы на сиденье тяги сверху (там прижатие складывало кожу) */
+  for (const [id, body] of [['bbbench', 'back'], ['latpull', 'buttocks'], ['seatedcalf', 'buttocks']]) { const { R } = pose(id, .5); assert(!A.supports(R, d).list.some(c => c.body === body), `${id}: ${body} already on the support`); }
+  /* в опоре кожа не сдвигается: бедро в подушке скамьи в концентрированном сгибании (опора ягодиц ведёт и бёдра) */
+  const { R: Rc } = pose('concentration', .5), Pc0 = A.skin(Rc, { d, floor: false, sup: null }), Pc1 = A.skin(Rc, { d, floor: false }), u = A.supports(Rc, d), g = [0, 0, 0];
+  let inside = 0;
+  for (const v of verts(/^th[LR]$/)) if (A.supportSD(u.u, 0, Pc0[v * 3], Pc0[v * 3 + 1], Pc0[v * 3 + 2], g) < -.01) { inside++; for (let i = 0; i < 3; i++) assert.equal(Pc1[v * 3 + i], Pc0[v * 3 + i]); }
+  assert(inside > 5, `${inside} thigh vertices inside the bench pad`);
 });
 
 /* ---------- сцена ---------- */
