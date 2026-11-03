@@ -262,11 +262,21 @@ const AnnySkin = (() => {
      сверх записанного в fixtures/folds.json). Зазор больше SUP.GAP_MAX — это не касание (поза или инвентарь, а не форма
      кожи): ягодичный мост — гриф над животом на 3,6 см, скамья для скручиваний — колени под валиками на 4 см. Скрытый коврик
      (необязательный инвентарь) — опора на пол под ним. Кисти, стопы и голова — не мягкие ткани (у кистей и стоп свои позы по
-     опоре и хвату). Опора — деталь контакта (видимая): коробка со скруглением, труба (капсула), цилиндр, шар; пол —
-     полупространство. Тот же расчёт — в шейдере (src/volume/anny.mjs, annySupport): опоры кадра — массив из SUP.MAX по 6
-     vec4. SUP.PRESS = 0,5 см — меньше толщины мягких тканей над опорными зонами (ягодицы — 2–4 см, спина над лопатками —
-     1–2; см. DEPTH_EXTRA в tools/anny-look/check.js). */
-  const SUP = { MAX: 4, GAP_MAX: 3, PRESS: .5, RAMP: 3, GAP_VERTS: 250, LEN: 24 };
+     опоре и хвату) — кроме пятки (ниже). Опора — деталь контакта (видимая): коробка со скруглением, труба (капсула),
+     цилиндр, шар; пол — полупространство. Тот же расчёт — в шейдере (src/volume/anny.mjs, annySupport): опоры кадра —
+     массив из SUP.MAX по 6 vec4. SUP.PRESS = 0,5 см — меньше толщины мягких тканей над опорными зонами (ягодицы — 2–4 см,
+     спина над лопатками — 1–2; см. DEPTH_EXTRA в tools/anny-look/check.js).
+     Сила опоры плавно нарастает с зазором от 0 до SUP.PRESS и спадает у SUP.GAP_MAX (на 0,5 см): опора включается и
+     выключается по ходу движения без скачка (иначе при зазоре чуть больше 0 слой 0,5 см у опоры прижимался, а при 0 —
+     отпускался: скачок на 0,5 см между кадрами).
+     Пятка. Стопа, лежащая на пятке (ноги прямые, носки вверх: обратные отжимания, тяга под столом, тяга резинки сидя;
+     удар пяткой в ходьбе), касается опоры задне-нижним краем пятки, а у Anny он на 1,0–1,3 см ближе к голеностопу, чем у
+     процедурной стопы (по направлениям 15–75° от «назад» к «вниз» в рамке стопы; подошва — та же): пятка висела над полом
+     на 1,0–1,9 см. Контакт стопы (foot, sole) становится опорой пятки, если ближе всего к опоре — пятка: её зазор не
+     больше SUP.GAP_MAX и меньше зазора остальной стопы (на SUP.HEEL_MARGIN — в полную силу); ложится только пяточная область — вершины рамки
+     стопы позади SUP.HEEL_Z (стойка, вдоль стопы; плавно на ±1 см). Стоя на всей подошве (зазор пятки и подушечки
+     одинаков) опоры нет — свод не сплющивается. */
+  const SUP = { MAX: 4, GAP_MAX: 3, PRESS: .5, RAMP: 3, GAP_VERTS: 250, LEN: 24, HEEL_Z: -2.5, HEEL_MARGIN: 1, HEEL: 1000 };
   const SUP_TRUNK = ['thorax', 'lumbar', 'pelvis', 'clL', 'clR', 'spL', 'spR'];
   /* рамки части тела контакта: [кожа, которая ложится на опору; по какой мерится зазор] */
   function supportBody(body) {
@@ -314,22 +324,37 @@ const AnnySkin = (() => {
   }
   /* доля вершины v в части тела опоры (биты рамок u[o+20…22] — по 19 рамок в числе) */
   const supBit = (u, o, i) => { const c = Math.floor(i / 19); return (Math.floor(u[o + 20 + c] / 2 ** (i - c * 19)) % 2); };
+  /* пяточная область (u[o+23] = HEEL + z порога): доля по продольной координате вершины в стойке (z — вперёд) */
+  const heelMask = (zc, z) => { const t = Math.max(0, Math.min(1, (zc + 1 - z) / 2)); return t * t * (3 - 2 * t); };
   function supportMove(sup, d, v, out, k) {
     if (!sup || !sup.n) return;
     const u = sup.u, g = [0, 0, 0];
     for (let s = 0; s < sup.n; s++) {
       const o = s * SUP.LEN; let m = 0;
       for (let j = 0; j < 4; j++) { const w = d.ww[v * 4 + j]; if (w > 0) m += w * supBit(u, o, d.wi[v * 4 + j]); }
+      if (m > 0 && u[o + 23] > 0) m *= heelMask(u[o + 23] - SUP.HEEL, d.pos[v * 3 + 2]);
       if (!(m > 0)) continue;
       const h = supportSD(u, o, out[k * 3], out[k * 3 + 1], out[k * 3 + 2], g), a = u[o + 17], H = u[o + 18], b = a + H;
       if (h < 0 || h >= b) continue;
-      const t = Math.max(0, Math.min(1, (h - a) / H)), f = h <= a ? 0 : b * t * t * (3 - 2 * t) + H * t * t * (t - 1), dm = (f - h) * m;
+      const t = Math.max(0, Math.min(1, (h - a) / H)), f = h <= a ? 0 : b * t * t * (3 - 2 * t) + H * t * t * (t - 1), dm = (f - h) * m * u[o + 19];
       out[k * 3] += g[0] * dm; out[k * 3 + 1] += g[1] * dm; out[k * 3 + 2] += g[2] * dm;
     }
   }
   /* опоры кадра: R.contacts (кроме хвата, кистей, стоп и головы) с видимыми деталями props (по умолчанию — детали R.props, кроме
      скрываемых при «всём инвентаре»); зазор — по коже без опор; mats — {S, DQ} кадра, если уже посчитаны. Возвращает
      {n, u: Float32Array(SUP.MAX·24), list} */
+  const smooth = t => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
+  /* сила опоры по зазору: от 0 при 0 до 1 при SUP.PRESS, спад на последних 0,5 см до SUP.GAP_MAX */
+  const strength = gap => smooth(gap / SUP.PRESS) * (1 - smooth((gap - SUP.GAP_MAX + .5) / .5));
+  /* вершины по доле рамок (frames) больше половины (и по условию keep), не больше ≈ SUP.GAP_VERTS через равный шаг */
+  function supVerts(d, fi, frames, keep = () => true) {
+    const set = new Set(frames.map(f => fi[f])), all = [];
+    for (let v = 0; v < d.nv; v++) { let w = 0; for (let j = 0; j < 4; j++) if (set.has(d.wi[v * 4 + j])) w += d.ww[v * 4 + j]; if (w > .5 && keep(v)) all.push(v); }
+    const st = Math.max(1, Math.round(all.length / SUP.GAP_VERTS)); return all.filter((_, i) => i % st === 0);
+  }
+  /* опоры кадра: R.contacts (кроме хвата, кистей и головы; стопы — опорой пятки) с видимыми деталями props (по умолчанию —
+     детали R.props, кроме скрываемых при «всём инвентаре»); зазор — по коже без опор; mats — {S, DQ} кадра, если уже
+     посчитаны. Возвращает {n, u: Float32Array(SUP.MAX·24), list} */
   function supports(R, d = data, props = null, cw = null, mats = null) {
     const out = { n: 0, u: new Float32Array(SUP.MAX * SUP.LEN), list: [] };
     const contacts = R.contacts || []; if (!contacts.length || !d) return out;
@@ -337,30 +362,40 @@ const AnnySkin = (() => {
     const C = d._sup || (d._sup = new Map());
     for (const k of contacts) {
       if (out.n >= SUP.MAX || !k.body || !k.prop || (k.when && R.t != null && (R.t < k.when[0] - 1e-6 || R.t > k.when[1] + 1e-6))) continue;
-      const B = supportBody(k.body); if (!B) continue;
+      const foot = /^(foot|sole)(L|R)$/.exec(k.body), B = foot ? [['foot' + foot[2]], null] : supportBody(k.body); if (!B) continue;
       const of = p => p.id === k.prop || p.id?.startsWith(k.prop + ':');
       let cand = k.prop === 'floor' ? ['floor'] : parts.filter(of);
       /* коврик скрыт (необязательный инвентарь): опора — пол под ним */
       if (!cand.length) { const all = (R.props || []).filter(of); if (all.length && all.every(p => p.tone === 'mat')) cand = ['floor']; }
       if (!cand.length) continue;
-      /* вершины зазора: у кого доля рамок зазора больше половины, не больше ≈ SUP.GAP_VERTS (через равный шаг по номеру) */
-      let vs = C.get(k.body);
-      if (!vs) { const set = new Set(B[1].map(f => fi[f])), all = []; for (let v = 0; v < d.nv; v++) { let w = 0; for (let j = 0; j < 4; j++) if (set.has(d.wi[v * 4 + j])) w += d.ww[v * 4 + j]; if (w > .5) all.push(v); }
-        const st = Math.max(1, Math.round(all.length / SUP.GAP_VERTS)); vs = all.filter((_, i) => i % st === 0); C.set(k.body, vs); }
+      /* вершины зазора; у стопы — пятки (позади SUP.HEEL_Z) и остальной стопы (впереди SUP.HEEL_Z + 2) */
+      const key = foot ? 'heel' + foot[2] : k.body;
+      let vs = C.get(key), rest = C.get(key + ':rest');
+      if (!vs) {
+        if (foot) { const s = foot[2]; vs = supVerts(d, fi, ['foot' + s], v => d.pos[v * 3 + 2] < SUP.HEEL_Z - 1); rest = supVerts(d, fi, ['foot' + s, 'toes' + s], v => d.pos[v * 3 + 2] > SUP.HEEL_Z + 2); C.set(key + ':rest', rest); }
+        else vs = supVerts(d, fi, B[1]);
+        C.set(key, vs);
+      }
       if (!mats) { const S = skinMats(R, d); mats = { S, DQ: dualQuats(S, d.frames.length) }; }
-      const P = skin(R, { d, only: vs, corr: cw, floor: false, sup: null, mats }), g = [0, 0, 0];
+      const P = skin(R, { d, only: rest ? vs.concat(rest) : vs, corr: cw, floor: false, sup: null, mats }), g = [0, 0, 0];
       let best = null;
       for (const p of cand) {
         const sh = supportShape(p); if (!sh) continue;
         const u = new Float32Array(SUP.LEN); u.set(sh.c, 0); u[3] = sh.type; for (let a = 0; a < 3; a++) { u.set(sh.ax[a], 4 + a * 4); u[7 + a * 4] = sh.half[a]; } u[16] = sh.rr;
-        let gap = Infinity; for (let i = 0; i < vs.length; i++) gap = Math.min(gap, supportSD(u, 0, P[i * 3], P[i * 3 + 1], P[i * 3 + 2], g));
-        if (!best || gap < best.gap) best = { u, gap };
+        let gap = Infinity, other = Infinity;
+        for (let i = 0; i < vs.length; i++) gap = Math.min(gap, supportSD(u, 0, P[i * 3], P[i * 3 + 1], P[i * 3 + 2], g));
+        if (rest) for (let i = vs.length; i < vs.length + rest.length; i++) other = Math.min(other, supportSD(u, 0, P[i * 3], P[i * 3 + 1], P[i * 3 + 2], g));
+        if (!best || gap < best.gap) best = { u, gap, other };
       }
       if (!best || !(best.gap > 0 && best.gap <= SUP.GAP_MAX)) continue;
-      const u = best.u; u[17] = best.gap + SUP.PRESS; u[18] = SUP.RAMP;
+      /* стопа: опора пятки — только если пятка ближе к опоре, чем остальная стопа (лежит на пятке, а не стоит на подошве):
+         сила нарастает с разницей зазоров от SUP.HEEL_MARGIN / 2 до SUP.HEEL_MARGIN · 1,5 (без скачка в ходьбе) */
+      const heel = foot ? smooth((best.other - best.gap - SUP.HEEL_MARGIN / 2) / SUP.HEEL_MARGIN) : 1;
+      if (!(heel > 0)) continue;
+      const u = best.u; u[17] = best.gap + SUP.PRESS; u[18] = SUP.RAMP; u[19] = strength(best.gap) * heel;
       const bits = [0, 0, 0]; for (const f of B[0]) { const i = fi[f]; if (i == null) continue; const c = Math.floor(i / 19); bits[c] += 2 ** (i - c * 19); }
-      u[20] = bits[0]; u[21] = bits[1]; u[22] = bits[2];
-      out.u.set(u, out.n * SUP.LEN); out.list.push({ body: k.body, prop: k.prop, gap: best.gap }); out.n++;
+      u[20] = bits[0]; u[21] = bits[1]; u[22] = bits[2]; u[23] = foot ? SUP.HEEL + SUP.HEEL_Z : 0;
+      out.u.set(u, out.n * SUP.LEN); out.list.push({ body: k.body, prop: k.prop, gap: best.gap, ...(foot ? { heel: true, other: best.other } : {}) }); out.n++;
     }
     return out;
   }

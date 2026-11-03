@@ -63,18 +63,19 @@ void annyBlend(out vec4 r,out vec4 d){
 vec3 annyRotate(vec4 q,vec3 p){return p+2.*cross(q.xyz,cross(q.xyz,p)+q.w*p);}
 vec3 annyMove(vec4 r,vec4 d,vec3 p){return annyRotate(r,p)+2.*(r.w*d.xyz-d.w*r.xyz+cross(r.xyz,d.xyz));}
 /* опоры (AnnySkin.supports, supportMove — тот же расчёт): кожа части тела контакта у опоры ложится на неё. На опору 6 vec4:
-   центр и тип (0 — коробка со скруглением, 1 — цилиндр по оси y), три оси с полуразмерами, [скругление, a, переход, 0],
-   биты рамок части тела (по 19 в числе) */
+   центр и тип (0 — коробка со скруглением, 1 — цилиндр по оси y), три оси с полуразмерами, [скругление, a, переход, сила],
+   [биты рамок части тела (по 19 в числе), пятка: 1000 + порог z в стойке (0 — вся часть тела)]; st — вершина в стойке */
 uniform vec4 annySup[ANNY_SUP*6];
 uniform int annySupN;
 float annySupBit(vec4 m,int i){int c=i/19;float v=c==0?m.x:c==1?m.y:m.z;return float((int(v+.5)>>(i-c*19))&1);}
-vec3 annySupport(vec3 p){
+vec3 annySupport(vec3 p,vec3 st){
  if(annySupN==0)return p;
  ivec4 ix=ivec4(annyIndex+.5);
  for(int k=0;k<ANNY_SUP;k++){
   if(k>=annySupN)break;
   vec4 c0=annySup[k*6],X=annySup[k*6+1],Y=annySup[k*6+2],Z=annySup[k*6+3],pr=annySup[k*6+4],mk=annySup[k*6+5];
   float m=0.;for(int j=0;j<4;j++){float w=annyWeight[j];if(w>0.)m+=w*annySupBit(mk,ix[j]);}
+  if(mk.w>0.){float u=clamp((mk.w-1000.+1.-st.z)*.5,0.,1.);m*=u*u*(3.-2.*u);}
   if(m<=0.)continue;
   vec3 d=p-c0.xyz,l=vec3(dot(d,X.xyz),dot(d,Y.xyz),dot(d,Z.xyz)),g;float h;
   if(c0.w<.5){vec3 q=abs(l)-vec3(X.w,Y.w,Z.w)+pr.x,qp=max(q,0.);float lo=length(qp);h=lo+min(max(q.x,max(q.y,q.z)),0.)-pr.x;
@@ -83,7 +84,7 @@ vec3 annySupport(vec3 p){
    vec3 rv=rd>1e-6?vec3(l.x/rd,0.,l.z/rd):vec3(1.,0.,0.),yv=vec3(0.,sign(l.y),0.);g=lo>0.?(rv*ep.x+yv*ep.y)/lo:e.x>=e.y?rv:yv;}
   float a=pr.y,H=pr.z,b=a+H;if(h<0.||h>=b)continue;
   float t=clamp((h-a)/H,0.,1.),f=h<=a?0.:b*t*t*(3.-2.*t)+H*t*t*(t-1.);
-  p+=(X.xyz*g.x+Y.xyz*g.y+Z.xyz*g.z)*((f-h)*m);
+  p+=(X.xyz*g.x+Y.xyz*g.y+Z.xyz*g.z)*((f-h)*m*pr.w);
  }
  return p;
 }
@@ -104,12 +105,12 @@ function patch(shader,frames,{normals=true,color=false,lookN=0}={}){
  if(globalThis.ANNY_METHOD==='lbs'){
   shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\n#define ANNY_LBS\n#define ANNY_FRAMES '+frames+'\n'+DQ_PARS+pars);
   if(normals)shader.vertexShader=shader.vertexShader.replace('#include <skinnormal_vertex>','objectNormal=normalize(annyLinear(objectNormal,true));');
-  shader.vertexShader=shader.vertexShader.replace('#include <skinning_vertex>','transformed=annySupport(annyLinear(transformed,false));transformed.y=min(transformed.y,ANNY_FLOOR);'+out);
+  shader.vertexShader=shader.vertexShader.replace('#include <skinning_vertex>','transformed=annySupport(annyLinear(transformed,false),transformed);transformed.y=min(transformed.y,ANNY_FLOOR);'+out);
   return;
  }
  shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\n#define ANNY_FRAMES '+frames+'\n'+DQ_PARS+pars);
  if(normals)shader.vertexShader=shader.vertexShader.replace('#include <skinnormal_vertex>','vec4 annyR,annyD;annyBlend(annyR,annyD);objectNormal=annyRotate(annyR,objectNormal);\n#ifdef USE_TANGENT\nobjectTangent=annyRotate(annyR,objectTangent);\n#endif');
- shader.vertexShader=shader.vertexShader.replace('#include <skinning_vertex>',(normals?'':'vec4 annyR,annyD;annyBlend(annyR,annyD);\n')+'transformed=annySupport(annyMove(annyR,annyD,transformed));transformed.y=min(transformed.y,ANNY_FLOOR);'+out);
+ shader.vertexShader=shader.vertexShader.replace('#include <skinning_vertex>',(normals?'':'vec4 annyR,annyD;annyBlend(annyR,annyD);\n')+'transformed=annySupport(annyMove(annyR,annyD,transformed),transformed);transformed.y=min(transformed.y,ANNY_FLOOR);'+out);
 }
 export function createAnnyLayer(parent,skin){
  const group=new THREE.Group();group.name='anny';group.visible=false;parent.add(group);

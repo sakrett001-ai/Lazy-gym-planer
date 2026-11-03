@@ -96,10 +96,11 @@ function dipTorso(C, hipY, o, k) {
   return q;
 }
 const dipHand = (C, q, s, o) => { const lat = C.lat(q, s), dl = o.distal * D, R = C.M3.ry(SG[s] * (o.turn || 0)); return { point: [SG[s] * o.hx, o.top - o.gr, o.edge - o.gr], thumb: C.M3.v(R, C.V.scale(lat, -1)), distal: C.M3.v(R, [0, -Math.sin(dl), Math.cos(dl)]), lat }; };
-/* k: 0 — верх (руки прямые), 1 — низ */
+/* k: 0 — верх (руки прямые), 1 — низ. Пятки — на полу: самая низкая точка пятки касается пола (прежде опора пятки стояла
+   на 0,6 см над полом, и пятки висели над ним на 0,62–0,64 см во всех фазах) */
 function dipBody(C, k, o, L) {
   const { V } = C, q = dipTorso(C, C.lerp(L.yTop, L.yBot, k), o, k);
-  for (const s of S) C.heel(q, s, [SG[s] * o.feetX, .6, o.heelZ], 0, C.lerp(...o.toe, k), V.unit([SG[s] * .15, 1, .6]));
+  for (const s of S) C.heel(q, s, [SG[s] * o.feetX, 0, o.heelZ], 0, C.lerp(...o.toe, k), V.unit([SG[s] * .15, 1, .6]));
   for (const s of S) { const h = dipHand(C, q, s, o); edgeGrip(C, q, s, h.point, h.thumb, h.distal, V.unit(V.add([0, 0, -1], h.lat, o.flare ?? .25))); }
   return q;
 }
