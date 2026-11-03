@@ -2,20 +2,20 @@
   "schemaVersion": 1,
   "repository": "sakrett001-ai/Lazy-gym-planer",
   "sourceBranch": "main",
-  "sourceCommit": "6e902efbefb12fdd9e16912c5d7623139953e2db",
-  "version": "4.76.0",
+  "sourceCommit": "db436c42b872ecc957461abedbee1d8831272d85",
+  "version": "4.77.0",
   "checks": "passed",
-  "builtAt": "2026-11-03T17:37:29.638Z",
+  "builtAt": "2026-11-03T23:04:29.149Z",
   "documents": {
     "ru": {
-      "path": "floot/releases/6e902efbefb12fdd9e16912c5d7623139953e2db/planner-ru.html",
-      "sha256": "8e78e30be3fb5503527098106d0e91cb1a446dbd012dfbcacbaa425022755e25",
-      "bytes": 3678483
+      "path": "floot/releases/db436c42b872ecc957461abedbee1d8831272d85/planner-ru.html",
+      "sha256": "c6e7ceb2eb3ba2add28873881eacf100e23de77d3108c90d81f27791b67a20a9",
+      "bytes": 3684483
     },
     "en": {
-      "path": "floot/releases/6e902efbefb12fdd9e16912c5d7623139953e2db/planner-en.html",
-      "sha256": "5f0ad309a66a114aa03f0838a55dea3b139375476d96bf5e9b3c2f2bf959d727",
-      "bytes": 3581764
+      "path": "floot/releases/db436c42b872ecc957461abedbee1d8831272d85/planner-en.html",
+      "sha256": "7eff49660c44921da349eefb84237e084599bb861d2d7b08461533345eab9b96",
+      "bytes": 3587764
     }
   }
 }
