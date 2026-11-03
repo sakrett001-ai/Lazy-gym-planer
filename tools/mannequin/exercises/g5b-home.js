@@ -190,7 +190,7 @@ const INC = once(() => {
    Низ: грудь в 5 см от пола, кисти под плечами; верх — руки выпрямлены. */
 const PK = { phi0: 26, phi1: 39, headAhead: 7, opts: { feetX: 10, dorsi: 10, knee: 10 } };
 const PKD = { phi0: 50, phi1: 60, headAhead: 6, opts: { ballY: 44, ballZ: 0, feetX: 9, dorsi: 10, knee: 10 } };
-/* Отжимания с ногами на скамье: низ — грудь (или голова) в low см от пола, кисти под локтями (stackedPalm, локоть отведён
+/* Отжимания с ногами на скамье: низ — грудь (или голова) в low см от коврика, кисти под локтями (stackedPalm, локоть отведён
    назад и наружу на lean°); верх — руки почти прямые.
    Техника: ладони на полу чуть шире плеч, плечи над запястьями, локти около 45° к корпусу, грудь почти у пола (NASM Exercise
    Library, Decline Push-Up: «slightly wider than shoulder-width», «elbows at approximately 45 degrees», «chest nearly touches
@@ -205,13 +205,17 @@ const PKD = { phi0: 50, phi1: 60, headAhead: 6, opts: { ballY: 44, ballZ: 0, fee
    запястье в 10 см позади плеча, разгибание запястья 89°. Меньший наклон внизу — дальше кисть позади плеча вверху и больше
    разгибание запястья; кисть точно под плечом вверху — при tilt 30. */
 const DECP = { x: 36, out: 13, tilt: 14, lean: 25, low: 3.5, gBot: [12, -14], gTop: [-6, 8], neck: [-8, -12], pole0: [.331, -.296, .896], roll: 1, rollMax: 14 };
+/* Ладони — на коврике, как у всех отжиманий на полу (g5a-floor.js: MAT = 1 см, PUSH_MAT): вверху ладонь заваливается на
+   ребро, и пальцы видимой кожи Anny (полнее процедурной кисти) на голом полу уходили в него на 3 см при допуске 2,5
+   (npm run anny:check). Скамья стоит на полу перед ковриком. */
+const DEC_MAT = 1, DEC_MAT_E = { type: 'mat', id: 'mat', len: 160, width: 100, at: [0, 0, 120] };
 const lowestFront = (C, q, h0 = 26, h1 = 49.8) => { let best = null; for (let h = h0; h <= h1; h += 1) for (const a of [0, .25, -.25]) { const p = C.chestPoint(q, h, a); if (!best || p[1] < best[1]) best = p; } return best; };
 const DEC = once(() => {
   const C = ctx([]), { V } = C, opts = { ballY: 44, ballZ: 0, feetX: 9, dorsi: 12, mtpMax: 58 }, P = DECP, F = S.map(s => fingersOut(s, P.out));
   const low = a => { const q = plankBody(C, a, opts); q.neck = [P.neck[1], 0, 0]; return Math.min(lowestFront(C, q)[1], ...C.region(q, 'headAll').map(p => p[1])); };
-  const ab = C.solve1D(a => low(a) - P.low, -45, 15), qb = plankBody(C, ab, opts);
+  const ab = C.solve1D(a => low(a) - DEC_MAT - P.low, -45, 15), qb = plankBody(C, ab, opts);
   qb.neck = [P.neck[1], 0, 0]; for (const s of S) qb[s].girdle = [...P.gBot];
-  const st = S.map((s, i) => stackedPalm(C, qb, s, { from: [SG[s] * P.x, 0, C.fk(qb).P['gh' + s][2]], dir: [0, 0, -1], F: F[i], tilt: P.tilt, lean: P.lean || 0 }));
+  const st = S.map((s, i) => stackedPalm(C, qb, s, { from: [SG[s] * P.x, DEC_MAT, C.fk(qb).P['gh' + s][2]], dir: [0, 0, -1], F: F[i], tilt: P.tilt, lean: P.lean || 0 }));
   const palm = st.map(b => b.palm);
   const reach = a => { const q = plankBody(C, a, opts); for (const s of S) q[s].girdle = [...P.gTop]; const w = palmWrist(C, 'L', palm[0], F[0], [0, 1, 0]); return V.dist(C.ghToward(q, 'L', w), w) - 55.05; };
   const at = C.solve1D(reach, ab, 40);
@@ -602,8 +606,8 @@ module.exports = {
      t=0 — руки выпрямлены, t=1 — грудь почти у пола, локти 30–45° к корпусу. */
   declinepush: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [{ type: 'flatBench', id: 'bench', at: [0, 0, -13.3], yaw: 90 }],
-    contacts: [{ body: 'soleL', prop: 'bench:pad' }, { body: 'soleR', prop: 'bench:pad' }, { body: 'palmL', prop: 'floor' }, { body: 'palmR', prop: 'floor' }],
+    equipment: [{ type: 'flatBench', id: 'bench', at: [0, 0, -13.3], yaw: 90 }, DEC_MAT_E],
+    contacts: [{ body: 'soleL', prop: 'bench:pad' }, { body: 'soleR', prop: 'bench:pad' }, { body: 'palmL', prop: 'mat' }, { body: 'palmR', prop: 'mat' }],
     pose(t, C) {
       const L = DEC(), P = DECP, e = C.ease(t), al = C.lerp(L.at, L.ab, e), q = plankBody(C, al, L.opts), a = al * D;
       q.neck = [C.lerp(P.neck[0], P.neck[1], e), 0, 0];
