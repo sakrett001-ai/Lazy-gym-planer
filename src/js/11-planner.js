@@ -572,7 +572,7 @@ function cardHtml(it, idx) {
   const meta = [];
   if (r.tempo) meta.push(`<span title="опускание – пауза – подъём – пауза, секунды; X — взрывно">темп <b>${r.tempo}</b></span>`);
   if (r.load) meta.push(`<span>${r.load}</span>`);
-  const view = ex.anim.catalogRig?'Изометрия · 5 ракурсов':(ex.viewNote || (ex.anim.view === 'front' ? 'вид спереди' : 'вид сбоку'));
+  const view = 'Изометрия · 5 ракурсов';
   return `<li class="card${cardFoldClass(ex.id)}" data-ex="${ex.id}" data-slot="${it.slot}">
   <div class="c-top">
     <div class="motion-tile"><button type="button" class="illus" data-fig="${idx}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Разобрать движение: ${esc(it.name)}"><span class="illus-v">${view}</span><span class="illus-zoom" aria-hidden="true">Увеличить ↗</span></button><div class="motion-bar"><span class="motion-caption">Исходное положение</span><button type="button" data-motion-pause="${idx}" aria-label="Пауза демонстрации: ${esc(it.name)}" aria-pressed="false">Пауза</button></div></div>

@@ -2,8 +2,8 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {loadModel}=require('./biomechanics-audit');
 const model=loadModel({fullApp:true});
-const {muscleFrame,muscleSurfaces,visibleMuscleSurfaces,motionFrame,muscleColor}=model.get('({muscleFrame,muscleSurfaces,visibleMuscleSurfaces,motionFrame,muscleColor})');
-/* три исходных профиля ригов (с поверхностями мышц на схеме rig3d) и профили прицельных упражнений каталога на манекене */
+const {muscleFrame,mannequinMuscleSurfaces,camera3,motionFrame,muscleColor}=model.get('({muscleFrame,mannequinMuscleSurfaces,camera3,motionFrame,muscleColor})');
+/* три исходных профиля ригов и профили прицельных упражнений каталога; области мышц — на поверхности манекена (catalogProfile) */
 const ORIGINAL=['bbbench','latpull','squat'],TARGETED=['bandextrot','cableadduct','cableextrot','copenhagen','copenhagenknee'],ECCENTRIC=['nordic'];
 const authored=model.EX.filter(ex=>ex.anim.muscleProfile),pilot=authored.filter(ex=>ORIGINAL.includes(ex.id));
 test('three original hand-authored profiles remain intact alongside the catalog',()=>{
@@ -12,7 +12,7 @@ test('three original hand-authored profiles remain intact alongside the catalog'
  for(const ex of pilot){
   const p=ex.anim.muscleProfile;
   assert.equal(p.curveBasis,'illustrative');assert(p.sources.length>0);
-  assert(ex.anim.cameras.includes(p.pair));
+  assert(ex.anim.catalogCameras.includes(p.pair));
   for(const id of ex.pri)assert.equal(p.muscles[id].role,'primary');
  }
  const unsupported=model.EX.find(ex=>ex.id==='deadlift');
@@ -70,23 +70,27 @@ test('curves and colors stay finite and continuous across a dense sweep',()=>{
 });
 test('surfaces follow the skeleton and cannot alter the pose or contacts',()=>{
  for(const ex of pilot)for(const t of [0,.25,.5,.75,1]){
-  const R=ex.anim.rig3d(t),before=JSON.stringify(R),faces=muscleSurfaces(R,ex.anim.muscleProfile);
+  const p=ex.anim.catalogProfile,R=ex.anim.catalogRig(t),before=JSON.stringify(R),faces=mannequinMuscleSurfaces(R,p);
   assert.equal(JSON.stringify(R),before);
   const ids=new Set(faces.map(f=>f.id));
-  for(const id of Object.keys(ex.anim.muscleProfile.muscles))assert(ids.has(id));
+  /* каждая мышца авторского профиля видна хотя бы одной своей областью на поверхности манекена */
+  for(const id of Object.keys(ex.anim.muscleProfile.muscles))assert(Object.entries(p.regions).some(([k,r])=>r.parent===id&&ids.has(k)),ex.id+' '+id);
+  for(const id of ids)assert(id in p.regions,ex.id+' '+id);
   for(const face of faces){
    assert(face.points.every(p=>p.length===3&&p.every(Number.isFinite)));
    assert(Math.abs(Math.hypot(...face.normal)-1)<1e-8);
   }
  }
 });
+/* видимость — тот же отбор по нормали к ракурсу, что у SVG-фигуры (buildSpatialFigure, 07-rigs-core.js) */
+const visible=(R,p,camera)=>{const project=camera3(camera),o=project([0,0,0]);return mannequinMuscleSurfaces(R,p,{coarse:true}).filter(f=>project(f.normal)[2]-o[2]>.035);};
 test('rear torso muscles disappear in front views and appear in their own rear view',()=>{
- const lat=pilot.find(ex=>ex.id==='latpull'),R=lat.anim.rig3d(.5),p=lat.anim.muscleProfile;
- const front=visibleMuscleSurfaces(R,p,'front'),back=visibleMuscleSurfaces(R,p,'back');
+ const lat=pilot.find(ex=>ex.id==='latpull'),R=lat.anim.catalogRig(.5),p=lat.anim.catalogProfile;
+ const front=visible(R,p,'front'),back=visible(R,p,'back');
  assert(!front.some(f=>f.id==='midback'));assert(back.some(f=>f.id==='midback'));
  assert(back.some(f=>f.id==='lats'));assert(!back.some(f=>f.id==='abs'));
- const bench=pilot.find(ex=>ex.id==='bbbench');
- assert(visibleMuscleSurfaces(bench.anim.rig3d(.5),bench.anim.muscleProfile,'above').some(f=>f.id==='chest'));
+ const bench=pilot.find(ex=>ex.id==='bbbench'),bp=bench.anim.catalogProfile;
+ assert(visible(bench.anim.catalogRig(.5),bp,'above').some(f=>bp.regions[f.id]?.parent==='chest'));
 });
 /* прицельные упражнения на приводящие и манжету: профиль ведёт каталог (catalogProfile), цель — основная мышца,
    опускание слабее подъёма, на краях фаз яркость одна и та же, источники — исследования ЭМГ */

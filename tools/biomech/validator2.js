@@ -538,4 +538,4 @@ function checkClip(frameAt, entry = {}, { samples = 41 } = {}) {
   if (entry.loop) { const a = frameAt(0), b = frameAt(1); for (const k of keys) { const d = V.dist(a[k], b[k]); if (d > 1) { issues.set('loop|' + k, { rule: 'loop', severity: 'error', detail: `цикл не замкнут: ${k} в конце на ${d.toFixed(1)} см от начала`, t: 1, frames: 1 }); break; } } }
   return [...issues.values()];
 }
-module.exports = { checkFrame, checkClip, angles, romChecks, bodyPoints, collider, LIM, SCAP_RIB_DEPTH };
+module.exports = { checkFrame, checkClip, angles, romChecks, bodyPoints, regionPoints, collider, LIM, SCAP_RIB_DEPTH };
