@@ -1,16 +1,12 @@
 const{test}=require('node:test'),assert=require('node:assert/strict');
 const{loadModel}=require('./biomechanics-audit'),{auditCatalog}=require('./catalog-audit');
-const model=loadModel(),api=model.get('({catalogProps,catalogVolumeData,muscleFrame,catalogMuscleSurfaces})');
+const model=loadModel(),api=model.get('({catalogVolumeData,muscleFrame})');
 test('every catalog motion has a continuous spatial skeleton, five cameras and complete region coverage',()=>{const r=auditCatalog(model);assert.deepEqual(r.failures,[]);assert.equal(r.stats.poses,151*101);assert.equal(r.stats.cameraPoses,151*101*5);}); /* 151: +5 на приводящие и манжету */
 test('negative: a bone changed only in the new catalog model is detected',()=>{
  const ex=model.EX.find(e=>e.id==='kbswing'),anim={...ex.anim,catalogRig:t=>{const R=ex.anim.catalogRig(t);if(t>.35&&t<.41)R.wrL[1]+=5;return R;}};
  const r=auditCatalog({...model,EX:[{...ex,anim}]});assert(r.failures.some(f=>f.rule==='bone:elL-wrL'));
 });
-test('unknown equipment attachment and kind fail instead of silently disappearing',()=>{
- const R=model.EX[0].anim.catalogRig(0);
- assert.throws(()=>api.catalogProps({view:'side',props:[{k:'db',at:'missing'}]},{},R),/Unknown equipment attachment/);
- assert.throws(()=>api.catalogProps({view:'side',props:[{k:'future-missing'}]},{},R),/Unmapped equipment kind/);
-});
+/* неизвестная деталь не пропадает молча: SVG-фигура её отвергает (tools/catalog-svg.test.js) */
 test('negative: missing chest region cannot pass the catalog coverage audit',()=>{
  const ex=model.EX.find(e=>e.id==='bbbench'),p=ex.anim.catalogProfile,regions={...p.regions};delete regions.pec_clavicular;
  const invalid={...ex,anim:{...ex.anim,catalogProfile:{...p,regions}}};

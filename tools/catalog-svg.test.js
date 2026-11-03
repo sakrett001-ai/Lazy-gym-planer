@@ -7,6 +7,14 @@ function svgModel(){
  return dom;
 }
 
+test('an unknown equipment kind fails instead of silently disappearing from the SVG figure',()=>{
+ const dom=svgModel();
+ try{
+  const {EX,buildFigure}=dom.window.api,ex=EX.find(e=>e.id==='bbbench');
+  const anim={...ex.anim,catalogVariants:null,catalogRig:t=>{const R=ex.anim.catalogRig(t);R.props=[...R.props,{kind:'future-missing',c:[0,100,0]}];return R;}};
+  assert.throws(()=>buildFigure(anim,{t:0}),/Unknown spatial equipment kind: future-missing/);
+ }finally{dom.window.close();}
+});
 test('SVG fallback preserves the working and supporting sides through both phases',()=>{
  const dom=svgModel();
  try{
