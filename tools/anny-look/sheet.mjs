@@ -1,7 +1,8 @@
 /* Лист «было / стало» для кожи Anny: те же кадры сцены приложения (свет и тон студии, вид «Манекен») из двух копий кода.
    node tools/anny-look/sheet.mjs --spec spec.json --out лист.png [--before <корень копии «было»>] [--width 1800]
    [--before-label 'БЫЛО (4.63.0)'] [--after-label 'СТАЛО']
-   spec: { title, sub: [строки], rows: [{ title, note?, panels: [{ id | 'stance', t, cam, label?, focus?, span?, w?, h?, has? }] }] }
+   spec: { title, sub: [строки], tables?: [{ title?, head: [ячейки], rows: [[ячейки]] }], rows: [{ title, note?, panels: [{ id | 'stance', t, cam, label?,
+   focus?, span?, w?, h?, has?, marks? }] }] } — таблицы (замеры «было → стало») — под заголовком, над кадрами.
    id 'stance' — нейтральная стойка без инвентаря. focus — ключ позы (head, gripL, knL, hipL, shL, elL…) и span — ширина
    кадра, м (крупный план); иначе кадр — по всем фазам повторения, как в разборе. Каждая ячейка рисуется дважды: из копии
    «было» (--before; без неё ряд «было» не рисуется) и из этой копии («стало», кожа Anny из src/data/anny.bin), камера — одна
@@ -50,8 +51,10 @@ for(const row of spec.rows){
 const css=`body{margin:0;background:#0b1018;color:#dfe7f3;font:14px/1.35 system-ui,sans-serif;width:${W}px}header{padding:16px 20px 4px}h1{margin:0;font-size:22px}
  header p{margin:3px 0;color:#a9b6c9}section{padding:6px 20px 8px;border-top:1px solid #1d2838}h2{font-size:16px;margin:6px 0 4px}.note{margin:0 0 6px;color:#a9b6c9}
  .pair{display:flex;align-items:flex-start;gap:8px;margin:4px 0}.lbl{writing-mode:vertical-rl;transform:rotate(180deg);color:#9fb0c8;font-weight:600;font-size:13px;padding:4px}
- .row{display:flex;gap:6px;flex-wrap:wrap}figure{margin:0}figcaption{font-size:12px;color:#c5d1e3;padding:2px}`;
-const doc=`<!doctype html><meta charset="utf-8"><style>${css}</style><header><h1>${esc(spec.title)}</h1>${(spec.sub||[]).map(s=>`<p>${esc(s)}</p>`).join('')}</header>${html}`;
+ .row{display:flex;gap:6px;flex-wrap:wrap}figure{margin:0}figcaption{font-size:12px;color:#c5d1e3;padding:2px}
+ .tbl{margin:8px 0 6px}.tbl h3{font-size:14px;margin:4px 0;color:#dfe7f3}table{border-collapse:collapse;font-size:13px}th,td{border:1px solid #2a3850;padding:3px 8px;text-align:left}th{background:#152033;color:#c9d6ea}td{color:#dfe7f3}`;
+const tables=(spec.tables||[]).map(t=>`<div class="tbl">${t.title?`<h3>${esc(t.title)}</h3>`:''}<table><thead><tr>${t.head.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${t.rows.map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`).join('');
+const doc=`<!doctype html><meta charset="utf-8"><style>${css}</style><header><h1>${esc(spec.title)}</h1>${(spec.sub||[]).map(s=>`<p>${esc(s)}</p>`).join('')}${tables}</header>${html}`;
 const tmp=path.join(after.dir,'sheet.html');await fs.writeFile(tmp,doc);
 const p2=await browser.newPage({viewport:{width:W,height:800}});await p2.goto('file://'+tmp);
 await fs.mkdir(path.dirname(out),{recursive:true});await p2.screenshot({path:out,fullPage:true});

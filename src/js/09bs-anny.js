@@ -257,12 +257,13 @@ const AnnySkin = (() => {
      нормали опоры (градиент её знакового расстояния): слой высотой a над опорой (зазор + SUP.PRESS) ложится на неё, выше —
      плавно (кубический переход на SUP.RAMP см с непрерывной производной; отображение высоты монотонно — без складок), кожа
      дальше a + RAMP — на месте. Кожу в опоре не трогает (её проверяет check.js). Зазор больше SUP.GAP_MAX — это не касание
-     (поза или инвентарь, а не форма кожи): опора не применяется. Кисти, стопы и голова — не мягкие ткани (у кистей и стоп
+     (поза или инвентарь, а не форма кожи): опора не применяется (ягодичный мост — гриф над животом на 3,6 см, валики скамьи для скручиваний — 4 см). Скрытый коврик
+     (необязательный инвентарь) — опора на пол под ним. Кисти, стопы и голова — не мягкие ткани (у кистей и стоп
      свои позы по опоре и хвату). Опора — деталь контакта (видимая): коробка со скруглением, труба (капсула), цилиндр, шар;
      пол — полупространство. Тот же расчёт — в шейдере (src/volume/anny.mjs, annySupport): опоры кадра — массив из SUP.MAX
      по 6 vec4. SUP.PRESS = 0,5 см — меньше толщины мягких тканей над опорными зонами (ягодицы — 2–4 см, спина над лопатками
      — 1–2; см. DEPTH_EXTRA в tools/anny-look/check.js). */
-  const SUP = { MAX: 4, GAP_MAX: 2.5, PRESS: .5, RAMP: 3, GAP_VERTS: 250, LEN: 24 };
+  const SUP = { MAX: 4, GAP_MAX: 3, PRESS: .5, RAMP: 3, GAP_VERTS: 250, LEN: 24 };
   const SUP_TRUNK = ['thorax', 'lumbar', 'pelvis', 'clL', 'clR', 'spL', 'spR'];
   /* рамки части тела контакта: [кожа, которая ложится на опору; по какой мерится зазор] */
   function supportBody(body) {
@@ -334,7 +335,11 @@ const AnnySkin = (() => {
     for (const k of contacts) {
       if (out.n >= SUP.MAX || !k.body || !k.prop || (k.when && R.t != null && (R.t < k.when[0] - 1e-6 || R.t > k.when[1] + 1e-6))) continue;
       const B = supportBody(k.body); if (!B) continue;
-      const cand = k.prop === 'floor' ? ['floor'] : parts.filter(p => p.id === k.prop || p.id?.startsWith(k.prop + ':')); if (!cand.length) continue;
+      const of = p => p.id === k.prop || p.id?.startsWith(k.prop + ':');
+      let cand = k.prop === 'floor' ? ['floor'] : parts.filter(of);
+      /* коврик скрыт (необязательный инвентарь): опора — пол под ним */
+      if (!cand.length) { const all = (R.props || []).filter(of); if (all.length && all.every(p => p.tone === 'mat')) cand = ['floor']; }
+      if (!cand.length) continue;
       /* вершины зазора: у кого доля рамок зазора больше половины, не больше ≈ SUP.GAP_VERTS (через равный шаг по номеру) */
       let vs = C.get(k.body);
       if (!vs) { const set = new Set(B[1].map(f => fi[f])), all = []; for (let v = 0; v < d.nv; v++) { let w = 0; for (let j = 0; j < 4; j++) if (set.has(d.wi[v * 4 + j])) w += d.ww[v * 4 + j]; if (w > .5) all.push(v); }

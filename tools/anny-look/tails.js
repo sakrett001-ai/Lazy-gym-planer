@@ -59,7 +59,9 @@ function sideOf(d, v) { const f = d.frames[d.wi[v * 4]]; return /[LR]$/.test(f) 
 function contactVerts(d, zones, body) {
   const m = /^(sole|palm|knee|shin|hand|ua|fa|th|sk|foot)(L|R)?$/.exec(body), key = m ? m[1] : body, s = m ? m[2] : null, zs = BODY_ZONES[key === 'sk' ? 'shin' : key];
   if (!zs) return null;
-  const out = []; for (let v = 0; v < d.nv; v++) if (zs.includes(zones[v]) && (!s || sideOf(d, v) === s)) out.push(v);
+  /* ягодицы — вершины таза (без бёдер: бедро у края сиденья касается раньше, а ягодица висит — концентрированное сгибание) */
+  const own = body === 'buttocks' ? v => d.frames[d.wi[v * 4]] === 'pelvis' : () => true;
+  const out = []; for (let v = 0; v < d.nv; v++) if (zs.includes(zones[v]) && own(v) && (!s || sideOf(d, v) === s)) out.push(v);
   return out;
 }
 /* опоры: зазор кожи Anny и процедурной кожи до заявленных деталей */
