@@ -4,21 +4,23 @@ const fs=require('node:fs'),path=require('node:path');
 const{loadModel}=require('./biomechanics-audit');
 const distance=(a,b)=>Math.hypot(...a.map((v,i)=>v-b[i]));
 function auditCatalog(model,{samples=101}={}){
- const {EX,get}=model,{catalogVolumeData,muscleFrame,REGION_META,MUSCLE_REGIONS,CATALOG_SOURCES,camera3,Mannequin}=get('({catalogVolumeData,muscleFrame,REGION_META,MUSCLE_REGIONS,CATALOG_SOURCES,camera3,Mannequin})'),MB=Mannequin.B;
+ const {EX,get}=model,{catalogVolumeData,muscleFrame,MUSCLE_REGIONS,camera3,Mannequin}=get('({catalogVolumeData,muscleFrame,MUSCLE_REGIONS,camera3,Mannequin})'),MB=Mannequin.B;
+ /* области мышц: глубокие (kind 'deep') на поверхности не рисуются */
+ const REGION_META=Object.fromEntries(Object.entries(MUSCLE_REGIONS).flatMap(([parent,rows])=>rows.map(([id,label,kind])=>[id,{id,parent,label,kind,visible:kind!=='deep'}])));
  const failures=[],stats={exercises:EX.length,poses:0,cameraPoses:0,regionFrames:0,reconstructed:0,authored:0};
  const seen=new Set(),check=(ok,id,rule,t)=>{if(!ok&&!seen.has(id+rule)){seen.add(id+rule);failures.push({exercise:id,rule,t});}};
  for(const ex of EX){
   const a=ex.anim,p=a.catalogProfile;check(typeof a.catalogRig==='function',ex.id,'rig',0);check(p?.curveBasis==='illustrative',ex.id,'profile-basis',0);
-  const first=a.catalogRig(0);stats[first.basis==='reconstructed'?'reconstructed':'authored']++;
-  const source=CATALOG_SOURCES.get(ex.id),sourceIndices=new Set(first.props.map(s=>s.sourceIndex));
-  if(first.basis==='reconstructed')for(let i=0;i<(source.props||[]).length;i++)check(sourceIndices.has(i),ex.id,'equipment-coverage:'+i,0);
+  if(typeof a.catalogRig!=='function')continue;
+  /* все позы — манекен (tools/mannequin); прежние восстановленные из плоских описаний (reconstructed) удалены вместе с ними */
+  const first=a.catalogRig(0);check(!!first.frames,ex.id,'mannequin',0);stats[first.basis==='reconstructed'?'reconstructed':'authored']++;
   for(const id of ex.pri)check(p.muscles[id]?.role==='primary',ex.id,'primary:'+id,0);
   for(const id of Object.keys(p.muscles))for(const[key]of MUSCLE_REGIONS[id])check(!!p.regions[key],ex.id,'required-region:'+key,0);
   for(let i=0;i<samples;i++){
    const t=i/(samples-1),R=a.catalogRig(t);stats.poses++;
    for(const [key,v]of Object.entries(R))if(Array.isArray(v)&&typeof v[0]==='number')check(v.length===3&&v.every(Number.isFinite),ex.id,'finite:'+key,t);
-   /* длины сегментов: у манекена — антропометрия de Leva (Mannequin.B), у старых плоских ригов — прежние константы */
-   const L=R.frames?MB:{ua:30,fa:27,th:43,sk:42};
+   /* длины сегментов — антропометрия de Leva (Mannequin.B) */
+   const L=MB;
    for(const s of ['L','R'])for(const[x,y,l]of [['sh','el',L.ua],['el','wr',L.fa],['hip','kn',L.th],['kn','an',L.sk]])check(Math.abs(distance(R[x+s],R[y+s])-l)<1e-4,ex.id,'bone:'+x+s+'-'+y+s,t);
    /* числовые поля деталей (точки, оси, ломаные тросов) конечны; списки имён (rides) не проверяются */
    for(const prop of R.props)for(const[k,v]of Object.entries(prop))if(Array.isArray(v)&&!v.every(x=>typeof x==='string'))check(v.flat(2).every(Number.isFinite),ex.id,'prop-finite:'+prop.kind+':'+k,t);

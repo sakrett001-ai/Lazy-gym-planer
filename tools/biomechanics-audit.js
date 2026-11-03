@@ -22,41 +22,62 @@ function loadModel({root = path.resolve(__dirname, '..'), fullApp = false} = {})
   const files = fs.readdirSync(dir).filter(f => /^\d.*\.js$/.test(f) && Number.parseInt(f) < (fullApp ? 99 : 11)).sort();
   for (const file of files) vm.runInContext(fs.readFileSync(path.join(dir, file), 'utf8'), context, {filename:file, timeout:10000});
   const get = expression => vm.runInContext(expression, context, {timeout:10000});
-  const api = get('({EX, FL, SIDE_CHEST, torsoPoint, PROPS, prepAnim, poseAt, solvePose, spatialPose, camera3, CAMERA3, muscleFrame, muscleSurfaces, Mannequin:typeof Mannequin === "undefined" ? null : Mannequin})');
+  const api = get('({EX, camera3, CAMERA3, muscleFrame, mannequinMuscleSurfaces, Mannequin:typeof Mannequin === "undefined" ? null : Mannequin})');
   return {...api, get};
 }
 
 const distance = (a,b) => Array.isArray(a) && Array.isArray(b) ? Math.hypot(...a.map((x,i) => x - b[i])) : Infinity;
 const dot = (a,b) => a.reduce((sum,x,i) => sum + x*b[i], 0);
 const sub = (a,b) => a.map((x,i) => x - b[i]);
-const angle2 = (a,b) => (Math.atan2(b[0]-a[0], a[1]-b[1])*180/Math.PI + 360)%360;
-const bend3 = (root,joint,end) => Math.acos(Math.max(-1, Math.min(1,
-  dot(sub(joint,root), sub(end,joint)) / (distance(root,joint)*distance(joint,end))))) * 180/Math.PI;
+const unit = a => { const n = Math.hypot(...a) || 1; return a.map(x => x/n); };
+const angleDeg = (a,b) => Math.acos(Math.max(-1, Math.min(1, Math.abs(dot(unit(a),unit(b)))))) * 180/Math.PI;
+/* расстояние от точки до оси детали: перекладина (beam a→b), гриф, гантель и цилиндр (c, axis) */
+function axisOf(p) {
+  if (p.kind === 'beam') return [p.a, unit(sub(p.b,p.a))];
+  if (p.c && p.axis) return [p.c, unit(p.axis)];
+  return null;
+}
+const axisDistance = (q,[o,d]) => { const w = sub(q,o), t = dot(w,d); return Math.hypot(...w.map((x,i) => x - d[i]*t)); };
+const partsOf = (R, id) => R.props.filter(p => p.id === id || (p.id && p.id.startsWith(id + ':')));
 
-/* Only assert contacts specified by this exercise. Hanging feet and raised heels are free. */
+/* Опоры и хваты, которые 14 упражнений обязаны сохранять (ключи — точки 3D-позы манекена). Висящие стопы и поднятые пятки
+   свободны. floor — стопы, которые стоят на полу весь подход: касание пола заявлено в спецификации позы (контакт подошвы
+   с полом) и проверяется валидатором манекена в каждом кадре (тест — biomechanics-audit.test.js). */
 const CONTACT_RULES = {
-  bbbench:{bar:true, anchors:['anL','anR'], ground:['anL','anR'], bench:true},
-  dbbench:{anchors:['anL','anR'], ground:['anL','anR'], bench:true, dumbbells:true},
-  bbrow:{bar:true, anchors:['anL','anR'], ground:['anL','anR']},
-  latpull:{bar:true, anchors:['anL','anR'], ground:['anL','anR']},
-  deadlift:{bar:true, anchors:['anL','anR'], ground:['anL','anR'], straightArms:true},
-  dbpress:{anchors:['anL','anR'], ground:['anL','anR'], dumbbells:true},
-  ohp:{bar:true, anchors:['anL','anR'], ground:['anL','anR']},
+  bbbench:{bar:true, anchors:['anL','anR'], floor:['L','R'], bench:true},
+  dbbench:{anchors:['anL','anR'], floor:['L','R'], bench:true, dumbbells:true},
+  bbrow:{bar:true, anchors:['anL','anR'], floor:['L','R']},
+  latpull:{bar:true, anchors:['anL','anR'], floor:['L','R']},
+  deadlift:{bar:true, anchors:['anL','anR'], floor:['L','R'], straightArms:true},
+  dbpress:{anchors:['anL','anR'], floor:['L','R'], dumbbells:true},
+  ohp:{bar:true, anchors:['anL','anR'], floor:['L','R']},
   chinup:{bar:true, anchors:['gripL','gripR']},
-  hipthrust:{bar:true, anchors:['anL','anR','backContact'], ground:['anL','anR']},
-  bulgarian:{anchors:['anL','anR'], ground:['anL'], dumbbells:true},
-  rdl:{bar:true, anchors:['anL','anR'], ground:['anL','anR'], straightArms:true, dumbbells:true},
-  squat:{bar:true, anchors:['anL','anR'], ground:['anL','anR']},
-  lunge:{anchors:['toeL','toeR'], ground:['toeL','toeR'], dumbbells:true},
-  chestrowdb:{anchors:['hip','anN','anF'], chestPad:true}
+  hipthrust:{bar:true, anchors:['anL','anR'], floor:['L','R']},
+  bulgarian:{anchors:['anL','anR'], floor:['L'], dumbbells:true},
+  rdl:{bar:true, anchors:['anL','anR'], floor:['L','R'], straightArms:true, dumbbells:true},
+  squat:{bar:true, anchors:['anL','anR'], floor:['L','R']},
+  lunge:{anchors:['toeL','toeR'], floor:['L','R'], dumbbells:true},
+  chestrowdb:{anchors:['hip','anL','anR'], floor:['L','R'], chestPad:true}
 };
+/* Неподвижная опора не скользит: сдвиг точки опоры от первого кадра — не больше, чем аудит механики разрешает стопе и кисти
+   на детали (LIM.slip, 0,5 см) и тазу или спине на сиденье (LIM.slipTrunk, 1 см; tools/mannequin/mech-audit.js).
+   Записанные сдвиги нынешних поз — долг поз: числа только убывают (правка — в спецификации упражнения, с ревью владельца). */
+const ANCHOR_KNOWN = {
+  'deadlift:anL':.84, 'deadlift:anR':.84, 'squat:anL':.88, 'squat:anR':.88, 'chinup:gripL':.73, 'chinup:gripR':.73,
+  'lunge:toeR':1.04, 'chestrowdb:hip':1.33
+};
+/* Прямая рука: сгибание локтя до 5° от самой прямой руки манекена. Двухзвенная кинематика манекена не выпрямляет руку до
+   конца — тянется до 0,9995 длины (twoBone в 09bm-mannequin.js), и прямая рука — это сгибание 2·acos(0,9995) ≈ 3,6°. */
+const STRAIGHT_ARM = 5, REACH = .9995;
 
-function auditModel(model, {samples = 101, only = 'all'} = {}) {
+function auditModel(model, {samples = 101} = {}) {
   if (!Number.isInteger(samples) || samples < 9 || samples > 2001) throw new Error('samples must be an integer from 9 to 2001');
-  if (!['all','side','spatial'].includes(only)) throw new Error('only must be all, side or spatial');
-  const {EX, FL, SIDE_CHEST, torsoPoint, PROPS, prepAnim, poseAt, solvePose, spatialPose, camera3, CAMERA3, muscleFrame, muscleSurfaces, Mannequin} = model;
+  const {EX, CAMERA3, Mannequin, mannequinMuscleSurfaces} = model, M = Mannequin;
+  const {regionPoints, bodyPoints, collider} = require('./biomech/validator2.js');
+  const SLIP = require('./mannequin/mech-audit.js').LIM;
+  const straight = (() => { const a = M.B.ua, b = M.B.fa, d = REACH*(a+b); return 180 - Math.acos((a*a+b*b-d*d)/(2*a*b))*180/Math.PI; })();
   const failures = new Map(), warnings = new Map();
-  const stats = {exercises:0, spatialExercises:0, poses:0, cameraPoses:0, muscleProfiles:0, musclePoses:0, mannequinPoses:0, checks:0};
+  const stats = {exercises:0, poses:0, mannequinPoses:0, cameraChecks:0, muscleProfiles:0, musclePoses:0, contactPoses:0, checks:0};
   function check(ok, ex, rule, t, detail, magnitude = 1) {
     stats.checks++;
     if (ok) return;
@@ -71,11 +92,8 @@ function auditModel(model, {samples = 101, only = 'all'} = {}) {
   }
   for (const ex of EX) {
     const a = ex.anim;
-    if (!a) { check(false, ex, 'missing-animation', 0, 'Exercise has no animation'); continue; }
-    const spatial = typeof a.rig3d === 'function';
-    if (only === 'spatial' && !spatial || only === 'side' && (spatial || a.view !== 'side')) continue;
+    if (!a || typeof a.catalogRig !== 'function') { check(false, ex, 'missing-animation', 0, 'Exercise has no mannequin pose'); continue; }
     stats.exercises++;
-    if (spatial) stats.spatialExercises++;
     if (a.muscleProfile) {
       stats.muscleProfiles++;
       check(a.muscleProfile.curveBasis === 'illustrative',ex,'muscle-curve-basis',0,'Pilot curves must be identified as illustrative');
@@ -86,162 +104,128 @@ function auditModel(model, {samples = 101, only = 'all'} = {}) {
         if(valid)check(m.concentric[0]===m.eccentric[0]&&m.concentric[2]===m.eccentric[2],ex,'muscle-turn:'+id,0,'Phase endpoints must match to avoid flashes at holds/turns');
       }
     }
-    prepAnim(a);
-    const rules = CONTACT_RULES[ex.id];
-    if (spatial && !rules) warn(ex, 'contact-coverage', 0, 'Add explicit grip/support rules for this new rig');
-    const first = spatial ? a.rig3d(0) : solvePose(a,poseAt(a,0),a._C);
-    let previous;
-    for (let i=0; i<samples; i++) {
-      const t = i/(samples-1), P = poseAt(a,t), J = spatial ? a.rig3d(t) : solvePose(a,P,a._C);
-      stats.poses++;
-      for (const [key,p] of Object.entries(J)) if (Array.isArray(p) && typeof p[0] === 'number') {
-        const finite = p.every(Number.isFinite);
-        check(finite, ex, 'finite:'+key, t, 'Joint coordinates must be finite');
-        if (finite && previous?.[key]) {
-          const step = distance(p,previous[key]);
-          /* Scale threshold to sampling density; a hard discontinuity remains detectable. */
-          check(step <= 12 * 100/(samples-1), ex, 'continuity:'+key, t, `Jump ${step.toFixed(4)} model units`, step);
-        }
-      }
-      for (const key of rules?.anchors || []) {
-        const error = distance(J[key],first[key]);
-        check(error < 1e-4, ex, 'anchor:'+key, t, `Support drift ${error.toFixed(4)} model units`, error);
-      }
-      if (spatial) {
-        if (a.muscleProfile) {
-          stats.musclePoses++;
-          const before = JSON.stringify(J), zones = muscleSurfaces(J,a.muscleProfile);
-          check(JSON.stringify(J)===before,ex,'muscle-pose-integrity',t,'Muscle surfaces must not change joints or equipment');
-          for (const zone of zones) {
-            check(zone.points.every(p=>p.length===3&&p.every(Number.isFinite))&&zone.anchor.every(Number.isFinite)&&zone.normal.every(Number.isFinite),ex,'muscle-surface:'+zone.id,t,'Muscle surface coordinates must be finite');
-            check(zone.id in a.muscleProfile.muscles,ex,'muscle-profile:'+zone.id,t,'A surface must belong to the exercise profile');
-          }
-        }
-        for (const side of ['L','R']) {
-          for (const [x,y,length] of [['sh'+side,'el'+side,FL.ua],['el'+side,'wr'+side,FL.fa],['hip'+side,'kn'+side,FL.th],['kn'+side,'an'+side,FL.sh]]) {
-            const error = Math.abs(distance(J[x],J[y])-length);
-            check(error < 1e-4, ex, 'bone:'+x+'-'+y, t, `Length error ${error.toFixed(6)}`, error);
-          }
-          if (rules?.bar) {
-            /* Bar axis is X; the hand may slide along its width, but not leave its Y/Z line. */
-            const error = Math.hypot(J['grip'+side][1]-J.bar[1], J['grip'+side][2]-J.bar[2]);
-            check(error <= .75, ex, 'grip:'+side, t, `Hand/bar gap ${error.toFixed(4)} model units`, error);
-          }
-          if (rules?.straightArms) {
-            const bend = bend3(J['sh'+side],J['el'+side],J['wr'+side]);
-            check(bend <= 5, ex, 'straight-arm:'+side, t, `Elbow flexion ${bend.toFixed(3)} degrees`, bend);
-          }
-          if (rules?.bench && t >= .9) {
-            const headward = dot(sub(J['el'+side],J['sh'+side]),J.u);
-            check(headward <= 0, ex, 'bench-elbow:'+side, t, 'At the bottom, elbow must not point toward the head', headward);
-          }
-          if (['ohp','dbpress'].includes(ex.id) && t < .85) {
-            const forward = dot(sub(J['el'+side],J['sh'+side]),J.n);
-            check(forward >= -2, ex, 'press-elbow:'+side, t, 'Elbow is behind the shoulder plane', -forward);
-          }
-        }
-        /* World-space support centers lie at Y=180; the foot surface/marker is drawn lower. */
-        for (const key of rules?.ground || []) {
-          const error = Math.abs(J[key][1]-180);
-          check(error < 1e-4, ex, 'ground:'+key, t, `Support is ${error.toFixed(4)} units off the floor plane`, error);
-        }
-        if (rules?.dumbbells) {
-          const props = J.props.filter(p => p.kind === 'dumbbell');
-          for (const prop of props) {
-            const error = Math.min(distance(prop.c,J.gripL),distance(prop.c,J.gripR));
-            check(error <= .75, ex, 'dumbbell-contact', t, `Hand/dumbbell gap ${error.toFixed(4)} model units`, error);
-          }
-        }
-        if (rules?.bench) {
-          const bench = J.props.find(p => p.kind === 'box' && p.lo[1] === 136);
-          check(!!bench, ex, 'bench-present', t, 'Support bench missing');
-          if (bench) for (const key of ['head','sh','hip']) {
-            const margin = key === 'head' ? 9 : 0;
-            check(J[key][2]-margin >= bench.lo[2] && J[key][2]+margin <= bench.hi[2], ex, 'bench-support:'+key, t, 'Body point falls outside the bench length');
-          }
-        }
-        const savedCamera = a.camera;
-        try {
-          for (const camera of a.cameras || [savedCamera || 'side']) {
-            check(Object.prototype.hasOwnProperty.call(CAMERA3,camera),ex,'camera-defined:'+camera,t,'Declared camera must have its own projection');
-            a.camera = camera;
-            const projected = spatialPose(a,t), project = camera3(camera);
-            stats.cameraPoses++;
-            for (const key of ['hip','head','shL','shR','elL','elR','wrL','wrR','knL','knR','anL','anR']) {
-              const expected = project(J[key]).slice(0,2), actual = projected[key];
-              const error = distance(actual,expected);
-              check(error < 1e-4, ex, 'camera:'+camera+':'+key, t, 'Cameras must project the same world pose', error);
-            }
-          }
-        } finally { a.camera = savedCamera; }
-      } else if (a.view === 'side') {
-        if (rules?.chestPad) {
-          const pads = (a.props || []).filter(p => p.support === 'chest');
-          check(pads.length === 1, ex, 'chest-pad-present', t, 'Exactly one chest-support pad is required');
-          if (pads.length === 1) {
-            const pad = pads[0], pts = pad.k === 'line' ? PROPS.line.bounds(pad) : null;
-            const width = pad.w || 4;
-            const valid = pts?.length === 2 && pts.every(p => p?.length === 2 && p.every(Number.isFinite)) && Number.isFinite(width) && width > 0 && distance(pts[0],pts[1]) > 0;
-            check(valid, ex, 'chest-pad-geometry', t, 'Chest support must be a finite, fixed padded segment');
-            if (valid) {
-              // Use the actual prop endpoints/stroke width and the same chest point as the SVG contour.
-              const chest = torsoPoint(J,...SIDE_CHEST), d = sub(pts[1],pts[0]), length = distance(pts[0],pts[1]);
-              const axis = d.map(v => v/length), center = pts[0].map((v,k) => (v+pts[1][k])/2);
-              const forward = dot(sub(center,chest),J.chestN);
-              check(forward > 0, ex, 'chest-pad-side', t, 'Pad must be in front of the chest, not behind the back', -forward);
-              const along = dot(sub(chest,pts[0]),axis);
-              check(along >= 0 && along <= length, ex, 'chest-pad-coverage', t, 'Chest contact falls outside the pad length');
-              const nearest = pts[0].map((v,k) => v+axis[k]*Math.max(0,Math.min(length,along)));
-              const gap = Math.abs(distance(chest,nearest)-width/2);
-              check(gap <= .75, ex, 'chest-pad-contact', t, `Chest/pad surface mismatch ${gap.toFixed(4)} model units`, gap);
-              const tilt = Math.acos(Math.min(1,Math.abs(dot(axis,J.chestU))))*180/Math.PI;
-              check(tilt <= 5, ex, 'chest-pad-angle', t, `Pad/torso angle mismatch ${tilt.toFixed(3)} degrees`, tilt);
-              const incline = Math.atan2(Math.abs(d[1]),Math.abs(d[0]))*180/Math.PI;
-              check(incline >= 30 && incline <= 45, ex, 'chest-pad-incline', t, `Bench incline ${incline.toFixed(3)} degrees does not match the exercise description`);
-            }
-          }
-        }
-        for (const side of ['N','F']) {
-          for (const [x,y,length] of [['sh','el'+side,FL.ua],['el'+side,'wr'+side,FL.fa],['hip','kn'+side,FL.th],['kn'+side,'an'+side,FL.sh]]) {
-            const error = Math.abs(distance(J[x],J[y])-length);
-            check(error < 1e-4, ex, 'bone:'+x+'-'+y, t, `Length error ${error.toFixed(6)}`, error);
-          }
-          /* A 2D bend sign is a visual-review flag, not proof of an anatomical violation.
-             Shoulder rotation and out-of-plane limbs can reverse the projected sign. The elbow is checked on the
-             3D mannequin pose below (elbow-hyperextension); the old 2D projected-elbow flagged 12 legacy sources. */
-          const knee = (angle2(J['kn'+side],J['an'+side])-angle2(J.hip,J['kn'+side])+360)%360;
-          if (knee > 190 && knee < 350) warn(ex, 'projected-knee:'+side, t, 'Review knee in another projection', Math.min(knee-180,360-knee));
-        }
-      }
-      previous = J;
-    }
-    /* Переразгибание локтя — по 3D-позе манекена, которую показывает приложение (все 151 упражнение, 4.72.0): угол локтя —
-       Mannequin.jointAngles, тот же расчёт, что у валидатора манекена (tools/biomech/validator2.js), предел — его же
-       (LIM.elbow: меньше −5° — переразгибание больше 5°), по всем кадрам выборки и всем вариантам инвентаря. До 4.72.0
-       правило (projected-elbow) смотрело на знак изгиба в старых плоских 2D-описаниях, которых приложение не показывает:
-       12 ложных пометок при углах манекена 3,6–113°. */
-    if (Mannequin && typeof a.catalogRig === 'function') {
-      const rigs = [['', a.catalogRig], ...Object.entries(a.catalogVariants || {})];
-      for (const [variant, rig] of rigs) for (let i=0; i<samples; i++) {
-        const t = i/(samples-1), R = rig(t), A = Mannequin.jointAngles(R);
+    /* каждый ракурс разбора — своя проекция той же позы */
+    for (const camera of a.catalogCameras || []) { stats.cameraChecks++; check(Object.prototype.hasOwnProperty.call(CAMERA3,camera),ex,'camera-defined:'+camera,0,'Declared camera must have its own projection'); }
+    const rules = CONTACT_RULES[ex.id], profile = a.catalogProfile;
+    const rigs = [['', a.catalogRig, () => false], ...Object.entries(a.catalogVariants || {}).map(([v,rig]) => [v, rig, k => k === v])];
+    for (const [variant, rig, has] of rigs) {
+      const tag = variant ? ' ('+variant+')' : '', first = rig(0);
+      let previous;
+      for (let i=0; i<samples; i++) {
+        const t = i/(samples-1), R = rig(t);
+        if (!variant) stats.poses++;
         stats.mannequinPoses++;
+        for (const [key,p] of Object.entries(R)) if (Array.isArray(p) && typeof p[0] === 'number') {
+          const finite = p.every(Number.isFinite);
+          check(finite, ex, 'finite:'+key, t, 'Pose coordinates must be finite'+tag);
+          if (finite && previous?.[key]) {
+            const step = distance(p,previous[key]);
+            /* порог по плотности выборки: настоящий разрыв (телепорт) виден при любой */
+            check(step <= 12 * 100/(samples-1), ex, 'continuity:'+key, t, `Jump ${step.toFixed(3)} cm${tag}`, step);
+          }
+        }
+        /* переразгибание локтя — Mannequin.jointAngles, тот же расчёт и предел, что у валидатора (LIM.elbow) */
+        const A = M.jointAngles(R);
         for (const side of ['L','R']) {
           const elbow = A[side].elbow;
           check(Number.isFinite(elbow), ex, 'elbow-angle:'+side, t, 'Elbow angle of the 3D pose must be finite');
-          if (elbow < LIM.elbow[0]) warn(ex, 'elbow-hyperextension:'+side, t, `Elbow hyperextended by ${(-elbow).toFixed(1)}° in the 3D pose${variant ? ' ('+variant+')' : ''} (limit ${-LIM.elbow[0]}°)`, LIM.elbow[0]-elbow);
+          if (elbow < LIM.elbow[0]) warn(ex, 'elbow-hyperextension:'+side, t, `Elbow hyperextended by ${(-elbow).toFixed(1)}° in the 3D pose${tag} (limit ${-LIM.elbow[0]}°)`, LIM.elbow[0]-elbow);
         }
+        /* области мышц на поверхности манекена: не трогают позу, конечны и принадлежат профилю упражнения */
+        if (!variant && profile && (i%10 === 0 || i === samples-1)) {
+          stats.musclePoses++;
+          const before = JSON.stringify(R), zones = mannequinMuscleSurfaces(R,profile);
+          check(JSON.stringify(R) === before, ex, 'muscle-pose-integrity', t, 'Muscle surfaces must not change joints or equipment');
+          for (const zone of zones) {
+            check(zone.points.every(p=>p.length===3&&p.every(Number.isFinite))&&zone.normal.every(Number.isFinite)&&(!zone.anchor||zone.anchor.every(Number.isFinite)),ex,'muscle-surface:'+zone.id,t,'Muscle surface coordinates must be finite');
+            check(zone.id in profile.regions, ex, 'muscle-profile:'+zone.id, t, 'A surface must belong to the exercise profile');
+          }
+        }
+        if (rules) {
+          stats.contactPoses++;
+          for (const key of rules.anchors) {
+            const drift = distance(R[key], first[key]), trunk = key === 'hip', limit = ANCHOR_KNOWN[ex.id+':'+key] ?? (trunk ? SLIP.slipTrunk : SLIP.slip);
+            check(drift <= limit, ex, 'anchor:'+key, t, `Support drift ${drift.toFixed(3)} cm${tag} (limit ${limit} cm)`, drift);
+          }
+          for (const side of ['L','R']) {
+            if (rules.bar) {
+              /* кисть может скользить вдоль грифа или перекладины, но не уходить с его оси */
+              const c = R.contacts.find(k => k.body === 'grip'+side), parts = c ? partsOf(R, c.prop).map(axisOf).filter(Boolean) : [];
+              const error = parts.length ? Math.min(...parts.map(ax => axisDistance(R['grip'+side], ax))) : Infinity;
+              check(error <= .75, ex, 'grip:'+side, t, `Hand/bar gap ${error.toFixed(3)} cm${tag}`, error);
+            }
+            if (rules.straightArms) {
+              const bend = A[side].elbow - straight;
+              check(bend <= STRAIGHT_ARM, ex, 'straight-arm:'+side, t, `Elbow flexion ${bend.toFixed(2)}° beyond the straight arm${tag}`, bend);
+            }
+            if (rules.bench && t >= .9) {
+              const headward = dot(sub(R['el'+side],R['sh'+side]),R.u);
+              check(headward <= 0, ex, 'bench-elbow:'+side, t, 'At the bottom, elbow must not point toward the head', headward);
+            }
+            if (['ohp','dbpress'].includes(ex.id) && t < .85) {
+              const forward = dot(sub(R['el'+side],R['sh'+side]),R.n);
+              check(forward >= -2, ex, 'press-elbow:'+side, t, 'Elbow is behind the shoulder plane', -forward);
+            }
+          }
+          if (rules.dumbbells) for (const p of R.props.filter(q => q.kind === 'dumbbell' && GymEquipmentVisible(model, q, has))) {
+            const error = Math.min(distance(p.c,R.gripL), distance(p.c,R.gripR));
+            check(error <= .75, ex, 'dumbbell-contact', t, `Hand/dumbbell gap ${error.toFixed(3)} cm${tag}`, error);
+          }
+          if (rules.bench) {
+            /* скамья под спиной: голова (с запасом на её радиус), плечи и таз — в пределах длины подушки */
+            const c = R.contacts.find(k => k.body === 'back'), pad = c && partsOf(R, c.prop).find(p => p.kind === 'obox');
+            check(!!pad, ex, 'bench-present', t, 'Support bench missing');
+            if (pad) {
+              const k = pad.size.indexOf(Math.max(...pad.size)), ax = unit([pad.x,pad.y,pad.z][k]), half = pad.size[k]/2;
+              for (const key of ['head','sh','hip']) {
+                const along = Math.abs(dot(sub(R[key],pad.c),ax)), margin = key === 'head' ? 9 : 0;
+                check(along + margin <= half, ex, 'bench-support:'+key, t, 'Body point falls outside the bench length', along + margin - half);
+              }
+            }
+          }
+          if (rules.chestPad) {
+            /* грудь на наклонной подушке: одна опора груди, подушка перед грудью, грудь в пределах её длины и на её поверхности,
+               корпус вдоль подушки, наклон подушки как в описании (30–45°) */
+            const pads = R.contacts.filter(k => k.body === 'front').map(k => partsOf(R, k.prop).find(p => p.kind === 'obox')).filter(Boolean);
+            check(pads.length === 1, ex, 'chest-pad-present', t, 'Exactly one chest-support pad is required');
+            if (pads.length === 1) {
+              const pad = pads[0], k = pad.size.indexOf(Math.max(...pad.size)), ax = unit([pad.x,pad.y,pad.z][k]), half = pad.size[k]/2;
+              const col = [collider(pad)].flat()[0], chest = regionPoints('front', bodyPoints(R), R), cache = M.torsoCache(R);
+              let nearest = null, gap = Infinity; for (const p of chest) { const d = col.sdf(p.p); if (d < gap) { gap = d; nearest = p.p; } }
+              /* насколько подушка ушла в корпус: глубина её точек внутри поверхности туловища */
+              const depth = Math.max(0, ...col.pts.map(q => -M.torsoSDF(R, q, cache)));
+              const forward = dot(sub(pad.c, R.sh), R.chestN || R.n);
+              check(forward > 0, ex, 'chest-pad-side', t, 'Pad must be in front of the chest, not behind the back', -forward);
+              const along = dot(sub(nearest, pad.c), ax);
+              check(Math.abs(along) <= half, ex, 'chest-pad-coverage', t, 'Chest contact falls outside the pad length');
+              /* грудь не отходит от подушки дальше 0,75 см и не проходит сквозь неё: поджатие мягких тканей и обивки заявленной
+                 опорой — в пределах допуска валидатора манекена (мягкая 4 см, жёсткая 2 см; validator2.js, проникновение) */
+              const sink = col.soft ? 4 : 2;
+              check(gap <= .75 && depth <= sink, ex, 'chest-pad-contact', t, `Chest/pad gap ${gap.toFixed(3)} cm, pad ${depth.toFixed(2)} cm inside the chest`, Math.max(gap, depth - sink));
+              const tilt = angleDeg(ax, R.u);
+              check(tilt <= 5, ex, 'chest-pad-angle', t, `Pad/torso angle mismatch ${tilt.toFixed(2)}°`, tilt);
+              const incline = Math.asin(Math.min(1, Math.abs(ax[1]))) * 180/Math.PI;
+              check(incline >= 30 && incline <= 45, ex, 'chest-pad-incline', t, `Bench incline ${incline.toFixed(2)}° does not match the exercise description`);
+            }
+          }
+        }
+        previous = R;
       }
     }
   }
   return {stats, failures:[...failures.values()], warnings:[...warnings.values()],
-    limitations:['This audits schematic geometry and declared contacts; it does not validate medical safety, individual mobility, muscle force or unmodeled collisions.', 'Front-view 2D poses have no anatomical depth; projected limb lengths and bend signs are not used as 3D evidence.', 'Elbow hyperextension is checked on the 3D mannequin poses the app shows (Mannequin.jointAngles), not on the legacy 2D sources.', 'Muscle checks validate illustrative brightness curves and finite attached surfaces, not physiological activation or force.']};
+    limitations:['This audits the 3D mannequin poses the app shows (all variants, all samples) for declared supports, grips, bars and pads; it does not validate medical safety, individual mobility, muscle force or collisions (tools/biomech/validator2.js does).', 'Floor contact, penetration, joint limits (knee, elbow), holds and balance are checked frame by frame by the mannequin validator (npm run mannequin:check).', 'Muscle checks validate illustrative brightness curves and finite attached surfaces, not physiological activation or force.']};
+}
+function GymEquipmentVisible(model, p, has) {
+  return model.get('GymEquipment').visible(p, has);
 }
 
 function elbowProfile(model) {
-  for (const ex of model.EX.filter(e => e.anim.rig3d)) {
+  for (const id of Object.keys(CONTACT_RULES)) {
+    const ex = model.EX.find(e => e.id === id);
     console.log(ex.id);
     for (const t of [0,.25,.5,.75,1]) {
-      const R = ex.anim.rig3d(t);
+      const R = ex.anim.catalogRig(t);
       console.log('  '+t+' '+['L','R'].map(s => {
         const d = sub(R['el'+s],R['sh'+s]);
         return `${s}: forward=${dot(d,R.n).toFixed(2)}, headward=${dot(d,R.u).toFixed(2)}, lateral=${d[0].toFixed(2)}`;
@@ -255,10 +239,9 @@ function main(args) {
   let json = false, elbows = false;
   for (let i=0; i<args.length; i++) {
     if (args[i] === '--samples') opts.samples = Number(args[++i]);
-    else if (args[i] === '--only') opts.only = args[++i];
     else if (args[i] === '--json') json = true;
     else if (args[i] === '--elbows') elbows = true;
-    else if (args[i] === '--help') { console.log('node tools/biomechanics-audit.js [--samples 101] [--only all|side|spatial] [--json] [--elbows]'); return; }
+    else if (args[i] === '--help') { console.log('node tools/biomechanics-audit.js [--samples 101] [--json] [--elbows]'); return; }
     else throw new Error('Unknown argument: '+args[i]);
   }
   const model = loadModel();
@@ -266,14 +249,14 @@ function main(args) {
   const report = auditModel(model,opts);
   if (json) console.log(JSON.stringify(report,null,2));
   else {
-    console.log(`Biomechanics: ${report.stats.exercises} exercises, ${report.stats.poses} poses, ${report.stats.mannequinPoses} 3D mannequin poses, ${report.stats.cameraPoses} camera poses, ${report.stats.muscleProfiles} muscle profiles; ${report.failures.length} errors, ${report.warnings.length} review flags.`);
+    console.log(`Biomechanics (3D): ${report.stats.exercises} exercises, ${report.stats.mannequinPoses} mannequin poses (${report.stats.contactPoses} with support rules), ${report.stats.musclePoses} muscle-surface poses, ${report.stats.muscleProfiles} muscle profiles; ${report.failures.length} errors, ${report.warnings.length} review flags.`);
     for (const f of report.failures) console.log(`ERROR ${f.exercise} / ${f.rule} @ ${f.t.toFixed(3)}: ${f.detail}`);
     for (const f of report.warnings) console.log(`REVIEW ${f.exercise} / ${f.rule} @ ${f.t.toFixed(3)}: ${f.detail}`);
   }
   process.exitCode = report.failures.length ? 1 : 0;
 }
 
-module.exports = {loadModel, auditModel, CONTACT_RULES, main};
+module.exports = {loadModel, auditModel, CONTACT_RULES, ANCHOR_KNOWN, main};
 if (require.main === module) {
   try { main(process.argv.slice(2)); } catch (e) { console.error(e.message); process.exitCode = 1; }
 }
