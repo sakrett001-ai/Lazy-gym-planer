@@ -39,6 +39,11 @@ const skeletonBin = fs.readFileSync(path.join(SRC, 'data', 'skeleton.bin')), ske
 const musclesBin = fs.readFileSync(path.join(SRC, 'data', 'muscles.bin')), musclesB64 = musclesBin.toString('base64');
 /* кожа Anny (вид «Манекен», src/js/09bs-anny.js) — так же: файл по требованию, в офлайн-файлах встроена */
 const annyBin = fs.readFileSync(path.join(SRC, 'data', 'anny.bin')), annyB64 = annyBin.toString('base64');
+/* Иконки: адрес — по хэшу содержимого (?v=<sha256>), а не по версии сборки. Иконка не менялась — адрес прежний: браузер
+   и сервис-воркер (sw.js берёт файл из кеша прежней версии) не скачивают ≈0,3 МБ иконок заново в каждом выпуске. */
+const ICON_FILES = ['icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'favicon-32.png'];
+const iconUrl = Object.fromEntries(ICON_FILES.filter(f => fs.existsSync(path.join(SRC, f)))
+  .map(f => [f, f + '?v=' + require('node:crypto').createHash('sha256').update(fs.readFileSync(path.join(SRC, f))).digest('hex').slice(0, 16)]));
 const ASSET_VERSION = VERSION + '-' + require('node:crypto').createHash('sha256').update([volumeSrc,cssSrc,jsSrc,bodySrc,pwaSrc,JSON.stringify(manifestSrc),read(path.join(SRC,'sw.js')),read(path.join(__dirname,'i18n/en.json')),skeletonB64,musclesB64,annyB64].join('\n')).digest('hex').slice(0,12);
 const reset = `:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}`;
 const headMeta = L => `<meta charset="utf-8">
@@ -52,8 +57,8 @@ const headMeta = L => `<meta charset="utf-8">
 const fontsDir = path.join(SRC, 'fonts');
 const inlineFonts = c => c.replace(/url\(\.\.\/fonts\/([\w.-]+)\)/g, (m, f) => `url(data:font/woff2;base64,${fs.readFileSync(path.join(fontsDir, f)).toString('base64')})`);
 for (const f of fs.readdirSync(fontsDir)) fs.copyFileSync(path.join(fontsDir, f), path.join(DIST, 'fonts', f));
-for (const f of ['icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'favicon-32.png']) { const p = path.join(SRC, f); if (fs.existsSync(p)) fs.copyFileSync(p, path.join(DIST, f)); }
-fs.writeFileSync(path.join(DIST, 'sw.js'), read(path.join(SRC, 'sw.js')).replace(/__VERSION__/g, ASSET_VERSION));
+for (const f of Object.keys(iconUrl)) fs.copyFileSync(path.join(SRC, f), path.join(DIST, f));
+fs.writeFileSync(path.join(DIST, 'sw.js'), read(path.join(SRC, 'sw.js')).replace(/__VERSION__/g, ASSET_VERSION).replace('__ICONS__', JSON.stringify(Object.values(iconUrl).map(u => './' + u))));
 fs.writeFileSync(path.join(DIST, '.nojekyll'), '');
 fs.writeFileSync(path.join(DIST, 'skeleton.bin'), skeletonBin);
 fs.copyFileSync(path.join(__dirname, 'third_party', 'myosim', 'LICENSE'), path.join(DIST, 'skeleton-LICENSE.txt'));
@@ -79,7 +84,7 @@ for (const [lang, L] of Object.entries(LANGS)) {
   }
   js += L.patch + `\nwindow.PODHOD_VERSION='${VERSION}';window.PODHOD_BUILD='${ASSET_VERSION}';window.PODHOD_LANG='${lang}';\n`;
   body = body.replace(/__VERSION__/g, VERSION).replace(/__LANG_HREF__/g, L.other.href).replace(/__LANG_LABEL__/g, L.other.label).replace(/__LANG_TITLE__/g, L.other.title);
-  const manifest = {...manifestSrc, name:L.manifestName, description:L.manifestDesc, lang, scope:up || './', icons:manifestSrc.icons.map(i => ({...i, src:up + i.src + '?v=' + ASSET_VERSION}))};
+  const manifest = {...manifestSrc, name:L.manifestName, description:L.manifestDesc, lang, scope:up || './', icons:manifestSrc.icons.map(i => ({...i, src:up + iconUrl[i.src]}))};
 
   /* 1. PWA */
   fs.writeFileSync(path.join(out, 'app.css'), css.replace(/\.\.\/fonts\//g, up + 'fonts/'));
@@ -94,8 +99,8 @@ for (const [lang, L] of Object.entries(LANGS)) {
 ${headMeta(L)}
 <title>${L.title}</title>
 <link rel="manifest" href="manifest.webmanifest?v=${ASSET_VERSION}">
-<link rel="icon" href="${up}favicon-32.png?v=${ASSET_VERSION}" type="image/png" sizes="32x32">
-<link rel="apple-touch-icon" href="${up}apple-touch-icon.png?v=${ASSET_VERSION}" sizes="180x180">
+<link rel="icon" href="${up}${iconUrl['favicon-32.png']}" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="${up}${iconUrl['apple-touch-icon.png']}" sizes="180x180">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Lazy Gym">
