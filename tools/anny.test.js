@@ -92,6 +92,20 @@ test('corrective shapes with a second angle: contact in the full elbow flexion �
     w = at(90, -60); assert(w[iS] === 0 && w[iP] === 0, 'no contact before 100°');
   }
 });
+
+test('arms up through flexion (armsFwd): full in its pose and in the catalog poses with the arm forward, off in the scapular plane and at the twist limits', () => {
+  const names = d.correctives.map(c => c.name), SC = require('./anny-look/sculpt.js');
+  const wOf = (R, s) => A.correctiveWeights(R, d)[names.indexOf('armsFwd' + s)];
+  for (const s of M.SIDES) assert(names.includes('armsFwd' + s) && d.correctives.find(c => c.name === 'armsFwd' + s).also.length === 3, 'shape and its window in the data');
+  /* рука вверх в плоскости лопатки (поза armsUp, отведение 19°) — без формы; прямо вверх (armsOverhead, 177°) плоскость
+     подъёма вырождается (отведение 3°) — форма включена поверх armsOverhead (так и строилась: формы — по очереди) */
+  for (const s of M.SIDES) { assert(wOf(SC.poseR('armsFwd'), s) > .95, 'own pose'); assert.equal(wOf(SC.poseR('armsUp'), s), 0, 'armsUp pose'); }
+  /* разгибание на блоке из-за головы и подтягивания обратным хватом — форма целиком; разгибание гантели вверху (закрутка −78°)
+     и «лодочка» (−44°) — без неё (с ней — больше вывернутых треугольников) */
+  for (const [id, t, on] of [['cableohext', .5, true], ['chinup', 0, true], ['ohext', 0, false], ['hollow', 1, false]]) {
+    const { R } = pose(id, t), w = wOf(R, 'L'); assert(on ? w > .9 : w === 0, `${id} t=${t}: ${w.toFixed(2)}`);
+  }
+});
 test('supports: the skin lies on the declared support where it hovered (buttocks on the bench, forearms on the mat); skin inside a support stays; no contact — no support', () => {
   const gapOf = (R, P, vs, prop) => { const p = (R.props || []).find(q => q.id === prop || q.id.startsWith(prop + ':')), u = new Float32Array(A.SUP.LEN), sh = A.supportShape(p), g = [0, 0, 0];
     u.set(sh.c, 0); u[3] = sh.type; for (let a = 0; a < 3; a++) { u.set(sh.ax[a], 4 + a * 4); u[7 + a * 4] = sh.half[a]; } u[16] = sh.rr;
