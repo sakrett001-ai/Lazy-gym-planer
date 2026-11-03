@@ -376,7 +376,9 @@ const NORDIC = once(() => {
   const f0 = C.fk(nordicBody(C, NRD.phi0)), palm = s => [f0.P['gh' + s][0] + SG[s] * 4, 0, f0.P['gh' + s][2] + 4 + 5.6];
   const wr = s => C.V.add(C.V.sub(palm(s), [0, 0, 5.6]), [0, 1, 0], 1.8);
   const phi1 = C.solve1D(ph => C.V.dist(C.fk(nordicBody(C, ph)).P.ghL, wr('L')) - 53.5, 20, NRD.phi0);
-  return { legH: top + .8, front: Math.max(...zs) + 3, palm, phi1 };
+  /* основание дивана — на пятках (стопы под ним упираются в него; прежде между ними оставалось 0,8 см, и пятки висели под
+     основанием во всех фазах) */
+  return { legH: top, front: Math.max(...zs) + 3, palm, phi1 };
 });
 
 /* Подъём на носок на одной ноге: стоя лицом к стене на степ-платформе; левая стопа подушечкой на заднем крае
