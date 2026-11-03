@@ -28,6 +28,11 @@ const RFLY = once(() => {
 /* обратные разведения: рукоять по касательной к дуге, внутренний конец ниже на 15° (запястье без локтевого отведения) —
    форма рукояти на рычаге (BIND.pecArm, tilt) и ось хвата в позе */
 const RFLY_TILT = Math.atan(.27) * 180 / Math.PI;
+/* тяга гантелей грудью на наклонной скамье: грудь лежит на подушке весь подход, корпус почти неподвижен (BarBend, «Chest
+   Supported Row»: «you shouldn't be arching your back to the point of your chest peeling off the bench»; Peloton,
+   «Chest-Supported Row»: «maintaining a static position with your torso for the most part»). Грудной отдел — от 2° сгибания
+   внизу до 2° разгибания вверху: лопатки сводит плечевой пояс, грудная клетка с поясницей (−2°) — в пределах 4° от подушки */
+const CROW = { th: [2, -2] };
 /* «бабочка»: 9 ключей — рукоять на жёстком рычаге держит постоянную высоту, а между 5 ключами кисть по дуге вокруг
    плечевого сустава проседала вдоль рукояти до 1 см */
 const PEC_KEYS = [0, .125, .25, .375, .5, .625, .75, .875, 1];
@@ -329,7 +334,7 @@ module.exports = {
   },
 
   /* Тяга гантелей лёжа грудью на наклонной скамье (35°): стопы на полу по бокам сиденья.
-     t=0 — руки выпрямлены вниз, t=1 — гантели у пояса. */
+     t=0 — руки выпрямлены вниз, t=1 — гантели у пояса. Грудь всё время на подушке (CROW). */
   chestrowdb: {
     keys: [0, .25, .5, .75, 1],
     equipment: [{ type: 'adjBench', id: 'bench', back: 40, seat: 0, width: 28, seatPad: false }, { type: 'dumbbell', id: 'dbL', hand: 'L' }, { type: 'dumbbell', id: 'dbR', hand: 'R' }],
@@ -339,11 +344,17 @@ module.exports = {
       const { V, M } = C, e = C.ease(t), q = C.base(), bp = C.frame('bench', 'backPad'), by = M.M3.col(bp.R, 1), bz = M.M3.col(bp.R, 2);
       /* сиденье снято: таз у шарнира, грудь на подушке, ноги почти прямые назад, упор на носки */
       C.root(q, V.add(bp.o, bz, 4), bz, V.scale(by, -1));
-      q.thoracic = [C.lerp(4, -6, e), 0, 0]; q.lumbar = [-2, 0, 0]; q.neck = [-30, 0, 0];
+      q.lumbar = [-2, 0, 0]; q.neck = [-30, 0, 0];
       for (const s of S) { q[s].hip = [12, 9, 6]; q[s].knee = 8; }
+      /* таз ставится один раз — по груди на подушке при среднем разгибании груди (CROW.th — грудной отдел внизу и вверху);
+         дальше грудная клетка только чуть поворачивается на подушке. Прежде таз переставлялся в каждом кадре вслед за грудью
+         (грудной отдел 4° → −6°), и таз ехал по подушке на 1,33 см (опора таза — до 1 см, tools/biomechanics-audit.js), а
+         грудная клетка вверху отходила от подушки на 8° */
+      q.thoracic = [(CROW.th[0] + CROW.th[1]) / 2, 0, 0];
       C.restOn(q, 'front', bp.o, by, -1.4);
       const hipAlong = V.dot(V.sub(C.fk(q).P.hipL, bp.o), bz);
       q.root.p = V.add(q.root.p, bz, 2 - hipAlong);
+      q.thoracic = [C.lerp(CROW.th[0], CROW.th[1], e), 0, 0];
       for (const s of S) {
         const f = C.fk(q), hip = f.P['hip' + s], lat = C.latP(q, s);
         const sup = d => V.add([hip[0], 0, hip[2] - d], lat, 3), heel = 55;
