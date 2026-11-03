@@ -135,8 +135,12 @@ const HY = once(() => {
   for (const s of S) { q[s].hip = [0, 3, 0]; q[s].knee = 6; q[s].ankle = [4, 0]; }
   const f = C.fk(q), H = [0, 100, 0];
   const U = p => V.dot(V.sub(p, H), d), W = p => V.dot(V.sub(p, H), n);
-  /* площадка для стоп — по плоскости подошв */
-  const soles = S.flatMap(s => M.solePoints(f, s).map(o => o.p)), pn = C.M.M3.col(f.F.footL.R, 1);
+  /* площадка для стоп — по плоскости подошв. Нормаль — в плоскости YZ, как у построенной площадки: у нормали стопы
+     (ось рамки foot) есть боковая доля (бедро отведено на 3°), и плоскость по ней на стопах в ±13 см от середины
+     проходила на 0,66 см ниже подошв — стопы висели над площадкой. Точки — поверхности подошвы (M.footPoints, по ним стопу
+     ставят валидатор и кожа; опорные точки M.solePoints — на 0,2 см ниже) */
+  const pf = C.M.M3.col(f.F.footL.R, 1), pn = V.unit([0, pf[1], pf[2]]);
+  const soles = S.flatMap(s => M.footPoints(s).filter(fp => fp.sole).map(fp => M.footPointWorld(f.F['foot' + s], f.F['toes' + s], fp)));
   const off = Math.min(...soles.map(p => V.dot(p, pn)));
   const solesC = V.mix(V.mix(f.P.heelL, f.P.heelR, .5), V.mix(f.P.ballL, f.P.ballR, .5), .5);
   const plateC = V.add(solesC, pn, off - V.dot(solesC, pn));

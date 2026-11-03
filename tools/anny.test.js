@@ -118,6 +118,38 @@ test('supports: the skin lies on the declared support where it hovered (buttocks
   for (const v of verts(/^th[LR]$/)) if (A.supportSD(u.u, 0, Pc0[v * 3], Pc0[v * 3 + 1], Pc0[v * 3 + 2], g) < -.01) { inside++; for (let i = 0; i < 3; i++) assert.equal(Pc1[v * 3 + i], Pc0[v * 3 + i]); }
   assert(inside > 5, `${inside} thigh vertices inside the bench pad`);
 });
+test('heel support: a foot lying on the heel lies on the floor with the heel only; standing on the sole — no support; the support fades in with the gap', () => {
+  const floorGap = (P, vs) => { const u = new Float32Array(A.SUP.LEN), sh = A.supportShape('floor'), g = [0, 0, 0];
+    u.set(sh.c, 0); u[3] = sh.type; for (let a = 0; a < 3; a++) { u.set(sh.ax[a], 4 + a * 4); u[7 + a * 4] = sh.half[a]; } u[16] = sh.rr;
+    let m = Infinity; for (const v of vs) m = Math.min(m, A.supportSD(u, 0, P[v * 3], P[v * 3 + 1], P[v * 3 + 2], g)); return m; };
+  const footVerts = (s, keep) => { const o = []; for (let v = 0; v < d.nv; v++) { const f = d.frames[d.wi[v * 4]]; if ((f === 'foot' + s || f === 'toes' + s) && keep(d.pos[v * 3 + 2])) o.push(v); } return o; };
+  const heel = footVerts('L', z => z < A.SUP.HEEL_Z - 1).concat(footVerts('R', z => z < A.SUP.HEEL_Z - 1)), fore = footVerts('L', z => z > A.SUP.HEEL_Z + 1).concat(footVerts('R', z => z > A.SUP.HEEL_Z + 1));
+  /* обратные отжимания, тяга под столом, тяга в наклоне назад: пятка висела над полом на 0,9–1,3 см (у Anny задне-нижний край
+     пятки короче процедурного) — ложится на пол; свод и носок не двигаются */
+  for (const [id, t] of [['benchdip', .5], ['tablerow', 1], ['invrow', .5]]) {
+    const { R } = pose(id, t), P0 = A.skin(R, { d, floor: false, sup: null }), P1 = A.skin(R, { d, floor: false });
+    const g0 = floorGap(P0, heel), g1 = floorGap(P1, heel);
+    assert(g0 > .8, `${id}: without supports the heel hovers ${g0.toFixed(2)} cm`);
+    assert(g1 < .05 && g1 > -.6, `${id}: the heel lies on the floor: ${g1.toFixed(2)} cm`);
+    for (const v of fore) for (let i = 0; i < 3; i++) assert.equal(P1[v * 3 + i], P0[v * 3 + i], `${id}: forefoot vertex ${v} moved`);
+    assert(A.supports(R, d).list.some(c => c.heel), `${id}: heel support`);
+  }
+  /* стоя на подошве (присед, становая, выпады, подъём на носки) — опоры пятки нет, свод не сплющивается */
+  for (const [id, t] of [['squat', 0], ['squat', .5], ['deadlift', 0], ['lunge', .5], ['calfraise', 1], ['farmer', .25]]) {
+    const { R } = pose(id, t); assert(!A.supports(R, d).list.some(c => c.heel), `${id} t=${t}: no heel support when standing on the sole`);
+  }
+  /* сила опоры нарастает с зазором: тело опущено так, что пятка над полом на 0,02 см, — кожа почти не сдвигается
+     (без нарастания слой SUP.PRESS у пола прижимался целиком и отпускался при касании — скачок 0,5 см) */
+  const { R } = pose('benchdip', .5), g0 = floorGap(A.skin(R, { d, floor: false, sup: null }), heel);
+  const lift = dy => ({ ...R, frames: Object.fromEntries(Object.entries(R.frames).map(([k, f]) => [k, { ...f, o: [f.o[0], f.o[1] + dy, f.o[2]] }])) });
+  const sgn = floorGap(A.skin(lift(.1), { d, floor: false, sup: null }), heel) < g0 ? 1 : -1;
+  const shift = gap => { const Rs = lift(sgn * (g0 - gap)), P0 = A.skin(Rs, { d, floor: false, sup: null }), P1 = A.skin(Rs, { d, floor: false });
+    let mx = 0; for (const v of heel) mx = Math.max(mx, Math.hypot(P1[v * 3] - P0[v * 3], P1[v * 3 + 1] - P0[v * 3 + 1], P1[v * 3 + 2] - P0[v * 3 + 2])); return { mx, gap: floorGap(P0, heel), after: floorGap(P1, heel) }; };
+  const near = shift(.02), mid = shift(.25), far = shift(1);
+  assert(Math.abs(near.gap - .02) < .01 && near.mx < .05, `gap ${near.gap.toFixed(3)}: the skin moved ${near.mx.toFixed(3)} cm`);
+  assert(mid.after > .02 && mid.after < mid.gap, `gap ${mid.gap.toFixed(2)}: half way to the floor (${mid.after.toFixed(2)})`);
+  assert(far.after < .05, `gap ${far.gap.toFixed(2)}: on the floor (${far.after.toFixed(2)})`);
+});
 
 /* ---------- сцена ---------- */
 test('scene: in the Mannequin view the Anny mesh replaces the procedural skin; Anatomy and Skeleton keep the procedural ghost; no data — procedural skin', async () => {
