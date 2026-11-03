@@ -96,7 +96,7 @@ function workoutShow(index){
   $('#wv-suggestion').textContent=sg.text;
   holdSetup(s,sg);
   const cue=MOTION_FOCUS[ex.id];$('#wv-setup').textContent=cue?.setup||ex.tech[0];$('#wv-control').textContent=cue?.control||ex.tech[1];$('#wv-breath').textContent=ex.breath;
-  disposeMotion(workout.motion);workout.motion={it,f:null,clock:0,paused:reduceMotion,durations:motionDurations(it)};$('#wv-angle').textContent=ex.viewNote||(ex.anim.view==='front'?'Вид спереди':'Вид сбоку');
+  disposeMotion(workout.motion);workout.motion={it,f:null,clock:0,paused:reduceMotion,durations:motionDurations(it)};$('#wv-angle').textContent=CAMERA3[motionCamera(ex)].label;
   $('#wv-motion').textContent=reduceMotion?'Воспроизвести':'Пауза';$('#wv-motion').setAttribute('aria-pressed',String(!reduceMotion));mountWorkoutCameras();
   $('#wv-prev').disabled=workout.index===0;$('#wv-next').disabled=workout.index===workout.queue.length-1;
   saveWorkout();workoutTick();
@@ -312,19 +312,19 @@ function setupWorkout(){
 }
 
 function motionCamera(ex){
- const cameras=ex.anim.catalogCameras||ex.anim.cameras||[],saved=motionPrefs.views?.[ex.id];
- return cameras.includes(saved)?saved:ex.anim.catalogRig?'above':ex.anim.camera||ex.anim.view;
+ const cameras=ex.anim.catalogCameras||[],saved=motionPrefs.views?.[ex.id];
+ return cameras.includes(saved)?saved:'above';
 }
 function cameraButtons(ex,current){
- return (ex.anim.catalogCameras||ex.anim.cameras||[]).map(key=>`<button type="button" data-motion-camera="${key}" aria-pressed="${current===key}">${CAMERA3[key].label}</button>`).join('');
+ return (ex.anim.catalogCameras||[]).map(key=>`<button type="button" data-motion-camera="${key}" aria-pressed="${current===key}">${CAMERA3[key].label}</button>`).join('');
 }
 function rememberCamera(ex,key){
- if(!(ex.anim.catalogCameras||ex.anim.cameras)?.includes(key))return false;
+ if(!ex.anim.catalogCameras?.includes(key))return false;
  motionPrefs.views=Object.assign({},motionPrefs.views,{[ex.id]:key});saveMotionPrefs();return true;
 }
 function mountDetailCameras(){
  if(!detailMotion)return;
- const F=detailMotion,ex=F.it.ex,a=ex.anim,key=motionCamera(ex),cameras=a.catalogCameras||a.cameras||[];
+ const F=detailMotion,ex=F.it.ex,a=ex.anim,key=motionCamera(ex),cameras=a.catalogCameras||[];
  disposeMotion(F);
  /* кости и мышцы — с первого кадра фигуры, если уже загружены (иначе их покажет applyFigureView, когда придут); второй ракурс
     пары — та же сцена первой фигуры (share): без второго WebGL-контекста и второй сборки шейдеров */
@@ -335,7 +335,7 @@ function mountDetailCameras(){
  F.f=make(key);$('#mv-stage').replaceChildren(F.f.svg);
  $('#mv-camera-controls').hidden=cameras.length<2;
  $('#mv-cameras').innerHTML=cameraButtons(ex,key);
- $('#mv-view').textContent=CAMERA3[key]?.label||ex.viewNote||(a.view==='front'?'Вид спереди':'Вид сбоку');
+ $('#mv-view').textContent=CAMERA3[key].label;
  $('#mv-camera-hint').textContent=a.cameraHints?.[key]||'';
  $('#mv-camera-hint').hidden=!a.cameraHints;
  const pair=cameras.length>1&&!!motionPrefs.dual;
@@ -353,11 +353,11 @@ function detailLayers(ex){
  return{bones:Skeleton.data,body:view==='anatomy'?{skeleton:Skeleton.data,muscles:Muscles.data,level:anatomyLevel(ex)}:null};
 }
 /* второй ракурс пары: из профиля мышц упражнения, иначе первый другой */
-function pairCamera(a,key){const cameras=a.catalogCameras||a.cameras||[],preferred=motionProfile(a)?.pair;return preferred!==key&&cameras.includes(preferred)?preferred:cameras.find(c=>c!==key);}
+function pairCamera(a,key){const cameras=a.catalogCameras||[],preferred=motionProfile(a)?.pair;return preferred!==key&&cameras.includes(preferred)?preferred:cameras.find(c=>c!==key);}
 /* Смена ракурса в разборе: объёмная фигура переключает камеру сама — без новой сцены и пересчёта позы (≈0,2 с на
    компьютере, втрое дольше на слабом телефоне). Плоская запасная схема и смена числа видов пересобирают окно. */
 function switchDetailCamera(){
- const F=detailMotion,a=F.it.ex.anim,key=motionCamera(F.it.ex),pair=(a.catalogCameras||a.cameras||[]).length>1&&!!motionPrefs.dual,other=pair?pairCamera(a,key):null;
+ const F=detailMotion,a=F.it.ex.anim,key=motionCamera(F.it.ex),pair=(a.catalogCameras||[]).length>1&&!!motionPrefs.dual,other=pair?pairCamera(a,key):null;
  /* второй ракурс пары, повёрнутый вручную, не сбрасывается, если его предустановка та же */
  if(!F.f?.setCamera||(pair?!F.extra?.setCamera:!!F.extra)||!F.f.setCamera(key)||(pair&&F.extra.camera!==other&&!F.extra.setCamera(other)))return mountDetailCameras();
  paintDetailCamera();
@@ -379,14 +379,14 @@ function paintDetailCamera(){
  const F=detailMotion;if(!F?.f)return;
  const a=F.it.ex.anim,key=motionCamera(F.it.ex),free=!!F.f.free;
  pressCamera('#mv-cameras',free?null:key);
- $('#mv-view').textContent=free?FREE_VIEW_LABEL:CAMERA3[key]?.label||F.it.ex.viewNote||(a.view==='front'?'Вид спереди':'Вид сбоку');
+ $('#mv-view').textContent=free?FREE_VIEW_LABEL:CAMERA3[key].label;
  if(F.extra?.orbit)$('#mv-second-label').textContent=F.extra.free?FREE_VIEW_LABEL:CAMERA3[F.extra.camera]?.label||'';
 }
 function paintWorkoutCamera(){
  const F=workout?.motion;if(!F?.f)return;
  const ex=F.it.ex,key=motionCamera(ex),free=!!F.f.free;
  pressCamera('#wv-cameras',free?null:key);
- $('#wv-angle').textContent=free?FREE_VIEW_LABEL:CAMERA3[key]?.label||(ex.anim.view==='front'?'Вид спереди':'Вид сбоку');
+ $('#wv-angle').textContent=free?FREE_VIEW_LABEL:CAMERA3[key].label;
 }
 /* Подсказка под сценой разбора — одна строка, пока человек ни разу не повернул и не приблизил сцену (флаг в localStorage;
    без хранилища — до конца сеанса). Первый жест на любой сцене её убирает. */
@@ -407,8 +407,8 @@ function mountWorkoutCameras(){
  if(!workout?.motion)return;
  const F=workout.motion,ex=F.it.ex,key=motionCamera(ex),m=motionFrame(F);
  disposeMotion(F);F.f=createMotionFigure(ex.anim,{has:F.it.has,ratio:1.15,t:m.t,label:F.it.name,camera:key,muscles:motionPrefs.muscles,memoBones:true,interactive:true,onCamera:paintWorkoutCamera,onGesture:orbitGesture,layers:workoutLayers(F)});F.f.setVectors(!!motionPrefs.vectors);
- $('#wv-stage').replaceChildren(F.f.svg);$('#wv-cameras').innerHTML=cameraButtons(ex,key);$('#wv-cameras').hidden=!(ex.anim.catalogCameras||ex.anim.cameras);
- $('#wv-angle').textContent=CAMERA3[key]?.label||(ex.anim.view==='front'?'Вид спереди':'Вид сбоку');configureMusclePanel('wv',F.it);configureStressPanel('wv',F);workoutFigure.pace.settle();applyWorkoutView(F);paintWorkoutMotion();
+ $('#wv-stage').replaceChildren(F.f.svg);$('#wv-cameras').innerHTML=cameraButtons(ex,key);$('#wv-cameras').hidden=!ex.anim.catalogCameras;
+ $('#wv-angle').textContent=CAMERA3[key].label;configureMusclePanel('wv',F.it);configureStressPanel('wv',F);workoutFigure.pace.settle();applyWorkoutView(F);paintWorkoutMotion();
 }
 /* Вид фигуры на экране тренировки — тот же выбор, что в разборе (motionPrefs.view; по умолчанию «Анатомия»): кости и мышцы
    в почти невидимом силуэте кожи, цвет мышц по фазам. Переключатель «Анатомия · Скелет · Манекен» — маленький, в углу

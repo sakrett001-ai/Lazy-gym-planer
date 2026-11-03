@@ -1,5 +1,6 @@
 function catalogVectors(anim){
- if(anim.hold||(anim.keys?.length>2&&!anim.vectors))return[];
+ /* удержания и циклические многоключевые движения (бёрпи, прыжки, велосипед) стрелками не описываются (noVectors в описании упражнения) */
+ if(anim.hold||anim.noVectors)return[];
  const rig=anim.catalogRig||anim.rig3d,poses=Array.from({length:41},(_,i)=>rig(i/40)),a=poses[0],b=poses.at(-1),out=[];
  for(const key of ['sh','hip','elL','elR','gripL','gripR','knL','knR','anL','anR']){
   const delta=V3.sub(b[key],a[key]);if(Math.hypot(...delta)>10)out.push({a:a[key],b:b[key],key,points:poses.map(R=>R[key])});
