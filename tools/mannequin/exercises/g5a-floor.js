@@ -322,12 +322,14 @@ function pushPose(C, L, e) {
          запястья около 90° такой наклон в углах манекена — уже не разгибание, а отведение запястья на десятки градусов
          (поворот кисти вокруг её оси при разгибании 90° запястью недоступен — сгибание и отведение тогда обе поперёк
          предплечья). Живая ладонь здесь ложится на опору мягкими тканями и чуть заваливается; центр ладони поднят так,
-         что нижний край касается коврика. Внизу предплечье над кистью — наклона нет. */
+         что нижний край касается коврика с поджатием мягких тканей (возвышения ладони) на 0,3 см, — иначе вверху у
+         широкого хвата центр ладони висел в 1,1 см над ковриком (порог аудита хватов — 1 см). Внизу предплечье над
+         кистью — наклона нет. */
       const F = L.fingers(s), Y = [0, 1, 0];
       for (let k = 0; k < 3; k++) {
         const f = C.fk(q), a = V.unit(V.sub(f.P['el' + s], f.P['wr' + s])), side = V.cross(F, Y), lean = Math.asin(Math.max(-1, Math.min(1, V.dot(a, side))));
         const rho = Math.max(-L.palmRollMax, Math.min(L.palmRollMax, L.palmRoll * lean * 180 / Math.PI)) * C.D2R;
-        const n = V.add(V.scale(Y, Math.cos(rho)), side, Math.sin(rho)), lift = C.M.B.palm.width / 2 * Math.abs(Math.sin(rho));
+        const n = V.add(V.scale(Y, Math.cos(rho)), side, Math.sin(rho)), lift = Math.max(0, C.M.B.palm.width / 2 * Math.abs(Math.sin(rho)) - .3);
         C.palm(q, s, V.add(palm, Y, lift), F, n, pole);
       }
     }
@@ -1011,7 +1013,8 @@ module.exports = {
   /* Отжимания от пола. eccFirst: t=0 — верх (руки почти прямые), t=1 — грудь в 3 см от коврика. */
   pushup: {
     keys: [0, .25, .5, .75, 1],
-    equipment: PUSH_MAT,
+    /* коврик 100 см: ладони в 36 см от середины (кисти под локтями), на коврике 75 см мизинцевый край ладони свисал */
+    equipment: [{ type: 'mat', id: 'mat', len: 200, width: 100, at: [0, 0, 8] }],
     contacts: PUSH_CONTACTS,
     pose(t, C) { return pushPose(C, PUSH(), C.ease(t)); }
   },
@@ -1028,7 +1031,7 @@ module.exports = {
      Рабочая фаза — выжимание: t=0 — грудь у коврика, t=1 — руки почти прямые. */
   kneepush: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [{ type: 'mat', id: 'mat', len: 180, width: 75, at: [0, 0, 18] }],
+    equipment: [{ type: 'mat', id: 'mat', len: 180, width: 100, at: [0, 0, 18] }],   /* 100 см: ладони в 36,5 см от середины */
     contacts: [{ body: 'palmL', prop: 'mat' }, { body: 'palmR', prop: 'mat' }, { body: 'kneeL', prop: 'mat' }, { body: 'kneeR', prop: 'mat' }],
     pose(t, C) { return pushPose(C, KNEEPUSH(), 1 - C.ease(t)); }
   },
