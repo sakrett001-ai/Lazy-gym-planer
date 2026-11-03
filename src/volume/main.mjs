@@ -111,7 +111,7 @@ export function createVolumeFigure(options){
   idleTask(()=>{
    if(!usable())return;
    try{const d=data(lastT,lastIndex,false);scene.anny.update(A.data,d,{on:muscles,color:options.color,values:d.values,sideValues:d.sideValues,regions:d.regions,selected});scene.anny.hide();}catch(e){return;}
-   renderer.compileAsync(scene.scene,cameras.angle).then(()=>idleTask(()=>{
+   Promise.all([renderer.compileAsync(scene.scene,cameras.angle),compileShadowDepth(scene.anny.mesh)]).then(()=>idleTask(()=>{
     if(!usable()||!renderer.setViewport)return;
     const g=scene.anny.group;g.visible=true;
     try{renderer.setViewport(0,0,1,1);renderer.setScissor(0,0,1,1);renderer.setScissorTest(true);renderer.render(scene.scene,cameras.angle);}
@@ -119,6 +119,21 @@ export function createVolumeFigure(options){
     draw();
    }),()=>{});
   });
+ }
+ /* Программа тени сетки (её материал глубины) — тоже без остановки главного потока. compileAsync собирает только основные
+    материалы, а материал глубины собирается в проходе тени — синхронно, кадр ждёт сборку. Здесь он собирается так, как его
+    возьмёт проход тени: та же сторона (проход тени ставит её по стороне основного материала), свет сцены и запись в
+    текстуру (в текстуру — без тонального отображения и в линейном цвете: иначе другая программа) */
+ function compileShadowDepth(mesh){
+  const depth=mesh?.customDepthMaterial;
+  if(!depth||!mesh.castShadow||!renderer.shadowMap?.enabled||!renderer.setRenderTarget||!renderer.compileAsync)return Promise.resolve();
+  const side={[THREE.FrontSide]:THREE.BackSide,[THREE.BackSide]:THREE.FrontSide,[THREE.DoubleSide]:THREE.DoubleSide};
+  depth.side=mesh.material.shadowSide??side[mesh.material.side];
+  const helper=new THREE.Scene(),twin=new THREE.Mesh(mesh.geometry,depth);twin.frustumCulled=false;twin.receiveShadow=mesh.receiveShadow;twin.morphTargetInfluences=mesh.morphTargetInfluences;helper.add(twin);
+  const target=new THREE.WebGLRenderTarget(1,1),prev=renderer.getRenderTarget();let done;
+  try{renderer.setRenderTarget(target);done=renderer.compileAsync(helper,cameras.angle,scene.scene);}
+  catch(e){done=Promise.resolve();}finally{renderer.setRenderTarget(prev);}
+  return done.catch(()=>{}).then(()=>target.dispose());
  }
  const wantAnny=()=>{if(!skeleton&&!anatomy)loadAnny();};
  /* shape — кадр только для рамки (без нормалей, scene.apply) */
