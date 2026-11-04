@@ -18,9 +18,9 @@ window.Lab={
    if(light){view.scene.background=new THREE.Color('#e4e9ef');view.scene.traverse(o=>{if(o.name==='floor')o.material.color.set('#c9d1db');if(o.isGridHelper){o.material.color.set('#aab4c0');}});const a=view.scene.children.find(o=>o.isAmbientLight);if(a)a.intensity=.75;}
    for(let k=0;k<=8;k++){view.apply(dataFor(rig,k/8,hasFn),{muscles:false,joints:!!s.joints,color:()=>'#a7b3c6'});view.includeBounds();}
    view.resize(w,h);view.apply(dataFor(rig,s.t,hasFn),{muscles:false,joints:!!s.joints,color:anatomy?heat:()=>'#a7b3c6',skeleton:bones,anatomy});
-   /* крупный план: ортокамера вокруг точки позы (focus — ключ позы, например head или gripL), ширина span, м */
+   /* крупный план: ортокамера вокруг точки позы (focus — ключ позы, например head или gripL, или prop:<id детали> — её центр), ширина span, м */
    const cam=view.cameras[s.cam],saved=focus&&cam.isOrthographicCamera?[cam.left,cam.right,cam.top,cam.bottom]:null;
-   if(saved){const R=rig(s.t),f=R[focus],q=new THREE.Vector3(f[0]/100,(186-f[1])/100,f[2]/100).applyMatrix4(cam.matrixWorldInverse),hh=span*h/w/2;cam.left=q.x-span/2;cam.right=q.x+span/2;cam.top=q.y+hh;cam.bottom=q.y-hh;cam.updateProjectionMatrix();}
+   if(saved){const R=rig(s.t),pp=focus.startsWith('prop:')&&R.props.find(p=>p.id===focus.slice(5)),f=pp?(pp.c||pp.pts?.[0]||pp.a):R[focus],q=new THREE.Vector3(f[0]/100,(186-f[1])/100,f[2]/100).applyMatrix4(cam.matrixWorldInverse),hh=span*h/w/2;cam.left=q.x-span/2;cam.right=q.x+span/2;cam.top=q.y+hh;cam.bottom=q.y-hh;cam.updateProjectionMatrix();}
    renderer.render(view.scene,cam);ctx.drawImage(renderer.domElement,x,y+lab);
    if(saved){[cam.left,cam.right,cam.top,cam.bottom]=saved;cam.updateProjectionMatrix();}
    ctx.fillStyle='#cbd7ec';ctx.fillText(`${s.label||s.id} · t=${s.t} · ${s.cam}`,x+8,y+16);view.dispose();
