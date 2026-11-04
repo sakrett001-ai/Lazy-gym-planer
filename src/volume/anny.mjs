@@ -43,6 +43,18 @@ function reliefNormals(g,idx,nv,k,rings){
  for(let v=0;v<nv;v++){const x=n[v*3]+k*(n[v*3]-s[v*3]),y=n[v*3+1]+k*(n[v*3+1]-s[v*3+1]),z=n[v*3+2]+k*(n[v*3+2]-s[v*3+2]),l=Math.hypot(x,y,z)||1;n[v*3]=x/l;n[v*3+1]=y/l;n[v*3+2]=z/l;}
  g.attributes.normal.needsUpdate=true;
 }
+/* нормали форм: форма двигает кожу, а нормаль шейдера — нормаль стойки, повёрнутая скиннингом. Без своей нормали форма,
+   выглаживающая складку (подмышка в висе — armsUpTw, руки вверх — armsUp), освещена как прежняя складка: на гладкой
+   коже — светлое пятно, похожее на вздутие (с нормалями граней, по самой поверхности, его нет). Сдвиг нормали —
+   нормаль стойки с формой минус нормаль стойки, как сдвиг позиций (morphTargetsRelative); нормали — как computeVertexNormals */
+function shapeNormals(pos,idx,morphs){
+ const vn=P=>{const N=new Float32Array(P.length);
+  for(let t=0;t<idx.length;t+=3){const a=idx[t]*3,b=idx[t+1]*3,c=idx[t+2]*3,ux=P[c]-P[b],uy=P[c+1]-P[b+1],uz=P[c+2]-P[b+2],wx=P[a]-P[b],wy=P[a+1]-P[b+1],wz=P[a+2]-P[b+2],
+   nx=uy*wz-uz*wy,ny=uz*wx-ux*wz,nz=ux*wy-uy*wx;N[a]+=nx;N[a+1]+=ny;N[a+2]+=nz;N[b]+=nx;N[b+1]+=ny;N[b+2]+=nz;N[c]+=nx;N[c+1]+=ny;N[c+2]+=nz;}
+  for(let i=0;i<N.length;i+=3){const l=Math.hypot(N[i],N[i+1],N[i+2])||1;N[i]/=l;N[i+1]/=l;N[i+2]/=l;}return N;};
+ const N0=vn(pos),P=new Float32Array(pos.length);
+ return morphs.map(m=>{for(let i=0;i<P.length;i++)P[i]=pos[i]+m.array[i];const N=vn(P);for(let i=0;i<N.length;i++)N[i]-=N0[i];return new THREE.BufferAttribute(N,3);});
+}
 const DQ_PARS=`
 uniform vec4 annyDQ[ANNY_FRAMES*2];
 #define ANNY_FLOOR ${FLOOR.toFixed(1)}
@@ -147,7 +159,7 @@ export function createAnnyLayer(parent,skin){
   }
   if(d.correctives.length){
    g.morphAttributes.position=d.correctives.map(c=>{const a=new Float32Array(d.nv*3);for(let j=0;j<c.n;j++){const v=c.i[j];a[v*3]=c.d[j*3];a[v*3+1]=c.d[j*3+1];a[v*3+2]=c.d[j*3+2];}return new THREE.BufferAttribute(a,3);});
-   g.morphTargetsRelative=true;
+   g.morphTargetsRelative=true;g.morphAttributes.normal=shapeNormals(d.pos,idx,g.morphAttributes.position);
   }
   /* габарит задаём сами (по точкам кадра): сетка в стойке, без него отсечение по пирамиде видимости ошибётся */
   g.boundingSphere=new THREE.Sphere(new THREE.Vector3(),1e3);g.boundingBox=new THREE.Box3(new THREE.Vector3(-1e3,-1e3,-1e3),new THREE.Vector3(1e3,1e3,1e3));

@@ -24,7 +24,7 @@
   "folds": 128
  },
  "pullup 0": {
-  "inverted": 61,
+  "inverted": 60,
   "folds": 114
  },
  "latpull 0": {
@@ -72,7 +72,7 @@
   "folds": 135
  },
  "crunch 1": {
-  "inverted": 55,
+  "inverted": 49,
   "folds": 227
  },
  "pushup 1": {
