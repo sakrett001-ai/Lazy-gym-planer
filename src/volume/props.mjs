@@ -8,7 +8,7 @@ const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],add=(a,b,k=1)=>[a[0]+b[0]*k,a[1
 const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 export const NEW_KINDS=new Set(['beam','obox','cyl','sphere','cable','prism']);
 export const isNewProp=s=>NEW_KINDS.has(s.kind)||(s.kind==='barbell'&&s.len)||(s.kind==='dumbbell'&&s.handle)||(s.kind==='kettlebell'&&s.handleAxis);
-export function propKey(s){return s.kind+(s.kind==='barbell'?JSON.stringify(s.plates||[]):'')+(s.kind==='cable'?':'+s.pts.length:'')+(s.kind==='beam'?(s.r?':r':':w'):'')+(s.kind==='cyl'?':'+(s.sides||24):'')+(s.kind==='prism'?':'+prismKey(s):'');}
+export function propKey(s){return s.kind+(s.kind==='barbell'?JSON.stringify(s.plates||[]):'')+(s.kind==='cable'?':'+s.pts.length+(s.joints?':j':'')+(s.flat?':f':''):'')+(s.kind==='beam'?(s.r?':r':':w'):'')+(s.kind==='cyl'?':'+(s.sides||24):'')+(s.kind==='prism'?':'+prismKey(s):'');}
 const prismKey=s=>s.pts.length+':'+s.len+':'+s.pts.reduce((a,q)=>a+q[0]*1.7+q[1]*2.3,0).toFixed(3);
 /* контур в плоскости XY (м), выдавлен на len по Z симметрично: знак оси w не важен, ориентацию задают u, v */
 function prismGeometry(s){const sh=new THREE.Shape(s.pts.map(q=>new THREE.Vector2(q[0]/100,q[1]/100)));const g=new THREE.ExtrudeGeometry(sh,{depth:s.len/100,bevelEnabled:false,curveSegments:1});g.translate(0,0,-s.len/200);g.computeVertexNormals();return g;}
@@ -25,7 +25,12 @@ export function createPropNode(parent,s,mats,mesh){
  else if(s.kind==='cyl')mesh(g,new THREE.CylinderGeometry(1,1,1,s.sides||24),m,'cyl');
  else if(s.kind==='sphere')mesh(g,new THREE.SphereGeometry(1,18,12),m,'sphere');
  else if(s.kind==='prism')mesh(g,prismGeometry(s),m,'prism');
- else if(s.kind==='cable')for(let i=1;i<s.pts.length;i++)mesh(g,new THREE.CylinderGeometry(1,1,1,8),m,'cable');
+ else if(s.kind==='cable'){
+  /* лента эспандера (09bo-band.js): круглая — отрезки-цилиндры радиуса rs и сферы в изломах (joints), без щелей на сгибах;
+     плоская (flat: [ширина, толщина], nrm — нормаль ленты по отрезкам) — отрезки-пластины */
+  for(let i=1;i<s.pts.length;i++)mesh(g,s.flat?new THREE.BoxGeometry(1,1,1):new THREE.CylinderGeometry(1,1,1,s.joints?12:8),m,'cable');
+  if(s.joints&&!s.flat)for(let i=1;i<s.pts.length-1;i++)mesh(g,new THREE.SphereGeometry(1,12,8),m,'joint');
+ }
  else if(s.kind==='barbell'){
   mesh(g,new THREE.CylinderGeometry(1,1,1,18),mats.chrome,'shaft');
   for(const sign of [-1,1]){
@@ -56,7 +61,13 @@ export function updatePropNode(node,s){
  else if(s.kind==='cyl'){const o=ch[0];o.position.fromArray(world(s.c));o.quaternion.setFromUnitVectors(UP,vec(unit(direction(s.axis))));o.scale.set(s.r/100,s.len/100,s.r/100);}
  else if(s.kind==='sphere'){const o=ch[0];o.position.fromArray(world(s.c));o.scale.setScalar(s.r/100);}
  else if(s.kind==='prism'){const o=ch[0];o.position.fromArray(world(s.c));o.quaternion.copy(basisQ(s.u,s.v,s.w));}
- else if(s.kind==='cable'){for(let i=1;i<s.pts.length;i++){const o=ch[i-1],l=alignY(o,s.pts[i-1],s.pts[i]);o.scale.set(s.r/100,l/100,s.r/100);}}
+ else if(s.kind==='cable'){
+  const n=s.pts.length-1;
+  for(let i=1;i<=n;i++){const o=ch[i-1],l=alignY(o,s.pts[i-1],s.pts[i]),r=s.rs?s.rs[i-1]:s.r;
+   if(s.flat&&l>1e-4){const y=unit(sub(s.pts[i],s.pts[i-1])),nz=s.nrm?.[i-1]||[0,-1,0],z=unit(sub(nz,y.map(v=>v*dot(nz,y)))),x=cross(y,z);o.quaternion.copy(basisQ(x,y,z));o.scale.set(s.flat[0]/100,l/100,s.flat[1]/100);}
+   else o.scale.set(r/100,l/100,r/100);}
+  if(s.joints&&!s.flat)for(let i=1;i<n;i++){const o=ch[n+i-1],r=s.rs?Math.max(s.rs[i-1],s.rs[i]):s.r;o.position.fromArray(world(s.pts[i]));o.scale.setScalar(r/100);}
+ }
  else if(s.kind==='barbell'){
   const ax=unit(s.axis),c=s.c,q=new THREE.Quaternion().setFromUnitVectors(UP,vec(unit(direction(ax))));
   for(const o of ch){

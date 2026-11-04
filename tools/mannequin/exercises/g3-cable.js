@@ -505,13 +505,33 @@ function rowGripW(C, q, g, e, allowShort) {
 }
 const ROWL_W = once(() => { const C = ctx([ROW_EQ]); return rowLine(C, t => rowAt(C, ROWW, t), q => C.V.add(C.chestPoint(q, 28), [0, 0, 9]), (q, g, e, sh) => rowGripW(C, q, g, e, sh), 8); });
 
-/* ---------- Эспандеры ---------- */
+/* ---------- Эспандеры ----------
+   Лента — общая модель (src/js/09bo-band.js): одна непрерывная трубка с рукоятями, путь по опорам, растяжение по
+   кускам, сечение по сохранению объёма латекса. Трубки — реальные изделия: tube48 — 48″ (122 см; TheraBand Professional
+   Latex Resistance Tubing with Handles, CanDo, Power Systems), tube36 — 36″ (91 см; CanDo Tubing with Handles Exerciser).
+   В любой фазе трубка натянута (не короче длины покоя) и растянута не больше чем втрое (TheraBand, «Care & Safety»).
+   Стоя на ленте: трубка под обеими подошвами поперёк, под передним краем свода; на середину встают — ветви поровну.
+   У двери: середина трубки продета в петлю крепления (кольцо), в петле трубка скользит — натяжение ветвей одно. */
 const BAND_FEET = { L: [10.5, 13, 7], R: [-10.5, 13, -7] };
+const BAND_SOLES = [{ handle: 'L' }, { sole: 'L', at: 6 }, { sole: 'R', at: 6 }, { handle: 'R' }];
+/* продета в кольцо крепления двери D: перекладина кольца на стороне двери (ringBar), направление к двери */
+const ringOf = D => { const A = EQ.anchors([D]).door, d = A.ringBar.map((v, i) => v - A.anchor[i]), n = Math.hypot(...d); return { ring: rp(A.ringBar), door: d.map(v => Math.round(v / n * 1000) / 1000), mountTo: 'door:ring' }; };
 const BAND = once(() => {
   const C = ctx([]), q = C.base();
   stand(C, q, { root: [0, 88.5, 0], lean: 1, feet: BAND_FEET });
   q.lumbar = [-2, 0, 0]; q.neck = [2, 0, 0];
   balance(C, q, BAND_FEET);
+  return { q };
+});
+/* махи в стороны: стопы почти вместе (между внутренними краями 4 см). Ветви 48-дюймовой трубки растягиваются от 1,7 раза
+   у бёдер до 3 раз при руках на уровне плеч только при коротком куске под стопами: при стопах на ширине таза
+   (BAND_FEET, под стопами 28 см) руки на уровне плеч тянули ветви в 3,2 раза — больше паспортного предела */
+const BAND_FEET_N = { L: [5.4, 13, 3], R: [-5.4, 13, -3] };
+const BANDN = once(() => {
+  const C = ctx([]), q = C.base();
+  stand(C, q, { root: [0, 88.5, 0], lean: 1, feet: BAND_FEET_N });
+  q.lumbar = [-2, 0, 0]; q.neck = [2, 0, 0];
+  balance(C, q, BAND_FEET_N);
   return { q };
 });
 /* Дверь стоит при x > 0, пользователь смотрит в +X (ни одна из камер атласа не смотрит со стороны +X — дверь не заслоняет тело).
@@ -549,11 +569,11 @@ module.exports = {
   /* Стоя на середине ленты (лента из-под подошв). t=0 — кисти у бёдер; t=1 — руки через стороны до уровня плеч, локти слегка согнуты. */
   bandlatraise: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [{ type: 'band', id: 'band', fromSole: true, r: .7 }],
+    equipment: [{ type: 'band', id: 'band', model: 'tube48', route: BAND_SOLES }],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'band:handleL' }, { body: 'gripR', prop: 'band:handleR' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
-      const { V } = C, e = C.ease(t), q = C.M.clone(BAND().q);
+      const { V } = C, e = C.ease(t), q = C.M.clone(BANDN().q);
       const f = C.fk(q), T = C.axes(q, 'thorax');
       for (const s of S) {
         const gh = f.P['gh' + s], lat = C.lat(q, s);
@@ -570,7 +590,7 @@ module.exports = {
   /* Стоя на ленте, хват снизу, локти прижаты к бокам. t=0 — руки выпрямлены; t=1 — кисти у плеч. */
   bandcurl: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [{ type: 'band', id: 'band', fromSole: true, r: .7 }],
+    equipment: [{ type: 'band', id: 'band', model: 'tube48', route: BAND_SOLES }],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'band:handleL' }, { body: 'gripR', prop: 'band:handleR' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
@@ -589,7 +609,7 @@ module.exports = {
   /* Лента закреплена в притворе над дверью. Локти прижаты к бокам. t=0 — локти согнуты под 90°; t=1 — руки разогнуты вниз. */
   bandpushdown: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [DOOR_TOP, { type: 'g3band', id: 'band', from: rp(EQ.anchors([DOOR_TOP]).door.anchor), mountTo: 'door:ring', r: .7 }],
+    equipment: [DOOR_TOP, { type: 'band', id: 'band', model: 'tube48', route: [{ handle: 'L' }, ringOf(DOOR_TOP), { handle: 'R' }] }],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'band:handleL' }, { body: 'gripR', prop: 'band:handleR' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
@@ -611,7 +631,7 @@ module.exports = {
      локтях, согнутых на 64°, и поднимались к лицу по дуге (путь в 14 см от прямой, лента поворачивалась на 22°). */
   bandfacepull: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [DOOR_SIDE, { type: 'g3band', id: 'band', from: rp(EQ.anchors([DOOR_SIDE]).door.anchor), mountTo: 'door:ring', r: .7 }],
+    equipment: [DOOR_SIDE, { type: 'band', id: 'band', model: 'tube36', route: [{ handle: 'L' }, ringOf(DOOR_SIDE), { handle: 'R' }] }],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'band:handleL' }, { body: 'gripR', prop: 'band:handleR' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {
@@ -885,7 +905,7 @@ module.exports = {
      валик между локтем и боком; движение — как на блоке (t=0 — предплечье у живота, t=1 — развёрнуто наружу на 50°). */
   bandextrot: {
     keys: [0, .2, .4, .6, .8, 1],
-    equipment: [ER_DOOR, ER_TOWEL, { type: 'g3band', id: 'band', from: rp(EQ.anchors([ER_DOOR]).door.anchor), mountTo: 'door:ring', hands: ['R'], r: .7 }],
+    equipment: [ER_DOOR, ER_TOWEL, { type: 'band', id: 'band', model: 'tube36', route: [{ handle: 'R' }, ringOf(ER_DOOR), { handle: 'R' }] }],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripR', prop: 'band:handleR' }, { body: 'uaR', prop: 'towel' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {

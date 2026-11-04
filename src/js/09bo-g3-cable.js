@@ -240,6 +240,8 @@
     b.tube('strap', root, loopEnd, [2.6, .45], { mount: 'leaf', tone: 'rubber', up: side ? [1, 0, 0] : [0, 1, 0] });
     b.cyl('ring', V.add(loopEnd, [0, 0, -1.2]), side ? [0, 1, 0] : [1, 0, 0], 1.7, .7, { mount: 'strap', tone: 'chrome' });
     b.anchor('anchor', V.add(loopEnd, [0, 0, -1.8]));
+    /* перекладина кольца на стороне двери (там лента, продетая в кольцо, его огибает; кольцо Ø3,4, перекладина Ø0,7) */
+    b.anchor('ringBar', V.add(loopEnd, [0, 0, -1.2 + 1.7 - .35]));
   };
 
   /* Подушка под колени (поролон в чехле): size [ширина, толщина, длина] */
@@ -382,17 +384,8 @@
   /* общие узлы стека для рычажных тренажёров (09bo-g4-lever.js): Sub — узел со сдвигом и разворотом, stack — неподвижная часть
      (направляющие, нижние плиты, рамка и stackInfo), stackParts — подвижная (плиты, верхняя плита, шток или подвижный блок) */
   E.cableStack = { Sub, stack, parts: stackParts, FLOAT, PITCH, PLATE };
-  /* Эспандер от крепления (кольцо на двери): обе ветви от одной точки к кольцам стремён рукоятей (E.stirrup, как у
-     эспандера под стопами); ветви крепятся к детали mountTo */
-  BIND.g3band = (e, R) => {
-    const id = e.id || 'band', from = toCat(e.from), out = [];
-    for (const s of e.hands || ['L', 'R']) {
-      const st = E.stirrup(R['grip' + s], R.frames['hand' + s].z, from, { ...E.BAND_HANDLE, clear: E.clearOfForearm(R, s) });
-      out.push({ kind: 'cable', pts: [from, st.apex], r: e.r || .7, tone: 'band', role: 'cable', id: id + ':' + s, mount: e.mountTo });
-      out.push(...E.bandHandle(st, id, s));
-    }
-    return out;
-  };
+  /* Эспандер от крепления (кольцо на двери) — прежняя запись: общая модель ленты (09bo-band.js), лента продета в кольцо */
+  BIND.g3band = (e, R) => BIND.band(e, R);
   /* Валик между локтем и боком (свёрнутое полотенце, Ø6,5 × 14 см) во вращениях плеча: лежит вдоль корпуса спереди назад
      у внутренней поверхности плеча над локтем, держится зажатым между плечом и корпусом и следует за плечом */
   BIND.g3towelRoll = (e, R) => {
