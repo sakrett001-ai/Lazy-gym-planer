@@ -11,6 +11,7 @@ const CK = require('./anny-look/check.js'), CMP = require('./anny-look/compare.j
 const BIN = path.join(root, 'src/data/anny.bin');
 const gz = fs.readFileSync(BIN), raw = zlib.gunzipSync(gz), d = A.decode(raw), POSES = CMP.loadPoses(), kind = CK.kinds(d), zones = CMP.zonesOf(d);
 const header = JSON.parse(raw.subarray(8, 8 + raw.readUInt32LE(4)).toString('utf8'));
+const V3close = (a, b, e = 1e-9) => a.every((x, i) => Math.abs(x - b[i]) < e);
 const pose = (id, t, has = () => true) => { const e = EQ.variantEntry(POSES[id], has); return { R: EQ.rig(e)(t), e }; };
 
 /* ---------- данные ---------- */
@@ -23,7 +24,8 @@ function sourceOf(dd, H) {
     correctives: dd.correctives.map(c => { const { i, d: dl, n, ...rest } = c; return { ...rest, i: Array.from(i), d: Array.from(dl, x => round(x, 100)) }; }) };
 }
 test('anny.bin: canonical pack output (decode → pack.js gives the same bytes), weights sum to one', () => {
-  assert.equal(d.nv, header.nv); assert.equal(d.frames.length, 55); assert(d.nv > 12000 && d.nf > 25000, 'full mesh');
+  assert.equal(d.nv, header.nv); assert.equal(d.frames.length, 57);   // 55 рамок сегментов и две рамки закрутки плеча (uarL, uarR)
+  assert(d.nv > 12000 && d.nf > 25000, 'full mesh');
   const again = PACK.encode(sourceOf(d, header));
   assert(Buffer.compare(again.gz, gz) === 0, 'src/data/anny.bin must be exactly what tools/anny-look/pack.js writes — the file is generated, not edited');
   for (let v = 0; v < d.nv; v++) { let s = 0; for (let k = 0; k < 4; k++) s += d.ww[v * 4 + k]; assert(Math.abs(s - 1) < 1e-6, `weights of vertex ${v}`); }
@@ -92,6 +94,41 @@ test('corrective shapes with a second angle: contact in the full elbow flexion �
     w = at(145, 0); assert(Math.abs(w[iS] - .5) < .05 && Math.abs(w[iP] - .5) < .05, `neutral: ${w[iS]} / ${w[iP]}`);
     w = at(90, -60); assert(w[iS] === 0 && w[iP] === 0, 'no contact before 100°');
   }
+});
+
+test('arm roll frame (uar): the outward shoulder twist is removed with the arm up, kept with the arm down, rotated inward or near 180°; the stance is the arm itself', () => {
+  const fl = v => [v[0], -v[1], v[2]], I = f => M.M3.cols(fl(f.x), fl(f.y), fl(f.z));
+  const tw = (R, f, s) => M.SIGN[s] * M.swingTwist(M.M3.mul(M.M3.T(I(R.frames.thorax)), I(f))).twist;
+  const roll = (R, s) => tw(R, A.rollFrame(R.frames, s), s);
+  assert(d.frames.includes('uarL') && d.frames.includes('uarR') && d.roll, 'roll frames and shares in the data');
+  /* стойка: рамка закрутки — само плечо */
+  const R0 = M.catalogPose(M.neutral()); for (const s of M.SIDES) for (const k of ['x', 'y', 'z']) assert(V3close(A.rollFrame(R0.frames, s)[k], R0.frames['ua' + s][k]), 'stance');
+  /* руки за головой, вис — закрутка наружу снята; разворот внутрь (ролик) и рука внизу с закруткой (присед) — нет; у 180° — нет */
+  for (const [id, t, want] of [['crunch', .25, 'off'], ['hang', 0, 'off'], ['bicycle', .25, 'off'], ['rollout', 1, 'kept'], ['squat', 1, 'kept'], ['jumpingjack', .5, 'kept']]) {
+    const { R } = pose(id, t), a = tw(R, R.frames.uaL, 'L'), b = roll(R, 'L');
+    assert(want === 'off' ? Math.abs(b) < 1 && a > 30 : Math.abs(b - a) < 1, `${id} t=${t}: twist ${a.toFixed(1)}° → ${b.toFixed(1)}°`);
+  }
+  /* доли: 1 у плечевого сустава, 0 дальше 28 см по плечу, только у вершин с ячейкой плеча */
+  const fi = Object.fromEntries(d.frames.map((f, i) => [f, i])), sh = R0.shL, el = R0.elL, ax = M.V.unit(M.V.sub(el, sh));
+  let near = 0, far = 0, other = 0;
+  for (let v = 0; v < d.nv; v++) {
+    let ua = false; for (let j = 0; j < 4; j++) if ((d.wi[v * 4 + j] === fi.uaL || d.wi[v * 4 + j] === fi.uaR) && d.ww[v * 4 + j] > 0) ua = true;
+    if (!ua) { if (d.roll.share[v] !== 0) other++; continue; }
+    const a = M.V.dot(M.V.sub([d.pos[v * 3], d.pos[v * 3 + 1], d.pos[v * 3 + 2]], sh), ax);
+    if (d.frames[d.wi[v * 4]] === 'uaL' && a < 1 && d.roll.share[v] > .99) near++; if (a > 28.5 && d.roll.share[v] > 0) far++;
+  }
+  assert(near > 20 && far === 0 && other === 0, `near ${near}, far ${far}, other ${other}`);
+});
+
+test('arm roll in skinning: arms behind the head and the hang lose most of the armpit band; without the roll (shares 0) the band is back', () => {
+  const T = require('./anny-look/tails.js'), noRoll = { ...d, roll: null };
+  for (const [id, t] of [['crunch', .25], ['hang', 0], ['bicycle', .25]]) {
+    const { R } = pose(id, t), a = T.axilla(d, R, A.skin(R, { d, floor: false }), zones, 'L'), b = T.axilla(noRoll, R, A.skin(R, { d: noRoll, floor: false }), zones, 'L');
+    assert(a.n40 * 2 < b.n40, `${id} t=${t}: ${a.n40} edges over 40° with the roll, ${b.n40} without`);
+  }
+  /* поворот вершины для проверок (blendRot) — тот же, что у скиннинга: нормаль треугольника у подмышки повёрнута как кожа */
+  const { R } = pose('crunch', .25), S = A.skinMats(R, d), DQ = A.dualQuats(S, d.frames.length), v = d.roll.share.findIndex(k => k > .9);
+  const q = A.blendRot(d, DQ, v), q0 = A.blendRot(noRoll, DQ, v); assert(Math.abs(q[0] * q0[0] + q[1] * q0[1] + q[2] * q0[2] + q[3] * q0[3]) < .999, 'the roll changes the vertex rotation');
 });
 
 test('arms up through flexion (armsFwd): full in its pose and in the catalog poses with the arm forward, off in the scapular plane and at the twist limits', () => {

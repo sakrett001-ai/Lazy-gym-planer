@@ -44,11 +44,11 @@
   "folds": 16
  },
  "bicycle 0.25": {
-  "inverted": 64,
+  "inverted": 63,
   "folds": 250
  },
  "hangknee 1": {
-  "inverted": 104,
+  "inverted": 103,
   "folds": 135
  },
  "lunge 1": {
@@ -64,16 +64,16 @@
   "folds": 238
  },
  "burpee 0.5": {
-  "inverted": 62,
-  "folds": 84
+  "inverted": 59,
+  "folds": 74
  },
  "seatedcalf 0": {
   "inverted": 82,
   "folds": 135
  },
  "crunch 1": {
-  "inverted": 65,
-  "folds": 231
+  "inverted": 55,
+  "folds": 227
  },
  "pushup 1": {
   "inverted": 37,
