@@ -113,7 +113,7 @@ function penetration(R, P, d, kind, entry, has) {
 function folds(d, R, P, opts = {}) {
   const S = A.skinMats(R, d), DQ = A.dualQuats(S, d.frames.length), n = d.nf, idx = d.idx, B = d.pos;
   /* поворот вершины — смешанный кватернион (как в skin) */
-  const rot = v => { let x = 0, y = 0, z = 0, w = 0, r0 = -1; for (let j = 0; j < 4; j++) { const wt = d.ww[v * 4 + j]; if (!wt) continue; const o = d.wi[v * 4 + j] * 8; let s = wt; if (r0 < 0) r0 = o; else if (DQ[o] * DQ[r0] + DQ[o + 1] * DQ[r0 + 1] + DQ[o + 2] * DQ[r0 + 2] + DQ[o + 3] * DQ[r0 + 3] < 0) s = -wt; x += s * DQ[o]; y += s * DQ[o + 1]; z += s * DQ[o + 2]; w += s * DQ[o + 3]; } const l = Math.hypot(x, y, z, w); return [x / l, y / l, z / l, w / l]; };
+  const rot = v => A.blendRot(d, DQ, v);   /* поворот вершины — как в скиннинге (с рамкой закрутки плеча) */
   const rotate = (q, p) => { const [x, y, z, w] = q, cx = y * p[2] - z * p[1] + w * p[0], cy = z * p[0] - x * p[2] + w * p[1], cz = x * p[1] - y * p[0] + w * p[2]; return [p[0] + 2 * (y * cz - z * cy), p[1] + 2 * (z * cx - x * cz), p[2] + 2 * (x * cy - y * cx)]; };
   const at = (Q, i) => [Q[i * 3], Q[i * 3 + 1], Q[i * 3 + 2]], nrm = (Q, a, b, c) => V.cross(V.sub(at(Q, b), at(Q, a)), V.sub(at(Q, c), at(Q, a)));
   let inverted = 0; const bad = [];

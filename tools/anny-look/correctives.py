@@ -159,10 +159,11 @@ def tent(c, v, angles=None):
 
 
 def build(Vcat, F, wi, ww, frames):
-    """Vcat — вершины в стойке (каталог), wi/ww — четыре рамки и доли на вершину. Возвращает список форм для anny.json."""
+    """Vcat — вершины в стойке (каталог), wi/ww — рамки и доли на вершину (четыре и пятый столбец — рамка закрутки плеча,
+    build.py). Возвращает список форм для anny.json."""
     n = len(Vcat); A = adjacency(F, n); poses = sculpt_poses(frames)
     fi = {f: i for i, f in enumerate(frames)}
-    chain_w = lambda names: sum(np.where(np.isin(wi[:, k], [fi[c] for c in names]), ww[:, k], 0) for k in range(4))
+    chain_w = lambda names: sum(np.where(np.isin(wi[:, k], [fi[c] for c in names]), ww[:, k], 0) for k in range(wi.shape[1]))
     out = []
     for name, pose, angle, a0, a2, chains, (jk, r), *conf in SPECS:
         S = np.array(poses[pose]['S']).reshape(-1, 12); DQ = dq_from(S); J = poses[pose]['joints']

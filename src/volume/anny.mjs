@@ -49,12 +49,18 @@ uniform vec4 annyDQ[ANNY_FRAMES*2];
 #define ANNY_SUP ${SUP_MAX}
 attribute vec4 annyIndex;
 attribute vec4 annyWeight;
+/* рамка закрутки плеча (AnnySkin.slotDQ): [рамка плеча, его рамка закрутки, доля закрутки в ячейке плеча]; доля 0 — нет */
+attribute vec3 annyRoll;
+void annySlot(int i,out vec4 qr,out vec4 qd){
+ qr=annyDQ[i*2];qd=annyDQ[i*2+1];
+ if(annyRoll.z>0.&&i==int(annyRoll.x+.5)){int j=int(annyRoll.y+.5);vec4 rr=annyDQ[j*2],rd=annyDQ[j*2+1];float sg=dot(qr,rr)<0.?-1.:1.;qr=mix(qr,sg*rr,annyRoll.z);qd=mix(qd,sg*rd,annyRoll.z);}
+}
 void annyBlend(out vec4 r,out vec4 d){
  ivec4 ix=ivec4(annyIndex+.5);
- vec4 r0=annyDQ[ix.x*2];r=vec4(0.);d=vec4(0.);
+ vec4 r0,d0;annySlot(ix.x,r0,d0);r=vec4(0.);d=vec4(0.);
  for(int k=0;k<4;k++){
   float w=annyWeight[k];if(w<=0.)continue;
-  int i=ix[k];vec4 qr=annyDQ[i*2],qd=annyDQ[i*2+1];
+  vec4 qr,qd;annySlot(ix[k],qr,qd);
   if(dot(qr,r0)<0.)w=-w;
   r+=w*qr;d+=w*qd;
  }
@@ -92,7 +98,7 @@ vec3 annySupport(vec3 p,vec3 st){
 /* линейное смешение тех же преобразований (только для сравнения на листах: globalThis.ANNY_METHOD = 'lbs') */
 vec3 annyLinear(vec3 p,bool dir){
  ivec4 ix=ivec4(annyIndex+.5);vec3 o=vec3(0.);
- for(int k=0;k<4;k++){float w=annyWeight[k];if(w<=0.)continue;int i=ix[k];vec4 r=annyDQ[i*2],d=annyDQ[i*2+1];o+=w*(dir?annyRotate(r,p):annyMove(r,d,p));}
+ for(int k=0;k<4;k++){float w=annyWeight[k];if(w<=0.)continue;vec4 r,d;annySlot(ix[k],r,d);o+=w*(dir?annyRotate(r,p):annyMove(r,d,p));}
  return o;
 }
 #endif
@@ -128,6 +134,9 @@ export function createAnnyLayer(parent,skin){
   const shadeOf=lookN===2?'vAnnyLook.x':'vAnnyLook';
   g.setAttribute('annyIndex',new THREE.BufferAttribute(Float32Array.from(d.wi),4));
   g.setAttribute('annyWeight',new THREE.BufferAttribute(d.ww,4));
+  /* рамка закрутки плеча: у вершины с ячейкой плеча — [плечо, рамка закрутки, доля] (AnnySkin.rollShare) */
+  const roll=new Float32Array(d.nv*3);if(d.roll)for(let v=0;v<d.nv;v++){const k=d.roll.share[v];if(!(k>0))continue;for(let j=0;j<4;j++){const i=d.wi[v*4+j],r=d.roll.map[i];if(r>=0&&d.ww[v*4+j]>0){roll[v*3]=i;roll[v*3+1]=r;roll[v*3+2]=k;break;}}}
+  g.setAttribute('annyRoll',new THREE.BufferAttribute(roll,3));
   colorAttr=new THREE.BufferAttribute(new Uint8Array(d.nv*4),4,true);colorAttr.setUsage(THREE.DynamicDrawUsage);g.setAttribute('annyColor',colorAttr);
   /* вид вершины: затенённость впадин (доля открытого неба) и расстояние до линии плавок (см, плюс — внутри; только таз и
      бёдра — кисти и предплечья у бёдер в стойке не красятся) */

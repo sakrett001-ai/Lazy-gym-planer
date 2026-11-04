@@ -38,7 +38,7 @@ function encode(src) {
     const n = c.i.length, ci = Uint16Array.from(c.i), cd = new Int16Array(n * 3); for (let k = 0; k < n * 3; k++) cd[k] = int16(c.d[k], SCALE, 'смещение');
     const { i, d, ...rest } = c; meta.push({ ...rest, n }); chunks.push(Buffer.from(ci.buffer), ...(n % 2 ? [Buffer.alloc(2)] : []), Buffer.from(cd.buffer));
   }
-  let header = Buffer.from(JSON.stringify({ version: 1, source: src.source, scale: SCALE, rscale: RSCALE, index: 'delta', shade: true, frames: src.frames, nv, nf, correctives: meta, ...(src.hands ? { hands: src.hands } : {}) }), 'utf8');
+  let header = Buffer.from(JSON.stringify({ version: 1, source: src.source, scale: SCALE, rscale: RSCALE, index: 'delta', shade: true, frames: src.frames, nv, nf, correctives: meta, ...(src.roll ? { roll: src.roll } : {}), ...(src.hands ? { hands: src.hands } : {}) }), 'utf8');
   if (header.length % 4) header = Buffer.concat([header, Buffer.alloc(4 - header.length % 4, 0x20)]);
   const head = Buffer.alloc(8); head.write('ANY1', 0, 'latin1'); head.writeUInt32LE(header.length, 4);
   /* выравнивание: Int16 — по 2 байта, всё подряд кратно 2 (после байтов затенённости при нечётном nv — байт выравнивания) */
