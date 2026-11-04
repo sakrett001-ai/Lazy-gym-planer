@@ -2,6 +2,7 @@
 /* Пилот: упражнения со скриншотов пользователя. Ось Z — вдоль скамьи/тренажёра, X — поперёк, Y — вверх, см.
    Каждая поза строится так: корпус (углы) → опора (подушка, сиденье, пол) → стопы → кисти к реальным ручкам. */
 const { ctx, fromCat } = require('../compose.js');
+const EQ = require('../../../src/js/09bn-equipment.js');
 const S = ['L', 'R'];
 const once = f => { let v; return () => v ?? (v = f()); };
 
@@ -56,7 +57,13 @@ const SOHP = once(() => {
    концы ленты тянутся к бёдрам, колени и спина прямые. Таз в длинном сидении отклонён назад на 12–16° (задняя поверхность
    бедра при почти прямых коленях), поясница выводит корпус почти в вертикаль, грудной отдел прямой; стопы на месте весь
    повтор. Каждая кисть идёт по прямой вдоль своей ветви ленты — от точки у пояса к месту, где лента сходит со стопы
-   (BIND.band, fromSole); в растяжке локти разогнуты до 10°. Рукоять поперёк предплечья — кисть продолжает предплечье.
+   (общая модель ленты, 09bo-band.js: лента охватывает подошвы поперёк у головок плюсневых костей, огибает наружные края
+   стоп и идёт между ними по плоскости подошв). Рукоять поперёк предплечья — кисть продолжает предплечье.
+   Трубка 36″ (91 см; CanDo Tubing with Handles Exerciser, 36 Inch): ветвь в растяжке 28 см, в конце тяги 77 см — окно
+   «натянута в растяжке, не больше трёх длин покоя в конце» узкое. Поэтому стопы на 5,5 см шире прежнего (под лентой между
+   наружными краями стоп 38 см, ветви — по 26,5 см покоя: ×1,05…2,89), в растяжке локти согнуты на 16° (BR_ELBOW; при 10°
+   ветвь короче и растяжение больше втрое), кисти у пояса на 2,5 см шире — рукоять в растяжке не задевает голень.
+   48-дюймовая трубка в растяжке провисала бы (ветви по 46 см покоя при 28 см длины).
    Прежде в растяжке спина была скруглена (сгибание поясницы 20° и грудного отдела 14°), локти согнуты на 62°, кисти
    на 30 см выше стоп: лента шла под 54° к полу и поворачивалась за повтор на 48°, рукоять стояла вертикально при любом
    наклоне предплечья (отклонение кисти до 18°). */
@@ -70,7 +77,7 @@ function brBody(C, t, hz) {
   const z = hz ?? C.fk(q).P.hipL[2];
   for (const s of S) {
     const f = C.fk(q), hip = f.P['hip' + s], lat = C.latP(q, s);
-    C.heel(q, s, V.add([hip[0], 1, z + 82], lat, 1.5), 0, 72, [0, 1, 0]);
+    C.heel(q, s, V.add([hip[0], 1, z + 82], lat, BR_FEET), 0, 72, [0, 1, 0]);
   }
   for (const s of S) q[s].girdle = [0, C.lerp(14, -15, e)];
   return q;
@@ -78,8 +85,10 @@ function brBody(C, t, hz) {
 /* стопы — по тазу в растяжке (BR0): при отклонении таза назад к концу тяги пятки не съезжают по коврику */
 const BR0 = once(() => { const C = ctx([BR_MAT]); return C.fk(brBody(C, 0)).P.hipL[2]; });
 /* конец ленты у пояса в конце тяги и место, где ветвь сходит со стопы (как BIND.band: сбоку от подушечки стопы) */
-function brEnd(C, q, s) { const { V } = C, T = C.axes(q, 'thorax'); return V.add(V.add(V.add(T.o, T.x, C.M.SIGN[s] * 18.5), T.y, -6), T.z, 10); }
-function brSole(C, q, s) { const { V } = C, R = C.M.catalogPose(q), t = R.frames['toes' + s], lat = V.scale(t.x, C.M.SIGN[s]); return fromCat(V.add(V.add(R['ball' + s], lat, 5.6), t.y, -1)); }
+function brEnd(C, q, s) { const { V } = C, T = C.axes(q, 'thorax'); return V.add(V.add(V.add(T.o, T.x, C.M.SIGN[s] * 21), T.y, -6), T.z, 10); }
+/* место, где ветвь сходит со стопы: наружный край подошвы в сечении BR_AT (общая модель ленты, 09bo-band.js — огибание края) */
+const BR_AT = 11;
+function brSole(C, q, s) { const { V } = C, R = C.M.catalogPose(q), o = EQ.band.soleOf(R, s, BR_AT, .5); return fromCat(V.add(o.c, o.lat, o.r)); }
 /* кисти на расстоянии k от точки у пояса вдоль своей ветви; рукоять поперёк предплечья (большой палец вверх, перпендикулярно
    предплечью), локти в растяжке вниз и в стороны, в конце — назад */
 function brGrip(C, q, L, k, e, allowShort) {
@@ -92,13 +101,16 @@ function brGrip(C, q, L, k, e, allowShort) {
     C.grip(q, s, g, V.unit(V.perp([0, 1, 0], fore)), pole, { allowShort });
   }
 }
+/* локти в растяжке: при 10° трубка у стоп короче 27 см, а в конце тяги — 77 см: растяжение больше чем втрое при любой
+   длине трубки, натянутой в растяжке. Начало с мягкими локтями (BR_ELBOW) — ветвь в растяжке длиннее */
+const BR_ELBOW = 16, BR_FEET = 7;
 const BRL = once(() => {
   const C = ctx([BR_MAT]), { V } = C;
   return C.unhinted(() => {
     const q1 = brBody(C, 1, BR0()), q0 = brBody(C, 0, BR0()), L = {};
     for (const s of S) { const E = brEnd(C, q1, s), A = brSole(C, q0, s); L[s] = { E, u: V.unit(V.sub(A, E)), len: V.dist(A, E) }; }
     const elbow = k => { const q = brBody(C, 0, BR0()); brGrip(C, q, L, k, 0, true); brGrip(C, q, L, k, 0, true); return (q.L.elbow + q.R.elbow) / 2; };
-    L.s0 = C.solve1D(k => elbow(k) - 10, 10, Math.min(L.L.len, L.R.len) - 20);
+    L.s0 = C.solve1D(k => elbow(k) - BR_ELBOW, 10, Math.min(L.L.len, L.R.len) - 20);
     return L;
   });
 });
@@ -323,7 +335,7 @@ module.exports = {
      лопатки сведены. Спина прямая, кисти — по прямой вдоль ветвей ленты. */
   bandrow: {
     keys: [0, .25, .5, .75, 1],
-    equipment: [BR_MAT, { type: 'band', id: 'band', fromSole: true, r: .7 }],
+    equipment: [BR_MAT, { type: 'band', id: 'band', model: 'tube36', route: [{ handle: 'L' }, { sole: 'L', at: BR_AT }, { sole: 'R', at: BR_AT }, { handle: 'R' }] }],
     contacts: [{ body: 'buttocks', prop: 'mat' }, { body: 'footL', prop: 'mat' }, { body: 'footR', prop: 'mat' }, { body: 'gripL', prop: 'band:handleL' }, { body: 'gripR', prop: 'band:handleR' }],
     gripRadius: { L: 1.6, R: 1.6 },
     pose(t, C) {

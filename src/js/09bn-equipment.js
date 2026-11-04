@@ -220,19 +220,7 @@ function stirrup(g,hz,to,{half=6,height=9,side=5,clear}={}){
 }
 /* запас до поверхности предплечья стороны s — для стремени (E.stirrup, clear) */
 const clearOfForearm=(R,s)=>p=>M.limbSDF(R,'fa',s,p);
-/* Лента/трос: ломаная от точки крепления к кольцу стремени рукояти; рукоять в кулаке, стремя (лямка) — вокруг кисти */
-BIND.band=(e,R)=>{
- const out=[],id=e.id||'band';
- for(const s of e.hands||['L','R']){
-  let from=e.fromSole?null:e.fromKey?R[e.fromKey+s]:toCat(e.from);
-  let via=(e.via||[]).map(toCat);
-  if(e.fromSole){const t=R.frames['toes'+s],g=s==='L'?1:-1,lat=V.scale(t.x,g);from=V.add(V.add(R['ball'+s],t.y,M.B.toeSole-(e.r||.7)),t.z,1.5);via=[V.add(V.add(R['ball'+s],lat,5.6),t.y,-1)];}
-  const st=stirrup(R['grip'+s],R.frames['hand'+s].z,via.length?via[via.length-1]:from,{...BAND_HANDLE,clear:clearOfForearm(R,s)});
-  out.push({kind:'cable',pts:[from,...via,st.apex],r:e.r||.7,tone:'band',role:'cable',id:id+':'+s,mount:e.fromKey||e.fromSole?'body':'floor'});
-  out.push(...bandHandle(st,id,s));
- }
- return out;
-};
+/* Лента эспандера — общая модель в 09bo-band.js (BIND.band): одна непрерывная лента по опорам, растяжение, сечение */
 /* рукоять эспандера: 13 см в кулаке, лямка-стремя 2,5 см шириной (r .45) до кольца в 8 см от оси рукояти */
 const BAND_HANDLE={half:6.5,height:8,side:4.5};
 function bandHandle(st,id,s){
