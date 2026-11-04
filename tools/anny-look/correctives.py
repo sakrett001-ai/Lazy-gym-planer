@@ -47,7 +47,7 @@ from common import ROOT
 
 HAND = ('hand',) + tuple(f'f{f}{k}' for f in range(5) for k in range(3))
 FOREARM = ('fa', 'fd') + HAND
-ARM = ('ua',) + FOREARM
+ARM = ('ua', 'uar') + FOREARM   # плечо и его рамка закрутки (uar, build.py)
 SHANK = ('sk', 'foot', 'toes')
 SPECS = [
     # имя, поза, угол (Mannequin.jointAngles[side]), a0, a2; полоса — вершины, у которых доля рамок за суставом (вся цепочка до
@@ -74,7 +74,7 @@ FALL_IN = {'armsOverhead': 12, 'armsFwd': 12}
 SMOOTH_IT = {'armsOverhead': 70, 'armsFwd': 70}   # проходов Таубина у формы (иначе — TAUBIN); 80 — ohext в позе 4.73.0 на 1 выворот выше записанного, 50 — подтягивания обратным хватом
 # касание в полном сгибе: сустав, ближний и дальний суставы (направления сегментов), цепочка дальнего сегмента, цепочка
 # всей конечности (вершины своей стороны — доля её рамок больше половины)
-LIMB_ARM, LIMB_LEG = ('ua',) + FOREARM, ('th',) + SHANK
+LIMB_ARM, LIMB_LEG = ('ua', 'uar') + FOREARM, ('th',) + SHANK
 CONTACT = {'elbowIn': ('el', 'sh', 'wr', FOREARM, LIMB_ARM), 'elbowInPro': ('el', 'sh', 'wr', FOREARM, LIMB_ARM), 'kneeIn': ('kn', 'hip', 'an', SHANK, LIMB_LEG)}
 CONTACT_EPS, CONTACT_INNER, CONTACT_PASSES, CONTACT_SIGN = -.2, 3.0, 3, 4.0
 # второй угол формы: (угол, b0 — доля 0, b1 — доля 1): касание в локте при супинации и при пронации предплечья

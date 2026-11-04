@@ -190,10 +190,32 @@ const AnnySkin = (() => {
         const s = m[3], H = handOf(s), js = digits[s] || (digits[s] = digitJoints(H.shape)), f = +m[1], k = +m[2], g = SIGN[s];
         const P = phalanx(js[f][k], js[f][k + 1], g), hf = H.frame, W = p => V.add(V.add(V.add(hf.o, hf.x, p[0]), hf.y, p[1]), hf.z, p[2]), D = d => V.add(V.add(V.scale(hf.x, d[0]), hf.y, d[1]), hf.z, d[2]);
         A = aff(W(P.o), D(P.x), D(P.y), D(P.z));
-      } else { const f = F[n]; A = aff(f.o, f.x, f.y, f.z); }
+      } else if (/^uar[LR]$/.test(n)) { const f = rollFrame(F, n.slice(-1)); A = aff(f.o, f.x, f.y, f.z); }
+      else { const f = F[n]; A = aff(f.o, f.x, f.y, f.z); }
       out.set(A, i * 12);
     });
     return out;
+  }
+  /* ---------- рамка закрутки плеча (uar): плечо без своей закрутки относительно грудной клетки ----------
+     Закрутка плеча (поворот вокруг его оси) в скиннинге ложится на узкую полосу весов у подмышки (3–4 ребра сетки): при
+     плече, развёрнутом наружу на 30–90° (руки за головой, висы, наклоны в сторону), полоса складывается в себя — «фантик».
+     Как twist-кости в скиннинге персонажей: у сустава доля плеча вершины — на рамке uar, к 28 см по оси плеча — на самом плече
+     (сборка, tools/anny-look/build.py, ROLL_A1), так что закрутка раскладывается по всему плечу. Закрутка — та же, что у
+     Mannequin.jointAngles (Mannequin.swingTwist плеча относительно грудной клетки: размах от стойки и поворот вокруг оси).
+     Снимается разворот наружу целиком (ROLL.OUT), внутрь — доля ROLL.IN: при развороте внутрь (ролик, тяга узким хватом,
+     разгибание из-за головы вверху) снятая закрутка сжимала кожу плеча. У подъёма к 180° разложение на размах и закрутку
+     вырождается (ось размаха неустойчива), поэтому снятие плавно уходит к 0 от ROLL.EL0 до ROLL.EL1. */
+  /* формы кожи строятся под эту рамку (sculpt.js): AnnySkin.ROLL отпечатан в anny.bin (tools/anny-look/inputs.js), сменился —
+     npm run anny:build */
+  const ROLL = { OUT: 1, IN: 0, EL0: 168, EL1: 178 };
+  const flipY = v => [v[0], -v[1], v[2]], intM = f => M.M3.cols(flipY(f.x), flipY(f.y), flipY(f.z));
+  /* доля закрутки (градусы, наружу +), которую рамка uar снимает, при закрутке e и подъёме el */
+  function rollOff(e, el) { const t = Math.max(0, Math.min(1, (el - ROLL.EL0) / (ROLL.EL1 - ROLL.EL0))); return (e > 0 ? ROLL.OUT : ROLL.IN) * e * (1 - t * t * (3 - 2 * t)); }
+  function rollFrame(F, s) {
+    const u = F['ua' + s], st = M.swingTwist(M.M3.mul(M.M3.T(intM(F.thorax)), intM(u))), g = SIGN[s];
+    /* поворот рамки плеча вокруг её оси y (ось плеча) на −r: закрутка относительно грудной клетки уменьшается на r */
+    const r = g * rollOff(g * st.twist, st.elevation) * Math.PI / 180, c = Math.cos(r), sn = Math.sin(r);
+    return { o: u.o, x: V.add(V.scale(u.x, c), u.z, sn), y: u.y, z: V.add(V.scale(u.z, c), u.x, -sn) };
   }
   function inv(A, o = 0) {
     /* обратная к ортогональной (с отражением) аффинной: линейная часть транспонируется */
@@ -284,7 +306,7 @@ const AnnySkin = (() => {
   /* рамки части тела контакта: [кожа, которая ложится на опору; по какой мерится зазор] */
   function supportBody(body) {
     const m = /^(th|sk|shin|knee|ua|fa)(L|R)$/.exec(body);
-    if (m) { const s = m[2], k = m[1]; const f = k === 'th' ? ['th' + s] : k === 'fa' ? ['fa' + s, 'fd' + s] : k === 'ua' ? ['ua' + s] : k === 'knee' ? ['th' + s, 'sk' + s] : ['sk' + s]; return [f, f]; }
+    if (m) { const s = m[2], k = m[1]; const f = k === 'th' ? ['th' + s] : k === 'fa' ? ['fa' + s, 'fd' + s] : k === 'ua' ? ['ua' + s, 'uar' + s] : k === 'knee' ? ['th' + s, 'sk' + s] : ['sk' + s]; return [f, f]; }
     /* ягодицы: ложится таз с бёдрами, зазор — по ягодицам (вершины таза): бёдра у края сиденья касаются раньше */
     if (body === 'buttocks') return [['pelvis', 'thL', 'thR'], ['pelvis']];
     if (body === 'thighsBack') return [['thL', 'thR'], ['thL', 'thR']];
@@ -473,7 +495,7 @@ const AnnySkin = (() => {
     }
     return d._regions = { fn: regionOf, ids, rid };
   }
-  return { load, decode, frameMats, skinMats, dualQuats, correctiveWeights, skin, supports, supportBody, supportShape, supportSD, SUP, regions, bindInv, digitRig, digitPose, DIG, _digit: { R3, chain, xf, flexRot, flexAngle, flatThumb }, get data() { return data; }, set data(x) { data = x; } };
+  return { load, decode, frameMats, rollFrame, ROLL, skinMats, dualQuats, correctiveWeights, skin, supports, supportBody, supportShape, supportSD, SUP, regions, bindInv, digitRig, digitPose, DIG, _digit: { R3, chain, xf, flexRot, flexAngle, flatThumb }, get data() { return data; }, set data(x) { data = x; } };
 })();
 if (typeof window !== 'undefined') window.AnnySkin = AnnySkin; /* объёмная сцена (volume.js) берёт данные и рамки отсюда */
 if (typeof module !== 'undefined' && module.exports) module.exports = AnnySkin;

@@ -37,6 +37,7 @@ test('anny.bin was built from the current tools, Anny parameters and neutral sta
   const inputs = IN.inputs();
   assert.equal(header.source.inputs.files, inputs.files, 'tools/anny-look or the approved Anny parameters changed: rebuild — python3 tools/anny-look/build.py && node tools/anny-look/pack.js');
   assert.equal(header.source.inputs.stance, inputs.stance, 'the neutral stance of the mannequin changed: refit and rebuild the Anny skin (tools/anny-look/README.md)');
+  assert.equal(header.source.inputs.roll, inputs.roll, 'the arm roll frame (AnnySkin.ROLL) changed: the corrective shapes were sculpted for the old one — npm run anny:build');
   /* отрицательные: изменённый файл подгонки и сдвинутая стойка дают другой отпечаток */
   const fit = path.join(root, 'tools/anny-look/fit.json');
   assert.notEqual(IN.filesHash(f => f === 'tools/anny-look/fit.json' ? Buffer.concat([fs.readFileSync(fit), Buffer.from(' ')]) : fs.readFileSync(path.join(root, f))), inputs.files);

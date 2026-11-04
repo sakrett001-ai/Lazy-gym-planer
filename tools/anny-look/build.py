@@ -35,7 +35,7 @@ import correctives as CR
 
 FLOOR = 186.0
 CENTRAL = ['pelvis', 'lumbar', 'thorax', 'neck', 'head']
-SIDE_FRAMES = ['cl', 'sp', 'ua', 'fa', 'fd', 'hand', 'th', 'sk', 'foot', 'toes'] + [f'f{f}{k}' for f in range(5) for k in range(3)]
+SIDE_FRAMES = ['cl', 'sp', 'ua', 'uar', 'fa', 'fd', 'hand', 'th', 'sk', 'foot', 'toes'] + [f'f{f}{k}' for f in range(5) for k in range(3)]
 FRAMES = CENTRAL + [n + s for s in 'LR' for n in SIDE_FRAMES]
 PART_CODE = {'torso': 1, 'ua': 2, 'fa': 3, 'th': 4, 'sk': 5, 'delt': 6}
 CAVITY_CODE = 7          # выстилка рта: вершина не на видимой коже (областей мышц и проверок отхода нет)
@@ -53,6 +53,10 @@ def rigid_mask(W, frames):
 
 SH_GEO = 4.0             # доля плеча (ua) на стороне корпуса — до 0 на 4 см по коже от линии сгиба Anny (доля руки 0,5)
 HIP_GEO = 6.0            # доля бедра (th) на стороне корпуса — до 0 на 6 см по коже от линии сгиба Anny (доля ноги 0,5)
+# рамка закрутки плеча (uar — плечо без своей закрутки относительно грудной клетки, AnnySkin.rollFrame): доля плеча вершины
+# у сустава — на uar, к ROLL_A1 см по оси плеча (в стойке, от плечевого сустава) — на самом плече: закрутка раскладывается по
+# всему плечу, а не ложится на полосу весов у подмышки
+ROLL_A0, ROLL_A1 = 0.0, 28.0
 SH_FRONT = 1.0           # лопатка (sp) — только сзади: спереди от плоскости на 1 см впереди сустава её доля уходит ключице
 
 
@@ -287,6 +291,10 @@ def build(out_path, mannequin=None, shape='look'):
     Wo = smooth_weights(Wo, F, ~rigid_mask(Wo, FRAMES), SMOOTH_ITERS)
     Wo = limb_limit(Wo, V, F, J, fi, Wa, ('leg',))
     Wo = foot_split(Wo, V, FRAMES, D)
+    for s_ in 'LR':   # рамка закрутки плеча: доля плеча делится по положению вдоль его оси (до выбора четырёх наибольших)
+        sh, el = np.array(J['sh' + s_]), np.array(J['el' + s_]); ax = (el - sh) / np.linalg.norm(el - sh)
+        t = np.clip((ROLL_A1 - (V - sh) @ ax) / (ROLL_A1 - ROLL_A0), 0, 1); k = t * t * (3 - 2 * t)
+        Wo[:, fi['uar' + s_]] = Wo[:, fi['ua' + s_]] * k; Wo[:, fi['ua' + s_]] *= 1 - k
     # четыре наибольших — непрерывно: из них вычитается пятый (иначе на границе, где пятый становится четвёртым, — скачок)
     order = np.argsort(-Wo, 1); w5 = np.take_along_axis(Wo, order[:, 4:5], 1); order = order[:, :4]
     wv = np.maximum(np.take_along_axis(Wo, order, 1) - w5, 0); wv = wv / wv.sum(1, keepdims=True)
@@ -318,7 +326,7 @@ def build(out_path, mannequin=None, shape='look'):
         fr = D['frames']['ua' + s]; uy = np.array(fr['y']); uz = np.array(fr['z']); lat = np.array(fr['x']) * (1 if s == 'L' else -1)
         d = V - c; r = np.linalg.norm(d, axis=1); dn = d / np.maximum(r, 1e-9)[:, None]
         polar = np.arccos(np.clip(dn @ uy, -1, 1)); az = np.arctan2(dn @ lat, dn @ uz)
-        armw = Wo[:, [fi['ua' + s], fi['sp' + s], fi['cl' + s]]].sum(1)
+        armw = Wo[:, [fi['ua' + s], fi['uar' + s], fi['sp' + s], fi['cl' + s]]].sum(1)
         near_part = np.array([p in ('cap-sh' + s, 'cap-ac' + s) or (p == 'ua' + s) for p in P.part[ia]])
         sel = (armw > .3) & (r < 10) & (polar < 1.75) & (near_part | (code == 0)) & ~((code == 2) & (a1 > .3))
         # адрес на «шапке» — точка сферы с той же нормалью, что у вершины (у сферы это и есть направление от центра): плечо
