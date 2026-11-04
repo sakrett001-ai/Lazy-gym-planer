@@ -47,7 +47,7 @@ from common import ROOT
 
 HAND = ('hand',) + tuple(f'f{f}{k}' for f in range(5) for k in range(3))
 FOREARM = ('fa', 'fd') + HAND
-ARM = ('ua',) + FOREARM
+ARM = ('ua', 'uar') + FOREARM   # плечо и его рамка закрутки (uar, build.py)
 SHANK = ('sk', 'foot', 'toes')
 SPECS = [
     # имя, поза, угол (Mannequin.jointAngles[side]), a0, a2; полоса — вершины, у которых доля рамок за суставом (вся цепочка до
@@ -61,6 +61,11 @@ SPECS = [
     ('armsOverhead', 'armsOverhead', 'elevation', 150, None, (ARM, ('cl', 'sp') + ARM), ('sh', 24), (('torso', 'ua', 'sh', 'ac'), 2.0, None, None)),
     # руки вверх через сгибание (сагиттальная плоскость, лопатка повёрнута вверх сильнее ритма): окно по отведению и закрутке — ALSO
     ('armsFwd', 'armsFwd', 'elevation', 110, None, (ARM, ('cl', 'sp') + ARM), ('sh', 24), (('torso', 'ua', 'sh', 'ac'), 2.0, None, None)),
+    # руки вверх с плечом, развёрнутым наружу (вис: подъём 161°, отведение 19°, закрутка 68°) — под рамку закрутки плеча.
+    # Рамка снимает закрутку наружу, и формы рук вверх (их позы — без неё) оставляли кожу подмышки в висе на 3,5 см снаружи
+    # процедурной (светлое вздутие; у 4.80.0 — 2,8); эта форма прижимает её к процедурной с 1 см (1,45). Окно по закрутке —
+    # ALSO: с 25° → 55° вывороты «велосипеда» (t = 0,25, закрутка 42°) — 66 при 64 записанных
+    ('armsUpTw', 'armsUpTw', 'elevation', 110, None, (ARM, ('cl', 'sp') + ARM), ('sh', 18), (('torso', 'ua', 'sh', 'ac'), 1.0, None, None)),
     # касание в полном сгибе (CONTACT): полоса — вся конечность своей стороны
     ('elbowIn', 'elbows', 'elbow', 100, None, None, ('el', 9)),
     ('elbowInPro', 'elbowsPro', 'elbow', 100, None, None, ('el', 9)),
@@ -74,16 +79,21 @@ FALL_IN = {'armsOverhead': 12, 'armsFwd': 12}
 SMOOTH_IT = {'armsOverhead': 70, 'armsFwd': 70}   # проходов Таубина у формы (иначе — TAUBIN); 80 — ohext в позе 4.73.0 на 1 выворот выше записанного, 50 — подтягивания обратным хватом
 # касание в полном сгибе: сустав, ближний и дальний суставы (направления сегментов), цепочка дальнего сегмента, цепочка
 # всей конечности (вершины своей стороны — доля её рамок больше половины)
-LIMB_ARM, LIMB_LEG = ('ua',) + FOREARM, ('th',) + SHANK
+LIMB_ARM, LIMB_LEG = ('ua', 'uar') + FOREARM, ('th',) + SHANK
 CONTACT = {'elbowIn': ('el', 'sh', 'wr', FOREARM, LIMB_ARM), 'elbowInPro': ('el', 'sh', 'wr', FOREARM, LIMB_ARM), 'kneeIn': ('kn', 'hip', 'an', SHANK, LIMB_LEG)}
 CONTACT_EPS, CONTACT_INNER, CONTACT_PASSES, CONTACT_SIGN = -.2, 3.0, 3, 4.0
 # второй угол формы: (угол, b0 — доля 0, b1 — доля 1): касание в локте при супинации и при пронации предплечья
 SECOND = {'elbowIn': ('pron', 20, -20), 'elbowInPro': ('pron', -20, 20)}
+# формы под скиннинг без рамки закрутки плеча (AnnySkin.rollFrame). Остальные строятся под скиннинг приложения: у их поз закрутки
+# наружу нет, и они те же, что без рамки. Рука вверх через сгибание (поза — закрутка 21°): построенная под рамку закрутки, форма
+# поднимала изломы у подтягиваний обратным хватом (закрутка −10°: рёбер больше 40° 54 → 64–76 при позе формы с закруткой 21°,
+# 0° и −10°) и вывороты в них выше записанного; построенная без рамки — как в 4.80.0 (подтягивания — 54)
+PLAIN = {'armsFwd'}
 # окно по другим углам: [(угол, c0 — доля 0, c1 — доля 1), …] — доли перемножаются. Руки вверх через сгибание — при отведении
 # до 5° (с 12° — нет: там рука в плоскости лопатки, это armsUp; прямо вверх плоскость подъёма вырождается, и форма
 # действует поверх armsOverhead) и закрутке от −15° до 40° (за −40° и 65° — нет:
 # разгибание гантели из-за головы внизу (−61°) и «лодочка» (−44°) с формой — на 3–10 вывернутых треугольников больше)
-ALSO = {'armsFwd': (('abduction', 12, 5), ('twist', -40, -15), ('twist', 65, 40))}
+ALSO = {'armsFwd': (('abduction', 12, 5), ('twist', -40, -15), ('twist', 65, 40)), 'armsUpTw': (('twist', 35, 65),)}
 
 
 def dq_from(S):
@@ -158,13 +168,15 @@ def tent(c, v, angles=None):
     return w
 
 
-def build(Vcat, F, wi, ww, frames):
-    """Vcat — вершины в стойке (каталог), wi/ww — четыре рамки и доли на вершину. Возвращает список форм для anny.json."""
+def build(Vcat, F, wi5, ww5, frames, plain=None):
+    """Vcat — вершины в стойке (каталог), wi5/ww5 — рамки и доли на вершину под скиннинг приложения (четыре и пятый столбец —
+    рамка закрутки плеча, build.py), plain — (wi, ww) без рамки закрутки (формы PLAIN). Возвращает список форм для anny.json."""
     n = len(Vcat); A = adjacency(F, n); poses = sculpt_poses(frames)
     fi = {f: i for i, f in enumerate(frames)}
-    chain_w = lambda names: sum(np.where(np.isin(wi[:, k], [fi[c] for c in names]), ww[:, k], 0) for k in range(4))
     out = []
     for name, pose, angle, a0, a2, chains, (jk, r), *conf in SPECS:
+        wi, ww = plain if (plain is not None and name in PLAIN) else (wi5, ww5)
+        chain_w = lambda names, wi=wi, ww=ww: sum(np.where(np.isin(wi[:, k], [fi[c] for c in names]), ww[:, k], 0) for k in range(wi.shape[1]))
         S = np.array(poses[pose]['S']).reshape(-1, 12); DQ = dq_from(S); J = poses[pose]['joints']
         for s in 'LR':
             # прежние формы (и левая этой же — у правой: круги сторон у таза перекрываются) — с их весом в этой позе

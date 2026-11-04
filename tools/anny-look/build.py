@@ -36,7 +36,7 @@ import correctives as CR
 FLOOR = 186.0
 CENTRAL = ['pelvis', 'lumbar', 'thorax', 'neck', 'head']
 SIDE_FRAMES = ['cl', 'sp', 'ua', 'fa', 'fd', 'hand', 'th', 'sk', 'foot', 'toes'] + [f'f{f}{k}' for f in range(5) for k in range(3)]
-FRAMES = CENTRAL + [n + s for s in 'LR' for n in SIDE_FRAMES]
+FRAMES = CENTRAL + [n + s for s in 'LR' for n in SIDE_FRAMES] + ['uarL', 'uarR']   # рамки закрутки плеча — последние (ROLL_A0/A1)
 PART_CODE = {'torso': 1, 'ua': 2, 'fa': 3, 'th': 4, 'sk': 5, 'delt': 6}
 CAVITY_CODE = 7          # выстилка рта: вершина не на видимой коже (областей мышц и проверок отхода нет)
 
@@ -53,6 +53,18 @@ def rigid_mask(W, frames):
 
 SH_GEO = 4.0             # доля плеча (ua) на стороне корпуса — до 0 на 4 см по коже от линии сгиба Anny (доля руки 0,5)
 HIP_GEO = 6.0            # доля бедра (th) на стороне корпуса — до 0 на 6 см по коже от линии сгиба Anny (доля ноги 0,5)
+# рамка закрутки плеча (uar — плечо без своей закрутки относительно грудной клетки, AnnySkin.rollFrame): в ячейке плеча вершины
+# доля рамки uar — 1 у сустава и до 0 на ROLL_A1 см по оси плеча (в стойке, от плечевого сустава): закрутка раскладывается по
+# всему плечу, а не ложится на полосу весов у подмышки. Веса вершин — те же четыре рамки: uar подмешивается к плечу в его
+# ячейке (AnnySkin.skin, шейдер — annyRoll), доли пишутся в файл (roll) и считаются по стойке при загрузке (AnnySkin.rollShare)
+ROLL_A0, ROLL_A1 = 0.0, 28.0
+
+
+def roll_share(V, J, s):
+    """доля рамки закрутки в ячейке плеча стороны s по положению вершины в стойке вдоль оси плеча (как AnnySkin.rollShare)"""
+    sh, el = np.array(J['sh' + s]), np.array(J['el' + s]); ax = (el - sh) / np.linalg.norm(el - sh)
+    t = np.clip((ROLL_A1 - (V - sh) @ ax) / (ROLL_A1 - ROLL_A0), 0, 1)
+    return t * t * (3 - 2 * t)
 SH_FRONT = 1.0           # лопатка (sp) — только сзади: спереди от плоскости на 1 см впереди сустава её доля уходит ключице
 
 
@@ -336,7 +348,14 @@ def build(out_path, mannequin=None, shape='look'):
     cat = np.round(cat, 2)
 
     # ---------- корректирующие формы (по тем же данным, что попадут в файл: координаты до 0,01 см, доли — байты) ----------
-    corr = CR.build(cat, F, order, wq / 255.0, FRAMES)
+    # формы — под скиннинг с рамкой закрутки: ячейка плеча делится на плечо и uar (пятый столбец)
+    w4 = wq / 255.0; o5 = np.concatenate([order, np.zeros((n, 1), order.dtype)], 1); w5 = np.concatenate([w4, np.zeros((n, 1))], 1)
+    for s_ in 'LR':
+        k = roll_share(V, J, s_)
+        for j in range(4):
+            m = (order[:, j] == fi['ua' + s_]) & (w4[:, j] > 0) & (k > 0)
+            o5[m, 4] = fi['uar' + s_]; w5[m, 4] = w4[m, j] * k[m]; w5[m, j] = w4[m, j] * (1 - k[m])
+    corr = CR.build(cat, F, o5, w5, FRAMES, plain=(order, w4))
     inputs = json.loads(subprocess.run(['node', os.path.join(C.ROOT, 'tools/anny-look/inputs.js')], check=True, capture_output=True, text=True).stdout)
     out = {'version': 1, 'source': {'anny': '0.6.1', 'toned': 'tools/skin-anny/result/anny-toned.json', 'fit': fit.get('pose'), 'local_delta': fit.get('local_delta', {}),
                                     # версия приложения в файл не пишется: стойку и инструменты уже отпечатывает inputs,
@@ -345,7 +364,7 @@ def build(out_path, mannequin=None, shape='look'):
            'frames': FRAMES, 'v': np.round(cat, 2).ravel().tolist(), 'f': F.ravel().tolist(),
            'wi': order.ravel().tolist(), 'ww': wq.ravel().tolist(),
            'region': {'code': code.tolist(), 'side': side.tolist(), 'a1': np.round(a1, 3).tolist(), 'a2': np.round(a2, 3).tolist()},
-           'shade': shade.tolist(), 'correctives': corr, 'hands': digits}
+           'shade': shade.tolist(), 'correctives': corr, 'hands': digits, 'roll': {'a0': ROLL_A0, 'a1': ROLL_A1}}
     if shape != 'look': out['source']['shape'] = shape
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     s = json.dumps(out, separators=(',', ':'))

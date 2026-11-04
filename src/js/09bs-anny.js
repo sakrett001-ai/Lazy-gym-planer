@@ -35,7 +35,9 @@ const AnnySkin = (() => {
     const ww = new Float32Array(nv * 4); for (let i = 0; i < ww.length; i++) ww[i] = wq[i] / 255;
     const a1 = new Float32Array(nv), a2 = new Float32Array(nv); for (let i = 0; i < nv; i++) { a1[i] = a1q[i] / H.rscale; a2[i] = a2q[i] / H.rscale; }
     const correctives = H.correctives.map(c => { const i = take(Uint16Array, c.n); if (c.n % 2) off += 2; const dq = take(Int16Array, c.n * 3), d = new Float32Array(c.n * 3); for (let k = 0; k < d.length; k++) d[k] = dq[k] / H.scale; return { ...c, i, d }; });
-    return { source: H.source, frames: H.frames, nv, nf, pos, idx, wi, ww, region: { code, side, a1, a2 }, shade, correctives, hands: H.hands || null };
+    const d = { source: H.source, frames: H.frames, nv, nf, pos, idx, wi, ww, region: { code, side, a1, a2 }, shade, correctives, hands: H.hands || null };
+    if (H.roll) { d.rollAt = H.roll; d.roll = rollShare(d, H.roll); }
+    return d;
   }
   async function gunzip(bytes) {
     if (typeof DecompressionStream === 'undefined') throw Error('anny: DecompressionStream is unavailable');
@@ -190,10 +192,72 @@ const AnnySkin = (() => {
         const s = m[3], H = handOf(s), js = digits[s] || (digits[s] = digitJoints(H.shape)), f = +m[1], k = +m[2], g = SIGN[s];
         const P = phalanx(js[f][k], js[f][k + 1], g), hf = H.frame, W = p => V.add(V.add(V.add(hf.o, hf.x, p[0]), hf.y, p[1]), hf.z, p[2]), D = d => V.add(V.add(V.scale(hf.x, d[0]), hf.y, d[1]), hf.z, d[2]);
         A = aff(W(P.o), D(P.x), D(P.y), D(P.z));
-      } else { const f = F[n]; A = aff(f.o, f.x, f.y, f.z); }
+      } else if (/^uar[LR]$/.test(n)) { const f = rollFrame(F, n.slice(-1)); A = aff(f.o, f.x, f.y, f.z); }
+      else { const f = F[n]; A = aff(f.o, f.x, f.y, f.z); }
       out.set(A, i * 12);
     });
     return out;
+  }
+  /* ---------- рамка закрутки плеча (uar): плечо без своей закрутки относительно грудной клетки ----------
+     Закрутка плеча (поворот вокруг его оси) в скиннинге ложится на узкую полосу весов у подмышки (3–4 ребра сетки): при плече,
+     развёрнутом наружу на 30–90° и поднятом (руки за головой, висы, наклоны в сторону, подъём ног в висе), полоса складывается
+     в себя — «фантик» (кожа там не сжата и в другой сегмент не заходит: смыкание по касанию не помогает, README «Хвосты»).
+     Как twist-кости в скиннинге персонажей: в ячейке плеча вершины подмешивается рамка uar — 1 у сустава и до 0 на 28 см по
+     оси плеча (доля — rollShare, границы — в файле, build.py ROLL_A0/A1), так что закрутка раскладывается по всему плечу; веса
+     вершин — те же четыре рамки. Закрутка — та же, что у Mannequin.jointAngles (Mannequin.swingTwist плеча относительно грудной
+     клетки: размах от стойки и поворот вокруг оси). Снимается:
+     * разворот наружу — целиком (ROLL.OUT), внутрь — доля ROLL.IN = 0: со снятым разворотом внутрь хуже ролик (86 → 148 рёбер
+       с изломом больше 40° при доле 0,4), тяга узким хватом (36 → 56);
+     * только при руке выше ROLL.LO0…LO1 (плавно): ниже снятая закрутка поднимала вывороты в крайних позах (присед, сгибание
+       ног, жим стоя внизу, отжимания) — там полосы нет, а рука у корпуса;
+     * у подъёма к 180° — плавно до 0 от ROLL.EL0 до ROLL.EL1: разложение на размах и закрутку там вырождается (ось размаха
+       неустойчива), а при 168–178° со снятой закруткой хуже «прыжки с разведением» (16 → 22) и жим Арнольда (12 → 14).
+     Формы кожи строятся под скиннинг с этой рамкой (sculpt.js, correctives.py; кроме PLAIN): AnnySkin.ROLL отпечатан в
+     anny.bin (tools/anny-look/inputs.js), сменился — npm run anny:build. */
+  const ROLL = { OUT: 1, IN: 0, LO0: 90, LO1: 130, EL0: 162, EL1: 172 };
+  const flipY = v => [v[0], -v[1], v[2]], intM = f => M.M3.cols(flipY(f.x), flipY(f.y), flipY(f.z));
+  const sstep = (x, a, b) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  /* закрутка (градусы, наружу +), которую снимает рамка uar, при закрутке плеча e и подъёме el */
+  function rollOff(e, el) { return (e > 0 ? ROLL.OUT : ROLL.IN) * e * sstep(el, ROLL.LO0, ROLL.LO1) * (1 - sstep(el, ROLL.EL0, ROLL.EL1)); }
+  /* доля рамки закрутки в ячейке плеча (как roll_share в build.py): 1 у плечевого сустава и до 0 на at.a1 см по оси плеча в
+     стойке. {share: Float32Array(nv), map: Int16Array(рамки) — для рамки плеча номер её рамки закрутки, иначе −1} */
+  function rollShare(d, at) {
+    const R0 = M.catalogPose(M.neutral()), share = new Float32Array(d.nv), map = new Int16Array(d.frames.length).fill(-1), fi = Object.fromEntries(d.frames.map((f, i) => [f, i]));
+    for (const s of M.SIDES) {
+      const iu = fi['ua' + s], ir = fi['uar' + s]; if (iu == null || ir == null) continue; map[iu] = ir;
+      const sh = R0['sh' + s], ax = V.unit(V.sub(R0['el' + s], sh));
+      for (let v = 0; v < d.nv; v++) {
+        let has = false; for (let j = 0; j < 4; j++) if (d.wi[v * 4 + j] === iu && d.ww[v * 4 + j] > 0) has = true; if (!has) continue;
+        const a = (d.pos[v * 3] - sh[0]) * ax[0] + (d.pos[v * 3 + 1] - sh[1]) * ax[1] + (d.pos[v * 3 + 2] - sh[2]) * ax[2];
+        const t = Math.max(0, Math.min(1, (at.a1 - a) / (at.a1 - at.a0))); share[v] = t * t * (3 - 2 * t);
+      }
+    }
+    return { share, map };
+  }
+  /* двойной кватернион ячейки j вершины v (в out, с 0): у ячейки плеча — смесь плеча и его рамки закрутки по доле вершины */
+  function slotDQ(d, DQ, v, j, out) {
+    const o = d.wi[v * 4 + j] * 8, r = d.roll, k = r ? r.share[v] : 0, ir = k > 0 ? r.map[d.wi[v * 4 + j]] : -1;
+    if (ir < 0) { for (let c = 0; c < 8; c++) out[c] = DQ[o + c]; return out; }
+    const p = ir * 8, sg = DQ[o] * DQ[p] + DQ[o + 1] * DQ[p + 1] + DQ[o + 2] * DQ[p + 2] + DQ[o + 3] * DQ[p + 3] < 0 ? -1 : 1;
+    for (let c = 0; c < 8; c++) out[c] = (1 - k) * DQ[o + c] + k * sg * DQ[p + c];
+    return out;
+  }
+  /* поворот вершины — смешанный кватернион (как в skin; для правил проверок и разметки листов) */
+  const RQ = new Float64Array(8), RQ0 = new Float64Array(8);
+  function blendRot(d, DQ, v) {
+    let x = 0, y = 0, z = 0, w = 0, first = true;
+    for (let j = 0; j < 4; j++) {
+      const wt = d.ww[v * 4 + j]; if (!wt) continue; slotDQ(d, DQ, v, j, RQ); let s = wt;
+      if (first) { RQ0.set(RQ); first = false; } else if (RQ[0] * RQ0[0] + RQ[1] * RQ0[1] + RQ[2] * RQ0[2] + RQ[3] * RQ0[3] < 0) s = -wt;
+      x += s * RQ[0]; y += s * RQ[1]; z += s * RQ[2]; w += s * RQ[3];
+    }
+    const l = Math.hypot(x, y, z, w); return [x / l, y / l, z / l, w / l];
+  }
+  function rollFrame(F, s) {
+    const u = F['ua' + s], st = M.swingTwist(M.M3.mul(M.M3.T(intM(F.thorax)), intM(u))), g = SIGN[s];
+    /* поворот рамки плеча вокруг её оси y (ось плеча) на −r: закрутка относительно грудной клетки уменьшается на r */
+    const r = g * rollOff(g * st.twist, st.elevation) * Math.PI / 180, c = Math.cos(r), sn = Math.sin(r);
+    return { o: u.o, x: V.add(V.scale(u.x, c), u.z, sn), y: u.y, z: V.add(V.scale(u.z, c), u.x, -sn) };
   }
   function inv(A, o = 0) {
     /* обратная к ортогональной (с отражением) аффинной: линейная часть транспонируется */
@@ -431,16 +495,17 @@ const AnnySkin = (() => {
        в порядке форм) */
     const sparse = active && list && n < d.nv / 4, CI = sparse ? corrIndex(d) : null;
     if (active && !sparse) { P = d.pos.slice(); d.correctives.forEach((c, k) => { const w = cw[k]; if (!(w > 0)) return; for (let j = 0; j < c.n; j++) { const v = c.i[j]; P[v * 3] += w * c.d[j * 3]; P[v * 3 + 1] += w * c.d[j * 3 + 1]; P[v * 3 + 2] += w * c.d[j * 3 + 2]; } }); }
-    const f32 = Math.fround;
+    const f32 = Math.fround, roll = d.roll, SQ = [0, 1, 2, 3].map(() => new Float64Array(8)), R0Q = new Float64Array(4);
     for (let k = 0; k < n; k++) {
       const v = list ? list[k] : k; let px = P[v * 3], py = P[v * 3 + 1], pz = P[v * 3 + 2];
       if (sparse) for (let e = CI.start[v]; e < CI.start[v + 1]; e++) { const c = d.correctives[CI.k[e]], w = cw[CI.k[e]], j = CI.j[e]; if (!(w > 0)) continue; px = f32(px + w * c.d[j * 3]); py = f32(py + w * c.d[j * 3 + 1]); pz = f32(pz + w * c.d[j * 3 + 2]); }
       if (DQ) {
         let x = 0, y = 0, z = 0, w = 0, dx = 0, dy = 0, dz = 0, dw = 0, r0 = -1;
         for (let j = 0; j < 4; j++) {
-          const wt = d.ww[v * 4 + j]; if (!wt) continue; const o = d.wi[v * 4 + j] * 8;
-          let s = wt; if (r0 < 0) r0 = o; else if (DQ[o] * DQ[r0] + DQ[o + 1] * DQ[r0 + 1] + DQ[o + 2] * DQ[r0 + 2] + DQ[o + 3] * DQ[r0 + 3] < 0) s = -wt;
-          x += s * DQ[o]; y += s * DQ[o + 1]; z += s * DQ[o + 2]; w += s * DQ[o + 3]; dx += s * DQ[o + 4]; dy += s * DQ[o + 5]; dz += s * DQ[o + 6]; dw += s * DQ[o + 7];
+          const wt = d.ww[v * 4 + j]; if (!wt) continue; let Q = DQ, o = d.wi[v * 4 + j] * 8;
+          if (roll && roll.share[v] > 0 && roll.map[d.wi[v * 4 + j]] >= 0) { Q = slotDQ(d, DQ, v, j, SQ[j]); o = 0; }   // ячейка плеча с рамкой закрутки
+          let s = wt; if (r0 < 0) { r0 = 0; R0Q.set(Q.subarray ? Q.subarray(o, o + 4) : Q.slice(o, o + 4)); } else if (Q[o] * R0Q[0] + Q[o + 1] * R0Q[1] + Q[o + 2] * R0Q[2] + Q[o + 3] * R0Q[3] < 0) s = -wt;
+          x += s * Q[o]; y += s * Q[o + 1]; z += s * Q[o + 2]; w += s * Q[o + 3]; dx += s * Q[o + 4]; dy += s * Q[o + 5]; dz += s * Q[o + 6]; dw += s * Q[o + 7];
         }
         const l = Math.hypot(x, y, z, w); x /= l; y /= l; z /= l; w /= l; dx /= l; dy /= l; dz /= l; dw /= l;
         /* поворот: p + 2·q×(q×p + w·p); сдвиг: 2·(w·d − dw·q + q×d) */
@@ -473,7 +538,7 @@ const AnnySkin = (() => {
     }
     return d._regions = { fn: regionOf, ids, rid };
   }
-  return { load, decode, frameMats, skinMats, dualQuats, correctiveWeights, skin, supports, supportBody, supportShape, supportSD, SUP, regions, bindInv, digitRig, digitPose, DIG, _digit: { R3, chain, xf, flexRot, flexAngle, flatThumb }, get data() { return data; }, set data(x) { data = x; } };
+  return { load, decode, frameMats, rollFrame, rollShare, slotDQ, blendRot, ROLL, skinMats, dualQuats, correctiveWeights, skin, supports, supportBody, supportShape, supportSD, SUP, regions, bindInv, digitRig, digitPose, DIG, _digit: { R3, chain, xf, flexRot, flexAngle, flatThumb }, get data() { return data; }, set data(x) { data = x; } };
 })();
 if (typeof window !== 'undefined') window.AnnySkin = AnnySkin; /* объёмная сцена (volume.js) берёт данные и рамки отсюда */
 if (typeof module !== 'undefined' && module.exports) module.exports = AnnySkin;

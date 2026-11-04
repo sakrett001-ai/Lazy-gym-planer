@@ -1,6 +1,7 @@
 'use strict';
 /* Входы сборки кожи Anny (build.py пишет их в заголовок src/data/anny.bin, tools/anny.test.js сверяет):
    files — sha256 файлов, из которых собрана сетка (подгонка, сборка, одобренные параметры Anny);
+   roll — sha256 параметров рамки закрутки плеча (AnnySkin.ROLL: формы кожи строятся под неё);
    stance — sha256 нейтральной стойки манекена: рамки сегментов и суставы пальцев расслабленной кисти (стойка — поза
    «в покое» скиннинга: сменилась стойка — сетку нужно собрать заново).
    node tools/anny-look/inputs.js — печатает {files, stance}. */
@@ -16,5 +17,7 @@ function stanceHash(M = require(root + '/src/js/09bm-mannequin.js')) {
   for (const s of M.SIDES) { const h = M.handShape('relaxed', s, 1.4); out['hand-' + s] = [...h.fingers, h.thumb].map(f => f.pts.map(p => p.map(r))); }
   return sha(JSON.stringify(out));
 }
-module.exports = { FILES, filesHash, stanceHash, inputs: () => ({ files: filesHash(), stance: stanceHash() }) };
+/* рамка закрутки плеча (AnnySkin.ROLL): формы кожи строятся под неё */
+function rollHash(A = require(root + '/src/js/09bs-anny.js')) { return sha(JSON.stringify(A.ROLL)); }
+module.exports = { FILES, filesHash, stanceHash, rollHash, inputs: () => ({ files: filesHash(), stance: stanceHash(), roll: rollHash() }) };
 if (require.main === module) console.log(JSON.stringify(module.exports.inputs()));
