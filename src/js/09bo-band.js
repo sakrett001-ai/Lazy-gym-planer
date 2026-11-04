@@ -35,7 +35,8 @@
 ((E) => {
   const M = typeof Mannequin !== 'undefined' ? Mannequin : require('./09bm-mannequin.js');
   const { V, M3, toCat, dirCat, FLOOR, SIGN } = M, { BIND } = E;
-  const MU = () => (typeof Muscles !== 'undefined' ? Muscles : require('./09br-muscles.js'));
+  /* огибание — из расчёта путей мышц (09br-muscles.js): в приложении он загружен, в node — по require */
+  const MU = () => { if (typeof Muscles !== 'undefined') return Muscles; if (typeof require === 'function') return require('./09br-muscles.js'); throw Error('Лента эспандера: нужен 09br-muscles.js (Muscles.wrap)'); };
   const BAND_MODELS = {
     tube48: { shape: 'round', rest: 121.9, r0: .5, max: 3 },
     tube36: { shape: 'round', rest: 91.4, r0: .5, max: 3 },
