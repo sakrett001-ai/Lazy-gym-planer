@@ -20,10 +20,11 @@
      к тросу верхней плиты).
    Рычажный стек (BIND.g4camCable, 09bo-g4-lever.js) — строки «кулачок», см. auditLever: длина троса, касание кулачка
    и колёс, кулачок вместе с рычагом, подъём стека против k·∫p dφ, трос против рамы, момент против кривой силы.
-   Эспандер (BIND.band, BIND.g3band), по кадрам и по каждой ветви: длина ветви, угол ленты к полу и к линии тяги,
-   высота кисти над точкой, откуда лента идёт к кисти; длина в растяжке — наименьшая за повтор (лента не сжимается
-   посреди повтора), растяжение max/min не больше 3 (паспортный предел латексных лент), путь кисти вдоль ленты —
-   как у троса. */
+   Эспандер (общая модель ленты, src/js/09bo-band.js; BIND.band, BIND.g3band), по кадрам и по каждой ветви: угол ленты
+   к полу и к линии тяги, высота кисти над точкой, откуда лента идёт к кисти, путь кисти вдоль ленты — как у троса;
+   по ленте целиком (auditBand): непрерывность, изломы вне огибания, лента сквозь тело и инвентарь, растяжение каждого
+   нагруженного куска — от длины покоя до трёх длин покоя (паспорт), скольжение под подошвой, согласованность натяжения
+   ветвей. Тест — tools/bands.test.js. */
 const fs = require('node:fs');
 const M = require('../../src/js/09bm-mannequin.js');
 const EQ = require('../../src/js/09bn-equipment.js');
@@ -327,19 +328,19 @@ function auditEntry(id, entry, { samples = 41 } = {}) {
     rows.push(row);
   }
   for (const e of bandsEq) {
-    /* две ветви от одной точки крепления (дверь): ход — по середине кистей, как у каната (концы ленты расходятся, и каждая
-       кисть идёт к своей ветви под углом); у ветвей — длина и растяжение */
-    const hands = e.hands || ['L', 'R'], shared = e.type === 'g3band' && hands.length > 1;
+    /* ход кистей вдоль ленты — по ветвям (детали id:L и id:R от середины ленты к рукоятям: направление последнего отрезка
+       к кольцу стремени); у ленты, продетой в кольцо, — и по середине кистей, как у каната */
+    const info0 = frames[0].R.props.find(p => p.band && p.band.id === (e.id || 'band')).band;
+    const hands = info0.hands, shared = info0.slide && hands.length > 1;
     const branch = (R, s) => {
       const b = R.props.find(p => p.id === (e.id || 'band') + ':' + s), pts = b.pts.map(fromCat);
-      let L = 0; for (let i = 1; i < pts.length; i++) L += V.dist(pts[i - 1], pts[i]);
-      return { A: pts[pts.length - 2], K: pts[pts.length - 1], L, end: fromCat(R['grip' + s]) };
+      return { A: pts[pts.length - 2], K: pts[pts.length - 1], end: fromCat(R['grip' + s]) };
     };
     for (const s of shared ? [...hands, 'mid'] : hands) {
       const fr = frames.map(({ t, R }) => {
         if (s !== 'mid') { const b = branch(R, s); return { t, ...b, dir: V.sub(b.K, b.A) }; }
         const a = branch(R, hands[0]), b = branch(R, hands[1]), K = V.mix(a.K, b.K, .5);
-        return { t, A: a.A, K, L: (a.L + b.L) / 2, end: V.mix(a.end, b.end, .5), dir: V.sub(K, a.A) };
+        return { t, A: a.A, K, end: V.mix(a.end, b.end, .5), dir: V.sub(K, a.A) };
       });
       fr.forEach((f, i) => { const a = fr[Math.max(0, i - 1)], b = fr[Math.min(fr.length - 1, i + 1)]; f.v = V.sub(b.end, a.end); });
       const vmax = Math.max(...fr.map(f => V.len(f.v))), moving = fr.filter(f => V.len(f.v) > LIM.moving * vmax);
@@ -349,21 +350,16 @@ function auditEntry(id, entry, { samples = 41 } = {}) {
       row.moveAng = Math.max(...moving.map(f => angleLine(f.dir, f.v)));
       row.moveAngMid = angleLine(fr[Math.floor(fr.length / 2)].dir, fr[Math.floor(fr.length / 2)].v);
       row.height = [Math.min(...fr.map(f => f.end[1] - f.A[1])), Math.max(...fr.map(f => f.end[1] - f.A[1]))];
-      const Ls = fr.map(f => f.L), near = fr.reduce((a, f) => f.L < a.L ? f : a), far = fr.reduce((a, f) => f.L > a.L ? f : a);
-      row.len = [Math.min(...Ls), Math.max(...Ls)]; row.stretchT = near.t; row.farT = far.t;
-      /* растяжка — исходное положение (t=0 или t=1, где лента короче); сжатие — ветвь короче, чем в растяжке */
-      const start = fr[0].L <= fr[fr.length - 1].L ? fr[0] : fr[fr.length - 1];
-      row.startT = start.t; row.shrink = start.L - near.L;
-      row.ratioLen = row.len[1] / row.len[0];
-      const u = V.unit(V.sub(far.end, far.A));
+      const far = fr.reduce((a, f) => V.dist(f.end, f.A) > V.dist(a.end, a.A) ? f : a), u = V.unit(V.sub(far.end, far.A));
       row.lineDev = Math.max(...fr.map(f => lineDist(f.end, far.A, u)));
       row.swing = Math.max(...fr.map(f => angleLine(f.dir, far.dir)));
       const pl = pca(fr.map(f => f.end)), n = pl.axes[2];
       row.planeAng = Math.max(...moving.map(f => deg(Math.asin(Math.min(1, Math.abs(V.dot(V.unit(f.dir), n)))))));
-      row.frames = fr.map(f => ({ t: +f.t.toFixed(3), floor: +elev(f.dir).toFixed(1), move: V.len(f.v) > LIM.moving * vmax ? +angleLine(f.dir, f.v).toFixed(1) : null, h: +(f.end[1] - f.A[1]).toFixed(1), len: +f.L.toFixed(1) }));
+      row.frames = fr.map(f => ({ t: +f.t.toFixed(3), floor: +elev(f.dir).toFixed(1), move: V.len(f.v) > LIM.moving * vmax ? +angleLine(f.dir, f.v).toFixed(1) : null, h: +(f.end[1] - f.A[1]).toFixed(1) }));
       row.flags = flagsOf(row);
       rows.push(row);
     }
+    rows.push(auditBand(id, e.id || 'band', frames));
   }
   return rows;
 }
@@ -385,10 +381,82 @@ function flagsOf(r) {
     if (r.ratio === 1 && r.floating) f.push('ratio 1 (1:1), а на стеке подвижный блок');
     if (!r.route.ok) f.push('трос от блока не доходит до стека');
   }
-  if (r.type === 'лента') {
-    if (r.shrink > LIM.bandShrink) f.push(`лента короче, чем в растяжке, на ${r.shrink.toFixed(1)} см (сжимается или провисает)`);
-    if (r.ratioLen > LIM.bandStretch) f.push(`растяжение ленты ×${r.ratioLen.toFixed(1)}`);
+  return f;
+}
+/* ---------- лента целиком (общая модель, src/js/09bo-band.js) ----------
+   По кадрам (и между ключами позы — кадры идут чаще ключей): лента непрерывна (ветви id:L и id:R сходятся в середине),
+   без изломов вне огибания (угол между соседними отрезками — не больше BAND_LIM.kink: дуги огибания нарисованы ARC_N
+   точками, шаг дуги в 180° — 20°), не проходит сквозь тело (кроме кисти у хвата и стопы, которую огибает) и инвентарь
+   (кроме кольца и петли крепления, которые огибает); длина каждого нагруженного куска — от длины покоя (без провиса,
+   допуск LIM.bandShrink) до LIM.bandStretch длин покоя (паспортный предел); опора на подошве не скользит (место ленты
+   под подошвой — не дальше BAND_LIM.slip от первого кадра); натяжение ветвей одной ленты согласовано: у ленты, продетой
+   в кольцо, растяжение по обе стороны одно (скользит), у ленты под стопами — сила ветвей (∝ λ − 1, латекс до 200 %
+   удлинения почти линеен) не расходится больше чем на BAND_LIM.pull. */
+const BAND_LIM = {
+  kink: 25,        // °: излом ленты вне огибания
+  join: .01,       // см: ветви не сходятся в середине ленты
+  slip: .5,        // см: место ленты под подошвой сдвигается (как у стопы и кисти на детали, mech-audit.js LIM.slip)
+  body: 1,         // см: лента в теле глубже (как у троса в валидаторе, правило cable: 1 см — предупреждение)
+  gear: .3,        // см: лента в инвентаре глубже своего радиуса
+  pull: .1         // доля: сила ветвей одной ленты под стопами расходится
+};
+const bandParts = (R, bid) => R.props.filter(p => p.band && p.band.id === bid);
+function auditBand(id, bid, frames) {
+  const V2 = require('../biomech/validator2.js');
+  const row = { id, kind: 'лента', part: bid, type: 'лента-модель', frames: [] }, f0 = bandParts(frames[0].R, bid)[0].band;
+  row.model = f0.model; row.rest = f0.rest; row.max = f0.max; row.slide = f0.slide;
+  const lamR = f0.pieces.map(() => [Infinity, -Infinity]), Ls = [], slips = f0.pins.map(() => 0), pull = [0];
+  let join = 0, kink = { a: 0 }, body = { d: 0 }, gear = { d: 0 };
+  const pin0 = f0.pins.map(p => p.med);
+  for (const { t, R } of frames) {
+    const parts = bandParts(R, bid), b = parts[0].band;
+    Ls.push(b.L);
+    b.pieces.forEach((p, k) => { lamR[k][0] = Math.min(lamR[k][0], p.lam); lamR[k][1] = Math.max(lamR[k][1], p.lam); });
+    b.pins.forEach((p, k) => { slips[k] = Math.max(slips[k], V.dist(p.med, pin0[k])); });
+    const loaded = b.pieces.filter(p => p.loaded);
+    if (loaded.length > 1) { const F = loaded.map(p => Math.max(0, p.lam - 1)), m = Math.max(...F); if (m > 0) pull[0] = Math.max(pull[0], (m - Math.min(...F)) / m); }
+    if (parts.length > 1 && !b.closed) join = Math.max(join, V.dist(parts[0].pts[0], parts[1].pts[0]));
+    /* изломы: внутри каждой детали и на стыке деталей в середине ленты */
+    const chain = parts.length > 1 && !b.closed ? [...parts[0].pts.slice().reverse(), ...parts[1].pts.slice(1)] : parts[0].pts;
+    for (let i = 1; i < chain.length - 1; i++) {
+      const a = V.sub(chain[i], chain[i - 1]), c = V.sub(chain[i + 1], chain[i]);
+      if (V.len(a) < 1e-3 || V.len(c) < 1e-3) continue;
+      const ang = deg(Math.acos(Math.max(-1, Math.min(1, V.dot(V.unit(a), V.unit(c))))));
+      if (ang > kink.a) kink = { a: ang, t, at: i };
+    }
+    /* сквозь тело и инвентарь: точки через 1 см */
+    const cache = M.torsoCache(R), skip = p => M.SIDES.some(s => V.dist(p, R['grip' + s]) < 9);
+    const cols = R.props.filter(p => !(p.band || (p.id || '').startsWith(bid + ':') || /:(ring|strap)$/.test(p.id || '') || p.tone === 'mat')).flatMap(p => [V2.collider(p)].flat()).filter(c => c && !c.unknown && !c.cable && c.sdf);
+    for (const p of parts) for (let i = 1; i < p.pts.length; i++) {
+      const n = Math.max(1, Math.ceil(V.dist(p.pts[i - 1], p.pts[i])));
+      for (let j = 0; j <= n; j++) {
+        const x = V.mix(p.pts[i - 1], p.pts[i], j / n), r = p.rs ? p.rs[i - 1] : p.r;
+        if (skip(x)) continue;
+        const dT = -M.torsoSDF(R, x, cache) + r; if (dT > body.d) body = { d: dT, t, where: 'корпус' };
+        for (const s of M.SIDES) for (const k of ['ua', 'fa', 'th', 'sk']) { const d = -M.limbSDF(R, k, s, x) + r; if (d > body.d) body = { d, t, where: k + s }; }
+        for (const c of cols) { const d = -c.sdf(x) + r; if (d > gear.d) gear = { d, t, where: c.id }; }
+      }
+    }
+    row.frames.push({ t: +t.toFixed(3), L: +b.L.toFixed(1), lam: b.pieces.map(p => +p.lam.toFixed(3)), r: parts.map(p => +p.r.toFixed(2)) });
   }
+  Object.assign(row, { L: [Math.min(...Ls), Math.max(...Ls)], lam: lamR, loaded: f0.pieces.map(p => p.loaded), slip: slips, pull: pull[0], join, kink, body, gear });
+  row.flags = bandFlags(row);
+  return row;
+}
+function bandFlags(r) {
+  const f = [];
+  r.lam.forEach(([lo, hi], k) => {
+    if (!r.loaded[k]) return;
+    const L0 = r.frames.length ? null : null; void L0;
+    if (lo < 1 - 1e-6) f.push(`кусок ${k + 1} короче длины покоя (растяжение ×${lo.toFixed(2)}): лента провисает`);
+    if (hi > Math.min(r.max, LIM.bandStretch) + 1e-6) f.push(`кусок ${k + 1} растянут ×${hi.toFixed(2)} — больше паспортного предела ×${Math.min(r.max, LIM.bandStretch)}`);
+  });
+  if (r.join > BAND_LIM.join) f.push(`лента разорвана в середине на ${r.join.toFixed(2)} см`);
+  if (r.kink.a > BAND_LIM.kink) f.push(`излом ленты ${r.kink.a.toFixed(0)}° (t=${r.kink.t})`);
+  if (r.body.d > BAND_LIM.body) f.push(`лента проходит сквозь ${r.body.where} на ${r.body.d.toFixed(1)} см (t=${r.body.t})`);
+  if (r.gear.d > BAND_LIM.gear) f.push(`лента проходит сквозь ${r.gear.where} на ${r.gear.d.toFixed(1)} см (t=${r.gear.t})`);
+  r.slip.forEach((d, k) => { if (d > BAND_LIM.slip) f.push(`лента скользит под подошвой (опора ${k + 1}) на ${d.toFixed(2)} см`); });
+  if (r.pull > BAND_LIM.pull) f.push(`ветви ленты натянуты по-разному: сила расходится на ${(r.pull * 100).toFixed(0)} %`);
   return f;
 }
 function run({ only, samples = 41, baked = false } = {}) {
@@ -400,6 +468,10 @@ function run({ only, samples = 41, baked = false } = {}) {
 const f1 = v => v == null ? '—' : (+v).toFixed(1), f0 = v => v == null ? '—' : (+v).toFixed(0), rng = (a, k = f0) => `${k(a[0])}…${k(a[1])}`;
 function describe(r) {
   if (r.type === 'стек') return `стек тренажёра ${r.part}`;
+  if (r.type === 'лента-модель') return [`лента ${r.part} [${r.model}, покой ${f1(r.rest)} см${r.slide ? ', продета в кольцо' : ''}]`, `длина ${rng(r.L, f1)} см`,
+    `растяжение по кускам: ${r.lam.map(([a, b], k) => `${r.loaded[k] ? '' : '(лежит) '}×${a.toFixed(2)}…${b.toFixed(2)}`).join(', ')}`,
+    `сила ветвей расходится на ${(r.pull * 100).toFixed(0)} %`, r.slip.length ? `скольжение под подошвой ${r.slip.map(d => d.toFixed(2)).join(' / ')} см` : '',
+    `стык ${r.join.toFixed(3)} см`, `излом до ${f0(r.kink.a)}°`, `в теле ${f1(r.body.d)} см (${r.body.where || '—'})`, `в инвентаре ${f1(r.gear.d)} см (${r.gear.where || '—'})`].filter(Boolean).join(' | ');
   if (r.type === 'кулачок') return [`кулачок ${r.part} [рычаг, k=${r.ratio}]`, `плечо троса ${rng(r.p, f1)} см, колено ${rng(r.knee)}°`,
     r.curve ? `пик момента ${f0(r.peakMachine)}° (цель ${f0(r.peakTarget)}°), min/max ${r.ratioMachine.toFixed(2)} (цель ${r.ratioTarget.toFixed(2)}), откл. RMS ${r.rms.toFixed(3)}, max ${r.maxDev.toFixed(3)}` : 'без кривой силы',
     `длина троса ${rng(r.length, v => v.toFixed(2))} см`, `касание: cos ${r.tan.toExponential(1)}, обод ${Math.max(r.rim, r.onProf).toFixed(3)} см, профиль за прямой ${r.side.toFixed(3)} см`,
@@ -412,7 +484,7 @@ function describe(r) {
   if (r.type === 'трос') {
     out.push(`рукоять—колесо ${rng(r.span)} см`);
     if (r.liftMin != null) out.push(`ratio ${r.ratio}${r.floating ? ' (подвижный блок)' : ''}, rest ${r.rest}, стек: в растяжке ${f1(r.liftAtStretch)} см @${r.stretchT.toFixed(3)}, min ${f1(r.liftMin)} @${r.liftMinT.toFixed(3)}, max ${f1(r.liftMax)} из ${r.maxLift}`, `проводка ${r.route.ok ? 'до стека' : 'обрыв'} (${r.route.chain.join(', ') || '—'})`);
-  } else out.push(`длина ${rng(r.len, f1)} см (×${r.ratioLen.toFixed(2)}), растяжка @${r.startT}`);
+  }
   return out.join(' | ');
 }
 if (require.main === module) {
@@ -425,7 +497,7 @@ if (require.main === module) {
     if (frames && r.type === 'кулачок') { for (const f of r.frames.filter((_, i) => i % 4 === 0)) console.log(`      t=${f.t.toFixed(3).padEnd(6)} колено ${f1(f.knee).padStart(6)}°  плечо ${f.p.toFixed(2).padStart(6)} см  момент ${f.norm.toFixed(3)} (цель ${f.target == null ? '—' : f.target.toFixed(3)})  подъём ${f1(f.lift).padStart(5)} (k·∫p dφ ${f1(f.calc).padStart(5)}) см  трос ${f.L.toFixed(2)} см`); continue; }
     if (frames) for (const f of r.frames.filter((_, i) => i % 5 === 0)) console.log(`      t=${f.t.toFixed(3).padEnd(6)} к полу ${f1(f.floor).padStart(6)}°  к ходу ${f.move == null ? '   —' : f1(f.move).padStart(5)}°  высота ${f1(f.h).padStart(6)} см${f.lift != null ? `  стек ${f1(f.lift).padStart(6)} см` : ''}${f.len != null ? `  длина ${f1(f.len).padStart(6)} см` : ''}`);
   }
-  console.log(`\nУпражнений ${new Set(rows.map(r => r.id)).size}; тросов ${rows.filter(r => r.type === 'трос').length}, ветвей ленты ${rows.filter(r => r.type === 'лента').length}; с замечаниями ${new Set(bad.map(r => r.id)).size} упражнений (${bad.length} строк)`);
+  console.log(`\nУпражнений ${new Set(rows.map(r => r.id)).size}; тросов ${rows.filter(r => r.type === 'трос').length}, ветвей ленты ${rows.filter(r => r.type === 'лента').length}, лент ${rows.filter(r => r.type === 'лента-модель').length}; с замечаниями ${new Set(bad.map(r => r.id)).size} упражнений (${bad.length} строк)`);
   if (arg('--json')) fs.writeFileSync(arg('--json'), JSON.stringify(rows, null, 1));
 }
-module.exports = { run, auditEntry, auditLever, KIND, LIM, LEVER_LIM };
+module.exports = { run, auditEntry, auditLever, auditBand, bandFlags, KIND, LIM, LEVER_LIM, BAND_LIM };

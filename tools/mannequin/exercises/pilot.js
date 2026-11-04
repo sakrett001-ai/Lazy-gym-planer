@@ -97,7 +97,7 @@ function brGrip(C, q, L, k, e, allowShort) {
 }
 /* локти в растяжке: при 10° трубка у стоп короче 27 см, а в конце тяги — 77 см: растяжение больше чем втрое при любой
    длине трубки, натянутой в растяжке. Начало с мягкими локтями (BR_ELBOW) — ветвь в растяжке длиннее */
-const BR_ELBOW = 26, BR_FEET = 5.5;
+const BR_ELBOW = 16, BR_FEET = 7;
 const BRL = once(() => {
   const C = ctx([BR_MAT]), { V } = C;
   return C.unhinted(() => {
