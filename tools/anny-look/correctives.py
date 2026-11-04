@@ -61,6 +61,8 @@ SPECS = [
     ('armsOverhead', 'armsOverhead', 'elevation', 150, None, (ARM, ('cl', 'sp') + ARM), ('sh', 24), (('torso', 'ua', 'sh', 'ac'), 2.0, None, None)),
     # руки вверх через сгибание (сагиттальная плоскость, лопатка повёрнута вверх сильнее ритма): окно по отведению и закрутке — ALSO
     ('armsFwd', 'armsFwd', 'elevation', 110, None, (ARM, ('cl', 'sp') + ARM), ('sh', 24), (('torso', 'ua', 'sh', 'ac'), 2.0, None, None)),
+    # руки вверх с плечом, развёрнутым наружу (вис): под рамку закрутки плеча, кожа у подмышки — к процедурной с 1 см
+    ('armsUpTw', 'armsUpTw', 'elevation', 110, None, (ARM, ('cl', 'sp') + ARM), ('sh', 18), (('torso', 'ua', 'sh', 'ac'), 1.0, None, None)),
     # касание в полном сгибе (CONTACT): полоса — вся конечность своей стороны
     ('elbowIn', 'elbows', 'elbow', 100, None, None, ('el', 9)),
     ('elbowInPro', 'elbowsPro', 'elbow', 100, None, None, ('el', 9)),
@@ -88,7 +90,7 @@ PLAIN = {'armsFwd'}
 # до 5° (с 12° — нет: там рука в плоскости лопатки, это armsUp; прямо вверх плоскость подъёма вырождается, и форма
 # действует поверх armsOverhead) и закрутке от −15° до 40° (за −40° и 65° — нет:
 # разгибание гантели из-за головы внизу (−61°) и «лодочка» (−44°) с формой — на 3–10 вывернутых треугольников больше)
-ALSO = {'armsFwd': (('abduction', 12, 5), ('twist', -40, -15), ('twist', 65, 40))}
+ALSO = {'armsFwd': (('abduction', 12, 5), ('twist', -40, -15), ('twist', 65, 40)), 'armsUpTw': (('twist', 35, 65),)}
 
 
 def dq_from(S):
