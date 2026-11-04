@@ -355,7 +355,7 @@ def build(out_path, mannequin=None, shape='look'):
         for j in range(4):
             m = (order[:, j] == fi['ua' + s_]) & (w4[:, j] > 0) & (k > 0)
             o5[m, 4] = fi['uar' + s_]; w5[m, 4] = w4[m, j] * k[m]; w5[m, j] = w4[m, j] * (1 - k[m])
-    corr = CR.build(cat, F, o5, w5, FRAMES)
+    corr = CR.build(cat, F, o5, w5, FRAMES, plain=(order, w4))
     inputs = json.loads(subprocess.run(['node', os.path.join(C.ROOT, 'tools/anny-look/inputs.js')], check=True, capture_output=True, text=True).stdout)
     out = {'version': 1, 'source': {'anny': '0.6.1', 'toned': 'tools/skin-anny/result/anny-toned.json', 'fit': fit.get('pose'), 'local_delta': fit.get('local_delta', {}),
                                     # версия приложения в файл не пишется: стойку и инструменты уже отпечатывает inputs,
