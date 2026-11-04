@@ -3858,18 +3858,19 @@ void annyBlend(out vec4 r,out vec4 d){
 vec3 annyRotate(vec4 q,vec3 p){return p+2.*cross(q.xyz,cross(q.xyz,p)+q.w*p);}
 vec3 annyMove(vec4 r,vec4 d,vec3 p){return annyRotate(r,p)+2.*(r.w*d.xyz-d.w*r.xyz+cross(r.xyz,d.xyz));}
 /* \u043E\u043F\u043E\u0440\u044B (AnnySkin.supports, supportMove \u2014 \u0442\u043E\u0442 \u0436\u0435 \u0440\u0430\u0441\u0447\u0451\u0442): \u043A\u043E\u0436\u0430 \u0447\u0430\u0441\u0442\u0438 \u0442\u0435\u043B\u0430 \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u0430 \u0443 \u043E\u043F\u043E\u0440\u044B \u043B\u043E\u0436\u0438\u0442\u0441\u044F \u043D\u0430 \u043D\u0435\u0451. \u041D\u0430 \u043E\u043F\u043E\u0440\u0443 6 vec4:
-   \u0446\u0435\u043D\u0442\u0440 \u0438 \u0442\u0438\u043F (0 \u2014 \u043A\u043E\u0440\u043E\u0431\u043A\u0430 \u0441\u043E \u0441\u043A\u0440\u0443\u0433\u043B\u0435\u043D\u0438\u0435\u043C, 1 \u2014 \u0446\u0438\u043B\u0438\u043D\u0434\u0440 \u043F\u043E \u043E\u0441\u0438 y), \u0442\u0440\u0438 \u043E\u0441\u0438 \u0441 \u043F\u043E\u043B\u0443\u0440\u0430\u0437\u043C\u0435\u0440\u0430\u043C\u0438, [\u0441\u043A\u0440\u0443\u0433\u043B\u0435\u043D\u0438\u0435, a, \u043F\u0435\u0440\u0435\u0445\u043E\u0434, 0],
-   \u0431\u0438\u0442\u044B \u0440\u0430\u043C\u043E\u043A \u0447\u0430\u0441\u0442\u0438 \u0442\u0435\u043B\u0430 (\u043F\u043E 19 \u0432 \u0447\u0438\u0441\u043B\u0435) */
+   \u0446\u0435\u043D\u0442\u0440 \u0438 \u0442\u0438\u043F (0 \u2014 \u043A\u043E\u0440\u043E\u0431\u043A\u0430 \u0441\u043E \u0441\u043A\u0440\u0443\u0433\u043B\u0435\u043D\u0438\u0435\u043C, 1 \u2014 \u0446\u0438\u043B\u0438\u043D\u0434\u0440 \u043F\u043E \u043E\u0441\u0438 y), \u0442\u0440\u0438 \u043E\u0441\u0438 \u0441 \u043F\u043E\u043B\u0443\u0440\u0430\u0437\u043C\u0435\u0440\u0430\u043C\u0438, [\u0441\u043A\u0440\u0443\u0433\u043B\u0435\u043D\u0438\u0435, a, \u043F\u0435\u0440\u0435\u0445\u043E\u0434, \u0441\u0438\u043B\u0430],
+   [\u0431\u0438\u0442\u044B \u0440\u0430\u043C\u043E\u043A \u0447\u0430\u0441\u0442\u0438 \u0442\u0435\u043B\u0430 (\u043F\u043E 19 \u0432 \u0447\u0438\u0441\u043B\u0435), \u043F\u044F\u0442\u043A\u0430: 1000 + \u043F\u043E\u0440\u043E\u0433 z \u0432 \u0441\u0442\u043E\u0439\u043A\u0435 (0 \u2014 \u0432\u0441\u044F \u0447\u0430\u0441\u0442\u044C \u0442\u0435\u043B\u0430)]; st \u2014 \u0432\u0435\u0440\u0448\u0438\u043D\u0430 \u0432 \u0441\u0442\u043E\u0439\u043A\u0435 */
 uniform vec4 annySup[ANNY_SUP*6];
 uniform int annySupN;
 float annySupBit(vec4 m,int i){int c=i/19;float v=c==0?m.x:c==1?m.y:m.z;return float((int(v+.5)>>(i-c*19))&1);}
-vec3 annySupport(vec3 p){
+vec3 annySupport(vec3 p,vec3 st){
  if(annySupN==0)return p;
  ivec4 ix=ivec4(annyIndex+.5);
  for(int k=0;k<ANNY_SUP;k++){
   if(k>=annySupN)break;
   vec4 c0=annySup[k*6],X=annySup[k*6+1],Y=annySup[k*6+2],Z=annySup[k*6+3],pr=annySup[k*6+4],mk=annySup[k*6+5];
   float m=0.;for(int j=0;j<4;j++){float w=annyWeight[j];if(w>0.)m+=w*annySupBit(mk,ix[j]);}
+  if(mk.w>0.){float u=clamp((mk.w-1000.+1.-st.z)*.5,0.,1.);m*=u*u*(3.-2.*u);}
   if(m<=0.)continue;
   vec3 d=p-c0.xyz,l=vec3(dot(d,X.xyz),dot(d,Y.xyz),dot(d,Z.xyz)),g;float h;
   if(c0.w<.5){vec3 q=abs(l)-vec3(X.w,Y.w,Z.w)+pr.x,qp=max(q,0.);float lo=length(qp);h=lo+min(max(q.x,max(q.y,q.z)),0.)-pr.x;
@@ -3878,7 +3879,7 @@ vec3 annySupport(vec3 p){
    vec3 rv=rd>1e-6?vec3(l.x/rd,0.,l.z/rd):vec3(1.,0.,0.),yv=vec3(0.,sign(l.y),0.);g=lo>0.?(rv*ep.x+yv*ep.y)/lo:e.x>=e.y?rv:yv;}
   float a=pr.y,H=pr.z,b=a+H;if(h<0.||h>=b)continue;
   float t=clamp((h-a)/H,0.,1.),f=h<=a?0.:b*t*t*(3.-2.*t)+H*t*t*(t-1.);
-  p+=(X.xyz*g.x+Y.xyz*g.y+Z.xyz*g.z)*((f-h)*m);
+  p+=(X.xyz*g.x+Y.xyz*g.y+Z.xyz*g.z)*((f-h)*m*pr.w);
  }
  return p;
 }
@@ -3898,13 +3899,13 @@ varying `+Zc(i)+` vAnnyLook;
 `:"",vx=i=>i?"vAnnyLook=annyLook;":"";function wd(i,e,{normals:t=!0,color:n=!1,lookN:s=0}={}){let r=(n?_x:"")+yx(s),o=(n?xx:"")+vx(s);if(globalThis.ANNY_METHOD==="lbs"){i.vertexShader=i.vertexShader.replace("#include <common>",`#include <common>
 #define ANNY_LBS
 #define ANNY_FRAMES `+e+`
-`+Ed+r),t&&(i.vertexShader=i.vertexShader.replace("#include <skinnormal_vertex>","objectNormal=normalize(annyLinear(objectNormal,true));")),i.vertexShader=i.vertexShader.replace("#include <skinning_vertex>","transformed=annySupport(annyLinear(transformed,false));transformed.y=min(transformed.y,ANNY_FLOOR);"+o);return}i.vertexShader=i.vertexShader.replace("#include <common>",`#include <common>
+`+Ed+r),t&&(i.vertexShader=i.vertexShader.replace("#include <skinnormal_vertex>","objectNormal=normalize(annyLinear(objectNormal,true));")),i.vertexShader=i.vertexShader.replace("#include <skinning_vertex>","transformed=annySupport(annyLinear(transformed,false),transformed);transformed.y=min(transformed.y,ANNY_FLOOR);"+o);return}i.vertexShader=i.vertexShader.replace("#include <common>",`#include <common>
 #define ANNY_FRAMES `+e+`
 `+Ed+r),t&&(i.vertexShader=i.vertexShader.replace("#include <skinnormal_vertex>",`vec4 annyR,annyD;annyBlend(annyR,annyD);objectNormal=annyRotate(annyR,objectNormal);
 #ifdef USE_TANGENT
 objectTangent=annyRotate(annyR,objectTangent);
 #endif`)),i.vertexShader=i.vertexShader.replace("#include <skinning_vertex>",(t?"":`vec4 annyR,annyD;annyBlend(annyR,annyD);
-`)+"transformed=annySupport(annyMove(annyR,annyD,transformed));transformed.y=min(transformed.y,ANNY_FLOOR);"+o)}function Ad(i,e){let t=new it;t.name="anny",t.visible=!1,i.add(t);let n=null,s=null,r=null,o=null,a=null,l=null,c="",h=null,u={value:.28};function f(d){m();let E=new st;E.setAttribute("position",new qe(d.pos,3));let x=new Uint16Array(d.idx.length);for(let v=0;v<x.length;v+=3)x[v]=d.idx[v],x[v+1]=d.idx[v+2],x[v+2]=d.idx[v+1];E.setIndex(new qe(x,1)),E.computeVertexNormals();let g=fx();gx(E,x,d.nv,g.relief?.[0]??0,g.relief?.[1]??6);let C=new Ve(g.trunks?.color||"#000"),A=g.trunks?.alpha||0,w=(g.ao?.[0]||0)>0||(g.ao?.[1]||0)>0,P=A>0?2:w?1:0,S=P===2?"vAnnyLook.x":"vAnnyLook";if(E.setAttribute("annyIndex",new qe(Float32Array.from(d.wi),4)),E.setAttribute("annyWeight",new qe(d.ww,4)),l=new qe(new Uint8Array(d.nv*4),4,!0),l.setUsage(Ts),E.setAttribute("annyColor",l),P){let v=new Float32Array(d.nv*P);for(let R=0;R<d.nv;R++)if(v[R*P]=d.shade?d.shade[R]:1,P===2){let L=d.frames[d.wi[R*4]];v[R*2+1]=mx.has(L)?Math.max(-8,Math.min(8,px(d.pos[R*3],il-d.pos[R*3+1],d.pos[R*3+2]))):-8}E.setAttribute("annyLook",new qe(v,P))}d.correctives.length&&(E.morphAttributes.position=d.correctives.map(v=>{let R=new Float32Array(d.nv*3);for(let L=0;L<v.n;L++){let z=v.i[L];R[z*3]=v.d[L*3],R[z*3+1]=v.d[L*3+1],R[z*3+2]=v.d[L*3+2]}return new qe(R,3)}),E.morphTargetsRelative=!0),E.boundingSphere=new Ln(new F,1e3),E.boundingBox=new tn(new F(-1e3,-1e3,-1e3),new F(1e3,1e3,1e3)),a={annyDQ:{value:new Float32Array(d.frames.length*8)},annySup:{value:new Float32Array(Td*ux)},annySupN:{value:0}},r=e.clone(),r.name="anny-skin",r.side=Qt,r.roughness=g.roughness??e.roughness,a.annyAO={value:new be(g.ao?.[0]??0,g.ao?.[1]??0)},a.annyTrunk={value:new ot(C.r,C.g,C.b,A)},r.onBeforeCompile=v=>{v.uniforms.annyDQ=a.annyDQ,v.uniforms.annySup=a.annySup,v.uniforms.annySupN=a.annySupN,v.uniforms.annyGlow=u,v.uniforms.annyAO=a.annyAO,v.uniforms.annyTrunk=a.annyTrunk,wd(v,d.frames.length,{color:!0,lookN:P}),v.fragmentShader=v.fragmentShader.replace("#include <common>",`#include <common>
+`)+"transformed=annySupport(annyMove(annyR,annyD,transformed),transformed);transformed.y=min(transformed.y,ANNY_FLOOR);"+o)}function Ad(i,e){let t=new it;t.name="anny",t.visible=!1,i.add(t);let n=null,s=null,r=null,o=null,a=null,l=null,c="",h=null,u={value:.28};function f(d){m();let E=new st;E.setAttribute("position",new qe(d.pos,3));let x=new Uint16Array(d.idx.length);for(let v=0;v<x.length;v+=3)x[v]=d.idx[v],x[v+1]=d.idx[v+2],x[v+2]=d.idx[v+1];E.setIndex(new qe(x,1)),E.computeVertexNormals();let g=fx();gx(E,x,d.nv,g.relief?.[0]??0,g.relief?.[1]??6);let C=new Ve(g.trunks?.color||"#000"),A=g.trunks?.alpha||0,w=(g.ao?.[0]||0)>0||(g.ao?.[1]||0)>0,P=A>0?2:w?1:0,S=P===2?"vAnnyLook.x":"vAnnyLook";if(E.setAttribute("annyIndex",new qe(Float32Array.from(d.wi),4)),E.setAttribute("annyWeight",new qe(d.ww,4)),l=new qe(new Uint8Array(d.nv*4),4,!0),l.setUsage(Ts),E.setAttribute("annyColor",l),P){let v=new Float32Array(d.nv*P);for(let R=0;R<d.nv;R++)if(v[R*P]=d.shade?d.shade[R]:1,P===2){let L=d.frames[d.wi[R*4]];v[R*2+1]=mx.has(L)?Math.max(-8,Math.min(8,px(d.pos[R*3],il-d.pos[R*3+1],d.pos[R*3+2]))):-8}E.setAttribute("annyLook",new qe(v,P))}d.correctives.length&&(E.morphAttributes.position=d.correctives.map(v=>{let R=new Float32Array(d.nv*3);for(let L=0;L<v.n;L++){let z=v.i[L];R[z*3]=v.d[L*3],R[z*3+1]=v.d[L*3+1],R[z*3+2]=v.d[L*3+2]}return new qe(R,3)}),E.morphTargetsRelative=!0),E.boundingSphere=new Ln(new F,1e3),E.boundingBox=new tn(new F(-1e3,-1e3,-1e3),new F(1e3,1e3,1e3)),a={annyDQ:{value:new Float32Array(d.frames.length*8)},annySup:{value:new Float32Array(Td*ux)},annySupN:{value:0}},r=e.clone(),r.name="anny-skin",r.side=Qt,r.roughness=g.roughness??e.roughness,a.annyAO={value:new be(g.ao?.[0]??0,g.ao?.[1]??0)},a.annyTrunk={value:new ot(C.r,C.g,C.b,A)},r.onBeforeCompile=v=>{v.uniforms.annyDQ=a.annyDQ,v.uniforms.annySup=a.annySup,v.uniforms.annySupN=a.annySupN,v.uniforms.annyGlow=u,v.uniforms.annyAO=a.annyAO,v.uniforms.annyTrunk=a.annyTrunk,wd(v,d.frames.length,{color:!0,lookN:P}),v.fragmentShader=v.fragmentShader.replace("#include <common>",`#include <common>
 varying vec4 vAnnyColor;
 `+(P?"varying "+Zc(P)+` vAnnyLook;
 `:"")+`uniform float annyGlow;
