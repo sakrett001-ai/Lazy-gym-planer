@@ -180,6 +180,17 @@ const FP_PRON0 = 30;
 const FPL = once(() => { const C = ctx([FP_TOWER]); return pullLine(C, pulleyOf(FP_TOWER), 4.5, -1, t => fpBody(C, FP().q, t), q => fpEnd(C, q), (q, g, e, sh) => fpGrip(C, q, g, e, sh, undefined, FP_PRON0), 10, 30); });
 /* направление между двумя единичными векторами (сферическая интерполяция) */
 function slerpDir(V, a, b, t) { const d = Math.max(-1, Math.min(1, V.dot(a, b))), th = Math.acos(d); if (th < 1e-4) return a; const s = Math.sin(th); return V.add(V.scale(a, Math.sin((1 - t) * th) / s), b, Math.sin(t * th) / s); }
+/* Рукоять в кулаке, большой палец — вдоль axis: пронация подбирается так, чтобы ось кулака (z кисти) смотрела вдоль axis
+   (как holdDir у гантелей в g2-dumbbell.js, но со знаком: большой палец не перескакивает на противоположную сторону) */
+function holdAxis(C, q, s, point, pole, axis, { lo = -84, hi = 78 } = {}) {
+  const { V } = C, ax = V.unit(axis);
+  const score = p => { C.hold(q, s, point, pole, { pron: p, allowShort: true }); return V.dot(C.M3.col(C.fk(q).F['hand' + s].R, 2), ax); };
+  let best = lo, bv = -Infinity;
+  for (let p = lo; p <= hi + 1e-9; p += 4) { const v = score(p); if (v > bv) { bv = v; best = p; } }
+  let a = Math.max(lo, best - 4), b = Math.min(hi, best + 4);
+  for (let i = 0; i < 18; i++) { const m1 = a + (b - a) * .382, m2 = a + (b - a) * .618; if (score(m1) >= score(m2)) b = m2; else a = m1; }
+  const p = (a + b) / 2; for (let k = 0; k < 3; k++) C.hold(q, s, point, pole, { pron: p, allowShort: true }); C.hold(q, s, point, pole, { pron: p }); return p;
+}
 /* ---------- Пуловер на блоке прямыми руками ---------- */
 const SP_TOWER = { type: 'g3Tower', id: 'col', h: 200, at: [0, 0, 135], yaw: 180 };
 const SP_FEET = { L: [13, 16, 8], R: [-13, 16, -8] };
@@ -748,7 +759,16 @@ module.exports = {
   },
 
   /* Шаг вперёд от линии блоков, корпус чуть наклонён, у каждой руки свой трос и D-рукоять.
-     t=0 — руки разведены в стороны, локти мягко согнуты; t=1 — рукояти сведены по дуге вниз-вперёд перед грудью. */
+     t=0 — руки разведены в стороны, локти мягко согнуты; t=1 — рукояти сведены по дуге вниз-вперёд перед грудью.
+     Кисть: в растяжке ладони смотрят вперёд (NASM «Two-Arm Standing Cable Fly»: «hold them out to the side of your body with
+     your palms facing forward»; weighttraining.guide «Cable Cross Over»: «Your palms should be facing forward»), руки сходятся
+     ниже груди (ACE «Standing Decline Cable Flyes»: «until your hands meet below the level of your chest»), запястье прямое
+     («neutral wrist position», там же). Ладонь всю дугу смотрит по ходу движения — большой палец вдоль нормали дуги
+     (holdAxis): в растяжке ладони вперёд и чуть вниз, в конце — друг к другу. Рукоять давит в ладонь, стремя ложится на тыл
+     кисти, в конце — на тыл запястья, как у живого человека. Прежде пронация шла от 60 до 25 при локте вверх-назад: в растяжке
+     ладонь смотрела назад, большой палец — вниз, в конце ладони — вниз; на возврате стремя шло под запястьем, а трос подходил
+     к кулаку со стороны ладони. Локоть смотрит назад и чуть вниз (наружная ротация плеча 31°, супинация 59°): ладонь вперёд
+     одной супинацией — у предела предплечья (85°). */
   cablefly: {
     keys: [0, .2, .4, .6, .8, 1],
     get equipment() { return tuned(this, () => [XO_HI, cable(XO_HI, 'L', { id: 'cabL', attach: 'D', hands: ['L'], plane: 'swivel', clip: 11 }), cable(XO_HI, 'R', { id: 'cabR', attach: 'D', hands: ['R'], plane: 'swivel', clip: 11 })]); },
@@ -762,8 +782,9 @@ module.exports = {
         const gh = f.P['gh' + s], lat = C.lat(q, s), fwd = T.z, up = T.y;
         const d0 = V.unit(V.add(V.add(V.scale(lat, .94), fwd, .05), up, .2)), d1 = V.unit(V.add(V.add(V.scale(fwd, .9), up, -.3), lat, -.19));
         const g = V.add(gh, slerpDir(V, d0, d1, e), 61.5);
-        const pole = V.unit(V.mix(V.add(V.scale(fwd, -1), up, .25), V.add(V.add(lat, up, -.12), fwd, -.65), e));
-        C.hold(q, s, g, pole, { pron: C.lerp(60, 25, e) });
+        const pole = V.unit(V.mix(V.add(V.scale(fwd, -1), up, -.3), V.add(V.add(lat, up, -.12), fwd, -.65), e));
+        let N = V.unit(V.cross(d0, d1)); if (V.dot(N, up) < 0) N = V.scale(N, -1);
+        holdAxis(C, q, s, g, pole, N);
       }
       return q;
     }
@@ -798,7 +819,13 @@ module.exports = {
      впереди фронтальной (плоскость лопатки — 30–45°: Magee D. J. «Orthopedic Physical Assessment», 6-е изд., 2014), тогда
      блок у пола рядом со стопой лежит почти в плоскости движения руки. Прежде кисть начинала в 26 см впереди плечевого сустава,
      а поднималась на 23,5° впереди фронтальной плоскости: блок оставался далеко от плоскости движения, и трос выходил из неё
-     на 24° (аудит тросов); теперь кисть в начале — в 22 см впереди сустава (перед левым бедром), трос — 17°. */
+     на 24° (аудит тросов); теперь кисть в начале — в 22 см впереди сустава (перед левым бедром), трос — 17°.
+     Кисть: в начале ладонь к телу, большой палец внутрь и вверх; наверху ладонь вниз, большой палец вперёд (holdAxis).
+     Прежде пронация шла от 10 до 45 при локте вверх-назад, и наверху большой палец смотрел вниз — положение «пустой банки»
+     (empty can): при подъёме руки с внутренней ротацией плеча лопатка сильнее поворачивается внутрь и наклоняется вперёд,
+     подакромиальное пространство уже (Thigpen C. A. et al. «Scapular kinematics during supraspinatus rehabilitation exercise:
+     a comparison of full-can versus empty-can techniques», Am J Sports Med 34(4), 2006). Наверху трос тянет вниз к блоку
+     в пальцы — стремя под кулаком, а не на тыле запястья. */
   cablelat: {
     keys: [0, .2, .4, .6, .8, 1],
     get equipment() { return tuned(this, () => [CL_TOWER, cable(CL_TOWER, '', { id: 'cab', attach: 'D', hands: ['R'] })]); },
@@ -811,7 +838,7 @@ module.exports = {
       C.grip(q, 'L', [grab[0], 128, grab[2]], [0, 1, 0], V.unit([.4, -1, -.3]));
       const d0 = V.unit(V.sub([4, 86, 29], gh)), d1 = V.unit([-.92, .04, .55]), d = slerpDir(V, d0, d1, e);
       const g = V.add(gh, d, 60);
-      C.hold(q, 'R', g, V.unit(V.mix([-1, -.3, -.4], [-.1, .5, -1], e)), { pron: C.lerp(10, 45, e) });
+      holdAxis(C, q, 'R', g, V.unit(V.mix([-1, -.3, -.4], [-.1, .5, -1], e)), slerpDir(V, V.unit([.7, .7, 0]), [0, 0, 1], e));
       return q;
     }
   },

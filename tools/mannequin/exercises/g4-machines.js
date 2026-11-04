@@ -454,7 +454,10 @@ const HA = once(() => {
   const hubY = jy - 24;
   const machine = { type: 'hipAbductor', id: 'ha', seat: { c: [jy + Math.sin(si) * 22, jz + Math.cos(si) * 22], ang: 10, len: 42 }, back: { c0: [jy, jz], ang: 16, len: 62 },
     hub: { x: 8.8, y: hubY, z: hip.L[2] }, handle: { x: 25, y: jy + 2, z: hip.L[2] + 2 } };
-  return { q, f, hip, K, feet, hubY, machine };
+  /* точки подошвы (как у валидатора: Mannequin.footPoints) — по ним ставится подножка (haLever) */
+  const Rc = M.catalogPose(q), sole = Object.fromEntries(S.map(s => [s, M.footPoints(s).filter(fp => fp.sole)
+    .map(fp => { const p = M.footPointWorld(Rc.frames['foot' + s], Rc.frames['toes' + s], fp); return [p[0], M.FLOOR - p[1], p[2]]; })]));
+  return { q, f, hip, K, feet, sole, hubY, machine };
 });
 function haPose(C, a) {
   const { V } = C, L = HA(), q = haLegs(C, L, a);
@@ -485,6 +488,21 @@ function haLever(L, s, side) {
   const ball = L.f.P['ball' + s], rb = Math.hypot(ball[0] - P[0], ball[2] - P[2]), ab = ball[1] - 2 - P[1];
   /* касательная Z = вверх × радиус: у левой ноги смотрит наружу (+X), у правой — внутрь */
   const tOut = g, sd = side === 'out' ? tOut : -tOut, tp = sd * (5.8 + 3.5 - 1.2), tpost = sd * (5.8 + 7 + 2.5);
+  /* подножка 16 × 11 × 3 см под передним отделом стопы — по точкам подошвы: верх — плоскость по точкам над площадкой
+     (наименьшие квадраты), опущенная до касания самой низкой. Нога поворачивается с рычагом целиком (haLegs), стопа
+     относительно рычага неподвижна, поэтому хватает стойки HA. Прежде верх стоял на 2 см ниже точки ball (ab) — горизонтально,
+     на 0,5 см под пяточным краем площадки и на 2–2,5 см под пальцами: стопа висела над подножкой. */
+  const Y = V.unit([K[0] - P[0], 0, K[2] - P[2]]), Z = V.cross([0, 1, 0], Y), y0 = rb - 1, PL = [8, 5.5];
+  const loc = p => { const d = V.sub(p, P); return [d[1], V.dot(d, Y), V.dot(d, Z)]; };
+  const pts = L.sole[s].map(loc).filter(p => Math.abs(p[1] - y0) <= PL[0] && Math.abs(p[2]) <= PL[1]);
+  /* x = a + b·(y − y0) + c·z: нормальные уравнения 3 × 3 */
+  const A3 = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], B3 = [0, 0, 0];
+  for (const p of pts) { const r = [1, p[1] - y0, p[2]]; for (let i = 0; i < 3; i++) { B3[i] += r[i] * p[0]; for (let j = 0; j < 3; j++) A3[i][j] += r[i] * r[j]; } }
+  const det = m => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+  const D = det(A3), sol = [0, 1, 2].map(k => det(A3.map((row, i) => row.map((v, j) => j === k ? B3[i] : v))) / D);
+  const top = (y, z) => sol[0] + sol[1] * (y - y0) + sol[2] * z, a0 = sol[0] + Math.min(...pts.map(p => p[0] - top(p[1], p[2])));
+  const n = V.unit([1, -sol[1], -sol[2]]), ty = V.unit([sol[1], 1, 0]), tz = V.cross(n, ty), pc = V.add([a0, y0, 0], n, -1.5);
+  const armEnd = a0 + sol[1] * (rb - y0) - 3 / n[0] - 1.1;
   return { type: 'g4lever', id: 'ha' + s, pivot: P, axis: [0, 1, 0], mountTo: 'ha:hub' + s, bind: 'kn' + s,
     parts: [
       { name: 'hub', kind: 'cyl', c: [-3, 0, 0], axis: [1, 0, 0], r: 5, len: 7, mount: 'ha:hub' + s },
@@ -495,8 +513,8 @@ function haLever(L, s, side) {
       /* подушка у колена; нижний край выше сиденья (сиденье кончается под бедром) */
       { name: 'padPlate', kind: 'obox', c: [ak + 1.5, rk, sd * (5.8 + 7 - .2 - 1.2)], size: [12, 18, 2], mount: 'post' },
       { name: 'pad', kind: 'obox', c: [ak + 1.5, rk, tp], size: [14, 20, 7], tone: 'pad', role: 'pad', mount: 'padPlate', round: 1.8 },
-      { name: 'pegArm', kind: 'beam', a: [ab - 5, rk - 2, tpost], b: [ab - 5, rb, 0], w: 3, h: 3, up: [1, 0, 0], mount: 'post' },
-      { name: 'peg', kind: 'obox', c: [ab - 2.4, rb - 1, 0], size: [3, 16, 11], tone: 'rubber', mount: 'pegArm', round: .5 }
+      { name: 'pegArm', kind: 'beam', a: [armEnd, rk - 2, tpost], b: [armEnd, rb, 0], w: 3, h: 3, up: [1, 0, 0], mount: 'post' },
+      { name: 'peg', kind: 'obox', c: pc, axes: [n, ty, tz], size: [3, 16, 11], tone: 'rubber', mount: 'pegArm', round: .5 }
     ] };
 }
 
