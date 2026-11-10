@@ -578,7 +578,13 @@ const BFPL = once(() => {
 module.exports = {
 
   /* Стоя на середине ленты, стопы почти вместе (BAND_FEET_N): трубка 48″ под обеими подошвами. t=0 — кисти у бёдер;
-     t=1 — руки через стороны до уровня плеч, локти слегка согнуты; растяжение ветвей ×1,45…2,97. */
+     t=1 — руки через стороны до уровня плеч, локти слегка согнуты; растяжение ветвей ×1,45…2,97.
+     Кисть: внизу ладони к телу («palms facing your body», UNMC Center for Healthy Living «Dumbbell Lateral Raise»), руки
+     поднимаются через стороны без поворота — наверху ладони вниз, большой палец вперёд (holdAxis). Прежде пронация шла от 5
+     до 25 при локте назад-вверх, и наверху большой палец смотрел вниз (положение «пустой банки», Thigpen C. A. et al.,
+     Am J Sports Med 34(4), 2006): лента от стоп шла вдоль рукояти и уходила от стремени под 77°. Ладонью вниз лента
+     тянет поперёк рукояти — стремя смотрит на неё (не больше 29°). Досягание 59,5 см (было 60): кулак ладонью вниз
+     на 0,1 см дальше от плеча. */
   bandlatraise: {
     keys: [0, .25, .5, .75, 1],
     equipment: [{ type: 'band', id: 'band', model: 'tube48', route: BAND_SOLES }],
@@ -590,10 +596,11 @@ module.exports = {
       for (const s of S) {
         const gh = f.P['gh' + s], lat = C.lat(q, s);
         const d0 = V.unit(V.add(V.add([0, -1, 0], lat, .2), T.z, .14)), d1 = V.unit(V.add(V.add(lat, [0, 1, 0], .04), T.z, .3));
-        const g = V.add(gh, slerpDir(V, d0, d1, e), 60);
-        C.hold(q, s, g, V.unit(V.mix(V.add([0, 0, -1], lat, .5), V.add([0, 1, -.6], lat, .2), e)), { pron: C.lerp(5, 25, e) });
+        const g = V.add(gh, slerpDir(V, d0, d1, e), 59.5);
+        const pole = V.unit(V.mix(V.add([0, 0, -1], lat, .5), V.add([0, 1, -.6], lat, .2), e));
+        holdAxis(C, q, s, g, pole, T.z);
         C.rhythm(q, s, [0, 3]); /* пояс по ритму (этап Д: подъём плеч и поворот лопатки — от подъёма руки), сверх него — лёгкая протракция */
-        C.hold(q, s, g, V.unit(V.mix(V.add([0, 0, -1], lat, .5), V.add([0, 1, -.6], lat, .2), e)), { pron: C.lerp(5, 25, e) });
+        holdAxis(C, q, s, g, pole, T.z);
       }
       return q;
     }
@@ -618,7 +625,11 @@ module.exports = {
     }
   },
 
-  /* Лента закреплена в притворе над дверью. Локти прижаты к бокам. t=0 — локти согнуты под 90°; t=1 — руки разогнуты вниз. */
+  /* Лента закреплена в притворе над дверью. Локти прижаты к бокам. t=0 — локти согнуты под 90°; t=1 — руки разогнуты вниз.
+     Хват сверху, ладони вниз («overhand grip, with your palms facing downward», Fitwill «Band Pushdown»), большие пальцы
+     к середине (holdAxis): лента от двери тянет поперёк рукоятей, стремя смотрит на неё (не больше 15°). Прежде пронация
+     40…20 давала большой палец вперёд-вверх, лента шла вдоль рукояти и уходила от стремени под 53°. Нейтральный хват
+     с петлями вместо рукоятей (Bodylastics «Standing Triceps Extension With Bands»: «palms facing in») — другой вариант. */
   bandpushdown: {
     keys: [0, .25, .5, .75, 1],
     equipment: [DOOR_TOP, { type: 'band', id: 'band', model: 'tube48', route: [{ handle: 'L' }, ringOf(DOOR_TOP), { handle: 'R' }] }],
@@ -631,7 +642,7 @@ module.exports = {
         const ua = V.unit(V.add(V.add(down, fwd, C.lerp(.1, .15, e)), lat, .1)), el = V.add(gh, ua, C.M.B.ua);
         const phi = C.lerp(88, 6, e) * C.D2R, fore = V.unit(V.add(V.add(V.scale(down, Math.cos(phi)), fwd, Math.sin(phi)), lat, -.1));
         const wr = V.add(el, fore, C.M.B.fa), palm = V.add(V.scale(down, Math.sin(phi)), fwd, -Math.cos(phi));
-        C.hold(q, s, V.add(V.add(wr, fore, 8), palm, 2.6), V.unit(V.add(V.add(V.sub(el, V.mix(gh, wr, .5)), [0, 0, -1], 4), lat, 2)), { pron: C.lerp(40, 20, e) });
+        holdAxis(C, q, s, V.add(V.add(wr, fore, 8), palm, 2.6), V.unit(V.add(V.add(V.sub(el, V.mix(gh, wr, .5)), [0, 0, -1], 4), lat, 2)), V.scale(lat, -1));
       }
       return turn(C, q, 90);
     }

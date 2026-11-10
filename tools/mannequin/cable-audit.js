@@ -406,7 +406,7 @@ function auditBand(id, bid, frames) {
   const row = { id, kind: 'лента', part: bid, type: 'лента-модель', frames: [] }, f0 = bandParts(frames[0].R, bid)[0].band;
   row.model = f0.model; row.rest = f0.rest; row.max = f0.max; row.slide = f0.slide;
   const lamR = f0.pieces.map(() => [Infinity, -Infinity]), Ls = [], slips = f0.pins.map(() => 0), pull = [0];
-  let join = 0, kink = { a: 0 }, body = { d: 0 }, gear = { d: 0 };
+  let join = 0, kink = { a: 0 }, body = { d: 0 }, gear = { d: 0 }, stir = { a: 0, lim: 90 }, hook = { d: 0 }, arm = { d: 0 };
   const pin0 = f0.pins.map(p => p.med);
   for (const { t, R } of frames) {
     const parts = bandParts(R, bid), b = parts[0].band;
@@ -437,9 +437,23 @@ function auditBand(id, bid, frames) {
         for (const c of cols) { const d = -c.sdf(x) + r; if (d > gear.d) gear = { d, t, where: c.id }; }
       }
     }
+    /* рукояти: лента цепляется к кольцу на вершине стремени и уходит от неё в плоскости стремени. Лямка стремени пришита
+       к обоим концам рукояти: пока лента тянет в пределах угла atan(половина рукояти / высота вершины) от направления
+       вершины, натянуты обе стороны лямки; дальше одна сторона провисает, рукоять тянет за один конец, стремя
+       развернулось бы по ленте. Лямка и лента у кисти (валидатор их в 9 см от хвата не смотрит) — не сквозь предплечье. */
+    for (const st of R.props.filter(p => (p.id || '').startsWith(bid + ':strap'))) {
+      const s = st.id.slice(-1), P = st.pts, mid = V.mix(P[0], P.at(-1), .5), apex = P[2], n = V.unit(V.sub(apex, mid));
+      const lim = deg(Math.atan2(V.dist(P[0], P.at(-1)) / 2, V.dist(apex, mid)));
+      const ends = parts.flatMap(p => [[p.pts[0], p.pts[1]], [p.pts.at(-1), p.pts.at(-2)]]).map(([e, nx]) => ({ d: V.dist(e, apex), dir: V.unit(V.sub(nx, e)) })).sort((x, y) => x.d - y.d)[0];
+      if (ends.d > hook.d) hook = { d: ends.d, t, s };
+      const a = deg(Math.acos(Math.max(-1, Math.min(1, V.dot(n, ends.dir)))));
+      if (a - lim > stir.a - stir.lim) stir = { a, lim, t, s };
+      const near = [...P, ...parts.flatMap(p => p.pts).filter(x => V.dist(x, R['grip' + s]) < 9)];
+      for (const x of near) { const d = -M.limbSDF(R, 'fa', s, x) + (st.r || .45); if (d > arm.d) arm = { d, t, s }; }
+    }
     row.frames.push({ t: +t.toFixed(3), L: +b.L.toFixed(1), lam: b.pieces.map(p => +p.lam.toFixed(3)), r: parts.map(p => +p.r.toFixed(2)) });
   }
-  Object.assign(row, { L: [Math.min(...Ls), Math.max(...Ls)], lam: lamR, loaded: f0.pieces.map(p => p.loaded), slip: slips, pull: pull[0], join, kink, body, gear });
+  Object.assign(row, { L: [Math.min(...Ls), Math.max(...Ls)], lam: lamR, loaded: f0.pieces.map(p => p.loaded), slip: slips, pull: pull[0], join, kink, body, gear, stir, hook, arm });
   row.flags = bandFlags(row);
   return row;
 }
@@ -457,6 +471,9 @@ function bandFlags(r) {
   if (r.gear.d > BAND_LIM.gear) f.push(`лента проходит сквозь ${r.gear.where} на ${r.gear.d.toFixed(1)} см (t=${r.gear.t})`);
   r.slip.forEach((d, k) => { if (d > BAND_LIM.slip) f.push(`лента скользит под подошвой (опора ${k + 1}) на ${d.toFixed(2)} см`); });
   if (r.pull > BAND_LIM.pull) f.push(`ветви ленты натянуты по-разному: сила расходится на ${(r.pull * 100).toFixed(0)} %`);
+  if (r.stir && r.stir.a > r.stir.lim) f.push(`лента уходит от стремени рукояти ${r.stir.s} под ${r.stir.a.toFixed(0)}° к направлению вершины (предел ${r.stir.lim.toFixed(0)}°, t=${r.stir.t}): лямка тянет за один конец`);
+  if (r.hook && r.hook.d > BAND_LIM.join) f.push(`лента не у кольца стремени рукояти ${r.hook.s}: конец в ${r.hook.d.toFixed(2)} см от вершины (t=${r.hook.t})`);
+  if (r.arm && r.arm.d > BAND_LIM.body) f.push(`стремя или лента у кисти ${r.arm.s} проходит сквозь предплечье на ${r.arm.d.toFixed(1)} см (t=${r.arm.t})`);
   return f;
 }
 function run({ only, samples = 41, baked = false } = {}) {
