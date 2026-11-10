@@ -29,7 +29,7 @@ const EXPECT = {
   knee: { on: ['squat', 'goblet', 'smithsquat', 'hacksquat', 'legpress', 'legpresslow', 'lunge', 'revlunge', 'bulgarian', 'stepup', 'pistolbox', 'kbfrontsquat'], off: ['dbpress', 'latpull', 'deadlift', 'jumpsquat', 'glutebridge1', 'crunch', 'legext', 'calfraise', 'cableadduct', 'copenhagen'] },
   kneeOpen: { on: ['legext'], off: ['legcurl', 'squat', 'legpress'] },
   /* гиря: наклоны от таза и тяга в наклоне без опоры — как со штангой */
-  lumbar: { on: ['deadlift', 'rdl', 'sllift', 'goodmorning', 'bbrow', 'kbswing', 'squat', 'kbdeadlift', 'kbswing1', 'kbclean', 'kbrow'], off: ['latpull', 'cablerow', 'dbrow', 'shrug', 'ohp', 'chestrowdb', 'legpress'] },
+  lumbar: { on: ['deadlift', 'rdl', 'sllift', 'goodmorning', 'bbrow', 'kbswing', 'squat', 'kbdeadlift', 'kbswing1', 'kbclean', 'kbrow', 'kbsnatch', 'kbsllift'], off: ['latpull', 'cablerow', 'dbrow', 'shrug', 'ohp', 'chestrowdb', 'legpress'] },
   /* вращение плеча наружу: плечо у бока, не уходит за линию корпуса */
   shPress: { on: ['bbbench', 'smithbench', 'inclinebb', 'closegrip', 'dip', 'assistdip', 'benchdip', 'pecdeck'], off: ['ohp', 'pushup', 'latpull', 'bbrow', 'dbcurl', 'cableextrot', 'bandextrot', 'kbfloorpress'] }, /* жим лёжа на полу: пол не пускает локоть ниже корпуса */
   shLever: { on: ['dbfly', 'pullover'], off: ['bbbench', 'cablefly', 'latraise'] },
@@ -43,7 +43,7 @@ const EXPECT = {
   wrist: { on: ['pushup', 'diamond', 'burpee', 'mountain', 'birddog', 'plankup'], off: ['plank', 'wallpush', 'nordic', 'bbbench', 'dbcurl', 'copenhagen', 'copenhagenknee'] },
   achilles: { on: ['calfraise', 'calf1', 'seatedcalf', 'standcalf'], off: ['squat', 'jumpsquat', 'treadmill', 'lpcalf'] },
   landing: { on: ['jumpsquat', 'burpee', 'jumpingjack'], off: ['pullup', 'dip', 'stepup', 'elliptical', 'stairs', 'squat', 'hangknee'] },
-  hams: { on: ['rdl', 'sllift', 'goodmorning', 'nordic'], off: ['squat', 'legcurl', 'hipthrust', 'lunge'] }
+  hams: { on: ['rdl', 'sllift', 'goodmorning', 'nordic', 'kbsllift'], off: ['squat', 'legcurl', 'hipthrust', 'lunge'] }
 };
 test('every rule has texts and lights up where the joint is loaded, and only there', () => {
   assert.deepEqual(plain(A.STRESS_RULES.map(r => r.id)).sort(), Object.keys(EXPECT).sort(), 'each rule is covered by this test');

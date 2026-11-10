@@ -35,8 +35,10 @@ const LOWER_CHEST=new Set(['declinebb','dip','assistdip']);
    - наклон в сторону: гантель в правой руке, работают косые левой стороны — сдерживают наклон и возвращают корпус
      (OpenStax A&P 2e, 11.4: наклон корпуса в сторону — косые своей стороны);
    - «дровосек» сверху вниз: корпус поворачивается вправо — наружная косая левой стороны и внутренняя правой (Gray's
-     Anatomy; OpenStax A&P 2e, 11.4: наружная косая поворачивает корпус в противоположную сторону, внутренняя — в свою). */
-const CATALOG_LATERALITY={dbrow:{upper:'L'},kbswing1:{upper:'L'},kbclean:{upper:'L'},kbpress:{upper:'L'},kbrow:{upper:'L'},kbfloorpress:{upper:'L'},cablelat:{upper:'R'},concentration:{upper:'L'},kickback:{upper:'L'},archer:{upper:'R'},bulgarian:{lower:'L'},stepup:{lower:'L'},lunge:{lower:'L'},revlunge:{lower:'L'},sidelunge:{lower:'R'},pistolbox:{lower:'L'},sllift:{lower:'L'},glutebridge1:{lower:'L'},glutekick:{lower:'L'},cablekickback:{lower:'L'},calf1:{lower:'L'},cableadduct:{lower:'L'},cableextrot:{upper:'R'},bandextrot:{upper:'R'},
+     Anatomy; OpenStax A&P 2e, 11.4: наружная косая поворачивает корпус в противоположную сторону, внутренняя — в свою);
+   - «мельница» с гирей в левой руке: внизу грудь развёрнута влево, к гире; на подъёме корпус разворачивается вправо —
+     наружная косая левой стороны и внутренняя правой (то же правило; по длинам мышц они укорачиваются). */
+const CATALOG_LATERALITY={dbrow:{upper:'L'},kbsnatch:{upper:'L'},kbsllift:{lower:'L'},kbwindmill:{upper:'L',regions:{obl_ext:'L',obl_int:'R'}},kbswing1:{upper:'L'},kbclean:{upper:'L'},kbpress:{upper:'L'},kbrow:{upper:'L'},kbfloorpress:{upper:'L'},cablelat:{upper:'R'},concentration:{upper:'L'},kickback:{upper:'L'},archer:{upper:'R'},bulgarian:{lower:'L'},stepup:{lower:'L'},lunge:{lower:'L'},revlunge:{lower:'L'},sidelunge:{lower:'R'},pistolbox:{lower:'L'},sllift:{lower:'L'},glutebridge1:{lower:'L'},glutekick:{lower:'L'},cablekickback:{lower:'L'},calf1:{lower:'L'},cableadduct:{lower:'L'},cableextrot:{upper:'R'},bandextrot:{upper:'R'},
  copenhagen:{lower:'L'},copenhagenknee:{lower:'L'},sidebend:{regions:{obl_ext:'L',obl_int:'L'}},cablewood:{regions:{obl_ext:'L',obl_int:'R'}}};
 function catalogSideValues(profile,values){
  const sides={L:{...values},R:{...values}},lower=new Set(['quads','hams','calves','glutes','adductors','hipflex']),lat=profile.laterality||{};

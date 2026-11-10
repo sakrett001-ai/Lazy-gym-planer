@@ -40,6 +40,7 @@ function motionFrame(F, clock=F.clock) {
   /* скандинавские сгибания: t 0→1 — толчок руками и возврат вверх, главная работа бёдер — медленное опускание 1→0
      (уступающая; профиль мышц — 09b-muscle-profiles.js) */
   if (F.it.ex.id === 'nordic') labels=['Подъём','Верхняя точка','Опускание','Нижняя точка'];
+  if (F.it.ex.id === 'kbsnatch') labels=['Рывок','Фиксация над головой','Сброс в замах','Замах'];
   if (F.it.ex.id === 'kbclean') labels=['Взятие на грудь','Стойка','Сброс в замах','Замах'];
   if (F.it.ex.id === 'deadlift' || F.it.ex.id === 'kbdeadlift') labels=['Подъём','Верхняя точка','Опускание','Исходное положение'];
   return {t,index,label:a.hold?'Удержание':labels[index],cue:a.hold?a.cues[0]:a.cues[(index<2)!==!!a.eccFirst?0:1],progress:((clock%total)+total)%total/total,total};

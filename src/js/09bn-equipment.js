@@ -335,7 +335,8 @@ BIND.cable=(e,R)=>{
    * hang 'gravity' (по умолчанию) — шар висит под рукоятью;
    * hang 'arm' — шар на продолжении предплечья (мах: гирю тянет по линии руки центробежная сила);
    * hang 'swing' — взятие на грудь и рывок: пока рука прямая, шар на её продолжении (мах); по мере сгибания локтя
-     (25…70°) гирю подтягивают к телу, и она повисает под рукоятью;
+     (25…70°) гирю подтягивают к телу, и она повисает под рукоятью; так же — когда предплечье смотрит вверх (рывок:
+     над головой гиря не стоит на руке дном вверх, а переворачивается на тыл предплечья — с rest);
    * rest: true — шар не может пройти сквозь руку: если свободное направление ведёт его в кисть, предплечье или плечо, он
      поворачивается вокруг рукояти к тылу кисти и ложится на тыл запястья и предплечья («рэк», гиря над головой, жим лёжа:
      так учат школы StrongFirst и RKC — пересказ, не цитата). Поджатие мягких тканей — 0,3 см. */
@@ -348,7 +349,7 @@ BIND.kettlebell=(e,R)=>{
   const s=hands[0],arm=V.unit(V.sub(R['wr'+s],R['el'+s]));
   if(e.hang==='arm')down=arm;
   else{ /* по сгибанию локтя: прямая рука — мах (0…25°), согнутая (от 70°) — гиря висит */
-   const el=Math.acos(Math.max(-1,Math.min(1,V.dot(V.unit(V.sub(R['el'+s],R['sh'+s])),arm))))/D2R,u=Math.max(0,Math.min(1,(el-25)/45)),w=u*u*(3-2*u);
+   const el=Math.acos(Math.max(-1,Math.min(1,V.dot(V.unit(V.sub(R['el'+s],R['sh'+s])),arm))))/D2R,up=Math.max(0,Math.min(1,-arm[1]/.5)),u=Math.max(up,Math.max(0,Math.min(1,(el-25)/45))),w=u*u*(3-2*u);
    down=V.unit(V.add(V.scale(arm,1-w),[0,1,0],w));
   }
  }
@@ -359,10 +360,13 @@ BIND.kettlebell=(e,R)=>{
  if(e.rest&&hands.length===1){
   const s=hands[0],F=R.frames['hand'+s],back=V.scale(F.x,M.SIGN[s]),wr=R['wr'+s],kn=V.add(wr,F.y,-9);
   const seg=p=>{const ab=V.sub(kn,wr),t=Math.max(0,Math.min(1,V.dot(V.sub(p,wr),ab)/V.dot(ab,ab)));return V.dist(p,V.add(wr,ab,t))-1.6;};
-  const clear=d=>{const c=V.add(g,d,H);return Math.min(seg(c),M.limbSDF(R,'fa',s,c),M.limbSDF(R,'ua',s,c))-r+KB.press;};
+  /* со стороны ладони шар у предплечья не лежит: когда кисть поднимается выше локтя (рывок, взятие на грудь), гиря
+     переворачивается через локтевую сторону на тыл предплечья */
+  const palmar=d=>V.dot(d,back)<-.2&&M.limbSDF(R,'fa',s,V.add(g,d,H))-r<1;
+  const clear=d=>{const c=V.add(g,d,H);return palmar(d)?-1:Math.min(seg(c),M.limbSDF(R,'fa',s,c),M.limbSDF(R,'ua',s,c))-r+KB.press;};
   if(clear(down)<0){
-   /* поворот вокруг рукояти от свободного направления к тылу кисти — до касания */
-   const b=ortho(back,axis),sg=V.dot(V.cross(down,b),axis)>=0?1:-1,w=V.scale(V.cross(axis,down),sg);
+   /* поворот вокруг рукояти от свободного направления к тылу кисти — до касания; от ладонной стороны — через локоть */
+   const b=ortho(back,axis),viaEl=V.dot(V.cross(down,F.y),axis),sg=(palmar(down)&&Math.abs(viaEl)>.15?viaEl:V.dot(V.cross(down,b),axis))>=0?1:-1,w=V.scale(V.cross(axis,down),sg);
    const at=a=>V.add(V.scale(down,Math.cos(a*D2R)),w,Math.sin(a*D2R));
    let lo=0,hi=0;for(let a=3;a<=240;a+=3)if(clear(at(a))>=0){hi=a;lo=a-3;break;}
    if(hi){for(let i=0;i<14;i++){const m=(lo+hi)/2;if(clear(at(m))>=0)hi=m;else lo=m;}down=at(hi);}
