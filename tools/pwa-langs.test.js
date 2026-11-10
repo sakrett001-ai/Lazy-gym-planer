@@ -108,11 +108,12 @@ test('offline: the cached language opens, a missing one gets an honest bilingual
 test('activation removes old versions of this scope only (shell and gallery thumbnails) and keeps the language marks', async () => {
   const w = worker({windows:[SCOPE]}); await w.install();
   const prefix = 'podhod@' + SCOPE + ':';
-  /* миниатюры витрины: корзина текущей сборки остаётся, прежних — удаляются, чужого места — не трогаются */
-  const thumbs = 'podhod-thumbs@' + SCOPE + ':';
-  for (const k of [prefix + 'old', 'podhod@https://test.invalid/:4.1.8', 'other-project', thumbs + '9.9.8-old', thumbs + '9.9.9-test', 'podhod-thumbs@https://test.invalid/:9.9.8-old']) await w.api.open(k);
+  /* миниатюры витрины: корзина места (ключи кадров — по содержимому) переживает обновление; корзины прежней схемы, по одной
+     на сборку, — удаляются; чужого места — не трогаются */
+  const thumbs = 'podhod-thumbs@' + SCOPE + ':', kept = 'podhod-thumbs2@' + SCOPE;
+  for (const k of [prefix + 'old', 'podhod@https://test.invalid/:4.1.8', 'other-project', thumbs + '9.9.8-old', thumbs + '9.9.9-test', kept, 'podhod-thumbs@https://test.invalid/:9.9.8-old', 'podhod-thumbs2@https://test.invalid/']) await w.api.open(k);
   let p; w.handlers.activate({waitUntil:x => p = x}); await p;
-  assert.deepEqual((await w.api.keys()).sort(), [w.ctx.api.CACHE, w.ctx.api.LANGS_CACHE, 'other-project', 'podhod@https://test.invalid/:4.1.8', thumbs + '9.9.9-test', 'podhod-thumbs@https://test.invalid/:9.9.8-old'].sort());
+  assert.deepEqual((await w.api.keys()).sort(), [w.ctx.api.CACHE, w.ctx.api.LANGS_CACHE, 'other-project', 'podhod@https://test.invalid/:4.1.8', kept, 'podhod-thumbs@https://test.invalid/:9.9.8-old', 'podhod-thumbs2@https://test.invalid/'].sort());
 });
 
 /* pwa.js: страница сообщает свой язык; без сети ссылка на нескачанный язык показывает подсказку */
