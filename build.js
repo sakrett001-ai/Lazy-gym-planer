@@ -45,6 +45,18 @@ const ICON_FILES = ['icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-5
 const iconUrl = Object.fromEntries(ICON_FILES.filter(f => fs.existsSync(path.join(SRC, f)))
   .map(f => [f, f + '?v=' + require('node:crypto').createHash('sha256').update(fs.readFileSync(path.join(SRC, f))).digest('hex').slice(0, 16)]));
 const ASSET_VERSION = VERSION + '-' + require('node:crypto').createHash('sha256').update([volumeSrc,cssSrc,jsSrc,bodySrc,pwaSrc,JSON.stringify(manifestSrc),read(path.join(SRC,'sw.js')),read(path.join(__dirname,'i18n/en.json')),skeletonB64,musclesB64,annyB64].join('\n')).digest('hex').slice(0,12);
+/* Версия отрисовки каждого вида фигуры — для ключа готовых кадров витрины (thumbCacheKey, src/js/12-figure-pace.js): хэш того,
+   от чего зависит картинка кадра при той же позе, — объёмная сцена (volume.js: свет, материалы, камеры, кисти, инвентарь),
+   манекен и его области (09bm, 09b, 09d) и данные вида: кожа Anny, кости, мышцы. Поза и детали инвентаря входят в ключ сами
+   (хэш позы). Номер версии сюда не входит: выпуск, не тронувший эти файлы, оставляет кадры в кеше. */
+const jsFile = f => read(path.join(SRC, 'js', f));
+const renderHash = (...parts) => require('node:crypto').createHash('sha256').update(parts.join('\n')).digest('hex').slice(0, 10);
+const renderBase = [volumeSrc, jsFile('09bm-mannequin.js'), jsFile('09b-muscle-profiles.js'), jsFile('09d-catalog-muscles.js')];
+const RENDER = {
+  skin:renderHash(...renderBase, jsFile('09bs-anny.js'), annyB64),
+  skeleton:renderHash(...renderBase, jsFile('09bq-skeleton.js'), skeletonB64),
+  anatomy:renderHash(...renderBase, jsFile('09bq-skeleton.js'), skeletonB64, jsFile('09br-muscles.js'), musclesB64)
+};
 const reset = `:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}`;
 const headMeta = L => `<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -82,7 +94,7 @@ for (const [lang, L] of Object.entries(LANGS)) {
     css = translateCss(css, dict, missing); js = translateJs(js, dict, missing); body = translateHtml(body, dict, missing); pwa = translateJs(pwa, dict, missing);
     if (missing.size) report.push(`${lang}: не переведено ${missing.size} строк (node i18n/extract.js ${lang})`);
   }
-  js += L.patch + `\nwindow.PODHOD_VERSION='${VERSION}';window.PODHOD_BUILD='${ASSET_VERSION}';window.PODHOD_LANG='${lang}';\n`;
+  js += L.patch + `\nwindow.PODHOD_VERSION='${VERSION}';window.PODHOD_BUILD='${ASSET_VERSION}';window.PODHOD_RENDER=${JSON.stringify(RENDER)};window.PODHOD_LANG='${lang}';\n`;
   body = body.replace(/__VERSION__/g, VERSION).replace(/__LANG_HREF__/g, L.other.href).replace(/__LANG_LABEL__/g, L.other.label).replace(/__LANG_TITLE__/g, L.other.title);
   const manifest = {...manifestSrc, name:L.manifestName, description:L.manifestDesc, lang, scope:up || './', icons:manifestSrc.icons.map(i => ({...i, src:up + iconUrl[i.src]}))};
 

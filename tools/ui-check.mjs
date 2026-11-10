@@ -690,8 +690,8 @@ await page.close();
   await n.close();
 }
 
-/* витрина атласа в «Анатомии» (этап 3) — настоящая объёмная графика (программный WebGL): сразу — SVG-миниатюры, потом у
-   видимых — кадры костей и мышц (картинки из общего рендерера карточек); клик открывает разбор, «← Все упражнения»
+/* витрина атласа в «Анатомии» (этап 3) — настоящая объёмная графика (программный WebGL): пока кадра нет — заглушка цвета сцены
+   (SVG-манекен не показывается ни разу), потом у видимых — кадры костей и мышц (картинки из общего рендерера карточек); клик открывает разбор, «← Все упражнения»
    возвращает на то же место и кадры — сразу из памяти; фильтр и поиск работают; «Манекен» — кожа Anny (без её данных — SVG). Без WebGL — SVG.
    Кеш между сеансами — по http (офлайн-файлу Cache Storage недоступен): после перезагрузки кадры берутся из кеша. */
 {
@@ -702,21 +702,27 @@ await page.close();
   await g.goto('file://' + file); await g.waitForTimeout(400);
   await g.evaluate(() => { motionPrefs.view = 'anatomy'; LOG.data = {}; });
   await g.waitForFunction(() => window.GymVolume, null, { timeout: 30000 });
+  /* SVG-манекен в миниатюрах: считается каждое появление, пока WebGL есть — их быть не должно */
+  const watchSvg = page => page.evaluate(() => { window.__thumbSvg = 0; new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1 && (n.matches?.('.mv-thumb svg, .mv-thumb > svg') || n.querySelector?.('.mv-thumb svg'))) window.__thumbSvg++; }).observe(document.querySelector('#mv-gallery'), { childList: true, subtree: true }); });
+  await watchSvg(g);
   await g.click('#motion-atlas');
-  const first = await g.waitForFunction(() => document.querySelector('#mv-gallery .mv-thumb.ready svg'), null, { timeout: 10000 }).then(() => true, () => false);
-  check(first, 'витрина в «Анатомии»: первые миниатюры — сразу SVG, кадры анатомии их не задерживают');
+  const hold = await g.evaluate(() => { const box = document.querySelector('#mv-gallery'), el = box.querySelector('.mv-thumb:not(.ready)'), cs = el && getComputedStyle(el);
+    return { gl: box.classList.contains('mv-gl'), expect: galleryAnat.expect, bg: cs?.backgroundColor, image: cs?.backgroundImage, anim: cs?.animationName, svg: box.querySelectorAll('.mv-thumb svg').length }; });
+  check(hold.gl && hold.expect && hold.bg === 'rgb(11, 17, 25)' && hold.image === 'none' && hold.anim === 'none' && hold.svg === 0, `витрина с WebGL: до кадра — неподвижная заглушка цвета сцены, не SVG (${JSON.stringify(hold)})`);
   check(await visAnat(g), 'витрина в «Анатомии»: у видимых миниатюр — кадры костей и мышц');
+  await g.waitForFunction(() => ThumbEncoder.pending === 0 && !document.querySelector('#mv-gallery canvas.mv-draft'), null, { timeout: 60000 }).catch(() => {});
+  check(await g.evaluate(() => window.__thumbSvg === 0 && !document.querySelector('#mv-gallery .mv-thumb svg')), 'витрина с WebGL: SVG-манекен не появился ни в одной миниатюре');
   const pic = await g.evaluate(async () => {
     const img = document.querySelector('#mv-gallery .mv-thumb.anat img.mv-anat'), c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
     const x = c.getContext('2d'); x.drawImage(img, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data;
     let lo = 765, hi = 0, warm = 0; for (let i = 0; i < d.length; i += 16) { const v = d[i] + d[i + 1] + d[i + 2]; lo = Math.min(lo, v); hi = Math.max(hi, v); if (d[i] > d[i + 2] + 60 && d[i] > 120) warm++; }
     const el = img.closest('.mv-thumb'), svg = el.querySelector('svg');
-    return { w: c.width, src: img.src.slice(0, 5), range: hi - lo, warm, svgHidden: !svg || getComputedStyle(svg).visibility === 'hidden', canvases: document.querySelectorAll('#mv-gallery canvas').length, stage: GymVolume.cards().stats() };
+    return { w: c.width, src: img.src.slice(0, 5), range: hi - lo, warm, svgHidden: !svg || getComputedStyle(svg).visibility === 'hidden', canvases: document.querySelectorAll('#mv-gallery canvas:not(.mv-draft)').length, stage: GymVolume.cards().stats() };
   });
   check(pic.w >= 200 && pic.src === 'blob:' && pic.range > 200 && pic.warm > 5 && pic.svgHidden, `миниатюра — сжатая картинка анатомии (${pic.w} точек, мышцы цветом), SVG под ней скрыт`);
   check(pic.canvases === 0 && pic.stage.scenes <= 3, `у витрины нет своих холстов и WebGL: общий рендерер, сцен ${pic.stage.scenes} (не больше трёх)`);
   /* миниатюра открывает разбор, возврат — на то же место, кадры — сразу из памяти */
-  const id = await g.evaluate(() => document.querySelector('#mv-gallery .mv-thumb.anat').closest('[data-gallery-open]').dataset.galleryOpen);
+  const id = await g.evaluate(() => document.querySelector('#mv-gallery .mv-thumb.anat img.mv-anat').closest('[data-gallery-open]').dataset.galleryOpen);
   await g.click(`[data-gallery-open="${id}"]`); await g.waitForTimeout(150);
   check(await g.evaluate(id => !$('#mv-detail').hidden && detailMotion?.it.ex.id === id && !gallery.on && !galleryAnat.io, id), 'миниатюра анатомии открывает разбор этого упражнения, очередь витрины стоит');
   await g.click('#mv-back');
@@ -766,34 +772,55 @@ await page.close();
   check(r.svg > 0 && r.img === 0 && r.view === 'mannequin' && r.note === true, `без WebGL витрина — SVG, как раньше (${JSON.stringify(r)})`);
   await n.close();
 }
-/* кеш между сеансами: PWA по http (Cache Storage), после перезагрузки кадры — из кеша, без отрисовки */
+/* кеш между сеансами: PWA по http (Cache Storage), после перезагрузки кадры — из кеша, без отрисовки. Ключ кадра — по
+   содержимому: «новая версия» (другой номер сборки, то же содержимое) берёт те же кадры и не показывает SVG; у упражнения с
+   изменённой позой кадр рисуется заново */
 {
   const dist = path.dirname(file), types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.bin': 'application/octet-stream', '.woff2': 'font/woff2', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
   const srv = http.createServer((req, res) => {
     let u = decodeURIComponent(new URL(req.url, 'http://x').pathname); if (u.endsWith('/')) u += 'index.html';
     const f = path.join(dist, u); if (!f.startsWith(dist) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end(); return; }
-    res.writeHead(200, { 'Content-Type': types[path.extname(f)] || 'application/octet-stream' }); fs.createReadStream(f).pipe(res);
+    res.writeHead(200, { 'Content-Type': types[path.extname(f)] || 'application/octet-stream', 'Cache-Control': 'no-store' });
+    /* «новая версия»: тот же код с другим номером сборки */
+    if (bumped && /\.(html|js)$/.test(f)) { res.end(fs.readFileSync(f, 'utf8').split(buildId).join(bumped)); return; }
+    fs.createReadStream(f).pipe(res);
   });
+  const buildId = /PODHOD_BUILD='([^']+)'/.exec(fs.readFileSync(path.join(dist, 'app.js'), 'utf8'))[1]; let bumped = '';
   await new Promise(r => srv.listen(0, '127.0.0.1', r));
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, serviceWorkers: 'block' });
   const c = await ctx.newPage(); c.on('pageerror', e => errors.push(String(e)));
   const url = `http://127.0.0.1:${srv.address().port}/`;
-  const openGal = async () => { await c.goto(url); await c.waitForFunction(() => window.GymVolume && typeof galleryAnat === 'object', null, { timeout: 30000 }); await c.evaluate(() => { motionPrefs.view = 'anatomy'; }); await c.click('#motion-atlas'); };
+  const openGal = async (before) => { await c.goto(url); await c.waitForFunction(() => window.GymVolume && typeof galleryAnat === 'object', null, { timeout: 30000 }); await c.evaluate(() => { motionPrefs.view = 'anatomy'; });
+    await c.evaluate(() => { window.__thumbSvg = 0; new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1 && (n.matches?.('.mv-thumb > svg') || n.querySelector?.('.mv-thumb svg'))) window.__thumbSvg++; }).observe(document.querySelector('#mv-gallery'), { childList: true, subtree: true }); });
+    if (before) await c.evaluate(before); await c.click('#motion-atlas'); };
+  const stored = () => c.waitForFunction(() => ThumbEncoder.pending === 0 && !galleryAnat.job, null, { timeout: 60000 }).then(() => c.waitForTimeout(800), () => {});
   await openGal();
   const okFirst = await c.waitForFunction(() => { const s = galleryAnatStats(); return s.vis > 0 && s.visReady >= s.vis; }, null, { timeout: 120000, polling: 200 }).then(() => true, () => false);
-  await c.waitForTimeout(800);
-  const saved = await c.evaluate(async () => { const names = (await caches.keys()).filter(n => n.startsWith('podhod-thumbs@')); const c0 = names.length ? await caches.open(names[0]) : null; return { names, n: c0 ? (await c0.keys()).length : 0, build: window.PODHOD_BUILD, painted: galleryAnat.stats.painted }; });
-  check(okFirst && saved.names.length === 1 && saved.names[0].endsWith(':' + saved.build) && saved.n >= saved.painted && saved.n > 0, `кадры сохранены в Cache Storage этой сборки (${saved.n} шт., корзина ${saved.names.join()})`);
-  /* корзина прежней сборки удаляется при открытии витрины */
+  await stored();
+  const saved = await c.evaluate(async () => { const names = (await caches.keys()).filter(n => n.startsWith('podhod-thumbs')); const c0 = names.length ? await caches.open(names[0]) : null; return { names, want: thumbCacheName(thumbScope()), n: c0 ? (await c0.keys()).length : 0, build: window.PODHOD_BUILD, painted: galleryAnat.stats.painted, vis: [...galleryAnat.vis] }; });
+  check(okFirst && saved.names.length === 1 && saved.names[0] === saved.want && !saved.want.includes(saved.build) && saved.n >= saved.painted && saved.n > 0, `кадры сохранены в Cache Storage места, корзина не привязана к сборке (${saved.n} шт., корзина ${saved.names.join()})`);
+  /* корзина прежней схемы (по сборке) удаляется при открытии витрины; «новая версия» — другой номер сборки */
   await c.evaluate(async () => { await caches.open('podhod-thumbs@' + thumbScope() + ':0.0.0-old'); });
+  bumped = buildId.replace(/-[0-9a-f]+$/, '-0000update00');
   await openGal();
   const t0 = Date.now();
   const okCache = await c.waitForFunction(() => { const s = galleryAnatStats(); return s.vis > 0 && s.visReady >= s.vis; }, null, { timeout: 30000, polling: 50 }).then(() => true, () => false);
   const fromCache = await c.evaluate(() => ({ painted: galleryAnat.stats.painted, cached: galleryAnat.stats.cached, stage: !!GymVolume.cards().stats().context }));
-  check(okCache && fromCache.painted === 0 && fromCache.cached > 0, `после перезагрузки видимые кадры — из кеша, без отрисовки (${Date.now() - t0} мс, ${JSON.stringify(fromCache)})`);
+  const after = await c.evaluate(() => ({ build: window.PODHOD_BUILD, svg: window.__thumbSvg, svgNow: document.querySelectorAll('#mv-gallery .mv-thumb svg').length }));
+  check(okCache && after.build === bumped && after.build !== saved.build && fromCache.painted === 0 && fromCache.cached > 0, `после «обновления версии» (${saved.build} → ${after.build}) видимые кадры — из кеша, без отрисовки (${Date.now() - t0} мс, ${JSON.stringify(fromCache)})`);
+  check(after.svg === 0 && after.svgNow === 0, 'после «обновления версии» SVG-манекен не показан ни в одной миниатюре');
   await c.waitForTimeout(3600);
-  const left = await c.evaluate(async () => (await caches.keys()).filter(n => n.startsWith('podhod-thumbs@')));
-  check(left.length === 1 && !left[0].endsWith('0.0.0-old'), `корзина прежней сборки удалена (${left.join()})`);
+  const left = await c.evaluate(async () => (await caches.keys()).filter(n => n.startsWith('podhod-thumbs')));
+  check(left.length === 1 && left[0] === saved.want, `корзина прежней схемы удалена, корзина места осталась (${left.join()})`);
+  /* поза одного упражнения изменилась — его кадр рисуется заново, остальные — из кеша */
+  const moved = saved.vis.find(id => true);
+  await openGal(`(() => { const a = EXI['${moved}'].anim, rig = a.catalogRig; a.catalogVariants = null; a.catalogRig = t => { const R = rig(t); R.head = [R.head[0], R.head[1] - 2, R.head[2]]; return R; }; })()`);
+  const okMoved = await c.waitForFunction(() => { const s = galleryAnatStats(); return s.vis > 0 && s.visReady >= s.vis; }, null, { timeout: 120000, polling: 100 }).then(() => true, () => false);
+  await stored();
+  const redo = await c.evaluate(() => ({ painted: galleryAnat.stats.painted, cached: galleryAnat.stats.cached, vis: galleryAnat.vis.size, svg: window.__thumbSvg }));
+  check(okMoved && redo.painted >= 1 && redo.painted <= 1 + Math.max(0, redo.vis - saved.vis.length) + 4 && redo.cached >= saved.vis.length - 1 && redo.svg === 0, `изменилась поза ${moved} — её кадр нарисован заново, остальные видимые — из кеша (${JSON.stringify(redo)})`);
+  const movedKey = await c.evaluate(id => { const b = galleryAnatBase(id); return { has: galleryAnat.mem.has(galleryAnatKey(b)) }; }, moved);
+  check(movedKey.has, 'кадр изменённой позы лежит под новым ключом');
   await ctx.close(); srv.close();
 }
 

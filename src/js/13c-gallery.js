@@ -6,8 +6,9 @@
    Миниатюра — неподвижный SVG-кадр того же манекена, что в карточках плана (конечная точка движения), строится,
    когда подходит к экрану, — сколько успеется за ~8 мс кадра; готовые миниатюры переиспользуются при смене фильтра. Рамка — по самой
    показанной позе (opts.still), а не по всем фазам: так миниатюра в 4–5 раз дешевле.
-   В виде «Анатомия» (и «Скелет») поверх SVG встаёт кадр костей и мышц из общего рендерера карточек — в простое, сжатой
-   картинкой из памяти или кеша (13e-gallery-anatomy.js); до его готовности — SVG, как раньше. */
+   С объёмной графикой миниатюра — кадр общего рендерера карточек в выбранном виде (кости и мышцы, скелет, кожа Anny) —
+   в простое, сжатой картинкой из памяти или кеша (13e-gallery-anatomy.js); до его готовности — заглушка цвета сцены.
+   SVG-манекен — там, где кадров не будет: без WebGL, при ошибке загрузки данных, если телефон не успевает. */
 const WORK_KINDS = [
   {id:'all', name:'Всё'}, {id:'free', name:'Свободные веса'}, {id:'mach', name:'Тренажёры и блоки'},
   {id:'band', name:'Резинки'}, {id:'body', name:'Свой вес'}
@@ -66,7 +67,8 @@ function buildThumb(el) {
   el.prepend(svg); for (const x of [...el.children]) if (x.tagName.toLowerCase() === 'svg' && x !== svg) x.remove();
   el.classList.add('ready');
 }
-const galleryNeedsSvg = el => el.isConnected && !el.classList.contains('anat') && !el.querySelector('svg');
+/* SVG-манекен — только там, где кадра не будет (galleryAnatWantsSvg): иначе до кадра — заглушка цвета сцены */
+const galleryNeedsSvg = el => el.isConnected && !el.classList.contains('anat') && !el.querySelector('svg') && galleryAnatWantsSvg(el);
 /* за кадр — сколько успеется за ~8 мс, но не меньше одной миниатюры: на быстром телефоне экран заполняется сразу */
 function pumpThumbs() {
   galleryRaf = 0;
@@ -88,20 +90,21 @@ function renderGallery() {
   if (galleryIO) galleryIO.disconnect();
   galleryQueue = [];
   const thumbs = [...box.querySelectorAll('[data-thumb]')];
-  /* готовые миниатюры ставятся сразу (кадр анатомии из памяти — без SVG), остальные — когда подходят к экрану */
-  for (const el of thumbs) { if (galleryAnatPlace(el)) continue; const svg = galleryThumbs.get(thumbKey(el.dataset.thumb)); if (svg) { el.replaceChildren(svg); el.classList.add('ready'); } }
+  /* вид миниатюр (кадры или SVG) — до первой картинки; готовые ставятся сразу (кадр из памяти — без SVG, готовый SVG —
+     только там, где кадров не будет), остальные — когда подходят к экрану */
+  galleryAnatMount(box);
+  for (const el of thumbs) { if (galleryAnatPlace(el) || !galleryAnatWantsSvg(el)) continue; const svg = galleryThumbs.get(thumbKey(el.dataset.thumb)); if (svg) { el.replaceChildren(svg); el.classList.add('ready'); } }
   if (typeof IntersectionObserver === 'function') {
     galleryIO = new IntersectionObserver(es => {
       for (const e of es) {
         if (e.isIntersecting) gallerySeen.add(e.target); else gallerySeen.delete(e.target);
         /* кадр анатомии уже в памяти — SVG не нужен (или подождёт ответа кеша) */
-        if (e.isIntersecting && !e.target.classList.contains('ready') && !galleryQueue.includes(e.target) && !galleryAnatPeek(e.target)) galleryQueue.push(e.target);
+        if (e.isIntersecting && !e.target.classList.contains('ready') && !galleryQueue.includes(e.target) && !galleryAnatPeek(e.target) && galleryAnatWantsSvg(e.target)) galleryQueue.push(e.target);
       }
       if (galleryQueue.length && !galleryRaf) galleryRaf = requestAnimationFrame(pumpThumbs);
     }, {rootMargin:'300px 0px'});
     for (const el of thumbs) galleryIO.observe(el);
   }
-  galleryAnatMount(box);
 }
 function showGallery(focusId) {
   disposeMotion(detailMotion); detailMotion = null;
