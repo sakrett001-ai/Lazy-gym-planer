@@ -104,12 +104,16 @@ test('kettlebell in one hand: the bell hangs, flies along the arm or rests on th
   const { auditEntry } = require('./mannequin/holds-audit.js');
   const bell = (id, e = POSES[id]) => auditEntry(id, e, { samples: N }).filter(r => r.kind === 'гиря');
   const want = { kbswing1: 'висит, по руке', kbclean: 'висит, по руке, на предплечье', kbpress: 'на предплечье', kbfrontsquat: 'на предплечье', kbrow: 'висит, по руке', kbfloorpress: 'на предплечье' };
-  for (const [id, pos] of Object.entries(want)) {
+  /* этап 2: у «мельницы» есть предупреждение по задней поверхности бедра (правая нога внизу) — к хвату оно не относится,
+     поэтому у них валидатор — по правилам хвата и подвижности руки */
+  const want2 = { kbsnatch: 'по руке, висит, на предплечье', kbsllift: 'висит', kbwindmill: 'на предплечье' };
+  const arm = i => i.rule !== 'rom' || /плечо|локоть|предплечье|запястье/.test(i.detail);
+  for (const [id, pos] of Object.entries({ ...want, ...want2 })) {
     const rows = bell(id);
     assert.equal(rows.length, 1, id + ': one kettlebell row');
     assert.deepEqual(rows[0].flags, [], id);
     assert.deepEqual(rows[0].pos.split(', ').sort(), pos.split(', ').sort(), id + ': bell positions');
-    assert.deepEqual(bad(POSES[id]), [], id + ': validator');
+    assert.deepEqual(want[id] ? bad(POSES[id]) : bad(POSES[id]).filter(arm), [], id + ': validator');
   }
   /* farmer's walk with kettlebells: both bells hang */
   assert.deepEqual(auditEntry('farmer', POSES.farmer, { samples: N }).filter(r => r.kind === 'гиря').map(r => [r.pos, r.flags.length]), [['висит', 0], ['висит', 0]]);
@@ -118,6 +122,17 @@ test('kettlebell in one hand: the bell hangs, flies along the arm or rests on th
   const swap = (id, o) => ({ ...POSES[id], equipment: POSES[id].equipment.map(q => q.type === 'kettlebell' ? { ...q, ...o } : q) });
   assert(bell('kbfrontsquat', swap('kbfrontsquat', { rest: false }))[0].flags.some(f => /шар гири в (предплечье|кисть|плечо)/.test(f)), 'bell through the forearm');
   assert(bell('kbpress', swap('kbpress', { rest: false, hang: 'arm' }))[0].flags.some(f => /выше рукояти без опоры/.test(f)), 'bell above the handle');
+  /* …and a bell lying on the palm side of the forearm: the ball of the press mirrored from the back of the forearm to the
+     palm side and moved onto the forearm until it touches (0,2 cm) */
+  EQ.BIND.kbPalmSide = (e, R) => EQ.BIND.kettlebell(e, R).map(p => {
+    const back = V.scale(R.frames.handL.x, M.SIGN.L), d = V.sub(p.c, p.grip), c = V.add(p.grip, V.sub(d, V.scale(back, 2 * V.dot(d, back))));
+    const ab = V.sub(R.elL, R.wrL), axis = V.add(R.wrL, ab, M.clamp(V.dot(V.sub(c, R.wrL), ab) / V.dot(ab, ab), 0, 1));
+    return { ...p, c: V.add(c, V.unit(V.sub(axis, c)), M.limbSDF(R, 'fa', 'L', c) - p.radius + .2) };
+  });
+  try {
+    const flags = bell('kbpress', swap('kbpress', { type: 'kbPalmSide' }))[0].flags;
+    assert(flags.some(f => /на ладонной стороне предплечья/.test(f)), 'bell on the palm side: ' + JSON.stringify(flags));
+  } finally { delete EQ.BIND.kbPalmSide; }
   /* the handle sits on the bell at the height of a competition kettlebell: 28.2 cm tall, Ø 21 */
   const kb = EQ.rig(POSES.kbdeadlift)(0).props.find(p => p.kind === 'kettlebell');
   assert(Math.abs(kb.handleUp + EQ.KB.handleR + kb.bottom - 28.2) < .05 && kb.radius === 10.5);
