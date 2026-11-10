@@ -155,13 +155,28 @@ function galleryAnatWantsSvg(el) {
 function galleryAnatShow(el, key, e) {
   let img = el.querySelector('img.mv-anat');
   if (!img) { img = document.createElement('img'); img.className = 'mv-anat'; img.alt = ''; img.decoding = 'async'; img.draggable = false; el.append(img); }
-  if (img.dataset.key !== key) { img.src = e.url; img.dataset.key = key; }
+  if (img.dataset.key !== key) {
+    img.src = e.url; img.dataset.key = key;
+    /* черновик кадра (galleryAnatDraft) уходит, когда сжатая картинка расшифрована */
+    const draft = el.querySelector('canvas.mv-draft');
+    if (draft) { const drop = () => draft.remove(); if (img.decode) img.decode().then(drop, drop); else drop(); }
+  }
   el.classList.add('ready', 'anat'); e.seenAt = performance.now();
+}
+/* только что нарисованный кадр — в миниатюру сразу, копией общего холста: сжатие в фоне занимает 0,2–1 с, и ждать его
+   незачем. Сжатая картинка встанет поверх, черновик уйдёт (galleryAnatShow) */
+function galleryAnatDraft(el, source, key) {
+  if (el.querySelector('img.mv-anat')?.dataset.key === key) return;
+  let c = el.querySelector('canvas.mv-draft');
+  if (!c) { c = document.createElement('canvas'); c.className = 'mv-draft'; el.append(c); }
+  c.width = source.width; c.height = source.height; c.dataset.key = key;
+  try { c.getContext('2d').drawImage(source, 0, 0); } catch (e) { c.remove(); return; }
+  el.classList.add('ready', 'anat');
 }
 /* убрать кадр: снова заглушка (кадр будет перерисован) или SVG, если кадров не будет (его построит очередь витрины) */
 function galleryAnatHide(el) {
   const img = el.querySelector('img.mv-anat'); if (!img && !el.classList.contains('anat')) return;
-  img?.remove(); el.classList.remove('anat');
+  img?.remove(); el.querySelector('canvas.mv-draft')?.remove(); el.classList.remove('anat');
   if (!el.querySelector('svg')) { el.classList.remove('ready'); galleryNeedSvg(el); }
 }
 const galleryThumbEl = id => $('#mv-gallery')?.querySelector(`.mv-thumb[data-thumb="${id}"]`);
@@ -173,7 +188,7 @@ function galleryAnatPlace(el) {
   galleryAnatShow(el, key, e); return true;
 }
 /* миниатюра на экране (очередь SVG, 13c-gallery.js): готовый кадр из памяти — сразу; true — SVG не нужен (кадр показан
-   или его ищут в кеше). Здесь ничего не считается: первая картинка витрины — SVG — не ждёт */
+   или его ищут в кеше). Здесь ничего не считается */
 function galleryAnatPeek(el) {
   if (!galleryAnatOn()) return false;
   const b = galleryAnat.base.get(thumbKey(el.dataset.thumb)); if (!b) return false;
@@ -181,11 +196,11 @@ function galleryAnatPeek(el) {
   if (e) { galleryAnatShow(el, key, e); return true; }
   return galleryAnat.state.get(key) === 'lookup';
 }
-/* миниатюра у экрана (в простое): готовый кадр — из памяти или кеша; нет — в очередь отрисовки.
-   true — SVG пока не нужен (кадр показан или ищется в кеше); false — нужен SVG */
+/* миниатюра у экрана (в простое): готовый кадр — из памяти или кеша; нет — в очередь отрисовки (до кадра — заглушка).
+   true — кадр показан или ищется в кеше */
 function galleryAnatTouch(el) {
   if (!galleryAnatOn()) return false;
-  const b = galleryAnatBase(el.dataset.thumb); if (!b) return false;
+  const b = galleryAnatBase(el.dataset.thumb); if (!b) { galleryNeedSvg(el); return false; }
   const key = galleryAnatKey(b), e = galleryAnat.mem.get(key);
   if (e) { galleryAnatShow(el, key, e); return true; }
   const st = galleryAnat.state.get(key);
@@ -193,10 +208,7 @@ function galleryAnatTouch(el) {
   if (st === undefined && ThumbStore.on && !galleryAnat.noStore) {
     galleryAnat.state.set(key, 'lookup');
     const t0 = performance.now();
-    /* SVG ждёт ответа кеша не дольше 150 мс: кадр из кеша не сменяет только что построенный SVG */
-    const late = setTimeout(() => { const el2 = galleryThumbEl(b.id); if (el2 && !el2.classList.contains('anat')) galleryNeedSvg(el2); }, 150);
     ThumbStore.get(key).then(blob => {
-      clearTimeout(late);
       if (blob) { galleryAnat.state.delete(key); galleryAnatAdd(key, b.id, blob); galleryAnat.stats.cached++; galleryAnat.lookupMs = performance.now() - t0; return; }
       galleryAnat.state.set(key, 'miss');
       const el2 = galleryThumbEl(b.id); if (el2 && !el2.classList.contains('anat')) galleryNeedSvg(el2);
@@ -232,7 +244,9 @@ function galleryAnatSync(el) {
 }
 
 /* ---------- очередь: кадры в простое ---------- */
-const galleryIdle = window.requestIdleCallback ? cb => requestIdleCallback(cb, {timeout:1000}) : cb => setTimeout(() => { const end = performance.now() + 12; cb({timeRemaining:() => Math.max(0, end - performance.now()), didTimeout:true}); }, 50);
+/* простой страницы; пока на экране есть миниатюры без кадра — ждать его не дольше urgentMs (первые кадры — быстро), иначе до секунды */
+const galleryUrgent = () => { if (!galleryAnat.expect) return false; if (!galleryAnat.vis.size) return true; const box = $('#mv-gallery'); for (const id of galleryAnat.vis) { const el = box?.querySelector(`.mv-thumb[data-thumb="${id}"]`); if (el && !el.classList.contains('ready')) return true; } return false; };
+const galleryIdle = window.requestIdleCallback ? cb => requestIdleCallback(cb, {timeout:galleryUrgent() ? GALLERY_THUMBS.urgentMs : 1000}) : cb => setTimeout(() => { const end = performance.now() + 12; cb({timeRemaining:() => Math.max(0, end - performance.now()), didTimeout:true}); }, 50);
 function galleryAnatKick(delay = 0) {
   if (galleryAnat.queued || !gallery.on || !galleryAnatOn() || (!galleryAnat.render && !galleryAnat.fresh.size)) return;
   galleryAnat.queued = true;
@@ -268,7 +282,7 @@ function galleryAnatNext() {
 function galleryAnatWork(deadline) {
   galleryAnat.queued = false;
   if (!gallery.on || !galleryAnatOn() || document.hidden) return;
-  /* при прокрутке и пока строятся первые SVG-миниатюры — подождать */
+  /* при прокрутке и пока строятся SVG-миниатюры (там, где кадров не будет) — подождать */
   if (performance.now() - galleryAnat.scrollAt < GALLERY_THUMBS.quiet || galleryQueue.length || galleryRaf) { galleryAnatKick(GALLERY_THUMBS.quiet); return; }
   /* миниатюры, подошедшие к экрану: кадр из памяти или поиск в кеше (сначала видимые) — пока есть время простоя */
   if (galleryAnat.fresh.size) {
@@ -283,8 +297,9 @@ function galleryAnatWork(deadline) {
   if (!galleryAnat.render) return;
   if (galleryAnatData() !== 'ready') { galleryAnatLoad(); return; }
   const stage = cardStage(); if (!stage) return;
-  /* сжимаются уже два кадра — новый подождёт (снимки держат память видеокарты) */
-  if (!galleryAnat.job && ThumbEncoder.pending >= 2) return;
+  /* сжимается уже много кадров — новый подождёт (снимки держат память видеокарты, 0,4 МБ каждый); кадр виден сразу
+     (черновик), поэтому очередь сжатия не задерживает показ видимых */
+  if (!galleryAnat.job && ThumbEncoder.pending >= GALLERY_THUMBS.encodeMax) return;
   let job = galleryAnat.job;
   /* размер, тема или вид сменились, пока сцена ждала кадра, — работа не нужна */
   if (job && (job.key !== galleryAnatKey(job.b) || !galleryAnat.near.has(job.id))) { job.h.forget(); job = galleryAnat.job = null; }
@@ -331,10 +346,11 @@ function galleryAnatPaint(job) {
   if (!ok) throw Error('paint');
   galleryAnat.state.set(job.key, 'encode');
   const {key, id} = job, t0 = performance.now();
+  { const el = galleryThumbEl(id), b = galleryAnat.base.get(thumbKey(id)); if (el && b && galleryAnatKey(b) === key) galleryAnatDraft(el, c, key); }
   ThumbEncoder.encode(c, galleryAnat.type, GALLERY_THUMBS.quality).then(blob => {
     galleryAnat.encodeMs = performance.now() - t0;
     /* не вышло (Worker упал) — нарисовать заново, уже через toBlob */
-    if (!blob) { galleryAnat.state.set(key, 'miss'); galleryAnatKick(); return; }
+    if (!blob) { galleryAnat.state.set(key, 'miss'); const el = galleryThumbEl(id); if (el && el.querySelector('canvas.mv-draft')?.dataset.key === key && !el.querySelector('img.mv-anat')) galleryAnatHide(el); galleryAnatKick(); return; }
     /* браузер без WebP отдаёт PNG (в 5–8 раз больше) — дальше JPEG */
     if (galleryAnat.type === 'image/webp' && blob.type !== 'image/webp') galleryAnat.type = 'image/jpeg';
     galleryAnat.state.delete(key); galleryAnat.stats.painted++;
