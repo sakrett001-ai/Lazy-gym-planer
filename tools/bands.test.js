@@ -7,7 +7,8 @@
    * физика: длина ленты — сумма отрезков, у ленты в кольце растяжение одно, у куска под стопами — 1; сечение по сохранению
      объёма (r0/√λ); огибание края подошвы — по дуге цилиндра (расчёт путей мышц, Muscles.wrap);
    * аудит ловит то, что должен: провисание, растяжение сверх паспорта, разрыв, излом, ленту сквозь тело, скольжение под
-     подошвой, разное натяжение ветвей;
+     подошвой, разное натяжение ветвей; у рукояти — ленту не у кольца стремени, ленту под углом к стремени больше
+     atan(половина рукояти / высота вершины) (лямка тянет за один конец), стремя или ленту сквозь предплечье;
    * модель покрывает типы лент: трубку с рукоятями, длинную петлю и мини-петлю (петля вокруг голеней). */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -58,7 +59,7 @@ test('bands: physics — length is the sum of segments, one stretch through the 
   void b;
 });
 
-test('bands: the audit catches slack, over-stretch, a break, a kink, a band through the body, slip under the sole, unequal pull', () => {
+test('bands: the audit catches slack, over-stretch, a break, a kink, a band through the body, slip under the sole, unequal pull, a stirrup turned away from the band', () => {
   const base = POSES.bandcurl, withRest = rest => ({ ...base, equipment: base.equipment.map(e => e.type === 'band' ? { ...e, rest } : e) });
   assert(has(audit('bandcurl', null, withRest(300)), /провисает/), 'длинная лента провисает');
   assert(has(audit('bandcurl', null, withRest(70)), /больше паспортного предела/), 'короткая лента растянута сверх паспорта');
@@ -67,6 +68,11 @@ test('bands: the audit catches slack, over-stretch, a break, a kink, a band thro
   assert(has(audit('bandcurl', R => { const p = band(R).find(q => q.id === 'band:L'); p.pts = p.pts.map((q, j) => j === p.pts.length - 2 ? V.mix(R.hip, R.sh, .5) : q); }), /сквозь/), 'сквозь тело');
   assert(has(audit('bandcurl', (R, t) => { for (const p of band(R)) p.band = { ...p.band, pins: p.band.pins.map(q => ({ ...q, med: V.add(q.med, [0, 0, 2 * t]) })) }; }), /скользит/), 'скольжение под подошвой');
   assert(has(audit('bandcurl', R => { const ps = band(R), b = ps[0].band, nb = { ...b, pieces: b.pieces.map((p, k) => k === 0 ? { ...p, lam: p.lam * 1.4 } : p) }; for (const p of ps) p.band = nb; }), /по-разному/), 'разное натяжение');
+  /* рукоять: стремя развёрнуто от ленты (вершина на другой стороне рукояти), лента не у кольца, стремя в предплечье */
+  const strap = (R, s) => R.props.find(p => p.id === 'band:strap' + s);
+  assert(has(audit('bandcurl', R => { const p = strap(R, 'L'), m = V.mix(p.pts[0], p.pts[4], .5); p.pts = p.pts.map((q, i) => i === 0 || i === 4 ? q : V.sub(V.scale(m, 2), q)); }), /уходит от стремени/), 'стремя против ленты');
+  assert(has(audit('bandcurl', R => { const p = strap(R, 'R'); p.pts = p.pts.map((q, i) => i === 2 ? V.add(q, [0, 0, .5]) : q); }), /не у кольца стремени/), 'лента не у кольца');
+  assert(has(audit('bandcurl', R => { const p = strap(R, 'L'); p.pts = p.pts.map((q, i) => i === 2 ? V.mix(R.elL, R.wrL, .7) : q); }), /сквозь предплечье/), 'стремя в предплечье');
   /* нормальная поза — без замечаний */
   assert.deepEqual(audit('bandcurl').flags, []);
   assert.deepEqual(bandFlags({ lam: [[1, 2]], loaded: [true], max: 3, join: 0, kink: { a: 0 }, body: { d: 0 }, gear: { d: 0 }, slip: [], pull: 0, frames: [] }), []);
