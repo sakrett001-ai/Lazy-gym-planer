@@ -37,14 +37,14 @@ const PATTERN = {};
  /* прицельно на манжету: вращение плеча наружу */
  ['extrot', 'cableextrot bandextrot'],
  /* гиря */
- ['hinge', 'kbdeadlift kbswing1 kbclean'], ['vpush', 'kbpress'], ['squat', 'kbfrontsquat'], ['hrow', 'kbrow'], ['hpush', 'kbfloorpress']].forEach(([p, ids]) => ids.split(' ').forEach(id => PATTERN[id] = p));
+ ['hinge', 'kbdeadlift kbswing1 kbclean kbsnatch kbsllift'], ['side', 'kbwindmill'], ['vpush', 'kbpress'], ['squat', 'kbfrontsquat'], ['hrow', 'kbrow'], ['hpush', 'kbfloorpress']].forEach(([p, ids]) => ids.split(' ').forEach(id => PATTERN[id] = p));
 /* желательность упражнения при равных условиях: вспомогательные и упрощённые варианты ниже */
 const EX_W = {wallpush:0.5, kneepush:0.7, inclinepush:0.8, towelcurl:0.6, towelrow:0.75, tablerow:0.8, chairdip:0.75, wallsit:0.7, superman:0.8, bicycle:0.9, deadbug:0.85, birddog:0.85, sidelunge:0.85, revlunge:0.9, calf1:0.9, sidebend:0.8, concentration:0.85, kickback:0.85, declinepush:0.9, goodmorning:0.8, jumpingjack:0.9, hangknee:0.95, shrug:0.55, hyper:0.75, frontraise:0.75, wristcurl:0.6, hang:0.65, farmer:0.8, lpcalf:0.9, pikepush:0.8, benchdip:0.85, bandlatraise:0.9,
   bridge:0.85, airsquat:0.8, lyinglegraise:0.9, sideplank:0.9, stepup:0.9, smithsquat:0.85, smithincline:0.9, diamond:0.85, bandcurl:0.9, bandpushdown:0.9, bandrow:0.95,
   /* прицельные на приводящие и манжету — вспомогательные: в обычный план попадают реже, с акцентом из атласа — в первую очередь */
   cableadduct:0.9, copenhagen:0.85, copenhagenknee:0.8, cableextrot:0.8, bandextrot:0.75,
   /* гиря: баллистика и односторонние варианты — после базовых движений со штангой и гантелями */
-  kbdeadlift:0.9, kbswing1:0.85, kbclean:0.8, kbpress:0.9, kbfrontsquat:0.85, kbrow:0.9, kbfloorpress:0.8};
+  kbdeadlift:0.9, kbswing1:0.85, kbclean:0.8, kbpress:0.9, kbfrontsquat:0.85, kbrow:0.9, kbfloorpress:0.8, kbsnatch:0.75, kbsllift:0.85, kbwindmill:0.7};
 const EXI = Object.fromEntries(EX.map(e => [e.id, e]));
 const EQN = Object.fromEntries(EQUIP.map(e => [e.id, e.name]));
 const GN = Object.fromEntries(GROUPS.map(g => [g.id, g.name]));

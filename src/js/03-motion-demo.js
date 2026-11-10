@@ -3,7 +3,7 @@ const DEMO = Object.fromEntries(EX.map(ex => [ex.id, ex]));
 /* упражнения, чья поза при t 0→1 опускается (уступающая фаза первой): рабочая фаза, подсказка и самый яркий цвет мышц —
    на обратном ходе 1→0. Обратные выпады, румынская тяга на одной ноге и наклоны в сторону — по аудиту анатомии 4.53.0:
    их ягодичные, задняя поверхность бедра и косые при t 0→1 удлиняются (tools/muscles/phase.js) */
-const eccFirst = new Set('pushup diamond dip bbbench dbbench dbincline smithincline dbfly hyper pikepush skull benchdip ohext bulgarian rdl squat goblet airsquat lunge legpress legpresshigh legpresslow smithsquat inclinebb declinebb closegrip pullover declinepush goodmorning rollout revlunge sllift sidebend kbfrontsquat'.split(' '));
+const eccFirst = new Set('pushup diamond dip bbbench dbbench dbincline smithincline dbfly hyper pikepush skull benchdip ohext bulgarian rdl squat goblet airsquat lunge legpress legpresshigh legpresslow smithsquat inclinebb declinebb closegrip pullover declinepush goodmorning rollout revlunge sllift sidebend kbfrontsquat kbsllift kbwindmill'.split(' '));
 const isometric = new Set(['plank','sideplank','hang']);
 const MOTION_CUES = {
   bbrow:['Локти ведут снаряд к поясу. Корпус сохраняет положение.','Опускайте штангу подконтрольно, постепенно разгибая руки.'],
