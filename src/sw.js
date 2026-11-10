@@ -9,8 +9,10 @@ const CACHE_PREFIX = 'podhod@' + SCOPE + ':';
 const CACHE = CACHE_PREFIX + VERSION;
 /* отметки языков — в своём кеше: он переживает обновления (старые кеши удаляются по CACHE_PREFIX) */
 const LANGS_CACHE = 'podhod-langs@' + SCOPE, LANGS_URL = SCOPE + '__podhod-langs.json', LANG_DAYS = 30;
-/* готовые миниатюры витрины атласа (13e-gallery-anatomy.js) — корзина на сборку: при обновлении прежние удаляются */
-const THUMBS_PREFIX = 'podhod-thumbs@' + SCOPE + ':', THUMBS = THUMBS_PREFIX + VERSION;
+/* готовые миниатюры витрины атласа (13e-gallery-anatomy.js): корзина одна на место приложения, ключ кадра — по его содержимому,
+   поэтому обновление её не трогает (кадры неизменившихся упражнений остаются). Корзины прежней схемы — по одной на сборку
+   (THUMBS_LEGACY) — удаляются */
+const THUMBS = 'podhod-thumbs2@' + SCOPE, THUMBS_LEGACY = 'podhod-thumbs@' + SCOPE + ':';
 /* Иконки — адрес с хэшем содержимого (список подставляет build.js): файл по такому адресу не меняется, поэтому новая версия
    берёт иконки из кеша прежней, а не из сети (≈0,3 МБ на каждый выпуск; fillShell). В исходнике (проверки) — адреса с версией. */
 const ICON_LIST = '__ICONS__';
@@ -78,7 +80,7 @@ async function fillShell(files) {
   await c.addAll(net);
 }
 self.addEventListener('install', e => { e.waitUntil(wantedLangs().then(langs => fillShell(shellFor(langs)))); });
-self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => (k.startsWith(CACHE_PREFIX) && k !== CACHE) || (k.startsWith(THUMBS_PREFIX) && k !== THUMBS)).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
+self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => (k.startsWith(CACHE_PREFIX) && k !== CACHE) || k.startsWith(THUMBS_LEGACY)).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || !e.request.url.startsWith(self.location.origin)) return;
   e.respondWith(caches.open(CACHE).then(c => c.match(e.request, {ignoreSearch:false})).then(hit => hit || fetch(e.request).then(res => {

@@ -15,7 +15,7 @@ const plain = v => JSON.parse(JSON.stringify(v));
 function rules() {
   const ctx = {}; vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(root, 'src/js/12-figure-pace.js'), 'utf8'), ctx, { filename: '12-figure-pace.js' });
-  return vm.runInContext('({GALLERY_THUMBS,thumbCanvasSize,thumbCacheKey,thumbCacheName,thumbCachesStale,thumbCacheTrim,thumbsToDrop,thumbNext,thumbPace,thumbViewFor,FIGURE_NOTES})', ctx);
+  return vm.runInContext('({GALLERY_THUMBS,thumbCanvasSize,thumbCacheKey,thumbCacheName,thumbCachesStale,thumbCacheTrim,thumbsToDrop,thumbNext,thumbPace,thumbViewFor,thumbModeFor,thumbHash,thumbPoseHash,thumbStale,FIGURE_NOTES})', ctx);
 }
 const R = rules(), G = R.GALLERY_THUMBS;
 
@@ -31,27 +31,76 @@ test('thumbnail canvas: device pixels up to ×2, in steps of 40 px, at most 320;
   assert(G.max * G.max * 4 < 0.5 * (1 << 20), 'общий холст — меньше 0,5 МБ');
 });
 
-test('cache key: build, view, theme, exercise equipment (it sets the variant and visible parts), phase, camera and size — each changes the key', () => {
-  const base = { build: '4.51.0-abc', view: 'anatomy', theme: 'dark', id: 'goblet', equip: 'db+', t: 1, size: 320 };
+test('cache key is by content: render version of the view, view, theme, pose hash, muscle level, camera, quality, paint version and size — each changes the key; the build number is not in it', () => {
+  const base = { render: 'r1', view: 'anatomy', theme: 'dark', pose: 'p1', level: 'l1', size: 320 };
   const k = R.thumbCacheKey(base);
-  assert.equal(k, 't1|4.51.0-abc|anatomy|dark|goblet|db+|1|angle|320');
-  for (const [f, v] of Object.entries({ build: '4.51.0-def', view: 'skeleton', theme: 'light', id: 'squat', equip: 'kb+', t: 0, camera: 'side', size: 200 }))
+  assert.equal(k, 't2|r1|' + G.paint + '|anatomy|dark|p1|l1|angle|' + G.quality + '|320');
+  for (const [f, v] of Object.entries({ render: 'r2', view: 'skeleton', theme: 'light', pose: 'p2', level: 'l2', camera: 'side', quality: .5, paint: 'p0', size: 200 }))
     assert.notEqual(R.thumbCacheKey({ ...base, [f]: v }), k, f);
+  assert.equal(R.thumbCacheKey({ ...base, build: '4.99.0-zzz' }), k, 'номер сборки ключ не меняет');
+});
+
+test('pose hash: the same pose gives the same hash in any build; a moved joint, another phase, variant or hidden part changes it; sub-micron noise does not', () => {
+  const m = loadModel(), ex = m.EX.find(e => e.id === 'squat'), pose = () => ex.anim.catalogRig(1);
+  const h = R.thumbPoseHash(pose(), ['squat', '', '111', 1, 1]);
+  assert.match(h, /^[0-9a-z]{6,12}$/);
+  assert.equal(R.thumbPoseHash(pose(), ['squat', '', '111', 1, 1]), h, 'та же поза — тот же хэш');
+  const moved = pose(); moved.head = [moved.head[0], moved.head[1] - .5, moved.head[2]];
+  assert.notEqual(R.thumbPoseHash(moved, ['squat', '', '111', 1, 1]), h, 'сустав сдвинут на 5 мм');
+  const prop = pose(); prop.props = prop.props.map((p, i) => i === 0 && p.c ? { ...p, c: [p.c[0] + 1, p.c[1], p.c[2]] } : i === 0 && p.a ? { ...p, a: [p.a[0] + 1, p.a[1], p.a[2]] } : p);
+  assert.notEqual(R.thumbPoseHash(prop, ['squat', '', '111', 1, 1]), h, 'деталь инвентаря сдвинута');
+  assert.notEqual(R.thumbPoseHash(ex.anim.catalogRig(.5), ['squat', '', '111', 1, 1]), h, 'другая фаза — другая поза');
+  assert.notEqual(R.thumbPoseHash(pose(), ['squat', 'db', '111', 1, 1]), h, 'вариант');
+  assert.notEqual(R.thumbPoseHash(pose(), ['squat', '', '110', 1, 1]), h, 'видимость детали');
+  const noise = pose(); noise.head = [noise.head[0] + 1e-7, noise.head[1], noise.head[2]];
+  assert.equal(R.thumbPoseHash(noise, ['squat', '', '111', 1, 1]), h, 'шум вычислений (0,1 мкм) ключ не меняет');
+  /* хэши поз каталога не сталкиваются */
+  const all = new Set(m.EX.map(e => R.thumbPoseHash(e.anim.catalogRig(1), [e.id])));
+  assert.equal(all.size, m.EX.length);
+});
+
+test('a thumbnail key survives a release that did not touch the exercise and changes when its pose changes', () => {
+  const m = loadModel({ fullApp: true });
+  const key = (build, patch = '') => m.get(`(() => { window.PODHOD_BUILD = '${build}'; window.PODHOD_RENDER = {anatomy:'ra', skeleton:'rs', skin:'rk'}; galleryAnat.base.clear(); galleryAnat.view = 'anatomy'; galleryAnat.theme = 'dark'; galleryAnat.size = 320;
+    ${patch} return ['squat', 'pushup'].map(id => galleryAnatKey(galleryAnatBase(id))); })()`);
+  const a = [...key('4.81.0-aaa')], b = [...key('4.82.0-bbb')];
+  assert.deepEqual(b, a, 'другая сборка, то же содержимое — те же ключи');
+  const c = [...key('4.82.0-bbb', "{ const an = EXI.squat.anim, rig = an.catalogRig; an.catalogRig = t => { const R = rig(t); R.head = [R.head[0], R.head[1] - 2, R.head[2]]; return R; }; }")];
+  assert.notEqual(c[0], a[0], 'поза приседа изменилась — у его кадра новый ключ'); assert.equal(c[1], a[1], 'отжимания не менялись — ключ прежний');
+  const d = [...m.get("(() => { window.PODHOD_RENDER = {anatomy:'ra2', skeleton:'rs', skin:'rk'}; galleryAnat.base.clear(); return ['pushup'].map(id => galleryAnatKey(galleryAnatBase(id))); })()")];
+  assert.notEqual(d[0], a[1], 'изменилась отрисовка вида — ключ новый');
+});
+
+test('thumbnail mode: with WebGL (or while volume.js is on its way) frames are expected — a placeholder, not SVG; SVG only where no frame will come', () => {
+  const v = (pref, o) => plain(R.thumbModeFor(pref, o));
+  assert.deepEqual(v('mannequin', { gl: 'ready' }), { view: 'skin', render: true, note: '', wait: false, expect: true });
+  assert.deepEqual(v('anatomy', { gl: 'ready' }), { view: 'anatomy', render: true, note: '', wait: false, expect: true });
+  /* volume.js ещё грузится: кадры из кеша показываются, новые не рисуются, SVG не нужен */
+  assert.deepEqual(v('mannequin', { gl: 'pending' }), { view: 'skin', render: false, note: '', wait: false, expect: true });
+  assert.deepEqual(v('anatomy', { gl: 'pending', state: 'loading' }), { view: 'anatomy', render: false, note: '', wait: true, expect: true });
+  assert.deepEqual(v('mannequin', { gl: 'ready', state: 'loading' }), { view: 'skin', render: false, note: '', wait: true, expect: true }, 'данные кожи грузятся — заглушка');
+  /* кадров не будет — SVG */
+  for (const o of [{ gl: 'none' }, { gl: 'ready', state: 'error' }, { gl: 'ready', slow: true }, { gl: 'ready', skin: false }])
+    assert.equal(v('mannequin', o).expect, false, JSON.stringify(o));
+  for (const o of [{ gl: 'none' }, { gl: 'ready', state: 'error' }, { gl: 'ready', slow: true }]) { const r = v('anatomy', o); assert.equal(r.expect, false, JSON.stringify(o)); assert.equal(r.view, 'mannequin'); assert.equal(r.render, false); }
 });
 
 test('the equipment of a thumbnail decides the exercise variant: goblet with a dumbbell and with a kettlebell are different frames', () => {
   const m = loadModel({ fullApp: true });
   const r = m.get(`(() => { const out = {}; for (const [place, eq] of [['db', ['db']], ['kb', ['kb']]]) { S.places = [{ id: place, name: place, equip: eq }]; S.place = place; ensurePlaces(S);
-    const b = galleryAnatBase('goblet'); out[place] = { equip: b.equip, variant: catalogAnimFor(b.ex.anim, propHas(b.ex, b.E)).catalogVariant || '' }; } return out; })()`);
-  assert.notEqual(r.db.equip, r.kb.equip); assert.notEqual(r.db.variant, r.kb.variant, 'другой вариант позы — другой ключ кадра');
+    const b = galleryAnatBase('goblet'); out[place] = { pose: b.pose, key: galleryAnatKey(b), variant: b.A.catalogVariant || '' }; } return out; })()`);
+  assert.notEqual(r.db.variant, r.kb.variant); assert.notEqual(r.db.pose, r.kb.pose, 'другой вариант позы — другой хэш позы'); assert.notEqual(r.db.key, r.kb.key, 'и другой ключ кадра');
 });
 
-test('Cache Storage buckets: one per build and app place; older builds of this place go, other places stay; a bucket is trimmed to fresh entries', () => {
-  const scope = 'https://lazy.test/app/', now = '4.51.0-abc';
-  assert.equal(R.thumbCacheName(scope, now), 'podhod-thumbs@https://lazy.test/app/:4.51.0-abc');
-  const names = [R.thumbCacheName(scope, now), R.thumbCacheName(scope, '4.50.0-old'), R.thumbCacheName('https://lazy.test/other/', '4.50.0-old'),
-    'podhod@https://lazy.test/app/:4.51.0-abc', 'podhod-langs@https://lazy.test/app/', null];
-  assert.deepEqual(plain(R.thumbCachesStale(names, scope, now)), [R.thumbCacheName(scope, '4.50.0-old')]);
+test('Cache Storage: one bucket per app place, not per build; buckets of the old per-build scheme of this place go, other places stay; the bucket is trimmed to fresh entries', () => {
+  const scope = 'https://lazy.test/app/';
+  assert.equal(R.thumbCacheName(scope), 'podhod-thumbs2@https://lazy.test/app/');
+  const names = [R.thumbCacheName(scope), 'podhod-thumbs@https://lazy.test/app/:4.50.0-old', 'podhod-thumbs@https://lazy.test/app/:4.51.0-abc', 'podhod-thumbs@https://lazy.test/other/:4.50.0-old',
+    R.thumbCacheName('https://lazy.test/other/'), 'podhod@https://lazy.test/app/:4.51.0-abc', 'podhod-langs@https://lazy.test/app/', null];
+  assert.deepEqual(plain(R.thumbCachesStale(names, scope)), ['podhod-thumbs@https://lazy.test/app/:4.50.0-old', 'podhod-thumbs@https://lazy.test/app/:4.51.0-abc']);
+  /* запись из кеша старше refreshDays переписывается в конец — при чистке уходят давно не виденные */
+  const day = 864e5, now = 1e12;
+  assert.equal(R.thumbStale(now - (G.refreshDays + 1) * day, now), true); assert.equal(R.thumbStale(now - day, now), false); assert.equal(R.thumbStale(NaN, now), true);
   const keys = Array.from({ length: G.cacheMax + 5 }, (_, i) => 'k' + i);
   const gone = R.thumbCacheTrim(keys);
   assert.equal(gone.length, keys.length - G.cacheKeep); assert.equal(gone[0], 'k0', 'первыми — самые старые');
@@ -183,11 +232,11 @@ function fakeCaches() {
 }
 function storeModel({ href = 'https://lazy.test/app/en/index.html', lang = 'en', caches = fakeCaches().api } = {}) {
   const m = loadModel({ fullApp: true });
-  m.get('globalThis.__set=(o)=>Object.assign(globalThis,o)')({ location: { href }, PODHOD_BUILD: '4.51.0-abc', PODHOD_LANG: lang, caches: caches === 'none' ? undefined : caches, Response, URL, Blob });
+  m.get('globalThis.__set=(o)=>Object.assign(globalThis,o)')({ location: { href }, PODHOD_BUILD: '4.51.0-abc', PODHOD_RENDER: { anatomy: 'ra', skeleton: 'rs', skin: 'rk' }, PODHOD_LANG: lang, caches: caches === 'none' ? undefined : caches, Response, URL, Blob });
   return m;
 }
 
-test('cache between sessions: one bucket per build for both languages; put, get, and old builds removed', async () => {
+test('cache between sessions: one bucket per place for both languages and all builds; put, get, and the old per-build buckets removed', async () => {
   const { stores, api } = fakeCaches();
   await api.open('podhod-thumbs@https://lazy.test/app/:4.50.0-old'); await api.open('podhod-thumbs@https://lazy.test/other/:4.50.0-old');
   const m = storeModel({ caches: api });
@@ -197,12 +246,15 @@ test('cache between sessions: one bucket per build for both languages; put, get,
   await S.put('t1|k', blob);
   const back = await S.get('t1|k'); assert.equal(back.size, 3); assert.equal(back.type, 'image/webp');
   assert.equal(await S.get('t1|missing'), null);
-  assert.equal(await S.clean(), 1, 'корзина прежней сборки этого места удалена');
-  assert.deepEqual([...stores.keys()].sort(), ['podhod-thumbs@https://lazy.test/app/:4.51.0-abc', 'podhod-thumbs@https://lazy.test/other/:4.50.0-old']);
+  assert.equal(await S.clean(), 1, 'корзина прежней схемы этого места удалена');
+  assert.deepEqual([...stores.keys()].sort(), ['podhod-thumbs2@https://lazy.test/app/', 'podhod-thumbs@https://lazy.test/other/:4.50.0-old']);
   /* имя корзины совпадает с тем, что оставляет сервис-воркер */
   const sw = {}; vm.runInNewContext(fs.readFileSync(path.join(root, 'src/sw.js'), 'utf8').replace(/__VERSION__/g, '4.51.0-abc') + ';this.T=THUMBS;',
     Object.assign(sw, { self: { addEventListener() {}, registration: { scope: 'https://lazy.test/app/' }, location: { origin: 'https://lazy.test' } }, caches: api }));
-  assert.equal(sw.T, 'podhod-thumbs@https://lazy.test/app/:4.51.0-abc');
+  assert.equal(sw.T, 'podhod-thumbs2@https://lazy.test/app/', 'сервис-воркер знает ту же корзину и не привязывает её к сборке');
+  /* «новая версия»: та же корзина, тот же кадр */
+  const m2 = storeModel({ caches: api }); m2.get('globalThis.__set')({ PODHOD_BUILD: '4.52.0-new' });
+  assert.equal((await m2.get('ThumbStore').get('t1|k')).size, 3, 'кадр пережил смену сборки');
 });
 
 test('no persistent cache where Cache Storage cannot work: the offline file (file://) and a missing API', async () => {
