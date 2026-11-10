@@ -286,11 +286,11 @@ function kbHinge(C, u) {
   for (const s of S) plant(C, q, s, [M.SIGN[s] * 24.5, 0, -2], { toeOut: 20 });
   return q;
 }
-/* «Рэк» (стойка с гирей у груди) — углами руки: плечо опущено, локоть у рёбер чуть впереди корпуса (сгибание 20°,
-   отведение 6°), плечо повёрнуто внутрь на 30° — кулак перед грудиной под подбородком, локоть согнут на 140°, запястье
+/* «Рэк» (стойка с гирей у груди) — углами руки: плечо опущено, локоть у рёбер чуть впереди корпуса (сгибание 8°,
+   отведение 6°), плечо повёрнуто внутрь на 40° — кулак перед грудиной под ключицами, локоть согнут на 132°, запястье
    прямое; большой палец смотрит назад к ключице, тыл кисти — наружу-вперёд: туда ложится шар (BIND.kettlebell, rest).
    StrongFirst: «wrist straight, forearm vertical, elbow tucked to the ribs, the bell rests on the forearm». */
-const KB_RACK = { shoulder: [20, 6, -30], elbow: 140, pron: 0 };
+const KB_RACK = { shoulder: [8, 9, -34], elbow: 132, pron: 0 };
 function kbRack(q, s) { armAngles(q, s, KB_RACK.shoulder, KB_RACK.elbow, KB_RACK.pron); return q; }
 /* точка кулака, большой палец и локоть «рэка» при этом корпусе — цели для взятия на грудь и жима */
 function kbRackAt(C, q, s) {
@@ -735,7 +735,7 @@ module.exports = {
          к горизонтальному предплечью ладонь уже смотрит к середине, и гиря под рукоятью оказывается у тыла кисти */
       const A0 = kbSwingStart(C), sm = (a, b) => { const w = Math.max(0, Math.min(1, (e - a) / (b - a))); return w * w * (3 - 2 * w); };
       const ws = sm(0, .7), we = sm(.25, 1), wp = sm(.2, .65), mix3 = (a, b, w) => a.map((v, i) => C.lerp(v, b[i], w));
-      const sh = mix3(A0.shoulder, KB_RACK.shoulder, ws); sh[0] -= 26 * Math.sin(Math.PI * we) * (1 - we * .3); /* локоть уходит назад: гиря идёт вплотную к телу */
+      const sh = mix3(A0.shoulder, KB_RACK.shoulder, ws); sh[1] += 6 * Math.sin(Math.PI * we); sh[0] += 16 * Math.sin(Math.PI * ws); /* мах выносит гирю перед бёдрами; локоть при сгибании чуть отходит от рёбер — шар проходит мимо корпуса */
       armAngles(q, 'L', sh, C.lerp(A0.elbow, KB_RACK.elbow, we), C.lerp(A0.pron, KB_RACK.pron, wp), mix3(A0.wrist, [0, 0], wp));
       armAngles(q, 'R', [C.lerp(-28, 6, e), C.lerp(14, 16, e), 0], C.lerp(14, 12, e), 20, [0, 0], 'relaxed');
       return q;
@@ -763,7 +763,7 @@ module.exports = {
         const top = V.add(V.add(V.add(f.P.ghL, [0, 1, 0], 63), lat, 2), fwd, 1);
         const g = V.add(V.add(V.mix(P1, top, e), lat, 12 * Math.sin(Math.PI * Math.min(1, e * 1.3)) * (1 - e * .5)), fwd, 2 * Math.sin(Math.PI * e));
         const thumb = arc(C, K.thumb, V.scale(lat, -1), Math.min(1, e * 1.4));
-        const pole = V.unit(V.mix(K.pole, V.add(V.add(lat, fwd, .5), [0, -1, 0], .4), e));
+        const pole = V.unit(V.mix(K.pole, V.add(V.add([0, -1, 0], lat, .6), fwd, .8), e));
         holdDir(C, q, 'L', g, pole, thumb, { signed: true });
       };
       settle(C, q, { lo: 2, hi: 8, loads: loadsIn(C, ['L'], KB_KG), resolve: q => { feet(q); arms(q); } });

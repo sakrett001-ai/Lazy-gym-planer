@@ -23,7 +23,7 @@ const PROTECT = [
 ].map(p => ({...p, rules:STRESS_RULES.filter(r => r.parts.includes(p.part)).map(r => r.id)}));
 const PROTECT_BY = Object.fromEntries(PROTECT.map(p => [p.id, p]));
 /* ударные и рывковые движения: пиковая нагрузка на суставы в несколько раз больше веса тела */
-const GENTLE_SKIP_PATTERNS = new Set(['jump', 'burpee', 'climb']), GENTLE_SKIP = new Set(['kbswing']);
+const GENTLE_SKIP_PATTERNS = new Set(['jump', 'burpee', 'climb']), GENTLE_SKIP = new Set(['kbswing', 'kbswing1', 'kbclean']);
 
 function ensureProtect(s) {
   s.protect = Array.isArray(s.protect) ? PROTECT.map(p => p.id).filter(id => s.protect.includes(id)) : [];

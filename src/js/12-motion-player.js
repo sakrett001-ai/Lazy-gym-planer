@@ -36,11 +36,12 @@ function motionFrame(F, clock=F.clock) {
   const part=F.it.rx&&F.it.rx.partial;if(part&&!F.it.ex.anim.loop&&!F.it.ex.anim.hold)t=part[0]+(part[1]-part[0])*t;
   const a = F.it.ex.anim;
   let labels = a.eccFirst ? ['Опускание','Нижняя точка','Подъём','Верхняя точка'] : ['Рабочая фаза','Конечная точка','Возврат','Исходное положение'];
-  if (F.it.ex.id === 'kbswing') labels=['Мах вперёд','Верхняя точка','Замах назад','Исходное положение'];
+  if (F.it.ex.id === 'kbswing' || F.it.ex.id === 'kbswing1') labels=['Мах вперёд','Верхняя точка','Замах назад','Исходное положение'];
   /* скандинавские сгибания: t 0→1 — толчок руками и возврат вверх, главная работа бёдер — медленное опускание 1→0
      (уступающая; профиль мышц — 09b-muscle-profiles.js) */
   if (F.it.ex.id === 'nordic') labels=['Подъём','Верхняя точка','Опускание','Нижняя точка'];
-  if (F.it.ex.id === 'deadlift') labels=['Подъём','Верхняя точка','Опускание','Исходное положение'];
+  if (F.it.ex.id === 'kbclean') labels=['Взятие на грудь','Стойка','Сброс в замах','Замах'];
+  if (F.it.ex.id === 'deadlift' || F.it.ex.id === 'kbdeadlift') labels=['Подъём','Верхняя точка','Опускание','Исходное положение'];
   return {t,index,label:a.hold?'Удержание':labels[index],cue:a.hold?a.cues[0]:a.cues[(index<2)!==!!a.eccFirst?0:1],progress:((clock%total)+total)%total/total,total};
 }
 /* Часы рисунка карточки — по сетке ≈30 кадров в секунду, целое число кадров на повторение: каждый круг проходит те же
