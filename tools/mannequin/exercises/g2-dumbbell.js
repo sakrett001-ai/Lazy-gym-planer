@@ -927,11 +927,11 @@ module.exports = {
       const pose2 = q => {
         plant(C, q, 'L', ankL, { toeOut: 5, pole: [.05, 0, 1] });
         const f = C.fk(q), P = C.axes(q, 'pelvis'), hipR = f.P.hipR, b = C.lerp(16, 4, e) * C.D2R;
-        const along = V.unit(V.add(V.add(V.scale(P.y, -Math.cos(b)), P.z, -Math.sin(b)), C.latP(q, 'R'), .05)), reach = C.lerp(70, 82.1, Math.min(1, e * 2.6));
+        const along = V.unit(V.add(V.add(V.scale(P.y, -Math.cos(b)), P.z, -Math.sin(b)), C.latP(q, 'R'), .09)), reach = C.lerp(70, 82.1, Math.min(1, e * 2.6));
         C.legTo(q, 'R', V.add(hipR, along, reach), V.unit(V.add(P.z, [0, -1, 0], .2)), { dorsi: C.lerp(-12, -2, e) });
         const sh = f.P.ghR, shL = f.P.ghL, latR = C.latP(q, 'R'), latL = C.latP(q, 'L');
         /* гиря под плечом, рукоять поперёк (хват сверху: большой палец к середине) */
-        holdDir(C, q, 'R', V.add(V.add(sh, latR, C.lerp(8, 2, e)), [0, -61.5, 3]), V.unit([0, .2, -1]), V.scale(latR, -1), { signed: true });
+        holdDir(C, q, 'R', V.add(V.add(sh, latR, C.lerp(8, 2, e)), [0, -62.6, 3]), V.unit(V.add(latR, [0, .1, -1], .7)), V.scale(latR, -1), { signed: true });
         C.armTo(q, 'L', V.add(V.add(shL, latL, C.lerp(5, 1, e)), [0, -53.5, 2]), V.unit([0, .2, -1]), { pron: 10, mode: 'relaxed' });
       };
       settle(C, q, { lo: 2, hi: 6, x: ankL[0] + 1.5, xTol: 1, loads: q => [[C.fk(q).P.gripR, KB_KG]], resolve: pose2 });

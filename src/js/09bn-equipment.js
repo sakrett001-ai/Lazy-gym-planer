@@ -360,10 +360,13 @@ BIND.kettlebell=(e,R)=>{
  if(e.rest&&hands.length===1){
   const s=hands[0],F=R.frames['hand'+s],back=V.scale(F.x,M.SIGN[s]),wr=R['wr'+s],kn=V.add(wr,F.y,-9);
   const seg=p=>{const ab=V.sub(kn,wr),t=Math.max(0,Math.min(1,V.dot(V.sub(p,wr),ab)/V.dot(ab,ab)));return V.dist(p,V.add(wr,ab,t))-1.6;};
-  const clear=d=>{const c=V.add(g,d,H);return Math.min(seg(c),M.limbSDF(R,'fa',s,c),M.limbSDF(R,'ua',s,c))-r+KB.press;};
+  /* со стороны ладони шар у предплечья не лежит: когда кисть поднимается выше локтя (рывок, взятие на грудь), гиря
+     переворачивается через локтевую сторону на тыл предплечья */
+  const palmar=d=>V.dot(d,back)<-.2&&M.limbSDF(R,'fa',s,V.add(g,d,H))-r<1;
+  const clear=d=>{const c=V.add(g,d,H);return palmar(d)?-1:Math.min(seg(c),M.limbSDF(R,'fa',s,c),M.limbSDF(R,'ua',s,c))-r+KB.press;};
   if(clear(down)<0){
-   /* поворот вокруг рукояти от свободного направления к тылу кисти — до касания */
-   const b=ortho(back,axis),sg=V.dot(V.cross(down,b),axis)>=0?1:-1,w=V.scale(V.cross(axis,down),sg);
+   /* поворот вокруг рукояти от свободного направления к тылу кисти — до касания; от ладонной стороны — через локоть */
+   const b=ortho(back,axis),viaEl=V.dot(V.cross(down,F.y),axis),sg=(palmar(down)&&Math.abs(viaEl)>.15?viaEl:V.dot(V.cross(down,b),axis))>=0?1:-1,w=V.scale(V.cross(axis,down),sg);
    const at=a=>V.add(V.scale(down,Math.cos(a*D2R)),w,Math.sin(a*D2R));
    let lo=0,hi=0;for(let a=3;a<=240;a+=3)if(clear(at(a))>=0){hi=a;lo=a-3;break;}
    if(hi){for(let i=0;i<14;i++){const m=(lo+hi)/2;if(clear(at(m))>=0)hi=m;else lo=m;}down=at(hi);}
