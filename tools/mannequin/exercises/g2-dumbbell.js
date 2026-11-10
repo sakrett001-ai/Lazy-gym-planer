@@ -283,51 +283,75 @@ function spline(V, pts, ts, e) {
   const u = Math.max(0, Math.min(1, (e - ts[i]) / (ts[i + 1] - ts[i]))), p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
   return p1.map((_, k) => .5 * (2 * p1[k] + (p2[k] - p0[k]) * u + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * u * u + (3 * p1[k] - p0[k] - 3 * p2[k] + p3[k]) * u * u * u));
 }
-/* Рука со снарядом над головой при наклонённом корпусе: локоть почти прямой, и его направление задаёт только поворот
-   плеча. Направление локтя подбирается так, чтобы наружная ротация плеча (как её считает валидатор) была ближе всего
-   к twist — в середине подвижности, без скачков между кадрами */
-function holdTwist(C, q, s, point, thumb, twist) {
-  const { V, M } = C, f = C.fk(q), ax = V.unit(V.sub(point, f.P['gh' + s])), b0 = V.unit(V.perp(Math.abs(ax[1]) > .9 ? [1, 0, 0] : [0, 1, 0], ax)), b1 = V.cross(ax, b0);
-  const at = a => V.add(V.scale(b0, Math.cos(a * C.D2R)), b1, Math.sin(a * C.D2R));
-  const err = a => { C.hold(q, s, point, at(a), { pron: 20, allowShort: true }); const tw = M.jointAngles(M.catalogPose(q))[s].twist; return Math.abs(tw - twist); };
-  let best = 0, bv = Infinity;
-  for (let a = 0; a < 360; a += 20) { const v = err(a); if (v < bv) { bv = v; best = a; } }
-  let lo = best - 20, hi = best + 20;
-  for (let i = 0; i < 10; i++) { const m1 = lo + (hi - lo) * .382, m2 = lo + (hi - lo) * .618; if (err(m1) <= err(m2)) hi = m2; else lo = m1; }
-  const pole = at((lo + hi) / 2); holdDir(C, q, s, point, pole, thumb, { signed: true }); return pole;
-}
-/* «Мельница»: e — доля наклона; poles — направления локтя руки с гирей в осях грудной клетки в начале и в конце
-   (WMP: подобраны holdTwist), между ними — по дуге: рука без скачков, ротация плеча в середине подвижности */
-function wmPose(C, e, poles) {
+/* «Мельница»: e — доля наклона; poles — направления локтя руки с гирей в осях грудной клетки (WMP: подобраны по 9 точкам
+   в конце wmPose), между ними — по дуге: рука без скачков, ротация плеча в середине подвижности. Кулак держит одну и ту же
+   сторону света (большой палец — WM.th от направления «вправо»): корпус поворачивается под гирей, а шар всё время
+   лежит на тыле предплечья с одной стороны — прежде кисть поворачивалась вместе с корпусом, и шар обходил кулак. */
+function wmPose(C, e, poles, prev) {
   const { V, M } = C, q = C.base(), a = C.lerp(0, WM.lean, e) * C.D2R, d = V.unit([-1, 0, WM.fwd]), yw = C.lerp(0, WM.yaw, e) * C.D2R;
   const up = [d[0] * Math.sin(a), Math.cos(a), d[2] * Math.sin(a)], fw = V.unit(V.perp([-Math.sin(yw), 0, Math.cos(yw)], up));
-  C.root(q, [C.lerp(0, -d[0] * WM.dx, e), C.lerp(88.2, WM.y, e), C.lerp(0, -d[2] * WM.dx, e)], up, fw);
-  q.lumbar = [0, 0, C.lerp(0, WM.rot * .25, e)]; q.thoracic = [0, 0, C.lerp(0, WM.rot * .75, e)]; q.neck = [C.lerp(0, 0, e), 0, C.lerp(0, 20, e)];
-  const toe = V.unit([-1, 0, 1]), out = {};
-  const feet = q => { for (const s of S) plant(C, q, s, [M.SIGN[s] * 22, 0, -2], { fwd: toe, pole: V.unit([-.6, 0, 1]) }); };
+  C.root(q, [C.lerp(0, -d[0] * WM.dx, e), 88.2, C.lerp(0, -d[2] * WM.dx, e)], up, fw);
+  q.lumbar = [0, 0, C.lerp(0, WM.rot * .25, e)]; q.thoracic = [0, 0, C.lerp(0, WM.rot * .75, e)]; q.neck = [C.lerp(WM.ne0, WM.ne1, e), 0, C.lerp(0, WM.nk, e)];
+  const toe = V.unit([-1, 0, 1]), out = {}, thumb = V.unit([-Math.cos(WM.th * C.D2R), 0, Math.sin(WM.th * C.D2R)]);
+  const feet = q => { for (const s of S) plant(C, q, s, [M.SIGN[s] * WM.st, 0, -2], { fwd: toe, pole: V.unit([-.6, 0, 1]) }); };
+  /* высота таза: левая нога (под гирей) прямая — колено WM.kL°; правое колено мягкое — сколько даст наклон */
+  const height = q => {
+    const k = C.lerp(WM.k0, WM.kL, e), knee = y => { q.root.p[1] = y; try { feet(q); } catch (err) { return -40; } return M.jointAngles(M.catalogPose(q)).L.knee - k; };
+    q.root.p[1] = C.solve1D(knee, 55, 95); feet(q);
+  };
+  /* точка у передне-внутренней поверхности правой ноги: s — 0 у тазобедренного, 1 у колена, 2 у лодыжки */
+  const leg = (f, s) => {
+    const [A, B, u] = s <= 1 ? [f.P.hipR, f.P.knR, s] : [f.P.knR, f.P.anR, s - 1], ax = V.unit(V.sub(B, A));
+    return V.add(V.mix(A, B, u), V.unit(V.perp(V.add(toe, [1, 0, 0], WM.hm), ax)), s <= 1 ? C.lerp(WM.r0, WM.r1, s) : C.lerp(WM.r1, WM.r2, s - 1));
+  };
   const arms = q => {
     q.L.girdle = [C.lerp(14, 10, e), 0];
-    const T = C.axes(q, 'thorax'), f = C.fk(q), latL = C.lat(q, 'L'), latR = C.lat(q, 'R');
-    const top = V.add(f.P.ghL, V.unit(V.add(V.add([0, 1, 0], T.z, WM.tf * e + WM.tf0), latL, WM.tl)), WM.top), thumb = V.unit(V.perp(V.scale(latL, -1), [0, 1, 0]));
+    const T = C.axes(q, 'thorax'), f = C.fk(q), latR = C.lat(q, 'R');
+    const top = V.add(f.P.ghL, V.unit(V.add(V.add([0, 1, 0], T.z, WM.tf * e + WM.tf0), C.lat(q, 'L'), WM.tl)), WM.top);
     if (poles) {
-      const n = poles.length - 1, x = Math.min(n - 1e-9, e * n), i = Math.floor(x), l = arc(C, poles[i].pole, poles[i + 1].pole, x - i);
-      C.hold(q, 'L', top, V.unit(V.add(V.add(V.scale(T.x, l[0]), T.y, l[1]), T.z, l[2])), { pron: C.lerp(poles[0].pron, poles[n].pron, e) });
-    } else { const pw = holdTwist(C, q, 'L', top, thumb, WM.tw); out.pole = { pole: [V.dot(pw, T.x), V.dot(pw, T.y), V.dot(pw, T.z)], pron: q.L.pron }; }
-    /* свободная рука: вдоль бедра к внутренней стороне правой голени, кисть перед ногой */
-    const hang = V.add(V.add(f.P.ghR, latR, WM.hl), [0, -53.5, 4]), an = f.P.anR, shin = [an[0] + 6, an[1] + C.lerp(44, 18, e), an[2] + WM.hz];
-    const dR = V.sub(V.mix(hang, shin, e), f.P.ghR), nR = Math.min(V.len(dR), 53.5);
+      const n = poles.length - 1, x = Math.min(n - 1e-9, e * n), i = Math.floor(x), l = arc(C, poles[i], poles[i + 1], x - i);
+      holdDir(C, q, 'L', top, V.unit(V.add(V.add(V.scale(T.x, l[0]), T.y, l[1]), T.z, l[2])), thumb, { signed: true });
+    } else C.hold(q, 'L', top, V.unit(V.add([0, -1, 0], C.lat(q, 'L'), .6)), { pron: 0, allowShort: true });
+    /* свободная рука скользит по передне-внутренней поверхности правой ноги: от середины бедра к середине голени */
+    const dR = V.sub(leg(f, C.lerp(WM.s0, WM.s1, e)), f.P.ghR), nR = Math.min(V.len(dR), WM.reach);
     C.armTo(q, 'R', V.add(f.P.ghR, V.unit(dR), nR), V.unit(V.add(latR, T.z, -.6)), { pron: 20, mode: 'relaxed' });
   };
-  settle(C, q, { lo: -2, hi: 8, x: 0, xTol: 6, loads: loadsIn(C, ['L'], KB_KG), resolve: q => { feet(q); arms(q); } });
-  return poles ? q : out.pole;
+  settle(C, q, { lo: -2, hi: 8, x: 0, xTol: 6, loads: loadsIn(C, ['L'], KB_KG), resolve: q => { height(q); arms(q); } });
+  if (poles) return q;
+  /* подбор локтя (вокруг оси руки): пронация и ротация плеча — подальше от границ, большой палец — по thumb,
+     и не дальше нужного от локтя прошлой точки (prev) — без перескоков между точками */
+  const T = C.axes(q, 'thorax'), f = C.fk(q), top = f.P.gripL, ax = V.unit(V.sub(top, f.P.ghL)), b0 = V.unit(V.perp(T.z, ax)), b1 = V.cross(ax, b0);
+  const at = a => V.add(V.scale(b0, Math.cos(a * C.D2R)), b1, Math.sin(a * C.D2R)), inT = w => [V.dot(w, T.x), V.dot(w, T.y), V.dot(w, T.z)];
+  const cost = a => {
+    const p = holdDir(C, q, 'L', top, at(a), thumb, { signed: true }), A = M.jointAngles(M.catalogPose(q)).L, z = C.M3.col(C.fk(q).F.handL.R, 2);
+    const jump = prev ? Math.acos(Math.max(-1, Math.min(1, V.dot(V.unit(prev), V.unit(inT(at(a))))))) / C.D2R : 0;
+    const over = (v, m) => Math.max(0, Math.abs(v) - m) / 3;
+    return (p / WM.pm) ** 2 + ((A.twist - WM.tw) / WM.tm) ** 2 + 40 * (1 - V.dot(z, thumb)) + (jump / WM.jm) ** 2 + over(A.twist, 88) ** 2 + over(p, 80) ** 2;
+  };
+  let best = 0, bv = Infinity;
+  for (let a = 0; a < 360; a += 15) { const v = cost(a); if (v < bv) { bv = v; best = a; } }
+  let lo = best - 15, hi = best + 15;
+  for (let i = 0; i < 8; i++) { const m1 = lo + (hi - lo) * .382, m2 = lo + (hi - lo) * .618; if (cost(m1) <= cost(m2)) hi = m2; else lo = m1; }
+  return inT(at((lo + hi) / 2));
 }
-const WMP = once(() => { const C = ctx([{ type: 'kettlebell', id: 'kb', hands: ['L'], rest: true }]); return [0, .125, .25, .375, .5, .625, .75, .875, 1].map(e => wmPose(C, e, null)); });
-/* «мельница»: наклон таза (lean) в сторону носков, смещение таза назад от них (dx), высота таза, разворот таза (yaw) и груди
-   (rot); hz, hl — кисть свободной руки перед голенью и у бедра; top — длина руки с гирей, tw — ротация плеча; tf0, tl, tf —
-   рука с гирей отведена от вертикали вперёд и в сторону на 8° в начале и на 17° внизу: строго над плечом рука проходит
-   через положение «прямо вверх по оси корпуса», где углы плеча вырождаются и поза между ключами дёргается (замер
-   tools/kettlebell.test.js) */
-const WM = { lean: 45, fwd: 1, dx: 10, y: 80, yaw: 15, rot: 44, pl: .6, pf: .8, hz: 22, top: 62.6, tw: 60, tf: .2, keys: 21, tf0: .1, tl: .1, hl: 9 };
+const WMP = once(() => {
+  const C = ctx([{ type: 'kettlebell', id: 'kb', hands: ['L'], rest: true }]), out = [];
+  for (const e of [0, .125, .25, .375, .5, .625, .75, .875, 1]) out.push(wmPose(C, e, null, out[out.length - 1]));
+  return out;
+});
+/* «мельница»: наклон таза (lean) в сторону носков, стопы на ±st, смещение таза назад от них (dx), разворот таза (yaw)
+   и груди (rot); k0, kL — колено левой ноги (под гирей) стоя и внизу: нога прямая; s0, s1 — путь кисти свободной руки по
+   правой ноге (0 — тазобедренный, 1 — колено, 2 — лодыжка; внизу кисть на середине голени), r0…r2 — её отход от оси
+   ноги, hm — к внутренней стороне, reach — до запястья от плеча не дальше; top — длина руки с гирей; tw, tm, pm, jm —
+   подбор локтя (WMP): ротация плеча около tw, пронация около 0, без перескоков; th — большой палец от «вправо» назад;
+   ne0, ne1, nk — голова к гире: разгибание шеи в начале и внизу и поворот внизу. Голова — сколько позволяет допуск мышц
+   (путь верхней трапеции правой стороны над кожей не выше 2,2 см): при ne −50/−40 и nk 40 — 2,06 см, при ne −60/−45 и nk 45 —
+   2,13; лицо внизу смотрит в 56° от гири, остальное — глазами. tf0, tl, tf — рука с гирей отведена от вертикали вперёд
+   и в сторону на 8° в начале и на 17° внизу: строго над плечом рука проходит через положение «прямо вверх по оси
+   корпуса», где углы плеча вырождаются и поза между ключами дёргается (замер tools/kettlebell.test.js). Глубже 62° нельзя:
+   правое бедро внизу согнуто на 100° при колене 27° — на 6° больше правила задней поверхности бедра (80° + половина
+   сгибания колена; предупреждение валидатора, допуск 12°); при 70° — ошибка. */
+const WM = { lean: 62, st: 30, fwd: 1, dx: 10, yaw: 30, rot: 44, k0: 4, kL: 4, s0: .5, s1: 1.5, r0: 15, r1: 11, r2: 9, hm: .3, reach: 54, top: 62.6, tw: 60, tm: 50, pm: 60, jm: 25, th: 0, nk: 40, ne0: -50, ne1: -40, tf: .2, keys: 21, tf0: .1, tl: .1 };
 /* ---------- Гиря ---------- */
 /* Наклон с отведением таза (как в махах): u = 0 — замах (наклон ~60°), u = 1 — тело прямое; стопы шире плеч */
 function kbHinge(C, u) {
