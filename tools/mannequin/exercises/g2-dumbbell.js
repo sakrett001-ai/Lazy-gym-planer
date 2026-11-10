@@ -301,7 +301,7 @@ function kbRackAt(C, q, s) {
 const kbSwingStart = C => {
   const { V } = C, q = kbHinge(C, 0); q.L.girdle = [-4, 8];
   const T = C.axes(q, 'thorax'), f = C.fk(q), ph = -25 * C.D2R, lat = C.lat(q, 'L');
-  C.grip(q, 'L', V.add(V.add(f.P.ghL, [0, -Math.cos(ph), Math.sin(ph)], 60.8), lat, -15), V.scale(lat, -1), V.unit(V.add(lat, T.y, -.8)));
+  holdDir(C, q, 'L', V.add(V.add(f.P.ghL, [0, -Math.cos(ph), Math.sin(ph)], 60.8), lat, -15), V.unit(V.add(lat, T.y, -.8)), V.scale(lat, -1), { signed: true });
   return { shoulder: [...q.L.shoulder], elbow: q.L.elbow, pron: q.L.pron, wrist: [...q.L.wrist] };
 };
 /* Становая с гирей: наклон lean, таз отведён на hz; высота таза подбирается так, чтобы руки дотянулись до рукояти H */
@@ -708,7 +708,8 @@ module.exports = {
       for (const s of S) q[s].girdle = [C.lerp(-4, 4, e), C.lerp(8, 12, e)];
       const T = C.axes(q, 'thorax'), f = C.fk(q), ph = C.lerp(-25, 88, e) * C.D2R, lat = C.lat(q, 'L');
       const H = V.add(V.add(f.P.ghL, [0, -Math.cos(ph), Math.sin(ph)], 60.8), lat, -C.lerp(15, 9, e));
-      C.grip(q, 'L', H, V.scale(lat, -1), V.unit(V.add(lat, T.y, -.8)));
+      /* кисть продолжает предплечье (одна рука на рукояти — запястье прямое), хват сверху: большой палец к середине */
+      holdDir(C, q, 'L', H, V.unit(V.add(lat, T.y, -.8)), V.scale(lat, -1), { signed: true });
       /* свободная рука: назад у бедра в замахе, вперёд-в сторону наверху */
       armAngles(q, 'R', [C.lerp(-28, 34, e), C.lerp(14, 22, e), 0], C.lerp(14, 22, e), 20, [0, 0], 'relaxed');
       return q;
