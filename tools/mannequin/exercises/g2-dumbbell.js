@@ -786,8 +786,8 @@ module.exports = {
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'kb' }],
     gripRadius: { L: 1.7, R: 1.7 },
     pose(t, C) {
-      const { V, M } = C, q = C.base(), e = C.ease(t), lean = C.lerp(2, 36, e);
-      pelvisLean(C, q, [0, C.lerp(88.4, 49.7, e), C.lerp(0, -20, e)], lean * .8);
+      const { V, M } = C, q = C.base(), e = C.ease(t), lean = C.lerp(2, +(process.env.FL ?? 20), e);
+      pelvisLean(C, q, [0, C.lerp(88.4, +(process.env.FH ?? 52), e), C.lerp(0, -20, e)], lean * .8);
       q.lumbar = [lean * .1, 0, 0]; q.thoracic = [lean * .1, 0, 0]; q.neck = [-lean * .35, 0, 0];
       const feet = q => { for (const s of S) plant(C, q, s, [M.SIGN[s] * 16, 0, -2], { toeOut: 14 }); };
       const arms = q => {
@@ -795,7 +795,7 @@ module.exports = {
         kbRack(q, 'L');
         armAngles(q, 'R', [C.lerp(6, 62, e), C.lerp(14, 38, e), 0], 14, 30, [0, 0], 'relaxed');
       };
-      settle(C, q, { lo: C.lerp(1, -6.5, Math.min(1, e * 2)), hi: C.lerp(4, -3.5, Math.min(1, e * 2)), loads: loadsIn(C, ['L'], KB_KG), resolve: q => { feet(q); arms(q); } });
+      settle(C, q, { lo: C.lerp(1, +(process.env.FZ ?? 0), Math.min(1, e * 2)), hi: C.lerp(4, +(process.env.FZ ?? 0) + 5, Math.min(1, e * 2)), loads: loadsIn(C, ['L'], KB_KG), resolve: q => { feet(q); arms(q); } });
       return q;
     }
   },
