@@ -1,6 +1,6 @@
 const SOURCES_BY_EX = {
   kbswing:[['Мах гирей — NSCA','https://www.nsca.com/education/articles/kinetic-select/two-arm-kettlebell-swing/']],
-  kbdeadlift:[['Мышцы в становой тяге: ЭМГ — Escamilla и др., 2002','https://pubmed.ncbi.nlm.nih.gov/11932579/'],['Наклон от таза с гирей — NSCA','https://www.nsca.com/education/articles/kinetic-select/two-arm-kettlebell-swing/']],
+  kbdeadlift:[['Мышцы в становой тяге: ЭМГ — Escamilla и др., 2002','https://pubmed.ncbi.nlm.nih.gov/11932579/'],['Становая с гирей в стойке «сумо» — StrongFirst (A. Bolton, P. Tsatsouline)','https://www.strongfirst.com/kettlebell-deadlift-%E2%9E%94-barbell-deadlift/'],['Становая с гирей: гиря между стоп — NASM','https://www.nasm.org/resource-center/exercise-library/kettlebell-deadlift']],
   kbswing1:[['Мах гирей — NSCA','https://www.nsca.com/education/articles/kinetic-select/two-arm-kettlebell-swing/'],['Мышцы корпуса в махах одной и двумя руками: ЭМГ — Andersen и др., 2019','https://doi.org/10.1055/a-0869-7228'],['Махи гирей и здоровье спины (по данным S. McGill) — StrongFirst','https://www.strongfirst.com/optimizing-back-health-with-the-kettlebell-swing/']],
   kbclean:[['Мах гирей — NSCA','https://www.nsca.com/education/articles/kinetic-select/two-arm-kettlebell-swing/'],['Взятие на грудь и жим гири: техника — StrongFirst','https://www.strongfirst.com/test-your-kettlebell-military-press/'],['Махи гирей и здоровье спины (по данным S. McGill) — StrongFirst','https://www.strongfirst.com/optimizing-back-health-with-the-kettlebell-swing/']],
   kbpress:[['Жим гири стоя: техника — StrongFirst','https://www.strongfirst.com/test-your-kettlebell-military-press/'],['Жимы над головой стоя и сидя, штанга и гантели: ЭМГ — Saeterbakken и Fimland, 2013','https://pubmed.ncbi.nlm.nih.gov/23096062/']],
@@ -52,7 +52,7 @@ const MOTION_FOCUS={
  deadlift:{setup:'Снаряд близко к ногам, руки прямые.',control:'Разгибайте таз и колени согласованно, сохраняйте снаряд близко к телу.'},
  rdl:{setup:'Снаряд в прямых руках, колени немного согнуты.',control:'Отводите таз назад; глубину ограничивает контроль спины.'},
  kbswing:{setup:'Стопы устойчивы, руки удерживают гирю.',control:'Разгибание таза задаёт мах; локти остаются разогнутыми.'},
- kbdeadlift:{setup:'Гиря между стоп на линии лодыжек, руки прямые, спина прямая.',control:'Разгибайте таз и колени согласованно; гиря идёт вдоль ног.'},
+ kbdeadlift:{setup:'Стопы шире плеч, гиря между стоп под серединой стопы, руки прямые, спина прямая.',control:'Разгибайте таз и колени согласованно; гиря идёт вдоль ног.'},
  kbswing1:{setup:'Стопы устойчивы, гиря в одной руке хватом сверху.',control:'Разгибание таза задаёт мах; плечи остаются развёрнутыми ровно.'},
  kbclean:{setup:'Замах между ног, как в махах одной рукой.',control:'Локоть у рёбер, кисть обходит гирю; в стойке запястье прямое.'},
  kbpress:{setup:'Гиря у груди: запястье прямое, локоть у рёбер, шар на тыле предплечья.',control:'Предплечье вертикально весь жим; корпус и таз неподвижны.'},
