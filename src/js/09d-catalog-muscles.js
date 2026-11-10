@@ -188,5 +188,5 @@ function catalogFigureAnim(anim){
 function catalogVolumeData(anim,t,index,has,coarse=false,lean=false){
  const R=anim.catalogRig(t),state=muscleFrame(anim,t,index),profile=motionProfile(anim);
  let body=null,surfaces=lean?[]:null;
- return{exerciseId:anim.catalogId,phase:t,poseKey:anim.catalogRig,pose:R,get body(){return body||(body=Mannequin.bodyData(R));},stress:jointStressPoints(anim,R,t,index),get surfaces(){return surfaces||(surfaces=mannequinMuscleSurfaces(R,profile,{coarse}));},values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>GymEquipment.visible(s,has)),torsoRings:[],limbProfiles:{}};
+ return{exerciseId:anim.catalogId,phase:t,poseKey:anim.catalogRig,pose:R,get body(){return body||(body=Mannequin.bodyData(R));},stress:jointStressPoints(anim,R,t,index),get surfaces(){return surfaces||(surfaces=mannequinMuscleSurfaces(R,profile,{coarse}));},values:state.values,sideValues:catalogSideValues(profile,state.values),regions:profile.regions,props:R.props.filter(s=>GymEquipment.visible(s,has))};
 }
