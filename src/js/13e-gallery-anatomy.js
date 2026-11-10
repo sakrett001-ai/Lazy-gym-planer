@@ -6,7 +6,9 @@
    · Рисует тот же общий рендерер вне экрана, что карточки плана (GymVolume.cards; своего WebGL у витрины нет): неподвижный
      кадр той же фазы, что SVG-миниатюра (конечная точка движения), ракурсом «Под углом», рамка — по телу в этой позе.
      Цвет мышц — основные ярче, вспомогательные бледнее (без фаз), меток нагрузки нет.
-   · Первая картинка витрины не ждёт: сразу — SVG-миниатюры, как раньше (13c-gallery.js), кадры анатомии — в простое
+   · Пока кадра нет, а он будет (WebGL есть или volume.js ещё грузится, вид рисует кадры, телефон успевает — thumbModeFor),
+     миниатюра — нейтральная заглушка цвета сцены (класс mv-gl у витрины, 31-gallery.css), а не прежняя SVG-фигура:
+     манекен не мелькает перед кадром. Готовые кадры из памяти и кеша встают сразу; новые рисуются в простое
      (requestIdleCallback), только для миниатюр у экрана и чуть ниже (GALLERY_THUMBS.near), сначала видимые, и не во
      время прокрутки. Миниатюра — две задачи: сборка сцены упражнения (prepare) и кадр (поза, кости, мышцы, отрисовка,
      копия в холст); сцен у рендерера не больше трёх, как у карточек.
@@ -14,11 +16,13 @@
      Worker → OffscreenCanvas.convertToBlob): главный поток не ждёт ни видеокарту, ни сжатие; без Worker — toBlob.
      Хранится картинкой blob: в памяти страницы (до 3 МБ, дальше отпускаются давно не виденные — thumbsToDrop) и в
      Cache Storage (ThumbStore) между открытиями витрины и сеансами.
-     Ключ — сборка, вид, тема, вариант инвентаря, фаза, ракурс, размер (thumbCacheKey); корзины прежних сборок удаляет
-     страница (при открытии витрины) и сервис-воркер (при обновлении). Холст один на все миниатюры.
-   · Без WebGL, после ошибки загрузки костей и мышц и если телефон не успевает (thumbPace) — SVG, как раньше; пока
-     кости и мышцы грузятся — SVG, а готовые кадры из памяти и кеша показываются сразу. */
-const galleryAnat = {view:'mannequin', render:false, note:'', wait:false, size:0, theme:'', loading:false, failed:false, annyFailed:false,
+     Ключ — по содержимому кадра (thumbCacheKey, 12-figure-pace.js): поза в показанной фазе с видимыми деталями, версия
+     отрисовки вида, тема, ракурс, размер; кадры неизменившихся упражнений переживают выпуск. Корзина одна на место
+     приложения; корзины прежней схемы (по сборке) удаляют страница и сервис-воркер. Холст один на все миниатюры.
+   · Без WebGL, после ошибки загрузки данных вида, если volume.js не пришёл (GALLERY_THUMBS.volumeWaitMs) и если телефон
+     не успевает (thumbPace) — SVG, как раньше; у миниатюры, кадр которой дважды не нарисовался, — тоже SVG. */
+const galleryAnat = {view:'mannequin', render:false, expect:false, gl:'none', note:'', wait:false, size:0, theme:'', loading:false, failed:false, annyFailed:false,
+  volumeFailed:false, volumeTimer:0,
   mem:new Map(), base:new Map(), state:new Map(), fails:new Map(), near:new Set(), fresh:new Set(), vis:new Set(), io:null, ioVis:null, queued:false, scrollAt:0,
   job:null, canvas:null, watched:null, type:'image/webp', noStore:false, pace:thumbPace(), stats:{painted:0, cached:0, chunks:0}, cleaned:false, freeTimer:0};
 
@@ -35,37 +39,45 @@ function thumbScope() {
   if (window.PODHOD_LANG === 'en') dir = dir.replace(/\/en\/$/, '/');
   return u.origin + dir;
 }
+/* версия отрисовки вида (хэш, считает build.js); в несобранных исходниках — номер сборки, если он задан */
+function thumbRender(view) { return (window.PODHOD_RENDER && window.PODHOD_RENDER[view]) || window.PODHOD_BUILD || ''; }
 const ThumbStore = (() => {
   let cache = null, opening = null, off = false;
-  const build = () => window.PODHOD_BUILD || '';
   /* адрес записи — условный (кадры в сеть не ходят): Cache Storage требует http(s) */
   const url = key => 'https://thumbs.podhod.invalid/' + encodeURIComponent(key);
+  const response = (blob, at = Date.now()) => new Response(blob, {headers:{'Content-Type':blob.type, 'X-Thumb-Time':String(at)}});
   function open() {
     if (cache || off) return Promise.resolve(cache);
     if (!opening) opening = (async () => {
       try {
         const scope = thumbScope();
-        if (!scope || !build() || typeof caches === 'undefined') throw 0;
-        cache = await caches.open(thumbCacheName(scope, build()));
+        if (!scope || !window.PODHOD_RENDER || typeof caches === 'undefined') throw 0;
+        cache = await caches.open(thumbCacheName(scope));
       } catch (e) { off = true; cache = null; }
       return cache;
     })();
     return opening;
   }
+  /* запись, которую давно не переписывали, — переписать в конец корзины: порядок записей — порядок вытеснения */
   async function get(key) {
     const c = await open(); if (!c) return null;
-    try { const r = await c.match(url(key)); return r ? await r.blob() : null; } catch (e) { return null; }
+    try {
+      const r = await c.match(url(key)); if (!r) return null;
+      const blob = await r.blob();
+      if (thumbStale(+r.headers.get('X-Thumb-Time'))) c.delete(url(key)).then(() => c.put(url(key), response(blob))).catch(() => {});
+      return blob;
+    } catch (e) { return null; }
   }
   async function put(key, blob) {
     const c = await open(); if (!c) return;
-    try { await c.put(url(key), new Response(blob, {headers:{'Content-Type':blob.type}})); } catch (e) {}
+    try { await c.put(url(key), response(blob)); } catch (e) {}
   }
-  /* корзины прежних сборок — удалить; в своей больше cacheMax записей — оставить свежие */
+  /* корзины прежней схемы (по сборке) этого места — удалить; в своей больше cacheMax записей — оставить свежие */
   async function clean() {
     const c = await open(); if (!c) return 0;
     let n = 0;
     try {
-      for (const name of thumbCachesStale(await caches.keys(), thumbScope(), build())) if (await caches.delete(name)) n++;
+      for (const name of thumbCachesStale(await caches.keys(), thumbScope())) if (await caches.delete(name)) n++;
       for (const r of thumbCacheTrim(await c.keys())) if (await c.delete(r)) n++;
     } catch (e) {}
     return n;
@@ -109,9 +121,9 @@ function galleryTheme() {
   if (t === 'light' || t === 'dark') return t;
   try { return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch (e) { return 'light'; }
 }
-/* упражнение миниатюры: инвентарь места, как у SVG-миниатюры (то, чего нет в месте, — из полного набора). Ключ — по
-   выбранному инвентарю (он и задаёт вариант и видимые детали), без расчёта позы: дёшево, чтобы не задерживать витрину;
-   сам вариант (catalogAnimFor) и видимые детали — уже при отрисовке. false — объёма у упражнения нет */
+/* упражнение миниатюры: инвентарь места, как у SVG-миниатюры (то, чего нет в месте, — из полного набора); он задаёт вариант
+   позы (catalogAnimFor) и видимые детали. Для ключа кадра считается сама показанная поза (одна поза, ≈0,6 мс) — в простое,
+   когда миниатюра подходит к экрану. false — объёма у упражнения нет */
 function galleryAnatBase(id) {
   const k = thumbKey(id);
   if (galleryAnat.base.has(k)) return galleryAnat.base.get(k);
@@ -120,15 +132,25 @@ function galleryAnatBase(id) {
     const ex = EXI[id];
     if (ex && ex.anim.catalogRig) {
       let E = effEquip(S.equip); if (!available(ex, E)) E = effEquip(EQUIP.map(e => e.id));
-      const equip = [...new Set(chosenEquip(ex, E))].sort().join(',') + '+' + (ex.opt || []).filter(x => E.has(x)).sort().join(','), t = thumbT(ex);
-      b = {id, ex, E, equip, t, index:t === 1 ? 1 : 0};
+      const t = thumbT(ex), index = t === 1 ? 1 : 0, has = propHas(ex, E), A = catalogAnimFor(ex.anim, has), R = A.catalogRig(t);
+      const bits = R.props.map(q => GymEquipment.visible(q, has) ? 1 : 0).join('');
+      b = {id, ex, E, has, A, bits, t, index, pose:thumbPoseHash(R, [A.catalogId, A.catalogVariant || '', bits, t, index]), level:thumbHash(JSON.stringify(anatomyLevel(ex)))};
     }
   } catch (e) { b = false; }
   galleryAnat.base.set(k, b);
   return b;
 }
-const galleryAnatKey = b => thumbCacheKey({build:window.PODHOD_BUILD || '', view:galleryAnat.view, theme:galleryAnat.theme, id:b.id, equip:b.equip, t:b.t, size:galleryAnat.size});
+const galleryAnatKey = b => thumbCacheKey({render:thumbRender(galleryAnat.view), view:galleryAnat.view, theme:galleryAnat.theme, pose:b.pose,
+  level:galleryAnat.view === 'anatomy' ? b.level : '', size:galleryAnat.size});
 const galleryAnatOn = () => galleryAnat.view !== 'mannequin' && galleryAnat.size > 0;
+/* миниатюре нужен SVG-манекен: кадров не будет (без WebGL, ошибка данных, телефон не успевает) или её кадр дважды не
+   нарисовался. Иначе, пока кадра нет, — заглушка цвета сцены */
+function galleryAnatWantsSvg(el) {
+  if (!galleryAnat.expect) return true;
+  const b = galleryAnat.base.get(thumbKey(el.dataset.thumb));
+  if (b === false) return true;
+  return !!b && galleryAnatOn() && galleryAnat.state.get(galleryAnatKey(b)) === 'fail';
+}
 /* показать готовый кадр в миниатюре: картинка поверх SVG (SVG скрыт; пока картинка не расшифрована — тёмный фон сцены) */
 function galleryAnatShow(el, key, e) {
   let img = el.querySelector('img.mv-anat');
@@ -136,7 +158,7 @@ function galleryAnatShow(el, key, e) {
   if (img.dataset.key !== key) { img.src = e.url; img.dataset.key = key; }
   el.classList.add('ready', 'anat'); e.seenAt = performance.now();
 }
-/* убрать кадр: снова SVG (если его ещё нет — построится в очереди витрины) */
+/* убрать кадр: снова заглушка (кадр будет перерисован) или SVG, если кадров не будет (его построит очередь витрины) */
 function galleryAnatHide(el) {
   const img = el.querySelector('img.mv-anat'); if (!img && !el.classList.contains('anat')) return;
   img?.remove(); el.classList.remove('anat');
@@ -270,7 +292,7 @@ function galleryAnatWork(deadline) {
     const n = galleryAnatNext(); if (!n) return;
     const {b} = n, layers = galleryAnat.view === 'anatomy' ? {skeleton:Skeleton.data, muscles:Muscles.data, level:anatomyLevel(b.ex)} : null;
     /* вариант упражнения и видимые детали — по инвентарю миниатюры (как у SVG-миниатюры и карточки) */
-    const has = propHas(b.ex, b.E), A = catalogAnimFor(b.ex.anim, has), bits = A.catalogRig(0).props.map(q => GymEquipment.visible(q, has) ? 1 : 0).join('');
+    const {has, A, bits} = b;
     const h = stage.figure({key:['thumb', A.catalogId, A.catalogVariant || '', bits].join('|'), still:true, fit:'body', color:muscleColor, muscles:false, stress:false,
       data:(t, index, coarse, lean) => catalogVolumeData(A, t, index, has, coarse, lean)});
     h.setLayers(galleryAnat.view === 'skin' ? null : Skeleton.data, layers); h.setLook({muscles:false, stress:false});
@@ -283,9 +305,12 @@ function galleryAnatWork(deadline) {
   } catch (e) {
     console.error('Миниатюра анатомии', job.id, e);
     job.h.forget(); galleryAnat.job = null;
-    /* вторая неудача — у этой миниатюры остаётся SVG */
+    /* вторая неудача — у этой миниатюры SVG */
     const n = (galleryAnat.fails.get(job.key) || 0) + 1; galleryAnat.fails.set(job.key, n);
     galleryAnat.state.set(job.key, n >= 2 ? 'fail' : 'miss');
+    if (n >= 2) { const el = galleryThumbEl(job.id); if (el) galleryNeedSvg(el); }
+    /* контекст WebGL не создался — рендерера нет: вся витрина — SVG */
+    if (!cardStage()) { galleryAnatApply(); return; }
   }
   const ms = performance.now() - t0; job.long = Math.max(job.long, ms); galleryAnat.stats.chunks++;
   globalThis.GymPerf?.thumb?.(ms);
@@ -319,16 +344,28 @@ function galleryAnatPaint(job) {
 }
 
 /* ---------- вид витрины: выбор человека, объёмная графика, данные, скорость ---------- */
+/* объёмная графика: рендерер есть ('ready'), volume.js ещё грузится, а WebGL в браузере есть ('pending'), её не будет ('none') */
+function galleryAnatGl() {
+  if (cardStage()) return 'ready';
+  if (window.GymVolume || galleryAnat.volumeFailed || typeof window.WebGL2RenderingContext === 'undefined') return 'none';
+  return 'pending';
+}
 function galleryAnatApply() {
   const box = $('#mv-gallery'); if (!box || !gallery.on) return;
-  const pref = figureView(), was = galleryAnat.view + galleryAnat.theme + galleryAnat.size;
-  const choice = thumbViewFor(pref, {able:!!cardStage() && (pref !== 'mannequin' || !!annySkinModule()), state:galleryAnatData(), slow:galleryAnat.pace.mode === 'svg', coarse:coarsePointer()});
-  Object.assign(galleryAnat, {view:choice.view, render:choice.render, note:choice.note, wait:choice.wait, theme:galleryTheme()});
+  const pref = figureView(), was = galleryAnat.view + galleryAnat.theme + galleryAnat.size, wasExpect = galleryAnat.expect, gl = galleryAnat.gl = galleryAnatGl();
+  const choice = thumbModeFor(pref, {gl, skin:!!annySkinModule(), state:galleryAnatData(), slow:galleryAnat.pace.mode === 'svg', coarse:coarsePointer()});
+  Object.assign(galleryAnat, {view:choice.view, render:choice.render, expect:choice.expect, note:choice.note, wait:choice.wait, theme:galleryTheme()});
+  box.classList.toggle('mv-gl', galleryAnat.expect);
+  /* volume.js не пришёл за volumeWaitMs после открытия витрины — как без WebGL */
+  clearTimeout(galleryAnat.volumeTimer);
+  if (gl === 'pending') galleryAnat.volumeTimer = setTimeout(() => { if (!window.GymVolume) { galleryAnat.volumeFailed = true; if (gallery.on) galleryAnatApply(); } }, GALLERY_THUMBS.volumeWaitMs);
   const first = box.querySelector('.mv-thumb');
   galleryAnat.size = galleryAnat.view === 'mannequin' ? 0 : thumbCanvasSize(first ? first.getBoundingClientRect().width : 0, window.devicePixelRatio);
   const note = box.querySelector('.mv-gnote'); if (note) { if (note.textContent !== galleryAnat.note) note.textContent = galleryAnat.note; note.hidden = !galleryAnat.note; }
   if (choice.wait) galleryAnatLoad();
   if (was !== galleryAnat.view + galleryAnat.theme + galleryAnat.size || !galleryAnatOn()) for (const el of box.querySelectorAll('.mv-thumb[data-thumb]')) galleryAnatSync(el);
+  /* кадров больше не будет (откат по скорости, ошибка данных, нет WebGL) — заглушкам у экрана нужен SVG */
+  if (wasExpect && !galleryAnat.expect) for (const el of box.querySelectorAll('.mv-thumb[data-thumb]:not(.ready)')) galleryNeedSvg(el);
   if (galleryAnatOn()) { galleryAnatWatch(box); galleryAnatKick(); }
   if (!galleryAnat.cleaned && ThumbStore.on) { galleryAnat.cleaned = true; setTimeout(() => galleryIdle(() => ThumbStore.clean()), 3000); }
 }
