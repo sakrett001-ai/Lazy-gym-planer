@@ -11,6 +11,8 @@
      (до 1 см) и наклон ладони к поверхности; при заявленном контакте ладони — до заявленной детали;
    * контакт областью кисти на свободном снаряде (гантель, гиря, диск, мяч) — каждый в список «посмотреть глазами»;
    * снаряд двумя руками (mount 'hands') — обе кисти на нём: центр хвата или ладони у оси ручки;
+   * гиря в одной руке: шар висит под рукоятью, идёт по линии руки (мах) или лежит на тыле предплечья («рэк», над головой,
+     жим лёжа) — не в руке и не в теле, не на ладонной стороне предплечья и не над рукоятью без опоры;
    * трос, лента, канат у кисти: угол каната или полотенца к оси кулака, глубина оси троса в кисти (ладонь и пальцы) и в
      предплечье — валидатор вокруг центра хвата (9 см) трос не проверяет.
    Варианты инвентаря: has не задан — весь необязательный инвентарь «есть», «без» — has: () => false; при нескольких
@@ -33,7 +35,8 @@ const LIM = {
   cupAxis: 7,        // см: центр ладони под гантелью дальше от оси рукояти — у края диска (радиус 7,5)
   ropeAngle: 35,     // °: канат/полотенце поперёк кулака
   cableHand: .5,     // см: ось троса в кисти глубже (ладонь, пальцы — кроме отверстия кулака)
-  cableArm: .5       // см: ось троса в предплечье глубже
+  cableArm: .5,      // см: ось троса в предплечье глубже
+  bellBody: 1.0      // см: шар гири в кисти, руке, корпусе или голове глубже (мягкие ткани поджимаются на 0,3 — E.KB.press)
 };
 const GRIPPY = new Set(['grip', 'hook']);
 
@@ -148,6 +151,23 @@ function auditEntry(id, e, { samples = 41 } = {}) {
           else { prev.gapMin = Math.min(prev.gapMin, o.gap); prev.gapMax = Math.max(prev.gapMax, o.gap); }
         }
       }
+      /* гиря в одной руке: шар относительно кисти, предплечья, плеча и корпуса. Положение по кадру: «висит» (шар под рукоятью),
+         «по руке» (мах: шар на продолжении предплечья), «на предплечье» («рэк», над головой, жим лёжа: шар касается тыла
+         запястья и предплечья). Подозрительно: шар в руке или теле глубже LIM.bellBody; шар лежит на ладонной стороне
+         предплечья; шар выше рукояти без опоры на предплечье (гиря дном вверх сама не стоит) */
+      for (const p of props.filter(p => p.kind === 'kettlebell' && p.mount === 'hands')) {
+        const held = M.SIDES.filter(s => R.hands?.[s] === 'grip' && V.dist(R['grip' + s], p.grip) < 6);
+        if (held.length !== 1 || props.some(q => (q.id || '').startsWith(p.id + ':horn'))) continue;
+        const s = held[0], F = R.frames['hand' + s], g = s === 'L' ? 1 : -1, d = V.unit(V.sub(p.c, p.grip)), back = V.dot(d, V.scale(F.x, g));
+        const wr = R['wr' + s], kn = V.add(wr, F.y, -9), hand = segDist(p.c, wr, kn).d - 1.6 - p.radius;
+        const fa = M.limbSDF(R, 'fa', s, p.c) - p.radius, ua = M.limbSDF(R, 'ua', s, p.c) - p.radius, torso = M.torsoSDF(R, p.c, M.torsoCache(R)) - p.radius, head = V.dist(p.c, R.head) - 9 - p.radius;
+        const arm = V.unit(V.sub(wr, R['el' + s])), on = Math.min(fa, hand) < 1, pos = on ? 'на предплечье' : V.dot(d, arm) > .9 && d[1] < .9 ? 'по руке' : 'висит';
+        const r = row('kb' + p.id, { side: s, kind: 'гиря', bell: p.id, pos: new Set(), deep: -Infinity, palm: 0, up: 0 });
+        r.pos.add(pos);
+        for (const [what, v] of [['предплечье', -fa], ['кисть', -hand], ['плечо', -ua], ['корпус', -torso], ['голова', -head]]) if (v > r.deep) Object.assign(r, { deep: v, deepIn: what, deepT: t });
+        if (on && back < -.2) { r.palm++; r.palmT = t; }
+        if (!on && d[1] < -.3) { r.up++; r.upT = t; }
+      }
       /* снаряд двумя руками: гантель под ладонями (g2CupDumbbell) — ладони у оси рукояти */
       for (const p of props.filter(p => /:handle$/.test(p.id) && props.some(q => q.id === p.id.replace(/:handle$/, ':top') && q.mount === 'hands'))) {
         for (const s of M.SIDES) {
@@ -180,7 +200,7 @@ function auditEntry(id, e, { samples = 41 } = {}) {
         }
       }
     }
-    for (const r of Object.values(acc)) { r.flags = flagsOf(r); if (r.modes) r.modes = [...r.modes].join(','); if (r.contacts) r.contacts = [...r.contacts].join(' '); rows.push(r); }
+    for (const r of Object.values(acc)) { if (r.pos) r.pos = [...r.pos].join(', '); r.flags = flagsOf(r); if (r.modes) r.modes = [...r.modes].join(','); if (r.contacts) r.contacts = [...r.contacts].join(' '); rows.push(r); }
   }
   return rows;
 }
@@ -195,6 +215,11 @@ function flagsOf(r) {
     if (d && d.byPalm && (d.gap > LIM.palmGap || d.touch < LIM.palmCover || d.tilt > LIM.palmTilt)) f.push(`ладонь на ${d.on}: зазор ${d.gap.toFixed(1)}, касание ${(d.touch * 100).toFixed(0)} %, наклон ${d.tilt.toFixed(0)}°`);
     if (d && !d.byPalm && d.any > LIM.handGap) f.push(`кисть над ${d.on}: зазор ${d.any.toFixed(1)}`);
     if (r.freeRegion) f.push('контакт областью кисти на свободном снаряде — глазами');
+  }
+  if (r.kind === 'гиря') {
+    if (r.deep > LIM.bellBody) f.push(`шар гири в ${r.deepIn} на ${r.deep.toFixed(1)} см (t=${r.deepT})`);
+    if (r.palm) f.push(`шар лежит на ладонной стороне предплечья (${r.palm} кадр., t=${r.palmT})`);
+    if (r.up) f.push(`шар выше рукояти без опоры на предплечье (${r.up} кадр., t=${r.upT})`);
   }
   if (r.kind === 'гантель в ладонях' && r.axis > LIM.cupAxis) f.push(`ладонь в ${r.axis.toFixed(1)} см от рукояти`);
   if (r.kind === 'трос') {
@@ -217,6 +242,7 @@ function describe(r) {
     return [r.modes, r.contacts || '—', r.handle ? `${r.handle}${r.declared ? '' : ' (не заявлен)'} ${f1(r.axis)} см @${r.axisT}` : '', r.angle != null ? `${f0(r.angle)}°` : '',
       p ? `${p.on}: ладонь ${f1(p.gap)} см (${f1(p.gapMin)}…${f1(p.gapMax)}), кисть ${f1(p.any)}, ${f0(p.touch * 100)} %, ${f0(p.tilt)}° @${p.t}` : ''].join(' | ');
   }
+  if (r.kind === 'гиря') return `${r.bell}: ${r.pos} | ближе всего ${r.deepIn}: ${f1(-r.deep)} см @${r.deepT}`;
   if (r.kind === 'трос') return [r.cable, r.angle != null ? `угол ${f0(r.angle)}° @${r.angleT}` : '', `ось в кисти ${f1(r.hand)} @${r.handT}`, `ось в предплечье ${f1(r.arm)} @${r.armT}`].join(' | ');
   return `${r.handle}: ладонь у оси ${f1(r.axis)} см @${r.axisT}`;
 }

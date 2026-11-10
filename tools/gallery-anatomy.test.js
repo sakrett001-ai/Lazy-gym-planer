@@ -64,7 +64,7 @@ test('memory: above the limit the longest-unseen compressed frames go, never the
   assert.deepEqual(plain(R.thumbsToDrop(list, 1200)), ['a', 'c'], '2000 байт → 1200: две самые давние, кроме той, что у экрана');
   assert.deepEqual(plain(R.thumbsToDrop(list, 5000)), []);
   assert.deepEqual(plain(R.thumbsToDrop(list.map(x => ({ ...x, near: true })), 100)), [], 'у экрана — не отпускаются');
-  assert.equal(G.memory, 3 << 20); assert(G.memory / 12e3 > 151, 'в 3 МБ помещается вся витрина (по ≈12 КБ на кадр)');
+  assert.equal(G.memory, 3 << 20); assert(G.memory / 12e3 > 158, 'в 3 МБ помещается вся витрина (по ≈12 КБ на кадр)');
 });
 
 test('queue: visible tiles first, then the nearest from the top; on a slow phone — visible only', () => {
