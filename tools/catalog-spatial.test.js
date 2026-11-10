@@ -1,7 +1,7 @@
 const{test}=require('node:test'),assert=require('node:assert/strict');
 const{loadModel}=require('./biomechanics-audit'),{auditCatalog}=require('./catalog-audit');
 const model=loadModel(),api=model.get('({catalogVolumeData,muscleFrame})');
-test('every catalog motion has a continuous spatial skeleton, five cameras and complete region coverage',()=>{const r=auditCatalog(model);assert.deepEqual(r.failures,[]);assert.equal(r.stats.poses,151*101);assert.equal(r.stats.cameraPoses,151*101*5);}); /* 151: +5 на приводящие и манжету */
+test('every catalog motion has a continuous spatial skeleton, five cameras and complete region coverage',()=>{const r=auditCatalog(model);assert.deepEqual(r.failures,[]);assert.equal(r.stats.poses,158*101);assert.equal(r.stats.cameraPoses,158*101*5);}); /* 158: +5 на приводящие и манжету */
 test('negative: a bone changed only in the new catalog model is detected',()=>{
  const ex=model.EX.find(e=>e.id==='kbswing'),anim={...ex.anim,catalogRig:t=>{const R=ex.anim.catalogRig(t);if(t>.35&&t<.41)R.wrL[1]+=5;return R;}};
  const r=auditCatalog({...model,EX:[{...ex,anim}]});assert(r.failures.some(f=>f.rule==='bone:elL-wrL'));
@@ -22,7 +22,7 @@ test('kettlebell swings keep both palms on one shared handle with fixed arm leng
  for(let i=0;i<=100;i++){
   const R=ex.anim.catalogRig(i/100),kb=R.props.find(p=>p.kind==='kettlebell');assert(kb&&kb.handleAxis,'kettlebell with a handle');
   /* ручка гири: отрезок вдоль handleAxis над центром шара; обе кисти на ней, ладони по разные стороны от середины */
-  const up=kb.grip.map((v,k)=>v-kb.c[k]),n=Math.hypot(...up),u=up.map(v=>v/n),ax=kb.handleAxis,k=kb.radius/10.5,a=kb.c.map((v,j)=>v+ax[j]*-5*k+u[j]*15.6*k),b=kb.c.map((v,j)=>v+ax[j]*5*k+u[j]*15.6*k);
+  const up=kb.grip.map((v,k)=>v-kb.c[k]),n=Math.hypot(...up),u=up.map(v=>v/n),ax=kb.handleAxis,k=kb.radius/10.5,a=kb.c.map((v,j)=>v+ax[j]*-5*k+u[j]*kb.handleUp),b=kb.c.map((v,j)=>v+ax[j]*5*k+u[j]*kb.handleUp);
   for(const side of ['L','R'])assert(seg(R['grip'+side],a,b)<2.6,'kbswing:'+side+' at '+i/100+' holds the handle');
   assert(Math.hypot(...R.gripL.map((v,j)=>v-R.gripR[j]))>4,'two palms side by side, not merged');
   for(const side of ['L','R'])assert(Math.abs(Math.hypot(...R['sh'+side].map((v,j)=>v-R['el'+side][j]))-M.B.ua)<1e-6&&Math.abs(Math.hypot(...R['el'+side].map((v,j)=>v-R['wr'+side][j]))-M.B.fa)<1e-6);

@@ -277,6 +277,65 @@ function walkLeg(C, q, s, t) {
   q[s].mtp = A0.m * (1 - smooth01(u / .3));
 }
 
+/* ---------- Гиря ---------- */
+/* Наклон с отведением таза (как в махах): u = 0 — замах (наклон ~60°), u = 1 — тело прямое; стопы шире плеч */
+function kbHinge(C, u) {
+  const { M } = C, q = C.base(), k = Math.min(1, u * 1.2), lean = C.lerp(60, -2, Math.min(1, u * 1.15));
+  pelvisLean(C, q, [0, C.lerp(78.9, 87.8, k), C.lerp(-25, 0, k)], lean * .9);
+  q.lumbar = [lean * .03, 0, 0]; q.thoracic = [lean * .05, 0, 0]; q.neck = [C.lerp(-16, 0, u), 0, 0];
+  for (const s of S) plant(C, q, s, [M.SIGN[s] * 24.5, 0, -2], { toeOut: 20 });
+  return q;
+}
+/* «Рэк» (стойка с гирей у груди) — углами руки: плечо опущено, локоть у рёбер чуть впереди корпуса (сгибание 5°,
+   отведение 6°), плечо повёрнуто внутрь на 18° — кулак перед ключицей, локоть согнут на 140°, предплечье близко к вертикали, запястье
+   прямое; большой палец смотрит назад к ключице, тыл кисти — наружу-вперёд: туда ложится шар (BIND.kettlebell, rest).
+   Запястье прямое, локоть у рёбер, гиря на предплечье — техника — по общим положениям школ StrongFirst и RKC (пересказ: страницы школ по этому упражнению при подготовке не открывались). */
+const KB_RACK = { shoulder: [5, 6, -18], elbow: 140, pron: 0 };
+function kbRack(q, s) { armAngles(q, s, KB_RACK.shoulder, KB_RACK.elbow, KB_RACK.pron); return q; }
+/* точка кулака, большой палец и локоть «рэка» при этом корпусе — цели для взятия на грудь и жима */
+function kbRackAt(C, q, s) {
+  const k = kbRack(C.M.clone(q), s), f = C.fk(k);
+  return { g: f.P['grip' + s], thumb: C.M.M3.col(f.F['hand' + s].R, 2), pole: C.V.unit(C.V.sub(f.P['el' + s], C.V.mix(f.P['gh' + s], f.P['wr' + s], .5))) };
+}
+/* рука в замахе одной рукой (как в kbswing1 при t = 0): углы плеча, локтя, пронации и запястья */
+const kbSwingStart = C => {
+  const { V } = C, q = kbHinge(C, 0); q.L.girdle = [-4, 8];
+  const T = C.axes(q, 'thorax'), f = C.fk(q), ph = -25 * C.D2R, lat = C.lat(q, 'L');
+  holdDir(C, q, 'L', V.add(V.add(f.P.ghL, [0, -Math.cos(ph), Math.sin(ph)], 60.8), lat, -15), V.unit(V.add(lat, T.y, -.8)), V.scale(lat, -1), { signed: true });
+  return { shoulder: [...q.L.shoulder], elbow: q.L.elbow, pron: q.L.pron, wrist: [...q.L.wrist] };
+};
+/* Становая с гирей: наклон lean, таз отведён на hz; высота таза подбирается так, чтобы руки дотянулись до рукояти H */
+function kbdlBody(C, lean, hz, H) {
+  const { V, M } = C;
+  const at = hy => {
+    const q = C.base(); pelvisLean(C, q, [0, hy, hz], lean * .9);
+    q.lumbar = [lean * .04, 0, 0]; q.thoracic = [lean * .06, 0, 0]; q.neck = [-lean * .38, 0, 0];
+    for (const s of S) { plant(C, q, s, [M.SIGN[s] * 21, 0, -2], { toeOut: 15 }); q[s].girdle = [-2, 6]; }
+    return q;
+  };
+  const reach = q => { const f = C.fk(q), lat = C.lat(q, 'L'); return V.dist(f.P.ghL, V.add(H, lat, 4.4)); };
+  const hy = C.solve1D(hy => { try { return reach(at(hy)) - 63; } catch (err) { return 30; } }, 40, 92), q = at(hy), T = C.axes(q, 'thorax');
+  for (const s of S) { const lat = C.lat(q, s); C.grip(q, s, V.add(H, lat, 4.4), V.scale(lat, -1), V.unit(V.add(V.add(lat, T.y, -.6), T.z, -.8))); }
+  return q;
+}
+const KBDL = once(() => {
+  const C = ctx([{ type: 'kettlebell', id: 'kb', hands: ['L', 'R'] }]), { V } = C, KB = require('../../../src/js/09bn-equipment.js').KB;
+  /* гиря на полу: ось рукояти — на высоте гири без радиуса рукояти; стоя — рукоять перед бёдрами */
+  const H0 = [0, KB.r * .94 + KB.handle, 5], lean0 = 58, hz0 = -24;
+  return { H0, H1: [0, 77.5, 25], lean0, hz0 };
+});
+/* свободная ладонь на бедре над коленом (опора в наклоне): центр ладони — на передней поверхности бедра в 70 % его длины */
+function handOnThigh(C, q, s, at = .7) {
+  const { V } = C, f = C.fk(q), hip = f.P['hip' + s], kn = f.P['kn' + s], ax = V.unit(V.sub(kn, hip)), A = V.add(hip, ax, C.M.B.th * at);
+  const up = V.unit(V.perp([0, 1, .35], ax));
+  let best = null, bv = -Infinity;
+  for (const p of C.region(q, 'th' + s)) { const d = V.sub(p, A); if (Math.abs(V.dot(d, ax)) > 2.2) continue; const v = V.dot(V.unit(V.perp(d, ax)), up); if (v > bv) { bv = v; best = p; } }
+  const n = V.unit(V.perp(V.sub(best, A), ax)), lat = C.lat(q, s);
+  const poles = [[1, .5, -.4], [1, .2, -.8], [.6, .8, -.3], [1, 0, 0]].map(([a, b, c]) => V.unit(V.add(V.add(V.scale(lat, a), [0, 1, 0], b), [0, 0, 1], c)));
+  palmBest(C, q, s, V.add(best, n, .2), n, fan(C, n, ax, 15), poles);
+  return q;
+}
+
 module.exports = {
 
   /* Разгибание руки с гантелью в наклоне (левая рука): правые колено и ладонь на скамье, левая стопа на полу,
@@ -597,9 +656,8 @@ module.exports = {
   kbswing: {
     keys: [0, .15, .3, .45, .6, .75, .9, 1],
     dynamic: true,
-    /* рукоять в кулаках: у гири двумя руками шар висит на drop + 2 см ниже хватов, рукоять — на 15,6 см выше центра шара;
-       drop 13,6 ставит ось рукояти в центры хватов (прежде, при drop 15, рукоять шла на 1,4 см ниже — под пальцами) */
-    equipment: [{ type: 'kettlebell', id: 'kb', hands: ['L', 'R'], hang: 'arm', drop: 13.6 }],
+    /* рукоять в кулаках: ось рукояти — в центрах хватов, шар — на KB.handle (16,6 см) от неё по линии рук */
+    equipment: [{ type: 'kettlebell', id: 'kb', hands: ['L', 'R'], hang: 'arm' }],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'kb' }, { body: 'gripR', prop: 'kb' }],
     gripRadius: { L: 1.7, R: 1.7 },
     pose(t, C) {
@@ -615,6 +673,157 @@ module.exports = {
         const lat = C.lat(q, s), pole = V.unit(V.add(lat, T.y, -.8));
         C.grip(q, s, V.add(H, lat, 4.4), V.scale(lat, -1), pole);
       }
+      return q;
+    }
+  },
+
+  /* ---------- Гиря: этап 1 ---------- */
+  /* Становая тяга с гирей: гиря стоит на полу между стоп (под серединой стопы), хват двумя руками за рукоять.
+     t=0 — таз отведён назад, спина нейтральна, голени почти вертикальны, плечи над гирей; t=1 — тело прямое, гиря
+     у бёдер на прямых руках. Гиря между стоп на линии лодыжек, наклон от таза, плечи выше таза, таз
+     выше коленей — техника — по общим положениям школ StrongFirst и RKC (пересказ: страницы школ по этому упражнению при подготовке не открывались); мышцы — Escamilla и др., 2002 (ЭМГ становой тяги). */
+  kbdeadlift: {
+    keys: [0, .2, .4, .6, .8, 1],
+    equipment: [{ type: 'kettlebell', id: 'kb', hands: ['L', 'R'] }],
+    contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'kb' }, { body: 'gripR', prop: 'kb' }],
+    gripRadius: { L: 1.7, R: 1.7 },
+    pose(t, C) {
+      const { V, M } = C, e = C.ease(t), L = KBDL(), H = V.mix(L.H0, L.H1, e);
+      return kbdlBody(C, C.lerp(L.lean0, 2, e), C.lerp(L.hz0, 0, e), H);
+    }
+  },
+
+  /* Махи гирей одной рукой (левой): как махи двумя руками, кисть хватом сверху посередине рукояти; свободная рука
+     идёт рядом с рабочей («guard»), плечи не разворачиваются. dynamic: мах — равновесие не проверяется.
+     Плечи развёрнуты ровно, свободная рука повторяет путь рабочей — техника — по общим положениям школ StrongFirst и RKC (пересказ: страницы школ по этому упражнению при подготовке не открывались);
+     мах — NSCA «Two-Arm Kettlebell Swing»; мышцы корпуса в махах одной рукой — Andersen и др., 2019 (ЭМГ). */
+  kbswing1: {
+    keys: [0, .15, .3, .45, .6, .75, .9, 1],
+    dynamic: true,
+    equipment: [{ type: 'kettlebell', id: 'kb', hands: ['L'], hang: 'arm' }],
+    contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'kb' }],
+    gripRadius: { L: 1.7, R: 1.7 },
+    pose(t, C) {
+      const { V } = C, e = C.ease(t), u = Math.pow(e, .75), q = kbHinge(C, u);
+      for (const s of S) q[s].girdle = [C.lerp(-4, 4, e), C.lerp(8, 12, e)];
+      const T = C.axes(q, 'thorax'), f = C.fk(q), ph = C.lerp(-25, 88, e) * C.D2R, lat = C.lat(q, 'L');
+      const H = V.add(V.add(f.P.ghL, [0, -Math.cos(ph), Math.sin(ph)], 60.8), lat, -C.lerp(15, 9, e));
+      /* кисть продолжает предплечье (одна рука на рукояти — запястье прямое), хват сверху: большой палец к середине */
+      holdDir(C, q, 'L', H, V.unit(V.add(lat, T.y, -.8)), V.scale(lat, -1), { signed: true });
+      /* свободная рука: назад у бедра в замахе, вперёд-в сторону наверху */
+      armAngles(q, 'R', [C.lerp(-28, 34, e), C.lerp(14, 22, e), 0], C.lerp(14, 22, e), 20, [0, 0], 'relaxed');
+      return q;
+    }
+  },
+
+  /* Взятие гири на грудь одной рукой (левой): из замаха между ног — в стойку «рэк». t=0 — замах (как в махах);
+     до середины — мах на прямой руке до уровня пояса; дальше локоть сгибается и остаётся у корпуса, кисть «обходит»
+     гирю, гиря идёт вплотную к телу; t=1 — «рэк»: кулак под подбородком у ключицы, предплечье почти вертикально,
+     локоть у рёбер, запястье прямое, шар лежит на тыле предплечья. dynamic: баллистика.
+     Локоть у рёбер, гиря не ударяет по предплечью — кисть проходит вокруг неё; в стойке запястье прямое, локоть прижат —
+     техника — по общим положениям школ StrongFirst и RKC (пересказ: страницы школ по этому упражнению при подготовке не открывались). */
+  kbclean: {
+    keys: [0, .15, .3, .45, .6, .75, .9, 1],
+    dynamic: true,
+    equipment: [{ type: 'kettlebell', id: 'kb', hands: ['L'], hang: 'swing', rest: true }],
+    contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'kb' }],
+    gripRadius: { L: 1.7, R: 1.7 },
+    pose(t, C) {
+      const { V } = C, e = C.ease(t), u = Math.pow(e, .75), q = kbHinge(C, Math.min(1, u * 1.25));
+      q.L.girdle = [C.lerp(-4, 0, e), C.lerp(8, 2, e)]; q.R.girdle = [0, 4];
+      /* рука — углами: от замаха (обратная кинематика при t = 0) к «рэку». Плечо уходит к корпусу в первой половине (мах
+         до пояса), локоть сгибается во второй, предплечье разворачивается из хвата сверху в нейтральный между ними —
+         к горизонтальному предплечью ладонь уже смотрит к середине, и гиря под рукоятью оказывается у тыла кисти */
+      const A0 = kbSwingStart(C), sm = (a, b) => { const w = Math.max(0, Math.min(1, (e - a) / (b - a))); return w * w * (3 - 2 * w); };
+      const ws = sm(0, .7), we = sm(.25, 1), wp = sm(.2, .65), mix3 = (a, b, w) => a.map((v, i) => C.lerp(v, b[i], w));
+      const sh = mix3(A0.shoulder, KB_RACK.shoulder, ws); sh[1] += 6 * Math.sin(Math.PI * we); sh[0] += 16 * Math.sin(Math.PI * ws); /* мах выносит гирю перед бёдрами; локоть при сгибании чуть отходит от рёбер — шар проходит мимо корпуса */
+      armAngles(q, 'L', sh, C.lerp(A0.elbow, KB_RACK.elbow, we), C.lerp(A0.pron, KB_RACK.pron, wp), mix3(A0.wrist, [0, 0], wp));
+      armAngles(q, 'R', [C.lerp(-28, 6, e), C.lerp(14, 16, e), 0], C.lerp(14, 12, e), 20, [0, 0], 'relaxed');
+      return q;
+    }
+  },
+
+  /* Жим гири стоя одной рукой (левой) из «рэка». t=0 — «рэк»; t=1 — рука выпрямлена над плечом, ладонь вперёд, шар
+     на тыле предплечья, запястье прямое, бицепс у уха. Предплечье всю дорогу вертикально, локоть под кистью; корпус
+     не отклоняется. Вертикальное предплечье, колени и таз выключены, плечо опущено, всё тело
+     напряжено — StrongFirst «Test Your Kettlebell Military Press» (напряжение всего тела, особенно свободной стороны) и
+     техника — по общим положениям школ StrongFirst и RKC (пересказ: страницы школ по этому упражнению при подготовке не открывались); мышцы — Saeterbakken и Fimland, 2013 (ЭМГ жимов стоя). */
+  kbpress: {
+    keys: [0, .2, .4, .6, .8, 1],
+    equipment: [{ type: 'kettlebell', id: 'kb', hands: ['L'], rest: true }],
+    contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'kb' }],
+    gripRadius: { L: 1.7, R: 1.7 },
+    pose(t, C) {
+      const { V } = C, e = C.ease(t), q = C.base();
+      pelvisLean(C, q, [0, 88.6, 0], 1); q.neck = [0, 0, 0];
+      const feet = q => { for (const s of S) plant(C, q, s, [C.M.SIGN[s] * 12, 0, -2], { toeOut: 10 }); };
+      const arms = q => {
+        C.rhythm(q, 'L', [0, 0]);
+        const T = C.axes(q, 'thorax'), f = C.fk(q), lat = C.lat(q, 'L'), fwd = V.unit(V.perp(T.z, [0, 1, 0])), K = kbRackAt(C, q, 'L'), P1 = K.g;
+        relaxArm(q, 'R', [2, 12, 0], 12);
+        if (e <= 0) return kbRack(q, 'L');
+        const top = V.add(V.add(V.add(f.P.ghL, [0, 1, 0], 63), lat, 2), fwd, 1);
+        /* середина жима: плечо горизонтально в плоскости лопатки (≈ 40° впереди фронтальной), предплечье вертикально над локтем */
+        const mid = V.add(V.add(V.add(f.P.ghL, lat, 19), fwd, 15), [0, 1, 0], 33);
+        const g = V.add(V.add(V.scale(P1, (1 - e) * (1 - 2 * e)), mid, 4 * e * (1 - e)), top, e * (2 * e - 1));
+        const thumb = arc(C, K.thumb, V.scale(lat, -1), Math.min(1, e * 1.4));
+        const pole = V.unit(V.mix(K.pole, V.add(V.add([0, -1, 0], lat, .6), fwd, .8), e * e));
+        holdDir(C, q, 'L', g, pole, thumb, { signed: true });
+      };
+      settle(C, q, { lo: 2, hi: 8, loads: loadsIn(C, ['L'], KB_KG), resolve: q => { feet(q); arms(q); } });
+      return q;
+    }
+  },
+
+  /* Фронтальный присед с гирей в «рэке» (одна гиря, левая рука). t=0 — стоя, гиря в «рэке»; t=1 — присед до бёдер
+     ниже параллели, корпус почти вертикален, локоть не опирается на колено, пятки на полу; свободная рука вытянута
+     в сторону-вперёд для равновесия. Стойка с гирей у груди сохраняется весь присед, локоть не расходится
+     в сторону, колени по носкам — техника — по общим положениям школ StrongFirst и RKC (пересказ: страницы школ по этому упражнению при подготовке не открывались); мышцы — Gullett и др., 2009. Одна гиря — исходный вариант (гиря у человека чаще
+     одна); две гири в «рэке» — следующий шаг. */
+  kbfrontsquat: {
+    keys: [0, .25, .5, .75, 1],
+    equipment: [{ type: 'kettlebell', id: 'kb', hands: ['L'], rest: true }],
+    contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'kb' }],
+    gripRadius: { L: 1.7, R: 1.7 },
+    pose(t, C) {
+      const { V, M } = C, q = C.base(), e = C.ease(t), lean = C.lerp(2, 36, e);
+      pelvisLean(C, q, [0, C.lerp(88.4, 49.7, e), C.lerp(0, -20, e)], lean * .8);
+      q.lumbar = [lean * .1, 0, 0]; q.thoracic = [lean * .1, 0, 0]; q.neck = [-lean * .35, 0, 0];
+      const feet = q => { for (const s of S) plant(C, q, s, [M.SIGN[s] * 16, 0, -2], { toeOut: 14 }); };
+      const arms = q => {
+        q.L.girdle = [0, 2];
+        kbRack(q, 'L');
+        armAngles(q, 'R', [C.lerp(6, 62, e), C.lerp(14, 38, e), 0], 14, 30, [0, 0], 'relaxed');
+      };
+      settle(C, q, { lo: C.lerp(1, -6.5, Math.min(1, e * 2)), hi: C.lerp(4, -3.5, Math.min(1, e * 2)), loads: loadsIn(C, ['L'], KB_KG), resolve: q => { feet(q); arms(q); } });
+      return q;
+    }
+  },
+
+  /* Тяга гири в наклоне одной рукой (левой), без скамьи: стопы на ширине плеч, таз отведён назад, корпус наклонён
+     примерно на 50°, спина нейтральна, свободная ладонь опирается на бедро над коленом. t=0 — рука с гирей выпрямлена
+     под плечом, лопатка отпущена; t=1 — локоть вдоль корпуса назад, кисть у нижних рёбер, лопатка сведена; корпус
+     не разворачивается. Опора свободной рукой, локоть вдоль корпуса, тяга к поясу — как в тяге гантели
+     одной рукой каталога (dbrow); мышцы корпуса и нагрузка на поясницу в тягах — Fenwick и др., 2009. */
+  kbrow: {
+    keys: [0, .25, .5, .75, 1],
+    equipment: [{ type: 'kettlebell', id: 'kb', hands: ['L'] }],
+    contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'kb' }],
+    gripRadius: { L: 1.7, R: 1.7 },
+    pose(t, C) {
+      const { V, M } = C, e = C.ease(t), q = C.base(), lean = 50;
+      pelvisLean(C, q, [0, 77, -2], lean * .92);
+      q.lumbar = [lean * .03, 0, 0]; q.thoracic = [lean * .05, 0, 0]; q.neck = [-22, 0, 0];
+      /* разножка: правая стопа впереди (колено согнуто, на бедре — ладонь), левая позади — под рабочим плечом свободно */
+      const feet = q => { plant(C, q, 'R', [-13, 0, 24], { toeOut: 4 }); plant(C, q, 'L', [15, 0, -30], { toeOut: 18, heel: 8 }); };
+      const arms = q => {
+        q.L.girdle = [C.lerp(-2, 0, e), C.lerp(14, -12, e)]; q.R.girdle = [0, 4];
+        const T = C.axes(q, 'thorax'), f = C.fk(q), lat = C.lat(q, 'L'), fwd = V.unit(V.perp(T.z, [0, 1, 0]));
+        const bot = V.add(f.P.ghL, [0, -1, 0], 62.6), top = V.add(V.add(V.add(f.P.ghL, T.y, -23), T.z, 11), lat, 4);
+        holdDir(C, q, 'L', V.mix(bot, top, e), V.unit(V.add(V.add(V.scale(T.z, -1), T.y, -.3), lat, .15)), fwd, { signed: true });
+        handOnThigh(C, q, 'R');
+      };
+      settle(C, q, { lo: -6, hi: 14, loads: loadsIn(C, ['L'], KB_KG), resolve: q => { feet(q); arms(q); } });
       return q;
     }
   },

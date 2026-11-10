@@ -135,7 +135,7 @@ function buildSpatialFigure(anim,opts={}){
   else if(s.kind==='kettlebell'&&s.handleAxis){
    const q=project(s.c);queue('circle',{cx:f1(q[0]),cy:f1(q[1]),r:f1(s.radius),fill:TONE3.plate,'data-prop':'kettlebell'},[s.c]);
    const up=V3.unit(V3.sub(s.grip,s.c)),ax=V3.unit(s.handleAxis),P=(x,y)=>V3.add(V3.add(s.c,ax,x*s.radius/10.5),up,y*s.radius/10.5);
-   const pts=[P(-7.2,6.5),P(-9,12),P(-5,15.6),P(5,15.6),P(9,12),P(7.2,6.5)].map(project);
+   const hu=(s.handleUp??15.6*s.radius/10.5)/s.radius*10.5,pts=[P(-7.2,6.5),P(-9,hu-3.6),P(-5,hu),P(5,hu),P(9,hu-3.6),P(7.2,6.5)].map(project);
    queue('path',{d:'M'+pts.map(p=>f1(p[0])+','+f1(p[1])).join('L'),fill:'none',stroke:TONE3.plate,'stroke-width':3.2,'stroke-linejoin':'round','data-prop':'kettlebell'},[s.grip],.5);
   }
   else throw Error('Unknown spatial equipment kind: '+s.kind);

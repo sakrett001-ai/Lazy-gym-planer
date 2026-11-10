@@ -1,5 +1,12 @@
 const SOURCES_BY_EX = {
   kbswing:[['Мах гирей — NSCA','https://www.nsca.com/education/articles/kinetic-select/two-arm-kettlebell-swing/']],
+  kbdeadlift:[['Мышцы в становой тяге: ЭМГ — Escamilla и др., 2002','https://pubmed.ncbi.nlm.nih.gov/11932579/'],['Наклон от таза с гирей — NSCA','https://www.nsca.com/education/articles/kinetic-select/two-arm-kettlebell-swing/']],
+  kbswing1:[['Мах гирей — NSCA','https://www.nsca.com/education/articles/kinetic-select/two-arm-kettlebell-swing/'],['Мышцы корпуса в махах одной и двумя руками: ЭМГ — Andersen и др., 2019','https://doi.org/10.1055/a-0869-7228'],['Махи гирей и здоровье спины (по данным S. McGill) — StrongFirst','https://www.strongfirst.com/optimizing-back-health-with-the-kettlebell-swing/']],
+  kbclean:[['Мах гирей — NSCA','https://www.nsca.com/education/articles/kinetic-select/two-arm-kettlebell-swing/'],['Взятие на грудь и жим гири: техника — StrongFirst','https://www.strongfirst.com/test-your-kettlebell-military-press/'],['Махи гирей и здоровье спины (по данным S. McGill) — StrongFirst','https://www.strongfirst.com/optimizing-back-health-with-the-kettlebell-swing/']],
+  kbpress:[['Жим гири стоя: техника — StrongFirst','https://www.strongfirst.com/test-your-kettlebell-military-press/'],['Жимы над головой стоя и сидя, штанга и гантели: ЭМГ — Saeterbakken и Fimland, 2013','https://pubmed.ncbi.nlm.nih.gov/23096062/']],
+  kbfrontsquat:[['Фронтальные и обычные приседания: биомеханика и ЭМГ — Gullett и др., 2009','https://pubmed.ncbi.nlm.nih.gov/19002072/']],
+  kbrow:[['Тяги в наклоне и к поясу: мышцы корпуса и нагрузка на поясницу — Fenwick и др., 2009','https://pubmed.ncbi.nlm.nih.gov/19197209/']],
+  kbfloorpress:[['Мышцы в жиме лёжа — исследование','https://pubmed.ncbi.nlm.nih.gov/25799093/']],
   cablerow:[['Горизонтальная тяга — ACE','https://www.acefitness.org/resources/everyone/exercise-library/48/seated-row/']],
   cablerowwide:[['Горизонтальная тяга — ACE','https://www.acefitness.org/resources/everyone/exercise-library/48/seated-row/'],['Узкий и широкий хват в горизонтальной тяге — Padovan и др., 2025','https://jhk.termedia.pl/High-Density-Surface-Electromyography-Excitation-of-Prime-Movers-in-the-Narrow-vs,209550,0,2.html']],
   pushup:[['Отжимания — ACE','https://www.acefitness.org/resources/everyone/exercise-library/41/push-up/']],
@@ -43,6 +50,13 @@ const MOTION_FOCUS={
  deadlift:{setup:'Снаряд близко к ногам, руки прямые.',control:'Разгибайте таз и колени согласованно, сохраняйте снаряд близко к телу.'},
  rdl:{setup:'Снаряд в прямых руках, колени немного согнуты.',control:'Отводите таз назад; глубину ограничивает контроль спины.'},
  kbswing:{setup:'Стопы устойчивы, руки удерживают гирю.',control:'Разгибание таза задаёт мах; локти остаются разогнутыми.'},
+ kbdeadlift:{setup:'Гиря между стоп на линии лодыжек, руки прямые, спина прямая.',control:'Разгибайте таз и колени согласованно; гиря идёт вдоль ног.'},
+ kbswing1:{setup:'Стопы устойчивы, гиря в одной руке хватом сверху.',control:'Разгибание таза задаёт мах; плечи остаются развёрнутыми ровно.'},
+ kbclean:{setup:'Замах между ног, как в махах одной рукой.',control:'Локоть у рёбер, кисть обходит гирю; в стойке запястье прямое.'},
+ kbpress:{setup:'Гиря у груди: запястье прямое, локоть у рёбер, шар на тыле предплечья.',control:'Предплечье вертикально весь жим; корпус и таз неподвижны.'},
+ kbfrontsquat:{setup:'Гиря у груди на одной руке, свободная рука в стороне для равновесия.',control:'Таз и колени сгибаются вместе; корпус не наклоняется к гире.'},
+ kbrow:{setup:'Наклон от таза в шаге, свободная ладонь на бедре, гиря под плечом.',control:'Локоть движется к тазу; корпус не разворачивается.'},
+ kbfloorpress:{setup:'Лёжа на спине, плечо на полу под 45° к корпусу, предплечье вертикально.',control:'Запястье прямое; локоть касается пола мягко, без удара.'},
  plank:{setup:'Предплечья и носки образуют опору.',control:'Сохраняйте положение таза и грудной клетки, продолжайте дышать.'},
  latraise:{setup:'Гантели у бёдер, локти слегка согнуты.',control:'Руки движутся по дуге; корпус сохраняет положение.'}
 };

@@ -36,7 +36,7 @@ const LOWER_CHEST=new Set(['declinebb','dip','assistdip']);
      (OpenStax A&P 2e, 11.4: наклон корпуса в сторону — косые своей стороны);
    - «дровосек» сверху вниз: корпус поворачивается вправо — наружная косая левой стороны и внутренняя правой (Gray's
      Anatomy; OpenStax A&P 2e, 11.4: наружная косая поворачивает корпус в противоположную сторону, внутренняя — в свою). */
-const CATALOG_LATERALITY={dbrow:{upper:'L'},cablelat:{upper:'R'},concentration:{upper:'L'},kickback:{upper:'L'},archer:{upper:'R'},bulgarian:{lower:'L'},stepup:{lower:'L'},lunge:{lower:'L'},revlunge:{lower:'L'},sidelunge:{lower:'R'},pistolbox:{lower:'L'},sllift:{lower:'L'},glutebridge1:{lower:'L'},glutekick:{lower:'L'},cablekickback:{lower:'L'},calf1:{lower:'L'},cableadduct:{lower:'L'},cableextrot:{upper:'R'},bandextrot:{upper:'R'},
+const CATALOG_LATERALITY={dbrow:{upper:'L'},kbswing1:{upper:'L'},kbclean:{upper:'L'},kbpress:{upper:'L'},kbrow:{upper:'L'},kbfloorpress:{upper:'L'},cablelat:{upper:'R'},concentration:{upper:'L'},kickback:{upper:'L'},archer:{upper:'R'},bulgarian:{lower:'L'},stepup:{lower:'L'},lunge:{lower:'L'},revlunge:{lower:'L'},sidelunge:{lower:'R'},pistolbox:{lower:'L'},sllift:{lower:'L'},glutebridge1:{lower:'L'},glutekick:{lower:'L'},cablekickback:{lower:'L'},calf1:{lower:'L'},cableadduct:{lower:'L'},cableextrot:{upper:'R'},bandextrot:{upper:'R'},
  copenhagen:{lower:'L'},copenhagenknee:{lower:'L'},sidebend:{regions:{obl_ext:'L',obl_int:'L'}},cablewood:{regions:{obl_ext:'L',obl_int:'R'}}};
 function catalogSideValues(profile,values){
  const sides={L:{...values},R:{...values}},lower=new Set(['quads','hams','calves','glutes','adductors','hipflex']),lat=profile.laterality||{};
@@ -49,7 +49,7 @@ function catalogSideValues(profile,values){
 }
 /* Учебные акценты частей мышц (этап А аудита анатомии 4.53.0: цвет по фазам против длины мышц — tools/muscles/phase.js,
    проверка — tools/muscle-phase.test.js): доля значения группы у области в упражнении; без записи — 1. */
-const SQUAT_LIKE=new Set('squat goblet airsquat smithsquat hacksquat legpress legpresshigh legpresslow lunge revlunge bulgarian stepup pistolbox sidelunge wallsit jumpsquat thruster'.split(' '));
+const SQUAT_LIKE=new Set('squat goblet airsquat smithsquat hacksquat legpress legpresshigh legpresslow lunge revlunge bulgarian stepup pistolbox sidelunge wallsit jumpsquat thruster kbfrontsquat'.split(' '));
 const PULL_DOWN=new Set(['latpull','latpullv','latpulluh','assistpull','pullup','chinup']);
 const EXT_ROT=new Set(['cableextrot','bandextrot']);
 const REGION_FACTORS={

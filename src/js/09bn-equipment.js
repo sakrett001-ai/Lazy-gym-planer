@@ -324,14 +324,52 @@ BIND.cable=(e,R)=>{
  out.unshift({kind:'cyl',c:pulley,axis:ax,r:wr,len:2.4,tone:'chrome',role:'frame',id:id+':wheel',mount:e.mountTo||'floor'});
  return out;
 };
-/* Гиря: рукоять на хвате (одна или две руки), шар висит по гравитации или по линии рук */
+/* Гиря — по соревновательной (размеры одинаковы при любом весе): шар ⌀ 21 см, высота 28,2 см, рукоять ⌀ 33–35 мм,
+   плоское основание ⌀ 14 см. Источники: Rogue Competition Kettlebells, Product Guide — «11.1" (282MM) height», «8.19" (208MM)
+   bell width», «Standardized 33MM handle diameter», «5.5" (140MM) base diameter», «the exact same exterior dimensions across
+   the entire weight range (8KG to 48KG)»; Titan Fitness Competition Kettlebell — 290 мм, ⌀ 210 мм, рукоять 35 мм. Вес
+   по умолчанию 16 кг — стартовая гиря мужчины (по P. Tsatsouline, «Enter the Kettlebell!», 2006 — по памяти, книга
+   при подготовке не открывалась). Ось рукояти — на KB.handle над центром шара: дно на 0,94·r ниже центра, высота 28,2 см, рукоять
+   r 1,7. Прежде ось стояла на 15,6 см (гиря 27,2 см высотой — на сантиметр ниже настоящей).
+   Рукоять лежит в кулаке по его оси (z кисти; двумя руками — по линии хватов), шар — на KB.handle от оси рукояти поперёк неё:
+   * hang 'gravity' (по умолчанию) — шар висит под рукоятью;
+   * hang 'arm' — шар на продолжении предплечья (мах: гирю тянет по линии руки центробежная сила);
+   * hang 'swing' — взятие на грудь и рывок: пока рука прямая, шар на её продолжении (мах); по мере сгибания локтя
+     (25…70°) гирю подтягивают к телу, и она повисает под рукоятью;
+   * rest: true — шар не может пройти сквозь руку: если свободное направление ведёт его в кисть, предплечье или плечо, он
+     поворачивается вокруг рукояти к тылу кисти и ложится на тыл запястья и предплечья («рэк», гиря над головой, жим лёжа:
+     так учат школы StrongFirst и RKC — пересказ, не цитата). Поджатие мягких тканей — 0,3 см. */
+const KB={r:10.5,handle:16.6,handleR:1.7,half:5,base:7,kg:16,press:.3};
 BIND.kettlebell=(e,R)=>{
- const hands=e.hands||['L'],grips=hands.map(s=>R['grip'+s]),g=V.mix(grips[0],grips[1]??grips[0],.5);
+ const hands=e.hands||['L'],grips=hands.map(s=>R['grip'+s]),g=V.mix(grips[0],grips[1]??grips[0],.5),k=(e.r||KB.r)/KB.r,r=KB.r*k,H=e.drop??KB.handle*k;
  const axis=hands.length>1?V.unit(V.sub(grips[0],grips[1])):V.unit(R.frames['hand'+hands[0]].z);
- let down=[0,1,0];if(e.hang==='arm'){const s=hands[0];down=V.unit(V.sub(R['wr'+s],R['el'+s]));}
+ let down=[0,1,0];
+ if(e.hang==='arm'||e.hang==='swing'){
+  const s=hands[0],arm=V.unit(V.sub(R['wr'+s],R['el'+s]));
+  if(e.hang==='arm')down=arm;
+  else{ /* по сгибанию локтя: прямая рука — мах (0…25°), согнутая (от 70°) — гиря висит */
+   const el=Math.acos(Math.max(-1,Math.min(1,V.dot(V.unit(V.sub(R['el'+s],R['sh'+s])),arm))))/D2R,u=Math.max(0,Math.min(1,(el-25)/45)),w=u*u*(3-2*u);
+   down=V.unit(V.add(V.scale(arm,1-w),[0,1,0],w));
+  }
+ }
+ /* рукоять почти вдоль свободного направления (кулак «стоймя»): шар заваливается к тылу кисти — со стороны ладони
+    его не пускают пальцы и основание ладони */
+ if(e.rest&&hands.length===1){const p=V.perp(down,axis),n=V.len(p);if(n<.6){const s=hands[0];down=V.add(p,ortho(V.scale(R.frames['hand'+s].x,M.SIGN[s]),axis),.6-n);}}
  down=ortho(down,axis);
- const r=e.r||10.5,c=V.add(g,down,(e.drop||15)+(hands.length>1?2:0));
- return[{kind:'kettlebell',c,grip:g,axis,handleAxis:axis,radius:r,role:'free',tone:'plate',free:true,id:e.id||'kb',mount:'hands'}];
+ if(e.rest&&hands.length===1){
+  const s=hands[0],F=R.frames['hand'+s],back=V.scale(F.x,M.SIGN[s]),wr=R['wr'+s],kn=V.add(wr,F.y,-9);
+  const seg=p=>{const ab=V.sub(kn,wr),t=Math.max(0,Math.min(1,V.dot(V.sub(p,wr),ab)/V.dot(ab,ab)));return V.dist(p,V.add(wr,ab,t))-1.6;};
+  const clear=d=>{const c=V.add(g,d,H);return Math.min(seg(c),M.limbSDF(R,'fa',s,c),M.limbSDF(R,'ua',s,c))-r+KB.press;};
+  if(clear(down)<0){
+   /* поворот вокруг рукояти от свободного направления к тылу кисти — до касания */
+   const b=ortho(back,axis),sg=V.dot(V.cross(down,b),axis)>=0?1:-1,w=V.scale(V.cross(axis,down),sg);
+   const at=a=>V.add(V.scale(down,Math.cos(a*D2R)),w,Math.sin(a*D2R));
+   let lo=0,hi=0;for(let a=3;a<=240;a+=3)if(clear(at(a))>=0){hi=a;lo=a-3;break;}
+   if(hi){for(let i=0;i<14;i++){const m=(lo+hi)/2;if(clear(at(m))>=0)hi=m;else lo=m;}down=at(hi);}
+  }
+ }
+ const c=V.add(g,down,H);
+ return[{kind:'kettlebell',c,grip:g,axis,handleAxis:axis,radius:r,handleUp:H,role:'free',tone:'plate',free:true,id:e.id||'kb',mount:'hands'}];
 };
 /* Ролик для пресса: колесо Ø18 × 5 см между хватами, ось-рукоять постоянной длины (2·half, по умолчанию 32 см) по центру
    между кистями. Колесо катится без проскальзывания: поворот вокруг оси × радиус = путь центра по полу, поэтому на боковинах
@@ -422,6 +460,6 @@ function rig(entry){
   return R;
  };
 }
-return{TYPES,BIND,Builder,build,anchors,rig,PLATES,padFrame,barbellPart,dumbbellPart,bodyPoint,ortho,visible,variantOf,variantEntry,ankleCuff,stirrup,bandHandle,BAND_HANDLE,clearOfForearm};
+return{TYPES,BIND,Builder,build,anchors,rig,PLATES,padFrame,barbellPart,dumbbellPart,bodyPoint,ortho,visible,variantOf,variantEntry,ankleCuff,stirrup,bandHandle,BAND_HANDLE,clearOfForearm,KB};
 })(typeof Mannequin!=='undefined'?Mannequin:require('./09bm-mannequin.js'));
 if(typeof module!=='undefined'&&module.exports){module.exports=GymEquipment;const fs=require('fs'),path=require('path');for(const f of fs.readdirSync(__dirname).filter(f=>/^09bo.*\.js$/.test(f)).sort()){try{require(path.join(__dirname,f));}catch(e){console.error('Инвентарь '+f+': '+e.message);}}}

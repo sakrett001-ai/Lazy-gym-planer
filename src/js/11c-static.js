@@ -13,7 +13,7 @@ const STATIC = {
 /* где медленная неполная амплитуда не имеет смысла или опасна при утомлении:
    кардио, удержания, прыжки, махи гирей, тяги с пола и наклоны со штангой (поясница), подтягивания на весе тела
    (30–40 с без расслабления почти никому не по силам), уступающие сгибания, ролик, пистолет */
-const STATIC_SKIP = new Set(['kbswing', 'deadlift', 'goodmorning', 'pullup', 'chinup', 'nordic', 'rollout', 'pistolbox']);
+const STATIC_SKIP = new Set(['kbswing', 'kbswing1', 'kbclean', 'kbdeadlift', 'deadlift', 'goodmorning', 'pullup', 'chinup', 'nordic', 'rollout', 'pistolbox']);
 function staticOk(ex) {
   if (ex.g === 'cardio' || ex.kind || ex.anim.hold || ex.anim.loop || STATIC_SKIP.has(ex.id)) return false;
   return !['jump', 'burpee', 'climb'].includes(PATTERN[ex.id]);

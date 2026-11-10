@@ -99,3 +99,27 @@ test('concentration curl: the free palm rests on the right thigh above the knee'
     assert(n[1] > .8, `t=${t}: palm faces down onto the thigh`);
   }
 });
+
+test('kettlebell in one hand: the bell hangs, flies along the arm or rests on the back of the forearm — never through the arm', () => {
+  const { auditEntry } = require('./mannequin/holds-audit.js');
+  const bell = (id, e = POSES[id]) => auditEntry(id, e, { samples: N }).filter(r => r.kind === 'гиря');
+  const want = { kbswing1: 'висит, по руке', kbclean: 'висит, по руке, на предплечье', kbpress: 'на предплечье', kbfrontsquat: 'на предплечье', kbrow: 'висит, по руке', kbfloorpress: 'на предплечье' };
+  for (const [id, pos] of Object.entries(want)) {
+    const rows = bell(id);
+    assert.equal(rows.length, 1, id + ': one kettlebell row');
+    assert.deepEqual(rows[0].flags, [], id);
+    assert.deepEqual(rows[0].pos.split(', ').sort(), pos.split(', ').sort(), id + ': bell positions');
+    assert.deepEqual(bad(POSES[id]), [], id + ': validator');
+  }
+  /* farmer's walk with kettlebells: both bells hang */
+  assert.deepEqual(auditEntry('farmer', POSES.farmer, { samples: N }).filter(r => r.kind === 'гиря').map(r => [r.pos, r.flags.length]), [['висит', 0], ['висит', 0]]);
+  /* the audit catches what it must: without the rest on the forearm the bell of the rack hangs through the arm;
+     a bell flying «along the arm» of a pressing arm stands above the handle with no support */
+  const swap = (id, o) => ({ ...POSES[id], equipment: POSES[id].equipment.map(q => q.type === 'kettlebell' ? { ...q, ...o } : q) });
+  assert(bell('kbfrontsquat', swap('kbfrontsquat', { rest: false }))[0].flags.some(f => /шар гири в (предплечье|кисть|плечо)/.test(f)), 'bell through the forearm');
+  assert(bell('kbpress', swap('kbpress', { rest: false, hang: 'arm' }))[0].flags.some(f => /выше рукояти без опоры/.test(f)), 'bell above the handle');
+  /* the handle sits on the bell at the height of a competition kettlebell: 28.2 cm tall, Ø 21 */
+  const kb = EQ.rig(POSES.kbdeadlift)(0).props.find(p => p.kind === 'kettlebell');
+  assert(Math.abs(kb.handleUp + EQ.KB.handleR + .94 * kb.radius - 28.2) < .05 && kb.radius === 10.5);
+  assert(Math.abs(M.FLOOR - kb.c[1] - .94 * kb.radius) < .3, 'the bell of the deadlift stands on the floor at the start');
+});

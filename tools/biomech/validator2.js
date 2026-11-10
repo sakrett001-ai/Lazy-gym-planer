@@ -127,7 +127,7 @@ function collider(s) {
   else if (s.kind === 'cable') { c.cable = true; c.pts = s.pts; c.r = s.r; c.ptR = s.r; c.sdf = p => Math.min(...s.pts.slice(1).map((b, i) => sdCapsule(p, s.pts[i], b, s.r))); }
   else if (s.kind === 'barbell' || s.kind === 'dumbbell') return compound(s, c);
   else if (s.kind === 'kettlebell' && s.handleAxis) {
-    const ax = V.unit(s.handleAxis), up = V.unit(V.sub(s.grip, s.c)), k = s.radius / 10.5, a = V.add(V.add(s.c, ax, -5 * k), up, 15.6 * k), b = V.add(V.add(s.c, ax, 5 * k), up, 15.6 * k);
+    const ax = V.unit(s.handleAxis), up = V.unit(V.sub(s.grip, s.c)), k = s.radius / 10.5, hu = s.handleUp ?? 15.6 * k, a = V.add(V.add(s.c, ax, -5 * k), up, hu), b = V.add(V.add(s.c, ax, 5 * k), up, hu);
     return [{ ...c, free: true, part: 'bell', r: s.radius, sdf: p => V.dist(p, s.c) - s.radius * .97, pts: cylPoints(s.c, up, s.radius * .9, s.radius * .5).concat([V.add(s.c, up, -s.radius)]) },
       { ...c, free: true, part: 'handle', grip: true, r: 1.7, ptR: 1.7, axis: [a, b], sdf: p => sdCapsule(p, a, b, 1.7), pts: linspace(a, b, 2) }];
   }
