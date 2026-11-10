@@ -780,14 +780,18 @@ module.exports = {
      в сторону-вперёд для равновесия. Стойка с гирей у груди сохраняется весь присед, локоть не расходится
      в сторону, колени по носкам — техника — по общим положениям школ StrongFirst и RKC (пересказ: страницы школ по этому упражнению при подготовке не открывались); мышцы — Gullett и др., 2009. Одна гиря — исходный вариант (гиря у человека чаще
      одна); две гири в «рэке» — следующий шаг. */
+  /* Корпус внизу — 19° от вертикали (линия «таз — плечи»): во фронтальном приседе корпус вертикальнее, чем в приседе со
+     штангой на спине (Gullett и др., 2009). Центр масс с гирей — над серединой стопы (прежде — над пяткой, и корпус
+     наклонялся на 33°, чтобы его туда вернуть). Вертикальнее не выходит: при 14° голеностоп сгибается на 37° — больше
+     предела валидатора 36°, пятки оторвались бы. */
   kbfrontsquat: {
     keys: [0, .25, .5, .75, 1],
     equipment: [{ type: 'kettlebell', id: 'kb', hands: ['L'], rest: true }],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'kb' }],
     gripRadius: { L: 1.7, R: 1.7 },
     pose(t, C) {
-      const { V, M } = C, q = C.base(), e = C.ease(t), lean = C.lerp(2, +(process.env.FL ?? 20), e);
-      pelvisLean(C, q, [0, C.lerp(88.4, +(process.env.FH ?? 52), e), C.lerp(0, -20, e)], lean * .8);
+      const { V, M } = C, q = C.base(), e = C.ease(t), lean = C.lerp(2, 21, e);
+      pelvisLean(C, q, [0, C.lerp(88.4, 50, e), C.lerp(0, -20, e)], lean * .8);
       q.lumbar = [lean * .1, 0, 0]; q.thoracic = [lean * .1, 0, 0]; q.neck = [-lean * .35, 0, 0];
       const feet = q => { for (const s of S) plant(C, q, s, [M.SIGN[s] * 16, 0, -2], { toeOut: 14 }); };
       const arms = q => {
@@ -795,7 +799,7 @@ module.exports = {
         kbRack(q, 'L');
         armAngles(q, 'R', [C.lerp(6, 62, e), C.lerp(14, 38, e), 0], 14, 30, [0, 0], 'relaxed');
       };
-      settle(C, q, { lo: C.lerp(1, +(process.env.FZ ?? 0), Math.min(1, e * 2)), hi: C.lerp(4, +(process.env.FZ ?? 0) + 5, Math.min(1, e * 2)), loads: loadsIn(C, ['L'], KB_KG), resolve: q => { feet(q); arms(q); } });
+      settle(C, q, { lo: C.lerp(1, 0, Math.min(1, e * 2)), hi: C.lerp(4, 5, Math.min(1, e * 2)), loads: loadsIn(C, ['L'], KB_KG), resolve: q => { feet(q); arms(q); } });
       return q;
     }
   },
