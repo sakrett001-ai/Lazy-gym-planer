@@ -38,7 +38,7 @@ const STRESS_RULE = Object.fromEntries(STRESS_RULES.map(r => [r.id, r]));
 const STRESS_FRAMES = 40;
 const STRESS_CACHE = new Map();
 /* наклоны от таза, если таблица движений планировщика ещё не загружена (проверка рисунков без приложения) */
-const STRESS_HINGE = new Set(['deadlift', 'rdl', 'sllift', 'goodmorning', 'kbswing', 'hyper', 'pullthrough', 'kbdeadlift', 'kbswing1', 'kbclean']);
+const STRESS_HINGE = new Set(['deadlift', 'rdl', 'sllift', 'goodmorning', 'kbswing', 'hyper', 'pullthrough', 'kbdeadlift', 'kbswing1', 'kbclean', 'kbsnatch', 'kbsllift']);
 /* жимы вверх — так же, на случай проверки без таблицы движений */
 const STRESS_VPUSH = new Set(['dbpress', 'ohp', 'pikepush', 'arnold', 'declinepike', 'shoulderpressm', 'smithohp', 'kbpress']);
 
