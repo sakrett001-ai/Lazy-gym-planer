@@ -1145,8 +1145,10 @@ details.rule p { margin:6px 0 0; }
 .mv-thumb:not(.ready) { animation:mv-thumb-wait 1.4s ease-in-out infinite alternate; }
 .mv-thumb svg { display:block; width:100%; height:100%; }
 /* кадр «Анатомии» (13e-gallery-anatomy.js) — поверх SVG; пока картинка расшифровывается — тёмный фон сцены */
-.mv-thumb > img.mv-anat { position:absolute; inset:0; width:100%; height:100%; display:block; }
+.mv-thumb > img.mv-anat, .mv-thumb > canvas.mv-draft { position:absolute; inset:0; width:100%; height:100%; display:block; }
 .mv-thumb.anat { background:#0b1119; }
+/* кадр объёмной сцены будет (класс mv-gl ставит 13e-gallery-anatomy.js): до него — неподвижная заглушка цвета сцены, не SVG-манекен */
+.mv-gl .mv-thumb:not(.ready) { background:#0b1119; animation:none; }
 .mv-thumb.anat > svg { visibility:hidden; }
 .mv-gnote { margin:6px 0 0; font-size:13px; color:var(--muted); }
 .mv-tname { margin-top:4px; font-size:14px; font-weight:600; line-height:1.25; overflow-wrap:anywhere; }
