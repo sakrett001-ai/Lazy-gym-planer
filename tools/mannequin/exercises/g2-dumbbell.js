@@ -286,11 +286,11 @@ function kbHinge(C, u) {
   for (const s of S) plant(C, q, s, [M.SIGN[s] * 24.5, 0, -2], { toeOut: 20 });
   return q;
 }
-/* «Рэк» (стойка с гирей у груди) — углами руки: плечо опущено, локоть у рёбер чуть впереди корпуса (сгибание 8°,
-   отведение 6°), плечо повёрнуто внутрь на 40° — кулак перед грудиной под ключицами, локоть согнут на 132°, запястье
+/* «Рэк» (стойка с гирей у груди) — углами руки: плечо опущено, локоть у рёбер чуть впереди корпуса (сгибание 5°,
+   отведение 6°), плечо повёрнуто внутрь на 18° — кулак перед ключицей, локоть согнут на 140°, предплечье близко к вертикали, запястье
    прямое; большой палец смотрит назад к ключице, тыл кисти — наружу-вперёд: туда ложится шар (BIND.kettlebell, rest).
    StrongFirst: «wrist straight, forearm vertical, elbow tucked to the ribs, the bell rests on the forearm». */
-const KB_RACK = { shoulder: [8, 9, -34], elbow: 132, pron: 0 };
+const KB_RACK = { shoulder: [5, 6, -18], elbow: 140, pron: 0 };
 function kbRack(q, s) { armAngles(q, s, KB_RACK.shoulder, KB_RACK.elbow, KB_RACK.pron); return q; }
 /* точка кулака, большой палец и локоть «рэка» при этом корпусе — цели для взятия на грудь и жима */
 function kbRackAt(C, q, s) {
@@ -761,9 +761,11 @@ module.exports = {
         relaxArm(q, 'R', [2, 12, 0], 12);
         if (e <= 0) return kbRack(q, 'L');
         const top = V.add(V.add(V.add(f.P.ghL, [0, 1, 0], 63), lat, 2), fwd, 1);
-        const g = V.add(V.add(V.mix(P1, top, e), lat, 12 * Math.sin(Math.PI * Math.min(1, e * 1.3)) * (1 - e * .5)), fwd, 2 * Math.sin(Math.PI * e));
+        /* середина жима: плечо горизонтально в плоскости лопатки (≈ 40° впереди фронтальной), предплечье вертикально над локтем */
+        const mid = V.add(V.add(V.add(f.P.ghL, lat, 19), fwd, 15), [0, 1, 0], 33);
+        const g = V.add(V.add(V.scale(P1, (1 - e) * (1 - 2 * e)), mid, 4 * e * (1 - e)), top, e * (2 * e - 1));
         const thumb = arc(C, K.thumb, V.scale(lat, -1), Math.min(1, e * 1.4));
-        const pole = V.unit(V.mix(K.pole, V.add(V.add([0, -1, 0], lat, .6), fwd, .8), e));
+        const pole = V.unit(V.mix(K.pole, V.add(V.add([0, -1, 0], lat, .6), fwd, .8), e * e));
         holdDir(C, q, 'L', g, pole, thumb, { signed: true });
       };
       settle(C, q, { lo: 2, hi: 8, loads: loadsIn(C, ['L'], KB_KG), resolve: q => { feet(q); arms(q); } });
