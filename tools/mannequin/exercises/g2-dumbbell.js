@@ -322,9 +322,12 @@ function wmPose(C, e, poles) {
   return poles ? q : out.pole;
 }
 const WMP = once(() => { const C = ctx([{ type: 'kettlebell', id: 'kb', hands: ['L'], rest: true }]); return [0, .125, .25, .375, .5, .625, .75, .875, 1].map(e => wmPose(C, e, null)); });
-/* «мельница»: наклон таза, вынос вперёд, смещение таза, разворот груди; «гало»: круг вокруг головы */
-const WM = { lean: +(process.env.WL ?? 45), fwd: +(process.env.WF ?? 1), dx: +(process.env.WX ?? 10), y: +(process.env.WY ?? 80), yaw: +(process.env.WYAW ?? 15), rot: +(process.env.WR ?? 44), pl: +(process.env.WPL ?? .6), pf: +(process.env.WPF ?? .8), hz: +(process.env.WHZ ?? 22), top: +(process.env.WTOP ?? 62.6), tw: +(process.env.WTW ?? 60), tf: +(process.env.WTF ?? .2), keys: +(process.env.WK ?? 21), tf0: +(process.env.WT0 ?? .1), tl: +(process.env.WTL ?? .1), hl: +(process.env.WHL ?? 9) };
-const HALO = { rs: +(process.env.HS ?? 22), r0: +(process.env.H0 ?? 27), r1: +(process.env.H1 ?? 20), y0: +(process.env.HY0 ?? -12), y1: +(process.env.HY1 ?? -9), yaw: +(process.env.HW ?? 55), ys: +(process.env.HYS ?? 8), zb: +(process.env.HZB ?? 12), zw: +(process.env.HZW ?? 18), pu: +(process.env.HPU ?? .3), pf: +(process.env.HPF ?? -.2) };
+/* «мельница»: наклон таза (lean) в сторону носков, смещение таза назад от них (dx), высота таза, разворот таза (yaw) и груди
+   (rot); hz, hl — кисть свободной руки перед голенью и у бедра; top — длина руки с гирей, tw — ротация плеча; tf0, tl, tf —
+   рука с гирей отведена от вертикали вперёд и в сторону на 8° в начале и на 17° внизу: строго над плечом рука проходит
+   через положение «прямо вверх по оси корпуса», где углы плеча вырождаются и поза между ключами дёргается (замер
+   tools/kettlebell.test.js) */
+const WM = { lean: 45, fwd: 1, dx: 10, y: 80, yaw: 15, rot: 44, pl: .6, pf: .8, hz: 22, top: 62.6, tw: 60, tf: .2, keys: 21, tf0: .1, tl: .1, hl: 9 };
 /* ---------- Гиря ---------- */
 /* Наклон с отведением таза (как в махах): u = 0 — замах (наклон ~60°), u = 1 — тело прямое; стопы шире плеч */
 function kbHinge(C, u) {
@@ -896,7 +899,7 @@ module.exports = {
       q.R.girdle = [0, 4]; C.rhythm(q, 'L', [0, 0]);
       const T = C.axes(q, 'thorax'), f = C.fk(q), lat = C.lat(q, 'L'), fwd = V.unit(V.perp(T.z, [0, 1, 0])), gh = f.P.ghL;
       const dir = a => [0, -Math.cos(a * C.D2R), Math.sin(a * C.D2R)];
-      const P0 = V.add(V.add(gh, dir(-25), 59.8), lat, -12), Pa = V.add(V.add(gh, dir(38), 58), lat, -4);
+      const P0 = V.add(V.add(gh, dir(-25), 59.8), lat, -14), Pa = V.add(V.add(gh, dir(38), 58), lat, -8);
       const Pb = V.add(V.add(V.add(gh, lat, 7), fwd, 27), [0, 1, 0], 4), P1 = V.add(V.add(V.add(gh, [0, 1, 0], 63), lat, 2), fwd, 1);
       const g = spline(V, [P0, Pa, Pb, P1], [0, .42, .68, 1], e);
       const k = Math.max(0, Math.min(1, (e - .4) / .35)), w = k * k * (3 - 2 * k), k2 = Math.max(0, Math.min(1, (e - .7) / .3));
@@ -946,38 +949,6 @@ module.exports = {
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'kb' }],
     gripRadius: { L: 1.7, R: 1.7 },
     pose(t, C) { return wmPose(C, C.ease(t), WMP()); }
-  },
-
-  /* «Гало»: гиря дном вверх двумя руками за рога идёт по кругу вокруг головы. t=0 — перед грудью, шар у лица;
-     t=0,25 — у правого уха, гиря ложится набок; t=0,5 — за головой, шар внизу у верха спины, локти вверх; t=0,75 —
-     у левого уха; t=1 — снова перед грудью. Голова и корпус неподвижны, гиря идёт близко к голове. Цикл (loop). */
-  kbhalo: {
-    keys: Array.from({ length: 17 }, (_, i) => i / 16),
-    loop: true,
-    equipment: [{ type: 'g2KbHorns', id: 'kb', bottomUp: true }],
-    contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'kb:hornL' }, { body: 'gripR', prop: 'kb:hornR' }],
-    gripRadius: { L: 1.7, R: 1.7 },
-    pose(t, C) {
-      const { V, M } = C, q = C.base(), ph = 2 * Math.PI * (((t % 1) + 1) % 1), c = Math.cos(ph), sn = Math.sin(ph), back = (1 - c) / 2;
-      pelvisLean(C, q, [0, 88.6, 0], 1);
-      const feet = q => { for (const s of S) plant(C, q, s, [M.SIGN[s] * 13, 0, -2], { toeOut: 10 }); };
-      const arms = q => {
-        for (const s of S) q[s].girdle = [C.lerp(2, 14, back), C.lerp(6, 0, back)];
-        const f = C.fk(q), H = f.P.head, tau = Math.acos(c);
-        /* середина хватов: круг вокруг головы (сначала к правому уху), спереди — дальше и ниже, сзади — у основания шеи */
-        const Mid = [H[0] - HALO.rs * sn, H[1] + C.lerp(HALO.y0, HALO.y1, back) + HALO.ys * sn * sn, H[2] + C.lerp(HALO.r0, -HALO.r1, back)];
-        const u = [0, Math.cos(tau), -Math.sin(tau)], psi = HALO.yaw * C.D2R * sn, ax = [Math.cos(psi), 0, Math.sin(psi)];
-        for (const s of S) {
-          const g = M.SIGN[s], lat = [g, 0, 0], P = V.add(Mid, ax, g * 8.65);
-          /* локоть: кисть перед лицом — вниз и в сторону; кисть у уха и за головой — в сторону и чуть вверх (как руки за головой) */
-          const k = Math.max(0, Math.min(1, (H[2] + HALO.zb - P[2]) / HALO.zw)), w = k * k * (3 - 2 * k);
-          const pole = V.unit(V.mix(V.add([0, -1, 0], lat, .6), V.add(V.add(lat, [0, 1, 0], HALO.pu), [0, 0, 1], HALO.pf), w));
-          C.grip(q, s, P, u, pole);
-        }
-      };
-      settle(C, q, { lo: 2, hi: 8, loads: q => { const f = C.fk(q); return [[V.mix(f.P.gripL, f.P.gripR, .5), KB_KG]]; }, resolve: q => { feet(q); arms(q); } });
-      return q;
-    }
   },
 
   /* Подъём на носки стоя на степ-платформе: подушечки стоп у заднего края, пятки свисают.
