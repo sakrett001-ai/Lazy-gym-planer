@@ -302,7 +302,7 @@ function wmPose(C, e, poles) {
   const { V, M } = C, q = C.base(), a = C.lerp(0, WM.lean, e) * C.D2R, d = V.unit([-1, 0, WM.fwd]), yw = C.lerp(0, WM.yaw, e) * C.D2R;
   const up = [d[0] * Math.sin(a), Math.cos(a), d[2] * Math.sin(a)], fw = V.unit(V.perp([-Math.sin(yw), 0, Math.cos(yw)], up));
   C.root(q, [C.lerp(0, -d[0] * WM.dx, e), C.lerp(88.2, WM.y, e), C.lerp(0, -d[2] * WM.dx, e)], up, fw);
-  q.lumbar = [0, 0, C.lerp(0, WM.rot * .25, e)]; q.thoracic = [0, 0, C.lerp(0, WM.rot * .75, e)]; q.neck = [C.lerp(0, -18, e), 0, C.lerp(0, 55, e)];
+  q.lumbar = [0, 0, C.lerp(0, WM.rot * .25, e)]; q.thoracic = [0, 0, C.lerp(0, WM.rot * .75, e)]; q.neck = [C.lerp(0, 0, e), 0, C.lerp(0, 20, e)];
   const toe = V.unit([-1, 0, 1]), out = {};
   const feet = q => { for (const s of S) plant(C, q, s, [M.SIGN[s] * 22, 0, -2], { fwd: toe, pole: V.unit([-.6, 0, 1]) }); };
   const arms = q => {
