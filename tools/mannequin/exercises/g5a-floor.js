@@ -659,7 +659,44 @@ function cphFull(lever) {
 const CPH_LONG = once(() => cphFull('long')), CPH_SHORT = once(() => cphFull('short'));
 const cphMat = L => ({ type: 'mat', id: 'mat', len: 200, width: 70, at: [7, 0, Math.round(L.A[2] / 2)] });
 
+/* жим гири лёжа: наклон плеча к коврику в нижней точке (подбирается один раз) и разворот кисти — ладонь к стопам и к середине */
+let KBFP_DROP = null;
+const KBFP_PRON = 35;
+const arcDir = (V, a, b, t) => { const d = Math.max(-1, Math.min(1, V.dot(a, b))), th = Math.acos(d); if (th < 1e-4) return a; const s = Math.sin(th); return V.add(V.scale(a, Math.sin((1 - t) * th) / s), b, Math.sin(t * th) / s); };
+
 module.exports = {
+
+  /* Жим гири лёжа на полу одной рукой (левой). Лёжа на спине, колени согнуты, стопы на коврике. t=0 — плечо (трицепс)
+     лежит на коврике под 45° к корпусу, предплечье вертикально, кулак над локтем, шар на тыле предплечья; t=1 — рука
+     выпрямлена над плечом, запястье прямое. Свободная рука — ладонью на коврике. Пол ограничивает амплитуду: локоть
+     не уходит ниже корпуса. Источники: StrongFirst «The Floor Press» (плечо под 45°, предплечье вертикально, пауза
+     на полу, запястье прямое); ACE «Kettlebell Floor Press». */
+  kbfloorpress: {
+    keys: [0, .25, .5, .75, 1],
+    equipment: [...SUP_MAT, { type: 'kettlebell', id: 'kb', hands: ['L'], rest: true }],
+    contacts: [{ body: 'buttocks', prop: 'mat' }, { body: 'back', prop: 'mat' }, { body: 'soleL', prop: 'mat' }, { body: 'soleR', prop: 'mat' }, { body: 'gripL', prop: 'kb' },
+      { body: 'uaL', prop: 'mat', when: [0, .04] }],
+    gripRadius: { L: 1.7, R: 1.7 },
+    pose(t, C) {
+      const { V, M } = C, e = C.ease(t), q = supine(C, { tilt: 2, lumbar: 2, thoracic: 0, neck: 0 });
+      for (const s of S) { q[s].hip = [50, 8, 4]; q[s].knee = 95; }
+      lieOn(C, q, 'back', [0, -10]); C.neckTo(q, 'headBack', [0, MAT, 0], [0, 1, 0], -.3);
+      feetFlatAtKnee(C, q, 100);
+      q.L.girdle = [0, C.lerp(-8, 6, e)]; q.R.girdle = [0, -4];
+      palmBesideHip(C, q, 'R', palmsAlongBody(C, q).R);
+      /* локоть внизу — на коврике под 45° к корпусу; подбирается высота, при которой плечо лежит на коврике */
+      const f = C.fk(q), gh = f.P.ghL, a = 45 * C.D2R, lat = C.latP(q, 'L'), out = V.unit(V.add(V.scale(lat, Math.sin(a)), [0, 0, -1], Math.cos(a)));
+      const armAt = (drop, e) => {
+        const d0 = V.unit(V.add(out, [0, -1, 0], drop)), d = arcDir(V, d0, [0, 1, 0], e), el = V.add(gh, d, M.B.ua * (1 - .0));
+        const g = V.add(V.add(gh, d, M.B.ua), [0, 1, 0], C.lerp(34.2, 35.2, e));
+        C.hold(q, 'L', g, V.unit(V.add(out, [0, -1, 0], .2)), { pron: KBFP_PRON, allowShort: e > .97 });
+        return el;
+      };
+      const low = d => { armAt(d, 0); return Math.min(...C.region(q, 'uaL').map(p => p[1])) - MAT + .6; };
+      armAt(KBFP_DROP ?? (KBFP_DROP = C.solve1D(low, .6, -.2)), e);
+      return q;
+    }
+  },
   /* Скручивания: лёжа на спине, колени согнуты, стопы на коврике, кисти за головой, локти в стороны (голову не тянуть).
      t=0 — лопатки на коврике, t=1 — лопатки оторваны сгибанием грудного отдела, поясница прижата. */
   crunch: {

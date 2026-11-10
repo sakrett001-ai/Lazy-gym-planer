@@ -41,9 +41,9 @@ export function createPropNode(parent,s,mats,mesh){
  }else if(s.kind==='kettlebell'){
   /* шар Ø21, плоское дно, П-образная рукоять: локальные оси — x вдоль рукояти, y вверх к рукояти */
   const ball=mesh(g,new THREE.SphereGeometry(1,24,16),mats.plate,'bell');ball.scale.set(1,.94,1);
-  const pts=[[-7.2,6.5],[-9.2,11],[-8.4,14.6],[-5,15.6],[5,15.6],[8.4,14.6],[9.2,11],[7.2,6.5]].map(([x,y])=>new THREE.Vector3(x/10.5,y/10.5,0));
+  const hu=(s.handleUp??15.6*(s.radius||10.5)/10.5)/(s.radius||10.5)*10.5,pts=[[-7.2,6.5],[-9.2,hu-4.6],[-8.4,hu-1],[-5,hu],[5,hu],[8.4,hu-1],[9.2,hu-4.6],[7.2,6.5]].map(([x,y])=>new THREE.Vector3(x/10.5,y/10.5,0));
   mesh(g,new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),40,.16,10,false),mats.plate,'handle');
-  const base=mesh(g,new THREE.CylinderGeometry(.62,.62,.06,24),mats.plate,'base');base.position.set(0,-.92,0);
+  const base=mesh(g,new THREE.CylinderGeometry(.667,.667,.06,24),mats.plate,'base');base.position.set(0,-.92,0);
  }else if(s.kind==='dumbbell'){
   mesh(g,new THREE.CylinderGeometry(1,1,1,14),mats.chrome,'handle');
   for(const sign of [-1,1]){mesh(g,new THREE.CylinderGeometry(1,1,1,6),mats.plate,'head').userData.sign=sign;mesh(g,new THREE.CylinderGeometry(1,1,1,14),mats.chrome,'inner').userData.sign=sign;}

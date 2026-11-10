@@ -22,7 +22,7 @@ test('kettlebell swings keep both palms on one shared handle with fixed arm leng
  for(let i=0;i<=100;i++){
   const R=ex.anim.catalogRig(i/100),kb=R.props.find(p=>p.kind==='kettlebell');assert(kb&&kb.handleAxis,'kettlebell with a handle');
   /* ручка гири: отрезок вдоль handleAxis над центром шара; обе кисти на ней, ладони по разные стороны от середины */
-  const up=kb.grip.map((v,k)=>v-kb.c[k]),n=Math.hypot(...up),u=up.map(v=>v/n),ax=kb.handleAxis,k=kb.radius/10.5,a=kb.c.map((v,j)=>v+ax[j]*-5*k+u[j]*15.6*k),b=kb.c.map((v,j)=>v+ax[j]*5*k+u[j]*15.6*k);
+  const up=kb.grip.map((v,k)=>v-kb.c[k]),n=Math.hypot(...up),u=up.map(v=>v/n),ax=kb.handleAxis,k=kb.radius/10.5,a=kb.c.map((v,j)=>v+ax[j]*-5*k+u[j]*kb.handleUp),b=kb.c.map((v,j)=>v+ax[j]*5*k+u[j]*kb.handleUp);
   for(const side of ['L','R'])assert(seg(R['grip'+side],a,b)<2.6,'kbswing:'+side+' at '+i/100+' holds the handle');
   assert(Math.hypot(...R.gripL.map((v,j)=>v-R.gripR[j]))>4,'two palms side by side, not merged');
   for(const side of ['L','R'])assert(Math.abs(Math.hypot(...R['sh'+side].map((v,j)=>v-R['el'+side][j]))-M.B.ua)<1e-6&&Math.abs(Math.hypot(...R['el'+side].map((v,j)=>v-R['wr'+side][j]))-M.B.fa)<1e-6);
