@@ -47,12 +47,25 @@ test('anny.bin was built from the current tools, Anny parameters and neutral sta
   assert.notEqual(IN.stanceHash(shifted), inputs.stance);
 });
 /* полная пересборка — только где есть пакет anny (pip install --break-system-packages anny; torch с PyPI) */
+const ANNY_BUILD_CPU_S = 300, ANNY_BUILD_WALL_MS = 3600000;
 const python = (() => { try { cp.execFileSync('python3', ['-c', 'import anny, torch, trimesh, scipy'], { stdio: 'ignore', cwd: os.tmpdir() }); return true; } catch (e) { return false; } })();
 test('anny.bin rebuilds byte for byte from tools/anny-look (Python stage + pack.js)', { skip: !python && 'нет пакета anny/torch: пересборка не проверяется (данные проверены выше)' }, () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'anny-')), json = path.join(tmp, 'anny.json'), bin = path.join(tmp, 'anny.bin');
   try {
     cp.execFileSync('node', [path.join(root, 'tools/anny-look/export.js'), '--out', path.join(tmp, 'mannequin.json')], { cwd: root, stdio: 'ignore' });
-    cp.execFileSync('python3', [path.join(root, 'tools/anny-look/build.py'), '--out', json, '--mannequin', path.join(tmp, 'mannequin.json')], { cwd: root, stdio: 'ignore', timeout: 600000 });
+    /* Предел — время процессора сборки, а не время на часах. Сборка детерминирована и однопоточна: ≈25 с процессора на
+       свободной машине и столько же под нагрузкой (замеры 4.85.0: 22,5–25,3 с; файл байт в байт тот же при 1 и 4 потоках
+       и при 6 занятых процессах). Время на часах растёт с нагрузкой контейнера (6 занятых процессов на 2 ядрах — 183–221 с,
+       12 — больше 600 с), и прежний предел 600 с на часах обрывал исправную сборку (ETIMEDOUT). Предел процессора —
+       RLIMIT_CPU 300 с (в 12 раз больше нужного): зациклившаяся сборка по-прежнему обрывается. Часы — только страховка от
+       зависания без работы процессора, с запасом на нагрузку. */
+    const build = [path.join(root, 'tools/anny-look/build.py'), '--out', json, '--mannequin', path.join(tmp, 'mannequin.json')];
+    const limited = `import resource, runpy, sys
+try: resource.setrlimit(resource.RLIMIT_CPU, (${ANNY_BUILD_CPU_S}, ${ANNY_BUILD_CPU_S}))
+except (ValueError, OSError): pass
+sys.argv = ${JSON.stringify(build)}; sys.path.insert(0, ${JSON.stringify(path.join(root, 'tools/anny-look'))})
+runpy.run_path(sys.argv[0], run_name='__main__')`;
+    cp.execFileSync('python3', ['-c', limited], { cwd: root, stdio: 'ignore', timeout: ANNY_BUILD_WALL_MS });
     cp.execFileSync('node', [path.join(root, 'tools/anny-look/hands.js'), json], { cwd: root, stdio: 'ignore' });
     cp.execFileSync('node', [path.join(root, 'tools/anny-look/pack.js'), json, bin], { cwd: root, stdio: 'ignore' });
     assert(Buffer.compare(fs.readFileSync(bin), gz) === 0, 'rebuilt anny.bin differs from src/data/anny.bin');
