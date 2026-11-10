@@ -328,8 +328,8 @@ BIND.cable=(e,R)=>{
    плоское основание ⌀ 14 см. Источники: Rogue Competition Kettlebells, Product Guide — «11.1" (282MM) height», «8.19" (208MM)
    bell width», «Standardized 33MM handle diameter», «5.5" (140MM) base diameter», «the exact same exterior dimensions across
    the entire weight range (8KG to 48KG)»; Titan Fitness Competition Kettlebell — 290 мм, ⌀ 210 мм, рукоять 35 мм. Вес
-   по умолчанию 16 кг — стартовая гиря мужчины (P. Tsatsouline, «Enter the Kettlebell!», 2006: «An average man should start
-   with a 35-pounder»). Ось рукояти — на KB.handle над центром шара: дно на 0,94·r ниже центра, высота 28,2 см, рукоять
+   по умолчанию 16 кг — стартовая гиря мужчины (по P. Tsatsouline, «Enter the Kettlebell!», 2006 — по памяти, книга
+   при подготовке не открывалась). Ось рукояти — на KB.handle над центром шара: дно на 0,94·r ниже центра, высота 28,2 см, рукоять
    r 1,7. Прежде ось стояла на 15,6 см (гиря 27,2 см высотой — на сантиметр ниже настоящей).
    Рукоять лежит в кулаке по его оси (z кисти; двумя руками — по линии хватов), шар — на KB.handle от оси рукояти поперёк неё:
    * hang 'gravity' (по умолчанию) — шар висит под рукоятью;
@@ -338,7 +338,7 @@ BIND.cable=(e,R)=>{
      (25…70°) гирю подтягивают к телу, и она повисает под рукоятью;
    * rest: true — шар не может пройти сквозь руку: если свободное направление ведёт его в кисть, предплечье или плечо, он
      поворачивается вокруг рукояти к тылу кисти и ложится на тыл запястья и предплечья («рэк», гиря над головой, жим лёжа:
-     «the kettlebell rests on the back of the forearm» — StrongFirst, RKC). Поджатие мягких тканей — 0,3 см. */
+     так учат школы StrongFirst и RKC — пересказ, не цитата). Поджатие мягких тканей — 0,3 см. */
 const KB={r:10.5,handle:16.6,handleR:1.7,half:5,base:7,kg:16,press:.3};
 BIND.kettlebell=(e,R)=>{
  const hands=e.hands||['L'],grips=hands.map(s=>R['grip'+s]),g=V.mix(grips[0],grips[1]??grips[0],.5),k=(e.r||KB.r)/KB.r,r=KB.r*k,H=e.drop??KB.handle*k;
