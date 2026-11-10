@@ -321,7 +321,7 @@ function kbdlBody(C, lean, hz, H) {
 const KBDL = once(() => {
   const C = ctx([{ type: 'kettlebell', id: 'kb', hands: ['L', 'R'] }]), { V } = C, KB = require('../../../src/js/09bn-equipment.js').KB;
   /* гиря на полу: ось рукояти — на высоте гири без радиуса рукояти; стоя — рукоять перед бёдрами */
-  const H0 = [0, KB.r * .94 + KB.handle, 5], lean0 = 58, hz0 = -24;
+  const H0 = [0, KB.bottom + KB.handle, 5], lean0 = 58, hz0 = -24;
   return { H0, H1: [0, 77.5, 25], lean0, hz0 };
 });
 /* свободная ладонь на бедре над коленом (опора в наклоне): центр ладони — на передней поверхности бедра в 70 % его длины */

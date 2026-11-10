@@ -39,11 +39,14 @@ export function createPropNode(parent,s,mats,mesh){
    (s.plates||[]).forEach((p,i)=>{const o=mesh(g,new THREE.CylinderGeometry(1,1,1,32),mats.plate,'plate');o.userData={sign,i};});
   }
  }else if(s.kind==='kettlebell'){
-  /* шар Ø21, плоское дно, П-образная рукоять: локальные оси — x вдоль рукояти, y вверх к рукояти */
-  const ball=mesh(g,new THREE.SphereGeometry(1,24,16),mats.plate,'bell');ball.scale.set(1,.94,1);
+  /* шар Ø21, срезанный плоским дном Ø14 (s.bottom — от центра до дна), П-образная рукоять: локальные оси — x вдоль
+     рукояти, y вверх к рукояти. Тело — одно тело вращения: дуга шара от верха до окружности дна и плоское дно. */
+  const R0=s.radius||10.5,bt=(s.bottom??7.83*R0/10.5)/R0,end=Math.acos(-bt),prof=[];
+  for(let i=0;i<=24;i++){const a=end*i/24;prof.push(new THREE.Vector2(Math.sin(a),Math.cos(a)));}
+  prof.push(new THREE.Vector2(0,-bt));
+  mesh(g,new THREE.LatheGeometry(prof.reverse(),32),mats.plate,'bell');
   const hu=(s.handleUp??15.6*(s.radius||10.5)/10.5)/(s.radius||10.5)*10.5,pts=[[-7.2,6.5],[-9.2,hu-4.6],[-8.4,hu-1],[-5,hu],[5,hu],[8.4,hu-1],[9.2,hu-4.6],[7.2,6.5]].map(([x,y])=>new THREE.Vector3(x/10.5,y/10.5,0));
   mesh(g,new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),40,.16,10,false),mats.plate,'handle');
-  const base=mesh(g,new THREE.CylinderGeometry(.667,.667,.06,24),mats.plate,'base');base.position.set(0,-.92,0);
  }else if(s.kind==='dumbbell'){
   mesh(g,new THREE.CylinderGeometry(1,1,1,14),mats.chrome,'handle');
   for(const sign of [-1,1]){mesh(g,new THREE.CylinderGeometry(1,1,1,6),mats.plate,'head').userData.sign=sign;mesh(g,new THREE.CylinderGeometry(1,1,1,14),mats.chrome,'inner').userData.sign=sign;}

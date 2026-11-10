@@ -256,11 +256,25 @@ await run(`(()=>{S.lr={};S.view='plan';S.mode='single';regen();})()`);
 
 /* 8. скрытая панель замера скорости (?perf): живые цифры, устройство, идёт замер, итог, текст результата, все подписи */
 step('8. замер скорости');
+/* Без --full фигуры — заглушки, но карточки плана и витрина в замере рисовали бы настоящие кадры общим рендерером: одиннадцать
+   шагов пересоздают контекст WebGL и сцены, и безголовый Chromium с программной графикой после замера 60–90 с не выдаёт кадров
+   (очередь видеопроцесса) — ожидания Playwright по кадрам (waitForFunction, «элемент неподвижен» перед нажатием) не укладывались
+   в свои тайм-ауты даже на свободной машине. Тексты панели от отрисовки не зависят: общий рендерер на время замера выключен;
+   сам замер с настоящей графикой проверяет tools/ui-check.mjs, а здесь — с --full. */
+if (!FULL) await run(`(()=>{if(window.GymVolume){window.__cards=GymVolume.cards;GymVolume.cards=()=>null;}})()`);
+/* Панель «Устройство» спрашивает модель видеокарты (perfGpu: новый контекст WebGL и синхронный вопрос видеопроцессу). После шагов
+   с настоящими миниатюрами витрины видеопроцесс безголового Chromium с программной графикой ещё занят: на свободной машине ответ
+   приходит через ≈23 с, под нагрузкой дольше, а у нажатия Playwright предел 30 с. Сведения об устройстве запрашиваются заранее
+   (они запоминаются, нажатие потом мгновенно) — явно и со своим пределом */
+{ const t0 = Date.now(), ok = await Promise.race([run(`(()=>{perfDevice();return true;})()`), new Promise(r => setTimeout(() => r(false), 240000))]);
+  if (!ok) throw new Error('Видеопроцесс не ответил за 240 с (сведения об устройстве для панели замера)'); step(`сведения об устройстве через ${((Date.now() - t0) / 1000).toFixed(1)} с`); }
 await run(`(()=>{perfStart();document.querySelector('.card')?.scrollIntoView({block:'center'});})()`); await page.waitForTimeout(700);
 await scan('perf panel live');
 await page.click('#perf-panel [data-perf="dev"]'); await scan('perf panel device');
 await run(`(()=>{perfRun({plan:300,step:250,warm:100});})()`); await page.waitForTimeout(150); await scan('perf panel running');
-await page.waitForFunction(() => !GymPerf.run, null, { timeout: 60000 });
+/* опрос по таймеру, а не по кадрам экрана (у waitForFunction по умолчанию — requestAnimationFrame): замер идёт ≈8 с, а кадры
+   под нагрузкой могут задерживаться */
+await page.waitForFunction(() => !GymPerf.run, null, { timeout: 60000, polling: 100 });
 await scan('perf panel result', await run(`[perfReportText(GymPerf.result), Object.values(PERF_T).join('\\n'), perfUa('Mozilla/5.0 (Linux; Android 12; M2101K6G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 YaBrowser/24.1.2.86.00 Mobile Safari/537.36').browser, [1, 2, 5].map(n => perfDeviceLines({...perfDevice(), cores: n})[0] + '\\n' + perfStepLine({label: 'x', sum: perfSummary(Array.from({length: n}, (_, i) => ({t: i, cost: 1, b: {svgHit: 1, nHit: 1, svgMiss: 1, nMiss: 1, svgDom: 1}})), 1000)}, 0)).join('\\n')].join('\\n')`));
 await run(`(()=>{navigator.clipboard&&(navigator.clipboard.writeText=()=>Promise.reject(new Error('no')));})()`);
 await page.click('#perf-panel [data-perf="copy"]'); await page.waitForTimeout(100); await scan('perf copy fallback');

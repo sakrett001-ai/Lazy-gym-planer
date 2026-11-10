@@ -329,8 +329,9 @@ BIND.cable=(e,R)=>{
    bell width», «Standardized 33MM handle diameter», «5.5" (140MM) base diameter», «the exact same exterior dimensions across
    the entire weight range (8KG to 48KG)»; Titan Fitness Competition Kettlebell — 290 мм, ⌀ 210 мм, рукоять 35 мм. Вес
    по умолчанию 16 кг — стартовая гиря мужчины (по P. Tsatsouline, «Enter the Kettlebell!», 2006 — по памяти, книга
-   при подготовке не открывалась). Ось рукояти — на KB.handle над центром шара: дно на 0,94·r ниже центра, высота 28,2 см, рукоять
-   r 1,7. Прежде ось стояла на 15,6 см (гиря 27,2 см высотой — на сантиметр ниже настоящей).
+   при подготовке не открывалась). Шар срезан плоским дном ⌀ 14: дно на KB.bottom = √(10,5² − 7²) = 7,83 см ниже центра; ось рукояти — на KB.handle
+   над центром: 7,83 + 18,67 + 1,7 (радиус рукояти) = 28,2 см. Прежде дно стояло на 0,94·r (шар сплюснут, а дно ⌀ 14
+   рисовалось отдельным диском, торчавшим из шара), ось — на 16,6 см, ещё раньше на 15,6 см.
    Рукоять лежит в кулаке по его оси (z кисти; двумя руками — по линии хватов), шар — на KB.handle от оси рукояти поперёк неё:
    * hang 'gravity' (по умолчанию) — шар висит под рукоятью;
    * hang 'arm' — шар на продолжении предплечья (мах: гирю тянет по линии руки центробежная сила);
@@ -339,7 +340,7 @@ BIND.cable=(e,R)=>{
    * rest: true — шар не может пройти сквозь руку: если свободное направление ведёт его в кисть, предплечье или плечо, он
      поворачивается вокруг рукояти к тылу кисти и ложится на тыл запястья и предплечья («рэк», гиря над головой, жим лёжа:
      так учат школы StrongFirst и RKC — пересказ, не цитата). Поджатие мягких тканей — 0,3 см. */
-const KB={r:10.5,handle:16.6,handleR:1.7,half:5,base:7,kg:16,press:.3};
+const KB={r:10.5,handle:18.67,handleR:1.7,half:5,base:7,bottom:7.83,kg:16,press:.3};
 BIND.kettlebell=(e,R)=>{
  const hands=e.hands||['L'],grips=hands.map(s=>R['grip'+s]),g=V.mix(grips[0],grips[1]??grips[0],.5),k=(e.r||KB.r)/KB.r,r=KB.r*k,H=e.drop??KB.handle*k;
  const axis=hands.length>1?V.unit(V.sub(grips[0],grips[1])):V.unit(R.frames['hand'+hands[0]].z);
@@ -369,7 +370,7 @@ BIND.kettlebell=(e,R)=>{
   }
  }
  const c=V.add(g,down,H);
- return[{kind:'kettlebell',c,grip:g,axis,handleAxis:axis,radius:r,handleUp:H,role:'free',tone:'plate',free:true,id:e.id||'kb',mount:'hands'}];
+ return[{kind:'kettlebell',c,grip:g,axis,handleAxis:axis,radius:r,handleUp:H,bottom:KB.bottom*k,role:'free',tone:'plate',free:true,id:e.id||'kb',mount:'hands'}];
 };
 /* Ролик для пресса: колесо Ø18 × 5 см между хватами, ось-рукоять постоянной длины (2·half, по умолчанию 32 см) по центру
    между кистями. Колесо катится без проскальзывания: поворот вокруг оси × радиус = путь центра по полу, поэтому на боковинах
