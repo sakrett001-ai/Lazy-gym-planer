@@ -40,9 +40,11 @@
      Дужки — короткие участки рукояти (role grip): на них проверяется хват. */
   BIND.g2KbHorns = (e, R) => {
     const id = e.id || 'kb', k = (e.r || 10.5) / 10.5, gL = R.gripL, gR = R.gripR, ax = V.unit(V.sub(gL, gR)), mid = V.mix(gL, gR, .5);
-    const th = V.add(R.frames.handL.z, R.frames.handR.z), up = V.unit(V.perp(V.len(V.perp(th, ax)) > .2 ? th : [0, -1, 0], ax));
+    const th = V.add(R.frames.handL.z, R.frames.handR.z), up0 = V.unit(V.perp(V.len(V.perp(th, ax)) > .2 ? th : [0, -1, 0], ax));
+    /* bottomUp («гало»): гиря дном вверх — шар со стороны больших пальцев, перекладина рукояти — со стороны мизинцев */
+    const up = e.bottomUp ? V.scale(up0, -1) : up0;
     const c = V.add(mid, up, -10.5 * k), L = (a, u) => V.add(V.add(c, ax, a * k), up, u * k);
     const horn = sg => ({ kind: 'beam', a: L(sg * 8.1, 6.9), b: L(sg * 9.1, 14.4), r: 1.7, tone: 'plate', role: 'grip', id: id + ':horn' + (sg > 0 ? 'L' : 'R'), mount: id });
-    return [{ kind: 'kettlebell', c, grip: L(0, E.KB.handle), axis: ax, handleAxis: ax, radius: 10.5 * k, handleUp: E.KB.handle * k, role: 'free', tone: 'plate', free: true, id, mount: 'hands' }, horn(1), horn(-1)];
+    return [{ kind: 'kettlebell', c, grip: L(0, E.KB.handle), axis: ax, handleAxis: ax, radius: 10.5 * k, handleUp: E.KB.handle * k, role: 'free', tone: 'plate', free: true, id, mount: 'hands', ...(e.bottomUp ? { bottomUp: true } : {}) }, horn(1), horn(-1)];
   };
 })(typeof GymEquipment !== 'undefined' ? GymEquipment : require('./09bn-equipment.js'));
