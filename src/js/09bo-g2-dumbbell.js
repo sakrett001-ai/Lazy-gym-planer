@@ -43,6 +43,6 @@
     const th = V.add(R.frames.handL.z, R.frames.handR.z), up = V.unit(V.perp(V.len(V.perp(th, ax)) > .2 ? th : [0, -1, 0], ax));
     const c = V.add(mid, up, -10.5 * k), L = (a, u) => V.add(V.add(c, ax, a * k), up, u * k);
     const horn = sg => ({ kind: 'beam', a: L(sg * 8.1, 6.9), b: L(sg * 9.1, 14.4), r: 1.7, tone: 'plate', role: 'grip', id: id + ':horn' + (sg > 0 ? 'L' : 'R'), mount: id });
-    return [{ kind: 'kettlebell', c, grip: L(0, E.KB.handle), axis: ax, handleAxis: ax, radius: 10.5 * k, handleUp: E.KB.handle * k, role: 'free', tone: 'plate', free: true, id, mount: 'hands' }, horn(1), horn(-1)];
+    return [{ kind: 'kettlebell', c, grip: L(0, E.KB.handle), axis: ax, handleAxis: ax, radius: 10.5 * k, handleUp: E.KB.handle * k, bottom: E.KB.bottom * k, role: 'free', tone: 'plate', free: true, id, mount: 'hands' }, horn(1), horn(-1)];
   };
 })(typeof GymEquipment !== 'undefined' ? GymEquipment : require('./09bn-equipment.js'));

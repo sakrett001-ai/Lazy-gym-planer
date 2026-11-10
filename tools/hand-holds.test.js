@@ -120,6 +120,8 @@ test('kettlebell in one hand: the bell hangs, flies along the arm or rests on th
   assert(bell('kbpress', swap('kbpress', { rest: false, hang: 'arm' }))[0].flags.some(f => /выше рукояти без опоры/.test(f)), 'bell above the handle');
   /* the handle sits on the bell at the height of a competition kettlebell: 28.2 cm tall, Ø 21 */
   const kb = EQ.rig(POSES.kbdeadlift)(0).props.find(p => p.kind === 'kettlebell');
-  assert(Math.abs(kb.handleUp + EQ.KB.handleR + .94 * kb.radius - 28.2) < .05 && kb.radius === 10.5);
-  assert(Math.abs(M.FLOOR - kb.c[1] - .94 * kb.radius) < .3, 'the bell of the deadlift stands on the floor at the start');
+  assert(Math.abs(kb.handleUp + EQ.KB.handleR + kb.bottom - 28.2) < .05 && kb.radius === 10.5);
+  /* flat base Ø 14: the sphere is cut at √(r² − 7²) below its centre */
+  assert(Math.abs(kb.radius ** 2 - kb.bottom ** 2 - 49) < .2);
+  assert(Math.abs(M.FLOOR - kb.c[1] - kb.bottom) < .3, 'the bell of the deadlift stands on the floor at the start');
 });

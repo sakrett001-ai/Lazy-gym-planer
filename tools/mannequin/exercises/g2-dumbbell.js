@@ -372,7 +372,7 @@ function kbdlBody(C, lean, hz, H) {
 const KBDL = once(() => {
   const C = ctx([{ type: 'kettlebell', id: 'kb', hands: ['L', 'R'] }]), { V } = C, KB = require('../../../src/js/09bn-equipment.js').KB;
   /* гиря на полу: ось рукояти — на высоте гири без радиуса рукояти; стоя — рукоять перед бёдрами */
-  const H0 = [0, KB.r * .94 + KB.handle, 5], lean0 = 58, hz0 = -24;
+  const H0 = [0, KB.bottom + KB.handle, 5], lean0 = 58, hz0 = -24;
   return { H0, H1: [0, 77.5, 25], lean0, hz0 };
 });
 /* свободная ладонь на бедре над коленом (опора в наклоне): центр ладони — на передней поверхности бедра в 70 % его длины */
@@ -707,7 +707,7 @@ module.exports = {
   kbswing: {
     keys: [0, .15, .3, .45, .6, .75, .9, 1],
     dynamic: true,
-    /* рукоять в кулаках: ось рукояти — в центрах хватов, шар — на KB.handle (16,6 см) от неё по линии рук */
+    /* рукоять в кулаках: ось рукояти — в центрах хватов, шар — на KB.handle (18,67 см) от неё по линии рук */
     equipment: [{ type: 'kettlebell', id: 'kb', hands: ['L', 'R'], hang: 'arm' }],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'kb' }, { body: 'gripR', prop: 'kb' }],
     gripRadius: { L: 1.7, R: 1.7 },
@@ -899,7 +899,7 @@ module.exports = {
       q.R.girdle = [0, 4]; C.rhythm(q, 'L', [0, 0]);
       const T = C.axes(q, 'thorax'), f = C.fk(q), lat = C.lat(q, 'L'), fwd = V.unit(V.perp(T.z, [0, 1, 0])), gh = f.P.ghL;
       const dir = a => [0, -Math.cos(a * C.D2R), Math.sin(a * C.D2R)];
-      const P0 = V.add(V.add(gh, dir(-25), 59.8), lat, -14), Pa = V.add(V.add(gh, dir(38), 58), lat, -8);
+      const P0 = V.add(V.add(gh, dir(-25), 59.8), lat, -14), Pa = V.add(V.add(gh, dir(38), 60), lat, -6);
       const Pb = V.add(V.add(V.add(gh, lat, 7), fwd, 27), [0, 1, 0], 4), P1 = V.add(V.add(V.add(gh, [0, 1, 0], 63), lat, 2), fwd, 1);
       const g = spline(V, [P0, Pa, Pb, P1], [0, .42, .68, 1], e);
       const k = Math.max(0, Math.min(1, (e - .4) / .35)), w = k * k * (3 - 2 * k), k2 = Math.max(0, Math.min(1, (e - .7) / .3));

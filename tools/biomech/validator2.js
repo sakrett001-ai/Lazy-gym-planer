@@ -128,7 +128,9 @@ function collider(s) {
   else if (s.kind === 'barbell' || s.kind === 'dumbbell') return compound(s, c);
   else if (s.kind === 'kettlebell' && s.handleAxis) {
     const ax = V.unit(s.handleAxis), up = V.unit(V.sub(s.grip, s.c)), k = s.radius / 10.5, hu = s.handleUp ?? 15.6 * k, a = V.add(V.add(s.c, ax, -5 * k), up, hu), b = V.add(V.add(s.c, ax, 5 * k), up, hu);
-    return [{ ...c, free: true, part: 'bell', r: s.radius, sdf: p => V.dist(p, s.c) - s.radius * .97, pts: cylPoints(s.c, up, s.radius * .9, s.radius * .5).concat([V.add(s.c, up, -s.radius)]) },
+    /* шар срезан плоским дном на s.bottom ниже центра (соревновательная гиря: дно ⌀ 14 см) */
+    const bt = s.bottom ?? s.radius;
+    return [{ ...c, free: true, part: 'bell', r: s.radius, sdf: p => Math.max(V.dist(p, s.c) - s.radius * .97, -V.dot(V.sub(p, s.c), up) - bt), pts: cylPoints(s.c, up, s.radius * .9, s.radius * .5).concat([V.add(s.c, up, -bt)]) },
       { ...c, free: true, part: 'handle', grip: true, r: 1.7, ptR: 1.7, axis: [a, b], sdf: p => sdCapsule(p, a, b, 1.7), pts: linspace(a, b, 2) }];
   }
   else { c.unknown = true; c.sdf = () => Infinity; c.pts = []; }
