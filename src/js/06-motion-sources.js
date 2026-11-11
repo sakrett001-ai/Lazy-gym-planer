@@ -8,6 +8,7 @@ const SOURCES_BY_EX = {
   kbrow:[['Тяги в наклоне и к поясу: мышцы корпуса и нагрузка на поясницу — Fenwick и др., 2009','https://pubmed.ncbi.nlm.nih.gov/19197209/']],
   kbfloorpress:[['Мышцы в жиме лёжа — исследование','https://pubmed.ncbi.nlm.nih.gov/25799093/']],
   kbsnatch:[['Мах гирей — NSCA','https://www.nsca.com/education/articles/kinetic-select/two-arm-kettlebell-swing/'],['Мах, рывок и перенос гири: мышцы спины и таза, нагрузка на поясницу — McGill и Marshall, 2012 (JSCR 26(1):16–27)','https://www.backfitpro.com/medical-scientific-articles/2012/%5B63%5DMcGill,S.(2012)Kettlebell-swing-snatch-and-bottoms-up-carry%5BJ.Strength-Condit.Res.%5D.pdf']],
+  kbhalo:[['Гало с гирей: техника и мышцы — StrengthLog','https://www.strengthlog.com/kettlebell-halo'],['Гало с гирей — ACE','https://www.acefitness.org/resources/everyone/exercise-library/394/halo/']],
   kbsllift:[['Становая тяга и её варианты: обзор замеров мышц — Martín-Fuentes и др., 2020','https://pubmed.ncbi.nlm.nih.gov/32107499/']],
   cablerow:[['Горизонтальная тяга — ACE','https://www.acefitness.org/resources/everyone/exercise-library/48/seated-row/']],
   cablerowwide:[['Горизонтальная тяга — ACE','https://www.acefitness.org/resources/everyone/exercise-library/48/seated-row/'],['Узкий и широкий хват в горизонтальной тяге — Padovan и др., 2025','https://jhk.termedia.pl/High-Density-Surface-Electromyography-Excitation-of-Prime-Movers-in-the-Narrow-vs,209550,0,2.html']],
@@ -61,6 +62,7 @@ const MOTION_FOCUS={
  kbfloorpress:{setup:'Лёжа на спине, плечо на полу под 45° к корпусу, предплечье вертикально.',control:'Запястье прямое; локоть касается пола мягко, без удара.'},
  kbsnatch:{setup:'Замах между ног, как в махах одной рукой.',control:'Гиря идёт вплотную к телу; наверху рука прямая, запястье прямое.'},
  kbsllift:{setup:'Стоя на одной ноге, гиря в противоположной руке.',control:'Наклон от таза, спина прямая, таз не раскрывается вбок.'},
+ kbhalo:{setup:'Стопы на ширине плеч, гиря за рога дном вверх перед грудью.',control:'Гиря вплотную к голове, корпус и голова неподвижны.'},
  kbwindmill:{setup:'Гиря над головой, стопы шире плеч, носки развёрнуты от гири.',control:'Рука с гирей вертикальна, спина прямая, взгляд на гирю.'},
  plank:{setup:'Предплечья и носки образуют опору.',control:'Сохраняйте положение таза и грудной клетки, продолжайте дышать.'},
  latraise:{setup:'Гантели у бёдер, локти слегка согнуты.',control:'Руки движутся по дуге; корпус сохраняет положение.'}
