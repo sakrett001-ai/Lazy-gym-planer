@@ -75,41 +75,11 @@ function fadingGrid(size,divisions,color,center){
  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));g.setAttribute('color',new THREE.Float32BufferAttribute(cols,4));
  const lines=new THREE.LineSegments(g,new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.55,depthWrite:false}));lines.name='floor-grid';lines.position.set(...center);return lines;
 }
-function grid(rows,cols){
- const g=new THREE.BufferGeometry(),indices=[];g.setAttribute('position',new THREE.BufferAttribute(new Float32Array((rows+1)*(cols+1)*3),3));
- for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const a=r*(cols+1)+c,b=a+1,d=a+cols+1;indices.push(a,d,b,b,d,d+1);}
- g.setIndex(indices);return g;
-}
-function updateGrid(g,rows,cols,point){const p=g.attributes.position;let i=0;for(let r=0;r<=rows;r++)for(let c=0;c<=cols;c++){const q=world(point(r/rows,c/cols));p.setXYZ(i++,...q);}p.needsUpdate=true;g.computeVertexNormals();g.computeBoundingSphere();g.computeBoundingBox();}
-function torsoCenter(R,h){return h>18&&R.waist?add(R.waist,R.chestU||R.u,h-18):add(R.hip,R.u,h);}
-function radius(profile,t){for(let i=1;i<profile.length;i++)if(t<=profile[i][0]){const a=profile[i-1],b=profile[i],q=(t-a[0])/(b[0]-a[0]);return[a[1]+(b[1]-a[1])*q,a[2]+(b[2]-a[2])*q];}return profile.at(-1).slice(1);}
 function placeSphere(o,p,scale){o.position.fromArray(world(p));o.scale.set(...scale.map(v=>v/100));}
 function placeBeam(o,a,b,width){
  const d=sub(b,a),l=len(d);o.visible=l>1e-5;if(!o.visible)return;
  o.position.fromArray(world(add(a,b).map(v=>v/2)));o.scale.set(width/200,l/100,width/200);
  o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),vec(direction(unit(d))));
-}
-// Closed fingers must follow the handle's axis, rather than the world's X axis.
-// A neutral-grip dumbbell and a dip rail have different axes from a barbell.
-function gripAxis(R,side,props){
- const grip=R['grip'+side],candidates=[];
- for(const p of props){
-  let center,axis,half,priority=0;
-  if(['dumbbell','barbell'].includes(p.kind)){center=p.c;axis=p.axis||[1,0,0];half=p.kind==='dumbbell'?6:40;priority=1;}
-  else if(p.kind==='kettlebell'&&p.grip){center=p.grip;axis=p.axis||[1,0,0];half=8;priority=1;}
-  else if(p.kind==='line'&&p.equipmentRole==='grip'&&(!p.side||p.side===side)){
-   center=add(p.a,p.b).map(v=>v/2);axis=sub(p.b,p.a);half=len(axis)/2;priority=2;
-  }else continue;
-  if(len(axis)<1e-8)continue;axis=unit(axis);const delta=sub(grip,center),along=dot(delta,axis),distance=len(sub(delta,axis.map(v=>v*along)));
-  if(Math.abs(along)<=half+2&&distance<5)candidates.push({axis,distance,priority});
- }
- candidates.sort((a,b)=>b.priority-a.priority||a.distance-b.distance);
- const d=unit(sub(grip,R['wr'+side]));
- if(candidates.length)return candidates[0].axis;
- // For an empty hand, preserve the wrist direction and the body's lateral frame.
- let x=sub(R.x,d.map(v=>v*dot(R.x,d)));
- if(len(x)<1e-5)x=cross(d,Math.abs(d[0])<.8?[1,0,0]:[0,0,1]);
- return unit(x);
 }
 /* Неподвижные детали инвентаря — рама, стойки, подушки тренажёров (без dyn: их положение не зависит от позы,
    GymEquipment.build) — рисуются объединёнными сетками, по одной на материал: вызовов отрисовки и теней меньше в разы.
@@ -143,18 +113,10 @@ export function mergeMeshes(list){
  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('normal',new THREE.BufferAttribute(nor,3));g.setIndex(new THREE.BufferAttribute(idx.subarray(0,k),1));
  g.computeBoundingSphere();g.computeBoundingBox();return g;
 }
-function placeHand(hand,R,side,props){
- const grip=R['grip'+side],axis=gripAxis(R,side,props),d=unit(sub(grip,R['wr'+side]));
- let y=sub(d,axis.map(v=>v*dot(d,axis)));
- if(len(y)<1e-5)y=cross(axis,Math.abs(axis[1])<.8?[0,1,0]:[0,0,1]);
- y=unit(y);const z=unit(cross(axis,y));
- hand.position.fromArray(world(grip));hand.quaternion.copy(quaternion(direction(axis),direction(y),direction(z).map(v=>-v)));
-}
-export function createCatalogScene(first,{coarse=false}={}){
- const limbRows=coarse?5:10,limbCols=coarse?8:16,torsoCols=coarse?12:24;
+export function createCatalogScene(first){
  const scene=new THREE.Scene();scene.background=new THREE.Color(STUDIO.background[1]);
  /* манекен — матовый «скульптурный» пластик: светлее прежнего, чтобы жёлто-оранжевые мышцы и тени читались */
- const skin=material('#a0adc0',{roughness:.62}),joint=material('#96a4b8',{roughness:.6}),shorts=material('#46546d',{roughness:.86}),sole=material('#323c4c',{roughness:.78});
+ const skin=material('#a0adc0',{roughness:.62}),joint=material('#96a4b8',{roughness:.6}),sole=material('#323c4c',{roughness:.78});
  const mats={steel:material('#6a7fa2',{roughness:.42,metalness:.25}),bar:material('#d3dbe6',{roughness:.26,metalness:.5}),pad:material('#3c4a62',{roughness:.66}),plate:material('#3d506b',{roughness:.5,metalness:.15}),
   cable:material('#8494aa',{roughness:.35,metalness:.4}),band:material('#6f9fc7',{roughness:.7}),mat:material('#2a3a52',{roughness:.95}),
   frame:material('#7186a7',{roughness:.45,metalness:.25}),chrome:material('#dde4ee',{roughness:.24,metalness:.5}),rubber:material('#2b3341',{roughness:.95}),wood:material('#7a6450',{roughness:.78}),
@@ -165,12 +127,13 @@ export function createCatalogScene(first,{coarse=false}={}){
  const floorTexture=radialTexture(...STUDIO.floor);
  const floor=mesh(scene,new THREE.PlaneGeometry(12,12),new THREE.MeshStandardMaterial({map:floorTexture,roughness:.94,metalness:0}),'floor');floor.rotation.x=-Math.PI/2;floor.position.y=-.014;floor.castShadow=false;floor.position.z=.6;
  const floorGrid=fadingGrid(5,20,0x485b76,[0,-.01,1]);scene.add(floorGrid);
- const mannequin=first.body?createMannequinBody(scene,first,{skin,joint,sole,mesh}):null;
- const parts=mannequin?mannequin.parts:{};let body=mannequin?mannequin.parts.torso.mesh:null,head=mannequin?mannequin.parts.head.mesh:null,nose,neck,dots;
+ /* тело — всегда манекен (src/volume/body.mjs): прежней запасной фигуры из колец и профилей больше нет */
+ const mannequin=createMannequinBody(scene,first,{skin,joint,sole,mesh});
+ const parts=mannequin.parts,body=mannequin.parts.torso.mesh,head=mannequin.parts.head.mesh;
  /* вид «Манекен»: видимая кожа — сетка Anny (src/volume/anny.mjs), когда её данные загружены (AnnySkin, src/js/09bs-anny.js);
     процедурная кожа тогда скрыта и не считается (рамки, проверки и мышцы её считают сами). Виды «Анатомия» и «Скелет» — прежний
     процедурный силуэт кожи (GHOST): мышцы проверены против него. options.anny === false — прежняя кожа и в «Манекене». */
- const anny=mannequin?createAnnyLayer(scene,skin):null;let annyShown=false;
+ const anny=createAnnyLayer(scene,skin);let annyShown=false;
  /* вид «Скелет» (options.skeleton): кости внутри почти невидимого силуэта кожи, области манекена скрыты. Вид «Анатомия» —
     то же с мышцами (options.anatomy: {skeleton, muscles, level}); кости при этом — по options.skeleton */
  const skeletonLayer=createSkeletonLayer(scene),muscleLayer=createMuscleLayer(scene);let ghosted=false;
@@ -190,26 +153,6 @@ export function createCatalogScene(first,{coarse=false}={}){
    if(on&&!twin){twin=new THREE.Mesh(o.geometry,ghostDepth);twin.name='ghost-depth';twin.userData.ghostTwin=true;twin.castShadow=twin.receiveShadow=false;twin.renderOrder=GHOST.order;o.add(twin);o.userData.twin=twin;}
    if(twin){twin.visible=on;twin.geometry=o.geometry;twin.frustumCulled=o.frustumCulled;}
   }
- }
- if(!mannequin){
- body=mesh(scene,grid(first.torsoRings.length-1,torsoCols),skin,'torso');
- head=mesh(scene,new THREE.SphereGeometry(1,18,12),skin,'head');nose=mesh(scene,new THREE.SphereGeometry(1,10,8),joint,'nose');neck=mesh(scene,new THREE.CylinderGeometry(1,1,1,12),skin,'neck');
- dots=new THREE.Group();dots.name='joint-dots';scene.add(dots);const dotMat=new THREE.MeshBasicMaterial({color:'#e2f1ff',depthTest:false,toneMapped:false});
- for(const side of ['L','R']){
-  for(const[kind,a,b]of [['ua','sh','el'],['fa','el','wr'],['th','hip','kn'],['sh','kn','an']])parts[kind+side]={a:a+side,b:b+side,mesh:mesh(scene,grid(limbRows,limbCols),skin,kind+side)};
-  for(const[name,r]of [['sh',6.4],['el',4.3],['wr',2.7],['kn',5.2]])parts[name+'-joint'+side]={r,mesh:mesh(scene,new THREE.SphereGeometry(1,14,10),joint,name+'-joint'+side)};
-  const hand=new THREE.Group();hand.name='hand'+side;scene.add(hand);
-  const palm=mesh(hand,new THREE.SphereGeometry(1,14,10),skin,'palm'+side);palm.scale.set(.039,.034,.026);
-  for(let f=0;f<4;f++){
-   const points=Array.from({length:10},(_,i)=>{const a=-2+i/9*4.65;return new THREE.Vector3((f-1.5)*.017,.021*Math.cos(a),.021*Math.sin(a));});
-   mesh(hand,new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points),12,.0065,5,false),skin,'finger');
-  }
-  const thumbSign=side==='L'?-1:1,thumbPoints=[[thumbSign*.028,-.018,-.017],[thumbSign*.043,.010,-.020],[thumbSign*.031,.023,.004]].map(p=>vec(p));
-  mesh(hand,new THREE.TubeGeometry(new THREE.CatmullRomCurve3(thumbPoints),8,.008,6,false),skin,'thumb');
-  const shoe=mesh(scene,new RoundedBoxGeometry(1,1,1,2,.04),sole,'shoe'+side);parts['hand'+side]={mesh:hand};parts['shoe'+side]={mesh:shoe};
-  const thighShorts=mesh(scene,grid(2,16),shorts,'shorts'+side);parts['shorts'+side]={mesh:thighShorts};
-  for(const key of ['sh','el','wr','hip','kn','an']){const d=mesh(dots,new THREE.SphereGeometry(.021,8,6),dotMat,key+side);parts['dot'+key+side]={mesh:d};}
- }
  }
  const regionMeshes=new Map(),regionsGroup=new THREE.Group();regionsGroup.name='regions';scene.add(regionsGroup);
  const equipment=new THREE.Group();equipment.name='equipment';scene.add(equipment);let propNodes=[],lastData,options={};
@@ -279,39 +222,19 @@ export function createCatalogScene(first,{coarse=false}={}){
     (их досчитывает следующий обычный кадр) */
  function apply(data,nextOptions={},how={}){
   lastData=data;options={...options,...nextOptions};const R=data.pose,shape=!!how.shape;
-  const bonesOn=!!(mannequin&&options.skeleton&&data.body),musclesOn=!!(mannequin&&options.anatomy&&data.body),skeletonOn=bonesOn||musclesOn;
-  const annyData=mannequin&&!skeletonOn&&options.anny!==false&&data.pose?.frames?globalThis.AnnySkin?.data:null;annyShown=!!annyData;
-  if(mannequin){mannequin.group.visible=!annyData;if(annyData)mannequin.dots(data,options);else mannequin.apply(data,options,shape);}
+  const bonesOn=!!(options.skeleton&&data.body),musclesOn=!!(options.anatomy&&data.body),skeletonOn=bonesOn||musclesOn;
+  const annyData=!skeletonOn&&options.anny!==false&&data.pose?.frames?globalThis.AnnySkin?.data:null;annyShown=!!annyData;
+  mannequin.group.visible=!annyData;if(annyData)mannequin.dots(data,options);else mannequin.apply(data,options,shape);
   if(annyData)anny.update(annyData,data,{on:options.muscles!==false,color:options.color,values:data.values,sideValues:data.sideValues,regions:data.regions,selected:options.selected});else anny?.hide();
   /* матрицы костей кадра: готовые (data.boneFrames — память кадров карточек плана, main.mjs) или посчитанные здесь */
   const frames=musclesOn?data.boneFrames||globalThis.Skeleton.frames(R,data.body,options.anatomy.skeleton.bones):null;
   if(bonesOn)skeletonLayer.update(options.skeleton,R,data.body,frames&&options.anatomy.skeleton===options.skeleton?frames:data.boneFrames||undefined);else skeletonLayer.hide();
   /* фаза и ключ позы (catalogVolumeData) — память кожи по фазе в слое мышц */
   if(musclesOn)muscleLayer.update(options.anatomy,frames,options.color,{values:data.values,sideValues:data.sideValues,regions:data.regions,phases:options.muscles!==false,selected:options.selected},data.poseKey&&typeof data.phase==='number'?{t:data.phase,key:data.poseKey}:null);else muscleLayer.hide();
-  if(mannequin&&(skeletonOn||ghosted))ghost(skeletonOn);
+  if(skeletonOn||ghosted)ghost(skeletonOn);
   /* области мышц на процедурной коже; с кожей Anny зоны — цвет её вершин (поверхности областей не считаются) */
   const surfaces=annyData?[]:data.surfaces;
   if(skeletonOn||!surfaces.length)for(const o of regionMeshes.values())o.visible=false;
-  if(!mannequin){
-  updateGrid(body.geometry,data.torsoRings.length-1,torsoCols,(t,q)=>{
-   const i=Math.min(data.torsoRings.length-2,Math.floor(t*(data.torsoRings.length-1))),f=t*(data.torsoRings.length-1)-i,a=data.torsoRings[i],b=data.torsoRings[i+1],h=a[0]+(b[0]-a[0])*f,w=a[1]+(b[1]-a[1])*f,ant=a[2]+(b[2]-a[2])*f,post=a[3]+(b[3]-a[3])*f,angle=q*Math.PI*2,s=Math.cos(angle);
-   return add(add(torsoCenter(R,h),R.x,w*Math.sin(angle)),R.chestN||R.n,(s>=0?ant:post)*s);
-  });
-  placeSphere(head,R.head,[8.8,12.3,10]);const hu=direction(R.headU),hn=direction(R.headN),hx=unit(cross(hu,hn));head.quaternion.copy(quaternion(hx,hu,hn));
-  placeSphere(nose,add(R.head,R.headN,9.5),[1.7,2,3]);placeBeam(neck,add(R.sh,R.chestU||R.u,-2),R.head,8.5);
-  for(const side of ['L','R']){
-   for(const kind of ['ua','fa','th','sh']){
-    const p=parts[kind+side],a=R[p.a],b=R[p.b],f=frame(a,b,kind==='th'||kind==='sh'?cross(R.x,sub(b,a)):R.n),prof=data.limbProfiles[kind];
-    updateGrid(p.mesh.geometry,limbRows,limbCols,(t,q)=>{const[r1,r2]=radius(prof,t),theta=q*Math.PI*2;return add(add(add(a,sub(b,a),t),f.x,r1*Math.cos(theta)),f.y,r2*Math.sin(theta));});
-   }
-   for(const name of ['sh','el','wr','kn']){const p=parts[name+'-joint'+side];placeSphere(p.mesh,R[name+side],[p.r,p.r,p.r]);}
-   placeHand(parts['hand'+side].mesh,R,side,data.props);
-   const a=R['heel'+side],b=R['toe'+side],shoe=parts['shoe'+side].mesh;placeBeam(shoe,a,b,8);shoe.scale.x=.095;shoe.scale.z=.055;
-   const ta=R['hip'+side],tb=R['kn'+side],f=frame(ta,tb,cross(R.x,sub(tb,ta)));updateGrid(parts['shorts'+side].mesh.geometry,2,16,(t,q)=>{const u=t*.145,[r1,r2]=radius(data.limbProfiles.th,u),angle=q*Math.PI*2;return add(add(add(ta,sub(tb,ta),u),f.x,(r1+.2)*Math.cos(angle)),f.y,(r2+.2)*Math.sin(angle));});
-   for(const name of ['sh','el','wr','hip','kn','an'])parts['dot'+name+side].mesh.position.fromArray(world(R[name+side]));
-  }
-  dots.visible=!!options.joints;
-  }
   const groups=new Map();for(const f of surfaces){const key=f.id+':'+f.side;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(f);}
   for(const[key,faces]of groups){
    let o=regionMeshes.get(key);if(!o){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(faces.length*6*3),3));const m=material('#a7b3c6',{roughness:.82});m.polygonOffset=true;m.polygonOffsetFactor=-1;m.polygonOffsetUnits=-1;o=mesh(regionsGroup,g,m,key);o.receiveShadow=false;o.userData={region:faces[0].id,side:faces[0].side};regionMeshes.set(key,o);}
@@ -339,12 +262,12 @@ export function createCatalogScene(first,{coarse=false}={}){
     only='body' — только тело манекена (карточки плана в виде «Анатомия»: человек крупнее, тренажёр может уйти за край) */
  /* скрытая кожа тела: процедурная при показанной Anny и наоборот (их сетки остаются в сцене) */
  const under=(o,g)=>{for(let p=o;p;p=p.parent)if(p===g)return true;return false;};
- const offBody=o=>!!mannequin&&(annyShown?under(o,mannequin.group):under(o,anny.group));
+ const offBody=o=>(annyShown?under(o,mannequin.group):under(o,anny.group));
  /* visit(x, y, z) — каждая точка рамки в мире (рамка свободной камеры разбора, orbit.mjs) */
  function includeBounds(only,visit){
-  const root=only==='body'&&mannequin?(annyShown?anny.group:mannequin.group):scene;
+  const root=only==='body'?(annyShown?anny.group:mannequin.group):scene;
   const add=p=>{visit?.(p.x,p.y,p.z);for(const[id,c]of Object.entries(cameras)){const q=p.clone().applyMatrix4(c.matrixWorldInverse),e=bounds[id];e.minX=Math.min(e.minX,q.x);e.maxX=Math.max(e.maxX,q.x);e.minY=Math.min(e.minY,q.y);e.maxY=Math.max(e.maxY,q.y);}};
-  root.traverse(o=>{if(!o.isMesh||!o.visible||o===floor||o.name==='dot-ring'||o.parent===dots||o.parent?.name==='joint-dots'||o.parent?.parent===stressGroup||o.userData.merged||o.userData.ghostTwin||offBody(o))return;
+  root.traverse(o=>{if(!o.isMesh||!o.visible||o===floor||o.name==='dot-ring'||o.parent?.name==='joint-dots'||o.parent?.parent===stressGroup||o.userData.merged||o.userData.ghostTwin||offBody(o))return;
    /* кожа Anny — сетка в стойке, скиннинг на видеокарте: её место в кадре — по точкам выборки (сцена, м) */
    if(o.userData.boundsPoints){for(const p of o.userData.boundsPoints)add(p);return;}
    if(!o.geometry.boundingBox)o.geometry.computeBoundingBox();const b=o.geometry.boundingBox;
@@ -374,8 +297,7 @@ export function createCatalogScene(first,{coarse=false}={}){
     const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;scene.background=t;studioTextures.push(t);}
   }
   key.castShadow=!!STUDIO.shadow;key.shadow.mapSize.set(1024,1024);key.shadow.bias=-.0004;key.shadow.normalBias=.02;key.shadow.radius=4;
-  /* тело тень отбрасывает, но не принимает (манекен и мышцы — при создании, здесь — запасная фигура без манекена) */
-  if(!mannequin)for(const p of Object.values(parts))p?.mesh?.traverse?.(o=>{if(o.isMesh)o.receiveShadow=false;});
+  /* тело тень отбрасывает, но не принимает: манекен и мышцы настраивают это при создании */
   /* точки суставов — разметка, а не предметы: тени не отбрасывают */
   scene.getObjectByName('joint-dots')?.traverse(o=>{o.castShadow=false;o.receiveShadow=false;});
   fitShadow();return true;
@@ -388,7 +310,7 @@ export function createCatalogScene(first,{coarse=false}={}){
  }
  /* теневая камера ключевого света охватывает всю сцену со всеми фазами (по рамке камер) с запасом */
  function fitShadow(){
-  const box=new THREE.Box3();scene.traverse(o=>{if(!o.isMesh||!o.visible||o===floor||o.name==='dot-ring'||o.parent===dots||o.parent?.name==='joint-dots'||o.parent?.parent===stressGroup||o.userData.merged||offBody(o))return;if(o.userData.boundsPoints){for(const p of o.userData.boundsPoints)box.expandByPoint(p);return;}box.expandByObject(o);});
+  const box=new THREE.Box3();scene.traverse(o=>{if(!o.isMesh||!o.visible||o===floor||o.name==='dot-ring'||o.parent?.name==='joint-dots'||o.parent?.parent===stressGroup||o.userData.merged||offBody(o))return;if(o.userData.boundsPoints){for(const p of o.userData.boundsPoints)box.expandByPoint(p);return;}box.expandByObject(o);});
   if(box.isEmpty())box.set(new THREE.Vector3(-1,0,-1),new THREE.Vector3(1,2,2));
   box.expandByScalar(.7);const center=box.getCenter(new THREE.Vector3()),r=box.getSize(new THREE.Vector3()).length()/2;
   for(const l of [key,fill,rim]){l.target.position.copy(center);l.position.copy(center).add(l.userData.dir||(l.userData.dir=l.position.clone().normalize().multiplyScalar(8)));l.target.updateMatrixWorld();}
