@@ -120,6 +120,25 @@ const B={
     на 4,1 см от запястья к локтю в «рэке» и 4,6–4,8 над головой, вместо 2,7 при обычном хвате.
     [ладоннее, вдоль кисти (− к пальцам), к большому пальцу]; a — направление оси от мизинца к большому пальцу. */
  deep:{c:[4.0,-4.0,0],a:[0,-.588,.809]},
+ /* Хват гантели «чашей» за верхний диск (тип g2CupDumbbell): диск лежит в ладонях, пальцы обхватывают его край. Положение
+    диска в рамке кисти — одно на режим (Mannequin.cupDisk): по нему ставятся кисти (спецификации), гантель
+    (BIND.g2CupDumbbell) и пальцы кожи Anny (строки таблицы, tools/anny-look/hands.js). Ладонь наклонена к грани диска на
+    tilt° (ось гантели отходит от нормали ладони на tilt° в сторону up — направления от запястья к пальцам, повёрнутого
+    на psi° к большому пальцу), касается края диска в точке at см от запястья вдоль кисти, сдвинутой на shift см к большому
+    пальцу, на gap над опорной поверхностью ладони; ось — в rim см от этой точки.
+    cup — гоблет: «чаша» из двух ладоней, локтевые края ладоней у рукояти, большие пальцы снаружи по краю диска, пальцы
+      вперёд и через передний край. Локти вниз, предплечья идут к гантели снизу и спереди: кисть продолжает их пальцами
+      вперёд и к середине, большой палец смотрит вперёд и наружу (перебор раскладок, tools/mannequin/exercises/g2-dumbbell.js
+      cup: с большими пальцами у рукояти в гоблете кисти либо перекрещиваются, либо заходят друг в друга, либо пронация и
+      запястье — за пределами).
+    cupring — пуловер и разгибание из-за головы: «ромб» — рукоять между большим и указательным пальцами каждой кисти,
+      большие пальцы обхватывают её; руки вверх, кисти разогнуты к диску.
+    paths — процедурная кисть (M.handShape): суставы и кончик большого пальца и пальцев [ладоннее, вдоль кисти, к большому
+    пальцу] — те же, что у кожи Anny в этом режиме (строки cup, cupring таблицы, левая кисть; печатает
+    node tools/anny-look/hands.js --paths): по процедурной кисти считаются касания, скелет и отход кожи Anny от процедурной. */
+ cup:{
+  cup:{tilt:30,psi:90,at:6.5,shift:2,rim:7.0,gap:.15,paths:[[[0.5,4.1,3.2],[3.5,5,4.9],[6.8,6.9,6.7],[9.8,7.6,5.4]],[[0.7,11.6,4.2],[3.1,13.3,3.7],[5.7,12.7,3.2],[8.4,11.4,3.2]],[[0.2,11.8,1.2],[3.5,13.9,0.8],[6.7,14,0.6],[9.4,13.5,0.6]],[[0.2,11.4,-1.1],[3,13.4,-1.3],[5.6,14.4,-1.3],[8.6,14.1,-1.5]],[[0.7,10.5,-3.3],[2.7,12,-3.2],[4.1,13.1,-3.1],[5.9,14.4,-3.3]]]},
+  cupring:{tilt:15,psi:-90,at:9,shift:-1.5,rim:7.0,gap:.15,paths:[[[0.5,4.1,3.2],[0.6,6.1,6.1],[1.9,9,8.8],[5.1,9.9,8.8]],[[0.7,11.6,4.2],[1.4,14.5,4.4],[3.1,16.6,4.6],[5.9,17.3,4.7]],[[0.2,11.8,1.2],[1.7,15.4,1.2],[4.7,16.5,1.1],[7.4,15.8,0.9]],[[0.2,11.4,-1.1],[1.1,14.7,-1],[3.7,15.9,-1.1],[6.7,15.4,-1.4]],[[0.7,10.5,-3.3],[2.8,11.7,-3.1],[4.6,11.3,-3],[6.2,9.8,-3]]]}},
  palm:{width:8.4,thick:3.0,len:10.2},finger:8.6,
  ankle:7.0,heel:-6.5,ball:[0,-5.35,13.5],toe:[0,-0.49,7.2],toeSole:-1.65, // опорные точки стопы от центра голеностопа (форма — FOOT_SECTIONS)
  sole:{heelW:6.0,ballM:4.6,ballL:4.3,ballLZ:10.8,hallux:[2.8,5.0],toe5:[-4.0,2.4]} // опора подошвы: ширина пятки, головки 1-й и 5-й плюсневых, подушечки пальцев
@@ -678,6 +697,26 @@ function handleIn(f,s,mode){
  if(mode==='deep')return{c:pt([-g*B.deep.c[0],B.deep.c[1],B.deep.c[2]]),a:dir(B.deep.a)};
  return{c:pt([-g*B.grip[0],B.grip[1],B.grip[2]]),a:V.unit(f.z)};
 }
+/* Верхний диск гантели в ладони, хват «чашей» (B.cup[mode]: 'cup' — гоблет, 'cupring' — пуловер и разгибание из-за головы),
+   в рамке кисти стороны s (x — тыл·g, −y — к пальцам, z — к большому
+   пальцу): c — середина внутренней грани диска на оси, n — ось от рукояти к диску, k — точка касания ладони с ребром диска,
+   u — направление от оси к этой точке (наружу), up — вверх по боку диска в плоскости ладони. Ладонь смотрит в pf = −g·x;
+   ось наклонена от неё на tilt° к пальцам (повёрнутым на psi° к большому пальцу); касание — на at см от запястья, сдвинуто
+   на shift см к большому пальцу, на gap над опорной поверхностью ладони (как у C.palm: 1,8 см от оси кисти).
+   Техника: гантель вертикально у груди, «both hands cupping the top of the weight» (NASM Exercise Library, Goblet Squat),
+   «gripping it with both hands underneath the top of the weight» (Healthline, Dumbbell Goblet Squat), «one of the heads
+   between your palms and your thumbs pointing towards your chest» (S. Lee, NSCA-CPT; Training & Conditioning, «Starting
+   with the Goblet»), локти у корпуса и вниз (ACE Exercise Library, Goblet Squat: «Keep the elbows close to the rib cage»;
+   P. Macek, StrongFirst, «Tips for Heavy Goblet Squats»: «Pulling the elbows down»). ExRx (Goblet Squat) роботам закрыт —
+   не сверялся. */
+function cupDisk(s,mode='cup'){
+ const g=SIGN[s],c=B.cup[mode]||B.cup.cup,b=c.tilt*D2R,p=c.psi*D2R,pf=[-g,0,0],up=V.add(V.scale([0,-1,0],Math.cos(p)),[0,0,1],Math.sin(p));
+ const n=V.unit(V.add(V.scale(pf,Math.cos(b)),up,Math.sin(b))),u=V.unit(V.add(V.scale(pf,-Math.sin(b)),up,Math.cos(b)));
+ const k=[-g*(B.palm.thick/2+.3+c.gap),-c.at,c.shift];
+ return{c:V.add(k,u,-c.rim),n,k,u,up,pf};
+}
+/* то же в мире (каталог или координаты авторинга): рамка кисти f {o,x,y,z} */
+function cupIn(f,s,mode){const L=cupDisk(s,mode),pt=l=>V.add(V.add(V.add(f.o,f.x,l[0]),f.y,l[1]),f.z,l[2]),dir=l=>V.add(V.add(V.scale(f.x,l[0]),f.y,l[1]),f.z,l[2]);return{c:pt(L.c),n:dir(L.n),k:pt(L.k),u:dir(L.u)};}
 function catalogPose(q){
  const r=fk(q),P=r.P,F=r.F,R={basis:'mannequin',props:[],contacts:[]};
  R.hip=toCat(F.pelvis.o);R.u=dirCat(M3.col(F.pelvis.R,1));R.n=dirCat(M3.col(F.pelvis.R,2));R.x=dirCat(V.scale(M3.col(F.pelvis.R,0),-1)); /* x — анатомически правая сторона */
@@ -1163,7 +1202,8 @@ function handShape(mode='relaxed',side='L',r=1.4){
  const g=SIGN[side],P=(u,v,w)=>[-g*u,-v,w],fingers=[],G=[B.grip[0],-B.grip[1]];
  for(const[w,len,rad]of FINGERS){
   let pts=[];
-  if(mode==='grip'||mode==='fist'||mode==='deep'){
+  if(B.cup[mode]){const fi=FINGERS.findIndex(x=>x[0]===w);pts=B.cup[mode].paths[fi+1].map(p=>P(...p));}
+  else if(mode==='grip'||mode==='fist'||mode==='deep'){
    const fs=mode!=='grip',rr=fs?1.15:r+.85,gu=fs?2.2:G[0],gv=fs?8.4:G[1];
    pts.push(P(.2,9.6,w));let used=0,prev=[.2,9.6],phi=-.6;
    while(used<len&&phi<3.3){const u=gu+rr*Math.sin(phi),v=gv+rr*Math.cos(phi);used+=Math.hypot(u-prev[0],v-prev[1]);prev=[u,v];pts.push(P(u,v,w*.96));phi+=.32;}
@@ -1174,7 +1214,7 @@ function handShape(mode='relaxed',side='L',r=1.4){
   fingers.push({pts,r:rad});
  }
  const T={hook:[[.4,2.6,3.0],[1.0,5.8,4.4],[1.4,8.0,4.6]],grip:[[.4,2.6,3.0],[1.9,6.0,3.7],[G[0]+r+2.0,G[1]-.4,2.4],[G[0]+r*.6+1.4,G[1]+r+.9,1.0]],
-  fist:[[.4,2.6,3.0],[2.2,6.0,3.3],[3.4,8.6,1.6]],deep:[[.4,2.6,3.0],[2.2,6.0,3.3],[3.4,8.6,1.6]],flat:[[.4,2.6,3.0],[.6,5.4,5.6],[.6,7.9,6.6]],relaxed:[[.4,2.6,3.0],[1.2,5.6,4.6],[1.9,7.7,4.2]]};
+  fist:[[.4,2.6,3.0],[2.2,6.0,3.3],[3.4,8.6,1.6]],cup:B.cup.cup.paths[0],cupring:B.cup.cupring.paths[0],deep:[[.4,2.6,3.0],[2.2,6.0,3.3],[3.4,8.6,1.6]],flat:[[.4,2.6,3.0],[.6,5.4,5.6],[.6,7.9,6.6]],relaxed:[[.4,2.6,3.0],[1.2,5.6,4.6],[1.9,7.7,4.2]]};
  return{palm:{c:P(.2,5.6,.15),size:[B.palm.thick,8.6,B.palm.width]},fingers,thumb:{pts:(T[mode]||T.relaxed).map(p=>P(...p)),r:1.0}};
 }
 /* Стопа (босая). Рамка — как у сегмента foot: начало в центре голеностопного сустава, +Z — к пальцам, +Y — вверх
@@ -1337,7 +1377,7 @@ function centerOfMass(R,extra=[]){
  const M=parts.reduce((s,[,w])=>s+w,0);return{c:parts.reduce((acc,[p,w])=>V.add(acc,p,w/M),[0,0,0]),mass:M};
 }
 
-return{handleIn,V,M3,Q,B,TORSO,TORSO_H,TORSO_COLS,colAngle,TORSO_JOINTS,TORSO_BLEND,TORSO_BLEND_FRONT,FRONT_W,FRONT_H,VERT_LEVELS,VERT_SHARE,LIMBS,NECK,CAPS,SH_CAP,AC_CAP,MASS,LIMITS,SIDES,SIGN,FLOOR,D2R,R2D,clamp,
+return{handleIn,cupDisk,cupIn,V,M3,Q,B,TORSO,TORSO_H,TORSO_COLS,colAngle,TORSO_JOINTS,TORSO_BLEND,TORSO_BLEND_FRONT,FRONT_W,FRONT_H,VERT_LEVELS,VERT_SHARE,LIMBS,NECK,CAPS,SH_CAP,AC_CAP,MASS,LIMITS,SIDES,SIGN,FLOOR,D2R,R2D,clamp,
  neutral,clone,pack,unpack,PACK,PACK_SIZE,fk,solePoints,twoBone,solveArm,solveArmWrist,setArmFromPoints,footFrame,heelFrame,solveLeg,rootRot,rootFromAxes,
  swing,swingTwist,eulerXZY,eulerYZX,spineRot,makeTrack,monotone,toCat,dirCat,catalogPose,
  profileAt,sectionAt,spineFrame,torsoFrame,frontK,ramp,vertebraFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,neckSDF,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,

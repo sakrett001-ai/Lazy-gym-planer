@@ -29,7 +29,8 @@ window.Sheet = {
       else {
         if (p.focus) {
           view.apply(dataFor(p.t), look);
-          const R = rig(p.t), f = R[p.focus], q = new THREE.Vector3(f[0] / 100, (186 - f[1]) / 100, f[2] / 100).applyMatrix4(cam.matrixWorldInverse), span = p.span || .5, hh = span * h / w / 2;
+          /* focus 'gripL+gripR' — середина нескольких точек (снаряд в обеих ладонях) */
+          const R = rig(p.t), fs = p.focus.split('+').map(k => R[k]), f = [0, 1, 2].map(i => fs.reduce((a, x) => a + x[i], 0) / fs.length), q = new THREE.Vector3(f[0] / 100, (186 - f[1]) / 100, f[2] / 100).applyMatrix4(cam.matrixWorldInverse), span = p.span || .5, hh = span * h / w / 2;
           cam.left = q.x - span / 2; cam.right = q.x + span / 2; cam.top = q.y + hh; cam.bottom = q.y - hh; cam.updateProjectionMatrix();
         } else {
           for (let k = 0; k <= 12; k++) { view.apply(dataFor(p.id === 'stance' ? 0 : k / 12), look); view.includeBounds(); }

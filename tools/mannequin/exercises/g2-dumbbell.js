@@ -114,29 +114,40 @@ function palmBest(C, q, s, point, up, fingersList, poles, extra) {
 }
 /* направления в плоскости с нормалью n: base, повёрнутый на 0…360° с шагом step */
 function fan(C, n, base, step = 20) { const { V } = C, N = V.unit(n), b = V.unit(V.perp(base, N)), c = V.cross(N, b), out = []; for (let a = 0; a < 360; a += step) { const r = a * C.D2R; out.push(V.add(V.scale(b, Math.cos(r)), c, Math.sin(r))); } return out; }
-/* Гантель в ладонях (хват за верхний диск, тип g2CupDumbbell): P — центр внутренней грани верхнего диска,
-   n — ось гантели (от рукояти к верхнему диску), fingers — базовое направление пальцев в плоскости диска.
-   Ладони лежат на диске «внахлёст»: каждая смещена на w в свою сторону и на stag вдоль пальцев (одна кисть впереди,
-   другая позади рукояти), пальцы повёрнуты к середине на yaw° — большие и указательные пальцы охватывают рукоять. */
-function cup(C, q, P, n, fingers, { w = 4, stag = 4.4, yaw = [0, 90], pole, poles, prefer, cands, prev, lam = 0 } = {}) {
-  const { V } = C, N = V.unit(n), F = V.unit(V.perp(fingers, N)), side = V.unit(V.cross(N, F)), chosen = {};
-  /* штраф за выход пронации, запястья и ротации плеча к границам подвижности */
-  const k = (x, lim) => Math.max(0, x - lim) ** 2;
-  const pen = s => { const p = q[s].pron, [wf, wd] = q[s].wrist, tw = q[s].shoulder[2]; return k(Math.abs(p), 72) + k(-wf, 62) + k(wf, 62) + k(wd, 14) + k(-wd, 22) + k(tw, 82) + k(-tw, 68); };
+/* Гантель в ладонях «чашей» (хват за верхний диск, тип g2CupDumbbell, кисть 'cup'): P — центр внутренней грани верхнего
+   диска, n — ось гантели (от рукояти к верхнему диску), fwd — направление «вперёд» в плоскости диска (от груди или к ногам).
+   Где диск лежит в ладони, задаёт Mannequin.cupDisk (одно место в рамке кисти на все упражнения — по нему же ставится
+   гантель и пальцы кожи Anny): ладони по бокам диска, нижнее ребро — на основании ладони, пальцы вверх по боку и через
+   край, большие пальцы — к рукояти. Свободно только, где на окружности диска стоит кисть: угол az° от бока своей стороны
+   к fwd (0 — точно сбоку), и полюс локтя. Выбирается вариант, где пронация, запястье и ротация плеча дальше от пределов
+   (prefer — добавка к штрафу); cands — явные варианты {az, pole(s, lat), dist(prev)} с непрерывностью по ключам (lam). */
+const kLim = (x, lim) => Math.max(0, x - lim) ** 2;
+const cupPen = (q, s) => { const p = q[s].pron, [wf, wd] = q[s].wrist, tw = q[s].shoulder[2]; return kLim(Math.abs(p), 72) + kLim(-wf, 62) + kLim(wf, 62) + kLim(wd, 14) + kLim(-wd, 22) + kLim(tw, 82) + kLim(-tw, 68); };
+function cupPlace(C, q, s, P, N, u, pole, mode = 'cup') {
+  const { V, M } = C, L = M.cupDisk(s, mode), M3 = C.M3, ln = L.n, lu = L.u, lw = V.cross(ln, lu), w = V.cross(N, u);
+  /* поворот рамки кисти: L.n → N, L.u → u */
+  const Rh = M3.cols(...[0, 1, 2].map(j => V.add(V.add(V.scale(N, ln[j]), u, lu[j]), w, lw[j])));
+  const o = V.sub(P, M3.v(Rh, L.c)), r = M.solveArmWrist(q, s, o, pole, Rh);
+  q.hands = { ...(q.hands || {}), [s]: mode };
+  return r;
+}
+function cup(C, q, P, n, fwd, { mode = 'cup', az = [-40, 40], step = 5, poles, prefer, cands, prev, lam = 0 } = {}) {
+  const { V } = C, N = V.unit(n), F = V.unit(V.perp(fwd, N)), chosen = {};
   for (const s of S) {
-    const lat = C.lat(q, s), sg = V.dot(side, lat) >= 0 ? 1 : -1, med = V.scale(side, -sg);
-    const put = (yw, pl) => { const y = yw * C.D2R; C.palm(q, s, V.add(V.add(P, side, sg * w), F, sg * stag), V.unit(V.add(V.scale(F, Math.cos(y)), med, Math.sin(y))), V.scale(N, -1), pl); return pen(s) + (prefer ? prefer(q, s) : 0); };
+    const lat = C.lat(q, s), side = V.unit(V.perp(lat, N));
+    const put = (a, pl) => { const r = a * C.D2R, u = V.unit(V.add(V.scale(side, Math.cos(r)), F, Math.sin(r))), res = cupPlace(C, q, s, P, N, u, pl, mode); return cupPen(q, s) + (prefer ? prefer(q, s) : 0) + (res.reachError > .05 ? 1e4 * res.reachError : 0); };
     if (cands) {
-      /* явные варианты {yaw, pole(s, lat), key}; lam — штраф за отход от варианта предыдущего ключа (непрерывность) */
       let best = null, bv = Infinity;
-      for (const c of cands(s)) { let v; try { v = put(c.yaw, c.pole(s, lat)); } catch (err) { continue; } v += prev && prev[s] ? lam * c.dist(prev[s]) : 0; if (v < bv) { bv = v; best = c; } }
-      put(best.yaw, best.pole(s, lat)); chosen[s] = best; continue;
+      for (const c of cands(s)) { const v = put(c.az, c.pole(s, lat)) + (prev && prev[s] ? lam * c.dist(prev[s]) : 0); if (v < bv) { bv = v; best = c; } }
+      put(best.az, best.pole(s, lat)); chosen[s] = best; continue;
     }
-    const cl = poles ? poles.map(f => f(s, lat)) : [pole ? pole(s, lat) : V.unit(V.add(lat, [0, -1, 0], .3))];
-    const yv = typeof yaw === 'function' ? yaw(s) : yaw, [lo, hi] = Array.isArray(yv) ? yv : [yv, yv];
+    const cl = (poles || [(s, lat) => V.unit(V.add([0, -1, 0], lat, .3))]).map(f => f(s, lat));
+    const av = typeof az === 'function' ? az(s) : az, [lo, hi] = Array.isArray(av) ? av : [av, av];
     let best = [lo, cl[0]], bv = Infinity;
-    for (const pl of cl) for (let yw = lo; yw <= hi + 1e-9; yw += 5) { const v = put(yw, pl) + 1e-4 * Math.abs(yw - (lo + hi) / 2); if (v < bv) { bv = v; best = [yw, pl]; } }
-    put(...best);
+    /* при равном штрафе — ближе к середине диапазона и полюс раньше в списке (иначе между ключами выбор скачет, и кисти между
+       ними уходят с диска) */
+    cl.forEach((pl, i) => { for (let a = lo; a <= hi + 1e-9; a += step) { const v = put(a, pl) + 1e-3 * Math.abs(a - (lo + hi) / 2) + .05 * i; if (v < bv) { bv = v; best = [a, pl]; } } });
+    put(...best); chosen[s] = { az: best[0] };
   }
   return chosen;
 }
@@ -175,15 +186,15 @@ function instepOn(C, q, s, x, ankleZ, top, phi, pole, squash = 1) {
   return r;
 }
 
-/* Разгибание из-за головы: хват «ромбом» — гантель вертикально, обе ладони под верхним диском рядом, без нахлёста (stag 0,
-   центры ладоней в w см по сторонам рукояти), большие и указательные пальцы смыкаются вокруг рукояти; вверху руки почти
-   прямые (дуга начинается с радиуса r0) и плечи чуть подняты (ge0 — подъём ключицы вверху, град). Вверху хват задан (top:
-   разворот пальцев к середине, полюс локтя вперёд fz и наружу lx), ниже — выбор из сетки с непрерывностью. Техника: гантель
-   держат обеими ладонями за внутреннюю поверхность верхнего диска (Healthline «Overhead Triceps Extension»: «grasping the
-   inside dumbbell plate surface with both hands»; каталог — «обеими руками за верхний диск»), вверху руки выпрямлены
-   (Healthline: «Hold the fully extended position»; Catalyst Athletics «Dumbbell Overhead Tricep Extension»: «full
-   extension», локти высоко). */
-const OHX = { r0: 32.4, w: 6, stag: 0, ge0: 30, top: { yaw: 60, fz: .45, lx: .55 } };
+/* Разгибание из-за головы: хват «ромбом» (кисти 'cupring', Mannequin.cupDisk) — гантель вертикально, обе ладони под
+   верхним диском, рукоять между большим и указательным пальцами каждой кисти, пальцы — вверх по дальнему боку диска; вверху
+   руки почти прямые (дуга начинается с радиуса r0) и плечи чуть подняты (ge0 — подъём ключицы вверху, град). Где на
+   окружности диска стоит кисть (az) и полюс локтя (вперёд fz, наружу lx) — выбор из сетки с непрерывностью по ключам.
+   Техника: гантель держат обеими ладонями за внутреннюю поверхность верхнего диска (Healthline «Overhead Triceps
+   Extension»: «grasping the inside dumbbell plate surface with both hands»; каталог — «обеими руками за верхний диск»),
+   вверху руки выпрямлены (Healthline: «Hold the fully extended position»; Catalyst Athletics «Dumbbell Overhead Tricep
+   Extension»: «full extension», локти высоко). */
+const OHX = { r0: 32.4, ge0: 30, top: { az: 0, fz: .45, lx: .55 } };
 /* Разгибание из-за головы: поза одного ключа; prev — варианты хвата предыдущего ключа; force — заданный вариант хвата
    по сторонам ({ L: { yaw, fz, lx }, R: … }) вместо выбора из сетки */
 function ohextKey(t, C, prev, force) {
@@ -191,10 +202,10 @@ function ohextKey(t, C, prev, force) {
   C.root(q, [0, 89.2, 0], [0, 1, 0], [0, 0, 1]); q.lumbar = [1, 0, 0]; q.thoracic = [0, 0, 0]; q.neck = [C.lerp(4, 10, e), 0, 0];
   const feet = q => { for (const s of S) plant(C, q, s, [C.M.SIGN[s] * 11, 0, -1]); };
   for (const s of S) q[s].girdle = [C.lerp(OHX.ge0, 22, e), C.lerp(2, 0, e)];
-  const mk = (yw, fz, lx) => ({ yaw: yw, fz, lx, pole: (s, lat) => V.unit(V.add(V.add(V.scale(lat, lx), [0, 1, 0], C.lerp(.2, 4, e)), [0, 0, 1], fz)), dist: o => Math.abs(yw - o.yaw) / 10 + Math.abs(fz - o.fz) * 2 + Math.abs(lx - o.lx) * 2 });
+  const mk = (az, fz, lx) => ({ az, fz, lx, pole: (s, lat) => V.unit(V.add(V.add(V.scale(lat, lx), [0, 1, 0], C.lerp(.2, 4, e)), [0, 0, 1], fz)), dist: o => Math.abs(az - o.az) / 10 + Math.abs(fz - o.fz) * 2 + Math.abs(lx - o.lx) * 2 });
   const grid = [];
-  for (let yw = 20; yw <= 90; yw += 5) for (const fz of [-.4, 0, .3, .6, 1, 1.6]) for (const lx of [1, .4, -.2]) grid.push(mk(yw, fz, lx));
-  const cands = force ? s => [mk(force[s].yaw, force[s].fz, force[s].lx)] : () => grid;
+  for (let az = -60; az <= 60; az += 10) for (const fz of [-.4, 0, .3, .6, 1, 1.6]) for (const lx of [1, .4, -.2]) grid.push(mk(az, fz, lx));
+  const cands = force ? s => [mk(force[s].az, force[s].fz, force[s].lx)] : () => grid;
   let chosen = null;
   const arms = q => {
     const f = C.fk(q), head = f.P.head, gh = V.mix(f.P.ghL, f.P.ghR, .5);
@@ -209,7 +220,7 @@ function ohextKey(t, C, prev, force) {
        дальше вперёд (fz 0,45): ротация плеча −78…−80° (предел −80), пронация — до 85. Плечи вверху приподняты (ge0 30°) */
     const E = [0, gh[1] + 25, head[2] + 1.9], th = C.lerp(-15.6, 96, Math.pow(e, .8)) * C.D2R, r = e < .5 ? OHX.r0 + (28 - OHX.r0) * Math.sin(Math.PI * e) : C.lerp(28, 20, (e - .5) * 2);
     const P = V.add(E, [0, Math.cos(th), -Math.sin(th)], r), tilt = C.lerp(18, 12, e) * C.D2R;
-    chosen = cup(C, q, P, [0, Math.cos(tilt), Math.sin(tilt)], [0, 0, -1], { w: OHX.w, stag: OHX.stag, cands, prev, lam: 25,
+    chosen = cup(C, q, P, [0, Math.cos(tilt), Math.sin(tilt)], [0, 0, -1], { mode: 'cupring', cands, prev, lam: 25,
       prefer: (q, s) => { const el = C.fk(q).P['el' + s]; return 1.2 * Math.max(0, Math.abs(el[0]) - 12) ** 2; } });
   };
   settle(C, q, { lo: 1, hi: 7, loads: q => [[C.fk(q).P.gripL, 12]], resolve: q => { feet(q); arms(q); } });
@@ -588,7 +599,7 @@ module.exports = {
       /* дуга гантели — от плечевых суставов; они идут за лопатками (ритм пояса), поэтому руки ставятся дважды */
       for (const pass of [0, 1]) {
         const f = C.fk(q), gh = V.mix(f.P.ghL, f.P.ghR, .5), P = V.add(gh, [0, Math.cos(th), Math.sin(th)], 50);
-        cup(C, q, P, [0, 1, 0], [0, 0, 1], { w: 4.8, yaw: [yw, yw], poles: [(s, lat) => V.unit(V.add(V.add(lat, [0, 1, 0], -.6 * k * (1 - (s === 'L' ? 1 : .3) * m)), [0, 0, 1], -.6 * k - .4 * m))] });
+        cup(C, q, P, [0, 1, 0], [0, 0, 1], { mode: 'cupring', az: [-60, 60], step: 10, poles: [(s, lat) => V.unit(V.add(V.add(lat, [0, 1, 0], -.6 * k * (1 - (s === 'L' ? 1 : .3) * m)), [0, 0, 1], -.6 * k - .4 * m)), (s, lat) => lat, (s, lat) => V.unit(V.add(lat, [0, 0, 1], -.6)), (s, lat) => V.unit(V.add(lat, [0, -1, 0], .6))] });
       }
       return q;
     }
@@ -763,10 +774,13 @@ module.exports = {
     }
   },
 
-  /* Гоблет-приседания: гантель вертикально у груди — ладони «чашкой» под верхним диском, большие и указательные пальцы
-     охватывают рукоять (хват, как в пуловере, тип g2CupDumbbell); гиря (optional 'kb') — кулаками за рога (вариант позы
-     variants: ['kb'] — у гири другой хват). До 4.43.0 гантель тоже лежала верхним диском на кулаках: кулаки стояли по бокам
-     рукояти в 2–3 см от неё — сверху казалось, что рука проходит мимо гантели.
+  /* Гоблет-приседания: гантель вертикально у груди — верхний диск в ладонях, сложенных «чашей» (кисти 'cup',
+     Mannequin.cupDisk): локтевые края ладоней у рукояти, пальцы вперёд и вверх через передний край диска, большие пальцы —
+     по его бокам; гиря (optional 'kb') — кулаками за рога (вариант позы variants: ['kb'] — у гири другой хват). Большие
+     пальцы вокруг рукояти здесь не получаются: при локтях вниз предплечья идут к гантели снизу и спереди, и кисть продолжает
+     их пальцами вперёд и к середине; с большими пальцами у рукояти кисти либо перекрещиваются, либо заходят друг в друга,
+     либо пронация и запястье за пределами (перебор раскладок при переходе на «чашу»). До 4.43.0 гантель лежала верхним
+     диском на кулаках, в 4.43.0–4.90.0 — на раскрытых плоских ладонях с прямыми пальцами в воздухе.
      Стопы шире плеч, носки врозь, колени по носкам, локти опущены и при приседе проходят внутри коленей.
      eccFirst: t=0 — стоя, t=1 — присед до параллели бедра с полом, спина нейтральна. */
   goblet: {
@@ -791,12 +805,12 @@ module.exports = {
       };
       /* гантель: внутренняя грань верхнего диска — на высоте прежних кулаков + 4,7 см (там лежал диск), стоя — на 3 см ближе
          к груди (в нижней точке корпус наклонён на 42° и грудь сама подходит к гантели — ближе диск уходит в неё); ладони
-         внахлёст под диском (одна ближе к груди, другая дальше), большие и указательные пальцы у рукояти, локти вниз */
+         «чашей» по бокам диска (место диска в ладони — Mannequin.cupDisk 'cup'), локти вниз */
       const cupped = q => {
         const { T, Hc, fw } = at(q), P = V.add(V.add(Hc, [0, 1, 0], 4.7), T.z, -3 * (1 - e)), tl = 15 * C.D2R, n = V.add(V.scale([0, 1, 0], Math.cos(tl)), fw, -Math.sin(tl));
-        /* ладони смотрят вверх и на 15° к груди (строго вверх — предплечье выворачивается за предел супинации на 4–5°);
-           пальцы — вперёд и к середине на 50–80° (наружу при опущенных локтях — запястье за пределом отведения) */
-        cup(C, q, P, n, fw, { w: 4.5, stag: 3, yaw: [50, 80], poles: [(s, lat) => V.unit(V.add(V.add([0, -1, 0], lat, .35), fw, -.25)), (s, lat) => V.unit(V.add(V.add([0, -1, 0], lat, .15), fw, -.1))] });
+        /* ось гантели — вверх и на 15° к груди (строго вверх — предплечье выворачивается за предел супинации на 4–5°);
+           кисть — у своего бока диска, сдвиг вокруг оси до 45° вперёд или назад, локоть — вниз и наружу (полюсы) */
+        cup(C, q, P, n, fw, { az: [-45, 45], poles: [(s, lat) => V.unit(V.add(V.add([0, -1, 0], lat, .35), fw, -.25)), (s, lat) => V.unit(V.add(V.add([0, -1, 0], lat, .15), fw, -.1)), (s, lat) => V.unit(V.add([0, -1, 0], lat, .6)), (s, lat) => V.unit(V.add(V.add([0, -1, 0], lat, .3), fw, .3))] });
       };
       const hands = variant === 'kb' ? fists : cupped;
       const load = q => { const f = C.fk(q); return variant === 'kb' ? V.mix(f.P.gripL, f.P.gripR, .5) : V.add(V.add(at(q).Hc, [0, 1, 0], 4.7), at(q).T.z, -3 * (1 - e)); };
@@ -1214,9 +1228,9 @@ module.exports = {
       const chain = this._chain || (this._chain = (() => {
         const out = new Map(), base = Array.from({ length: 13 }, (_, i) => i / 12), ch = [];
         let prev = null;
-        for (const tk of base) { const r = ohextKey(tk, C, prev, tk === 0 ? { L: OHX.top, R: OHX.top } : undefined); out.set(key(tk), r.q); ch.push(r.chosen); prev = r.chosen; }
+        for (const tk of base) { const r = ohextKey(tk, C, prev); out.set(key(tk), r.q); ch.push(r.chosen); prev = r.chosen; }
         for (let i = 0; i < 12; i++) {
-          const mid = s => ({ yaw: (ch[i][s].yaw + ch[i + 1][s].yaw) / 2, fz: (ch[i][s].fz + ch[i + 1][s].fz) / 2, lx: (ch[i][s].lx + ch[i + 1][s].lx) / 2 });
+          const mid = s => ({ az: (ch[i][s].az + ch[i + 1][s].az) / 2, fz: (ch[i][s].fz + ch[i + 1][s].fz) / 2, lx: (ch[i][s].lx + ch[i + 1][s].lx) / 2 });
           out.set(key((2 * i + 1) / 24), ohextKey((2 * i + 1) / 24, C, null, { L: mid('L'), R: mid('R') }).q);
         }
         return out;

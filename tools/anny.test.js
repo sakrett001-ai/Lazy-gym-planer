@@ -345,6 +345,21 @@ test('grip: Anny fingers close around the handle — the ring is closed, no fing
   for (const hv of HO.handVerts(d).L) if (!hv.palm) { const p = [P[hv.v * 3], P[hv.v * 3 + 1], P[hv.v * 3 + 2]], t = M.V.sub(p, h.c0), rad = M.V.perp(t, h.e), n = M.V.unit(rad); for (let i = 0; i < 3; i++) P[hv.v * 3 + i] -= 1.5 * n[i]; }
   assert(HO.problems(HO.holdOf(R, P, d, 'L', e, () => true)).some(x => /пальцы в ручке/.test(x)), 'fingers pushed 1.5 cm into the bar must fail');
 });
+test('cupped dumbbell (cup — goblet, cupring — pullover and overhead extension): fingertips on the top head, thumb at the rim or the handle, fingers not in the head; flat palms fail', () => {
+  const HO = require('./anny-look/holds.js'), L = HO.LIM, none = () => false;
+  for (const s of M.SIDES) for (const m of HO.CUP_MODES) assert(header.hands[s][m]?.f?.length === 4 && header.hands[s][m].th, `cup row ${s} ${m}`);
+  for (const [id, t, mode] of [['goblet', 0, 'cup'], ['goblet', .5, 'cup'], ['goblet', 1, 'cup'], ['pullover', 0, 'cupring'], ['pullover', 1, 'cupring'], ['ohext', 0, 'cupring'], ['ohext', 1, 'cupring']]) {
+    const { R } = pose(id, t, none), rows = HO.framesCups(R, A.skin(R, { d, floor: false }), d);
+    assert(rows.length === 2 && rows.every(o => o.mode === mode), `${id} t=${t}: both hands ${mode}`);
+    for (const o of rows) assert.deepEqual(HO.cupProblems(o), [], `${id} t=${t} ${o.side}`);
+  }
+  /* отрицательный: без строк «чаши» в данных пальцы — как ладонь на опоре (прямые, как до 4.91): кончики в воздухе */
+  const flat = { ...d, hands: Object.fromEntries(M.SIDES.map(s => [s, { ...d.hands[s], cup: undefined, cupring: undefined }])) }; for (const k of ['_digits', '_bind', '_rig', '_handVerts']) delete flat[k];
+  for (const [id, t] of [['goblet', 0], ['ohext', .5]]) {
+    const { R } = pose(id, t, none), rows = HO.framesCups(R, A.skin(R, { d: flat, floor: false }), flat);
+    assert(rows.length === 2 && rows.every(o => o.tipFinger > L.CUP_TIP && HO.cupProblems(o).some(x => /кончик пальца/.test(x))), `${id} t=${t}: flat fingers must fail — ${JSON.stringify(rows.map(o => o.tipFinger))}`);
+  }
+});
 test('extreme poses: inverted triangles and skin folds do not grow beyond the recorded counts; broken weights fail', () => {
   const base = JSON.parse(fs.readFileSync(path.join(root, 'tools/anny-look/fixtures/folds.json'), 'utf8'));
   for (const [id, t] of [['squat', 1], ['bbcurl', 1], ['latpull', 0], ['pushup', 1]]) {

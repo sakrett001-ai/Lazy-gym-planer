@@ -105,6 +105,39 @@ function holdOf(R, P, d, s, entry, has) {
   const tg = tips.map(tipGap), cover = near.filter(x => x <= LIM.COVER_BAND).length / LIM.SECTORS, proc = procDepth(R, s, h);
   return { side: s, handle: h.id, r: h.r, off: h.off, cover, fingerDepth, fingerLimit: Math.max(LIM.FINGER_DEPTH, proc.finger + LIM.FINGER_EXTRA), palmDepth, palmLimit: proc.palm + LIM.HAND_FOOT_EXTRA, tipFinger: Math.max(...tg.slice(1)), tipThumb: tg[0] };
 }
+/* «Чаша» (кисти 'cup' и 'cupring', Mannequin.cupDisk; гоблет, пуловер, разгибание из-за головы): гантель лежит верхним диском
+   в ладонях, пальцы — на диске и через его край, большой палец — на краю диска (cup) или у рукояти (cupring). По коже Anny:
+   кончик каждого пальца (середина дальней трети концевой фаланги) — не дальше CUP_TIP = 1,5 см от поверхности диска (как
+   кончик на ручке, TIP_FINGER), большого — от своей цели (диск или рукоять со втулкой) не дальше TIP_THUMB; пальцы — не глубже
+   CUP_DEPTH = 1,0 см в диске (мякоть подушечки 0,25–0,3 и смешение весов у суставов, как FINGER_DEPTH, плюс шестигранник:
+   радиус диска 6,5 по граням и 7,5 по вершинам, таблица пальцев подобрана по 7,0). Отрицательный тест — ладонь на опоре
+   (прямые пальцы, 4.90.0): кончики в воздухе. */
+const CUP_MODES = new Set(['cup', 'cupring']);
+Object.assign(LIM, { CUP_TIP: 1.5, CUP_DEPTH: 1.0 });
+const sdCyl = (p, c, n, r, h) => { const t = V.sub(p, c), a = V.dot(t, n), rd = V.len(V.sub(t, V.scale(n, a))), dx = rd - r, dy = Math.abs(a) - h; return Math.min(Math.max(dx, dy), 0) + Math.hypot(Math.max(dx, 0), Math.max(dy, 0)); };
+function cupOf(R, P, d, s) {
+  const props = R.props || [], top = props.find(p => /:top$/.test(p.id) && p.kind === 'cyl' && p.mount === 'hands'); if (!top) return null;
+  const id = top.id.replace(/:top$/, ''), parts = props.filter(p => p.id === id + ':handle' || p.id === id + ':collarT');
+  const n = V.unit(top.axis), disk = p => sdCyl(p, top.c, n, top.r, top.len / 2);
+  const grip = p => Math.min(...parts.map(q => q.kind === 'beam' ? (() => { const ab = V.sub(q.b, q.a), k = Math.max(0, Math.min(1, V.dot(V.sub(p, q.a), ab) / V.dot(ab, ab))); return V.dist(p, V.add(q.a, ab, k)) - q.r; })() : sdCyl(p, q.c, V.unit(q.axis), q.r, q.len / 2)));
+  const tips = [0, 1, 2, 3, 4].map(() => [0, 0, 0, 0]); let depth = 0;
+  for (const hv of handVerts(d)[s]) {
+    const p = [P[hv.v * 3], P[hv.v * 3 + 1], P[hv.v * 3 + 2]];
+    if (!hv.palm) depth = Math.max(depth, -disk(p));
+    if (hv.tip) { const c = tips[hv.digit]; c[0] += p[0]; c[1] += p[1]; c[2] += p[2]; c[3]++; }
+  }
+  const tp = tips.map(c => [c[0] / c[3], c[1] / c[3], c[2] / c[3]]), mode = R.hands[s];
+  return { side: s, kind: 'cup', mode, handle: top.id, tipFinger: Math.max(...tp.slice(1).map(disk)), tipThumb: mode === 'cupring' ? grip(tp[0]) : disk(tp[0]), fingerDepth: depth };
+}
+function cupProblems(o) {
+  const out = [];
+  if (o.tipFinger > LIM.CUP_TIP) out.push(`кончик пальца в ${o.tipFinger.toFixed(2)} см от диска (допуск ${LIM.CUP_TIP})`);
+  if (o.tipThumb > LIM.TIP_THUMB) out.push(`кончик большого пальца в ${o.tipThumb.toFixed(2)} см от ${o.mode === 'cupring' ? 'рукояти' : 'диска'} (допуск ${LIM.TIP_THUMB})`);
+  if (o.fingerDepth > LIM.CUP_DEPTH) out.push(`пальцы в диске на ${o.fingerDepth.toFixed(2)} см (допуск ${LIM.CUP_DEPTH})`);
+  return out;
+}
+/* кисти «чашей» в кадре */
+function framesCups(R, P, d) { const out = []; for (const s of M.SIDES) if (CUP_MODES.has(R.hands?.[s])) { const o = cupOf(R, P, d, s); if (o) out.push(o); } return out; }
 function problems(o) {
   const out = [];
   if (o.cover < LIM.COVER_MIN) out.push(`обхват ${(o.cover * 100).toFixed(0)} % (нужно ≥ ${LIM.COVER_MIN * 100})`);
@@ -139,7 +172,7 @@ function summary(rows) {
   return { n: rows.length, cover: { min: Math.min(...col('cover')), p5: q(col('cover'), .05), median: q(col('cover'), .5) }, fingerDepth: { max: Math.max(...col('fingerDepth')), p95: q(col('fingerDepth'), .95), margin: Math.min(...rows.map(r => r.fingerLimit - r.fingerDepth)) },
     palmDepth: { max: Math.max(...col('palmDepth')), margin: Math.min(...rows.map(r => r.palmLimit - r.palmDepth)) }, tipFinger: { max: Math.max(...col('tipFinger')), p95: q(col('tipFinger'), .95) }, tipThumb: { max: Math.max(...col('tipThumb')), p95: q(col('tipThumb'), .95) } };
 }
-module.exports = { LIM, handVerts, handleAt, holdOf, framesHolds, problems, run, failures, summary };
+module.exports = { LIM, CUP_MODES, cupOf, cupProblems, framesCups, handVerts, handleAt, holdOf, framesHolds, problems, run, failures, summary };
 if (require.main === module) {
   const CMP = require('./compare.js');
   const ids = process.argv[2] && process.argv[2] !== 'all' && !process.argv[2].startsWith('--') ? process.argv[2].split(',') : null;
