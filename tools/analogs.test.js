@@ -99,7 +99,7 @@ test('the band-only place: gym exercises are replaced by their band twins', () =
     assert.equal(first(gym), twin, `${gym} → ${twin}`);
   for (const id of ['bandlatpull', 'bandadduct', 'bandabduct', 'bandbridge', 'bandlegext', 'bandfloorpress', 'bandfly', 'sissysquat']) assert(a.available(a.EXI[id], E), id + ' needs only bands');
   /* разгибание ног в тренажёре: первая замена — разгибание с эспандером, вторая — сисси-присед у косяка (без снаряда); на улице — сисси-присед */
-  assert.deepEqual(a.analogsFor(a.EXI.legext, E, { limit: 2 }).map(r => r.ex.id), ['bandlegext', 'sissysquat']);
+  assert.deepEqual(Array.from(a.analogsFor(a.EXI.legext, E, { limit: 2 }), r => r.ex.id), ['bandlegext', 'sissysquat']);
   assert.equal(a.analogsFor(a.EXI.legext, a.effEquip(['pullup', 'dipbars']), { limit: 1 })[0]?.ex.id, 'sissysquat');
   assert.match(a.analogNote(a.EXI.latpull, a.EXI.bandlatpull, E), /резина/, 'the note names the band');
   /* программа зала в этом месте: тяга верхнего блока заменена тягой эспандера сверху */
