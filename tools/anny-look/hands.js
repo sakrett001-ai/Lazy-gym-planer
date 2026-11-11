@@ -276,6 +276,10 @@ const CUP = new Set(['cup', 'cupring']), CUP_R = 7.0, CUP_LEN = 7, CUP_COLLAR = 
    в себя (складки кисти в стойке: 3 у ладони на опоре, 21–37 при МФС 90°, 11–36 при ПМФС 60–90°); при 60/50/35 — 3–4.
    Чаша — не кулак: пальцы лежат на диске и через его край, а не сжаты */
 const CUP_LIM = [[0, 60], [0, 50], [0, 35]], CUP_THUMB_SLACK = 4, CUP_THUMB_TRIES = 300;
+/* большой палец «чаши»: складок кисти — не больше, чем у ладони на опоре, + CUP_FOLD_EXTRA (у левой кисти Anny без лишней
+   складки большой палец не встаёт к диску — остаётся в плоскости ладони и торчит «шипом»), вывернутых треугольников — не больше
+   (а если такой позы нет — на CUP_FOLD_EXTRA больше; итог проверяет tools/anny-look/check.js по крайним позам) */
+const CUP_FOLD_EXTRA = 1;
 const sdCylAx = (p, c, n, r, a0, a1) => { const t = V.sub(p, c), a = V.dot(t, n), rd = V.len(V.sub(t, V.scale(n, a))), dx = rd - r, m = (a0 + a1) / 2, h = (a1 - a0) / 2, dy = Math.abs(a - m) - h; return Math.min(Math.max(dx, dy), 0) + Math.hypot(Math.max(dx, 0), Math.max(dy, 0)); };
 function cupBodies(mr, mode) {
   const L = M.cupDisk(mr.s, mode), c = L.c, n = L.n;
@@ -346,8 +350,18 @@ function solveCup(mr, mode, d = null) {
   /* большой палец — первый из вариантов, у которого кисть не складывается сильнее, чем ладонь на опоре (строка flat): счёт
      складок кожи кисти (handFolds), как при подборе хвата */
   const base = handFolds(d, mr, 'flat', d.hands[mr.s].flat), inv0 = handInverted(d, mr, 'flat', d.hands[mr.s].flat);
-  for (const c of th.list.slice(0, CUP_THUMB_TRIES)) { const row = rowOf(c); if (handFolds(d, mr, mode, row) <= base && handInverted(d, mr, mode, row) <= inv0) return row; }
+  for (const extra of [0, CUP_FOLD_EXTRA]) for (const c of th.list.slice(0, CUP_THUMB_TRIES)) { const row = rowOf(c); if (handFolds(d, mr, mode, row) <= base + CUP_FOLD_EXTRA && handInverted(d, mr, mode, row) <= inv0 + extra) return row; }
   return { f, th: d.hands[mr.s].flat.th };
+}
+/* большой палец «чаши», не нашедший позы без лишних складок (остался в плоскости ладони, как на опоре), — зеркальная поза
+   другой кисти, если и с ней кисть складывается не больше (сетка Anny слева и справа чуть разная) */
+function cupMirror(d, T) {
+  const mirror = q => [q[0], -q[1], -q[2], q[3]];
+  for (const m of CUP) for (const s of ['L', 'R']) {
+    const o = s === 'L' ? 'R' : 'L', row = T[s][m]; if (row.th.q.join() !== T[s].flat.th.q.join() || T[o][m].th.q.join() === T[o].flat.th.q.join()) continue;
+    const dd = { ...d, hands: { ...d.hands, [s]: { ...d.hands[s], ...T[s] } } }, mr = meshRig(dd, s), cand = { f: row.f, th: { q: mirror(T[o][m].th.q), t: T[o][m].th.t } };
+    if (handFolds(dd, mr, m, cand) <= handFolds(dd, mr, 'flat', T[s].flat) + CUP_FOLD_EXTRA && handInverted(dd, mr, m, cand) <= handInverted(dd, mr, 'flat', T[s].flat) + CUP_FOLD_EXTRA) T[s][m] = cand;
+  }
 }
 /* вывернутые треугольники кожи кисти стороны mr.s в стойке с этой кистью (как check.js: нормаль в кадре против нормали
    стойки, повёрнутой смешанным поворотом вершины) */
@@ -373,12 +387,15 @@ function table(d, log = () => {}) {
     /* радиусы — по возрастанию, с тягой к предыдущей строке (W_PREV): таблица гладкая, между строками — линейно */
     const grip = []; for (const r of RADII) grip.push(solveHand(mr, 'grip', r, d, grip[grip.length - 1] || null));
     /* глубокий хват гири (M.B.deep): ручка гири — радиус KB.handleR = 1,7 */
-    out[s] = { grip, fist: solveHand(mr, 'fist', 0, d), flat: solveFlat(mr, d), deep: solveHand(mr, 'deep', 1.7, d), cup: solveCup(mr, 'cup', d), cupring: solveCup(mr, 'cupring', d) };
+    out[s] = { grip, fist: solveHand(mr, 'fist', 0, d), flat: solveFlat(mr, d), deep: solveHand(mr, 'deep', 1.7, d) };
+    const dd = { ...d, hands: { ...d.hands, [s]: { ...d.hands[s], flat: out[s].flat } } };
+    for (const m of CUP) out[s][m] = solveCup(mr, m, dd);
     log(`${s}: ${((Date.now() - t0) / 1000).toFixed(1)} с`);
   }
+  cupMirror(d, out);
   return out;
 }
-module.exports = { CUP, cupBodies, solveCup, cupPaths, PALMAR_ABD, RADII, PRESS, TRUE_PRESS, FIST, trueGaps, solveFlat, handFolds, fromJson, meshRig, solveFinger, solveThumb, solveHand, table };
+module.exports = { CUP, cupBodies, solveCup, cupPaths, cupMirror, handInverted, PALMAR_ABD, RADII, PRESS, TRUE_PRESS, FIST, trueGaps, solveFlat, handFolds, fromJson, meshRig, solveFinger, solveThumb, solveHand, table };
 /* пути пальцев кожи Anny в режимах «чаши» (левая кисть, [ладоннее, вдоль кисти, к большому пальцу]) — для процедурной кисти
    (B.cup[mode].paths в 09bm-mannequin.js): node tools/anny-look/hands.js --paths */
 function cupPaths(d) {
