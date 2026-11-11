@@ -1,7 +1,8 @@
 /* Инвентарь группы G2 (гантели и гири).
    g2Step — степ-платформа для подъёмов на носки: 90x35 см, высота 15 см, резиновое покрытие, две опоры.
    g2CupDumbbell — гантель, которую держат двумя ладонями под верхним диском (гоблет, разгибание из-за головы,
-   пуловер): ось гантели — по нормали ладоней, внутренняя грань верхнего диска лежит на ладонях.
+   пуловер). Кисти «чашей» ('cup'): диск — там, где его задаёт Mannequin.cupDisk в рамке каждой кисти (ладони по бокам
+   диска, нижнее ребро — на основании ладони). Иначе (прежний хват) ось — по нормали ладоней, грань лежит на ладонях.
    g2KbHorns — гиря двумя руками «за рога» (гоблет): хваты на дужках рукояти, шар под рукоятью; bottomUp — дном вверх
    («гало»): шар над кистями. */
 ((E) => {
@@ -19,13 +20,24 @@
      axis: 'palms' — по средней нормали ладоней (по умолчанию), 'gravity' — вертикально. */
   BIND.g2CupDumbbell = (e, R) => {
     const hs = e.hands || ['L', 'R'], id = e.id || 'cup';
-    const pal = hs.map(s => { const f = R.frames['hand' + s], g = s === 'L' ? 1 : -1; return { p: V.add(V.add(f.o, f.x, -g * 1.8), f.y, -5.6), n: V.scale(f.x, -g) }; });
-    let n = V.unit(pal.reduce((a, q) => V.add(a, q.n), [0, 0, 0]));
-    if (e.axis === 'gravity') n = [0, -1, 0];
-    const P0 = V.scale(pal.reduce((a, q) => V.add(a, q.p), [0, 0, 0]), 1 / pal.length);
-    const lift = Math.max(...pal.map(q => V.dot(V.sub(q.p, P0), n)));
     const H = e.handle || 13.5, hr = e.headR || 7.5, hl = e.headLen || 7;
-    const face = V.add(P0, n, lift + (e.gap ?? .15)), c = V.add(face, n, -(H / 2 + 1.2));
+    let n, face;
+    const cupMode = R.hands?.[hs[0]];
+    if ((cupMode === 'cup' || cupMode === 'cupring') && hs.every(s => R.hands?.[s] === cupMode)) {
+      /* хват «чашей» (кисть 'cup', Mannequin.cupDisk): у каждой ладони диск — в одном и том же месте её рамки; гантель —
+         среднее по ладоням (между ключами позы кисти чуть расходятся) */
+      const at = hs.map(s => M.cupIn(R.frames['hand' + s], s, cupMode));
+      n = V.unit(at.reduce((a, q) => V.add(a, q.n), [0, 0, 0]));
+      face = V.scale(at.reduce((a, q) => V.add(a, q.c), [0, 0, 0]), 1 / at.length);
+    } else {
+      const pal = hs.map(s => { const f = R.frames['hand' + s], g = s === 'L' ? 1 : -1; return { p: V.add(V.add(f.o, f.x, -g * 1.8), f.y, -5.6), n: V.scale(f.x, -g) }; });
+      n = V.unit(pal.reduce((a, q) => V.add(a, q.n), [0, 0, 0]));
+      if (e.axis === 'gravity') n = [0, -1, 0];
+      const P0 = V.scale(pal.reduce((a, q) => V.add(a, q.p), [0, 0, 0]), 1 / pal.length);
+      const lift = Math.max(...pal.map(q => V.dot(V.sub(q.p, P0), n)));
+      face = V.add(P0, n, lift + (e.gap ?? .15));
+    }
+    const c = V.add(face, n, -(H / 2 + 1.2));
     const at = k => V.add(c, n, k);
     return [
       { kind: 'cyl', c: at(H / 2 + 1.2 + hl / 2), axis: n, r: hr, len: hl, sides: 6, tone: 'plate', role: 'weight', id: id + ':top', mount: 'hands' },
