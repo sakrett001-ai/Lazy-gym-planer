@@ -28,7 +28,7 @@
   "folds": 114
  },
  "latpull 0": {
-  "inverted": 84,
+  "inverted": 81,
   "folds": 143
  },
  "ohp 0": {
@@ -44,11 +44,11 @@
   "folds": 16
  },
  "bicycle 0.25": {
-  "inverted": 63,
+  "inverted": 57,
   "folds": 250
  },
  "hangknee 1": {
-  "inverted": 103,
+  "inverted": 97,
   "folds": 135
  },
  "lunge 1": {
