@@ -41,7 +41,8 @@
       убывают»: числа на позу записаны в tools/anny-look/fixtures/folds.json (node tools/anny-look/check.js --record-folds
       после улучшения), больше записанного — ошибка.
    4. Хват (holds.js): кисть в режиме 'grip' у ручки — обхват ручки кожей ладони и пальцев, глубина пальцев и ладони в ручке,
-      кончики пальцев и большого пальца не торчат из кулака. Допуски и их обоснование — в шапке holds.js. */
+      кончики пальцев и большого пальца не торчат из кулака; кисть «чашей» ('cup', 'cupring') — кончики пальцев на верхнем
+      диске гантели, большой палец на краю диска или у рукояти, пальцы не в диске. Допуски и их обоснование — в шапке holds.js. */
 const fs = require('node:fs'), path = require('node:path');
 const root = path.resolve(__dirname, '../..');
 const M = require(root + '/src/js/09bm-mannequin.js'), EQ = require(root + '/src/js/09bn-equipment.js'), A = require(root + '/src/js/09bs-anny.js');
@@ -163,7 +164,7 @@ function triTri(T1, T2) {
 function run({ ids = null, ts = [0, .25, .5, .75, 1], d = CMP.loadAnny(), log = () => {} } = {}) {
   const POSES = CMP.loadPoses(), list = (ids || Object.keys(POSES)).filter(id => POSES[id]), kind = kinds(d), zones = CMP.zonesOf(d);
   const verts = []; for (let v = 0; v < d.nv; v += 2) if (zones[v] !== 'полость') verts.push(v);
-  const res = { penetration: [], distance: {}, folds: [], holds: [] };
+  const res = { penetration: [], distance: {}, folds: [], holds: [], cups: [] };
   const zacc = {};
   for (const id of list) {
     const entry = POSES[id], invs = [['всё', () => true], ['ничего', () => false]];
@@ -173,6 +174,7 @@ function run({ ids = null, ts = [0, .25, .5, .75, 1], d = CMP.loadAnny(), log = 
         const R = rig(t), P = A.skin(R, { d, floor: false, props: (R.props || []).filter(p => EQ.visible(p, has)) });
         for (const p of penetration(R, P, d, kind, e, has)) if (p.depth > p.limit) res.penetration.push({ ex: id, t, has: hn, ...p });
         for (const o of HOLDS.framesHolds(R, P, d, e, has)) res.holds.push({ id, t, has: hn, ...o, bad: HOLDS.problems(o) });
+        for (const o of HOLDS.framesCups(R, P, d)) res.cups.push({ id, t, has: hn, ...o, bad: HOLDS.cupProblems(o) });
         if (hn === 'всё') {
           const body = M.bodyData(R), Pv = new Float32Array(verts.length * 3); verts.forEach((v, k) => { Pv[k * 3] = P[v * 3]; Pv[k * 3 + 1] = P[v * 3 + 1]; Pv[k * 3 + 2] = P[v * 3 + 2]; });
           const dist = CMP.distances(d, Pv, R, zones, verts, body);
@@ -193,6 +195,7 @@ function failures(res) {
   for (const p of res.penetration) out.push(`${p.ex}${p.has === 'ничего' ? ' (без необязательного инвентаря)' : ''} t=${p.t}: ${p.seg} в ${p.id === 'floor' ? 'полу' : p.id} на ${p.depth.toFixed(2)} см (допуск ${p.limit.toFixed(2)}: валидатор ${p.tol}, процедурная кожа ${p.proc.toFixed(2)} + ${p.extra})`);
   for (const [z, s] of Object.entries(res.distance)) { if (s.p99 > s.limitP99) out.push(`${z}: 99 % вершин дальше ${s.p99.toFixed(2)} см от процедурной кожи (допуск ${s.limitP99})`); if (s.max > s.limitMax) out.push(`${z}: отход ${s.max.toFixed(2)} см (${s.where}, допуск ${s.limitMax})`); }
   out.push(...HOLDS.failures(res.holds || []));
+  for (const c of res.cups || []) if (c.bad.length) out.push(`${c.id}${c.has === 'ничего' ? ' (без необязательного инвентаря)' : ''} t=${c.t} ${c.side}: «чаша» — ${c.bad.join('; ')}`);
   const base = foldBase();
   for (const f of res.folds) { const b = base[`${f.id} ${f.t}`] || { inverted: 0, folds: 0 }; if (f.inverted > b.inverted) out.push(`${f.id} t=${f.t}: вывернутых треугольников ${f.inverted} (записано ${b.inverted})`); if (f.folds > b.folds) out.push(`${f.id} t=${f.t}: складок ${f.folds} (записано ${b.folds})`); }
   return out;
@@ -219,6 +222,7 @@ if (require.main === module) {
     console.log('отход от процедурной кожи (99 % / наибольший, см):'); for (const [z, s] of Object.entries(res.distance)) console.log(`  ${z.padEnd(12)} ${s.p99.toFixed(2).padStart(5)} / ${s.max.toFixed(2).padStart(5)} (допуск ${s.limitP99} / ${s.limitMax})  ${s.where}`);
     const H = HOLDS.summary(res.holds), f2 = x => x.toFixed(2);
     console.log(`хват (${H.n} кистей): обхват не меньше ${(H.cover.min * 100).toFixed(0)} % (допуск ${HOLDS.LIM.COVER_MIN * 100}), пальцы в ручке до ${f2(H.fingerDepth.max)} (запас до допуска ${f2(H.fingerDepth.margin)}), ладонь — до ${f2(H.palmDepth.max)} (запас ${f2(H.palmDepth.margin)}), кончики пальцев — до ${f2(H.tipFinger.max)} (допуск ${HOLDS.LIM.TIP_FINGER}), большого — до ${f2(H.tipThumb.max)} (допуск ${HOLDS.LIM.TIP_THUMB})`);
+    if (res.cups.length) { const mx = k => Math.max(...res.cups.map(c => c[k])); console.log(`«чаша» (${res.cups.length} кистей): кончики пальцев — до ${f2(mx('tipFinger'))} см от диска (допуск ${HOLDS.LIM.CUP_TIP}), большого — до ${f2(mx('tipThumb'))} от диска или рукояти (допуск ${HOLDS.LIM.TIP_THUMB}), пальцы в диске — до ${f2(mx('fingerDepth'))} (допуск ${HOLDS.LIM.CUP_DEPTH})`); }
     console.log('крайние позы (вывернутые треугольники, складки):', res.folds.map(f => `${f.id} ${f.t}: ${f.inverted}/${f.folds}`).join(', '));
   }
   if (arg('--json')) fs.writeFileSync(arg('--json'), JSON.stringify(res, null, 1));

@@ -3,7 +3,7 @@ const {loadModel}=require('./biomechanics-audit');
 const {checkClip,checkFrame}=require('./biomech/validator2.js');
 /* Инвентарь атласа на манекене: хваты на настоящих рукоятях, неподвижные рамы, направляющие Смита,
    собранные тренажёры, опоры без проникновения. Общие правила — в validator2, здесь — смысл конкретных снарядов. */
-const model=loadModel(),POSES=model.get('CATALOG_POSES'),EQ=model.get('GymEquipment');
+const model=loadModel(),POSES=model.get('CATALOG_POSES'),EQ=model.get('GymEquipment'),M=model.get('Mannequin');
 const pose=(id,t)=>model.EX.find(e=>e.id===id).anim.catalogRig(t);
 const issues=(id,rules,samples=21)=>{const e=POSES[id];return checkClip(EQ.rig(e),e,{samples}).filter(i=>rules.includes(i.rule)&&i.severity==='error');};
 const dist=(a,b)=>Math.hypot(...a.map((v,i)=>v-b[i]));
@@ -49,7 +49,7 @@ test('negative: a misplaced handle and a detached crossmember fail the validator
 /* Поза под вариант инвентаря (4.43.0): хват гоблета зависит от снаряда — гантель лежит верхним диском в ладонях
    («чашка»), гиря — в кулаках за рога. До 4.43.0 гантель лежала на кулаках, стоявших по бокам рукояти в 2–3 см от неё:
    касание было, но сверху рука проходила мимо гантели. */
-test('goblet: the dumbbell rests in both palms under its top head, the kettlebell in fists on the horns',()=>{
+test('goblet: the dumbbell rests in both palms cupped under its top head, the kettlebell in fists on the horns',()=>{
  const e=POSES.goblet,anim=model.EX.find(x=>x.id==='goblet').anim,forHas=model.get('catalogAnimFor');
  assert(e.variants&&e.variants.kb,'goblet has a kettlebell pose');
  const none=()=>false,kb=k=>k==='kb';
@@ -62,10 +62,13 @@ test('goblet: the dumbbell rests in both palms under its top head, the kettlebel
  const toAxis=(p,a,b)=>{const ab=b.map((v,i)=>v-a[i]),ap=p.map((v,i)=>v-a[i]),k=Math.max(0,Math.min(1,ap.reduce((s,v,i)=>s+v*ab[i],0)/ab.reduce((s,v)=>s+v*v,0)));return dist(p,a.map((v,i)=>v+k*ab[i]));};
  for(let i=0;i<=20;i++){
   const t=i/20,R=anim.catalogRig(t),K=forHas(anim,kb).catalogRig(t);
-  assert.deepEqual([R.hands.L,R.hands.R],['flat','flat'],'dumbbell: open palms');
+  assert.deepEqual([R.hands.L,R.hands.R],['cup','cup'],'dumbbell: palms cupped under the top head');
   assert.deepEqual([K.hands.L,K.hands.R],['grip','grip'],'kettlebell: fists');
   const h=R.props.find(p=>p.id==='cup:handle');
   for(const s of ['L','R'])assert(toAxis(palm(R,s),h.a,h.b)<6.5,`t=${t}: ${s} palm by the dumbbell handle (${toAxis(palm(R,s),h.a,h.b).toFixed(1)} cm)`);
+  /* диск — на своём месте в каждой ладони (Mannequin.cupDisk): середина внутренней грани и ось */
+  const top=R.props.find(p=>p.id==='cup:top'),n=top.axis.map(v=>v/Math.hypot(...top.axis)),face=top.c.map((v,i)=>v-n[i]*top.len/2);
+  for(const s of ['L','R']){const ex=M.cupIn(R.frames['hand'+s],s,'cup');assert(dist(face,ex.c)<.5&&n.reduce((a,v,i)=>a+v*ex.n[i],0)>Math.cos(3*Math.PI/180),`t=${t}: ${s} the top head sits in the cupped palm (${dist(face,ex.c).toFixed(2)} cm)`);}
  }
  assert.equal(forHas(anim,none),anim,'no kettlebell — the default pose');
 });
