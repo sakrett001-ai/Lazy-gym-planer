@@ -433,7 +433,57 @@ const TCURL = once(() => {
   return { L, gm };
 });
 
+/* ---------- Сисси-присед с опорой рукой о дверной косяк ----------
+   Muscle & Strength «Sissy Squat»: стопы на ширине плеч, «Put one arm across your chest and use the other to hold on to your
+   support», «Begin by bending at the knees and lowering your body backward while raising your heels off the ground», «Form a straight
+   line with your body (from your neck to your knees) by leaning back», глубина — насколько позволяет равновесие. Опора — дверной проём
+   слева (homeDoor, стена по оси Z при x > 0, лицевая сторона к телу; камеры атласа не смотрят со стороны +X — стена не заслоняет
+   тело): левая кисть держит край проёма — угол коробки у наличника, пальцы заходят в проём; правая рука поперёк груди, ладонь
+   у левой ключицы. Тело от колен до плеч — одна линия
+   (сгибание бедра ≈ 0), пятки подняты: голень наклонена вперёд на φ, линия бедро–корпус — назад на ψ = колено − φ; φ подбирается
+   так, чтобы центр масс был над подушечками стоп (рука на косяке страхует, вес не держит). t=0 — на подушечках стоп, колени
+   чуть согнуты; t=1 — колени согнуты на SISSY.knee[1]° (умеренная глубина: опора одной рукой, без отягощения). */
+const SISSY = { knee: [10, 95], heel: [16, 38], ballX: 10, ballZ: 8, wallX: 48, edgeZ: 19.75, handY: 108, elbow: -.2, off: [1.05, .3] };
+const SISSY_DOOR = { type: 'homeDoor', id: 'door', at: [SISSY.wallX, 0, SISSY.edgeZ + 40.25], yaw: -90 };
+function sissyBody(C, k, heel, phi) {
+  const { V, M } = C, q = C.base(), opt = { forward: [0, 0, 1], heel };
+  const sup = s => [SG[s] * SISSY.ballX, 0, SISSY.ballZ], A = V.mix(M.footFrame(sup('L'), 0, opt).o, M.footFrame(sup('R'), 0, opt).o, .5);
+  const f = phi * D, p = (k - phi) * D, K = V.add(A, [0, Math.cos(f), Math.sin(f)], M.B.sk - .05), up = [0, Math.cos(p), -Math.sin(p)];
+  C.root(q, V.add(K, up, M.B.th - .05), up, [0, Math.sin(p), Math.cos(p)]);
+  q.lumbar = [0, 0, 0]; q.thoracic = [2, 0, 0]; q.neck = [C.lerp(2, 12, k / SISSY.knee[1]), 0, 0];
+  for (const s of S) C.foot(q, s, sup(s), 0, V.unit(V.add([0, 0, 1], [SG[s], 0, 0], .1)), opt);
+  return q;
+}
+function sissyArms(C, q, allowShort = false) {
+  const { V } = C, latR = C.lat(q, 'R'), latL = C.lat(q, 'L'), T = C.axes(q, 'thorax');
+  q.L.girdle = [0, 2];
+  /* кулак на углу коробки; ось кулака — поперёк линии плечо–кисть в вертикальной плоскости (запястье без отведения), локоть
+     вниз и чуть внутрь — предплечье не ложится на наличник */
+  const H = [SISSY.wallX - SISSY.off[0], SISSY.handY, SISSY.edgeZ + SISSY.off[1]], pole = V.unit(V.add(V.add([0, -1, 0], latL, SISSY.elbow), [0, 0, -1], .3));
+  let thumb = [0, 1, 0];
+  for (let i = 0; i < 3; i++) { C.grip(q, 'L', H, thumb, pole, { allowShort: true }); thumb = V.unit(V.perp([0, 1, 0], V.unit(V.sub(H, C.fk(q).P.elL)))); }
+  C.grip(q, 'L', H, thumb, pole, { allowShort });
+  /* правая рука поперёк груди: ладонь у левой ключицы, локоть вниз и вперёд */
+  q.R.girdle = [0, 6];
+  C.palm(q, 'R', V.add(V.add(C.chestPoint(q, 44, 0), latL, 5), T.z, 1), V.unit(V.add(latL, T.y, .5)), T.z, V.unit(V.add(V.add(T.z, T.y, -1), latR, .3)));
+}
+/* наклон голени φ: центр масс — над подушечками стоп (в 2 см позади точки под подушечкой) */
+function sissyPose(C, k, heel) {
+  const phi = C.solve1D(ph => { const q = sissyBody(C, k, heel, ph); sissyArms(C, q, true); return C.com(q)[2] - (SISSY.ballZ - 2); }, 0, Math.min(80, k + 10));
+  const q = sissyBody(C, k, heel, phi); sissyArms(C, q);
+  return q;
+}
+
 module.exports = {
+  /* Сисси-присед с опорой рукой о дверной косяк: раскладка и источник — SISSY выше. */
+  sissysquat: {
+    keys: [0, .25, .5, .75, 1],
+    equipment: [SISSY_DOOR],
+    contacts: [{ body: 'footL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'gripL', prop: 'door:jambR' }],
+    gripRadius: { L: 1.5 },
+    pose(t, C) { const e = C.ease(t); return sissyPose(C, C.lerp(SISSY.knee[0], SISSY.knee[1], e), C.lerp(SISSY.heel[0], SISSY.heel[1], e)); }
+  },
+
   /* Сгибание рук с полотенцем: полотенце под правой стопой, концы в руках хватом снизу, локти прижаты.
      t=0 — руки почти прямые, стопа на полу; t=1 — руки согнуты, нога, сопротивляясь, поднялась (колено вперёд-вверх). */
   towelcurl: {
