@@ -18,6 +18,10 @@
      кольца (⌀ 0,7 см) на стороне двери в плоскости обеих ветвей. В петле лента скользит, и натяжение по обе стороны
      одно (как у трубки, продетой в дверной якорь: изготовители так её и закрепляют — середину трубки через петлю);
    * {clip:[x,y,z], mountTo} — конец ленты пристёгнут карабином (без скольжения);
+   * {cuff:'L'} — конец ленты пристёгнут карабином к D-кольцу манжеты на голеностопе (E.ankleCuff — та же манжета, что у
+     нижнего блока): Bodylastics «Standing Leg Adduction With Bands» — «Clip both ends of the band to one ankle strap»,
+     середина трубки — в креплении у низа двери. Две манжеты одной стороны (route [{cuff:'L'}, …, {cuff:'L'}]) — оба конца
+     трубки на одном кольце: карабины рядом (1,2 см вдоль голени);
    * {limb:'sk'|'th', side, at} — петля огибает голень или бедро (для петель; closed: true — путь замкнут).
    Две рукояти одной стороны (route [{handle:'R'}, …, {handle:'R'}]) — оба конца трубки в одной кисти: ветви идут рядом.
 
@@ -60,10 +64,11 @@
     if (lift > 0) { c = V.add(c, UP, lift); med = V.add(med, UP, lift); }
     return { c, r: EDGE_R + r, axis: F.z, side: V.add(V.add(c, lat, 3), n, 3), med, lat, n, foot: F };
   }
-  /* петля вокруг сегмента ноги: окружность сечения (средний радиус по четырём сторонам) */
+  /* петля вокруг сегмента ноги: окружность, охватывающая сечение (24 точки кожи; центр — их середина, радиус — до самой
+     дальней). Прежде радиус был средним по четырём сторонам: сечение голени не круглое, и петля заходила в кожу на 0,8 см */
   function limbOf(R, kind, s, at) {
-    const pts = [0, 1, 2, 3].map(k => M.limbPoint(R, kind, s, at, k * Math.PI / 2)), c = V.scale(pts.reduce((a, p) => V.add(a, p), [0, 0, 0]), 1 / 4);
-    return { c, r: pts.reduce((a, p) => a + V.dist(p, c), 0) / 4, axis: M.limbAxes(R, kind, s, at).axis };
+    const pts = Array.from({ length: 24 }, (_, k) => M.limbPoint(R, kind, s, at, k * Math.PI / 12)), c = V.scale(pts.reduce((a, p) => V.add(a, p), [0, 0, 0]), 1 / 24);
+    return { c, r: Math.max(...pts.map(p => V.dist(p, c))), axis: M.limbAxes(R, kind, s, at).axis };
   }
   /* ремень вокруг окружностей в одной плоскости (замкнутая петля): внешние касательные и дуги */
   function belt(circles, axis, rb) {
@@ -99,6 +104,7 @@
     /* 1. опоры: точки и цилиндры (радиус огибания — с радиусом ленты в покое; уточняется ниже не нужно — разница < 0,2 см) */
     const nodes = route.map(n => {
       if (n.handle) return { kind: 'handle', s: n.handle };
+      if (n.cuff) return { kind: 'cuff', s: n.cuff, pin: true };
       if (n.sole) return { kind: 'sole', s: n.sole, ...soleOf(R, n.sole, n.at ?? 9, r0), pin: true };
       if (n.ring) {
         /* door — направление к двери (перекладина кольца — на дальней от кистей стороне); без него — от середины кистей */
@@ -112,7 +118,8 @@
     const near = i => { const n = nodes[i]; return n.kind === 'sole' ? n.c : n.kind === 'ring' ? n.c : n.kind === 'clip' ? n.p : null; };
     /* 2. рукояти: кольцо стремени смотрит на соседнюю опору; две рукояти в одной кисти — ветви рядом (±0,6 см по рукояти) */
     const sameHand = nodes[0].kind === 'handle' && nodes.at(-1).kind === 'handle' && nodes[0].s === nodes.at(-1).s;
-    const handles = [];
+    const sameCuff = nodes[0].kind === 'cuff' && nodes.at(-1).kind === 'cuff' && nodes[0].s === nodes.at(-1).s;
+    const handles = [], cuffs = [];
     nodes.forEach((n, i) => {
       if (n.kind !== 'handle') return;
       const to = near(i === 0 ? 1 : i - 1), st = E.stirrup(R['grip' + n.s], R.frames['hand' + n.s].z, to, { ...E.BAND_HANDLE, clear: E.clearOfForearm(R, n.s) });
@@ -120,17 +127,24 @@
       if (sameHand && i > 0) n.apex = V.add(st.apex, V.unit(R.frames['hand' + n.s].z), 1.2);
       if (!(sameHand && i > 0)) handles.push(n);
     });
+    /* манжеты: карабин от D-кольца к соседней опоре (ankleCuff), конец ленты — на конце карабина */
+    nodes.forEach((n, i) => {
+      if (n.kind !== 'cuff') return;
+      const K = E.ankleCuff(R, n.s, near(i === 0 ? 1 : i - 1));
+      n.K = K; n.apex = sameCuff && i > 0 ? V.add(K.clip, V.unit(K.axis), 1.2) : K.clip;
+      cuffs.push(n);
+    });
     /* 3. путь по опорам: точки и куски (k — номер куска; граница куска — опора без скольжения) */
     const pts = [], piece = [], pins = [];
     let k = 0, midIdx = -1;
     const push = (p, kk = k) => { pts.push(p); piece.push(kk); };
     const first = nodes[0];
-    push(first.kind === 'handle' ? first.apex : first.p);
+    push(first.apex ?? first.p);
     for (let i = 1; i < nodes.length; i++) {
       const n = nodes[i], prev = pts[pts.length - 1];
-      if (n.kind === 'handle' || n.kind === 'clip') { push(n.kind === 'handle' ? n.apex : n.p); continue; }
+      if (n.kind === 'handle' || n.kind === 'clip' || n.kind === 'cuff') { push(n.apex ?? n.p); continue; }
       if (n.kind === 'sole') {
-        const fromHandle = nodes[i - 1].kind === 'handle' || nodes[i - 1].kind === 'clip';
+        const fromHandle = nodes[i - 1].kind === 'handle' || nodes[i - 1].kind === 'clip' || nodes[i - 1].kind === 'cuff';
         if (fromHandle) {
           /* с ветви на подошву: огибание наружного края, затем под подошвой к внутреннему краю — дальше кусок без тяги */
           const w = around(prev, n.med, cyl(n.c, n.axis, n.r, n.side));
@@ -139,7 +153,7 @@
           push(n.med);
         } else {
           /* с куска под стопами на подошву и к ветви: у внутреннего края, огибание наружного края к следующей рукояти */
-          const nextP = nodes[i + 1]?.kind === 'handle' ? nodes[i + 1].apex : nodes[i + 1]?.p;
+          const nextP = nodes[i + 1]?.apex ?? nodes[i + 1]?.p;
           /* середина куска под стопами — граница деталей id:L и id:R */
           midIdx = pts.length; push(V.mix(prev, n.med, .5));
           push(n.med);
@@ -152,7 +166,7 @@
       }
       if (n.kind === 'ring') {
         /* перекладина кольца на стороне двери: ось — по нормали плоскости обеих ветвей */
-        const nextP = nodes[i + 1].kind === 'handle' ? nodes[i + 1].apex : nodes[i + 1].p;
+        const nextP = nodes[i + 1].apex ?? nodes[i + 1].p;
         let axis = V.cross(V.sub(prev, n.c), V.sub(nextP, n.c));
         if (V.len(axis) < 1e-6) axis = V.cross(V.sub(prev, n.c), UP);
         const w = around(prev, nextP, cyl(n.c, axis, BAR_R + r0, V.add(n.c, n.toward, 5)));
@@ -171,7 +185,7 @@
     const sec = kk => model.shape === 'round' ? { r: model.r0 / Math.sqrt(Math.max(1, lam[kk])) } : { w: model.w0 / Math.sqrt(Math.max(1, lam[kk])), h: model.h0 / Math.sqrt(Math.max(1, lam[kk])) };
     /* 5. детали: две ветви от середины к рукоятям (у трубки) */
     const total = polyLen(pts), info = { id, model: e.model || 'tube48', shape: model.shape, rest: model.rest, max: model.max, L: total, pieces, pins,
-      slide: nodes.some(n => n.kind === 'ring'), hands: handles.map(h => h.s), sameHand };
+      slide: nodes.some(n => n.kind === 'ring'), hands: handles.map(h => h.s), sameHand, cuffs: [...new Set(cuffs.map(c => c.s))] };
     const ring = nodes.find(n => n.kind === 'ring');
     const mid = ring ? pts.indexOf(ring.mid) : midIdx >= 0 ? midIdx : Math.floor(pts.length / 2);
     const parts = [], branch = (a, b, side) => {
@@ -180,13 +194,21 @@
     };
     const A = branch(0, mid, first.s), B = branch(mid, pts.length - 1, nodes.at(-1).s);
     A.pts.reverse(); A.rs.reverse();
-    const sideName = (b, i) => sameHand ? (i ? b.side + '2' : b.side) : b.side;
+    const sideName = (b, i) => sameHand || sameCuff ? (i ? b.side + '2' : b.side) : b.side;
     for (const [b, i] of [[A, 0], [B, 1]]) {
       const pid = id + ':' + sideName(b, i), mount = ring ? ring.mount : pins.length ? 'body' : (nodes.find(n => n.kind === 'clip')?.mount || 'body');
       parts.push({ kind: 'cable', pts: b.pts, r: b.r, rs: b.rs, joints: true, tone: 'band', role: 'cable', id: pid, mount, band: info });
     }
     /* рукояти: стремя и рукоять (две рукояти в одной кисти — рисуется одна, обе ветви приходят к её кольцу) */
     for (const h of handles) parts.push(...E.bandHandle(h.st, id, h.s));
+    /* манжета: неопреновая лента вокруг голени, D-кольцо и карабины (E.cuffParts — как у нижнего блока) */
+    if (cuffs.length) {
+      /* одна манжета на сторону: оба конца трубки — на её кольце (карабины snap и snap2), карабин крепится к своей ветви */
+      for (const s of new Set(cuffs.map(c => c.s))) {
+        const cs = cuffs.filter(c => c.s === s);
+        parts.push(...E.cuffParts(R, s, cs[0].K, cs.map(c => c.apex), id + ':' + s, k => parts.find(p => p.role === 'cable' && p.pts[p.pts.length - 1] === cs[k].apex)?.id || id + ':' + s));
+      }
+    }
     return { parts, info, pts, piece };
   }
   /* замкнутая петля: вокруг сегментов ног (две окружности — общий ремень) */

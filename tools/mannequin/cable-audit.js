@@ -38,7 +38,8 @@ const KIND = {
   pushdown: 'arc', ropepushdown: 'arc', straightpull: 'arc', cableohext: 'arc', cablecurl: 'arc', ropecurl: 'arc',
   cablefly: 'arc', cablelowfly: 'arc', cablelat: 'arc', cablewood: 'arc', cablecrunch: 'hold',
   glutekick: 'arc', cablekickback: 'arc', cableadduct: 'arc', cableextrot: 'arc',
-  bandlatraise: 'arc', bandcurl: 'arc', bandpushdown: 'arc', bandfacepull: 'line', bandextrot: 'arc', bandrow: 'line'
+  bandlatraise: 'arc', bandcurl: 'arc', bandpushdown: 'arc', bandfacepull: 'line', bandextrot: 'arc', bandrow: 'line',
+  bandlatpull: 'arc', bandadduct: 'arc', bandabduct: 'arc', bandbridge: 'arc', bandlegext: 'arc'
 };
 /* пороги «подозрительно» (повод посмотреть глазами) */
 const LIM = {
@@ -427,10 +428,11 @@ function auditBand(id, bid, frames) {
     /* сквозь тело и инвентарь: точки через 1 см */
     const cache = M.torsoCache(R), skip = p => M.SIDES.some(s => V.dist(p, R['grip' + s]) < 9);
     const cols = R.props.filter(p => !(p.band || (p.id || '').startsWith(bid + ':') || /:(ring|strap)$/.test(p.id || '') || p.tone === 'mat')).flatMap(p => [V2.collider(p)].flat()).filter(c => c && !c.unknown && !c.cable && c.sdf);
-    for (const p of parts) for (let i = 1; i < p.pts.length; i++) {
-      const n = Math.max(1, Math.ceil(V.dist(p.pts[i - 1], p.pts[i])));
+    /* плоская лента (петля) — середина и оба края с полутолщиной (как правило cable валидатора) */
+    for (const p of parts) for (const P of p.flat && p.nrm ? [p.pts, ...V2.bandEdges(p.pts, p.nrm, p.flat[0] / 2 - p.flat[1] / 2)] : [p.pts]) for (let i = 1; i < P.length; i++) {
+      const n = Math.max(1, Math.ceil(V.dist(P[i - 1], P[i])));
       for (let j = 0; j <= n; j++) {
-        const x = V.mix(p.pts[i - 1], p.pts[i], j / n), r = p.rs ? p.rs[i - 1] : p.r;
+        const x = V.mix(P[i - 1], P[i], j / n), r = p.flat ? p.flat[1] / 2 : p.rs ? p.rs[i - 1] : p.r;
         if (skip(x)) continue;
         const dT = -M.torsoSDF(R, x, cache) + r; if (dT > body.d) body = { d: dT, t, where: 'корпус' };
         for (const s of M.SIDES) for (const k of ['ua', 'fa', 'th', 'sk']) { const d = -M.limbSDF(R, k, s, x) + r; if (d > body.d) body = { d, t, where: k + s }; }

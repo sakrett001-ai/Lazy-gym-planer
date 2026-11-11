@@ -24,8 +24,8 @@ for(const lang of ['ru','en']){
  const volumeSrc=[...d.querySelectorAll('script:not([src])')].map(s=>s.textContent).join('\n').match(/s\.src='([^']*volume\.js[^']*)'/)?.[1];
  assert(volumeSrc&&cached.has(new URL(volumeSrc,base).href),'3D engine loader points to a cached asset');
  w.eval(fs.readFileSync(path.join(dir,'app.js'),'utf8')+'\nwindow.qaCatalog={EX,openMotionItem,previewItem,closeMotion,motionPrefs,getMotion:()=>detailMotion,startWorkout,closeWorkout,getWorkout:()=>workout};');
- /* 163 упражнения: +5 прицельных на приводящие и манжету, +7 с гирей (этап 1), +3 (этап 2), +1 (этап 3), +1 (турецкий подъём) */
- const q=w.qaCatalog;assert.equal(q.EX.length,163);assert.equal(d.querySelectorAll('#mv-exercise option').length,163);
+ /* 168 упражнений: +5 дома с эспандером, +5 прицельных на приводящие и манжету, +7 с гирей (этап 1), +3 (этап 2), +1 (этап 3), +1 (турецкий подъём) */
+ const q=w.qaCatalog;assert.equal(q.EX.length,168);assert.equal(d.querySelectorAll('#mv-exercise option').length,168);
  console.log('  Application booted');
  /* разбор открыт раньше, чем пришёл объём: плоская схема, затем объём в той же фазе */
  q.openMotionItem(q.previewItem('bbbench'));assert(!d.querySelector('#mv-stage .volume-figure')&&d.querySelector('#mv-stage svg path'),'flat figure before the 3D engine arrives');

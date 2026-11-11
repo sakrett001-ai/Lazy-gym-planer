@@ -9,7 +9,9 @@
      между осью кулака и ручкой; заявлен хват или нет. «Кулак держит воздух» — ручки нет ближе 3 см от центра хвата;
    * ладонь (flat): зазор центра ладони до ближайшей поверхности (инвентарь, пол, тело), доля ладони и пальцев в касании
      (до 1 см) и наклон ладони к поверхности; при заявленном контакте ладони — до заявленной детали;
-   * контакт областью кисти на свободном снаряде (гантель, гиря, диск, мяч) — каждый в список «посмотреть глазами»;
+   * контакт областью кисти на свободном снаряде (гантель, гиря, диск, мяч) — каждый в список «посмотреть глазами»; кроме
+     кисти «чашей» ('cup', 'cupring'): у неё диск должен стоять в своём месте рамки кисти (Mannequin.cupDisk) — расстояние
+     и угол до него (пальцы кожи Anny на диске проверяет tools/anny-look/holds.js);
    * снаряд двумя руками (mount 'hands') — обе кисти на нём: центр хвата или ладони у оси ручки;
    * гиря в одной руке: шар висит под рукоятью, идёт по линии руки (мах) или лежит на тыле предплечья («рэк», над головой,
      жим лёжа) — не в руке и не в теле, не на ладонной стороне предплечья и не над рукоятью без опоры;
@@ -33,13 +35,15 @@ const LIM = {
   palmTilt: 35,      // °: ладонь наклонена к поверхности (касается краем)
   handGap: 1.5,      // см: кисть (контакт handL/R не ладонью) дальше от опоры — как допуск контакта в валидаторе
   cupAxis: 7,        // см: центр ладони под гантелью дальше от оси рукояти — у края диска (радиус 7,5)
+  cupOff: 1.0,       // см: диск гантели «чашей» дальше от своего места в ладони (Mannequin.cupDisk) — между ключами кисти разошлись
+  cupAng: 6,         // °: ось гантели «чашей» отклонена от оси по ладони
   ropeAngle: 35,     // °: канат/полотенце поперёк кулака
   cableHand: .5,     // см: ось троса в кисти глубже (ладонь, пальцы — кроме отверстия кулака)
   cableArm: .5,      // см: ось троса в предплечье глубже
   bellBody: 1.0,     // см: шар гири в кисти, руке, корпусе или голове глубже (мягкие ткани поджимаются на 0,3 — E.KB.press)
   horn: 2.0          // см: центр хвата дальше от оси рога гири (хват за рога) — как gripAxis
 };
-const GRIPPY = new Set(['grip', 'hook', 'deep']);
+const GRIPPY = new Set(['grip', 'hook', 'deep']), CUPPY = new Set(['cup', 'cupring']);
 
 /* ---------- геометрия ---------- */
 const segDist = (p, a, b) => { const ab = V.sub(b, a), l2 = V.dot(ab, ab), k = l2 < 1e-9 ? 0 : M.clamp(V.dot(V.sub(p, a), ab) / l2, 0, 1); return { d: V.dist(p, V.add(a, ab, k)), k, dir: l2 < 1e-9 ? [0, 0, 1] : V.unit(ab) }; };
@@ -134,6 +138,17 @@ function auditEntry(id, e, { samples = 41 } = {}) {
         }
         /* ладонь: заявленная опора или ближайшая поверхность. Ладонь (palmL/R или кисть 'flat') — ладонью: центр ладони у
            поверхности, ладонь и пальцы в касании, ладонь не наклонена; кисть (handL/R, не 'flat') — любой точкой */
+        /* «чаша» (кисть 'cup' или 'cupring', Mannequin.cupDisk): ладонь не лежит на диске плашмя — диск стоит в ладони в одном
+           месте её рамки (ладонь наклонена к грани, касается края; пальцы кожи Anny подобраны по этому месту и проверяются
+           tools/anny-look/holds.js). Проверка — диск там, где его ждёт эта кисть: середина внутренней грани и ось */
+        if (CUPPY.has(H.mode)) {
+          const top = props.find(p => /:top$/.test(p.id) && p.kind === 'cyl' && p.mount === 'hands');
+          if (top) {
+            const n = V.unit(top.axis), face = V.add(top.c, n, -top.len / 2), ex = M.cupIn(R.frames['hand' + s], s, H.mode), off = V.dist(face, ex.c), ang = V.angle(n, ex.n);
+            r.cup = r.cup || { off: 0, ang: 0 }; if (off > r.cup.off) Object.assign(r.cup, { off, offT: t }); if (ang > r.cup.ang) r.cup.ang = ang;
+            continue;
+          }
+        }
         if (H.mode === 'flat' || mine.some(k => !k.body.startsWith('grip'))) {
           const S = surfaces(R, cols, s), declPalm = mine.filter(k => !k.body.startsWith('grip'));
           let target = null;
@@ -233,6 +248,7 @@ function flagsOf(r) {
     if (d && d.byPalm && (d.gap > LIM.palmGap || d.touch < LIM.palmCover || d.tilt > LIM.palmTilt)) f.push(`ладонь на ${d.on}: зазор ${d.gap.toFixed(1)}, касание ${(d.touch * 100).toFixed(0)} %, наклон ${d.tilt.toFixed(0)}°`);
     if (d && !d.byPalm && d.any > LIM.handGap) f.push(`кисть над ${d.on}: зазор ${d.any.toFixed(1)}`);
     if (r.freeRegion) f.push('контакт областью кисти на свободном снаряде — глазами');
+    if (r.cup && (r.cup.off > LIM.cupOff || r.cup.ang > LIM.cupAng)) f.push(`«чаша»: диск в ${r.cup.off.toFixed(1)} см и ${r.cup.ang.toFixed(0)}° от своего места в ладони (t=${r.cup.offT})`);
   }
   if (r.kind === 'гиря за рога') {
     if (r.deep > LIM.bellBody) f.push(`шар гири в ${r.deepIn} на ${r.deep.toFixed(1)} см (t=${r.deepT})`);
@@ -262,7 +278,7 @@ function describe(r) {
   if (r.kind === 'кисть') {
     const p = r.palm?.decl || r.palm?.near;
     return [r.modes, r.contacts || '—', r.handle ? `${r.handle}${r.declared ? '' : ' (не заявлен)'} ${f1(r.axis)} см @${r.axisT}` : '', r.angle != null ? `${f0(r.angle)}°` : '',
-      p ? `${p.on}: ладонь ${f1(p.gap)} см (${f1(p.gapMin)}…${f1(p.gapMax)}), кисть ${f1(p.any)}, ${f0(p.touch * 100)} %, ${f0(p.tilt)}° @${p.t}` : ''].join(' | ');
+      p ? `${p.on}: ладонь ${f1(p.gap)} см (${f1(p.gapMin)}…${f1(p.gapMax)}), кисть ${f1(p.any)}, ${f0(p.touch * 100)} %, ${f0(p.tilt)}° @${p.t}` : '', r.cup ? `«чаша»: диск от своего места ${f1(r.cup.off)} см, ${f0(r.cup.ang)}°` : ''].join(' | ');
   }
   if (r.kind === 'гиря') return `${r.bell}: ${r.pos} | ближе всего ${r.deepIn}: ${f1(-r.deep)} см @${r.deepT}`;
   if (r.kind === 'гиря за рога') return `${r.bell}: ${r.pos} | ближе всего ${r.deepIn}: ${f1(-r.deep)} см @${r.deepT} | кулак от рога до ${f1(r.horn)} см`;

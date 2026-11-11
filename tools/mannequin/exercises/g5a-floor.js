@@ -486,6 +486,9 @@ function bridgePose(C, L, e) {
 }
 const BRIDGE = once(() => bridgeLayout());
 const GLUTEBRIDGE1 = once(() => bridgeLayout({ one: 'L', half: 9 }));
+/* мостик с мини-петлёй над коленями: стопы чуть шире таза (13 см от середины), петля 12″ (mini12) вокруг бёдер в 12 см над осью
+   коленями натянута уже внизу; колени держатся над стопами, не сводятся (петля тянет их внутрь) */
+const BANDBRIDGE = once(() => bridgeLayout({ half: 13 }));
 /* Подъём ног лёжа: корпус (таз подкручивается к верхней точке), ноги под углом a к коврику, пятки внизу в 5 см над ковриком */
 function legRaiseBody(C, e) {
   const q = supine(C, { tilt: C.lerp(5, 20, e), lumbar: C.lerp(5, 20, e) });
@@ -726,6 +729,16 @@ module.exports = {
     contacts: [{ body: 'upperBack', prop: 'mat' }, { body: 'headBack', prop: 'mat' }, { body: 'soleL', prop: 'mat' }, { body: 'soleR', prop: 'mat' },
       { body: 'palmL', prop: 'mat' }, { body: 'palmR', prop: 'mat' }, { body: 'buttocks', prop: 'mat', when: [0, .02] }],
     pose(t, C) { return bridgePose(C, BRIDGE(), C.ease(t)); }
+  },
+
+  /* Ягодичный мостик с мини-петлёй: как мостик, петля вокруг бёдер над коленями (BANDBRIDGE). t=0 — таз на коврике;
+     t=1 — таз поднят до прямой линии плечи–таз–колени, колени над стопами. */
+  bandbridge: {
+    keys: [0, .25, .5, .75, 1],
+    equipment: [...SUP_MAT, { type: 'band', id: 'band', model: 'mini12', route: [{ limb: 'th', side: 'L', at: .7 }, { limb: 'th', side: 'R', at: .7 }] }],
+    contacts: [{ body: 'upperBack', prop: 'mat' }, { body: 'headBack', prop: 'mat' }, { body: 'soleL', prop: 'mat' }, { body: 'soleR', prop: 'mat' },
+      { body: 'palmL', prop: 'mat' }, { body: 'palmR', prop: 'mat' }, { body: 'buttocks', prop: 'mat', when: [0, .02] }],
+    pose(t, C) { return bridgePose(C, BANDBRIDGE(), C.ease(t)); }
   },
 
   /* Ягодичный мостик на одной ноге: опорная — ЛЕВАЯ, правая нога выпрямлена, бёдра параллельны, таз без перекоса. */

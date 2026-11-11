@@ -306,28 +306,8 @@
     const out = base.filter(p => p.id !== id + ':strap' && !(e.attach === 'rope' && /:(rope|knob)(L|R)$/.test(p.id)));
     /* канат: ветви по оси кулаков, узлы за краем кулака (ropeInFist); knob — общий или по руке {L, R} */
     if (e.attach === 'rope') for (const s of e.hands || ['L', 'R']) out.push(...ropeInFist(R, s, clip, typeof e.knob === 'object' ? e.knob?.[s] : e.knob, id));
-    /* манжета на голеностоп (E.ankleCuff): лента 7,5 см из девяти витков, облегающих голень по её сечению (голень внутри),
-       стальное D-кольцо на стороне блока и карабин троса от кольца к концу троса */
-    if (e.attach === 'ankle') {
-      const s = e.foot || 'L', K = E.ankleCuff(R, s, toCat(e.from)), n = 9;
-      for (let i = 0; i < n; i++) {
-        const h = K.lo + K.ring + i * (K.hi - K.lo - 2 * K.ring) / (n - 1), t = 1 - h / M.B.sk, pts = [];
-        for (let j = 0; j <= 24; j++) pts.push(M.limbPoint(R, 'sk', s, t, K.ang + j / 24 * 2 * Math.PI, K.ring + .15));
-        out.push({ kind: 'cable', pts, r: K.ring, tone: 'rubber', role: 'strap', id: id + ':cuff' + i, mount: 'body' });
-      }
-      /* D-кольцо: дуга наружу и прямая перемычка вдоль голени (замкнуто) */
-      const ring = [V.add(K.base, K.axis, -K.dLen / 2)];
-      for (let j = 1; j <= 10; j++) { const a = j / 10 * Math.PI; ring.push(V.add(V.add(K.base, K.axis, K.dLen / 2 * Math.cos(a + Math.PI)), K.n, K.dOut * Math.sin(a))); }
-      ring.push(ring[0]);
-      out.push({ kind: 'cable', pts: ring, r: .3, tone: 'chrome', role: 'frame', id: id + ':dring', mount: 'body' });
-      /* карабин: вытянутая петля 6 × 2,2 см от вершины D-кольца к концу троса */
-      const u = V.unit(V.sub(clip, K.apex)), w = V.unit(V.cross(u, K.axis)), L = V.dist(clip, K.apex), hook = [];
-      for (let j = 0; j <= 16; j++) {
-        const a = j / 16 * 2 * Math.PI, along = (1 - Math.cos(a)) / 2 * L, side = Math.sin(a) * 1.1 * Math.min(1, 4 * along / L, 4 * (L - along) / L);
-        hook.push(V.add(V.add(K.apex, u, along), w, side));
-      }
-      out.push({ kind: 'cable', pts: hook, r: .35, tone: 'chrome', role: 'frame', id: id + ':snap', mount: id + ':line' });
-    }
+    /* манжета на голеностоп (E.ankleCuff, детали — E.cuffParts): лента из девяти витков, D-кольцо и карабин троса */
+    if (e.attach === 'ankle') { const s = e.foot || 'L'; out.push(...E.cuffParts(R, s, E.ankleCuff(R, s, toCat(e.from)), [clip], id, id + ':line')); }
     /* прямая рукоять: поворотный крюк от середины рукояти к карабину троса */
     const bar = base.find(p => p.id === id + ':bar');
     if (bar) {

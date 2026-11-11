@@ -18,7 +18,7 @@ const moveProp = (R, pick, d) => ({ ...R, props: R.props.map(p => !pick(p) ? p :
 test('every catalog exercise is authored on the mannequin', () => {
   const missing = EX.filter(ex => !POSES[ex.id]).map(ex => ex.id);
   assert.equal(missing.length, 0, 'not on the mannequin: ' + missing.join(', '));
-  assert.equal(EX.length, 163); /* +5 прицельных на приводящие и манжету, +7 с гирей (этап 1), +3 с гирей (этап 2), +1 (этап 3: «гало»), +1 (турецкий подъём) */
+  assert.equal(EX.length, 168); /* +5 дома с эспандером, +5 прицельных на приводящие и манжету, +7 с гирей (этап 1), +3 с гирей (этап 2), +1 (этап 3: «гало»), +1 (турецкий подъём) */
   for (const ex of EX) assert(ex.anim.catalogRig(.5).frames, ex.id + ' renders the mannequin, not a legacy rig');
 });
 test('a clean standing pose and a clean exercise frame pass', () => {

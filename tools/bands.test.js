@@ -17,13 +17,15 @@ const EQ = require('../src/js/09bn-equipment.js');
 const M = require('../src/js/09bm-mannequin.js'), { V } = M;
 const { auditBand, auditEntry, bandFlags, BAND_LIM } = require('./mannequin/cable-audit.js');
 
-const IDS = { bandlatraise: 'tube48', bandcurl: 'tube48', bandpushdown: 'tube48', bandfacepull: 'tube36', bandextrot: 'tube36', bandrow: 'tube36' };
+const IDS = { bandlatraise: 'tube48', bandcurl: 'tube48', bandpushdown: 'tube48', bandfacepull: 'tube36', bandextrot: 'tube36', bandrow: 'tube36',
+  /* дома с эспандером: трубка над дверью, трубка у низа двери на манжете (стоя и сидя), мини-петля на голенях и на бёдрах */
+  bandlatpull: 'tube36', bandadduct: 'tube36', bandabduct: 'mini12', bandbridge: 'mini12', bandlegext: 'tube48' };
 const frames = (entry, n = 41, edit) => { const rig = EQ.rig(EQ.variantEntry(entry, () => false)); return Array.from({ length: n }, (_, i) => { const t = i / (n - 1), R = rig(t); if (edit) edit(R, t); return { t, R }; }); };
 const band = (R, id = 'band') => R.props.filter(p => p.band && p.band.id === id);
 const audit = (id, edit, entry = POSES[id]) => auditBand(id, 'band', frames(entry, 41, edit));
 const has = (r, re) => r.flags.some(f => re.test(f));
 
-test('bands: six exercises — one continuous band, taut, within the passport stretch, no slip, no flags', () => {
+test('bands: eleven exercises — one continuous band, taut, within the passport stretch, no slip, no flags', () => {
   for (const [id, model] of Object.entries(IDS)) {
     const rows = auditEntry(id, POSES[id]), m = rows.find(r => r.type === 'лента-модель');
     assert(m, `${id}: строка ленты`);
@@ -42,8 +44,10 @@ test('bands: physics — length is the sum of segments, one stretch through the 
     assert(Math.abs(b.pieces.reduce((a, p) => a + p.L, 0) - b.L) < 1e-6, `${id}: куски`);
     assert(Math.abs(b.pieces.filter(p => p.loaded).reduce((a, p) => a + p.L0, 0) + b.pieces.filter(p => !p.loaded).reduce((a, p) => a + p.L, 0) - b.rest) < 1e-6, `${id}: длина покоя распределена целиком`);
     if (b.slide) assert.equal(b.pieces.length, 1, `${id}: в кольце лента скользит — один кусок`);
-    const r0 = EQ.band.MODELS[b.model].r0, lamMax = Math.max(...b.pieces.map(p => p.lam));
-    assert(Math.abs(Math.min(...ps.flatMap(p => p.rs)) - r0 / Math.sqrt(lamMax)) < 1e-9, `${id}: радиус r0/√λ`);
+    const mod = EQ.band.MODELS[b.model], lamMax = Math.max(...b.pieces.map(p => p.lam));
+    /* круглая трубка — радиус r0/√λ; плоская петля — ширина и толщина w0/√λ, h0/√λ */
+    if (mod.shape === 'round') assert(Math.abs(Math.min(...ps.flatMap(p => p.rs)) - mod.r0 / Math.sqrt(lamMax)) < 1e-9, `${id}: радиус r0/√λ`);
+    else for (const p of ps) assert(Math.abs(p.flat[0] - mod.w0 / Math.sqrt(Math.max(1, lamMax))) < 1e-9 && Math.abs(p.flat[1] - mod.h0 / Math.sqrt(Math.max(1, lamMax))) < 1e-9, `${id}: сечение петли по объёму`);
     for (const pin of b.pins) {
       /* место под подошвой — в рамке стопы неподвижно (опора без скольжения) */
       const F = pin.foot, loc = p => [V.dot(V.sub(p, F.o), F.x), V.dot(V.sub(p, F.o), F.y), V.dot(V.sub(p, F.o), F.z)];
@@ -92,4 +96,16 @@ test('bands: the model covers a tube, a long loop and a mini loop (round and fla
   }
   assert.equal(EQ.band.MODELS.tube48.rest, 121.9);
   assert.equal(EQ.band.MODELS.loop41.rest, 208.3);
+});
+
+test('bands: the ankle strap — both ends of the tube clip onto the D-ring of one strap round the left shin', () => {
+  for (const { R } of frames(POSES.bandadduct, 11)) {
+    const P = id => R.props.find(p => p.id === id), ends = ['band:L', 'band:L2'].map(id => P(id).pts.at(-1));
+    const snaps = ['band:L:snap', 'band:L:snap2'].map(P);
+    assert(P('band:L:dring') && snaps.every(Boolean), 'D-кольцо и два карабина');
+    /* дальний конец карабина — конец ветви ленты; карабины начинаются у вершины одного D-кольца */
+    snaps.forEach((s, k) => assert(V.dist(s.pts[8], ends[k]) < .01, `ветвь ${k + 1} — на своём карабине`));
+    assert(V.dist(snaps[0].pts[0], snaps[1].pts[0]) < .01, 'оба карабина на одном кольце');
+    for (let i = 0; i < 9; i++) for (const q of P('band:L:cuff' + i).pts) assert(Math.abs(M.limbSDF(R, 'sk', 'L', q) - .75) < .3, 'виток манжеты лежит на голени');
+  }
 });

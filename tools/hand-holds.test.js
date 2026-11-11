@@ -70,7 +70,7 @@ test('kettlebell swing: the handle runs through the centres of both fists', () =
 
 test('D-handles and band handles: the stirrup goes round the hand, the cable and the band clip onto its ring', () => {
   const D = { cablefly: ['L', 'R'], cablelowfly: ['L', 'R'], cablelat: ['R'], cableextrot: ['R'] };
-  const BAND = { bandlatraise: ['L', 'R'], bandcurl: ['L', 'R'], bandpushdown: ['L', 'R'], bandfacepull: ['L', 'R'], bandextrot: ['R'], bandrow: ['L', 'R'] };
+  const BAND = { bandlatraise: ['L', 'R'], bandcurl: ['L', 'R'], bandpushdown: ['L', 'R'], bandfacepull: ['L', 'R'], bandextrot: ['R'], bandrow: ['L', 'R'], bandlatpull: ['L', 'R'] };
   for (const [id, sides] of Object.entries({ ...D, ...BAND })) {
     const e = POSES[id], rig = EQ.rig(e);
     for (const t of ts) {
