@@ -26,18 +26,18 @@ test('joint angles are the validator\'s own calculation', () => {
 
 const EXPECT = {
   /* сведение на блоке: опорная нога почти прямая; копенгагенская планка: колено верхней ноги прямое, сгибания под весом нет */
-  knee: { on: ['squat', 'goblet', 'smithsquat', 'hacksquat', 'legpress', 'legpresslow', 'lunge', 'revlunge', 'bulgarian', 'stepup', 'pistolbox', 'kbfrontsquat'], off: ['dbpress', 'latpull', 'deadlift', 'jumpsquat', 'glutebridge1', 'crunch', 'legext', 'calfraise', 'cableadduct', 'copenhagen'] },
+  knee: { on: ['squat', 'goblet', 'smithsquat', 'hacksquat', 'legpress', 'legpresslow', 'lunge', 'revlunge', 'bulgarian', 'stepup', 'pistolbox', 'kbfrontsquat'], off: ['dbpress', 'latpull', 'deadlift', 'jumpsquat', 'glutebridge1', 'crunch', 'legext', 'calfraise', 'cableadduct', 'copenhagen', 'bandadduct', 'bandabduct', 'bandbridge'] }, /* дома с эспандером: колено почти прямое (сведение, отведение) или без нагрузки сверху (мостик) */
   kneeOpen: { on: ['legext'], off: ['legcurl', 'squat', 'legpress'] },
   /* гиря: наклоны от таза и тяга в наклоне без опоры — как со штангой */
-  lumbar: { on: ['deadlift', 'rdl', 'sllift', 'goodmorning', 'bbrow', 'kbswing', 'squat', 'kbdeadlift', 'kbswing1', 'kbclean', 'kbrow', 'kbsnatch', 'kbsllift'], off: ['latpull', 'cablerow', 'dbrow', 'shrug', 'ohp', 'chestrowdb', 'legpress'] },
+  lumbar: { on: ['deadlift', 'rdl', 'sllift', 'goodmorning', 'bbrow', 'kbswing', 'squat', 'kbdeadlift', 'kbswing1', 'kbclean', 'kbrow', 'kbsnatch', 'kbsllift'], off: ['latpull', 'cablerow', 'dbrow', 'shrug', 'ohp', 'chestrowdb', 'legpress', 'bandlatpull', 'bandbridge'] },
   /* вращение плеча наружу: плечо у бока, не уходит за линию корпуса */
-  shPress: { on: ['bbbench', 'smithbench', 'inclinebb', 'closegrip', 'dip', 'assistdip', 'benchdip', 'pecdeck'], off: ['ohp', 'pushup', 'latpull', 'bbrow', 'dbcurl', 'cableextrot', 'bandextrot', 'kbfloorpress'] }, /* жим лёжа на полу: пол не пускает локоть ниже корпуса */
+  shPress: { on: ['bbbench', 'smithbench', 'inclinebb', 'closegrip', 'dip', 'assistdip', 'benchdip', 'pecdeck'], off: ['ohp', 'pushup', 'latpull', 'bbrow', 'dbcurl', 'cableextrot', 'bandextrot', 'kbfloorpress', 'bandlatpull'] }, /* жим лёжа на полу: пол не пускает локоть ниже корпуса */
   shLever: { on: ['dbfly', 'pullover'], off: ['bbbench', 'cablefly', 'latraise'] },
   shOverhead: { on: ['ohp', 'dbpress', 'arnold', 'shoulderpressm', 'smithohp', 'pikepush', 'declinepike', 'kbpress'],
-    off: ['latraise', 'bandlatraise', 'frontraise', 'facepull', 'bandfacepull', 'latpull', 'pullup', 'ohext', 'cableohext', 'bbbench', 'dbincline', 'pullover'] },
-  hang: { on: ['pullup', 'chinup', 'hang', 'legraise', 'hangknee'], off: ['latpull', 'dip', 'ohp'] },
-  pullTop: { on: ['pullup', 'chinup', 'assistpull'], off: ['hang', 'legraise', 'latpull', 'invrow'] },
-  neck: { on: ['pullup', 'chinup', 'assistpull'], off: ['crunch', 'latpull', 'hang', 'shrug'] },
+    off: ['latraise', 'bandlatraise', 'frontraise', 'facepull', 'bandfacepull', 'latpull', 'pullup', 'ohext', 'cableohext', 'bbbench', 'dbincline', 'pullover', 'bandlatpull'] },
+  hang: { on: ['pullup', 'chinup', 'hang', 'legraise', 'hangknee'], off: ['latpull', 'dip', 'ohp', 'bandlatpull'] }, /* на коленях: тело не висит на руках */
+  pullTop: { on: ['pullup', 'chinup', 'assistpull'], off: ['hang', 'legraise', 'latpull', 'invrow', 'bandlatpull'] },
+  neck: { on: ['pullup', 'chinup', 'assistpull'], off: ['crunch', 'latpull', 'hang', 'shrug', 'bandlatpull'] },
   elbow: { on: ['skull', 'ohext', 'cableohext'], off: ['dbcurl', 'ohp', 'pushdown', 'closegrip'] },
   /* копенгагенская планка — упор на предплечье, как планка: кисть не нагружена */
   wrist: { on: ['pushup', 'diamond', 'burpee', 'mountain', 'birddog', 'plankup'], off: ['plank', 'wallpush', 'nordic', 'bbbench', 'dbcurl', 'copenhagen', 'copenhagenknee'] },
