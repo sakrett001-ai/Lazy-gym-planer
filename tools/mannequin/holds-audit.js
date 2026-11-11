@@ -171,16 +171,20 @@ function auditEntry(id, e, { samples = 41 } = {}) {
         if (!on && d[1] < -.3) { r.up++; r.upT = t; }
       }
       /* гиря за рога двумя руками (g2KbHorns: гоблет, «гало» дном вверх): положение — «дном вверх» (шар над рукоятью),
-         «шар внизу» или «набок»; подозрительно — шар в руке, корпусе или голове глубже LIM.bellBody, кулак дальше LIM.horn
-         от оси своего рога */
+         «шар внизу» или «набок», и точка хвата на роге (R.horn: «за изгиб у перекладины», если хоть один кулак за серединой
+         изгиба, u > 0,5); подозрительно — шар в руке, корпусе или голове глубже LIM.bellBody, кулак дальше LIM.horn
+         от оси своего рога (прямая часть и отрезки изгиба — ближайший) */
       for (const p of props.filter(p => p.kind === 'kettlebell' && props.some(q => q.id === p.id + ':hornL'))) {
         const d = V.unit(V.sub(p.c, p.grip)), pos = d[1] < -.5 ? 'дном вверх' : d[1] > .5 ? 'шар внизу' : 'набок';
         const r = row('kbh' + p.id, { side: 'LR', kind: 'гиря за рога', bell: p.id, pos: new Set(), deep: -Infinity, horn: 0 });
-        r.pos.add(pos);
+        r.pos.add(pos); if (R.horn && M.SIDES.some(s => (R.horn[s] ?? 0) > .5)) r.pos.add('за изгиб у перекладины');
         const torso = M.torsoSDF(R, p.c, M.torsoCache(R)) - p.radius, head = V.dist(p.c, R.head) - 9 - p.radius;
         const limbs = M.SIDES.flatMap(s => [['предплечье ' + s, M.limbSDF(R, 'fa', s, p.c) - p.radius], ['плечо ' + s, M.limbSDF(R, 'ua', s, p.c) - p.radius]]);
         for (const [what, v] of [...limbs, ['корпус', torso], ['голова', head]]) if (-v > r.deep) Object.assign(r, { deep: -v, deepIn: what, deepT: t });
-        for (const s of M.SIDES) { const h = props.find(q => q.id === p.id + ':horn' + s); if (!h) continue; const d2 = segDist(R['grip' + s], h.a, h.b).d; if (d2 > r.horn) Object.assign(r, { horn: d2, hornT: t, hornS: s }); }
+        for (const s of M.SIDES) {
+          const hs = props.filter(q => q.id === p.id + ':horn' + s || (q.id || '').startsWith(p.id + ':horn' + s + ':')); if (!hs.length) continue;
+          const d2 = Math.min(...hs.map(h => segDist(R['grip' + s], h.a, h.b).d)); if (d2 > r.horn) Object.assign(r, { horn: d2, hornT: t, hornS: s });
+        }
       }
       /* снаряд двумя руками: гантель под ладонями (g2CupDumbbell) — ладони у оси рукояти */
       for (const p of props.filter(p => /:handle$/.test(p.id) && props.some(q => q.id === p.id.replace(/:handle$/, ':top') && q.mount === 'hands'))) {

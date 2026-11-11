@@ -35,17 +35,48 @@
       { kind: 'cyl', c: at(-(H / 2 + 1.2 + hl / 2)), axis: n, r: hr, len: hl, sides: 6, tone: 'plate', role: 'weight', id: id + ':bottom', mount: id + ':collarB' }
     ];
   };
+  /* Изогнутый рог гири: точка хвата u — 0: прямая часть рога над шаром (центр кулака в 8,6 см от оси гири и 10,5 над центром
+     шара, как прежде), 1 — за изгибом, у перекладины (кулак в 6,5 см от оси, ось кулака почти поперёк оси гири). Ряды — по
+     осевой линии рукояти той же кривой, что у сетки (src/volume/props.mjs: CatmullRom по 8 точкам, центростремительная):
+     [u, x, y, ось от хвата к шару (x, y)] в плоскости рукояти (x — от оси гири к своему рогу, y — от центра шара к рукояти;
+     r = 10,5 см); ось — хорда кривой на ширине кулака (±3,5 см). Хват меняется по ходу «гало»: спереди — прямая часть
+     рога, за головой гиря висит шаром вниз, предплечья — вдоль оси гири, и кулаки держат рог у перекладины. */
+  const HORN = [[0, 8.6, 10.5, -.132, -.991], [.2, 8.97, 12.4, -.165, -.986], [.4, 9.2, 14.38, .031, -1], [.6, 9.05, 16.27, .39, -.921], [.8, 8.14, 17.89, .741, -.672], [1, 6.46, 18.47, .929, -.369]];
+  E.kbHorn = u => {
+    const v = Math.max(0, Math.min(1, u || 0)) * (HORN.length - 1), i = Math.min(HORN.length - 2, Math.floor(v)), w = v - i, A = HORN[i], B = HORN[i + 1];
+    const m = j => A[j] + (B[j] - A[j]) * w, l = Math.hypot(m(3), m(4));
+    return { x: m(1), y: m(2), ax: [m(3) / l, m(4) / l] };
+  };
   /* Гиря «за рога» двумя руками (гоблет): дужки рукояти — в кулаках. Ось «вверх» гири — средняя линия больших пальцев,
      центры хватов — на дужках (±8,65 см от оси, 10,5 см над центром шара при Ø21), шар ниже рукояти; размеры гири —
      E.KB (09bn-equipment.js).
-     Дужки — короткие участки рукояти (role grip): на них проверяется хват. */
+     Дужки — короткие участки рукояти (role grip): на них проверяется хват. Дном вверх у рогов — ещё изгиб к перекладине
+     (три отрезка по осевой линии); R.horn {L, R} — точка хвата каждой руки на роге (E.kbHorn): гиря ставится так, чтобы оба
+     кулака были на своих точках рогов (без R.horn — прежнее положение, u = 0 у обеих рук). */
   BIND.g2KbHorns = (e, R) => {
-    const id = e.id || 'kb', k = (e.r || 10.5) / 10.5, gL = R.gripL, gR = R.gripR, ax = V.unit(V.sub(gL, gR)), mid = V.mix(gL, gR, .5);
+    const id = e.id || 'kb', k = (e.r || 10.5) / 10.5, gL = R.gripL, gR = R.gripR;
     /* up — от шара к рукояти: по большим пальцам (хват за рога сверху: пальцы смотрят на рукоять); дном вверх (bottomUp,
        «гало») большие пальцы смотрят на шар — шар над кистями */
-    const th = V.add(R.frames.handL.z, R.frames.handR.z), up = V.scale(V.unit(V.perp(V.len(V.perp(th, ax)) > .2 ? th : [0, -1, 0], ax)), e.bottomUp ? -1 : 1);
-    const c = V.add(mid, up, -10.5 * k), L = (a, u) => V.add(V.add(c, ax, a * k), up, u * k);
-    const horn = sg => ({ kind: 'beam', a: L(sg * 8.1, 6.9), b: L(sg * 9.1, 14.4), r: 1.7, tone: 'plate', role: 'grip', id: id + ':horn' + (sg > 0 ? 'L' : 'R'), mount: id });
-    return [{ kind: 'kettlebell', c, grip: L(0, E.KB.handle), axis: ax, handleAxis: ax, radius: 10.5 * k, handleUp: E.KB.handle * k, bottom: E.KB.bottom * k, role: 'free', tone: 'plate', free: true, id, mount: 'hands' }, horn(1), horn(-1)];
+    const th = V.add(R.frames.handL.z, R.frames.handR.z);
+    let ax, up, c;
+    if (R.horn) {
+      /* кулаки на точках рогов hL, hR: линия хватов наклонена к оси рукояти на α (разные точки хвата у рук) */
+      const hL = E.kbHorn(R.horn.L), hR = E.kbHorn(R.horn.R), e1 = V.unit(V.sub(gL, gR));
+      const e2 = V.scale(V.unit(V.perp(V.len(V.perp(th, e1)) > .2 ? th : [0, -1, 0], e1)), e.bottomUp ? -1 : 1), a = Math.atan2(hL.y - hR.y, hL.x + hR.x);
+      ax = V.add(V.scale(e1, Math.cos(a)), e2, -Math.sin(a)); up = V.add(V.scale(e1, Math.sin(a)), e2, Math.cos(a));
+      c = V.mix(V.add(V.add(gL, ax, -hL.x * k), up, -hL.y * k), V.add(V.add(gR, ax, hR.x * k), up, -hR.y * k), .5);
+    } else {
+      ax = V.unit(V.sub(gL, gR)); up = V.scale(V.unit(V.perp(V.len(V.perp(th, ax)) > .2 ? th : [0, -1, 0], ax)), e.bottomUp ? -1 : 1);
+      c = V.add(V.mix(gL, gR, .5), up, -10.5 * k);
+    }
+    const L = (a, u) => V.add(V.add(c, ax, a * k), up, u * k), S = sg => sg > 0 ? 'L' : 'R';
+    const horn = sg => ({ kind: 'beam', a: L(sg * 8.1, 6.9), b: L(sg * 9.1, 14.4), r: 1.7, tone: 'plate', role: 'grip', id: id + ':horn' + S(sg), mount: id });
+    /* изгиб рога к перекладине — по осевой линии рукояти (точки кривой сетки на дуге 11,7; 9,2; 7,3 и 3,9 см от середины перекладины) */
+    const bend = sg => [[9.2, 14.49], [8.86, 16.9], [7.48, 18.23], [4.19, 18.76]].slice(1).map((p, i, A) => {
+      const a0 = i ? A[i - 1] : [9.2, 14.49], pid = id + ':horn' + S(sg);
+      return { kind: 'beam', a: L(sg * a0[0], a0[1]), b: L(sg * p[0], p[1]), r: 1.7, tone: 'plate', role: 'grip', id: pid + ':' + (i + 2), mount: i ? pid + ':' + (i + 1) : pid };
+    });
+    return [{ kind: 'kettlebell', c, grip: L(0, E.KB.handle), axis: ax, handleAxis: ax, radius: 10.5 * k, handleUp: E.KB.handle * k, bottom: E.KB.bottom * k, role: 'free', tone: 'plate', free: true, id, mount: 'hands' },
+      horn(1), horn(-1), ...(e.bottomUp ? [...bend(1), ...bend(-1)] : [])];
   };
 })(typeof GymEquipment !== 'undefined' ? GymEquipment : require('./09bn-equipment.js'));

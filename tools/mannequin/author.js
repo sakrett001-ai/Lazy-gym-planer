@@ -29,7 +29,7 @@ function bakeOne(id, spec) {
       M.rhythmHint(null); q = spec.pose(t, C, variant);
       for (let k = 0; k < RHYTHM_PASSES; k++) { const h = hint(q); M.rhythmHint(h); q = spec.pose(t, C, variant); }
       const v = M.pack(q).map((x, i) => i >= 3 && i < 7 ? round(x, 1e5) : round(x, 100));
-      return { t, v, hands: { L: q.hands?.L || 'relaxed', R: q.hands?.R || 'relaxed' }, ...(q.handDepth ? { depth: { L: round(q.handDepth.L ?? 0, 1e3), R: round(q.handDepth.R ?? 0, 1e3) } } : {}) };
+      return { t, v, hands: { L: q.hands?.L || 'relaxed', R: q.hands?.R || 'relaxed' }, ...(q.handDepth ? { depth: { L: round(q.handDepth.L ?? 0, 1e3), R: round(q.handDepth.R ?? 0, 1e3) } } : {}), ...(q.horn ? { horn: { L: round(q.horn.L ?? 0, 1e3), R: round(q.horn.R ?? 0, 1e3) } } : {}) };
     } catch (e) { e.message = `${id}${variant ? ' [' + variant + ']' : ''} t=${t}: ${e.message}`; throw e; } finally { M.rhythmHint(null); }
   });
   const out = { keys: bake(), equipment: spec.equipment || [], contacts: spec.contacts || [] };

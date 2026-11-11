@@ -229,7 +229,7 @@ function bakedPoses(spec, list, n = 40) {
     try {
       M.rhythmHint(null); let q = spec.pose(t, C);
       for (let k = 0; k < 2; k++) { M.rhythmHint(hint(q)); q = spec.pose(t, C); }
-      return { t, v: M.pack(q).map((x, i) => i >= 3 && i < 7 ? round(x, 1e5) : round(x, 100)), hands: { L: q.hands?.L || 'relaxed', R: q.hands?.R || 'relaxed' }, ...(q.handDepth ? { depth: { L: round(q.handDepth.L ?? 0, 1e3), R: round(q.handDepth.R ?? 0, 1e3) } } : {}) };
+      return { t, v: M.pack(q).map((x, i) => i >= 3 && i < 7 ? round(x, 1e5) : round(x, 100)), hands: { L: q.hands?.L || 'relaxed', R: q.hands?.R || 'relaxed' }, ...(q.handDepth ? { depth: { L: round(q.handDepth.L ?? 0, 1e3), R: round(q.handDepth.R ?? 0, 1e3) } } : {}), ...(q.horn ? { horn: { L: round(q.horn.L ?? 0, 1e3), R: round(q.horn.R ?? 0, 1e3) } } : {}) };
     } finally { M.rhythmHint(null); }
   });
   const track = M.makeTrack(keys, { loop: !!spec.loop }), poses = [];
