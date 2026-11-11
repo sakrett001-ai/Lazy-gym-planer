@@ -7,7 +7,7 @@ const PATTERN_NAMES = {squat:'присед', hinge:'наклон от таза',
   hold:'удержание корпуса', side:'боковой наклон', calf:'подъём на носки', grip:'хват', jump:'прыжки', burpee:'бёрпи', climb:'скалолаз',
   adduct:'сведение ног', abduct:'отведение ног', extrot:'вращение плеча наружу', run:'бег', ride:'вращение педалей', row:'гребля', kneeext:'разгибание колена', kneeflex:'сгибание колена', shrug:'шраги'};
 /* движения, которым не нашлось места в общей таблице */
-[['kneeext', 'legext'], ['kneeflex', 'legcurl nordic'], ['shrug', 'shrug'], ['raise', 'frontraise']].forEach(([p, ids]) => ids.split(' ').forEach(id => PATTERN[id] = p));
+[['kneeext', 'legext bandlegext'], ['kneeflex', 'legcurl nordic'], ['shrug', 'shrug'], ['raise', 'frontraise']].forEach(([p, ids]) => ids.split(' ').forEach(id => PATTERN[id] = p));
 
 /* вид сопротивления: от него зависит, как ощущается замена */
 const LOAD_KIND_NOTE = {

@@ -606,6 +606,49 @@ function blpArm(C, q, s, e) {
   holdAxis(C, q, s, g, pole, V.scale(lat, -1));
 }
 
+/* ---------- Разгибание ноги сидя с эспандером (двойник тренажёра разгибания ног) ----------
+   Как у Jakobsen et al. (Int J Sports Phys Ther 2012; 7(6):606–616): сидя на стуле спиной к креплению, крепление в 10 см над
+   полом, трубка — к щиколотке «1 finger above the medial malleoli», колено от ≈ 90° до полного разгибания, трубка растянута
+   примерно вдвое. Здесь: стул (homeChair: сиденье 45 см), крепление у низа двери позади стула (side, h 12), трубка 48″
+   серединой в петле крепления, оба конца — на манжете левой щиколотки (как в сведении ноги с эспандером); лента идёт под
+   сиденьем между ножками стула. Корпус чуть отклонён на спинку, кисти держат боковые края сиденья у бёдер, правая стопа на полу.
+   t=0 — колено согнуто под BLE_KNEE[0]°, стопа над полом; t=1 — колено почти прямое (BLE_KNEE[1]°), бедро на сиденье. */
+const BLE_KNEE = [88, 4];
+const BLE_CHAIR = { type: 'homeChair', id: 'chair', at: [0, 0, 0] };
+const BLE_DOOR = { type: 'g3Door', id: 'door', anchor: 'side', h: 12, at: [46.5, 0, -60], yaw: 180 };
+/* корпус отклонён назад на BLE_LEAN° и лежит лопатками на спинке стула (как спинка тренажёра разгибания ног, наклонённая
+   назад): при прямом колене сгибание бедра меньше, и задняя поверхность бедра не перерастянута (сидя прямо — 87° при колене 4°) */
+const BLE_LEAN = 11;
+const BLE = once(() => {
+  const C = ctx([BLE_CHAIR]), q = C.base(), a = BLE_LEAN * C.D2R;
+  C.root(q, [0, 56, -4], [0, Math.cos(a), -Math.sin(a)], [0, Math.sin(a), Math.cos(a)]);
+  q.lumbar = [-2, 0, 0]; q.thoracic = [2, 0, 0]; q.neck = [BLE_LEAN - 2, 0, 0];
+  for (const s of S) { q[s].hip = [86 - BLE_LEAN, 5, 4]; q[s].knee = 90; }
+  C.restOn(q, 'buttocks', [0, 45, 0], [0, 1, 0], -1.4);
+  /* спина ложится на доску спинки (передняя грань z −17, высота 69–87 см): по точкам спины на высоте доски, поджатие 0,4 см */
+  for (let i = 0; i < 3; i++) {
+    const pts = C.region(q, 'back').filter(p => p[1] > 70 && p[1] < 86);
+    if (pts.length) q.root.p = C.V.add(q.root.p, [0, 0, -17 - .4 - Math.min(...pts.map(p => p[2]))]);
+    C.restOn(q, 'buttocks', [0, 45, 0], [0, 1, 0], -1.4);
+  }
+  return { q };
+});
+function bleKnee(C, q, s, knee, dorsi = 0) {
+  const { V, M } = C, f = C.fk(q), hip = f.P['hip' + s], g = M.SIGN[s], a = 3 * C.D2R;
+  const th = V.unit([g * .06, -Math.sin(a), Math.cos(a)]), kn = V.add(hip, th, M.B.th), b = (180 - knee) * C.D2R;
+  /* голень — в плоскости бедра и вертикали: при knee 90° вниз, при 0° — по бедру */
+  const down = V.unit(V.perp([0, -1, 0], th)), sh = V.unit(V.add(V.scale(th, -Math.cos(b)), down, Math.sin(b)));
+  C.legTo(q, s, V.add(kn, sh, M.B.sk), V.unit(V.add([0, 1, 0], th, .3)), { dorsi });
+}
+/* кисти держат боковые края сиденья у бёдер: пальцы под сиденьем, большой палец вперёд, локти назад и чуть в стороны */
+function bleHands(C, q) {
+  const { V, M } = C;
+  for (const s of S) {
+    const g = M.SIGN[s], lat = C.lat(q, s);
+    C.grip(q, s, [g * 20.5, 43.6, -6], [0, 0, 1], V.unit(V.add(V.add(lat, [0, 0, -1], 1.2), [0, 1, 0], .3)));
+  }
+}
+
 /* ---------- Сведение ноги с эспандером (двойник сведения на нижнем блоке) ----------
    Bodylastics «Standing Leg Adduction With Bands»: «Attach the bands to the door anchor at the bottom of the door», «Clip both
    ends of the band to one ankle strap» (манжета на рабочей ноге, ближней к двери), встать боком в 3–4 футах от двери, корпус
@@ -1026,6 +1069,22 @@ module.exports = {
       for (const s of S) { C.rhythm(q, s, [C.lerp(6, -6, e), C.lerp(4, -10, e)]); blpArm(C, q, s, e); }
       for (const s of S) blpArm(C, q, s, e);
       return turn(C, q, 90);
+    }
+  },
+
+  /* Разгибание ноги сидя с эспандером: работает левая нога; раскладка и источник — BLE выше. */
+  bandlegext: {
+    keys: [0, .25, .5, .75, 1],
+    equipment: [BLE_CHAIR, BLE_DOOR, { type: 'band', id: 'band', model: 'tube48', route: [{ cuff: 'L' }, ringOf(BLE_DOOR), { cuff: 'L' }] }],
+    contacts: [{ body: 'buttocks', prop: 'chair:seat' }, { body: 'back', prop: 'chair:backRest' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'chair:seat' }, { body: 'gripR', prop: 'chair:seat' }],
+    gripRadius: { L: 1.5, R: 1.5 },
+    pose(t, C) {
+      const { V } = C, e = C.ease(t), q = C.M.clone(BLE().q);
+      bleKnee(C, q, 'L', C.lerp(BLE_KNEE[0], BLE_KNEE[1], e), C.lerp(5, 0, e));
+      const hip = C.fk(q).P.hipR;
+      C.foot(q, 'R', [hip[0] - 1, 0, hip[2] + 50], 0, V.unit([-.1, .4, 1]), { forward: V.unit([-.08, 0, 1]) });
+      bleHands(C, q);
+      return q;
     }
   },
 

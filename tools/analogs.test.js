@@ -93,9 +93,9 @@ test('the band-only place: gym exercises are replaced by their band twins', () =
   assert.deepEqual(place && { name: place.name, equip: [...place.equip] }, { name: 'Дома с эспандером', equip: BANDS });
   const E = a.effEquip(BANDS), first = id => a.analogsFor(a.EXI[id], E, { limit: 1 })[0]?.ex.id;
   for (const [gym, twin] of [['latpull', 'bandlatpull'], ['latpullv', 'bandlatpull'], ['adduction', 'bandadduct'], ['cableadduct', 'bandadduct'],
-    ['abduction', 'bandabduct'], ['bridge', 'bandbridge'], ['cablerow', 'bandrow'], ['pushdown', 'bandpushdown'], ['cablecurl', 'bandcurl'], ['facepull', 'bandfacepull']])
+    ['abduction', 'bandabduct'], ['bridge', 'bandbridge'], ['legext', 'bandlegext'], ['cablerow', 'bandrow'], ['pushdown', 'bandpushdown'], ['cablecurl', 'bandcurl'], ['facepull', 'bandfacepull']])
     assert.equal(first(gym), twin, `${gym} → ${twin}`);
-  for (const id of ['bandlatpull', 'bandadduct', 'bandabduct', 'bandbridge']) assert(a.available(a.EXI[id], E), id + ' needs only bands');
+  for (const id of ['bandlatpull', 'bandadduct', 'bandabduct', 'bandbridge', 'bandlegext']) assert(a.available(a.EXI[id], E), id + ' needs only bands');
   assert.match(a.analogNote(a.EXI.latpull, a.EXI.bandlatpull, E), /резина/, 'the note names the band');
   /* программа зала в этом месте: тяга верхнего блока заменена тягой эспандера сверху */
   Object.assign(a.S, { mode: 'single', goal: 'mass', level: 'mid', count: 6, groups: ['back'], seed: 3, format: 'classic' });

@@ -18,14 +18,14 @@ const M = require('../src/js/09bm-mannequin.js'), { V } = M;
 const { auditBand, auditEntry, bandFlags, BAND_LIM } = require('./mannequin/cable-audit.js');
 
 const IDS = { bandlatraise: 'tube48', bandcurl: 'tube48', bandpushdown: 'tube48', bandfacepull: 'tube36', bandextrot: 'tube36', bandrow: 'tube36',
-  /* дома с эспандером: трубка над дверью, трубка у низа двери на манжете, мини-петля на голенях и на бёдрах */
-  bandlatpull: 'tube36', bandadduct: 'tube36', bandabduct: 'mini12', bandbridge: 'mini12' };
+  /* дома с эспандером: трубка над дверью, трубка у низа двери на манжете (стоя и сидя), мини-петля на голенях и на бёдрах */
+  bandlatpull: 'tube36', bandadduct: 'tube36', bandabduct: 'mini12', bandbridge: 'mini12', bandlegext: 'tube48' };
 const frames = (entry, n = 41, edit) => { const rig = EQ.rig(EQ.variantEntry(entry, () => false)); return Array.from({ length: n }, (_, i) => { const t = i / (n - 1), R = rig(t); if (edit) edit(R, t); return { t, R }; }); };
 const band = (R, id = 'band') => R.props.filter(p => p.band && p.band.id === id);
 const audit = (id, edit, entry = POSES[id]) => auditBand(id, 'band', frames(entry, 41, edit));
 const has = (r, re) => r.flags.some(f => re.test(f));
 
-test('bands: ten exercises — one continuous band, taut, within the passport stretch, no slip, no flags', () => {
+test('bands: eleven exercises — one continuous band, taut, within the passport stretch, no slip, no flags', () => {
   for (const [id, model] of Object.entries(IDS)) {
     const rows = auditEntry(id, POSES[id]), m = rows.find(r => r.type === 'лента-модель');
     assert(m, `${id}: строка ленты`);

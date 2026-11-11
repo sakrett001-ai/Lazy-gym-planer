@@ -48,7 +48,7 @@ const EX_W = {wallpush:0.5, kneepush:0.7, inclinepush:0.8, towelcurl:0.6, towelr
   /* гиря: баллистика и односторонние варианты — после базовых движений со штангой и гантелями */
   kbdeadlift:0.9, kbswing1:0.85, kbclean:0.8, kbpress:0.9, kbfrontsquat:0.85, kbrow:0.9, kbfloorpress:0.8, kbsnatch:0.75, kbsllift:0.85, kbwindmill:0.7, kbhalo:0.6, kbtgu:0.6,
   /* дома с эспандером: тяга сверху — почти как тяга сверху на блоке, прицельные на бёдра — вспомогательные */
-  bandlatpull:0.9, bandadduct:0.85, bandbridge:0.9, bandabduct:0.8};
+  bandlatpull:0.9, bandadduct:0.85, bandbridge:0.9, bandabduct:0.8, bandlegext:0.85};
 const EXI = Object.fromEntries(EX.map(e => [e.id, e]));
 const EQN = Object.fromEntries(EQUIP.map(e => [e.id, e.name]));
 const GN = Object.fromEntries(GROUPS.map(g => [g.id, g.name]));

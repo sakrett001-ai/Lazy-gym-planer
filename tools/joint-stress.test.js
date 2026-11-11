@@ -26,7 +26,7 @@ test('joint angles are the validator\'s own calculation', () => {
 
 const EXPECT = {
   /* сведение на блоке: опорная нога почти прямая; копенгагенская планка: колено верхней ноги прямое, сгибания под весом нет */
-  knee: { on: ['squat', 'goblet', 'smithsquat', 'hacksquat', 'legpress', 'legpresslow', 'lunge', 'revlunge', 'bulgarian', 'stepup', 'pistolbox', 'kbfrontsquat'], off: ['dbpress', 'latpull', 'deadlift', 'jumpsquat', 'glutebridge1', 'crunch', 'legext', 'calfraise', 'cableadduct', 'copenhagen', 'bandadduct', 'bandabduct', 'bandbridge'] }, /* дома с эспандером: колено почти прямое (сведение, отведение) или без нагрузки сверху (мостик) */
+  knee: { on: ['squat', 'goblet', 'smithsquat', 'hacksquat', 'legpress', 'legpresslow', 'lunge', 'revlunge', 'bulgarian', 'stepup', 'pistolbox', 'kbfrontsquat'], off: ['dbpress', 'latpull', 'deadlift', 'jumpsquat', 'glutebridge1', 'crunch', 'legext', 'calfraise', 'cableadduct', 'copenhagen', 'bandadduct', 'bandabduct', 'bandbridge', 'bandlegext'] }, /* дома с эспандером: колено почти прямое (сведение, отведение) или без нагрузки сверху (мостик, разгибание сидя — как в тренажёре) */
   kneeOpen: { on: ['legext'], off: ['legcurl', 'squat', 'legpress'] },
   /* гиря: наклоны от таза и тяга в наклоне без опоры — как со штангой */
   lumbar: { on: ['deadlift', 'rdl', 'sllift', 'goodmorning', 'bbrow', 'kbswing', 'squat', 'kbdeadlift', 'kbswing1', 'kbclean', 'kbrow', 'kbsnatch', 'kbsllift'], off: ['latpull', 'cablerow', 'dbrow', 'shrug', 'ohp', 'chestrowdb', 'legpress', 'bandlatpull', 'bandbridge'] },
