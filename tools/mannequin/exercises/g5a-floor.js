@@ -666,6 +666,28 @@ const cphMat = L => ({ type: 'mat', id: 'mat', len: 200, width: 70, at: [7, 0, M
 let KBFP_DROP = null;
 const KBFP_PRON = 35;
 const arcDir = (V, a, b, t) => { const d = Math.max(-1, Math.min(1, V.dot(a, b))), th = Math.acos(d); if (th < 1e-4) return a; const s = Math.sin(th); return V.add(V.scale(a, Math.sin((1 - t) * th) / s), b, Math.sin(t * th) / s); };
+/* рукоять в кулаке, большой палец вдоль axis — пронация подбирается так, чтобы ось кулака (z кисти) смотрела вдоль axis
+   (тот же подбор, что holdAxis в g3-cable.js) */
+function holdAxis(C, q, s, point, pole, axis, { lo = -84, hi = 78, short = false } = {}) {
+  const { V } = C, ax = V.unit(axis);
+  const score = p => { C.hold(q, s, point, pole, { pron: p, allowShort: true }); return V.dot(C.M3.col(C.fk(q).F['hand' + s].R, 2), ax); };
+  let best = lo, bv = -Infinity;
+  for (let p = lo; p <= hi + 1e-9; p += 4) { const v = score(p); if (v > bv) { bv = v; best = p; } }
+  let a = Math.max(lo, best - 4), b = Math.min(hi, best + 4);
+  for (let i = 0; i < 18; i++) { const m1 = a + (b - a) * .382, m2 = a + (b - a) * .618; if (score(m1) >= score(m2)) b = m2; else a = m1; }
+  const p = (a + b) / 2; for (let k = 0; k < 3; k++) C.hold(q, s, point, pole, { pron: p, allowShort: true }); C.hold(q, s, point, pole, { pron: p, allowShort: short }); return p;
+}
+/* ---------- Жим лёжа на полу с эспандером (двойник жима лёжа) ----------
+   Nike «The Top 7 Resistance Band Chest Exercises» (тренеры N. Tamir, C.S.C.S., и M. Forzaglia, NFPT C.P.T.), «Banded Chest
+   Press»: лёжа на полу, лента «directly under your back», кисти держат концы, жим «at chest level towards the ceiling». Трубка 48″
+   лежит поперёк спины под лопатками (сечение BFP.at — уровень сосков, под нижними углами лопаток), прижата весом тела
+   (общая модель ленты, узел torso с floor: без скольжения, кусок под спиной без растяжения), огибает заднебоковой угол
+   корпуса под мышкой и идёт к рукояти. Тело — как в жиме гири лёжа (kbfloorpress): колени согнуты, стопы на коврике, плечо
+   внизу на коврике под BFP.abd° к корпусу, предплечье вертикально — пол ограничивает амплитуду (как у жима лёжа на полу).
+   Хват — полунейтральный: большой палец на BFP.thumb° от линии между кистями к голове — лента от бока корпуса подходит
+   к кулаку снизу и изнутри, стремя рукояти смотрит на неё. t=0 — плечи на коврике; t=1 — руки выпрямлены над плечами. */
+const BFP = { at: 34, abd: 45, thumb: 60 };
+let BFP_DROP = null;
 
 module.exports = {
 
@@ -697,6 +719,33 @@ module.exports = {
       };
       const low = d => { armAt(d, 0); return Math.min(...C.region(q, 'uaL').map(p => p[1])) - MAT + .6; };
       armAt(KBFP_DROP ?? (KBFP_DROP = C.solve1D(low, .6, -.2)), e);
+      return q;
+    }
+  },
+  /* Жим лёжа на полу с эспандером: раскладка и источник — BFP выше. */
+  bandfloorpress: {
+    keys: [0, .25, .5, .75, 1],
+    equipment: [...SUP_MAT, { type: 'band', id: 'band', model: 'tube36', route: [{ handle: 'L' }, { torso: 'L', at: BFP.at, floor: true }, { torso: 'R', at: BFP.at, floor: true }, { handle: 'R' }] }],
+    contacts: [{ body: 'buttocks', prop: 'mat' }, { body: 'back', prop: 'mat' }, { body: 'soleL', prop: 'mat' }, { body: 'soleR', prop: 'mat' }, { body: 'gripL', prop: 'band:handleL' }, { body: 'gripR', prop: 'band:handleR' },
+      { body: 'uaL', prop: 'mat', when: [0, .04] }, { body: 'uaR', prop: 'mat', when: [0, .04] }],
+    gripRadius: { L: 1.6, R: 1.6 },
+    pose(t, C) {
+      const { V, M } = C, e = C.ease(t), q = supine(C, { tilt: 2, lumbar: 2, thoracic: 0, neck: 0 });
+      for (const s of S) { q[s].hip = [50, 8, 4]; q[s].knee = 95; }
+      lieOn(C, q, 'back', [0, -10]); C.neckTo(q, 'headBack', [0, MAT, 0], [0, 1, 0], -.3);
+      feetFlatAtKnee(C, q, 100);
+      for (const s of S) q[s].girdle = [0, C.lerp(-8, 6, e)];
+      const f = C.fk(q), a = BFP.abd * C.D2R, b = BFP.thumb * C.D2R;
+      const arm = (s, drop, e) => {
+        const gh = f.P['gh' + s], lat = C.latP(q, s), out = V.unit(V.add(V.scale(lat, Math.sin(a)), [0, 0, -1], Math.cos(a)));
+        const d = arcDir(V, V.unit(V.add(out, [0, -1, 0], drop)), [0, 1, 0], e);
+        const g = V.add(V.add(gh, d, M.B.ua), [0, 1, 0], C.lerp(34.2, 35.2, e));
+        holdAxis(C, q, s, g, V.unit(V.add(out, [0, -1, 0], .2)), V.add(V.scale(lat, -Math.cos(b)), [0, 0, 1], Math.sin(b)), { short: e > .97 });
+      };
+      /* наклон плеча к коврику внизу — один раз: нижняя поверхность плеча на коврике (как у жима гири лёжа) */
+      const low = d => { arm('L', d, 0); return Math.min(...C.region(q, 'uaL').map(p => p[1])) - MAT + .6; };
+      if (BFP_DROP == null) BFP_DROP = C.solve1D(low, .6, -.2);
+      for (const s of S) arm(s, BFP_DROP, e);
       return q;
     }
   },

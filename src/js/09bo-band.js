@@ -22,7 +22,14 @@
      нижнего блока): Bodylastics «Standing Leg Adduction With Bands» — «Clip both ends of the band to one ankle strap»,
      середина трубки — в креплении у низа двери. Две манжеты одной стороны (route [{cuff:'L'}, …, {cuff:'L'}]) — оба конца
      трубки на одном кольце: карабины рядом (1,2 см вдоль голени);
-   * {limb:'sk'|'th', side, at} — петля огибает голень или бедро (для петель; closed: true — путь замкнут).
+   * {limb:'sk'|'th', side, at} — петля огибает голень или бедро (для петель; closed: true — путь замкнут);
+   * {torso:'L', at, floor} — лента огибает заднебоковой угол корпуса стороны L на сечении at (см от тазобедренных вдоль
+     корпуса — строки TORSO): цилиндр вдоль оси корпуса, охватывающий кожу угла (на 24 точках сечения от бока до спины). С floor
+     (лёжа на спине на ленте: «band directly under your back», жим лёжа на полу) лента лежит на полу под спиной поперёк
+     корпуса, прижата весом тела — опора без скольжения (pin), как под подошвой: место схода с пола — в рамке грудной клетки,
+     кусок между сторонами лежит без растяжения. Без floor (сведение рук от двери: лента из кольца позади огибает бок
+     корпуса под мышкой, когда руки сведены) — огибание со скольжением, натяжение по обе стороны одно; если прямая не
+     задевает цилиндр, лента идёт прямо.
    Две рукояти одной стороны (route [{handle:'R'}, …, {handle:'R'}]) — оба конца трубки в одной кисти: ветви идут рядом.
 
    Материал и растяжение. Лента делится опорами без скольжения на куски; в каждом куске натяжение одно (по скользящим
@@ -63,6 +70,36 @@
     const low = Math.max(...[V.add(c, n, EDGE_R + r), med].map(p => p[1])), lift = low - (FLOOR - r);
     if (lift > 0) { c = V.add(c, UP, lift); med = V.add(med, UP, lift); }
     return { c, r: EDGE_R + r, axis: F.z, side: V.add(V.add(c, lat, 3), n, 3), med, lat, n, foot: F };
+  }
+  /* у корпуса: сторона s, сечение at. Огибание — окружность в плоскости сечения вокруг заднебокового угла кожи (24 точки от
+     бока до спины, со складками подмышки — лента огибает кожу такой, какая она в кадре): центр на ρ внутрь от бока и от
+     спины, ρ — наименьший (от 2 см), при котором кожа угла не выходит за окружность больше чем на 0,2 см; радиус огибания —
+     ρ + радиус ленты. floor (лёжа на ленте): лента под спиной лежит на полу, вдавлена в коврик весом тела (центр — на r над
+     полом); окружность касается этой линии снизу (центр на 2r + ρ над полом), кожа ниже 2r — поджата к полу и не
+     учитывается; место схода с пола (med) — на полу в рамке грудной клетки без складок, на 7 см внутрь от бока: оно не плывёт
+     за складками и за повтор не сдвигается. Ось цилиндра — ось корпуса. */
+  function torsoOf(R, s, at, r, floor) {
+    const g = SIGN[s], f0 = M.noFolds(() => M.torsoFrame(R, at));
+    const sec = Array.from({ length: 25 }, (_, k) => M.torsoPoint(R, at, s, Math.PI / 2 + k * Math.PI / 48));
+    const up = floor ? UP : V.scale(f0.z, 1), lat = V.unit(V.perp(V.scale(f0.x, g), up)), down = V.scale(up, -1);
+    /* начало отсчёта в плоскости сечения: ось корпуса (лёжа — её проекция на пол) */
+    const o = floor ? [f0.c[0], FLOOR, f0.c[2]] : f0.c, u = p => V.dot(V.sub(p, o), lat), v = p => V.dot(V.sub(p, o), up);
+    const wF = Math.max(...sec.map(u));
+    let best = null;
+    for (let rho = 2; rho <= 12 + 1e-9; rho += .25) {
+      const c = floor ? V.add(V.add(o, lat, wF - rho), up, 2 * r + rho) : V.add(V.add(o, lat, wF - rho), down, Math.max(...sec.map(p => -v(p))) - rho);
+      const pts = sec.filter(p => u(p) >= u(c) - 1e-6 && (floor ? v(p) > 2 * r && v(p) <= v(c) + 1e-6 : -v(p) >= -v(c) - 1e-6));
+      const ex = Math.max(0, ...pts.map(p => V.dist(p, c) - rho));
+      if (!best || ex < best.ex - 1e-9) best = { c, rho, ex };
+      if (ex <= .2) { best = { c, rho, ex }; break; }
+    }
+    const c = best.c, rw = best.rho + r;
+    let med = null;
+    if (floor) {
+      /* полуширина сечения — по таблице корпуса (TORSO), а не по коже кадра: кожа бока следует за рукой */
+      med = V.add(V.add(o, lat, M.sectionAt(at)[0] - 7), up, r);
+    }
+    return { c, r: rw, axis: f0.y, side: V.add(V.add(c, lat, 3), down, 3), med, lat, n: down, frame: f0, rho: best.rho, excess: best.ex };
   }
   /* петля вокруг сегмента ноги: окружность, охватывающая сечение (24 точки кожи; центр — их середина, радиус — до самой
      дальней). Прежде радиус был средним по четырём сторонам: сечение голени не круглое, и петля заходила в кожу на 0,8 см */
@@ -106,6 +143,8 @@
       if (n.handle) return { kind: 'handle', s: n.handle };
       if (n.cuff) return { kind: 'cuff', s: n.cuff, pin: true };
       if (n.sole) return { kind: 'sole', s: n.sole, ...soleOf(R, n.sole, n.at ?? 9, r0), pin: true };
+      /* лёжа на ленте — та же опора без скольжения, что под подошвой (kind sole: огибание угла и кусок под спиной) */
+      if (n.torso) return n.floor ? { kind: 'sole', s: n.torso, ...torsoOf(R, n.torso, n.at ?? 38, r0, true), pin: true, torso: true } : { kind: 'wrap', s: n.torso, ...torsoOf(R, n.torso, n.at ?? 38, r0, false), pin: false };
       if (n.ring) {
         /* door — направление к двери (перекладина кольца — на дальней от кистей стороне); без него — от середины кистей */
         const c0 = toCat(n.ring), hs = route.filter(m => m.handle).map(m => R['grip' + m.handle]);
@@ -115,14 +154,25 @@
       if (n.clip) return { kind: 'clip', p: toCat(n.clip), mount: n.mountTo, pin: true };
       throw Error('band: unknown route node ' + JSON.stringify(n));
     });
-    const near = i => { const n = nodes[i]; return n.kind === 'sole' ? n.c : n.kind === 'ring' ? n.c : n.kind === 'clip' ? n.p : null; };
+    /* соседняя опора — куда смотрит кольцо стремени рукояти: у огибания корпуса — точка схода ленты с цилиндра на прямой от
+       кисти (если прямая к следующей опоре его не задевает — сама следующая опора) */
+    const near = (i, from) => {
+      const n = nodes[i];
+      if (n.kind === 'wrap' || (n.kind === 'sole' && n.torso)) {
+        const j = i + (i === 0 || nodes[i - 1].kind === 'handle' ? 1 : -1), next = n.kind === 'sole' ? n.med : near(j);
+        if (!from || !next) return n.c;
+        const w = MU().wrap(from, next, cyl(n.c, n.axis, n.r, n.side));
+        return w ? w.a : next;
+      }
+      return n.kind === 'sole' ? n.c : n.kind === 'ring' ? n.c : n.kind === 'clip' ? n.p : null;
+    };
     /* 2. рукояти: кольцо стремени смотрит на соседнюю опору; две рукояти в одной кисти — ветви рядом (±0,6 см по рукояти) */
     const sameHand = nodes[0].kind === 'handle' && nodes.at(-1).kind === 'handle' && nodes[0].s === nodes.at(-1).s;
     const sameCuff = nodes[0].kind === 'cuff' && nodes.at(-1).kind === 'cuff' && nodes[0].s === nodes.at(-1).s;
     const handles = [], cuffs = [];
     nodes.forEach((n, i) => {
       if (n.kind !== 'handle') return;
-      const to = near(i === 0 ? 1 : i - 1), st = E.stirrup(R['grip' + n.s], R.frames['hand' + n.s].z, to, { ...E.BAND_HANDLE, clear: E.clearOfForearm(R, n.s) });
+      const to = near(i === 0 ? 1 : i - 1, R['grip' + n.s]), st = E.stirrup(R['grip' + n.s], R.frames['hand' + n.s].z, to, { ...E.BAND_HANDLE, clear: E.clearOfForearm(R, n.s) });
       n.st = st; n.apex = st.apex;
       if (sameHand && i > 0) n.apex = V.add(st.apex, V.unit(R.frames['hand' + n.s].z), 1.2);
       if (!(sameHand && i > 0)) handles.push(n);
@@ -149,7 +199,7 @@
           /* с ветви на подошву: огибание наружного края, затем под подошвой к внутреннему краю — дальше кусок без тяги */
           const w = around(prev, n.med, cyl(n.c, n.axis, n.r, n.side));
           for (const p of w.pts) push(p);
-          pins.push({ s: n.s, foot: n.foot, at: w.b, med: n.med, lat: n.lat }); k++;
+          pins.push({ s: n.s, foot: n.foot, torso: n.torso ? n.frame : null, at: w.b, med: n.med, lat: n.lat }); k++;
           push(n.med);
         } else {
           /* с куска под стопами на подошву и к ветви: у внутреннего края, огибание наружного края к следующей рукояти */
@@ -159,14 +209,24 @@
           push(n.med);
           const w = around(n.med, nextP, cyl(n.c, n.axis, n.r, n.side));
           push(w.pts[0]);
-          pins.push({ s: n.s, foot: n.foot, at: w.a, med: n.med, lat: n.lat }); k++;
+          pins.push({ s: n.s, foot: n.foot, torso: n.torso ? n.frame : null, at: w.a, med: n.med, lat: n.lat }); k++;
           for (const p of w.pts.slice(1)) push(p);
         }
         continue;
       }
+      if (n.kind === 'wrap') {
+        /* огибание бока корпуса со скольжением: между соседними точками пути (если прямая цилиндр не задевает — прямо) */
+        const nextP = nodes[i + 1].kind === 'ring' ? nodes[i + 1].c : nodes[i + 1].apex ?? nodes[i + 1].p;
+        const w = around(prev, nextP, cyl(n.c, n.axis, n.r, n.side));
+        for (const p of w.pts) push(p);
+        continue;
+      }
       if (n.kind === 'ring') {
         /* перекладина кольца на стороне двери: ось — по нормали плоскости обеих ветвей */
-        const nextP = nodes[i + 1].apex ?? nodes[i + 1].p;
+        /* за кольцом — огибание бока корпуса: следующая точка — место, где лента от кольца к рукояти ложится на цилиндр */
+        const nx = nodes[i + 1];
+        let nextP = nx.apex ?? nx.p;
+        if (nx.kind === 'wrap') { const hp = nodes[i + 2].apex ?? nodes[i + 2].p, w = MU().wrap(n.c, hp, cyl(nx.c, nx.axis, nx.r, nx.side)); nextP = w ? w.a : hp; }
         let axis = V.cross(V.sub(prev, n.c), V.sub(nextP, n.c));
         if (V.len(axis) < 1e-6) axis = V.cross(V.sub(prev, n.c), UP);
         const w = around(prev, nextP, cyl(n.c, axis, BAR_R + r0, V.add(n.c, n.toward, 5)));

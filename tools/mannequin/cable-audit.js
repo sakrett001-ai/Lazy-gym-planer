@@ -39,7 +39,7 @@ const KIND = {
   cablefly: 'arc', cablelowfly: 'arc', cablelat: 'arc', cablewood: 'arc', cablecrunch: 'hold',
   glutekick: 'arc', cablekickback: 'arc', cableadduct: 'arc', cableextrot: 'arc',
   bandlatraise: 'arc', bandcurl: 'arc', bandpushdown: 'arc', bandfacepull: 'line', bandextrot: 'arc', bandrow: 'line',
-  bandlatpull: 'arc', bandadduct: 'arc', bandabduct: 'arc', bandbridge: 'arc', bandlegext: 'arc'
+  bandlatpull: 'arc', bandadduct: 'arc', bandabduct: 'arc', bandbridge: 'arc', bandlegext: 'arc', bandfloorpress: 'arc'
 };
 /* пороги «подозрительно» (повод посмотреть глазами) */
 const LIM = {
