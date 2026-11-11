@@ -328,8 +328,9 @@ BIND.cable=(e,R)=>{
    плоское основание ⌀ 14 см. Источники: Rogue Competition Kettlebells, Product Guide — «11.1" (282MM) height», «8.19" (208MM)
    bell width», «Standardized 33MM handle diameter», «5.5" (140MM) base diameter», «the exact same exterior dimensions across
    the entire weight range (8KG to 48KG)»; Titan Fitness Competition Kettlebell — 290 мм, ⌀ 210 мм, рукоять 35 мм. Вес
-   по умолчанию 16 кг — стартовая гиря мужчины (по P. Tsatsouline, «Enter the Kettlebell!», 2006 — по памяти, книга
-   при подготовке не открывалась). Шар срезан плоским дном ⌀ 14: дно на KB.bottom = √(10,5² − 7²) = 7,83 см ниже центра; ось рукояти — на KB.handle
+   по умолчанию 16 кг — первая гиря взрослого мужчины (S. Freides, RKC, «Kettlebell Buyer's Guide», Dragon Door: «buy one
+   16 kg kettlebell»); с гирей 16 кг делали махи и в исследовании McGill и Marshall, 2012 (по статье StrongFirst
+   «Optimizing Back Health With the Kettlebell Swing»). Шар срезан плоским дном ⌀ 14: дно на KB.bottom = √(10,5² − 7²) = 7,83 см ниже центра; ось рукояти — на KB.handle
    над центром: 7,83 + 18,67 + 1,7 (радиус рукояти) = 28,2 см. Прежде дно стояло на 0,94·r (шар сплюснут, а дно ⌀ 14
    рисовалось отдельным диском, торчавшим из шара), ось — на 16,6 см, ещё раньше на 15,6 см.
    Рукоять лежит в кулаке по его оси (z кисти; двумя руками — по линии хватов), шар — на KB.handle от оси рукояти поперёк неё:
