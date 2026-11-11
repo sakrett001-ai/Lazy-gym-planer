@@ -601,7 +601,7 @@ const BLP = once(() => {
 function blpArm(C, q, s, e) {
   const { V } = C, f = C.fk(q), gh = f.P['gh' + s], lat = C.lat(q, s), T = C.axes(q, 'thorax');
   const d0 = V.unit(V.add(V.add(T.y, T.z, .42), lat, .36)), d1 = V.unit(V.add(V.add(V.scale(T.y, -.42), lat, .72), T.z, .62));
-  const g = V.add(gh, slerpDir(V, d0, d1, e), C.lerp(60.5, 27, e));
+  const g = V.add(gh, slerpDir(V, d0, d1, e), C.lerp(59.5, 61.5, e));
   const pole = V.unit(V.add(V.add(lat, V.scale(T.y, -1), C.lerp(.2, .9, e)), T.z, -.45));
   holdAxis(C, q, s, g, pole, V.scale(lat, -1));
 }
@@ -675,7 +675,51 @@ function badStance(C, q) {
   C.foot(q, 'R', BAD_FOOT, 0, V.unit([-.12, 0, 1]), opts);
 }
 
+/* ---------- Сведение рук с эспандером у двери (двойник кроссовера) ----------
+   Fitwill «Band Middle Fly»: «Anchor the band behind you at roughly chest height», «stand facing away from the anchor point»,
+   шаг — одна стопа впереди другой (корпус не качается), «arms out to the sides, elbows softly bent, and palms facing inward»,
+   руки по широкой дуге сходятся перед грудью, угол в локтях почти постоянный; StrengthLog «Resistance Band Chest Fly»: крепление
+   «around chest level», тяга «in front of your body at chest height with a slight bend at the elbow». Трубка 48″ продета серединой
+   в петлю крепления сбоку двери (g3Door, side) на высоте BFLY.h позади, в BFLY.d см за тазом; стоя спиной к двери, левая стопа
+   впереди, корпус чуть наклонён вперёд. Когда руки сходятся перед грудью, лента от кольца позади огибает бок корпуса под мышкой
+   (узел torso без floor, со скольжением; пока прямая к кисти бок не задевает — идёт прямо). Кисть — как в исправленном
+   кроссовере (cablefly): большой палец вдоль нормали дуги (holdAxis) — в растяжке ладони вперёд, в конце — друг к другу.
+   t=0 — руки разведены в стороны чуть впереди плеч; t=1 — кисти сведены перед грудью. */
+const BFLY = { h: 124, d: 95, at: 40, lean: 8, drop: 13, reach: [59, 61], pole0: .1, pole1: -.12 };
+const BFLY_DOOR = { type: 'g3Door', id: 'door', anchor: 'side', h: BFLY.h, at: [37.5, 0, -BFLY.d], yaw: 180 };
+const BFLY_FEET = { L: [11, 30, 6], R: [-12, -20, -10, 14] };
+const BFLYQ = once(() => {
+  const C = ctx([BFLY_DOOR]), q = C.base();
+  stand(C, q, { root: [0, 85.3, 2], lean: BFLY.lean, feet: BFLY_FEET, heel: { R: 14 } });
+  q.lumbar = [-3, 0, 0]; q.thoracic = [1, 0, 0]; q.neck = [-6, 0, 0];
+  balance(C, q, BFLY_FEET, { shift: [0, 3], resolve: qq => placeFeet(C, qq, BFLY_FEET, { R: 14 }) });
+  return { q };
+});
+
 module.exports = {
+
+  /* Сведение рук с эспандером у двери: раскладка и источники — BFLY выше. */
+  bandfly: {
+    keys: [0, .2, .4, .6, .8, 1],
+    equipment: [BFLY_DOOR, { type: 'band', id: 'band', model: 'tube48', route: [{ handle: 'L' }, { torso: 'L', at: BFLY.at }, ringOf(BFLY_DOOR), { torso: 'R', at: BFLY.at }, { handle: 'R' }] }],
+    contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'gripL', prop: 'band:handleL' }, { body: 'gripR', prop: 'band:handleR' }],
+    gripRadius: { L: 1.6, R: 1.6 },
+    pose(t, C) {
+      const { V } = C, e = C.ease(t), q = C.M.clone(BFLYQ().q);
+      for (const s of S) C.rhythm(q, s, [C.lerp(2, 0, e), C.lerp(-6, 10, e)]);
+      const f = C.fk(q), T = C.axes(q, 'thorax');
+      for (const s of S) {
+        const gh = f.P['gh' + s], lat = C.lat(q, s), fwd = T.z, up = T.y;
+        const latH = V.unit(V.perp(lat, [0, 1, 0])), fwdH = V.unit(V.perp(fwd, [0, 1, 0])), dn = [0, -Math.tan(BFLY.drop * C.D2R), 0];
+        const d0 = V.unit(V.add(V.unit(V.add(V.scale(latH, .97), fwdH, .14)), dn)), d1 = V.unit(V.add(V.unit(V.add(V.scale(fwdH, .95), latH, -.2)), dn));
+        const g = V.add(gh, slerpDir(V, d0, d1, e), C.lerp(BFLY.reach[0], BFLY.reach[1], e));
+        const pole = V.unit(V.mix(V.add(V.scale(fwd, -1), up, BFLY.pole0), V.add(V.add(lat, up, BFLY.pole1), fwd, -.65), e));
+        let N = V.unit(V.cross(d0, d1)); if (V.dot(N, up) < 0) N = V.scale(N, -1);
+        holdAxis(C, q, s, g, pole, N);
+      }
+      return q;
+    }
+  },
 
   /* Стоя на середине ленты, стопы почти вместе (BAND_FEET_N): трубка 48″ под обеими подошвами. t=0 — кисти у бёдер;
      t=1 — руки через стороны до уровня плеч, локти слегка согнуты; растяжение ветвей ×1,45…2,97.

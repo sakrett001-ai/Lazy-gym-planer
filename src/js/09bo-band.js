@@ -79,27 +79,33 @@
      учитывается; место схода с пола (med) — на полу в рамке грудной клетки без складок, на 7 см внутрь от бока: оно не плывёт
      за складками и за повтор не сдвигается. Ось цилиндра — ось корпуса. */
   function torsoOf(R, s, at, r, floor) {
-    const g = SIGN[s], f0 = M.noFolds(() => M.torsoFrame(R, at));
-    const sec = Array.from({ length: 25 }, (_, k) => M.torsoPoint(R, at, s, Math.PI / 2 + k * Math.PI / 48));
+    const g = SIGN[s], f0 = M.noFolds(() => M.torsoFrame(R, at)), arc = (a0, a1) => Array.from({ length: 25 }, (_, k) => M.torsoPoint(R, at, s, a0 + k * (a1 - a0) / 24));
+    const sec = arc(Math.PI / 2, Math.PI);
     const up = floor ? UP : V.scale(f0.z, 1), lat = V.unit(V.perp(V.scale(f0.x, g), up)), down = V.scale(up, -1);
     /* начало отсчёта в плоскости сечения: ось корпуса (лёжа — её проекция на пол) */
     const o = floor ? [f0.c[0], FLOOR, f0.c[2]] : f0.c, u = p => V.dot(V.sub(p, o), lat), v = p => V.dot(V.sub(p, o), up);
-    const wF = Math.max(...sec.map(u));
-    let best = null;
-    for (let rho = 2; rho <= 12 + 1e-9; rho += .25) {
-      const c = floor ? V.add(V.add(o, lat, wF - rho), up, 2 * r + rho) : V.add(V.add(o, lat, wF - rho), down, Math.max(...sec.map(p => -v(p))) - rho);
-      const pts = sec.filter(p => u(p) >= u(c) - 1e-6 && (floor ? v(p) > 2 * r && v(p) <= v(c) + 1e-6 : -v(p) >= -v(c) - 1e-6));
-      const ex = Math.max(0, ...pts.map(p => V.dist(p, c) - rho));
-      if (!best || ex < best.ex - 1e-9) best = { c, rho, ex };
-      if (ex <= .2) { best = { c, rho, ex }; break; }
+    /* угол кожи: окружность с центром на ρ внутрь от бока (wF) и от края по nv (край — дальняя точка сечения pts вдоль nv) */
+    const fit = (pts, nv, base) => {
+      const wF = Math.max(...pts.map(u)), edge = Math.max(...pts.map(p => V.dot(V.sub(p, o), nv)));
+      let best = null;
+      for (let rho = 2; rho <= 12 + 1e-9; rho += .25) {
+        const c = base ? base(wF, rho) : V.add(V.add(o, lat, wF - rho), nv, edge - rho), cv = V.dot(V.sub(c, o), nv);
+        const inS = pts.filter(p => u(p) >= u(c) - 1e-6 && (base ? v(p) > 2 * r && v(p) <= v(c) + 1e-6 : V.dot(V.sub(p, o), nv) >= cv - 1e-6));
+        const ex = Math.max(0, ...inS.map(p => V.dist(p, c) - rho));
+        if (!best || ex < best.ex - 1e-9) best = { c, rho, ex };
+        if (ex <= .2) { best = { c, rho, ex }; break; }
+      }
+      return best;
+    };
+    const B = fit(sec, down, floor ? (wF, rho) => V.add(V.add(o, lat, wF - rho), up, 2 * r + rho) : null);
+    let med = null, front = null;
+    if (floor) med = V.add(V.add(o, lat, M.sectionAt(at)[0] - 7), up, r); /* полуширина — по таблице TORSO: кожа бока следует за рукой */
+    else {
+      /* стоя: и передний угол (грудь под мышкой) — лента от кольца позади к кистям перед грудью огибает бок целиком */
+      const F = fit(arc(0, Math.PI / 2), up);
+      front = { c: F.c, r: F.rho + r, side: V.add(V.add(F.c, lat, 3), up, 3) };
     }
-    const c = best.c, rw = best.rho + r;
-    let med = null;
-    if (floor) {
-      /* полуширина сечения — по таблице корпуса (TORSO), а не по коже кадра: кожа бока следует за рукой */
-      med = V.add(V.add(o, lat, M.sectionAt(at)[0] - 7), up, r);
-    }
-    return { c, r: rw, axis: f0.y, side: V.add(V.add(c, lat, 3), down, 3), med, lat, n: down, frame: f0, rho: best.rho, excess: best.ex };
+    return { c: B.c, r: B.rho + r, axis: f0.y, side: V.add(V.add(B.c, lat, 3), down, 3), med, front, lat, n: down, frame: f0 };
   }
   /* петля вокруг сегмента ноги: окружность, охватывающая сечение (24 точки кожи; центр — их середина, радиус — до самой
      дальней). Прежде радиус был средним по четырём сторонам: сечение голени не круглое, и петля заходила в кожу на 0,8 см */
@@ -131,6 +137,17 @@
     out.push(s.a, ...arc, s.b);
     return { pts: out, a: s.a, b: s.b, wrapped: true };
   }
+  /* огибание двух цилиндров подряд (задний и передний угол корпуса): касательные согласуются чередованием — точка схода
+     с первого цилиндра смотрит на точку входа на второй и наоборот; 2·ARC_N точек */
+  function around2(a, b, w1, w2) {
+    let x = b, A, B;
+    for (let it = 0; it < 12; it++) {
+      A = around(a, x, w1); B = around(A.wrapped ? A.b : a, b, w2);
+      const nx = B.wrapped ? B.a : b; if (V.dist(nx, x) < 1e-4) break; x = nx;
+    }
+    if (!A.wrapped && !B.wrapped) { const pts = []; for (let k = 1; k <= 2 * ARC_N; k++) pts.push(V.mix(a, b, k / (2 * ARC_N + 1))); return { pts, a: pts[0], wrapped: false }; }
+    return { pts: [...A.pts, ...B.pts], a: A.wrapped ? A.a : B.a, wrapped: true };
+  }
   const polyLen = pts => { let L = 0; for (let i = 1; i < pts.length; i++) L += V.dist(pts[i - 1], pts[i]); return L; };
   /* ---------- лента: путь, куски, растяжение, детали ---------- */
   function bandPath(e, R) {
@@ -154,6 +171,7 @@
       if (n.clip) return { kind: 'clip', p: toCat(n.clip), mount: n.mountTo, pin: true };
       throw Error('band: unknown route node ' + JSON.stringify(n));
     });
+    const torsoCyls = n => [cyl(n.c, n.axis, n.r, n.side), cyl(n.front.c, n.axis, n.front.r, n.front.side)];
     /* соседняя опора — куда смотрит кольцо стремени рукояти: у огибания корпуса — точка схода ленты с цилиндра на прямой от
        кисти (если прямая к следующей опоре его не задевает — сама следующая опора) */
     const near = (i, from) => {
@@ -161,6 +179,7 @@
       if (n.kind === 'wrap' || (n.kind === 'sole' && n.torso)) {
         const j = i + (i === 0 || nodes[i - 1].kind === 'handle' ? 1 : -1), next = n.kind === 'sole' ? n.med : near(j);
         if (!from || !next) return n.c;
+        if (n.kind === 'wrap') { const cs = torsoCyls(n), w = around2(from, next, ...(V.dist(from, n.c) <= V.dist(from, n.front.c) ? cs : cs.slice().reverse())); return w.wrapped ? w.a : next; }
         const w = MU().wrap(from, next, cyl(n.c, n.axis, n.r, n.side));
         return w ? w.a : next;
       }
@@ -217,7 +236,8 @@
       if (n.kind === 'wrap') {
         /* огибание бока корпуса со скольжением: между соседними точками пути (если прямая цилиндр не задевает — прямо) */
         const nextP = nodes[i + 1].kind === 'ring' ? nodes[i + 1].c : nodes[i + 1].apex ?? nodes[i + 1].p;
-        const w = around(prev, nextP, cyl(n.c, n.axis, n.r, n.side));
+        const cs = torsoCyls(n), ord = V.dist(prev, n.c) <= V.dist(prev, n.front.c) ? cs : cs.slice().reverse();
+        const w = around2(prev, nextP, ...ord);
         for (const p of w.pts) push(p);
         continue;
       }
@@ -226,7 +246,7 @@
         /* за кольцом — огибание бока корпуса: следующая точка — место, где лента от кольца к рукояти ложится на цилиндр */
         const nx = nodes[i + 1];
         let nextP = nx.apex ?? nx.p;
-        if (nx.kind === 'wrap') { const hp = nodes[i + 2].apex ?? nodes[i + 2].p, w = MU().wrap(n.c, hp, cyl(nx.c, nx.axis, nx.r, nx.side)); nextP = w ? w.a : hp; }
+        if (nx.kind === 'wrap') { const hp = nodes[i + 2].apex ?? nodes[i + 2].p, cs = torsoCyls(nx), w = around2(n.c, hp, ...(V.dist(n.c, nx.c) <= V.dist(n.c, nx.front.c) ? cs : cs.slice().reverse())); nextP = w.wrapped ? w.a : hp; }
         let axis = V.cross(V.sub(prev, n.c), V.sub(nextP, n.c));
         if (V.len(axis) < 1e-6) axis = V.cross(V.sub(prev, n.c), UP);
         const w = around(prev, nextP, cyl(n.c, axis, BAR_R + r0, V.add(n.c, n.toward, 5)));
