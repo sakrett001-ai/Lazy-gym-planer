@@ -55,6 +55,13 @@ function palmOn(C, q, s, P, fingers, prefer) {
   return C.palm(q, s, P, fingers, [0, 1, 0], best.pole);
 }
 
+/* точка ладони на полу в горизонтальном направлении dir (пальцы — туда же) на расстоянии почти прямой руки: запястье
+   (5,6 см от центра ладони к руке и 1,8 см над полом) — в span см от плечевого сустава gh (ua + fa = 55,3: при 54,8
+   локоть согнут на ~10°) */
+function palmAtReach(C, gh, dir, span = 54.8) {
+  const { V } = C, dy = gh[1] - (MAT + 1.8), h = 5.6 + Math.sqrt(Math.max(0, span * span - dy * dy));
+  return V.add([gh[0], MAT, gh[2]], dir, h);
+}
 /* нижняя точка стопы стороны s (по точкам её поверхности) — как в g5a-floor.js */
 function lowestFoot(C, q, s) {
   const { M } = C, f = C.fk(q);
@@ -84,14 +91,128 @@ function tguSupine(C) {
     const put = y => { const A = V.add(hip, dir, Math.sqrt(Math.max(1, L * L - (hip[1] - y) ** 2))); C.legTo(q, 'R', [A[0], y, A[2]], [0, 1, 0], { dorsi: 5 }); };
     put(C.solve1D(y => { put(y); return lowestFoot(C, q, 'R') - (MAT - .3); }, MAT, MAT + 12));
   }
-  /* правая рука на коврике под armR к корпусу, ладонью вниз; ладонь — на расстоянии почти прямой руки (центр ладони
-     в 60,3 см от плечевого сустава: локоть согнут на ~10°) */
+  /* правая рука на полу под armR к корпусу, ладонью вниз, почти прямая */
   {
     q.R.girdle = [0, -4];
-    const gh = C.fk(q).P.ghR, a = TGU.armR * C.D2R, lat = V.unit(V.perp(C.lat(q, 'R'), [0, 1, 0])), dir = V.add(V.scale(lat, Math.sin(a)), [0, 0, -1], Math.cos(a)), P = V.add([gh[0], MAT, gh[2]], dir, Math.sqrt(60.3 ** 2 - (gh[1] - MAT - 2) ** 2));
+    const gh = C.fk(q).P.ghR, a = TGU.armR * C.D2R, lat = V.unit(V.perp(C.lat(q, 'R'), [0, 1, 0])), dir = V.add(V.scale(lat, Math.sin(a)), [0, 0, -1], Math.cos(a)), P = palmAtReach(C, gh, dir);
     palmOn(C, q, 'R', P, dir);
   }
   bellUp(C, q, 'L', { reach: M.B.ua + 35.2 });
+  return q;
+}
+
+/* ---------- 2. На локте ----------
+   Таз на полу, корпус поднят «диагональным скручиванием»: отклонён назад на back° от вертикали и к опорной руке на side° —
+   так, чтобы правое плечо было вертикально над локтем (плечевой сустав на ELBOW_H + длина плеча над полом); предплечье
+   лежит на полу по линии руки из положения лёжа (под armR к корпусу), кисть расслаблена, ладонью вниз. */
+const ELBOW = { back: 52, knee: 100, legR: 22, ext: -14 };
+const ELBOW_H = 6.4, WRIST_H = 4.2;
+function tguElbow(C, o = ELBOW) {
+  const { V, M } = C, target = MAT + ELBOW_H + M.B.ua - 1;
+  const side = C.solve1D(sd => C.fk(sitBody(C, o.back, sd)).P.ghR[1] - target, 0, 60), q = sitBody(C, o.back, side);
+  footFlatAt(C, q, 'L', o.knee);
+  legOnFloor(C, q, 'R', o.legR);
+  {
+    const gh = C.fk(q).P.ghR, a = TGU.armR * C.D2R, lat = V.unit(V.perp(C.latP(q, 'R'), [0, 1, 0])), dir = V.unit(V.add(V.scale(lat, Math.sin(a)), [0, 0, -1], Math.cos(a)));
+    const E = [gh[0], MAT + ELBOW_H, gh[2]], dy = WRIST_H - ELBOW_H, W = V.add(V.add(E, dir, Math.sqrt(M.B.fa ** 2 - dy * dy)), [0, dy, 0]);
+    C.armTo(q, 'R', W, V.unit(V.sub(E, V.mix(gh, W, .5))), { pron: 80, wrist: [o.ext, 0], mode: 'relaxed' });
+  }
+  bellUp(C, q, 'L');
+  return q;
+}
+
+/* ---------- 3. На ладони (сидя) ----------
+   Таз на полу, корпус отклонён назад на back и к опорной руке на side (град); правая рука прямая, ладонь на полу сбоку-сзади
+   от таза (кисть развёрнута пальцами назад-наружу), плечо — над запястьем, насколько позволяет длина руки; левая стопа
+   на полу (колено согнуто на knee), правая нога прямая на полу. */
+const SIT = { back: 22, gh: 52, knee: 100, legR: 22, hand: 45 };
+function sitBody(C, back, side) {
+  const { V } = C, q = C.base(), up = V.unit([Math.tan(side * C.D2R), 1, Math.tan(back * C.D2R)]), fwd = V.unit(V.perp([0, 0, -1], up));
+  C.root(q, [0, 15, 0], up, fwd);
+  q.lumbar = [0, 0, 0]; q.thoracic = [0, 0, 0]; q.neck = [0, 0, 0]; q.R.girdle = [0, -2];
+  /* ноги вперёд до посадки (иначе бёдра, опущенные вниз, поднимают таз над полом) */
+  q.L.hip = [90 - back, 6, 0]; q.L.knee = 100; q.R.hip = [90 - back, 15, 0];
+  C.restOn(q, 'buttocks', [0, MAT, 0], [0, 1, 0], -.8);
+  { const f = C.fk(q), h = C.V.mix(f.P.hipL, f.P.hipR, .5); q.root.p = C.V.add(q.root.p, [-h[0], 0, -h[2]]); }
+  return q;
+}
+function tguSit(C, o = SIT) {
+  const { V, M } = C;
+  /* наклон к опорной руке — до высоты правого плечевого сустава o.gh над полом (рука прямая, чуть наклонена) */
+  const side = C.solve1D(sd => C.fk(sitBody(C, o.back, sd)).P.ghR[1] - (MAT + o.gh), 0, 45), q = sitBody(C, o.back, side);
+  footFlatAt(C, q, 'L', o.knee);
+  legOnFloor(C, q, 'R', o.legR);
+  /* опорная рука: ладонь на полу в стороне hand° от «назад» к «наружу», на расстоянии прямой руки */
+  {
+    const gh = C.fk(q).P.ghR, a = o.hand * C.D2R, lat = V.unit(V.perp(C.latP(q, 'R'), [0, 1, 0])), dir = V.unit(V.add(V.scale(lat, Math.sin(a)), [0, 0, 1], Math.cos(a)));
+    palmOn(C, q, 'R', palmAtReach(C, gh, dir), dir);
+  }
+  bellUp(C, q, 'L');
+  return q;
+}
+/* стопа стороны s на полу под коленом, согнутым на knee: стопа — на ширине таза, носок вперёд (по −Z) */
+function footFlatAt(C, q, s, knee) {
+  const { V, M } = C, hip = C.fk(q).P['hip' + s], base = M.clone(q);
+  const put = (t, D) => C.foot(t, s, [hip[0], MAT, hip[2] - D], 0, V.unit(V.add([0, 1, 0], C.latP(t, s), .15)), { forward: [0, 0, -1] });
+  const D = C.solve1D(D => { const t = M.clone(base); put(t, D); return t[s].knee - knee; }, 10, 85);
+  return put(q, D);
+}
+/* прямая нога стороны s на полу, отведена на deg от «вперёд» (−Z): пятка лежит на полу (на 0,3 см в нём) */
+function legOnFloor(C, q, s, deg) {
+  const { V, M } = C, hip = C.fk(q).P['hip' + s], a = deg * C.D2R, L = M.B.th + M.B.sk - .3, lat = V.unit(V.perp(C.latP(q, s), [0, 1, 0])), dir = V.add(V.scale(lat, Math.sin(a)), [0, 0, -1], Math.cos(a));
+  const put = y => { const A = V.add(hip, dir, Math.sqrt(Math.max(1, L * L - (hip[1] - y) ** 2))); C.legTo(q, s, [A[0], y, A[2]], [0, 1, 0], { dorsi: 5 }); };
+  put(C.solve1D(y => { put(y); return lowestFoot(C, q, s) - (MAT - .3); }, MAT, MAT + 12));
+}
+
+/* ---------- 4. Мост ----------
+   Таз поднят: корпус отклонён назад на back° от вертикали (к +Z) и к опорной руке на side°, высота таза — такая, при
+   которой правый плечевой сустав в gh см над полом (прямая рука на ладони чуть наклонена); опоры — правая ладонь, левая
+   стопа (колено согнуто на knee) и пятка прямой правой ноги. */
+const BRIDGE = { back: 62, side: 8, gh: 52, knee: 95, legR: 12, hand: 120 };
+function bridgeAt(C, o, h) {
+  const { V } = C, q = C.base(), up = V.unit([Math.tan(o.side * C.D2R), 1, Math.tan(o.back * C.D2R)]), fwd = V.unit(V.perp([0, 0, -1], up));
+  C.root(q, [0, h, 0], up, fwd);
+  q.lumbar = [0, 0, 0]; q.thoracic = [0, 0, 0]; q.neck = [0, 0, 0]; q.R.girdle = [0, -2];
+  return q;
+}
+function tguBridge(C, o = BRIDGE) {
+  const { V } = C, h = C.solve1D(h => C.fk(bridgeAt(C, o, h)).P.ghR[1] - (MAT + o.gh), 10, 60), q = bridgeAt(C, o, h);
+  footFlatAt(C, q, 'L', o.knee);
+  legOnFloor(C, q, 'R', o.legR);
+  {
+    const gh = C.fk(q).P.ghR, a = o.hand * C.D2R, lat = V.unit(V.perp(C.latP(q, 'R'), [0, 1, 0])), dir = V.unit(V.add(V.scale(lat, Math.sin(a)), [0, 0, 1], Math.cos(a)));
+    palmOn(C, q, 'R', palmAtReach(C, gh, dir), dir);
+  }
+  bellUp(C, q, 'L');
+  return q;
+}
+
+/* ---------- 5. На колене (выпад после «дворника») ----------
+   Лицом к −Z: левая стопа впереди на полу (колено согнуто на knee), правое колено на полу под тазом (бедро вертикально),
+   носок правой подогнут: подушечка на полу, стопа почти отвесна; корпус вертикален, гиря над
+   головой, правая рука опущена вдоль тела. */
+const KNEEL = { knee: 90, kneeH: 5.6 };
+function tguKneel(C, o = KNEEL) {
+  const { V, M } = C, q = C.base();
+  q.L.hip = [85, 4, 0]; q.L.knee = 90; q.R.hip = [0, 4, 0]; q.R.knee = 90;
+  C.root(q, [0, MAT + o.kneeH + M.B.th, 0], [0, 1, 0], [0, 0, -1]);
+  const f = C.fk(q);
+  /* правая: колено K на полу под тазобедренным суставом, голень поднята назад на e°, голеностоп в нейтральном положении
+     (dorsi 0): стопа почти отвесна, пятка поднята на 90 − e, подушечка — на полу (пальцы подогнуты: разгибание в плюснефаланговых
+     = подъём пятки); e — такой, при котором подушечка ложится на пол */
+  {
+    const hip = f.P.hipR, K = [hip[0], MAT + o.kneeH, hip[2]], dorsi = 0;
+    const at = e => { const a = e * C.D2R, A = V.add(K, [0, Math.sin(a), Math.cos(a)], M.B.sk), opt = { forward: [0, 0, -1], heel: 90 - e - dorsi }, off = M.footFrame([0, 0, 0], 0, opt).o; return { ball: V.sub(A, off), opt }; };
+    const e = C.solve1D(e => at(e).ball[1] - MAT, 0, 40), r = at(e);
+    C.foot(q, 'R', [r.ball[0], MAT, r.ball[2]], 0, [0, 0, -1], { ...r.opt, allowShort: true });
+  }
+  /* левая стопа впереди: колено согнуто на knee */
+  {
+    const hip = f.P.hipL, base = M.clone(q), put = (t, D) => C.foot(t, 'L', [hip[0], MAT, hip[2] - D], 0, V.unit(V.add([0, 0, -1], C.latP(t, 'L'), .15)), { forward: [0, 0, -1] });
+    put(q, C.solve1D(D => { const t = M.clone(base); put(t, D); return t.L.knee - o.knee; }, 20, 70));
+  }
+  q.R.shoulder = [4, 8, 0]; q.R.elbow = 10; q.hands = { ...(q.hands || {}), R: 'relaxed' };
+  bellUp(C, q, 'L', { reach: 63, girdle: [0, 0] });
   return q;
 }
 
@@ -112,7 +233,7 @@ function tguStand(C) {
   return q;
 }
 
-const POS = [tguSupine, null, null, null, null, tguStand];
+const POS = [tguSupine, tguElbow, tguSit, tguBridge, tguKneel, tguStand];
 const KEYS = [0, .2, .4, .6, .8, 1];
 /* опоры каждого положения — только в его ключе (when) */
 const at = (k, list) => list.map(c => ({ ...c, when: [KEYS[k] - .01, KEYS[k] + .01] }));
@@ -122,6 +243,10 @@ module.exports = {
     equipment: [{ type: 'kettlebell', id: 'kb', hands: ['L'], rest: true }],
     contacts: [{ body: 'gripL', prop: 'kb' },
       ...at(0, [{ body: 'back', prop: 'floor' }, { body: 'buttocks', prop: 'floor' }, { body: 'soleL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'palmR', prop: 'floor' }]),
+      ...at(1, [{ body: 'buttocks', prop: 'floor' }, { body: 'soleL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'faR', prop: 'floor' }]),
+      ...at(2, [{ body: 'buttocks', prop: 'floor' }, { body: 'soleL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'palmR', prop: 'floor' }]),
+      ...at(3, [{ body: 'palmR', prop: 'floor' }, { body: 'soleL', prop: 'floor' }, { body: 'footR', prop: 'floor' }]),
+      ...at(4, [{ body: 'soleL', prop: 'floor' }, { body: 'kneeR', prop: 'floor' }, { body: 'footR', prop: 'floor' }]),
       ...at(5, [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }])],
     gripRadius: { L: 1.7, R: 1.7 },
     pose(t, C) { const k = KEYS.reduce((b, x, i) => Math.abs(x - t) < Math.abs(KEYS[b] - t) ? i : b, 0); return (POS[k] || POS.find(Boolean))(C); }
