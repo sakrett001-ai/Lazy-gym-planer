@@ -333,7 +333,8 @@ function checkFrame(R, entry = {}) {
     if (k.prop !== 'floor' && !cols.some(c => c.id === k.prop || c.id.startsWith(k.prop + ':'))) { if (k.optional) continue; }
     const region = /^grip(L|R)$/.test(k.body) ? null : regionPoints(k.body, pts, R);
     if (/^grip(L|R)$/.test(k.body)) {
-      const s = k.body.slice(4), g = R['grip' + s], cand = cols.filter(c => c.id === k.prop || c.id.startsWith(k.prop + ':'));
+      /* ручка в кулаке — R.handle / R.handleAx (Mannequin.handleIn): у глубокого хвата гири ('deep') — у основания ладони, наискось */
+      const s = k.body.slice(4), g = R['handle' + s] || R['grip' + s], cand = cols.filter(c => c.id === k.prop || c.id.startsWith(k.prop + ':'));
       const handle = cand.filter(c => c.grip || c.role === 'grip');
       const list = handle.length ? handle : cand;
       if (!list.length) { push('contact', 'error', `${k.body}: нет детали ${k.prop}`); continue; }
@@ -342,7 +343,7 @@ function checkFrame(R, entry = {}) {
       if (d - r > 1.2 || d < -.3) push('contact', Math.abs(d - r) > 3 ? 'error' : 'warn', `${k.body} мимо ${k.prop}: центр хвата в ${(d - r).toFixed(1)} см от оси ручки`, Math.abs(d - r));
       /* ось кулака — вдоль ручки, которую он держит (ближайшей к центру хвата): у грифа и рукояти — их ось, у каната и
          полотенца — направление троса в кулаке (прежде канат не проверялся и мог идти поперёк кулака, сквозь ладонь) */
-      if (near.dir) { const ang = V.angle(R.frames['hand' + s].z, near.dir), off = Math.min(ang, 180 - ang); if (off > (k.axisTol ?? 25)) push('contact', off > 45 ? 'error' : 'warn', `${k.body}: ладонь повёрнута к ручке под ${off.toFixed(0)}°`, off, '°'); }
+      if (near.dir) { const ang = V.angle(R['handleAx' + s] || R.frames['hand' + s].z, near.dir), off = Math.min(ang, 180 - ang); if (off > (k.axisTol ?? 25)) push('contact', off > 45 ? 'error' : 'warn', `${k.body}: ладонь повёрнута к ручке под ${off.toFixed(0)}°`, off, '°'); }
       continue;
     }
     if (k.prop === 'floor') {
@@ -367,10 +368,10 @@ function checkFrame(R, entry = {}) {
        ладонью — центр ладони не дальше 2 см (3 — ошибка), а не кончиками пальцев или ребром. */
   {
     const active = k => !(k.when && entry.t != null && (entry.t < k.when[0] - 1e-6 || entry.t > k.when[1] + 1e-6)) && (k.prop === 'floor' || cols.some(c => c.id === k.prop || c.id.startsWith(k.prop + ':')));
-    const handles = cols.filter(c => (c.grip || c.role === 'grip') && !c.unknown), FIST = new Set(['grip', 'hook', 'fist']);
+    const handles = cols.filter(c => (c.grip || c.role === 'grip') && !c.unknown), FIST = new Set(['grip', 'hook', 'fist', 'deep']);
     for (const s of M.SIDES) {
-      const mode = R.hands?.[s] || 'relaxed', g = R['grip' + s], mine = contacts.filter(k => k.body.endsWith(s) && /^(grip|hand|palm)(L|R)$/.test(k.body) && active(k));
-      if (mode === 'grip' && !mine.length) {
+      const mode = R.hands?.[s] || 'relaxed', g = R['handle' + s] || R['grip' + s], mine = contacts.filter(k => k.body.endsWith(s) && /^(grip|hand|palm)(L|R)$/.test(k.body) && active(k));
+      if ((mode === 'grip' || mode === 'deep') && !mine.length) {
         const d = Math.min(Infinity, ...handles.map(c => handleAxis(c, g).d));
         if (d > 3) push('hold', 'error', `кулак ${s} сжат, а ручки в нём нет${isFinite(d) ? ` (ближайшая — в ${d.toFixed(1)} см)` : ''}`, isFinite(d) ? d : undefined);
       }
@@ -418,7 +419,7 @@ function checkFrame(R, entry = {}) {
     const freeIds = [...ids.entries()].filter(([, p]) => p[0].free);
     for (const [id, parts] of freeIds) {
       const grip = parts.filter(p => p.grip);
-      const held = M.SIDES.some(s => grip.some(c => c.sdf(R['grip' + s]) < 2.5));
+      const held = M.SIDES.some(s => grip.some(c => c.sdf(R['handle' + s] || R['grip' + s]) < 2.5));
       const supports = cols.filter(c => !c.free && !c.cable && c.id !== id);
       const resting = parts.some(c => c.pts.some(p => p[1] >= FLOOR - 1.2 || supports.some(o => o.sdf(p) < 1.2)));
       const onBody = parts.some(c => c.pts.some(p => torsoD(p) < 2.5));

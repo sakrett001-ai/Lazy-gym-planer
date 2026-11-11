@@ -38,7 +38,7 @@ const LIM = {
   cableArm: .5,      // см: ось троса в предплечье глубже
   bellBody: 1.0      // см: шар гири в кисти, руке, корпусе или голове глубже (мягкие ткани поджимаются на 0,3 — E.KB.press)
 };
-const GRIPPY = new Set(['grip', 'hook']);
+const GRIPPY = new Set(['grip', 'hook', 'deep']);
 
 /* ---------- геометрия ---------- */
 const segDist = (p, a, b) => { const ab = V.sub(b, a), l2 = V.dot(ab, ab), k = l2 < 1e-9 ? 0 : M.clamp(V.dot(V.sub(p, a), ab) / l2, 0, 1); return { d: V.dist(p, V.add(a, ab, k)), k, dir: l2 < 1e-9 ? [0, 0, 1] : V.unit(ab) }; };
@@ -72,7 +72,8 @@ function handGeo(R, s) {
   const all = [];
   for (const u of [-1.5, 1.5]) for (const v of [-4.3, 0, 4.3]) for (const w of [-4.2, 0, 4.2]) all.push({ p: V.add(V.add(V.add(box.c, f.x, u), f.y, v), f.z, w), r: 0 });
   for (const [a, b, r] of caps) all.push({ p: a, r }, { p: V.mix(a, b, .5), r }, { p: b, r });
-  return { f, g, mode, grip: R['grip' + s], palmC, n, face, sdf, all };
+  /* ручка в кулаке — R.handle / R.handleAx (у глубокого хвата гири — у основания ладони, наискось; Mannequin.handleIn) */
+  return { f, g, mode, grip: R['handle' + s] || R['grip' + s], gripAx: R['handleAx' + s] || f.z, palmC, n, face, sdf, all };
 }
 /* поверхности для ладони: инвентарь (кроме тросов), пол и тело (бёдра, голени, корпус, голова, рука другой стороны) */
 function surfaces(R, cols, s) {
@@ -124,7 +125,7 @@ function auditEntry(id, e, { samples = 41 } = {}) {
           const declBest = decl.length ? decl.map(c => ({ a: axisOf(c, H.grip), c })).sort((x, y) => x.a.d - y.a.d)[0] : null;
           const use = declBest || best;
           if (use) {
-            const ang = use.a.dir ? angleTo(H.f.z, use.a.dir) : null, name = use.c.id + (use.c.part ? '/' + use.c.part : '');
+            const ang = use.a.dir ? angleTo(H.gripAx, use.a.dir) : null, name = use.c.id + (use.c.part ? '/' + use.c.part : '');
             if (r.axis == null || use.a.d > r.axis) Object.assign(r, { axis: use.a.d, axisR: use.a.r, axisT: t, handle: name + (use.a.ends ? ' (у конца)' : ''), declared: !!declBest, surface: !!use.a.surface });
             if (ang != null && (r.angle == null || ang > r.angle)) Object.assign(r, { angle: ang, angleT: t });
           }
@@ -156,7 +157,7 @@ function auditEntry(id, e, { samples = 41 } = {}) {
          запястья и предплечья). Подозрительно: шар в руке или теле глубже LIM.bellBody; шар лежит на ладонной стороне
          предплечья; шар выше рукояти без опоры на предплечье (гиря дном вверх сама не стоит) */
       for (const p of props.filter(p => p.kind === 'kettlebell' && p.mount === 'hands')) {
-        const held = M.SIDES.filter(s => R.hands?.[s] === 'grip' && V.dist(R['grip' + s], p.grip) < 6);
+        const held = M.SIDES.filter(s => (R.hands?.[s] === 'grip' || R.hands?.[s] === 'deep') && V.dist(R['handle' + s] || R['grip' + s], p.grip) < 6);
         if (held.length !== 1 || props.some(q => (q.id || '').startsWith(p.id + ':horn'))) continue;
         const s = held[0], F = R.frames['hand' + s], g = s === 'L' ? 1 : -1, d = V.unit(V.sub(p.c, p.grip)), back = V.dot(d, V.scale(F.x, g));
         const wr = R['wr' + s], kn = V.add(wr, F.y, -9), hand = segDist(p.c, wr, kn).d - 1.6 - p.radius;
@@ -182,7 +183,7 @@ function auditEntry(id, e, { samples = 41 } = {}) {
           if (near.d > 15) continue;
           const r = row('cable' + s + c.id, { side: s, kind: 'трос', cable: c.id, role: c.role, tone: c.tone });
           /* канат и полотенце — сами ручка: проходят сквозь кулак вдоль его оси */
-          if (c.role === 'grip' && near.d < 2.5) { const a = angleTo(H.f.z, near.dir); if (r.angle == null || a > r.angle) Object.assign(r, { angle: a, angleT: t }); }
+          if (c.role === 'grip' && near.d < 2.5) { const a = angleTo(H.gripAx, near.dir); if (r.angle == null || a > r.angle) Object.assign(r, { angle: a, angleT: t }); }
           let hand = -Infinity, arm = -Infinity;
           for (let j = 1; j < c.pts.length; j++) {
             const a = c.pts[j - 1], b = c.pts[j], n = Math.max(1, Math.ceil(V.dist(a, b) / .5));

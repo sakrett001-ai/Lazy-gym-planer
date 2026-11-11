@@ -106,6 +106,19 @@ const B={
  sc:[2,28.5,4],ghRel:[17,-3.1,-4],               // грудино-ключичный шарнир и центр плечевого сустава от него
  head:[7.65,11.4,10.3],                          // габарит головы от её центра: ширина, высота (до макушки), глубина; форма — HEAD_PARTS
  grip:[2.6,-8.0,0],knuckle:[0,-9.8,0],           // центр хвата: 8 см дистальнее и 2,6 см ладоннее запястья
+ /* Глубокий хват гири (кисть 'deep': «рэк», над головой, жим лёжа): кисть «вдета» в рукоять, рукоять наискось у основания
+    ладони — от складки запястья у возвышения мизинца к возвышению большого пальца («angle the handle diagonally across your
+    palm from just above your thumb to the outer corner of your hand», «shove your hand deep into the handle» — J. Spezzano,
+    «The Proper Wrist Position for the Kettlebell Press», Breaking Muscle; «diagonally crossing both your palm and the crease
+    of your wrist» — J. Smith, «How to Properly Rack a Kettlebell», Onnit; рукоять «at the base of the palm», в линию
+    с мизинцем — S. Rieger, «Mind the Drop», StrongFirst). Ось — под 36° к поперечной линии ладони; концы (±4 см от центра):
+    у мизинца — на складке запястья (0,2 см дистальнее запястья, 3,2 см к локтевому краю), у большого — 4,9 см дистальнее и
+    3,2 см к лучевому краю. Центр — 2,5 см дистальнее запястья (на 5,5 см ближе к нему, чем центр обычного хвата) и 3,8 см
+    ладоннее: ладонная поверхность кожи Anny у основания ладони — 2,4–3,3 см от запястья (возвышение большого пальца
+    толще), рукоять радиуса 1,7 ложится на неё и уходит в мякоть возвышения до 1,2 см. Шар на тыле предплечья при этом —
+    на 5,3 см от запястья к локтю в «рэке» и на 6,1 над головой, вместо 2,7 при обычном хвате (замер — отчёт этапа).
+    [ладоннее, вдоль кисти (− к пальцам), к большому пальцу]; a — направление оси от мизинца к большому пальцу. */
+ deep:{c:[3.8,-2.5,0],a:[0,-.588,.809]},
  palm:{width:8.4,thick:3.0,len:10.2},finger:8.6,
  ankle:7.0,heel:-6.5,ball:[0,-5.35,13.5],toe:[0,-0.49,7.2],toeSole:-1.65, // опорные точки стопы от центра голеностопа (форма — FOOT_SECTIONS)
  sole:{heelW:6.0,ballM:4.6,ballL:4.3,ballLZ:10.8,hallux:[2.8,5.0],toe5:[-4.0,2.4]} // опора подошвы: ширина пятки, головки 1-й и 5-й плюсневых, подушечки пальцев
@@ -642,18 +655,26 @@ function makeTrack(keys,{loop=false}={}){
  const slopes=[];for(let j=0;j<n;j++)slopes.push(keys.length>1?monotone(ts,vals.map(v=>v[j])):[0]);
  if(loop&&keys.length>2){const m=keys.length-1;for(let j=0;j<n;j++){const d0=(vals[1][j]-vals[0][j])/(ts[1]-ts[0]),d1=(vals[m][j]-vals[m-1][j])/(ts[m]-ts[m-1]),s=d0*d1<=0?0:(d0+d1)/2;slopes[j][0]=slopes[j][m]=s;}}
  return t=>{
-  if(keys.length===1)return{v:vals[0].slice(),hands:keys[0].hands};
+  if(keys.length===1)return{v:vals[0].slice(),hands:keys[0].hands,...(keys[0].depth?{depth:keys[0].depth}:{})};
   t=clamp(t,ts[0],ts.at(-1));let i=0;while(i<ts.length-2&&t>ts[i+1])i++;
   const h=ts[i+1]-ts[i],u=(t-ts[i])/h,u2=u*u,u3=u2*u,h00=2*u3-3*u2+1,h10=u3-2*u2+u,h01=-2*u3+3*u2,h11=u3-u2,out=new Array(n);
   for(let j=0;j<n;j++)out[j]=h00*vals[i][j]+h10*h*slopes[j][i]+h01*vals[i+1][j]+h11*h*slopes[j][i+1];
   const qn=Math.hypot(out[3],out[4],out[5],out[6])||1;for(let j=3;j<7;j++)out[j]/=qn;
-  return{v:out,hands:(u<.5?keys[i]:keys[i+1]).hands};
+  /* depth — доля глубокого хвата гири по сторонам (handleIn): между ключами — линейно, без скачка рукояти в кулаке */
+  const da=keys[i].depth,db=keys[i+1].depth,depth=da||db?Object.fromEntries(SIDES.map(s=>[s,lerp(da?.[s]??0,db?.[s]??0,u)])):null;
+  return{v:out,hands:(u<.5?keys[i]:keys[i+1]).hands,...(depth?{depth}:{})};
  };
 }
 
 /* ---------- Вывод в координаты каталога ---------- */
 const toCat=p=>[p[0],FLOOR-p[1],p[2]],dirCat=d=>[d[0],-d[1],d[2]];
 function frameCat(F){return{o:toCat(F.o),x:dirCat(M3.col(F.R,0)),y:dirCat(M3.col(F.R,1)),z:dirCat(M3.col(F.R,2))};}
+/* ручка в кулаке по рамке кисти f (каталог): центр c и ось a; mode 'deep' — глубокий хват гири (B.deep), иначе — центр хвата B.grip, ось z */
+function handleIn(f,s,mode){
+ const g=SIGN[s],pt=l=>V.add(V.add(V.add(f.o,f.x,l[0]),f.y,l[1]),f.z,l[2]),dir=l=>V.unit(V.add(V.add(V.scale(f.x,l[0]),f.y,l[1]),f.z,l[2]));
+ if(mode==='deep')return{c:pt([-g*B.deep.c[0],B.deep.c[1],B.deep.c[2]]),a:dir(B.deep.a)};
+ return{c:pt([-g*B.grip[0],B.grip[1],B.grip[2]]),a:V.unit(f.z)};
+}
 function catalogPose(q){
  const r=fk(q),P=r.P,F=r.F,R={basis:'mannequin',props:[],contacts:[]};
  R.hip=toCat(F.pelvis.o);R.u=dirCat(M3.col(F.pelvis.R,1));R.n=dirCat(M3.col(F.pelvis.R,2));R.x=dirCat(V.scale(M3.col(F.pelvis.R,0),-1)); /* x — анатомически правая сторона */
@@ -666,6 +687,15 @@ function catalogPose(q){
  }
  R.frames={};for(const[k,f]of Object.entries(F))R.frames[k]=frameCat(f);
  R.hands={...(q.hands||{L:'relaxed',R:'relaxed'})};
+ /* ручка в кулаке: центр и ось (handle, handleAx); у глубокого хвата — B.deep, у остальных — центр хвата и ось z кисти.
+    q.handDepth {L, R} — доля глубокого хвата (переход «кисть уходит в рукоять» в рывке и взятии на грудь): центр и ось —
+    между двумя положениями по доле; без неё — по режиму кисти ('deep' — 1, иначе 0) */
+ for(const s of SIDES){
+  const f=R.frames['hand'+s],w=q.handDepth?.[s]??(R.hands[s]==='deep'?1:0);
+  if(w<=0||w>=1){const h=handleIn(f,s,w>=1?'deep':'grip');R['handle'+s]=h.c;R['handleAx'+s]=h.a;continue;}
+  const a=handleIn(f,s,'grip'),b=handleIn(f,s,'deep');R['handle'+s]=V.mix(a.c,b.c,w);R['handleAx'+s]=V.unit(V.mix(a.a,b.a,w));
+ }
+ if(q.handDepth)R.handDepth={...q.handDepth};
  R.girdle={L:toCat(P.ghL),R:toCat(P.ghR)};
  R.gripRadius={L:q.gripRadius?.L??1.4,R:q.gripRadius?.R??1.4};
  return R;
@@ -1121,14 +1151,15 @@ function headSamples(){
 
 /* ---------- Кисть и стопа: опорные точки для сетки (локальные координаты кисти/стопы, см) ---------- */
 /* Кисть: начало — центр лучезапястного сустава; −Y — к пальцам; ладонь смотрит в −g·X; +Z — сторона большого пальца.
-   mode: grip — обхват ручки радиуса r; flat — ладонь на опоре; relaxed — расслабленная; fist — кулак. */
+   mode: grip — обхват ручки радиуса r; flat — ладонь на опоре; relaxed — расслабленная; fist — кулак; deep — глубокий хват
+   гири (рукоять у основания ладони, B.deep): пальцы сжаты, как в кулаке. */
 const FINGERS=[[2.9,8.0,.85],[1.0,8.8,.86],[-.9,8.2,.8],[-2.8,6.6,.72]];
 function handShape(mode='relaxed',side='L',r=1.4){
  const g=SIGN[side],P=(u,v,w)=>[-g*u,-v,w],fingers=[],G=[B.grip[0],-B.grip[1]];
  for(const[w,len,rad]of FINGERS){
   let pts=[];
-  if(mode==='grip'||mode==='fist'){
-   const rr=mode==='fist'?1.15:r+.85,gu=mode==='fist'?2.2:G[0],gv=mode==='fist'?8.4:G[1];
+  if(mode==='grip'||mode==='fist'||mode==='deep'){
+   const fs=mode!=='grip',rr=fs?1.15:r+.85,gu=fs?2.2:G[0],gv=fs?8.4:G[1];
    pts.push(P(.2,9.6,w));let used=0,prev=[.2,9.6],phi=-.6;
    while(used<len&&phi<3.3){const u=gu+rr*Math.sin(phi),v=gv+rr*Math.cos(phi);used+=Math.hypot(u-prev[0],v-prev[1]);prev=[u,v];pts.push(P(u,v,w*.96));phi+=.32;}
   }else{
@@ -1138,7 +1169,7 @@ function handShape(mode='relaxed',side='L',r=1.4){
   fingers.push({pts,r:rad});
  }
  const T={hook:[[.4,2.6,3.0],[1.0,5.8,4.4],[1.4,8.0,4.6]],grip:[[.4,2.6,3.0],[1.9,6.0,3.7],[G[0]+r+2.0,G[1]-.4,2.4],[G[0]+r*.6+1.4,G[1]+r+.9,1.0]],
-  fist:[[.4,2.6,3.0],[2.2,6.0,3.3],[3.4,8.6,1.6]],flat:[[.4,2.6,3.0],[.6,5.4,5.6],[.6,7.9,6.6]],relaxed:[[.4,2.6,3.0],[1.2,5.6,4.6],[1.9,7.7,4.2]]};
+  fist:[[.4,2.6,3.0],[2.2,6.0,3.3],[3.4,8.6,1.6]],deep:[[.4,2.6,3.0],[2.2,6.0,3.3],[3.4,8.6,1.6]],flat:[[.4,2.6,3.0],[.6,5.4,5.6],[.6,7.9,6.6]],relaxed:[[.4,2.6,3.0],[1.2,5.6,4.6],[1.9,7.7,4.2]]};
  return{palm:{c:P(.2,5.6,.15),size:[B.palm.thick,8.6,B.palm.width]},fingers,thumb:{pts:(T[mode]||T.relaxed).map(p=>P(...p)),r:1.0}};
 }
 /* Стопа (босая). Рамка — как у сегмента foot: начало в центре голеностопного сустава, +Z — к пальцам, +Y — вверх
@@ -1301,7 +1332,7 @@ function centerOfMass(R,extra=[]){
  const M=parts.reduce((s,[,w])=>s+w,0);return{c:parts.reduce((acc,[p,w])=>V.add(acc,p,w/M),[0,0,0]),mass:M};
 }
 
-return{V,M3,Q,B,TORSO,TORSO_H,TORSO_COLS,colAngle,TORSO_JOINTS,TORSO_BLEND,TORSO_BLEND_FRONT,FRONT_W,FRONT_H,VERT_LEVELS,VERT_SHARE,LIMBS,NECK,CAPS,SH_CAP,AC_CAP,MASS,LIMITS,SIDES,SIGN,FLOOR,D2R,R2D,clamp,
+return{handleIn,V,M3,Q,B,TORSO,TORSO_H,TORSO_COLS,colAngle,TORSO_JOINTS,TORSO_BLEND,TORSO_BLEND_FRONT,FRONT_W,FRONT_H,VERT_LEVELS,VERT_SHARE,LIMBS,NECK,CAPS,SH_CAP,AC_CAP,MASS,LIMITS,SIDES,SIGN,FLOOR,D2R,R2D,clamp,
  neutral,clone,pack,unpack,PACK,PACK_SIZE,fk,solePoints,twoBone,solveArm,solveArmWrist,setArmFromPoints,footFrame,heelFrame,solveLeg,rootRot,rootFromAxes,
  swing,swingTwist,eulerXZY,eulerYZX,spineRot,makeTrack,monotone,toCat,dirCat,catalogPose,
  profileAt,sectionAt,spineFrame,torsoFrame,frontK,ramp,vertebraFrame,torsoPoint,torsoPointIn,torsoRow,limbAxes,limbPoint,limbPointIn,limbRow,neckPoint,neckSDF,surface,boundsSurface,limbSDF,torsoSDF,torsoCache,headSDF,

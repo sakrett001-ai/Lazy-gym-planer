@@ -43,14 +43,14 @@ function relaxArm(q, s, shoulder = [4, 8, 0], elbow = 10) { q[s].shoulder = [...
 
 /* Гантель в кисти с заданной осью: подбирается пронация (−88…84°), чтобы ось рукояти (линия «мизинец → большой палец»)
    шла по axis; signed — учитывать направление большого пальца (иначе ось без знака). */
-function holdDir(C, q, s, point, pole, axis, { flex = 0, dev = 0, lo = -88, hi = 84, signed = false } = {}) {
+function holdDir(C, q, s, point, pole, axis, { flex = 0, dev = 0, lo = -88, hi = 84, signed = false, mode } = {}) {
   const { V } = C, ax = V.unit(axis);
-  const score = p => { C.hold(q, s, point, pole, { pron: p, flex, dev, allowShort: true }); const d = V.dot(C.M3.col(C.fk(q).F['hand' + s].R, 2), ax); return signed ? d : Math.abs(d); };
+  const score = p => { C.hold(q, s, point, pole, { pron: p, flex, dev, allowShort: true, mode }); const d = V.dot(C.M3.col(C.fk(q).F['hand' + s].R, 2), ax); return signed ? d : Math.abs(d); };
   let best = lo, bv = -Infinity;
   for (let p = lo; p <= hi + 1e-9; p += 4) { const v = score(p); if (v > bv) { bv = v; best = p; } }
   let a = Math.max(lo, best - 4), b = Math.min(hi, best + 4);
   for (let i = 0; i < 18; i++) { const m1 = a + (b - a) * .382, m2 = a + (b - a) * .618; if (score(m1) >= score(m2)) b = m2; else a = m1; }
-  const p = (a + b) / 2; for (let k = 0; k < 3; k++) C.hold(q, s, point, pole, { pron: p, flex, dev, allowShort: true }); C.hold(q, s, point, pole, { pron: p, flex, dev }); return p;
+  const p = (a + b) / 2; for (let k = 0; k < 3; k++) C.hold(q, s, point, pole, { pron: p, flex, dev, allowShort: true, mode }); C.hold(q, s, point, pole, { pron: p, flex, dev, mode }); return p;
 }
 /* Лёжа на горизонтальной скамье (как в пилотном жиме): голова к +Z, лопатки и ягодицы на подушке, стопы на полу */
 function lieOnBench(C, q, { top = 44, z = -24, arch = 1 } = {}) {
@@ -310,8 +310,8 @@ function wmPose(C, e, poles, prev) {
     const top = V.add(f.P.ghL, V.unit(V.add(V.add([0, 1, 0], T.z, WM.tf * e + WM.tf0), C.lat(q, 'L'), WM.tl)), WM.top);
     if (poles) {
       const n = poles.length - 1, x = Math.min(n - 1e-9, e * n), i = Math.floor(x), l = arc(C, poles[i], poles[i + 1], x - i);
-      holdDir(C, q, 'L', top, V.unit(V.add(V.add(V.scale(T.x, l[0]), T.y, l[1]), T.z, l[2])), thumb, { signed: true });
-    } else C.hold(q, 'L', top, V.unit(V.add([0, -1, 0], C.lat(q, 'L'), .6)), { pron: 0, allowShort: true });
+      holdDir(C, q, 'L', top, V.unit(V.add(V.add(V.scale(T.x, l[0]), T.y, l[1]), T.z, l[2])), thumb, { signed: true, mode: 'deep' });
+    } else C.hold(q, 'L', top, V.unit(V.add([0, -1, 0], C.lat(q, 'L'), .6)), { pron: 0, allowShort: true, mode: 'deep' });
     /* свободная рука скользит по передне-внутренней поверхности правой ноги: от середины бедра к середине голени */
     const dR = V.sub(leg(f, C.lerp(WM.s0, WM.s1, e)), f.P.ghR), nR = Math.min(V.len(dR), WM.reach);
     C.armTo(q, 'R', V.add(f.P.ghR, V.unit(dR), nR), V.unit(V.add(latR, T.z, -.6)), { pron: 20, mode: 'relaxed' });
@@ -323,7 +323,7 @@ function wmPose(C, e, poles, prev) {
   const T = C.axes(q, 'thorax'), f = C.fk(q), top = f.P.gripL, ax = V.unit(V.sub(top, f.P.ghL)), b0 = V.unit(V.perp(T.z, ax)), b1 = V.cross(ax, b0);
   const at = a => V.add(V.scale(b0, Math.cos(a * C.D2R)), b1, Math.sin(a * C.D2R)), inT = w => [V.dot(w, T.x), V.dot(w, T.y), V.dot(w, T.z)];
   const cost = a => {
-    const p = holdDir(C, q, 'L', top, at(a), thumb, { signed: true }), A = M.jointAngles(M.catalogPose(q)).L, z = C.M3.col(C.fk(q).F.handL.R, 2);
+    const p = holdDir(C, q, 'L', top, at(a), thumb, { signed: true, mode: 'deep' }), A = M.jointAngles(M.catalogPose(q)).L, z = C.M3.col(C.fk(q).F.handL.R, 2);
     const jump = prev ? Math.acos(Math.max(-1, Math.min(1, V.dot(V.unit(prev), V.unit(inT(at(a))))))) / C.D2R : 0;
     const over = (v, m) => Math.max(0, Math.abs(v) - m) / 3;
     return (p / WM.pm) ** 2 + ((A.twist - WM.tw) / WM.tm) ** 2 + 40 * (1 - V.dot(z, thumb)) + (jump / WM.jm) ** 2 + over(A.twist, 88) ** 2 + over(p, 80) ** 2;
@@ -366,7 +366,7 @@ function kbHinge(C, u) {
    прямое; большой палец смотрит назад к ключице, тыл кисти — наружу-вперёд: туда ложится шар (BIND.kettlebell, rest).
    Запястье прямое, локоть у рёбер, гиря на предплечье — техника — по общим положениям школ StrongFirst и RKC (пересказ: страницы школ по этому упражнению при подготовке не открывались). */
 const KB_RACK = { shoulder: [5, 6, -18], elbow: 140, pron: 0 };
-function kbRack(q, s) { armAngles(q, s, KB_RACK.shoulder, KB_RACK.elbow, KB_RACK.pron); return q; }
+function kbRack(q, s) { armAngles(q, s, KB_RACK.shoulder, KB_RACK.elbow, KB_RACK.pron, [0, 0], 'deep'); return q; }
 /* точка кулака, большой палец и локоть «рэка» при этом корпусе — цели для взятия на грудь и жима */
 function kbRackAt(C, q, s) {
   const k = kbRack(C.M.clone(q), s), f = C.fk(k);
@@ -820,7 +820,10 @@ module.exports = {
       const A0 = kbSwingStart(C), sm = (a, b) => { const w = Math.max(0, Math.min(1, (e - a) / (b - a))); return w * w * (3 - 2 * w); };
       const ws = sm(0, .7), we = sm(.25, 1), wp = sm(.2, .65), mix3 = (a, b, w) => a.map((v, i) => C.lerp(v, b[i], w));
       const sh = mix3(A0.shoulder, KB_RACK.shoulder, ws); sh[1] += 6 * Math.sin(Math.PI * we); sh[0] += 16 * Math.sin(Math.PI * ws); /* мах выносит гирю перед бёдрами; локоть при сгибании чуть отходит от рёбер — шар проходит мимо корпуса */
-      armAngles(q, 'L', sh, C.lerp(A0.elbow, KB_RACK.elbow, we), C.lerp(A0.pron, KB_RACK.pron, wp), mix3(A0.wrist, [0, 0], wp));
+      /* к «рэку» кисть уходит в рукоять глубже (глубокий хват, M.B.deep): рукоять переходит в ладони на t 0,75–0,9 (handDepth),
+         пальцы — с ключа 0,9 */
+      armAngles(q, 'L', sh, C.lerp(A0.elbow, KB_RACK.elbow, we), C.lerp(A0.pron, KB_RACK.pron, wp), mix3(A0.wrist, [0, 0], wp), t >= .89 ? 'deep' : 'grip');
+      q.handDepth = { L: C.smooth((t - .75) / .15), R: 0 };
       armAngles(q, 'R', [C.lerp(-28, 6, e), C.lerp(14, 16, e), 0], C.lerp(14, 12, e), 20, [0, 0], 'relaxed');
       return q;
     }
@@ -851,7 +854,7 @@ module.exports = {
         const g = V.add(V.add(V.scale(P1, (1 - e) * (1 - 2 * e)), mid, 4 * e * (1 - e)), top, e * (2 * e - 1));
         const thumb = arc(C, K.thumb, V.scale(lat, -1), Math.min(1, e * 1.4));
         const pole = V.unit(V.mix(K.pole, V.add(V.add([0, -1, 0], lat, .6), fwd, .8), e * e));
-        holdDir(C, q, 'L', g, pole, thumb, { signed: true });
+        holdDir(C, q, 'L', g, pole, thumb, { signed: true, mode: 'deep' });
       };
       settle(C, q, { lo: 2, hi: 8, loads: loadsIn(C, ['L'], KB_KG), resolve: q => { feet(q); arms(q); } });
       return q;
@@ -937,7 +940,10 @@ module.exports = {
       const k = Math.max(0, Math.min(1, (e - .4) / .35)), w = k * k * (3 - 2 * k), k2 = Math.max(0, Math.min(1, (e - .7) / .3));
       /* локоть: в махе — наружу-вниз, в высокой тяге — вверх-назад и в сторону, наверху — как в жиме */
       const pole = V.unit(V.mix(V.mix(V.add(lat, T.y, -.8), V.add(V.add(lat, [0, 1, 0], .5), fwd, -.8), w), V.add(V.add([0, -1, 0], lat, .6), fwd, .8), k2 * k2));
-      holdDir(C, q, 'L', g, pole, V.scale(lat, -1), { signed: true });
+      /* наверху кисть «пробивает» рукоять и уходит в неё глубже (глубокий хват, M.B.deep): рукоять переходит в ладони на
+         t 0,8–0,96 (handDepth), пальцы — с ключа 0,92 */
+      holdDir(C, q, 'L', g, pole, V.scale(lat, -1), { signed: true, mode: t >= .91 ? 'deep' : 'grip' });
+      q.handDepth = { L: C.smooth((t - .8) / .16), R: 0 };
       armAngles(q, 'R', [C.lerp(-28, 6, e), C.lerp(14, 16, e), 0], C.lerp(14, 12, e), 20, [0, 0], 'relaxed');
       return q;
     }

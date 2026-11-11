@@ -344,8 +344,11 @@ BIND.cable=(e,R)=>{
      так учат школы StrongFirst и RKC — пересказ, не цитата). Поджатие мягких тканей — 0,3 см. */
 const KB={r:10.5,handle:18.67,handleR:1.7,half:5,base:7,bottom:7.83,kg:16,press:.3};
 BIND.kettlebell=(e,R)=>{
- const hands=e.hands||['L'],grips=hands.map(s=>R['grip'+s]),g=V.mix(grips[0],grips[1]??grips[0],.5),k=(e.r||KB.r)/KB.r,r=KB.r*k,H=e.drop??KB.handle*k;
- const axis=hands.length>1?V.unit(V.sub(grips[0],grips[1])):V.unit(R.frames['hand'+hands[0]].z);
+ const hands=e.hands||['L'],grips=hands.map(s=>R['grip'+s]),k=(e.r||KB.r)/KB.r,r=KB.r*k,H=e.drop??KB.handle*k;
+ let g=V.mix(grips[0],grips[1]??grips[0],.5),axis=hands.length>1?V.unit(V.sub(grips[0],grips[1])):V.unit(R.frames['hand'+hands[0]].z);
+ /* одной рукой — рукоять там, где её держит кулак (R.handle, R.handleAx: у глубокого хвата 'deep' — наискось у основания
+    ладони, M.B.deep; в переходе — между положениями по доле q.handDepth) */
+ if(hands.length===1&&R['handle'+hands[0]]){g=R['handle'+hands[0]];axis=R['handleAx'+hands[0]];}
  let down=[0,1,0];
  if(e.hang==='arm'||e.hang==='swing'){
   const s=hands[0],arm=V.unit(V.sub(R['wr'+s],R['el'+s]));
@@ -460,7 +463,7 @@ function rig(entry){
  const track=M.makeTrack(entry.keys,{loop:!!entry.loop});
  return t=>{
   if(!Number.isFinite(t)||t<0||t>1)throw Error('Pose must be in [0,1]');
-  const k=track(t),q=M.unpack(k.v,k.hands);if(entry.gripRadius)q.gripRadius=entry.gripRadius;
+  const k=track(t),q=M.unpack(k.v,k.hands);if(entry.gripRadius)q.gripRadius=entry.gripRadius;if(k.depth)q.handDepth=k.depth;
   /* R.t — фаза повтора: по ней движется то, что не следует за телом (лента дорожки, BIND.treadBelt) */
   const R=M.catalogPose(q);R.t=t;R.props=build(entry.equipment||[],R);R.contacts=(entry.contacts||[]).map(c=>({...c}));R.exerciseBasis='mannequin';
   return R;

@@ -4,7 +4,7 @@
    и вариантах инвентаря «всё есть» и «ничего необязательного». Входит в npm run anny:check (tools/anny-look/check.js).
    node tools/anny-look/holds.js [all|id,id] [0,0.25,0.5,0.75,1] [--all] — таблица (по умолчанию — только нарушения).
 
-   Кисть в хвате — режим 'grip' (R.hands) с ручкой: заявленная деталь хвата (контакт gripL/R) или ручка снаряда (grip, role
+   Кисть в хвате — режим 'grip' или 'deep' (глубокий хват гири; центр и ось ручки — R.handle, R.handleAx) с ручкой: заявленная деталь хвата (контакт gripL/R) или ручка снаряда (grip, role
    'grip': гриф, рукоять, дужка гири, канат, полотенце) — ось в 3 см от центра хвата (дальше — «кулак держит воздух», это
    holds-audit). Кожа кисти — вершины, у которых главная рамка — кисть или фаланга этой стороны. В рамке ручки (ось e через
    ближайшую к центру хвата точку оси): осевая координата a, расстояние до оси ρ, угол φ вокруг оси.
@@ -30,6 +30,8 @@ const root = path.resolve(__dirname, '../..');
 const M = require(root + '/src/js/09bm-mannequin.js'), EQ = require(root + '/src/js/09bn-equipment.js'), A = require(root + '/src/js/09bs-anny.js');
 const { collider } = require(root + '/tools/biomech/validator2.js');
 const { V } = M;
+/* кисти, которые держат ручку: хват и глубокий хват гири (рукоять у основания ладони — R.handle, R.handleAx) */
+const HOLD = new Set(['grip', 'deep']);
 const LIM = { COVER_A: 5.0, COVER_BAND: 1.0, COVER_MIN: .8, FINGER_DEPTH: .5, FINGER_EXTRA: .6, HAND_FOOT_EXTRA: 1.5, TIP_FINGER: 1.5, TIP_THUMB: 3.2, AIR: 3.0, SECTORS: 36 };
 
 /* вершины кисти по сторонам: главная рамка, концевая треть фаланги (кончик) */
@@ -51,7 +53,7 @@ function handVerts(d) {
 const segDist = (p, a, b) => { const ab = V.sub(b, a), l2 = V.dot(ab, ab), k = l2 < 1e-9 ? 0 : Math.max(0, Math.min(1, V.dot(V.sub(p, a), ab) / l2)); return { d: V.dist(p, V.add(a, ab, k)), k, at: V.add(a, ab, k), dir: l2 < 1e-9 ? [0, 0, 1] : V.unit(ab) }; };
 /* ручка у центра хвата стороны s: {id, c0 (ближайшая точка оси), e (ось), r, len: [от, до] по оси от c0} или null */
 function handleAt(R, s, entry, has) {
-  const props = (R.props || []).filter(p => EQ.visible(p, has)), cols = props.flatMap(collider), g = R['grip' + s];
+  const props = (R.props || []).filter(p => EQ.visible(p, has)), cols = props.flatMap(collider), g = R['handle' + s] || R['grip' + s];
   const declared = (entry.contacts || R.contacts || []).filter(k => k.body === 'grip' + s).map(k => k.prop);
   const handles = cols.filter(c => !c.unknown && (c.axis || c.cable) && (c.grip || c.role === 'grip' || declared.some(p => c.id === p || c.id.startsWith(p + ':'))));
   let best = null;
@@ -95,9 +97,9 @@ function holdOf(R, P, d, s, entry, has) {
   /* шип — кончик далеко и от ручки, и от «ручки кулака» (ось z кисти через центр хвата, радиус R.gripRadius — то, что пальцы
      обхватывают): где ручка снаряда наклонена к кулаку (присед — 24°, holds-audit допускает до 30°) или кончается раньше кисти
      (рожки гири), кончик у кулака — не шип */
-  const hf = R.frames['hand' + s], gc = R['grip' + s], gr = R.gripRadius?.[s] ?? 1.4;
+  const hf = R.frames['hand' + s], gc = R['handle' + s] || R['grip' + s], gz = R['handleAx' + s] || hf.z, gr = R.gripRadius?.[s] ?? 1.4;
   const tipGap = c => { if (!c[3]) return 0; const p = [c[0] / c[3], c[1] / c[3], c[2] / c[3]], t = V.sub(p, h.c0), a = Math.max(h.len[0], Math.min(h.len[1], V.dot(t, h.e))), u = V.sub(p, gc);
-    return Math.min(V.dist(p, V.add(h.c0, h.e, a)) - h.r, V.len(V.perp(u, hf.z)) - gr); };
+    return Math.min(V.dist(p, V.add(h.c0, h.e, a)) - h.r, V.len(V.perp(u, gz)) - gr); };
   const tg = tips.map(tipGap), cover = near.filter(x => x <= LIM.COVER_BAND).length / LIM.SECTORS, proc = procDepth(R, s, h);
   return { side: s, handle: h.id, r: h.r, off: h.off, cover, fingerDepth, fingerLimit: Math.max(LIM.FINGER_DEPTH, proc.finger + LIM.FINGER_EXTRA), palmDepth, palmLimit: proc.palm + LIM.HAND_FOOT_EXTRA, tipFinger: Math.max(...tg.slice(1)), tipThumb: tg[0] };
 }
@@ -113,7 +115,7 @@ function problems(o) {
 /* кисти в хвате в кадре: R — поза, P — кожа; mode — режим кисти, по которому кисть считается держащей (по умолчанию R.hands) */
 function framesHolds(R, P, d, entry, has, modes = R.hands) {
   const out = [];
-  for (const s of M.SIDES) if ((modes?.[s] || 'relaxed') === 'grip') { const o = holdOf(R, P, d, s, entry, has); if (o) out.push(o); }
+  for (const s of M.SIDES) if (HOLD.has(modes?.[s] || 'relaxed')) { const o = holdOf(R, P, d, s, entry, has); if (o) out.push(o); }
   return out;
 }
 function run({ ids = null, ts = [0, .25, .5, .75, 1], d, POSES, log = () => {} } = {}) {
@@ -122,7 +124,7 @@ function run({ ids = null, ts = [0, .25, .5, .75, 1], d, POSES, log = () => {} }
     if (!POSES[id] || id.startsWith('_')) continue;
     for (const [hn, has] of [['всё', () => true], ['ничего', () => false]]) {
       const e = EQ.variantEntry(POSES[id], has), rig = EQ.rig(e);
-      for (const t of ts) { const R = rig(t); if (!M.SIDES.some(s => R.hands?.[s] === 'grip')) continue; const P = A.skin(R, { d, floor: false, props: (R.props || []).filter(p => EQ.visible(p, has)) }); for (const o of framesHolds(R, P, d, e, has)) rows.push({ id, t, has: hn, ...o, bad: problems(o) }); }
+      for (const t of ts) { const R = rig(t); if (!M.SIDES.some(s => HOLD.has(R.hands?.[s]))) continue; const P = A.skin(R, { d, floor: false, props: (R.props || []).filter(p => EQ.visible(p, has)) }); for (const o of framesHolds(R, P, d, e, has)) rows.push({ id, t, has: hn, ...o, bad: problems(o) }); }
     }
     log(id);
   }
