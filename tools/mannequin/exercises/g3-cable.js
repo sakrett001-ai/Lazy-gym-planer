@@ -616,7 +616,7 @@ function blpArm(C, q, s, e) {
    Работает левая нога, дверь слева (+X), опора — правая нога; кисти на поясе (Bodylastics: стул — «if needed»; без опоры
    центр масс в каждом кадре подбирается над опорной стопой — таз чуть смещается в сторону опоры). Нога — как на блоке
    (adductLeg): отведение 26° → −11° (перед опорной стопой), сгибание бедра к концу до 22°, колено почти прямое. */
-const BAD_FOOT = [-8, 0, 5], BAD_ABD = [26, -11];
+const BAD_FOOT = [-8, 0, 5], BAD_ABD = [26, -11], BAB_ABD = [8, 32];
 const BAD_DOOR = { type: 'g3Door', id: 'door', anchor: 'side', h: 12, at: [102, 0, 42], yaw: 90 };
 /* кисти на поясе: ладонь на гребне подвздошной кости, пальцы вперёд и вниз, локоть в сторону и чуть назад */
 function handOnHip(C, q, s) {
@@ -1026,6 +1026,27 @@ module.exports = {
       for (const s of S) { C.rhythm(q, s, [C.lerp(6, -6, e), C.lerp(4, -10, e)]); blpArm(C, q, s, e); }
       for (const s of S) blpArm(C, q, s, e);
       return turn(C, q, 90);
+    }
+  },
+
+  /* Отведение ноги с мини-петлёй стоя: петля 12″ (mini12) вокруг обеих голеней над лодыжками; работает левая нога, опора —
+     правая (стойка и кисти на поясе — как в сведении ноги с эспандером, центр масс в каждом кадре над опорной стопой).
+     Техника: ACE «Standing Hip Abduction» — нога в сторону без наклона корпуса, носок вперёд; петля натянута уже в начале
+     (голени на ширине таза). t=0 — нога под тазом; t=1 — отведена на BAB_ABD°. */
+  bandabduct: {
+    keys: [0, .25, .5, .75, 1],
+    equipment: [{ type: 'band', id: 'band', model: 'mini12', route: [{ limb: 'sk', side: 'L', at: .85 }, { limb: 'sk', side: 'R', at: .85 }] }],
+    contacts: [{ body: 'soleR', prop: 'floor' }],
+    pose(t, C) {
+      const e = C.ease(t), q = C.base();
+      C.root(q, [2, 88.9, 0], [0, 1, 0], [0, 0, 1]);
+      q.lumbar = [-2, 0, 0]; q.neck = [2, 0, 0];
+      const place = qq => {
+        badStance(C, qq);
+        adductLeg(C, qq, 'L', { abd: C.lerp(BAB_ABD[0], BAB_ABD[1], e), flex: 2, knee: 4, dorsi: 2 });
+        for (const s of S) handOnHip(C, qq, s);
+      };
+      return C.balanceOver(q, [BAD_FOOT[0] - .7, 0, BAD_FOOT[2] - 7], { resolve: place });
     }
   },
 
