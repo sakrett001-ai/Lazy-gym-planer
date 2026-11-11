@@ -93,6 +93,14 @@ PLAIN = {'armsFwd'}
 # до 5° (с 12° — нет: там рука в плоскости лопатки, это armsUp; прямо вверх плоскость подъёма вырождается, и форма
 # действует поверх armsOverhead) и закрутке от −15° до 40° (за −40° и 65° — нет:
 # разгибание гантели из-за головы внизу (−61°) и «лодочка» (−44°) с формой — на 3–10 вывернутых треугольников больше)
+# нижнее продолжение веса формы (угол, колено, окно): ниже колена вес — не меньше, чем от 0 при угле до веса формы в колене
+# (доля окна — как у ALSO). Руки прямо вверх: полоса у подмышки при подъёме 145–160° — та же, что выше (подъём коленей и ног
+# в висе, бёрпи — подъём 147–150°, отведение 6–20°, закрутка 1–18°), а форма включалась только с 150°: с ней на полную в
+# подъёме коленей в висе рёбер с изломом больше 40° — 16 против 52. Колено — 159°: в позах форм после armsOverhead (armsUpTw —
+# 161°, armsFwd — 164°) её вес прежний, и они строятся как без продолжения. Окно по закрутке — от −35° → −20° до 55° → 68°:
+# с прибавкой и при закрутке внутрь (тяга узким хватом, −43°) и в висе с плечом наружу (подъём коленей в висе внизу, 69°)
+# рёбер больше 25° на 1–2 больше
+LOW = {'armsOverhead': (120, 159, (('twist', -35, -20), ('twist', 68, 55)))}
 ALSO = {'armsFwd': (('abduction', 12, 5), ('twist', -40, -15), ('twist', 65, 40)), 'armsUpTw': (('twist', 35, 65),)}
 
 
@@ -161,6 +169,10 @@ def tent(c, v, angles=None):
     его долю (angles — углы стороны формы в позе)"""
     if v <= c['a1']: w = float(np.clip((v - c['a0']) / (c['a1'] - c['a0']), 0, 1))
     else: w = 1.0 if c.get('a2') is None else float(np.clip((c['a2'] - v) / (c['a2'] - c['a1']), 0, 1))
+    if c.get('low') and angles is not None and v < c['low'][1]:   # нижнее продолжение (LOW): ниже колена — от 0 до веса в нём
+        l0, l1, win = c['low']; lw = float(np.clip((l1 - c['a0']) / (c['a1'] - c['a0']), 0, 1)) * float(np.clip((v - l0) / (l1 - l0), 0, 1))
+        for k, c0, c1 in win: lw *= float(np.clip((angles[k] - c0) / (c1 - c0), 0, 1))
+        w = max(w, lw)
     if c.get('angle2') and angles is not None:
         w *= float(np.clip((angles[c['angle2']] - c['b0']) / (c['b1'] - c['b0']), 0, 1))
     for k, c0, c1 in (c.get('also') or []) if angles is not None else ():
@@ -217,6 +229,7 @@ def build(Vcat, F, wi5, ww5, frames, plain=None):
             if a2 is not None: c['a2'] = a2
             if name in SECOND: c['angle2'], c['b0'], c['b1'] = SECOND[name]
             if name in ALSO: c['also'] = [list(x) for x in ALSO[name]]
+            if name in LOW: c['low'] = [LOW[name][0], LOW[name][1], [list(x) for x in LOW[name][2]]]
             out.append(c)
             print(f'  форма {name}{s}: угол {angle} {a0}→{a1:.0f}' + (f'→{a2}' if a2 else '') + (f', {c["angle2"]} {c["b0"]}→{c["b1"]}' if name in SECOND else '') + f', вершин {int(keep.sum())}, наибольшее смещение {np.linalg.norm(D, axis=1).max():.1f} см')
     return out

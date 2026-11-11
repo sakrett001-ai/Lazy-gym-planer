@@ -302,7 +302,8 @@ const AnnySkin = (() => {
 
   /* ---------- корректирующие формы: вес по углу сустава — «шатёр»: 0 при a0, 1 при a1 (угол позы формы), 0 при a2
      (без a2 — 1 и дальше); у формы со вторым углом (angle2) — ещё доля по нему: 0 при b0, 1 при b1; у формы с
-     окном по другим углам (also: [[угол, c0, c1], …]) — ещё доля по каждому: 0 при c0, 1 при c1 ---------- */
+     окном по другим углам (also: [[угол, c0, c1], …]) — ещё доля по каждому: 0 при c0, 1 при c1; у формы с нижним
+     продолжением (low: [угол, колено, окно]) ниже колена вес не меньше доли от 0 при угле до веса в колене (correctives.py, LOW) ---------- */
   const ramp = (v, a, b) => typeof v === 'number' ? Math.max(0, Math.min(1, (v - a) / (b - a))) : 0;
   function correctiveWeights(R, d = data) {
     if (!d.correctives.length) return [];
@@ -311,6 +312,8 @@ const AnnySkin = (() => {
       const src = c.side ? A[c.side] : A, v = c.angle.split('.').reduce((o, k) => o?.[k], src);
       if (typeof v !== 'number') return 0;
       let w = v <= c.a1 ? ramp(v, c.a0, c.a1) : c.a2 == null ? 1 : ramp(v, c.a2, c.a1);
+      /* нижнее продолжение (low: [угол, колено, окно]): ниже колена — не меньше, чем от 0 при угле до веса в колене, с долей окна */
+      if (c.low && v < c.low[1]) { let lw = ramp(c.low[1], c.a0, c.a1) * ramp(v, c.low[0], c.low[1]); for (const [k, c0, c1] of c.low[2]) lw *= ramp(src?.[k], c0, c1); w = Math.max(w, lw); }
       /* второй угол (касание в локте: доля по пронации) — b0 → 0, b1 → 1 */
       if (c.angle2 && w > 0) w *= ramp(src?.[c.angle2], c.b0, c.b1);
       for (const [k, c0, c1] of c.also || []) if (w > 0) w *= ramp(src?.[k], c0, c1);
