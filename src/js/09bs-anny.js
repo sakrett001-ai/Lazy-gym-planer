@@ -312,11 +312,11 @@ const AnnySkin = (() => {
       const src = c.side ? A[c.side] : A, v = c.angle.split('.').reduce((o, k) => o?.[k], src);
       if (typeof v !== 'number') return 0;
       let w = v <= c.a1 ? ramp(v, c.a0, c.a1) : c.a2 == null ? 1 : ramp(v, c.a2, c.a1);
-      /* нижнее продолжение (low: [угол, колено, окно]): ниже колена — не меньше, чем от 0 при угле до веса в колене, с долей окна */
-      if (c.low && v < c.low[1]) { let lw = ramp(c.low[1], c.a0, c.a1) * ramp(v, c.low[0], c.low[1]); for (const [k, c0, c1] of c.low[2]) lw *= ramp(src?.[k], c0, c1); w = Math.max(w, lw); }
       /* второй угол (касание в локте: доля по пронации) — b0 → 0, b1 → 1 */
       if (c.angle2 && w > 0) w *= ramp(src?.[c.angle2], c.b0, c.b1);
       for (const [k, c0, c1] of c.also || []) if (w > 0) w *= ramp(src?.[k], c0, c1);
+      /* нижнее продолжение (low: [угол, колено, окно]): ниже колена — не меньше, чем от 0 при угле до веса в колене, со своим окном (also к нему не применяется) */
+      if (c.low && v < c.low[1]) { let lw = ramp(c.low[1], c.a0, c.a1) * ramp(v, c.low[0], c.low[1]); for (const [k, c0, c1] of c.low[2]) lw *= ramp(src?.[k], c0, c1); w = Math.max(w, lw); }
       return w;
     });
   }
