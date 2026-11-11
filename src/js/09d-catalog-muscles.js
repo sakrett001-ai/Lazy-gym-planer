@@ -24,7 +24,7 @@ function motionProfile(anim){return anim.catalogProfile||anim.muscleProfile;}
 /* ключичная часть большой грудной сгибает плечо — ярче в наклонных жимах и подъёме перед собой; в тягах сверху
    (плечо разгибается и приводится) работают грудинно-рёберные части, ключичная почти молчит */
 const INCLINE_CHEST=new Set(['dbincline','smithincline','inclinebb','declinepush','cablelowfly','frontraise']);
-const PULL_CHEST=new Set(['latpull','latpullv','latpulluh','assistpull','pullup','chinup','pullover']);
+const PULL_CHEST=new Set(['latpull','latpullv','latpulluh','bandlatpull','assistpull','pullup','chinup','pullover']);
 const LOWER_CHEST=new Set(['declinebb','dip','assistdip']);
 /* Стороны упражнений на одну сторону: upper — руки и плечевой пояс, lower — ноги, regions — отдельные области корпуса
    (косые мышцы: наклон в сторону — одна сторона целиком, поворот — наружная косая одной стороны с внутренней другой).
@@ -38,7 +38,7 @@ const LOWER_CHEST=new Set(['declinebb','dip','assistdip']);
      Anatomy; OpenStax A&P 2e, 11.4: наружная косая поворачивает корпус в противоположную сторону, внутренняя — в свою);
    - «мельница» с гирей в левой руке: внизу грудь развёрнута влево, к гире; на подъёме корпус разворачивается вправо —
      наружная косая левой стороны и внутренняя правой (то же правило; по длинам мышц они укорачиваются). */
-const CATALOG_LATERALITY={dbrow:{upper:'L'},kbsnatch:{upper:'L'},kbsllift:{lower:'L'},kbwindmill:{upper:'L',regions:{obl_ext:'L',obl_int:'R'}},kbswing1:{upper:'L'},kbclean:{upper:'L'},kbpress:{upper:'L'},kbrow:{upper:'L'},kbfloorpress:{upper:'L'},cablelat:{upper:'R'},concentration:{upper:'L'},kickback:{upper:'L'},archer:{upper:'R'},bulgarian:{lower:'L'},stepup:{lower:'L'},lunge:{lower:'L'},revlunge:{lower:'L'},sidelunge:{lower:'R'},pistolbox:{lower:'L'},sllift:{lower:'L'},glutebridge1:{lower:'L'},glutekick:{lower:'L'},cablekickback:{lower:'L'},calf1:{lower:'L'},cableadduct:{lower:'L'},cableextrot:{upper:'R'},bandextrot:{upper:'R'},
+const CATALOG_LATERALITY={dbrow:{upper:'L'},kbsnatch:{upper:'L'},kbsllift:{lower:'L'},kbwindmill:{upper:'L',regions:{obl_ext:'L',obl_int:'R'}},kbswing1:{upper:'L'},kbclean:{upper:'L'},kbpress:{upper:'L'},kbrow:{upper:'L'},kbfloorpress:{upper:'L'},cablelat:{upper:'R'},concentration:{upper:'L'},kickback:{upper:'L'},archer:{upper:'R'},bulgarian:{lower:'L'},stepup:{lower:'L'},lunge:{lower:'L'},revlunge:{lower:'L'},sidelunge:{lower:'R'},pistolbox:{lower:'L'},sllift:{lower:'L'},glutebridge1:{lower:'L'},glutekick:{lower:'L'},cablekickback:{lower:'L'},calf1:{lower:'L'},cableadduct:{lower:'L'},bandadduct:{lower:'L'},cableextrot:{upper:'R'},bandextrot:{upper:'R'},
  copenhagen:{lower:'L'},copenhagenknee:{lower:'L'},sidebend:{regions:{obl_ext:'L',obl_int:'L'}},cablewood:{regions:{obl_ext:'L',obl_int:'R'}}};
 function catalogSideValues(profile,values){
  const sides={L:{...values},R:{...values}},lower=new Set(['quads','hams','calves','glutes','adductors','hipflex']),lat=profile.laterality||{};
@@ -52,7 +52,7 @@ function catalogSideValues(profile,values){
 /* Учебные акценты частей мышц (этап А аудита анатомии 4.53.0: цвет по фазам против длины мышц — tools/muscles/phase.js,
    проверка — tools/muscle-phase.test.js): доля значения группы у области в упражнении; без записи — 1. */
 const SQUAT_LIKE=new Set('squat goblet airsquat smithsquat hacksquat legpress legpresshigh legpresslow lunge revlunge bulgarian stepup pistolbox sidelunge wallsit jumpsquat thruster kbfrontsquat'.split(' '));
-const PULL_DOWN=new Set(['latpull','latpullv','latpulluh','assistpull','pullup','chinup']);
+const PULL_DOWN=new Set(['latpull','latpullv','latpulluh','bandlatpull','assistpull','pullup','chinup']);
 const EXT_ROT=new Set(['cableextrot','bandextrot']);
 const REGION_FACTORS={
  /* прямая бедра в приседаниях, выпадах и жиме ногами работает слабее широких: двусуставная, в разгибании колена с

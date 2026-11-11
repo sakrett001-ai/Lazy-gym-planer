@@ -5,7 +5,7 @@ const PATTERN_NAMES = {squat:'присед', hinge:'наклон от таза',
   fly:'сведение рук', pullover:'пуловер', vpull:'вертикальная тяга', hrow:'горизонтальная тяга', vpush:'жим вверх', raise:'подъём рук',
   rear:'задняя дельта и лопатки', curl:'сгибание рук', ext:'разгибание рук', lunge:'выпад', bridge:'ягодичный мост', flex:'скручивание',
   hold:'удержание корпуса', side:'боковой наклон', calf:'подъём на носки', grip:'хват', jump:'прыжки', burpee:'бёрпи', climb:'скалолаз',
-  adduct:'сведение ног', extrot:'вращение плеча наружу', run:'бег', ride:'вращение педалей', row:'гребля', kneeext:'разгибание колена', kneeflex:'сгибание колена', shrug:'шраги'};
+  adduct:'сведение ног', abduct:'отведение ног', extrot:'вращение плеча наружу', run:'бег', ride:'вращение педалей', row:'гребля', kneeext:'разгибание колена', kneeflex:'сгибание колена', shrug:'шраги'};
 /* движения, которым не нашлось места в общей таблице */
 [['kneeext', 'legext'], ['kneeflex', 'legcurl nordic'], ['shrug', 'shrug'], ['raise', 'frontraise']].forEach(([p, ids]) => ids.split(' ').forEach(id => PATTERN[id] = p));
 
@@ -72,8 +72,14 @@ function analogsFor(ex, E, {exclude = new Set(), lvlMax = 3, limit = 5, min = .4
 const PLACE_DEFAULTS = [
   {id:'gym', name:'Зал', equip:EQUIP.map(e => e.id)},
   {id:'home', name:'Дом', equip:['db', 'band', 'abwheel']},
-  {id:'street', name:'Улица', equip:['pullup', 'dipbars']}
+  {id:'street', name:'Улица', equip:['pullup', 'dipbars']},
+  /* только резинки (эспандер с рукоятями, петли, мини-петля, дверное крепление): программа «как в зале» здесь собирается
+     из двойников на резинке — тяга сверху, сведение и отведение ног, мостик с петлёй (11-planner.js, PATTERN) */
+  {id:'homeband', name:'Дома с эспандером', equip:['band']}
 ];
+/* заготовки мест, появившиеся после первого запуска: добавляются к сохранённым местам один раз (placesV), удалённое
+   пользователем потом не возвращается */
+const PLACE_ADDED = [[1, 'homeband']];
 function ensurePlaces(s) {
   if (!Array.isArray(s.places) || !s.places.length) {
     s.places = PLACE_DEFAULTS.map(p => ({...p, equip:p.equip.slice()}));
@@ -82,6 +88,11 @@ function ensurePlaces(s) {
     const match = s.places.find(p => same(p.equip, s.equip || []));
     if (match) s.place = match.id;
     else { s.place = 'gym'; s.places[0].equip = (s.equip || []).slice(); }
+  }
+  for (const [v, id] of PLACE_ADDED) if ((s.placesV || 0) < v) {
+    const d = PLACE_DEFAULTS.find(p => p.id === id);
+    if (!s.places.some(p => p.id === id)) s.places.push({...d, equip:d.equip.slice()});
+    s.placesV = v;
   }
   if (!s.places.some(p => p.id === s.place)) s.place = s.places[0].id;
   if (s.adapt && (!s.places.some(p => p.id === s.adapt) || s.adapt === s.place)) s.adapt = null;

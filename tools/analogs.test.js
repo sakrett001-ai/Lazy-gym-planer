@@ -61,7 +61,7 @@ test('weekly programme days are adapted too', () => {
 test('old settings become places: a known preset maps to its place, a custom list to the gym', () => {
   const a = app();
   const home = a.ensurePlaces({ equip: HOME.slice() });
-  assert.equal(home.place, 'home'); assert.equal(home.places.length, 3);
+  assert.equal(home.place, 'home'); assert.equal(home.places.length, 4); /* зал, дом, улица, дома с эспандером */
   const custom = a.ensurePlaces({ equip: ['db', 'bench', 'pullup'] });
   assert.equal(custom.place, 'gym'); assert.deepEqual([...a.placeOf(custom).equip], ['db', 'bench', 'pullup']);
   const stale = a.ensurePlaces({ places: [{ id: 'x', name: 'Дача', equip: ['kb'] }], place: 'gone', adapt: 'gone', equip: [] });
@@ -85,4 +85,32 @@ test('percent of 1RM is shown only for loads that can be weighed', () => {
     }
   assert.match(P.prescribe(a.EXI.bandrow, null, a.effEquip(['band'])).load, /натяжение ленты/);
   assert.match(P.prescribe(a.EXI.assistpull, P.WEEKS[3], a.effEquip(['gravitron'])).load, /противовес: больше/);
+});
+/* «Дома с эспандером»: место только с резинками; программа «как в зале» берёт двойники на резинке */
+const BANDS = ['band'];
+test('the band-only place: gym exercises are replaced by their band twins', () => {
+  const a = app(), place = a.PLACE_DEFAULTS.find(p => p.id === 'homeband');
+  assert.deepEqual(place && { name: place.name, equip: [...place.equip] }, { name: 'Дома с эспандером', equip: BANDS });
+  const E = a.effEquip(BANDS), first = id => a.analogsFor(a.EXI[id], E, { limit: 1 })[0]?.ex.id;
+  for (const [gym, twin] of [['latpull', 'bandlatpull'], ['latpullv', 'bandlatpull'], ['adduction', 'bandadduct'], ['cableadduct', 'bandadduct'],
+    ['abduction', 'bandabduct'], ['bridge', 'bandbridge'], ['cablerow', 'bandrow'], ['pushdown', 'bandpushdown'], ['cablecurl', 'bandcurl'], ['facepull', 'bandfacepull']])
+    assert.equal(first(gym), twin, `${gym} → ${twin}`);
+  for (const id of ['bandlatpull', 'bandadduct', 'bandabduct', 'bandbridge']) assert(a.available(a.EXI[id], E), id + ' needs only bands');
+  assert.match(a.analogNote(a.EXI.latpull, a.EXI.bandlatpull, E), /резина/, 'the note names the band');
+  /* программа зала в этом месте: тяга верхнего блока заменена тягой эспандера сверху */
+  Object.assign(a.S, { mode: 'single', goal: 'mass', level: 'mid', count: 6, groups: ['back'], seed: 3, format: 'classic' });
+  a.S.places = a.PLACE_DEFAULTS.map(p => ({ ...p, equip: p.equip.slice() })); a.S.place = 'homeband'; a.S.adapt = 'gym'; a.ensurePlaces(a.S);
+  assert.deepEqual([...a.S.equip], BANDS);
+  const p = a.buildPlan();
+  for (const it of p.items) assert(a.available(it.ex, E), it.ex.id + ' is doable with bands only');
+  const sub = p.items.find(it => it.sub && ['latpull', 'latpullv', 'latpulluh', 'pullup', 'chinup', 'assistpull'].includes(it.sub.from.id));
+  assert(sub && sub.ex.id === 'bandlatpull', 'a vertical pull of the gym programme becomes the band pulldown: ' + p.items.map(it => (it.sub ? it.sub.from.id + '→' : '') + it.ex.id).join(', '));
+});
+test('the band-only place is added once to places saved before it existed', () => {
+  const a = app(), saved = [{ id: 'gym', name: 'Зал', equip: ['db'] }, { id: 'home', name: 'Дом', equip: ['band'] }];
+  a.S.places = saved.map(p => ({ ...p })); a.S.place = 'home'; delete a.S.placesV; a.ensurePlaces(a.S);
+  assert.deepEqual(a.S.places.map(p => p.id), ['gym', 'home', 'homeband'], 'added after the saved places');
+  assert.equal(a.S.place, 'home', 'the current place does not change');
+  a.S.places = a.S.places.filter(p => p.id !== 'homeband'); a.ensurePlaces(a.S);
+  assert(!a.S.places.some(p => p.id === 'homeband'), 'a place the user deleted does not come back');
 });

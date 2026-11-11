@@ -46,7 +46,7 @@ test('exercises that need other equipment say what is missing and where it is av
   for (const r of A.other) {
     assert(!a.available(r.ex, E), r.ex.id + ' really is unavailable on the street');
     assert(r.need.length, r.ex.id + ' names the missing equipment');
-    for (const name of r.places) assert(['Зал', 'Дом'].includes(name));
+    for (const name of r.places) assert(['Зал', 'Дом', 'Дома с эспандером'].includes(name));
   }
   const shrug = A.other.find(r => r.ex.id === 'shrug');
   assert(shrug && shrug.places.includes('Зал'), 'shrugs can be done in the gym');
@@ -80,7 +80,9 @@ test('adductors and the rotator cuff: targeted exercises in the atlas and in a w
 });
 test('in a weekly programme the focus works on days that train its group and on every full-body day', () => {
   const a = app(); places(a); a.S.place = 'gym'; a.ensurePlaces(a.S);
-  Object.assign(a.S, { mode: 'program', days: 4, split: 'ul', week: 1, count: 6, seed: 5, goal: 'mass', level: 'mid', format: 'classic' });
+  /* seed 3: без акцента средняя дельта — только в первый верхний день (с упражнениями «дома с эспандером» каталог больше, и при seed 5 она
+     и без акцента была в обоих верхних днях — проверять было нечего) */
+  Object.assign(a.S, { mode: 'program', days: 4, split: 'ul', week: 1, count: 6, seed: 3, goal: 'mass', level: 'mid', format: 'classic' });
   const count = (prog, m) => prog.days.map(d => (d.plan.items || []).filter(it => it.ex.pri.includes(m)).length);
   a.setFocus(null); const plain = count(a.buildProgram(), 'delt_s');
   a.setFocus('delt_s');
