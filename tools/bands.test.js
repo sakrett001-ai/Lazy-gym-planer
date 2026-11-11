@@ -19,13 +19,15 @@ const { auditBand, auditEntry, bandFlags, BAND_LIM } = require('./mannequin/cabl
 
 const IDS = { bandlatraise: 'tube48', bandcurl: 'tube48', bandpushdown: 'tube48', bandfacepull: 'tube36', bandextrot: 'tube36', bandrow: 'tube36',
   /* дома с эспандером: трубка над дверью, трубка у низа двери на манжете (стоя и сидя), мини-петля на голенях и на бёдрах */
-  bandlatpull: 'tube36', bandadduct: 'tube36', bandabduct: 'mini12', bandbridge: 'mini12', bandlegext: 'tube48' };
+  bandlatpull: 'tube36', bandadduct: 'tube36', bandabduct: 'mini12', bandbridge: 'mini12', bandlegext: 'tube48',
+  /* заход 2: трубка под спиной лёжа (жим на полу) и трубка из кольца позади вокруг боков (сведение рук у двери) */
+  bandfloorpress: 'tube36', bandfly: 'tube48' };
 const frames = (entry, n = 41, edit) => { const rig = EQ.rig(EQ.variantEntry(entry, () => false)); return Array.from({ length: n }, (_, i) => { const t = i / (n - 1), R = rig(t); if (edit) edit(R, t); return { t, R }; }); };
 const band = (R, id = 'band') => R.props.filter(p => p.band && p.band.id === id);
 const audit = (id, edit, entry = POSES[id]) => auditBand(id, 'band', frames(entry, 41, edit));
 const has = (r, re) => r.flags.some(f => re.test(f));
 
-test('bands: eleven exercises — one continuous band, taut, within the passport stretch, no slip, no flags', () => {
+test('bands: thirteen exercises — one continuous band, taut, within the passport stretch, no slip, no flags', () => {
   for (const [id, model] of Object.entries(IDS)) {
     const rows = auditEntry(id, POSES[id]), m = rows.find(r => r.type === 'лента-модель');
     assert(m, `${id}: строка ленты`);
@@ -49,6 +51,8 @@ test('bands: physics — length is the sum of segments, one stretch through the 
     if (mod.shape === 'round') assert(Math.abs(Math.min(...ps.flatMap(p => p.rs)) - mod.r0 / Math.sqrt(lamMax)) < 1e-9, `${id}: радиус r0/√λ`);
     else for (const p of ps) assert(Math.abs(p.flat[0] - mod.w0 / Math.sqrt(Math.max(1, lamMax))) < 1e-9 && Math.abs(p.flat[1] - mod.h0 / Math.sqrt(Math.max(1, lamMax))) < 1e-9, `${id}: сечение петли по объёму`);
     for (const pin of b.pins) {
+      /* под спиной (лёжа на ленте) — отдельная проверка ниже */
+      if (pin.torso) continue;
       /* место под подошвой — в рамке стопы неподвижно (опора без скольжения) */
       const F = pin.foot, loc = p => [V.dot(V.sub(p, F.o), F.x), V.dot(V.sub(p, F.o), F.y), V.dot(V.sub(p, F.o), F.z)];
       const med = loc(pin.med);
@@ -107,5 +111,53 @@ test('bands: the ankle strap — both ends of the tube clip onto the D-ring of o
     snaps.forEach((s, k) => assert(V.dist(s.pts[8], ends[k]) < .01, `ветвь ${k + 1} — на своём карабине`));
     assert(V.dist(snaps[0].pts[0], snaps[1].pts[0]) < .01, 'оба карабина на одном кольце');
     for (let i = 0; i < 9; i++) for (const q of P('band:L:cuff' + i).pts) assert(Math.abs(M.limbSDF(R, 'sk', 'L', q) - .75) < .3, 'виток манжеты лежит на голени');
+  }
+});
+
+/* узел torso: лёжа на ленте (жим на полу) — лента поперёк спины под лопатками прижата весом тела; стоя у двери (сведение рук) —
+   лента из кольца позади огибает бок корпуса под мышкой со скольжением */
+const height = p => M.FLOOR - p[1];
+test('bands: lying on the band — under the shoulder blades it lies unloaded on the floor, does not slip, wraps the side of the chest, misses the upper arm and the shoulder blade', () => {
+  for (const { R } of frames(POSES.bandfloorpress, 21)) {
+    const ps = band(R), b = ps[0].band;
+    assert.equal(b.pins.length, 2, 'две опоры — по краям спины');
+    assert(b.pins.every(p => p.torso), 'опоры — под спиной');
+    assert(!b.pieces[1].loaded && Math.abs(b.pieces[1].lam - 1) < 1e-9, 'кусок под спиной лежит без растяжения');
+    /* под спиной лента на полу: центр — на радиус над полом (вдавлена в коврик весом тела) */
+    for (const pin of b.pins) assert(Math.abs(height(pin.med) - .5) < 1e-6, 'место схода с пола — на полу');
+    /* лопатка: задняя поверхность тела лопатки (16 точек у медиального края и корня ости) выше ленты под спиной */
+    for (const s of M.SIDES) {
+      const S = R.frames['sp' + s], g = s === 'L' ? 1 : -1;
+      const low = Math.min(...M.GIRDLE.back.map(f0 => height(V.add(V.add(V.add(S.o, S.x, -g * f0[0]), S.y, f0[1]), S.z, f0[2]))));
+      assert(low > 1.5, `лопатка ${s} над лентой: ${low.toFixed(2)} см над полом`);
+    }
+    /* плечо: лента мимо (плечо внизу лежит на коврике, лента поднимается от бока корпуса к кисти над ним) */
+    for (const p of ps) for (const q of p.pts) for (const s of M.SIDES) assert(M.limbSDF(R, 'ua', s, q) > 0, 'лента мимо плеча');
+    /* огибание бока: точки ленты от пола к кисти лежат на дуге вокруг угла корпуса — ни одна не глубже 0,6 см в коже */
+    const cache = M.torsoCache(R);
+    for (const p of ps) for (let i = 1; i < p.pts.length; i++) for (let k = 0; k <= 8; k++) {
+      const q = V.mix(p.pts[i - 1], p.pts[i], k / 8); if (M.SIDES.some(s => V.dist(q, R['grip' + s]) < 9)) continue;
+      assert(M.torsoSDF(R, q, cache) > -.6, 'лента не в корпусе');
+    }
+  }
+  const row = auditEntry('bandfloorpress', POSES.bandfloorpress).find(r => r.type === 'лента-модель');
+  assert(row.slip.length === 2 && row.slip.every(d => d < 1e-6), 'под спиной лента не скользит: ' + row.slip);
+  /* без огибания корпуса (концы на полу под спиной, лента прямо к кистям) — лента сквозь бок корпуса */
+  const z = band(frames(POSES.bandfloorpress, 2)[0].R)[0].band.pins[0].med[2];
+  const straight = { ...POSES.bandfloorpress, equipment: POSES.bandfloorpress.equipment.map(e => e.type !== 'band' ? e : { ...e, route: [{ handle: 'L' }, { clip: [-7, .5, z], mountTo: 'mat' }, { clip: [7, .5, z], mountTo: 'mat' }, { handle: 'R' }] }) };
+  assert(has(auditBand('bandfloorpress', 'band', frames(straight, 11)), /сквозь корпус/), 'прямая лента проходит сквозь корпус');
+});
+
+test('bands: at the door (fly) — the band from the ring behind slides round the side of the chest under the arm only when the hands meet in front', () => {
+  const fs = frames(POSES.bandfly, 11), L = R => R.props.find(p => p.id === 'band:L').pts;
+  /* отход ленты от прямой «кольцо → рукоять» и наименьший зазор до кожи корпуса */
+  const off = R => { const P = L(R), a = P[0], u = V.unit(V.sub(P.at(-1), a)); return Math.max(...P.map(q => V.len(V.perp(V.sub(q, a), u)))); };
+  const gap = R => { const c = M.torsoCache(R), P = L(R); let m = Infinity; for (let i = 1; i < P.length; i++) for (let k = 0; k <= 20; k++) m = Math.min(m, M.torsoSDF(R, V.mix(P[i - 1], P[i], k / 20), c)); return m; };
+  /* в начале (руки разведены) лента идёт прямо и далеко от корпуса; в конце огибает бок: уходит от прямой и лежит на коже */
+  assert(off(fs[0].R) < 1 && gap(fs[0].R) > 5, `в начале — прямо: отход ${off(fs[0].R).toFixed(2)}, зазор ${gap(fs[0].R).toFixed(1)}`);
+  assert(off(fs[10].R) > 3 && gap(fs[10].R) < 1.5 && gap(fs[10].R) > -1, `в конце — вокруг бока: отход ${off(fs[10].R).toFixed(2)}, зазор ${gap(fs[10].R).toFixed(2)}`);
+  for (const { R } of fs) {
+    const b = band(R)[0].band;
+    assert(b.slide && b.pieces.length === 1 && !b.pins.length, 'в кольце и у бока лента скользит — один кусок');
   }
 });

@@ -601,7 +601,7 @@ const BLP = once(() => {
 function blpArm(C, q, s, e) {
   const { V } = C, f = C.fk(q), gh = f.P['gh' + s], lat = C.lat(q, s), T = C.axes(q, 'thorax');
   const d0 = V.unit(V.add(V.add(T.y, T.z, .42), lat, .36)), d1 = V.unit(V.add(V.add(V.scale(T.y, -.42), lat, .72), T.z, .62));
-  const g = V.add(gh, slerpDir(V, d0, d1, e), C.lerp(59.5, 61.5, e));
+  const g = V.add(gh, slerpDir(V, d0, d1, e), C.lerp(60.5, 27, e));
   const pole = V.unit(V.add(V.add(lat, V.scale(T.y, -1), C.lerp(.2, .9, e)), T.z, -.45));
   holdAxis(C, q, s, g, pole, V.scale(lat, -1));
 }
