@@ -9930,13 +9930,21 @@ const AnnySkin = (() => {
        ног, жим стоя внизу, отжимания) — там полосы нет, а рука у корпуса;
      * у подъёма к 180° — плавно до 0 от ROLL.EL0 до ROLL.EL1: разложение на размах и закрутку там вырождается (ось размаха
        неустойчива), а при 168–178° со снятой закруткой хуже «прыжки с разведением» (16 → 22) и жим Арнольда (12 → 14).
+       Большая закрутка наружу (BIG0…BIG1: от 40° до 60°) снимается и выше — подъём UP0…UP1 (168–171°) до HI0…HI1
+       (174–179°): жим гири над головой вверху (подъём 172°, закрутка 81°) — рёбер с изломом больше 40° 48 → 6, рывок гири
+       вверху (170°, 52°) — 32 → 16; с 170° и при любой закрутке хуже «прыжки с разведением», жим Арнольда, жим гантелей
+       (закрутка 13–29°), а с 162° — турецкий подъём (167–169°, 78–85°: рёбер больше 40° 8 → 12).
      Формы кожи строятся под скиннинг с этой рамкой (sculpt.js, correctives.py; кроме PLAIN): AnnySkin.ROLL отпечатан в
      anny.bin (tools/anny-look/inputs.js), сменился — npm run anny:build. */
-  const ROLL = { OUT: 1, IN: 0, LO0: 90, LO1: 130, EL0: 162, EL1: 172 };
+  const ROLL = { OUT: 1, IN: 0, LO0: 90, LO1: 130, EL0: 162, EL1: 172, BIG0: 40, BIG1: 60, UP0: 168, UP1: 171, HI0: 174, HI1: 179 };
   const flipY = v => [v[0], -v[1], v[2]], intM = f => M.M3.cols(flipY(f.x), flipY(f.y), flipY(f.z));
   const sstep = (x, a, b) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
   /* закрутка (градусы, наружу +), которую снимает рамка uar, при закрутке плеча e и подъёме el */
-  function rollOff(e, el) { return (e > 0 ? ROLL.OUT : ROLL.IN) * e * sstep(el, ROLL.LO0, ROLL.LO1) * (1 - sstep(el, ROLL.EL0, ROLL.EL1)); }
+  function rollOff(e, el) {
+    let top = 1 - sstep(el, ROLL.EL0, ROLL.EL1);
+    if (e > 0) top = Math.max(top, sstep(e, ROLL.BIG0, ROLL.BIG1) * sstep(el, ROLL.UP0, ROLL.UP1) * (1 - sstep(el, ROLL.HI0, ROLL.HI1)));
+    return (e > 0 ? ROLL.OUT : ROLL.IN) * e * sstep(el, ROLL.LO0, ROLL.LO1) * top;
+  }
   /* доля рамки закрутки в ячейке плеча (как roll_share в build.py): 1 у плечевого сустава и до 0 на at.a1 см по оси плеча в
      стойке. {share: Float32Array(nv), map: Int16Array(рамки) — для рамки плеча номер её рамки закрутки, иначе −1} */
   function rollShare(d, at) {
@@ -10018,7 +10026,8 @@ const AnnySkin = (() => {
 
   /* ---------- корректирующие формы: вес по углу сустава — «шатёр»: 0 при a0, 1 при a1 (угол позы формы), 0 при a2
      (без a2 — 1 и дальше); у формы со вторым углом (angle2) — ещё доля по нему: 0 при b0, 1 при b1; у формы с
-     окном по другим углам (also: [[угол, c0, c1], …]) — ещё доля по каждому: 0 при c0, 1 при c1 ---------- */
+     окном по другим углам (also: [[угол, c0, c1], …]) — ещё доля по каждому: 0 при c0, 1 при c1; у формы с нижним
+     продолжением (low: [угол, колено, окно]) ниже колена вес не меньше доли от 0 при угле до веса в колене (correctives.py, LOW) ---------- */
   const ramp = (v, a, b) => typeof v === 'number' ? Math.max(0, Math.min(1, (v - a) / (b - a))) : 0;
   function correctiveWeights(R, d = data) {
     if (!d.correctives.length) return [];
@@ -10030,6 +10039,8 @@ const AnnySkin = (() => {
       /* второй угол (касание в локте: доля по пронации) — b0 → 0, b1 → 1 */
       if (c.angle2 && w > 0) w *= ramp(src?.[c.angle2], c.b0, c.b1);
       for (const [k, c0, c1] of c.also || []) if (w > 0) w *= ramp(src?.[k], c0, c1);
+      /* нижнее продолжение (low: [угол, колено, окно]): ниже колена — не меньше, чем от 0 при угле до веса в колене, со своим окном (also к нему не применяется) */
+      if (c.low && v < c.low[1]) { let lw = ramp(c.low[1], c.a0, c.a1) * ramp(v, c.low[0], c.low[1]); for (const [k, c0, c1] of c.low[2]) lw *= ramp(src?.[k], c0, c1); w = Math.max(w, lw); }
       return w;
     });
   }
@@ -17225,4 +17236,4 @@ renderPlan();
 prefetchStressIds();
 logInit();
 
-window.PODHOD_VERSION='4.89.0';window.PODHOD_BUILD='4.89.0-dd1289675535';window.PODHOD_RENDER={"skin":"888b0ed3ee","skeleton":"a08ad650f4","anatomy":"aaf6f3e1d2"};window.PODHOD_LANG='ru';
+window.PODHOD_VERSION='4.90.0';window.PODHOD_BUILD='4.90.0-f05ddb0d9c02';window.PODHOD_RENDER={"skin":"37b72e1c5c","skeleton":"a08ad650f4","anatomy":"aaf6f3e1d2"};window.PODHOD_LANG='ru';
