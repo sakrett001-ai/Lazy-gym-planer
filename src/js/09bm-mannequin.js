@@ -697,7 +697,8 @@ function handleIn(f,s,mode){
  if(mode==='deep')return{c:pt([-g*B.deep.c[0],B.deep.c[1],B.deep.c[2]]),a:dir(B.deep.a)};
  return{c:pt([-g*B.grip[0],B.grip[1],B.grip[2]]),a:V.unit(f.z)};
 }
-/* Верхний диск гантели в ладони, хват «чашей» (B.cup), в рамке кисти стороны s (x — тыл·g, −y — к пальцам, z — к большому
+/* Верхний диск гантели в ладони, хват «чашей» (B.cup[mode]: 'cup' — гоблет, 'cupring' — пуловер и разгибание из-за головы),
+   в рамке кисти стороны s (x — тыл·g, −y — к пальцам, z — к большому
    пальцу): c — середина внутренней грани диска на оси, n — ось от рукояти к диску, k — точка касания ладони с ребром диска,
    u — направление от оси к этой точке (наружу), up — вверх по боку диска в плоскости ладони. Ладонь смотрит в pf = −g·x;
    ось наклонена от неё на tilt° к пальцам (повёрнутым на psi° к большому пальцу); касание — на at см от запястья, сдвинуто
@@ -706,7 +707,8 @@ function handleIn(f,s,mode){
    «gripping it with both hands underneath the top of the weight» (Healthline, Dumbbell Goblet Squat), «one of the heads
    between your palms and your thumbs pointing towards your chest» (S. Lee, NSCA-CPT; Training & Conditioning, «Starting
    with the Goblet»), локти у корпуса и вниз (ACE Exercise Library, Goblet Squat: «Keep the elbows close to the rib cage»;
-   P. Macek, StrongFirst, «Tips for Heavy Goblet Squats»: «Pulling the elbows down»). */
+   P. Macek, StrongFirst, «Tips for Heavy Goblet Squats»: «Pulling the elbows down»). ExRx (Goblet Squat) роботам закрыт —
+   не сверялся. */
 function cupDisk(s,mode='cup'){
  const g=SIGN[s],c=B.cup[mode]||B.cup.cup,b=c.tilt*D2R,p=c.psi*D2R,pf=[-g,0,0],up=V.add(V.scale([0,-1,0],Math.cos(p)),[0,0,1],Math.sin(p));
  const n=V.unit(V.add(V.scale(pf,Math.cos(b)),up,Math.sin(b))),u=V.unit(V.add(V.scale(pf,-Math.sin(b)),up,Math.cos(b)));
