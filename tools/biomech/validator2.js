@@ -78,6 +78,11 @@ function romChecks(R, entry = {}) {
 }
 
 /* ---------- SDF инвентаря (каталог) ---------- */
+/* края плоской ленты: точки середины, сдвинутые поперёк ленты (направление — нормаль × касательная) на ±k */
+function bandEdges(pts, nrm, k) {
+  const dirAt = i => { const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, Math.max(1, i))], n = nrm[Math.min(nrm.length - 1, Math.max(0, i - 1))]; return V.unit(V.cross(n, V.sub(b, a))); };
+  return [1, -1].map(sg => pts.map((p, i) => V.add(p, dirAt(i), sg * k)));
+}
 function sdCapsule(p, a, b, r) { const pa = V.sub(p, a), ba = V.sub(b, a), bb = V.dot(ba, ba), h = bb < 1e-9 ? 0 : clamp(V.dot(pa, ba) / bb, 0, 1); return V.len(V.sub(pa, V.scale(ba, h))) - r; }
 function sdOBB(p, c, axes, half) { const d = V.sub(p, c), q = axes.map((ax, i) => Math.abs(V.dot(d, ax)) - half[i]); return V.len(q.map(v => Math.max(v, 0))) + Math.min(Math.max(...q), 0); }
 /* знаковое расстояние до многоугольника на плоскости (внутри — минус) */
@@ -124,7 +129,13 @@ function collider(s) {
     c.pts = []; for (const z of [-hl, 0, hl]) for (const [a, b] of P) c.pts.push(V.add(V.add(V.add(s.c, u, a), v, b), w, z));
     c.r = hl;
   }
-  else if (s.kind === 'cable') { c.cable = true; c.pts = s.pts; c.r = s.r; c.ptR = s.r; c.sdf = p => Math.min(...s.pts.slice(1).map((b, i) => sdCapsule(p, s.pts[i], b, s.r))); }
+  else if (s.kind === 'cable') {
+    c.cable = true; c.pts = s.pts; c.r = s.r; c.ptR = s.r; c.sdf = p => Math.min(...s.pts.slice(1).map((b, i) => sdCapsule(p, s.pts[i], b, s.r)));
+    /* плоская лента (петля эспандера, сечение flat [ширина, толщина], нормаль к поверхности по отрезкам nrm): сквозь тело
+       проверяются середина и оба края ленты с полутолщиной, а не середина с полушириной — лента 5 см шириной лежит на коже
+       плашмя */
+    if (s.flat && s.nrm) { const [w, h] = s.flat; c.r = h / 2; c.edges = bandEdges(s.pts, s.nrm, w / 2 - h / 2); }
+  }
   else if (s.kind === 'barbell' || s.kind === 'dumbbell') return compound(s, c);
   else if (s.kind === 'kettlebell' && s.handleAxis) {
     const ax = V.unit(s.handleAxis), up = V.unit(V.sub(s.grip, s.c)), k = s.radius / 10.5, hu = s.handleUp ?? 15.6 * k, a = V.add(V.add(s.c, ax, -5 * k), up, hu), b = V.add(V.add(s.c, ax, 5 * k), up, hu);
@@ -453,8 +464,8 @@ function checkFrame(R, entry = {}) {
   /* 7. Тросы и ленты */
   for (const c of cols.filter(c => c.cable)) {
     let worst = 0, where = '';
-    for (let i = 1; i < c.pts.length; i++) {
-      const a = c.pts[i - 1], b = c.pts[i], n = Math.ceil(V.dist(a, b) / 2);
+    for (const P of [c.pts, ...(c.edges || [])]) for (let i = 1; i < P.length; i++) {
+      const a = P[i - 1], b = P[i], n = Math.ceil(V.dist(a, b) / 2);
       for (let j = 0; j <= n; j++) {
         const p = V.mix(a, b, j / n);
         if (M.SIDES.some(s => V.dist(p, R['grip' + s]) < 9)) continue;
@@ -541,4 +552,4 @@ function checkClip(frameAt, entry = {}, { samples = 41 } = {}) {
   if (entry.loop) { const a = frameAt(0), b = frameAt(1); for (const k of keys) { const d = V.dist(a[k], b[k]); if (d > 1) { issues.set('loop|' + k, { rule: 'loop', severity: 'error', detail: `цикл не замкнут: ${k} в конце на ${d.toFixed(1)} см от начала`, t: 1, frames: 1 }); break; } } }
   return [...issues.values()];
 }
-module.exports = { checkFrame, checkClip, angles, romChecks, bodyPoints, regionPoints, collider, LIM, SCAP_RIB_DEPTH };
+module.exports = { checkFrame, checkClip, angles, romChecks, bodyPoints, regionPoints, collider, bandEdges, LIM, SCAP_RIB_DEPTH };

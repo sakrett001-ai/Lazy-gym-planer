@@ -64,10 +64,11 @@
     if (lift > 0) { c = V.add(c, UP, lift); med = V.add(med, UP, lift); }
     return { c, r: EDGE_R + r, axis: F.z, side: V.add(V.add(c, lat, 3), n, 3), med, lat, n, foot: F };
   }
-  /* петля вокруг сегмента ноги: окружность сечения (средний радиус по четырём сторонам) */
+  /* петля вокруг сегмента ноги: окружность, охватывающая сечение (24 точки кожи; центр — их середина, радиус — до самой
+     дальней). Прежде радиус был средним по четырём сторонам: сечение голени не круглое, и петля заходила в кожу на 0,8 см */
   function limbOf(R, kind, s, at) {
-    const pts = [0, 1, 2, 3].map(k => M.limbPoint(R, kind, s, at, k * Math.PI / 2)), c = V.scale(pts.reduce((a, p) => V.add(a, p), [0, 0, 0]), 1 / 4);
-    return { c, r: pts.reduce((a, p) => a + V.dist(p, c), 0) / 4, axis: M.limbAxes(R, kind, s, at).axis };
+    const pts = Array.from({ length: 24 }, (_, k) => M.limbPoint(R, kind, s, at, k * Math.PI / 12)), c = V.scale(pts.reduce((a, p) => V.add(a, p), [0, 0, 0]), 1 / 24);
+    return { c, r: Math.max(...pts.map(p => V.dist(p, c))), axis: M.limbAxes(R, kind, s, at).axis };
   }
   /* ремень вокруг окружностей в одной плоскости (замкнутая петля): внешние касательные и дуги */
   function belt(circles, axis, rb) {
