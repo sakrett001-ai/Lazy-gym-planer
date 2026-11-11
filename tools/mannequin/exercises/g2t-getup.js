@@ -87,7 +87,7 @@ function torsoPts(C, q) {
    Таз лёжа — в начале координат (середина тазобедренных суставов над x = z = 0). Левая стопа FL ставится лёжа (колено
    согнуто на kneeL) и не сдвигается до выпада; правый голеностоп AR (нога прямая, отведена на legR) — до проведения ноги;
    ладонь правой руки PR — из положения «на локте»: локоть под плечом, предплечье на полу под armR к корпусу. */
-const LY = { kneeL: 95, legR: 22, armR: 45, footOut: .15, span: 54.9 };
+const LY = { kneeL: 95, legR: 22, armR: 45, footOut: 0, span: 55.15, elbowMin: 5 };
 const REACH = 63.05;
 const ELBOW = { rho: 10, elbowH: 6.4 };
 function lieBody(C) {
@@ -168,7 +168,7 @@ function footAt(C, q, s, P, fwd = [0, 0, -1], heel = 0) {
    Каждое положение — таз (точка p или «на полу»: высота по касанию, над x = z = 0) и ориентация (orient), плюс поясница
    и грудной отдел. Между положениями параметры смешиваются, конечности каждый раз ставятся обратной кинематикой к своим
    опорам: ладонь, левая стопа и колено не скользят. */
-const SIT = { beta: 22, rho: 10, hand: 5, span: 55 };
+const SIT = { beta: 22, rho: 10, hand: 2, span: 55 };
 const SPAN = 55;
 const fingersYaw = (C, L, yaw) => C.M3.v(C.M3.axis([0, 1, 0], -yaw * C.D2R), L.dirE);
 const fingersSit = (C, L) => fingersYaw(C, L, SIT.hand);
@@ -194,36 +194,66 @@ const POSITIONS = once(() => {
   return C.unhinted(() => {
     const W = wristOn(C, L.PR, fingersSit(C, L));
     const sit = floorBody(C, { beta: SIT.beta, rho: SIT.rho }, null, q => V.dist(C.ghToward(q, 'R', W), W) - SIT.span, 0, 45);
+    /* лёжа: лопатки и ягодицы на полу — наклон корпуса подбирается */
+    const lowOf = (q, n) => Math.min(...C.region(q, n).map(p => p[1]));
+    const lieBeta = C.solve1D(b => { const q = makeBody(C, { beta: b, lumbar: [2, 0, 0], floor: true }); return lowOf(q, 'upperBack') - lowOf(q, 'buttocks'); }, 84, 100, 18);
     const P = {
-      lie: { beta: 90, lumbar: [2, 0, 0], floor: true },
+      lie: { beta: lieBeta, lumbar: [2, 0, 0], floor: true },
       elb: { beta: L.betaE, sigma: L.sigmaE, rho: ELBOW.rho, floor: true },
       sit: { beta: SIT.beta, sigma: sit.sigma, rho: SIT.rho, floor: true, pSit: sit.root.p.slice() },
-      brg: (x => ({ p: x.slice(0, 3), beta: x[3], sigma: x[4], rho: BR.rho }))(BRIDGE().x),
+      brg: (x => ({ p: x.slice(0, 3), beta: x[3], sigma: x[4], rho: x[5] }))(BRIDGE().x),
       wm: (x => ({ p: x.slice(0, 3), beta: x[3], sigma: x[4], psi: x[5], lumbar: [0, x[6] / 2, 0], thoracic: [0, x[6] / 2, 0] }))(WINDMILL().x),
       up: { p: [0, KNEEL().y, KNEEL().z], beta: 0 }
     };
     /* полюс локтя опорной руки в каждом положении — перебором (palmOn): лёжа локоть чуть над полом, «на локте» —
        предплечье на полу */
     const pole = (o, yaw, prefer, w) => { const q = makeBody(C, o); footAt(C, q, 'L', L.FL); return palmOn(C, q, 'R', L.PR, fingersYaw(C, L, yaw), prefer, w); };
-    P.lie.pole = pole(P.lie, 0, [0, 1, 0], .5); P.elb.pole = pole(P.elb, 0, [0, -1, 0], 3);
+    /* лёжа локоть чуть приподнят (полюс вверх), «на локте» — на полу: между ними локоть идёт по полу от точки к точке */
+    const elbowAt = (o, pl) => { const q = makeBody(C, o); footAt(C, q, 'L', L.FL); C.palm(q, 'R', L.PR, L.dirE, [0, 1, 0], pl); return C.fk(q).P.elR; };
+    P.elb.pole = pole(P.elb, 0, [0, -1, 0], 3); P.elb.elbow = elbowAt(P.elb, P.elb.pole);
     P.sit.pole = pole(P.sit, SIT.hand); P.brg.pole = pole(P.brg, SIT.hand); P.wm.pole = pole(P.wm, WM.yaw);
+    /* лёжа рука почти прямая, локоть на полу (центр сустава не ниже LY.elbowMin): полюс — перебором вокруг оси «плечо —
+       запястье», минимум пронации, ротации плеча и отклонения запястья */
+    {
+      const q0 = makeBody(C, P.lie); footAt(C, q0, 'L', L.FL);
+      const gh = C.fk(q0).P.ghR, W = wristOn(C, L.PR, L.dirE), ax = V.unit(V.sub(W, gh)), b0 = V.unit(V.perp([0, 1, 0], ax)), b1 = V.cross(ax, b0);
+      let best = null;
+      for (let i = 0; i < 72; i++) {
+        const a = i / 72 * 2 * Math.PI, pl = V.add(V.scale(b0, Math.cos(a)), b1, Math.sin(a)), q = M.clone(q0);
+        C.palm(q, 'R', L.PR, L.dirE, [0, 1, 0], pl);
+        const el = C.fk(q).P.elR, A = M.jointAngles(M.catalogPose(q)).R;
+        const cost = Math.max(Math.abs(A.pron) / 82, Math.abs(A.twist) / 85, Math.abs(A.wristDev) / 22) + Math.max(0, LY.elbowMin - el[1]);
+        if (!best || cost < best.cost) best = { cost, pl, el };
+      }
+      P.lie.pole = best.pl; P.lie.elbow = best.el;
+    }
+    /* длина «плечевой сустав — локоть» в концах (ритм пояса двигает сустав) */
+    for (const k of ['lie', 'elb']) P[k].ua = V.dist(C.fk(makeBody(C, P[k])).P.ghR, P[k].elbow);
     return P;
   });
 });
+/* перекат на локоть: локоть стоит на полу в E, предплечье и ладонь — тоже; корпус поворачивается к опорной руке так, что
+   плечевой сустав остаётся на расстоянии плеча от локтя (sigma подбирается) */
+function upperArmOn(C, o, E, ua) {
+  const { V } = C, d = sg => V.dist(C.fk(makeBody(C, { ...o, sigma: sg })).P.ghR, E) - ua;
+  return C.solve1D(d, -15, 60, 22);
+}
 
 /* ---------- 4. Мост ---------- */
-const BR = { h: 32, rho: 10, span: 55, tilt: 12, xz: [6, -3] };
+/* Мост («низкий», как советует Jankowitz для тяжёлой гири): таз поднят на BR.h, правая нога прямая до AR, опорная рука
+   прямая (SPAN) с наклоном около BR.tilt, грудь повёрнута к опорной руке на BR.rho (левое плечо выше правого).
+   x: [таз x, y, z, beta, sigma] */
+const BR = { h: 33, rho: 10, tilt: 12, xz: [8, -5] };
 function bridgeBody(C, x) { return bodyAt(C, { beta: x[3], sigma: x[4], rho: BR.rho }, [x[0], x[1], x[2]]); }
 const BRIDGE = once(() => {
   const C = ctx(EQUIP), { V, M } = C, L = LAYOUT();
   return C.unhinted(() => {
     const W = wristOn(C, L.PR, fingersSit(C, L)), Lleg = M.B.th + M.B.sk - .3;
-    const f = x => { const P = C.fk(bridgeBody(C, x)).P; return ((V.dist(P.hipR, L.AR) - Lleg) / .3) ** 2 + ((V.dist(P.ghR, W) - BR.span) / .3) ** 2 + ((deg(C, V.sub(P.ghR, W), [0, 1, 0]) - BR.tilt) / 5) ** 2 + ((x[1] - BR.h) / 3) ** 2 + ((x[0] - BR.xz[0]) / 8) ** 2 + ((x[2] - BR.xz[1]) / 8) ** 2; };
+    const f = x => { const P = C.fk(bridgeBody(C, x)).P; return ((V.dist(P.hipR, L.AR) - Lleg) / .3) ** 2 + ((V.dist(P.ghR, W) - SPAN) / .3) ** 2 + ((deg(C, V.sub(P.ghR, W), [0, 1, 0]) - BR.tilt) / 5) ** 2 + ((x[1] - BR.h) / 3) ** 2 + ((x[0] - BR.xz[0]) / 8) ** 2 + ((x[2] - BR.xz[1]) / 8) ** 2; };
     const r = nm(f, [BR.xz[0], BR.h, BR.xz[1], 40, 25], [4, 4, 4, 8, 8], 500);
-    return { x: r.x, f: r.f };
+    return { x: [...r.x, BR.rho], f: r.f };
   });
 });
-
 /* ---------- 6–7. На колене и выпад ---------- */
 const KN = { knee: 95, lift: 5.8, mtp: 70 };
 const KNEEL = once(() => {
@@ -276,7 +306,7 @@ const WINDMILL = once(() => {
 });
 
 /* ---------- 8. Стоя ---------- */
-const SPL = { dz: 10, knee: 35, kneeR: 30 };
+const SPL = { dz: -2, knee: 55, kneeR: 35 };
 const STAND = once(() => {
   const C = ctx(EQUIP), { V } = C, L = LAYOUT();
   return C.unhinted(() => {
@@ -304,26 +334,28 @@ const STAND = once(() => {
    t: 0 лёжа · 0,15 на локте · 0,3 на ладони · 0,425 мост · 0,575 «мельница на колене» · 0,675 на колене, корпус
    вертикален · 0,775 выпад (после «дворника») · 0,85 правая стопа отрывается · 0,95 стопы рядом · 1 стоя */
 const T = { elb: .15, sit: .3, brg: .425, wm: .575, up: .675, lng: .775, push: .85, land: .95, std: 1 };
-const KEYS = Array.from({ length: 41 }, (_, i) => i / 40);
+/* ключи через 2,5 % цикла; при проведении ноги — через 1,25 % (иначе стопа между ключами уходит в пол) */
+const KEYS = Array.from({ length: 41 }, (_, i) => i / 40).concat(Array.from({ length: 6 }, (_, i) => .4375 + i * .025)).sort((a, b) => a - b);
 const smooth = u => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
 const seg = (t, a, b) => smooth((t - a) / (b - a));
 const nlerpM = (C, A, B, t) => { const { Q } = C.M, a = Q.fromM3(A), b = Q.fromM3(B), sg = a.reduce((s, x, i) => s + x * b[i], 0) < 0 ? -1 : 1; return Q.toM3(Q.norm(a.map((x, i) => lerp(x, sg * b[i], t)))); };
 const vnl = (C, a, b, t) => C.V.unit(C.V.mix(a, b, t));
 /* гиря: [полюс локтя, разворот большого пальца] и пояс по положениям (подобраны по ротации плеча и пронации) */
-const BELL = { lie: [15, 0], elb: [30, 0], sit: [40, 0], brg: [60, 20], wm: [100, 45], up: [60, 30] };
+const BELL = { lie: [15, 0], elb: [30, 0], sit: [40, 0], brg: [60, 20], wm: [100, 45], up: [90, 30], lng: [50, 30] };
 
 function tguPose(t, C) {
   const { V, M, M3 } = C, L = LAYOUT(), P = POSITIONS(), K = KNEEL(), ST = STAND();
   let o, arm, leg, bell, girdle = [0, 6], look = 1;
-  if (t <= T.elb) { const e = seg(t, 0, T.elb); o = blendBody(P.lie, P.elb, e); arm = { yaw: 0, pole: vnl(C, P.lie.pole, P.elb.pole, e) }; bell = lerpA(BELL.lie, BELL.elb, e); leg = 'straight'; }
-  else if (t <= T.sit) { const e = seg(t, T.elb, T.sit); o = blendBody(P.elb, P.sit, e); arm = { yaw: lerp(0, SIT.hand, e), pole: vnl(C, P.elb.pole, P.sit.pole, e), span: true }; bell = lerpA(BELL.elb, BELL.sit, e); leg = 'straight'; }
+  if (t <= T.elb) { const e = seg(t, 0, T.elb), E = lerpA(P.lie.elbow, P.elb.elbow, e); o = blendBody(P.lie, P.elb, e); o.rho = lerp(0, P.elb.rho, seg(t, 0, T.elb * .6)); if (e > 0 && e < 1) o.sigma = upperArmOn(C, o, E, lerp(P.lie.ua, P.elb.ua, e)); arm = { yaw: 0, elbow: E }; bell = lerpA(BELL.lie, BELL.elb, e); leg = 'straight'; }
+  else if (t <= T.sit) { const e = seg(t, T.elb, T.sit); o = blendBody(P.elb, P.sit, e); arm = { yaw: lerp(0, SIT.hand, e), pole: vnl(C, P.elb.pole, P.sit.pole, e), span: true, elbow0: e < 1 ? P.elb.elbow : null, e }; bell = lerpA(BELL.elb, BELL.sit, e); leg = 'straight'; }
   else if (t <= T.brg) { const e = seg(t, T.sit, T.brg); o = blendBody({ ...P.sit, floor: false, p: P.sit.pSit }, P.brg, e); arm = { yaw: SIT.hand, pole: vnl(C, P.sit.pole, P.brg.pole, e), span: true }; bell = lerpA(BELL.sit, BELL.brg, e); leg = 'straight'; }
   else if (t <= T.wm) { const u = (t - T.brg) / (T.wm - T.brg), e = smooth(u); o = blendBody(P.brg, P.wm, e); arm = { yaw: lerp(SIT.hand, WM.yaw, e), pole: vnl(C, P.brg.pole, P.wm.pole, e), span: true }; bell = lerpA(BELL.brg, BELL.wm, e); leg = { sweep: u }; }
-  else if (t <= T.up) { const e = seg(t, T.wm, T.up); o = blendBody(P.wm, P.up, e); arm = { lift: e }; bell = lerpA(BELL.wm, BELL.up, e); girdle = [0, 6 * (1 - e)]; look = 1 - e; leg = { kneel: WM.gamma }; }
-  else if (t <= T.lng) { const u = (t - T.up) / (T.lng - T.up); o = P.up; arm = 'relax'; bell = BELL.up; girdle = [0, 0]; look = 0; leg = { kneel: WM.gamma * (1 - smooth(u)), lift: 10 * Math.sin(Math.PI * u) }; }
-  else { o = { p: standPelvis(C, t), beta: 0 }; arm = 'relax'; bell = BELL.up; girdle = [0, 0]; look = 0; leg = { stand: t }; }
+  else if (t <= T.up) { const e = seg(t, T.wm, T.up); o = blendBody(P.wm, P.up, e); arm = { lift: seg(t, T.wm + HL.on * (T.up - T.wm), T.up), yaw: WM.yaw, pole: P.wm.pole }; bell = lerpA(BELL.wm, BELL.up, e); girdle = [0, 6 * (1 - e)]; look = 1 - e; leg = { kneel: WM.gamma }; }
+  else if (t <= T.lng) { const u = (t - T.up) / (T.lng - T.up); o = P.up; arm = 'relax'; bell = lerpA(BELL.up, BELL.lng, smooth(u)); girdle = [0, 0]; look = 0; leg = { kneel: WM.gamma * (1 - smooth(u)) }; }
+  else { o = { p: standPelvis(C, t), beta: 0 }; arm = 'relax'; bell = BELL.lng; girdle = [0, 0]; look = 0; leg = { stand: t }; }
 
   const q = makeBody(C, o);
+  if (t > T.wm && t <= T.lng) fitThigh(C, q);
   footAt(C, q, 'L', L.FL);
   /* правая нога */
   if (leg === 'straight') legStraight(C, q);
@@ -332,15 +364,23 @@ function tguPose(t, C) {
   else standR(C, q, leg.stand);
   /* правая рука */
   if (arm === 'relax') relaxR(q);
-  else if (arm.lift != null) liftR(C, q, arm.lift);
+  else if (arm.lift != null && (arm.lift > 0 || V.dist(C.fk(q).P.ghR, wristOn(C, L.PR, fingersYaw(C, L, arm.yaw))) > SPAN)) liftR(C, q, Math.max(arm.lift, 1e-3), arm);
   else {
     const fingers = fingersYaw(C, L, arm.yaw);
-    if (arm.span) keepSpan(C, q, o, wristOn(C, L.PR, fingers));
-    C.palm(q, 'R', L.PR, fingers, [0, 1, 0], arm.pole);
+    const W = wristOn(C, L.PR, fingers);
+    if (arm.span) keepSpan(C, q, o, W);
+    let pole = arm.pole;
+    if (arm.elbow) pole = V.sub(arm.elbow, V.mix(C.fk(q).P.ghR, W, .5));
+    C.palm(q, 'R', L.PR, fingers, [0, 1, 0], pole);
   }
   bellUp(C, q, 'L', { pole: bell[0], thumb: bell[1], girdle });
   gaze(C, q, look);
   return q;
+}
+/* колено на месте: таз по высоте — так, чтобы правое бедро доставало до колена K ровно */
+function fitThigh(C, q) {
+  const { V, M } = C, Kc = V.add(KNEEL().K, [0, KN.lift, 0]), y0 = q.root.p[1];
+  q.root.p[1] = C.solve1D(y => { q.root.p[1] = y; return V.dist(C.fk(q).P.hipR, Kc) - M.B.th; }, y0 - 8, y0 + 8, 24);
 }
 /* прямая опорная рука не длиннее SPAN: если плечо ушло дальше от запястья, корпус наклоняется к руке (sigma) */
 function keepSpan(C, q, o, W) {
@@ -360,7 +400,7 @@ function sweepR(C, q, u) {
   /* пятка скользит назад над полом под таз (точка SW.mid в середине пути), колено при этом поднимается, затем
      опускается в K, голень уходит назад-влево */
   const Mid = SW.mid, ctl = V.sub(V.scale(Mid, 2), V.mix(A0, A1, .5)), w = u;
-  const A = V.add(V.add(V.scale(A0, (1 - w) ** 2), ctl, 2 * w * (1 - w)), A1, w * w);
+  const A = V.add(V.add(V.add(V.scale(A0, (1 - w) ** 2), ctl, 2 * w * (1 - w)), A1, w * w), [0, 1, 0], 2 * smooth(u * 4) * (1 - u));
   const pole0 = V.unit(V.add([0, 1, 0], C.latP(q, 'R'), .3)), pole1 = V.unit(V.sub(k.Kc, V.mix(hip, A1, .5)));
   const pole = vnl(C, pole0, pole1, smooth(Math.max(0, (u - .3) / .7)));
   /* стопа — в осях голени: от стопы прямой ноги к стопе на колене (без скручивания в голеностопе) */
@@ -377,10 +417,15 @@ function sweepR(C, q, u) {
   }
 }
 const SW = { mid: [14, 9, -24] };
+/* рука отрывается от пола сразу после «мельницы» (толчок рукой), HL.on — задержка в долях перехода */
+const HL = { on: 0 };
 /* правая рука отрывается от пола и опускается вдоль тела: углы — от рук «мельницы» к расслабленной */
 const WM_ARM = once(() => { const C = ctx(EQUIP), L = LAYOUT(), P = POSITIONS(); return C.unhinted(() => { const q = makeBody(C, P.wm); footAt(C, q, 'L', L.FL); C.palm(q, 'R', L.PR, fingersYaw(C, L, WM.yaw), [0, 1, 0], P.wm.pole); return { shoulder: q.R.shoulder, elbow: q.R.elbow, pron: q.R.pron, wrist: q.R.wrist }; }); });
-function liftR(C, q, e) {
-  const A = WM_ARM(), R0 = { shoulder: [4, 8, 0], elbow: 10, pron: 0, wrist: [0, 0] }, w = smooth(e);
+function liftR(C, q, e, arm) {
+  const { M } = C, L = LAYOUT(), R0 = { shoulder: [4, 8, 0], elbow: 10, pron: 0, wrist: [0, 0] }, w = smooth(e);
+  /* начало — рука на ладони при нынешнем корпусе (если ещё дотягивается), иначе — рука «мельницы» */
+  let A = WM_ARM();
+  try { const t = M.clone(q); C.palm(t, 'R', L.PR, fingersYaw(C, L, arm.yaw), [0, 1, 0], arm.pole); A = t.R; } catch (err) { /* не дотянуться */ }
   q.R.shoulder = lerpA(A.shoulder, R0.shoulder, w); q.R.elbow = lerp(A.elbow, R0.elbow, w); q.R.pron = lerp(A.pron, R0.pron, w); q.R.wrist = lerpA(A.wrist, R0.wrist, w);
   q.hands = { ...(q.hands || {}), R: e < .5 ? 'flat' : 'relaxed' };
 }
@@ -420,9 +465,8 @@ module.exports = {
       ...at(0, T.brg + .005, [{ body: 'footR', prop: 'floor' }]),
       ...at(T.elb - .005, T.elb + .005, [{ body: 'faR', prop: 'floor' }]),
       ...at(0, T.wm + .005, [{ body: 'palmR', prop: 'floor' }]),
-      ...at(T.wm - .005, T.lng + .005, [{ body: 'kneeR', prop: 'floor' }]),
-      ...at(T.wm - .005, T.up + .005, [{ body: 'footR', prop: 'floor' }]),
-      ...at(T.lng - .005, T.push + .005, [{ body: 'footR', prop: 'floor' }]),
+      ...at(T.wm - .001, T.lng + .005, [{ body: 'kneeR', prop: 'floor' }]),
+      ...at(T.wm - .001, T.push + .005, [{ body: 'footR', prop: 'floor' }]),
       ...at(T.land - .005, 1, [{ body: 'soleR', prop: 'floor' }])],
     gripRadius: { L: 1.7, R: 1.7 },
     pose: tguPose
@@ -430,4 +474,4 @@ module.exports = {
 };
 /* раскладка — для отладки (не перечисляется: loadSpecs её не видит) */
 Object.defineProperty(module.exports, '_layout', { value: () => ({ ...LAYOUT(), bridge: BRIDGE(), kneel: KNEEL(), windmill: WINDMILL(), stand: STAND() }), enumerable: false });
-Object.defineProperty(module.exports, '_dbg', { value: () => ({ LAYOUT, BRIDGE, KNEEL, POSITIONS, palmOn, bodyAt, makeBody, floorBody, bridgeBody, footAt, bellUp, wristOn, fingersSit, SIT, BR, EQUIP, orient, nm, DBG }), enumerable: false });
+Object.defineProperty(module.exports, '_dbg', { value: () => ({ LAYOUT, BRIDGE, KNEEL, POSITIONS, legStraight, kneelR, WINDMILL, STAND, palmOn, bodyAt, makeBody, floorBody, bridgeBody, footAt, bellUp, wristOn, fingersSit, SIT, BR, EQUIP, orient, nm, DBG }), enumerable: false });
