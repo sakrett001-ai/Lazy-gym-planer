@@ -419,6 +419,10 @@ function humeralElevation(J,g){
    подъёму плеча готовой позы предыдущего (RH_HINT[s] = {th, plane}); null — по руке самой позы. */
 let RH_HINT=null;
 function rhythmHint(h){const was=RH_HINT;RH_HINT=h||null;return was;}
+/* эталон покоя без подсказки ритма: ленивые эталоны (длины складок FOLD_L0, шары подушки над лопаткой cushData) считаются по
+   нейтральной стойке один раз — если первый расчёт приходился на запекание (author.js ставит подсказку ритма своей позы), стойка
+   получала пояс чужой руки, и складки и подушка в этом процессе (check.js, аудиты без --baked) отличались от приложения */
+function noHint(f){const was=RH_HINT;RH_HINT=null;try{return f();}finally{RH_HINT=was;}}
 /* цели пояса стороны s: ключица [подъём, ретракция], лопатка [ir, ur, pt] и σ ключицы */
 function girdleTargets(q,s){
  const J=q[s],{th,plane}=RH_HINT?.[s]||humeralElevation(J,SIGN[s]),r=rhythmAt(th,plane),gi=J.girdle||[0,0],abs=q.girdleMode?.[s]==='abs';
@@ -989,7 +993,7 @@ function foldAxes(R,kind,side){
  const F=FOLDS[kind],g=SIGN[side],T=R.frames.thorax,U=R.frames['ua'+side];
  const A=V.add(V.add(V.add(T.o,T.x,g*F.tr[0]),T.y,F.tr[1]),T.z,F.tr[2]),Bp=V.add(V.add(V.add(U.o,U.x,g*F.ua[0]),U.y,F.ua[1]),U.z,F.ua[2]);
  const ab=V.sub(Bp,A),L=V.len(ab);
- if(!FOLD_L0){FOLD_L0={};const R0=catalogPose(neutral());for(const k of Object.keys(FOLDS)){FOLD_L0[k]=1;FOLD_L0[k]=foldAxes(R0,k,'L').L;}}
+ if(!FOLD_L0){FOLD_L0={};const R0=noHint(()=>catalogPose(neutral()));for(const k of Object.keys(FOLDS)){FOLD_L0[k]=1;FOLD_L0[k]=foldAxes(R0,k,'L').L;}}
  return{A,B:Bp,d:V.scale(ab,1/L),L,k:Math.pow(L/FOLD_L0[kind],F.kv),F,kind,side};
 }
 const FOLD_AX=new WeakMap();
@@ -1034,16 +1038,18 @@ const spPoint=(S,g,f)=>V.add(V.add(V.add(S.o,S.x,-g*f[0]),S.y,f[1]),S.z,f[2]);
 /* шары в рамке лопатки (правая сторона, как GIRDLE) и радиусы — по коже покоя, один раз */
 function cushData(){
  if(CUSH)return CUSH;
- CUSH_OFF=true;
+ /* радиусы — по коже покоя со складками и без подсказки ритма, в каком бы состоянии ни пришёл первый вызов (из noFolds —
+    точки опор в compose.js — шары получали радиусы по коже без складок, и подушка в этом процессе была на 1 см выше) */
+ const fo=FOLD_OFF;CUSH_OFF=true;FOLD_OFF=false;
  try{
-  const R0=catalogPose(neutral()),S=R0.frames.spR,rows=TORSO_H.filter(h=>h>20).map(h=>torsoRing(R0,h,TORSO_COLS)),near=c=>{let d=Infinity,q=null;for(const row of rows)for(const p of row){const e=V.dist(p,c);if(e<d){d=e;q=p;}}return{d,q};};
+  const R0=noHint(()=>catalogPose(neutral())),S=R0.frames.spR,rows=TORSO_H.filter(h=>h>20).map(h=>torsoRing(R0,h,TORSO_COLS)),near=c=>{let d=Infinity,q=null;for(const row of rows)for(const p of row){const e=V.dist(p,c);if(e<d){d=e;q=p;}}return{d,q};};
   const pts=[],r=[];
   for(const f of GIRDLE.back){
    const c=spPoint(S,-1,f),n=V.unit(V.sub(near(c).q,c)),nl=[V.dot(n,S.x),V.dot(n,S.y),V.dot(n,S.z)],fl=[f[0]-nl[0]*CUSH_DEEP,f[1]-nl[1]*CUSH_DEEP,f[2]-nl[2]*CUSH_DEEP];
    pts.push(fl);r.push(near(spPoint(S,-1,fl)).d-CUSH_GAP);
   }
   CUSH={pts,r:Float64Array.from(r)};
- }finally{CUSH_OFF=false;}
+ }finally{CUSH_OFF=false;FOLD_OFF=fo;}
  return CUSH;
 }
 function cushCenters(R){
