@@ -2,7 +2,8 @@
    g2Step — степ-платформа для подъёмов на носки: 90x35 см, высота 15 см, резиновое покрытие, две опоры.
    g2CupDumbbell — гантель, которую держат двумя ладонями под верхним диском (гоблет, разгибание из-за головы,
    пуловер): ось гантели — по нормали ладоней, внутренняя грань верхнего диска лежит на ладонях.
-   g2KbHorns — гиря двумя руками «за рога» (гоблет): хваты на дужках рукояти, шар под рукоятью. */
+   g2KbHorns — гиря двумя руками «за рога» (гоблет): хваты на дужках рукояти, шар под рукоятью; bottomUp — дном вверх
+   («гало»): шар над кистями. */
 ((E) => {
   const M = typeof Mannequin !== 'undefined' ? Mannequin : require('./09bm-mannequin.js');
   const { V } = M, { TYPES, BIND } = E;
@@ -40,7 +41,9 @@
      Дужки — короткие участки рукояти (role grip): на них проверяется хват. */
   BIND.g2KbHorns = (e, R) => {
     const id = e.id || 'kb', k = (e.r || 10.5) / 10.5, gL = R.gripL, gR = R.gripR, ax = V.unit(V.sub(gL, gR)), mid = V.mix(gL, gR, .5);
-    const th = V.add(R.frames.handL.z, R.frames.handR.z), up = V.unit(V.perp(V.len(V.perp(th, ax)) > .2 ? th : [0, -1, 0], ax));
+    /* up — от шара к рукояти: по большим пальцам (хват за рога сверху: пальцы смотрят на рукоять); дном вверх (bottomUp,
+       «гало») большие пальцы смотрят на шар — шар над кистями */
+    const th = V.add(R.frames.handL.z, R.frames.handR.z), up = V.scale(V.unit(V.perp(V.len(V.perp(th, ax)) > .2 ? th : [0, -1, 0], ax)), e.bottomUp ? -1 : 1);
     const c = V.add(mid, up, -10.5 * k), L = (a, u) => V.add(V.add(c, ax, a * k), up, u * k);
     const horn = sg => ({ kind: 'beam', a: L(sg * 8.1, 6.9), b: L(sg * 9.1, 14.4), r: 1.7, tone: 'plate', role: 'grip', id: id + ':horn' + (sg > 0 ? 'L' : 'R'), mount: id });
     return [{ kind: 'kettlebell', c, grip: L(0, E.KB.handle), axis: ax, handleAxis: ax, radius: 10.5 * k, handleUp: E.KB.handle * k, bottom: E.KB.bottom * k, role: 'free', tone: 'plate', free: true, id, mount: 'hands' }, horn(1), horn(-1)];

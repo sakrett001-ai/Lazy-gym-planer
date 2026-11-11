@@ -36,7 +36,8 @@ const LIM = {
   ropeAngle: 35,     // °: канат/полотенце поперёк кулака
   cableHand: .5,     // см: ось троса в кисти глубже (ладонь, пальцы — кроме отверстия кулака)
   cableArm: .5,      // см: ось троса в предплечье глубже
-  bellBody: 1.0      // см: шар гири в кисти, руке, корпусе или голове глубже (мягкие ткани поджимаются на 0,3 — E.KB.press)
+  bellBody: 1.0,     // см: шар гири в кисти, руке, корпусе или голове глубже (мягкие ткани поджимаются на 0,3 — E.KB.press)
+  horn: 2.0          // см: центр хвата дальше от оси рога гири (хват за рога) — как gripAxis
 };
 const GRIPPY = new Set(['grip', 'hook', 'deep']);
 
@@ -169,6 +170,18 @@ function auditEntry(id, e, { samples = 41 } = {}) {
         if (on && back < -.2) { r.palm++; r.palmT = t; }
         if (!on && d[1] < -.3) { r.up++; r.upT = t; }
       }
+      /* гиря за рога двумя руками (g2KbHorns: гоблет, «гало» дном вверх): положение — «дном вверх» (шар над рукоятью),
+         «шар внизу» или «набок»; подозрительно — шар в руке, корпусе или голове глубже LIM.bellBody, кулак дальше LIM.horn
+         от оси своего рога */
+      for (const p of props.filter(p => p.kind === 'kettlebell' && props.some(q => q.id === p.id + ':hornL'))) {
+        const d = V.unit(V.sub(p.c, p.grip)), pos = d[1] < -.5 ? 'дном вверх' : d[1] > .5 ? 'шар внизу' : 'набок';
+        const r = row('kbh' + p.id, { side: 'LR', kind: 'гиря за рога', bell: p.id, pos: new Set(), deep: -Infinity, horn: 0 });
+        r.pos.add(pos);
+        const torso = M.torsoSDF(R, p.c, M.torsoCache(R)) - p.radius, head = V.dist(p.c, R.head) - 9 - p.radius;
+        const limbs = M.SIDES.flatMap(s => [['предплечье ' + s, M.limbSDF(R, 'fa', s, p.c) - p.radius], ['плечо ' + s, M.limbSDF(R, 'ua', s, p.c) - p.radius]]);
+        for (const [what, v] of [...limbs, ['корпус', torso], ['голова', head]]) if (-v > r.deep) Object.assign(r, { deep: -v, deepIn: what, deepT: t });
+        for (const s of M.SIDES) { const h = props.find(q => q.id === p.id + ':horn' + s); if (!h) continue; const d2 = segDist(R['grip' + s], h.a, h.b).d; if (d2 > r.horn) Object.assign(r, { horn: d2, hornT: t, hornS: s }); }
+      }
       /* снаряд двумя руками: гантель под ладонями (g2CupDumbbell) — ладони у оси рукояти */
       for (const p of props.filter(p => /:handle$/.test(p.id) && props.some(q => q.id === p.id.replace(/:handle$/, ':top') && q.mount === 'hands'))) {
         for (const s of M.SIDES) {
@@ -217,6 +230,10 @@ function flagsOf(r) {
     if (d && !d.byPalm && d.any > LIM.handGap) f.push(`кисть над ${d.on}: зазор ${d.any.toFixed(1)}`);
     if (r.freeRegion) f.push('контакт областью кисти на свободном снаряде — глазами');
   }
+  if (r.kind === 'гиря за рога') {
+    if (r.deep > LIM.bellBody) f.push(`шар гири в ${r.deepIn} на ${r.deep.toFixed(1)} см (t=${r.deepT})`);
+    if (r.horn > LIM.horn) f.push(`кулак ${r.hornS} в ${r.horn.toFixed(1)} см от оси рога (t=${r.hornT})`);
+  }
   if (r.kind === 'гиря') {
     if (r.deep > LIM.bellBody) f.push(`шар гири в ${r.deepIn} на ${r.deep.toFixed(1)} см (t=${r.deepT})`);
     if (r.palm) f.push(`шар лежит на ладонной стороне предплечья (${r.palm} кадр., t=${r.palmT})`);
@@ -244,6 +261,7 @@ function describe(r) {
       p ? `${p.on}: ладонь ${f1(p.gap)} см (${f1(p.gapMin)}…${f1(p.gapMax)}), кисть ${f1(p.any)}, ${f0(p.touch * 100)} %, ${f0(p.tilt)}° @${p.t}` : ''].join(' | ');
   }
   if (r.kind === 'гиря') return `${r.bell}: ${r.pos} | ближе всего ${r.deepIn}: ${f1(-r.deep)} см @${r.deepT}`;
+  if (r.kind === 'гиря за рога') return `${r.bell}: ${r.pos} | ближе всего ${r.deepIn}: ${f1(-r.deep)} см @${r.deepT} | кулак от рога до ${f1(r.horn)} см`;
   if (r.kind === 'трос') return [r.cable, r.angle != null ? `угол ${f0(r.angle)}° @${r.angleT}` : '', `ось в кисти ${f1(r.hand)} @${r.handT}`, `ось в предплечье ${f1(r.arm)} @${r.armT}`].join(' | ');
   return `${r.handle}: ладонь у оси ${f1(r.axis)} см @${r.axisT}`;
 }
