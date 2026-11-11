@@ -120,7 +120,9 @@ test('kettlebell in one hand: the bell hangs, flies along the arm or rests on th
   /* the audit catches what it must: without the rest on the forearm the bell of the rack hangs through the arm;
      a bell flying «along the arm» of a pressing arm stands above the handle with no support */
   const swap = (id, o) => ({ ...POSES[id], equipment: POSES[id].equipment.map(q => q.type === 'kettlebell' ? { ...q, ...o } : q) });
-  assert(bell('kbfrontsquat', swap('kbfrontsquat', { rest: false }))[0].flags.some(f => /шар гири в (предплечье|кисть|плечо)/.test(f)), 'bell through the forearm');
+  /* (жим лёжа: с глубоким хватом шар «рэка» без опоры уходит уже в корпус, а не в руку — это ловится тем же правилом) */
+  assert(bell('kbfloorpress', swap('kbfloorpress', { rest: false }))[0].flags.some(f => /шар гири в (предплечье|кисть|плечо)/.test(f)), 'bell through the forearm');
+  assert(bell('kbfrontsquat', swap('kbfrontsquat', { rest: false }))[0].flags.some(f => /шар гири в (предплечье|кисть|плечо|корпус)/.test(f)), 'rack bell through the body');
   assert(bell('kbpress', swap('kbpress', { rest: false, hang: 'arm' }))[0].flags.some(f => /выше рукояти без опоры/.test(f)), 'bell above the handle');
   /* …and a bell lying on the palm side of the forearm: the ball of the press mirrored from the back of the forearm to the
      palm side and moved onto the forearm until it touches (0,2 cm) */

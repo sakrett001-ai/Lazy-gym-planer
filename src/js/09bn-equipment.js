@@ -375,6 +375,14 @@ BIND.kettlebell=(e,R)=>{
    const at=a=>V.add(V.scale(down,Math.cos(a*D2R)),w,Math.sin(a*D2R));
    let lo=0,hi=0;for(let a=3;a<=240;a+=3)if(clear(at(a))>=0){hi=a;lo=a-3;break;}
    if(hi){for(let i=0;i<14;i++){const m=(lo+hi)/2;if(clear(at(m))>=0)hi=m;else lo=m;}down=at(hi);}
+  }else if(Math.abs(down[1])<.3){
+   /* рукоять почти отвесна (глубокий хват в нижней точке фронтального приседа): нижней точки у шара нет — он не висит,
+      а заваливается вокруг рукояти к тылу предплечья и ложится на него; прежде он оставался в 2–3 см от руки */
+   /* в обе стороны вокруг рукояти — до ближайшего касания (сначала — к тылу кисти) */
+   const b=ortho(back,axis),sg=V.dot(V.cross(down,b),axis)>=0?1:-1,w=V.cross(axis,down);
+   const at=a=>V.add(V.scale(down,Math.cos(a*D2R)),w,Math.sin(a*D2R));
+   let lo=0,hi=0;for(let a=3;a<=180&&!hi;a+=3)for(const k of [sg,-sg])if(clear(at(k*a))<0){hi=k*a;lo=k*(a-3);break;}
+   if(hi){for(let i=0;i<14;i++){const m=(lo+hi)/2;if(clear(at(m))<0)hi=m;else lo=m;}down=at(lo);}
   }
  }
  const c=V.add(g,down,H);

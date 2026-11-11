@@ -97,7 +97,9 @@ function holdOf(R, P, d, s, entry, has) {
   /* шип — кончик далеко и от ручки, и от «ручки кулака» (ось z кисти через центр хвата, радиус R.gripRadius — то, что пальцы
      обхватывают): где ручка снаряда наклонена к кулаку (присед — 24°, holds-audit допускает до 30°) или кончается раньше кисти
      (рожки гири), кончик у кулака — не шип */
-  const hf = R.frames['hand' + s], gc = R['handle' + s] || R['grip' + s], gz = R['handleAx' + s] || hf.z, gr = R.gripRadius?.[s] ?? 1.4;
+  /* «ручка кулака» — всегда ось z кисти через центр хвата (B.grip): у глубокого хвата гири ('deep') пальцы сжаты в кулак, а
+     рукоять лежит у основания ладони — кончики безымянного и мизинца у кулака, а не на её локтевом конце */
+  const hf = R.frames['hand' + s], gc = R['grip' + s], gz = hf.z, gr = R.gripRadius?.[s] ?? 1.4;
   const tipGap = c => { if (!c[3]) return 0; const p = [c[0] / c[3], c[1] / c[3], c[2] / c[3]], t = V.sub(p, h.c0), a = Math.max(h.len[0], Math.min(h.len[1], V.dot(t, h.e))), u = V.sub(p, gc);
     return Math.min(V.dist(p, V.add(h.c0, h.e, a)) - h.r, V.len(V.perp(u, gz)) - gr); };
   const tg = tips.map(tipGap), cover = near.filter(x => x <= LIM.COVER_BAND).length / LIM.SECTORS, proc = procDepth(R, s, h);
