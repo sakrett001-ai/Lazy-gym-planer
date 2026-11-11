@@ -2,6 +2,7 @@
 /* Группа G2: гантели и гири (со скамьями и без). Ось Z — вперёд от атлета (или вдоль скамьи), X — влево, Y — вверх, см.
    Порядок построения позы: корпус → опора (скамья, пол) → стопы → кисти со снарядом → равновесие с массой снарядов. */
 const { ctx } = require('../compose.js');
+const EQ = require('../../../src/js/09bn-equipment.js');
 const S = ['L', 'R'];
 const once = f => { let v; return () => v ?? (v = f()); };
 const DB_KG = 10, KB_KG = 16;
@@ -43,14 +44,14 @@ function relaxArm(q, s, shoulder = [4, 8, 0], elbow = 10) { q[s].shoulder = [...
 
 /* Гантель в кисти с заданной осью: подбирается пронация (−88…84°), чтобы ось рукояти (линия «мизинец → большой палец»)
    шла по axis; signed — учитывать направление большого пальца (иначе ось без знака). */
-function holdDir(C, q, s, point, pole, axis, { flex = 0, dev = 0, lo = -88, hi = 84, signed = false } = {}) {
+function holdDir(C, q, s, point, pole, axis, { flex = 0, dev = 0, lo = -88, hi = 84, signed = false, mode } = {}) {
   const { V } = C, ax = V.unit(axis);
-  const score = p => { C.hold(q, s, point, pole, { pron: p, flex, dev, allowShort: true }); const d = V.dot(C.M3.col(C.fk(q).F['hand' + s].R, 2), ax); return signed ? d : Math.abs(d); };
+  const score = p => { C.hold(q, s, point, pole, { pron: p, flex, dev, allowShort: true, mode }); const d = V.dot(C.M3.col(C.fk(q).F['hand' + s].R, 2), ax); return signed ? d : Math.abs(d); };
   let best = lo, bv = -Infinity;
   for (let p = lo; p <= hi + 1e-9; p += 4) { const v = score(p); if (v > bv) { bv = v; best = p; } }
   let a = Math.max(lo, best - 4), b = Math.min(hi, best + 4);
   for (let i = 0; i < 18; i++) { const m1 = a + (b - a) * .382, m2 = a + (b - a) * .618; if (score(m1) >= score(m2)) b = m2; else a = m1; }
-  const p = (a + b) / 2; for (let k = 0; k < 3; k++) C.hold(q, s, point, pole, { pron: p, flex, dev, allowShort: true }); C.hold(q, s, point, pole, { pron: p, flex, dev }); return p;
+  const p = (a + b) / 2; for (let k = 0; k < 3; k++) C.hold(q, s, point, pole, { pron: p, flex, dev, allowShort: true, mode }); C.hold(q, s, point, pole, { pron: p, flex, dev, mode }); return p;
 }
 /* Лёжа на горизонтальной скамье (как в пилотном жиме): голова к +Z, лопатки и ягодицы на подушке, стопы на полу */
 function lieOnBench(C, q, { top = 44, z = -24, arch = 1 } = {}) {
@@ -310,8 +311,8 @@ function wmPose(C, e, poles, prev) {
     const top = V.add(f.P.ghL, V.unit(V.add(V.add([0, 1, 0], T.z, WM.tf * e + WM.tf0), C.lat(q, 'L'), WM.tl)), WM.top);
     if (poles) {
       const n = poles.length - 1, x = Math.min(n - 1e-9, e * n), i = Math.floor(x), l = arc(C, poles[i], poles[i + 1], x - i);
-      holdDir(C, q, 'L', top, V.unit(V.add(V.add(V.scale(T.x, l[0]), T.y, l[1]), T.z, l[2])), thumb, { signed: true });
-    } else C.hold(q, 'L', top, V.unit(V.add([0, -1, 0], C.lat(q, 'L'), .6)), { pron: 0, allowShort: true });
+      holdDir(C, q, 'L', top, V.unit(V.add(V.add(V.scale(T.x, l[0]), T.y, l[1]), T.z, l[2])), thumb, { signed: true, mode: 'deep' });
+    } else C.hold(q, 'L', top, V.unit(V.add([0, -1, 0], C.lat(q, 'L'), .6)), { pron: 0, allowShort: true, mode: 'deep' });
     /* свободная рука скользит по передне-внутренней поверхности правой ноги: от середины бедра к середине голени */
     const dR = V.sub(leg(f, C.lerp(WM.s0, WM.s1, e)), f.P.ghR), nR = Math.min(V.len(dR), WM.reach);
     C.armTo(q, 'R', V.add(f.P.ghR, V.unit(dR), nR), V.unit(V.add(latR, T.z, -.6)), { pron: 20, mode: 'relaxed' });
@@ -323,7 +324,7 @@ function wmPose(C, e, poles, prev) {
   const T = C.axes(q, 'thorax'), f = C.fk(q), top = f.P.gripL, ax = V.unit(V.sub(top, f.P.ghL)), b0 = V.unit(V.perp(T.z, ax)), b1 = V.cross(ax, b0);
   const at = a => V.add(V.scale(b0, Math.cos(a * C.D2R)), b1, Math.sin(a * C.D2R)), inT = w => [V.dot(w, T.x), V.dot(w, T.y), V.dot(w, T.z)];
   const cost = a => {
-    const p = holdDir(C, q, 'L', top, at(a), thumb, { signed: true }), A = M.jointAngles(M.catalogPose(q)).L, z = C.M3.col(C.fk(q).F.handL.R, 2);
+    const p = holdDir(C, q, 'L', top, at(a), thumb, { signed: true, mode: 'deep' }), A = M.jointAngles(M.catalogPose(q)).L, z = C.M3.col(C.fk(q).F.handL.R, 2);
     const jump = prev ? Math.acos(Math.max(-1, Math.min(1, V.dot(V.unit(prev), V.unit(inT(at(a))))))) / C.D2R : 0;
     const over = (v, m) => Math.max(0, Math.abs(v) - m) / 3;
     return (p / WM.pm) ** 2 + ((A.twist - WM.tw) / WM.tm) ** 2 + 40 * (1 - V.dot(z, thumb)) + (jump / WM.jm) ** 2 + over(A.twist, 88) ** 2 + over(p, 80) ** 2;
@@ -352,6 +353,78 @@ const WMP = once(() => {
    правое бедро внизу согнуто на 100° при колене 27° — на 6° больше правила задней поверхности бедра (80° + половина
    сгибания колена; предупреждение валидатора, допуск 12°); при 70° — ошибка. */
 const WM = { lean: 62, st: 30, fwd: 1, dx: 10, yaw: 30, rot: 44, k0: 4, kL: 4, s0: .5, s1: 1.5, r0: 15, r1: 11, r2: 9, hm: .3, reach: 54, top: 62.6, tw: 60, tm: 50, pm: 60, jm: 25, th: 0, nk: 40, ne0: -50, ne1: -40, tf: .2, keys: 21, tf0: .1, tl: .1 };
+/* «Гало»: гиря дном вверх за рога (g2KbHorns bottomUp) обходит голову по кругу, первой — к правому уху. Центр шара — на
+   окружности радиуса r вокруг центра головы (dy — по высоте от него); ось гири — от рукояти к шару, наклонена к голове на
+   tilt от вертикали (около −40 спереди: шар над кистями перед лицом; −180 за головой: шар внизу, у шеи), рукоять повёрнута
+   на yaw вокруг вертикали (0 — поперёк: левая кисть на левом роге). Кулаки — на изогнутых рогах в точках uL, uR
+   (GymEquipment.kbHorn: 0 — прямая часть рога над шаром, 1 — у перекладины): по ходу круга кулаки перехватывают рог —
+   за головой ближе к перекладине, где ось кулака поперёк оси гири. Ключи правой половины круга (φ 0…180° через 5°:
+   φ, tilt, yaw, dy, r, uL, uR и направления локтей L и R) — путь динамического программирования по состояниям гири и рук
+   (направление локтя × точка хвата): цена узла — замечания валидатора (ошибка — дороже в десять раз) и выход за
+   «комфортные» пределы ротации плеча, отведения и сгибания запястья, пронации и подъёма руки; цена шага — перемещение
+   локтя и запястья, смена точки хвата, изменение положения гири; спереди и сзади (φ 0 и 180) руки зеркальны. Левая
+   половина круга — зеркально. Перебор — в отчёте этапа. */
+const HALO_KEYS = [
+  [0, -43.5, 0, -12.1, 26, 0, 0, [0.448,-0.859,0.245], [-0.448,-0.859,0.245]],
+  [5, -43.2, -0.1, -11.8, 26, 0, 0.25, [0.631,-0.702,0.329], [-0.237,-0.962,0.137]],
+  [10, -63.6, -0.7, -7.2, 20, 0, 0.25, [0.707,-0.474,0.525], [0.051,-0.936,0.347]],
+  [15, -87.2, -2.4, -10.8, 22, 0, 0.75, [0.811,-0.246,0.531], [0.505,-0.821,0.267]],
+  [20, -105.4, -25.4, -18.8, 22, 0, 1, [0.845,0,0.534], [0.254,-0.929,0.27]],
+  [25, -117, -28.8, -19.1, 22, 0, 1, [0.815,0.252,0.521], [0.225,-0.895,0.385]],
+  [30, -130, -30.2, -19, 22, 0, 1, [0.787,0.249,0.564], [0.181,-0.839,0.513]],
+  [35, -133.2, -8.8, -18.4, 22, 0, 1, [0.741,0.469,0.481], [0.377,-0.748,0.546]],
+  [40, -135.8, -5.4, -17.1, 22, 0, 1, [0.722,0.46,0.517], [0.313,-0.722,0.618]],
+  [45, -136.8, -2.4, -15.4, 22, 0, 1, [0.702,0.45,0.553], [0.464,-0.567,0.681]],
+  [50, -145.8, -0.7, -13.2, 22, 0, 1, [0.684,0.43,0.59], [0.38,-0.504,0.776]],
+  [55, -153.2, -0.1, -11, 22, 0, 1, [0.66,0.412,0.628], [0.291,-0.439,0.85]],
+  [60, -160, 0, -9.3, 22, 0, 1, [0.629,0.399,0.667], [0.2,-0.379,0.904]],
+  [65, -166.5, -0.2, -8.4, 22, 0, 1, [0.591,0.391,0.705], [0.107,-0.324,0.94]],
+  [70, -172.4, -1.4, -8.1, 22, 0.25, 1, [0.571,0.374,0.731], [0.078,-0.253,0.964]],
+  [75, -176.8, -4.8, 0, 22, 0, 1, [0.563,0.344,0.752], [0.035,-0.153,0.988]],
+  [80, -179.1, -11.1, 0, 22, 0.25, 1, [0.554,0.33,0.764], [0.02,-0.092,0.996]],
+  [85, -179.8, -18.9, 0, 22, 0.25, 1, [0.533,0.332,0.778], [0.006,-0.03,1]],
+  [90, -180, -25.2, 0, 22, 0.25, 1, [0.507,0.334,0.795], [-0.006,0.028,1]],
+  [95, -180, -28.6, 0.1, 22, 0.25, 1, [0.472,0.333,0.816], [-0.016,0.079,0.997]],
+  [100, -180, -29.8, 0.4, 22, 0.25, 1, [0.432,0.33,0.839], [-0.024,0.123,0.992]],
+  [105, -200, -30, 1.3, 22, 0.5, 0.75, [0.451,0.302,0.84], [-0.011,0.15,0.989]],
+  [110, -200, -30, 3, 22, 0.5, 0.75, [0.582,0.41,0.702], [-0.01,0.171,0.985]],
+  [115, -200, -30, 5.4, 22, 0.5, 0.75, [0.559,0.388,0.733], [-0.009,0.186,0.982]],
+  [120, -200, -30, 8, 22, 0.25, 0.75, [0.663,0.475,0.579], [-0.006,0.199,0.98]],
+  [125, -200, -29.8, 2.5, 22, 0.5, 0.5, [0.633,0.483,0.605], [-0.013,0.267,0.964]],
+  [130, -200, -28.6, 4.6, 22, 0.5, 0.5, [0.612,0.455,0.647], [-0.009,0.274,0.962]],
+  [135, -200, -25.2, 5.5, 22, 0.5, 0.5, [0.57,0.435,0.697], [-0.005,0.28,0.96]],
+  [140, -200, -18.9, 4.6, 22, 0.5, 0.5, [0.5,0.429,0.752], [-0.001,0.286,0.958]],
+  [145, -200, -11.1, 2.5, 22, 0.5, 0.5, [0.41,0.436,0.801], [0.004,0.296,0.955]],
+  [150, -200, -4.8, 0, 22, 0.5, 0.5, [0.323,0.45,0.833], [0.013,0.312,0.95]],
+  [155, -200, -1.4, -2.6, 22, 0.5, 0.5, [0.251,0.464,0.85], [0.026,0.338,0.941]],
+  [160, -200, -0.2, -5, 22, 0.5, 0.5, [0.19,0.475,0.859], [0.045,0.368,0.929]],
+  [165, -200, 0, -6.7, 22, 0.5, 0.5, [0.136,0.479,0.867], [0.067,0.393,0.917]],
+  [170, -200, 0, -7.6, 22, 0.5, 0.5, [0.085,0.473,0.877], [0.125,0.399,0.908]],
+  [175, -200, 0, -7.9, 22, 0.5, 0.5, [0.036,0.459,0.888], [0.069,0.422,0.904]],
+  [180, -200, 0, -8, 22, 0.5, 0.5, [-0.015,0.442,0.897], [0.015,0.442,0.897]]
+];
+const HALO = { step: 5, keys: 73 };
+/* темп: доля цикла в ключе φ = 0, 5…180° (левая половина — зеркально: t(360 − φ) = 1 − t(φ)); шаг времени — по
+   перемещению локтей и запястий между ключами (не меньше 4 см на долю отрезка): где кисти перехватывают рога и гиря
+   переворачивается (спереди, φ 5…20°), круг идёт медленнее — до 8,9 см на кадр проверки вместо 13 при равном темпе */
+const HALO_T = [0,0.015,0.0388,0.0667,0.0839,0.1016,0.1138,0.1314,0.1436,0.1577,0.1699,0.1821,0.1943,0.2065,0.2187,0.2405,0.2527,0.2649,0.2771,0.2893,0.3016,0.3158,0.3289,0.3411,0.3533,0.3656,0.3778,0.39,0.4023,0.4145,0.4267,0.4389,0.4511,0.4633,0.4756,0.4878,0.5];
+const haloKeyT = i => i <= 36 ? HALO_T[i] : 1 - HALO_T[72 - i];
+/* доля цикла при любом φ (между ключами — линейно) */
+const haloT = phi => { if (phi > 180) return 1 - haloT(360 - phi); const j = Math.min(35, Math.floor(phi / HALO.step)); return HALO_T[j] + (HALO_T[j + 1] - HALO_T[j]) * (phi / HALO.step - j); };
+/* ключи: через 5°, спереди (φ ≤ 60° и ≥ 300°) — через 2,5°: там кулаки перехватывают рога и гиря переворачивается, и между
+   ключами поза строится заново по положению гири и рук (haloAt), а не интерполяцией углов */
+const HALO_PHIS = Array.from({ length: 145 }, (_, i) => i * 2.5).filter(f => f % 5 === 0 || f <= 60 || f >= 300);
+function haloPhi(t) {
+  const h = t <= .5 ? t : 1 - t; let j = 0; while (j < 35 && h > HALO_T[j + 1]) j++;
+  const a = HALO.step * (j + Math.min(1, Math.max(0, (h - HALO_T[j]) / (HALO_T[j + 1] - HALO_T[j]))));
+  return t <= .5 ? a : 360 - a;
+}
+function haloAt(C, phi) {
+  const f = ((phi % 360) + 360) % 360, mirror = f > 180, a = mirror ? 360 - f : f, i = Math.min(HALO_KEYS.length - 2, Math.floor(a / HALO.step)), u = (a - HALO_KEYS[i][0]) / HALO.step;
+  const A = HALO_KEYS[i], B = HALO_KEYS[i + 1], mx = v => [-v[0], v[1], v[2]];
+  const o = { tilt: C.lerp(A[1], B[1], u), yaw: C.lerp(A[2], B[2], u), dy: C.lerp(A[3], B[3], u), r: C.lerp(A[4], B[4], u), uL: C.lerp(A[5], B[5], u), uR: C.lerp(A[6], B[6], u), L: arc(C, A[7], B[7], u), R: arc(C, A[8], B[8], u) };
+  return mirror ? { tilt: o.tilt, yaw: -o.yaw, dy: o.dy, r: o.r, uL: o.uR, uR: o.uL, L: mx(o.R), R: mx(o.L) } : o;
+}
 /* ---------- Гиря ---------- */
 /* Наклон с отведением таза (как в махах): u = 0 — замах (наклон ~60°), u = 1 — тело прямое; стопы шире плеч */
 function kbHinge(C, u) {
@@ -366,7 +439,7 @@ function kbHinge(C, u) {
    прямое; большой палец смотрит назад к ключице, тыл кисти — наружу-вперёд: туда ложится шар (BIND.kettlebell, rest).
    Запястье прямое, локоть у рёбер, гиря на предплечье — техника — по общим положениям школ StrongFirst и RKC (пересказ: страницы школ по этому упражнению при подготовке не открывались). */
 const KB_RACK = { shoulder: [5, 6, -18], elbow: 140, pron: 0 };
-function kbRack(q, s) { armAngles(q, s, KB_RACK.shoulder, KB_RACK.elbow, KB_RACK.pron); return q; }
+function kbRack(q, s) { armAngles(q, s, KB_RACK.shoulder, KB_RACK.elbow, KB_RACK.pron, [0, 0], 'deep'); return q; }
 /* точка кулака, большой палец и локоть «рэка» при этом корпусе — цели для взятия на грудь и жима */
 function kbRackAt(C, q, s) {
   const k = kbRack(C.M.clone(q), s), f = C.fk(k);
@@ -820,7 +893,10 @@ module.exports = {
       const A0 = kbSwingStart(C), sm = (a, b) => { const w = Math.max(0, Math.min(1, (e - a) / (b - a))); return w * w * (3 - 2 * w); };
       const ws = sm(0, .7), we = sm(.25, 1), wp = sm(.2, .65), mix3 = (a, b, w) => a.map((v, i) => C.lerp(v, b[i], w));
       const sh = mix3(A0.shoulder, KB_RACK.shoulder, ws); sh[1] += 6 * Math.sin(Math.PI * we); sh[0] += 16 * Math.sin(Math.PI * ws); /* мах выносит гирю перед бёдрами; локоть при сгибании чуть отходит от рёбер — шар проходит мимо корпуса */
-      armAngles(q, 'L', sh, C.lerp(A0.elbow, KB_RACK.elbow, we), C.lerp(A0.pron, KB_RACK.pron, wp), mix3(A0.wrist, [0, 0], wp));
+      /* к «рэку» кисть уходит в рукоять глубже (глубокий хват, M.B.deep): рукоять переходит в ладони на t 0,75–0,9 (handDepth),
+         пальцы — с ключа 0,9 */
+      armAngles(q, 'L', sh, C.lerp(A0.elbow, KB_RACK.elbow, we), C.lerp(A0.pron, KB_RACK.pron, wp), mix3(A0.wrist, [0, 0], wp), t >= .89 ? 'deep' : 'grip');
+      q.handDepth = { L: C.smooth((t - .75) / .15), R: 0 };
       armAngles(q, 'R', [C.lerp(-28, 6, e), C.lerp(14, 16, e), 0], C.lerp(14, 12, e), 20, [0, 0], 'relaxed');
       return q;
     }
@@ -851,7 +927,7 @@ module.exports = {
         const g = V.add(V.add(V.scale(P1, (1 - e) * (1 - 2 * e)), mid, 4 * e * (1 - e)), top, e * (2 * e - 1));
         const thumb = arc(C, K.thumb, V.scale(lat, -1), Math.min(1, e * 1.4));
         const pole = V.unit(V.mix(K.pole, V.add(V.add([0, -1, 0], lat, .6), fwd, .8), e * e));
-        holdDir(C, q, 'L', g, pole, thumb, { signed: true });
+        holdDir(C, q, 'L', g, pole, thumb, { signed: true, mode: 'deep' });
       };
       settle(C, q, { lo: 2, hi: 8, loads: loadsIn(C, ['L'], KB_KG), resolve: q => { feet(q); arms(q); } });
       return q;
@@ -937,7 +1013,10 @@ module.exports = {
       const k = Math.max(0, Math.min(1, (e - .4) / .35)), w = k * k * (3 - 2 * k), k2 = Math.max(0, Math.min(1, (e - .7) / .3));
       /* локоть: в махе — наружу-вниз, в высокой тяге — вверх-назад и в сторону, наверху — как в жиме */
       const pole = V.unit(V.mix(V.mix(V.add(lat, T.y, -.8), V.add(V.add(lat, [0, 1, 0], .5), fwd, -.8), w), V.add(V.add([0, -1, 0], lat, .6), fwd, .8), k2 * k2));
-      holdDir(C, q, 'L', g, pole, V.scale(lat, -1), { signed: true });
+      /* наверху кисть «пробивает» рукоять и уходит в неё глубже (глубокий хват, M.B.deep): рукоять переходит в ладони на
+         t 0,8–0,96 (handDepth), пальцы — с ключа 0,92 */
+      holdDir(C, q, 'L', g, pole, V.scale(lat, -1), { signed: true, mode: t >= .91 ? 'deep' : 'grip' });
+      q.handDepth = { L: C.smooth((t - .8) / .16), R: 0 };
       armAngles(q, 'R', [C.lerp(-28, 6, e), C.lerp(14, 16, e), 0], C.lerp(14, 12, e), 20, [0, 0], 'relaxed');
       return q;
     }
@@ -970,6 +1049,34 @@ module.exports = {
       return q;
     }
   },
+
+  /* «Гало» с гирей: стоя, стопы на ширине плеч, гиря дном вверх двумя руками за рога (StrengthLog: «upside-down by the
+     horns in front of your chest»). t=0 — перед грудью; гиря идёт по кругу вокруг головы вплотную к ней («close to your
+     skull»): у правого уха (t=0,25), за головой — шар внизу у верха спины, локти вверх (t=0,5), у левого уха (t=0,75), и
+     снова перед грудью; корпус и голова неподвижны, рёбра не раскрываются. Цикл (loop). Путь и локти — HALO_KEYS. */
+  kbhalo: {
+    keys: HALO_PHIS.map(haloT),
+    loop: true,
+    equipment: [{ type: 'g2KbHorns', id: 'kb', bottomUp: true }],
+    contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'kb:hornL' }, { body: 'gripR', prop: 'kb:hornR' }],
+    gripRadius: { L: 1.7, R: 1.7 },
+    pose(t, C) {
+      const { V, M } = C, q = C.base(), phi = haloPhi(t), h = haloAt(C, phi), p = phi * C.D2R, radial = [-Math.sin(p), 0, Math.cos(p)];
+      pelvisLean(C, q, [0, 88.6, 0], 0);
+      const feet = q => { for (const s of S) plant(C, q, s, [M.SIGN[s] * 13, 0, -2], { toeOut: 8 }); };
+      /* шар — у головы; кулак стороны s — на своём роге в точке h.u<s>, большой палец — по рогу к шару */
+      const geo = q => {
+        const H = C.fk(q).P.head, tl = h.tilt * C.D2R, yw = h.yaw * C.D2R, dBall = V.unit(V.add([0, Math.cos(tl), 0], radial, Math.sin(tl)));
+        const ax = V.unit(V.perp([Math.cos(yw), 0, -Math.sin(yw)], dBall)), up = V.scale(dBall, -1), B = V.add(V.add(H, radial, h.r), [0, h.dy, 0]);
+        const hand = s => { const k = EQ.kbHorn(h['u' + s]), g = M.SIGN[s]; return { g: V.add(V.add(B, ax, g * k.x), up, k.y), th: V.unit(V.add(V.scale(ax, g * k.ax[0]), up, k.ax[1])) }; };
+        return { B, hand };
+      };
+      const arms = q => { const G = geo(q); for (const s of S) { const k = G.hand(s); C.grip(q, s, k.g, k.th, h[s], { allowShort: true }); } q.horn = { L: h.uL, R: h.uR }; };
+      settle(C, q, { lo: 0, hi: 6, loads: q => [[geo(q).B, KB_KG]], resolve: q => { feet(q); arms(q); } });
+      return q;
+    }
+  },
+
 
   /* «Мельница» с гирей: гиря над головой в левой руке, стопы шире плеч и развёрнуты вправо (от гири) на 45°.
      t=0 — стоя, рука с гирей вертикальна; t=1 — таз уведён влево-назад, корпус с прямой спиной наклонён вправо-вперёд

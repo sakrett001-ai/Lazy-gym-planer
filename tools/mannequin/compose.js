@@ -14,6 +14,7 @@ function ctx(equipment) {
     lerp: (a, b, t) => a + (b - a) * t,
     mixV: (a, b, t) => V.mix(a, b, t),
     ease: t => .5 - .5 * Math.cos(Math.PI * Math.max(0, Math.min(1, t))),
+    smooth: t => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); },
     /* нейтральная стойка. Плечевой пояс в спецификациях до этапа Д — углы ключицы (girdleMode 'abs', см. Mannequin.resolveGirdle):
        лопатка идёт по ритму и рёбрам, ключица — по заданным углам. C.rhythm переводит сторону на ритм со смещениями. */
     base() { const q = M.neutral(); q.girdleMode = { L: 'abs', R: 'abs' }; return q; },
@@ -228,7 +229,7 @@ function bakedPoses(spec, list, n = 40) {
     try {
       M.rhythmHint(null); let q = spec.pose(t, C);
       for (let k = 0; k < 2; k++) { M.rhythmHint(hint(q)); q = spec.pose(t, C); }
-      return { t, v: M.pack(q).map((x, i) => i >= 3 && i < 7 ? round(x, 1e5) : round(x, 100)), hands: { L: q.hands?.L || 'relaxed', R: q.hands?.R || 'relaxed' } };
+      return { t, v: M.pack(q).map((x, i) => i >= 3 && i < 7 ? round(x, 1e5) : round(x, 100)), hands: { L: q.hands?.L || 'relaxed', R: q.hands?.R || 'relaxed' }, ...(q.handDepth ? { depth: { L: round(q.handDepth.L ?? 0, 1e3), R: round(q.handDepth.R ?? 0, 1e3) } } : {}), ...(q.horn ? { horn: { L: round(q.horn.L ?? 0, 1e3), R: round(q.horn.R ?? 0, 1e3) } } : {}) };
     } finally { M.rhythmHint(null); }
   });
   const track = M.makeTrack(keys, { loop: !!spec.loop }), poses = [];

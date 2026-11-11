@@ -344,8 +344,11 @@ BIND.cable=(e,R)=>{
      так учат школы StrongFirst и RKC — пересказ, не цитата). Поджатие мягких тканей — 0,3 см. */
 const KB={r:10.5,handle:18.67,handleR:1.7,half:5,base:7,bottom:7.83,kg:16,press:.3};
 BIND.kettlebell=(e,R)=>{
- const hands=e.hands||['L'],grips=hands.map(s=>R['grip'+s]),g=V.mix(grips[0],grips[1]??grips[0],.5),k=(e.r||KB.r)/KB.r,r=KB.r*k,H=e.drop??KB.handle*k;
- const axis=hands.length>1?V.unit(V.sub(grips[0],grips[1])):V.unit(R.frames['hand'+hands[0]].z);
+ const hands=e.hands||['L'],grips=hands.map(s=>R['grip'+s]),k=(e.r||KB.r)/KB.r,r=KB.r*k,H=e.drop??KB.handle*k;
+ let g=V.mix(grips[0],grips[1]??grips[0],.5),axis=hands.length>1?V.unit(V.sub(grips[0],grips[1])):V.unit(R.frames['hand'+hands[0]].z);
+ /* одной рукой — рукоять там, где её держит кулак (R.handle, R.handleAx: у глубокого хвата 'deep' — наискось у основания
+    ладони, M.B.deep; в переходе — между положениями по доле q.handDepth) */
+ if(hands.length===1&&R['handle'+hands[0]]){g=R['handle'+hands[0]];axis=R['handleAx'+hands[0]];}
  let down=[0,1,0];
  if(e.hang==='arm'||e.hang==='swing'){
   const s=hands[0],arm=V.unit(V.sub(R['wr'+s],R['el'+s]));
@@ -372,6 +375,14 @@ BIND.kettlebell=(e,R)=>{
    const at=a=>V.add(V.scale(down,Math.cos(a*D2R)),w,Math.sin(a*D2R));
    let lo=0,hi=0;for(let a=3;a<=240;a+=3)if(clear(at(a))>=0){hi=a;lo=a-3;break;}
    if(hi){for(let i=0;i<14;i++){const m=(lo+hi)/2;if(clear(at(m))>=0)hi=m;else lo=m;}down=at(hi);}
+  }else if(Math.abs(down[1])<.3){
+   /* рукоять почти отвесна (глубокий хват в нижней точке фронтального приседа): нижней точки у шара нет — он не висит,
+      а заваливается вокруг рукояти к тылу предплечья и ложится на него; прежде он оставался в 2–3 см от руки */
+   /* в обе стороны вокруг рукояти — до ближайшего касания (сначала — к тылу кисти) */
+   const b=ortho(back,axis),sg=V.dot(V.cross(down,b),axis)>=0?1:-1,w=V.cross(axis,down);
+   const at=a=>V.add(V.scale(down,Math.cos(a*D2R)),w,Math.sin(a*D2R));
+   let lo=0,hi=0;for(let a=3;a<=180&&!hi;a+=3)for(const k of [sg,-sg])if(clear(at(k*a))<0){hi=k*a;lo=k*(a-3);break;}
+   if(hi){for(let i=0;i<14;i++){const m=(lo+hi)/2;if(clear(at(m))<0)hi=m;else lo=m;}down=at(lo);}
   }
  }
  const c=V.add(g,down,H);
@@ -460,7 +471,7 @@ function rig(entry){
  const track=M.makeTrack(entry.keys,{loop:!!entry.loop});
  return t=>{
   if(!Number.isFinite(t)||t<0||t>1)throw Error('Pose must be in [0,1]');
-  const k=track(t),q=M.unpack(k.v,k.hands);if(entry.gripRadius)q.gripRadius=entry.gripRadius;
+  const k=track(t),q=M.unpack(k.v,k.hands);if(entry.gripRadius)q.gripRadius=entry.gripRadius;if(k.depth)q.handDepth=k.depth;if(k.horn)q.horn=k.horn;
   /* R.t — фаза повтора: по ней движется то, что не следует за телом (лента дорожки, BIND.treadBelt) */
   const R=M.catalogPose(q);R.t=t;R.props=build(entry.equipment||[],R);R.contacts=(entry.contacts||[]).map(c=>({...c}));R.exerciseBasis='mannequin';
   return R;

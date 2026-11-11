@@ -27,18 +27,18 @@ const movePad = (R, d) => { R.props = R.props.map(p => p === chestPad(R) ? {...p
 test('all 3D poses satisfy declared supports, grips, bars and pads', () => {
   const r = auditModel(model), rigs = model.EX.reduce((n, ex) => n + 1 + Object.keys(ex.anim.catalogVariants || {}).length, 0);
   const contactRigs = Object.keys(CONTACT_RULES).reduce((n, id) => n + 1 + Object.keys(model.EX.find(e => e.id === id).anim.catalogVariants || {}).length, 0);
-  assert.equal(r.stats.exercises,161);
-  assert.equal(r.stats.poses,161*101);
+  assert.equal(r.stats.exercises,162);
+  assert.equal(r.stats.poses,162*101);
   /* все варианты инвентаря, все кадры */
   assert.equal(r.stats.mannequinPoses,rigs*101);
-  assert(rigs > 161, 'equipment variants are checked too');
+  assert(rigs > 162, 'equipment variants are checked too');
   assert.equal(r.stats.contactPoses,contactRigs*101);
   /* три исходных профиля ригов, пять профилей прицельных упражнений на приводящие и манжету и уступающий акцент
      скандинавских сгибаний (09b-muscle-profiles.js) */
   assert.equal(r.stats.muscleProfiles,9);
-  /* области мышц на манекене — у всех 161 упражнения, каждый десятый кадр */
-  assert.equal(r.stats.musclePoses,161*11);
-  assert.equal(r.stats.cameraChecks,161*5);
+  /* области мышц на манекене — у всех 162 упражнений, каждый десятый кадр */
+  assert.equal(r.stats.musclePoses,162*11);
+  assert.equal(r.stats.cameraChecks,162*5);
   assert.deepEqual(r.failures,[]);
   assert.deepEqual(r.warnings,[]);
 });

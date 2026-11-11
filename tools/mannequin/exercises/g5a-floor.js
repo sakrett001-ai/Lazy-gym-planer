@@ -689,7 +689,7 @@ module.exports = {
       const armAt = (drop, e) => {
         const d0 = V.unit(V.add(out, [0, -1, 0], drop)), d = arcDir(V, d0, [0, 1, 0], e), el = V.add(gh, d, M.B.ua * (1 - .0));
         const g = V.add(V.add(gh, d, M.B.ua), [0, 1, 0], C.lerp(34.2, 35.2, e));
-        C.hold(q, 'L', g, V.unit(V.add(out, [0, -1, 0], .2)), { pron: KBFP_PRON, allowShort: e > .97 });
+        C.hold(q, 'L', g, V.unit(V.add(out, [0, -1, 0], .2)), { pron: KBFP_PRON, allowShort: e > .97, mode: 'deep' });
         return el;
       };
       const low = d => { armAt(d, 0); return Math.min(...C.region(q, 'uaL').map(p => p[1])) - MAT + .6; };
