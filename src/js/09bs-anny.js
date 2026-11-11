@@ -84,7 +84,9 @@ const AnnySkin = (() => {
      суставов пальцы не обхватывали гриф, а большой палец торчал шипом. Состояние хвата — то же, что у процедурной кисти
      (R.hands, R.gripRadius; M.handShape): grip — ручка радиуса r вдоль оси z кисти через центр хвата (B.grip), fist — кулак
      без снаряда, flat — ладонь на опоре, relaxed — кисть расслаблена (как в стойке: поворотов нет), hook — крюк, deep —
-     глубокий хват гири: ручка радиуса r вдоль B.deep.a через B.deep.c (наискось у основания ладони; строка deep таблицы).
+     глубокий хват гири: ручка радиуса r вдоль B.deep.a через B.deep.c (наискось у основания ладони; строка deep таблицы),
+     cup и cupring — гантель «чашей» за верхний диск (диск в рамке кисти — Mannequin.cupDisk; строки cup и cupring: пальцы
+     на диске и через его край, большой палец — по краю диска или вокруг рукояти; без строки в файле — как ладонь на опоре).
      Хват и кулак — таблица в данных (tools/anny-look/hands.js: углы подобраны по касанию с ручкой, ладонью и пальцами, в
      пределах суставов): grip — строки по радиусу ручки (между строками — линейно, поворот пясти большого пальца — нормированная
      смесь кватернионов), fist — одна строка. Ладонь на опоре — пальцы прямые (как у процедурной кисти: 0, 4 и 2°), большой —
@@ -154,6 +156,7 @@ const AnnySkin = (() => {
   function tableRow(H, mode, r) {
     if (mode === 'fist') return H.fist || null;
     if (mode === 'deep') return H.deep || H.fist || null;
+    if (mode === 'cup' || mode === 'cupring') return H[mode] || null;
     const T = H.grip; if (!T?.length) return null;
     if (r <= T[0].r) return T[0]; if (r >= T[T.length - 1].r) return T[T.length - 1];
     let i = 0; while (T[i + 1].r < r) i++;
@@ -168,9 +171,10 @@ const AnnySkin = (() => {
     if (C.has(key)) return C.get(key);
     const rig = digitRig(d, s), I3 = [R3.I, R3.I, R3.I], fingers = rig.digits.slice(1);
     const pose = (fa, thR, tha) => ({ T: [chain(rig.digits[0], thR), ...fingers.map((dg, i) => chain(dg, fa[i].map((t, k) => flexRot(dg, k, t))))], ang: [tha, ...fa], mode, r });
-    const row = mode === 'grip' || mode === 'fist' || mode === 'deep' ? tableRow(d.hands[s], mode, r) : null, th = rig.digits[0];
+    const cupm = mode === 'cup' || mode === 'cupring';
+    const row = mode === 'grip' || mode === 'fist' || mode === 'deep' || cupm ? tableRow(d.hands[s], mode, r) : null, th = rig.digits[0];
     const out = row ? pose(row.f, [R3.fromQuat(row.th.q), flexRot(th, 1, row.th.t[0]), flexRot(th, 2, row.th.t[1])], [null, ...row.th.t])
-      : mode === 'flat' ? (H => pose(fingers.map(() => DIG.flat), [H ? R3.fromQuat(H.th.q) : flatThumb(rig), flexRot(th, 1, H ? H.th.t[0] : 5), flexRot(th, 2, H ? H.th.t[1] : 5)], [null, ...(H ? H.th.t : [5, 5])]))(d.hands[s].flat)
+      : mode === 'flat' || cupm ? (H => pose(fingers.map(() => DIG.flat), [H ? R3.fromQuat(H.th.q) : flatThumb(rig), flexRot(th, 1, H ? H.th.t[0] : 5), flexRot(th, 2, H ? H.th.t[1] : 5)], [null, ...(H ? H.th.t : [5, 5])]))(d.hands[s].flat)
       : mode === 'hook' ? pose(fingers.map(() => DIG.hook), I3, [null, th.bind[1], th.bind[2]])
       : pose(fingers.map(dg => dg.bind), I3, [null, th.bind[1], th.bind[2]]);
     C.set(key, out);

@@ -144,7 +144,9 @@ function cup(C, q, P, n, fwd, { mode = 'cup', az = [-40, 40], step = 5, poles, p
     const cl = (poles || [(s, lat) => V.unit(V.add([0, -1, 0], lat, .3))]).map(f => f(s, lat));
     const av = typeof az === 'function' ? az(s) : az, [lo, hi] = Array.isArray(av) ? av : [av, av];
     let best = [lo, cl[0]], bv = Infinity;
-    for (const pl of cl) for (let a = lo; a <= hi + 1e-9; a += step) { const v = put(a, pl) + 1e-4 * Math.abs(a - (lo + hi) / 2); if (v < bv) { bv = v; best = [a, pl]; } }
+    /* при равном штрафе — ближе к середине диапазона и полюс раньше в списке (иначе между ключами выбор скачет, и кисти между
+       ними уходят с диска) */
+    cl.forEach((pl, i) => { for (let a = lo; a <= hi + 1e-9; a += step) { const v = put(a, pl) + 1e-3 * Math.abs(a - (lo + hi) / 2) + .05 * i; if (v < bv) { bv = v; best = [a, pl]; } } });
     put(...best); chosen[s] = { az: best[0] };
   }
   return chosen;
