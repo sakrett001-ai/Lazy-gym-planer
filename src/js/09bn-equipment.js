@@ -285,6 +285,31 @@ function ankleCuff(R,s,pulley){
  const base=M.limbPoint(R,'sk',s,t,ang,2*CUFF.ring),n=V.unit(V.perp(V.sub(base,c0),f.y)),apex=V.add(base,n,CUFF.dOut);
  return{c0,t,ang,axis:f.y,base,n,apex,clip:V.add(apex,V.unit(V.sub(pulley,apex)),CUFF.hook),...CUFF};
 }
+/* Детали манжеты: лента 7,5 см из девяти витков, облегающих голень по её сечению (голень внутри), стальное D-кольцо на
+   стороне тяги и карабины — вытянутые петли 6 × 2,2 см от вершины кольца к концам троса или ленты (clips; второй карабин
+   на том же кольце — snap2); hookMount — деталь, к которой крепится карабин (трос, ветвь ленты). */
+function cuffParts(R,s,K,clips,id,hookMount){
+ const out=[],n=9;
+ for(let i=0;i<n;i++){
+  const h=K.lo+K.ring+i*(K.hi-K.lo-2*K.ring)/(n-1),t=1-h/M.B.sk,pts=[];
+  for(let j=0;j<=24;j++)pts.push(M.limbPoint(R,'sk',s,t,K.ang+j/24*2*Math.PI,K.ring+.15));
+  out.push({kind:'cable',pts,r:K.ring,tone:'rubber',role:'strap',id:id+':cuff'+i,mount:'body'});
+ }
+ /* D-кольцо: дуга наружу и прямая перемычка вдоль голени (замкнуто) */
+ const ring=[V.add(K.base,K.axis,-K.dLen/2)];
+ for(let j=1;j<=10;j++){const a=j/10*Math.PI;ring.push(V.add(V.add(K.base,K.axis,K.dLen/2*Math.cos(a+Math.PI)),K.n,K.dOut*Math.sin(a)));}
+ ring.push(ring[0]);
+ out.push({kind:'cable',pts:ring,r:.3,tone:'chrome',role:'frame',id:id+':dring',mount:'body'});
+ clips.forEach((clip,k)=>{
+  const u=V.unit(V.sub(clip,K.apex)),w=V.unit(V.cross(u,K.axis)),L=V.dist(clip,K.apex),hook=[];
+  for(let j=0;j<=16;j++){
+   const a=j/16*2*Math.PI,along=(1-Math.cos(a))/2*L,side=Math.sin(a)*1.1*Math.min(1,4*along/L,4*(L-along)/L);
+   hook.push(V.add(V.add(K.apex,u,along),w,side));
+  }
+  out.push({kind:'cable',pts:hook,r:.35,tone:'chrome',role:'frame',id:id+':snap'+(k?k+1:''),mount:typeof hookMount==='function'?hookMount(k):hookMount});
+ });
+ return out;
+}
 /* Трос от блока к рукояти. attach: D (рукоять на кисть), rope (канат, две ветви), bar (прямая рукоять),
    V (V-образная рукоять), ankle (манжета на голеностоп). Колесо блока поворачивается к тросу. */
 BIND.cable=(e,R)=>{
@@ -477,6 +502,6 @@ function rig(entry){
   return R;
  };
 }
-return{TYPES,BIND,Builder,build,anchors,rig,PLATES,padFrame,barbellPart,dumbbellPart,bodyPoint,ortho,visible,variantOf,variantEntry,ankleCuff,stirrup,bandHandle,BAND_HANDLE,clearOfForearm,KB};
+return{TYPES,BIND,Builder,build,anchors,rig,PLATES,padFrame,barbellPart,dumbbellPart,bodyPoint,ortho,visible,variantOf,variantEntry,ankleCuff,cuffParts,stirrup,bandHandle,BAND_HANDLE,clearOfForearm,KB};
 })(typeof Mannequin!=='undefined'?Mannequin:require('./09bm-mannequin.js'));
 if(typeof module!=='undefined'&&module.exports){module.exports=GymEquipment;const fs=require('fs'),path=require('path');for(const f of fs.readdirSync(__dirname).filter(f=>/^09bo.*\.js$/.test(f)).sort()){try{require(path.join(__dirname,f));}catch(e){console.error('Инвентарь '+f+': '+e.message);}}}
