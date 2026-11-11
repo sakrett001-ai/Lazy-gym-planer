@@ -105,12 +105,12 @@ function tguSupine(C) {
    Таз на полу, корпус поднят «диагональным скручиванием»: отклонён назад на back° от вертикали и к опорной руке на side° —
    так, чтобы правое плечо было вертикально над локтем (плечевой сустав на ELBOW_H + длина плеча над полом); предплечье
    лежит на полу по линии руки из положения лёжа (под armR к корпусу), кисть расслаблена, ладонью вниз. */
-const ELBOW = { back: 52, knee: 100, legR: 22, ext: -14 };
+const ELBOW = { back: 52, knee: 100, legR: 22, ext: -14, out: 0, kneeOut: -.4 };
 const ELBOW_H = 6.4, WRIST_H = 4.2;
 function tguElbow(C, o = ELBOW) {
   const { V, M } = C, target = MAT + ELBOW_H + M.B.ua - 1;
   const side = C.solve1D(sd => C.fk(sitBody(C, o.back, sd)).P.ghR[1] - target, 0, 60), q = sitBody(C, o.back, side);
-  footFlatAt(C, q, 'L', o.knee);
+  footFlatAt(C, q, 'L', o.knee, o.out, o.kneeOut);
   legOnFloor(C, q, 'R', o.legR);
   {
     const gh = C.fk(q).P.ghR, a = TGU.armR * C.D2R, lat = V.unit(V.perp(C.latP(q, 'R'), [0, 1, 0])), dir = V.unit(V.add(V.scale(lat, Math.sin(a)), [0, 0, -1], Math.cos(a)));
@@ -150,10 +150,10 @@ function tguSit(C, o = SIT) {
   bellUp(C, q, 'L');
   return q;
 }
-/* стопа стороны s на полу под коленом, согнутым на knee: стопа — на ширине таза, носок вперёд (по −Z) */
-function footFlatAt(C, q, s, knee) {
-  const { V, M } = C, hip = C.fk(q).P['hip' + s], base = M.clone(q);
-  const put = (t, D) => C.foot(t, s, [hip[0], MAT, hip[2] - D], 0, V.unit(V.add([0, 1, 0], C.latP(t, s), .15)), { forward: [0, 0, -1] });
+/* стопа стороны s на полу под коленом, согнутым на knee: стопа — на ширине таза (out — наружу от неё, см), носок вперёд (по −Z) */
+function footFlatAt(C, q, s, knee, out = 0, kneeOut = .15) {
+  const { V, M } = C, hip = C.fk(q).P['hip' + s], base = M.clone(q), lat = V.unit(V.perp(C.latP(q, s), [0, 1, 0]));
+  const put = (t, D) => C.foot(t, s, [hip[0] + lat[0] * out, MAT, hip[2] - D], 0, V.unit(V.add([0, 1, 0], C.latP(t, s), kneeOut)), { forward: [0, 0, -1] });
   const D = C.solve1D(D => { const t = M.clone(base); put(t, D); return t[s].knee - knee; }, 10, 85);
   return put(q, D);
 }
