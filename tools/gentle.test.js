@@ -82,6 +82,36 @@ test('gentle goal: light dosage with reserve, no impact, ballistic or advanced e
   assert.match(plain(a.prescribe(a.EXI.treadmill, null, E)).load, /можно говорить/);
 });
 
+/* сисси-присед: колени далеко за носками при глубоком сгибе — метка колена (09f-joint-stress.js), при «Беречь колени»
+   не подбирается, не предлагается заменой «как в зале» и сам заменяется в своём плане */
+test('knees protected: the sissy squat is not picked, not offered as a substitute and is replaced in a custom plan', () => {
+  assert(a.stressIdsOf(a.EXI.sissysquat).includes('knee'), 'the sissy squat loads the knees');
+  const at = (place, extra = {}) => { reset(extra); a.S.place = place; a.S.adapt = extra.adapt || null; a.ensurePlaces(a.S); return a.buildPlan(); };
+  const all = p => p.items.map(it => it.ex.id).concat(p.items.filter(it => it.sub).map(it => it.sub.from.id + '→' + it.ex.id));
+  let seen = 0, offered = 0;
+  for (const seed of [1, 3, 7, 11, 23, 31, 51, 77]) for (const groups of [['quads'], ['quads', 'glutes', 'hams']]) for (const adapt of [null, 'gym']) {
+    if (all(at('homeband', { seed, groups, adapt })).some(x => /sissysquat$/.test(x))) seen++;
+    const p = at('homeband', { seed, groups, adapt, protect: ['knees'] });
+    assert(!p.items.some(it => it.ex.id === 'sissysquat'), `knees protected, ${groups} ${seed} ${adapt || ''}: ${all(p)}`);
+  }
+  for (const place of ['homeband', 'street']) {
+    /* свой план из зала: разгибание ног в тренажёре здесь недоступно — заменой без «Беречь колени» был бы сисси-присед */
+    reset({ mode: 'custom' }); a.S.place = place; a.ensurePlaces(a.S);
+    a.S.customs = [{ id: 'k1', name: 'Ноги', items: [{ id: 'legext' }, { id: 'bandlegext' }] }]; a.ensureCustoms(a.S); a.openCustom('k1');
+    if (a.buildPlan().items.some(it => it.ex.id === 'sissysquat' && it.sub && it.sub.from.id === 'legext')) offered++;
+    a.S.protect = ['knees'];
+    const p = a.buildPlan();
+    assert(!p.items.some(it => it.ex.id === 'sissysquat'), `${place}: not offered instead of the leg extension: ${all(p)}`);
+  }
+  assert(seen > 0 && offered > 0, `without protection it does come up (picked ${seen}, offered ${offered}) — the check above is not empty`);
+  reset({ mode: 'custom', protect: ['knees'] }); a.S.place = 'homeband'; a.ensurePlaces(a.S);
+  a.S.customs = [{ id: 'k2', name: 'Дома', items: [{ id: 'sissysquat' }] }]; a.ensureCustoms(a.S); a.openCustom('k2');
+  const p = a.buildPlan();
+  assert(!p.items.some(it => it.ex.id === 'sissysquat'), 'a custom plan does not keep it: ' + all(p));
+  const sub = p.items.find(it => it.sub && it.sub.from.id === 'sissysquat');
+  if (sub) assert.match(sub.sub.note, /нагружает колени/); else assert(p.lost.some(ex => ex.id === 'sissysquat'));
+});
+
 test('custom plan: an exercise that loads a protected joint is replaced and says why; nothing silently lost', () => {
   reset({ mode: 'custom', protect: ['knees'], groups: ['quads', 'chest'] });
   a.S.customs = [{ id: 'p1', name: 'Ноги', items: [{ id: 'squat' }, { id: 'legext' }, { id: 'dbbench' }] }]; a.ensureCustoms(a.S); a.openCustom('p1');
