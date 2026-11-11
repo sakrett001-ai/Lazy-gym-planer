@@ -39,7 +39,7 @@ const KIND = {
   cablefly: 'arc', cablelowfly: 'arc', cablelat: 'arc', cablewood: 'arc', cablecrunch: 'hold',
   glutekick: 'arc', cablekickback: 'arc', cableadduct: 'arc', cableextrot: 'arc',
   bandlatraise: 'arc', bandcurl: 'arc', bandpushdown: 'arc', bandfacepull: 'line', bandextrot: 'arc', bandrow: 'line',
-  bandlatpull: 'arc', bandadduct: 'arc', bandabduct: 'arc', bandbridge: 'arc', bandlegext: 'arc'
+  bandlatpull: 'arc', bandadduct: 'arc', bandabduct: 'arc', bandbridge: 'arc', bandlegext: 'arc', bandfloorpress: 'arc', bandfly: 'arc'
 };
 /* пороги «подозрительно» (повод посмотреть глазами) */
 const LIM = {
@@ -264,6 +264,8 @@ function leverFlags(r) {
   return f;
 }
 
+/* лента в кольце, две рукояти, но кисти расходятся и сходятся (сведение рук у двери): у каждой ветви — свой ход */
+const APART = new Set(['bandfly']);
 /* ---------- одно упражнение ---------- */
 function auditEntry(id, entry, { samples = 41 } = {}) {
   const ev = EQ.variantEntry(entry), rig = EQ.rig(ev), eqs = (ev.equipment || []);
@@ -332,7 +334,8 @@ function auditEntry(id, entry, { samples = 41 } = {}) {
     /* ход кистей вдоль ленты — по ветвям (детали id:L и id:R от середины ленты к рукоятям: направление последнего отрезка
        к кольцу стремени); у ленты, продетой в кольцо, — и по середине кистей, как у каната */
     const info0 = frames[0].R.props.find(p => p.band && p.band.id === (e.id || 'band')).band;
-    const hands = info0.hands, shared = info0.slide && hands.length > 1;
+    /* у сведения рук (APART) кисти идут каждая своей дугой: ход проверяется по ветвям, середина кистей — нет */
+    const hands = info0.hands, shared = info0.slide && hands.length > 1 && !APART.has(id);
     const branch = (R, s) => {
       const b = R.props.find(p => p.id === (e.id || 'band') + ':' + s), pts = b.pts.map(fromCat);
       return { A: pts[pts.length - 2], K: pts[pts.length - 1], end: fromCat(R['grip' + s]) };

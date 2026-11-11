@@ -93,9 +93,14 @@ test('the band-only place: gym exercises are replaced by their band twins', () =
   assert.deepEqual(place && { name: place.name, equip: [...place.equip] }, { name: 'Дома с эспандером', equip: BANDS });
   const E = a.effEquip(BANDS), first = id => a.analogsFor(a.EXI[id], E, { limit: 1 })[0]?.ex.id;
   for (const [gym, twin] of [['latpull', 'bandlatpull'], ['latpullv', 'bandlatpull'], ['adduction', 'bandadduct'], ['cableadduct', 'bandadduct'],
-    ['abduction', 'bandabduct'], ['bridge', 'bandbridge'], ['legext', 'bandlegext'], ['cablerow', 'bandrow'], ['pushdown', 'bandpushdown'], ['cablecurl', 'bandcurl'], ['facepull', 'bandfacepull']])
+    ['abduction', 'bandabduct'], ['bridge', 'bandbridge'], ['legext', 'bandlegext'], ['cablerow', 'bandrow'], ['pushdown', 'bandpushdown'], ['cablecurl', 'bandcurl'], ['facepull', 'bandfacepull'],
+    /* заход 2: жим лёжа → жим на полу с эспандером, кроссовер и «бабочка» → сведение рук у двери */
+    ['bbbench', 'bandfloorpress'], ['dbbench', 'bandfloorpress'], ['cablefly', 'bandfly'], ['pecdeck', 'bandfly'], ['dbfly', 'bandfly']])
     assert.equal(first(gym), twin, `${gym} → ${twin}`);
-  for (const id of ['bandlatpull', 'bandadduct', 'bandabduct', 'bandbridge', 'bandlegext']) assert(a.available(a.EXI[id], E), id + ' needs only bands');
+  for (const id of ['bandlatpull', 'bandadduct', 'bandabduct', 'bandbridge', 'bandlegext', 'bandfloorpress', 'bandfly', 'sissysquat']) assert(a.available(a.EXI[id], E), id + ' needs only bands');
+  /* разгибание ног в тренажёре: первая замена — разгибание с эспандером, вторая — сисси-присед у косяка (без снаряда); на улице — сисси-присед */
+  assert.deepEqual(Array.from(a.analogsFor(a.EXI.legext, E, { limit: 2 }), r => r.ex.id), ['bandlegext', 'sissysquat']);
+  assert.equal(a.analogsFor(a.EXI.legext, a.effEquip(['pullup', 'dipbars']), { limit: 1 })[0]?.ex.id, 'sissysquat');
   assert.match(a.analogNote(a.EXI.latpull, a.EXI.bandlatpull, E), /резина/, 'the note names the band');
   /* программа зала в этом месте: тяга верхнего блока заменена тягой эспандера сверху */
   Object.assign(a.S, { mode: 'single', goal: 'mass', level: 'mid', count: 6, groups: ['back'], seed: 3, format: 'classic' });
