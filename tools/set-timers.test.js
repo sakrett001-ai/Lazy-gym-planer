@@ -32,7 +32,7 @@ test('persistent signal repeats every 20 s at most three times; «once» rings o
   assert.deepEqual(plain(T.restSignals(end, {mode:'persist', from:end - 90000})),
     [{at:end, kind:'end'}, {at:end + 20000, kind:'repeat'}, {at:end + 40000, kind:'repeat'}, {at:end + 60000, kind:'repeat'}]);
   assert.deepEqual(plain(T.restSignals(end, {mode:'once', from:end - 90000})), [{at:end, kind:'end'}]);
-  assert.equal(T.restSignals(end).length, 1 + T.REST_SIGNAL.repeats, 'по умолчанию — настойчиво');
+  assert.equal(T.restSignals(end).length, 1, 'по умолчанию — один раз (настойчивый — по выбору; прежним пользователям 12b-rest-alarm.js оставляет их значение)');
   assert.equal(T.restLastAt(T.restSignals(end, {mode:'persist'})), end + 60000);
   assert.equal(T.restLastAt(T.restSignals(end, {mode:'once'})), end);
 });

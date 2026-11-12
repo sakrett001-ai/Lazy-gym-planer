@@ -58,6 +58,7 @@ function workoutPlanState(){
   if(!plan?.items?.length)return{kind:'start'};
   return wkPlanState(workoutLoad(),{today:todayKey(),queue:workoutQueue(plan),data:LOG.data});
 }
+function yesterdayKey(){const d=new Date();d.setDate(d.getDate()-1);return dayKey(d);}
 const doneOfText=(n,total)=>`${n} ${'из'} ${total} ${plural(total,'подхода','подходов','подходов')}`;
 function workoutStartHtml(w=workoutPlanState()){
   return w.kind==='continue'?`${'Продолжить тренировку →'}<small class="wip-n">${doneOfText(w.done,w.total)}</small>`:'Начать тренировку →';
@@ -65,7 +66,7 @@ function workoutStartHtml(w=workoutPlanState()){
 /* вопрос в плане: тренировка прошлого дня не закончена — её подходы уже в журнале */
 function workoutAskHtml(w=workoutPlanState()){
   if(w.kind!=='ask')return '';
-  const y=dayKey(new Date(Date.now()-864e5))===w.day,when=y?'Вчерашняя тренировка не закончена':`${'Тренировка'} ${fmtDay(w.day,true)} ${'не закончена'}`;
+  const y=yesterdayKey()===w.day,when=y?'Вчерашняя тренировка не закончена':`${'Тренировка'} ${fmtDay(w.day,true)} ${'не закончена'}`;
   return `<section class="wip-ask" id="wip-ask" aria-labelledby="wip-ask-h"><h2 id="wip-ask-h">${when}</h2><p>${doneOfText(w.done,w.total)} ${'— они уже в журнале.'}${w.can?'':` ${'В нынешнем плане этих упражнений нет — продолжить её здесь нельзя.'}`}</p>`
     +`<div class="wip-ask-b">${w.can?`<button type="button" class="btn" data-wip="go">${y?'Продолжить вчерашнюю':'Продолжить её'}</button>`:''}<button type="button" class="btn btn-2" data-wip="end">${'Закончить её'}</button></div></section>`;
 }
@@ -458,7 +459,7 @@ function setupWorkout(){
   document.addEventListener('click',e=>{
     const t=e.target.closest&&e.target.closest('[data-wip]');if(!t)return;
     if(t.dataset.wip==='go'){startWorkout(null,{cont:true});return;}
-    const w=workoutPlanState(),y=w.day&&dayKey(new Date(Date.now()-864e5))===w.day;workoutEndSaved();paintStartButtons();
+    const w=workoutPlanState(),y=w.day&&yesterdayKey()===w.day;workoutEndSaved();paintStartButtons();
     const msg=$('#save-msg');if(msg&&w.day)msg.textContent=(y?'Вчерашняя тренировка закончена.':`${'Тренировка'} ${fmtDay(w.day,true)} ${'закончена.'}`)+' '+'Её подходы — в журнале.';
     $('#start-workout')?.focus();
   });

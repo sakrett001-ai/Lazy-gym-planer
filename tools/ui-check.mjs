@@ -294,8 +294,8 @@ await page.close();
 }
 
 /* режим тренировки на телефоне — время (Date.now) и Screen Wake Lock подделаны: экран не гаснет в тренировке и
-   отпускается на выходе; отдых после нуля считает вверх «+0:25 сверх отдыха», экран меняет цвет, сигнал повторяется
-   (настройка «один раз / настойчиво» запоминается), фактический отдых — третьим полем подхода; таймер удержания:
+   отпускается на выходе; отдых после нуля спокойно считает вверх «Отдых окончен · +0:25», экран цвет не меняет, сигнал по
+   умолчанию — один раз (настройка «один раз / настойчиво» запоминается), фактический отдых — третьим полем подхода; таймер удержания:
    «Старт» → 3-2-1 → «до цели» → «сверх цели», «Стоп» пишет секунды в подход и начинает отдых; ручной ввод секунд;
    боковая планка — левая, пауза 10 с, правая, записывается слабая сторона; таймер отдыха в плане тоже считает вверх */
 {
@@ -315,7 +315,8 @@ await page.close();
   });
   const adv = ms => w.evaluate(ms => { window.__dt += ms; workoutTick(); }, ms);
   const hold = () => w.evaluate(() => ({ mode: $('#wv-hold-mode').textContent, time: $('#wv-hold-time').textContent, btn: $('#wv-hold-go').textContent, sides: $('#wv-hold-sides').textContent, shown: !$('#wv-hold').hidden, done: $('#wv-done').disabled }));
-  const rest = () => w.evaluate(() => ({ t: $('#wv-rest-time').textContent, over: $('#wv-rest-over').textContent, h: $('#wv-rest-heading').textContent, red: $('#workout-view').classList.contains('rest-over'), note: $('#wv-rest-note').textContent, st: RestAlarm.state() }));
+  const rest = () => w.evaluate(() => ({ t: $('#wv-rest-time').textContent, done: !$('#wv-rest-done').hidden, mark: $('.wv-rest-clock').textContent, h: $('#wv-rest-heading').textContent, say: $('#wv-rest-say').textContent,
+    red: $('#workout-view').classList.contains('rest-over'), hot: getComputedStyle($('#workout-view')).boxShadow.includes('inset'), note: $('#wv-rest-note').textContent, st: RestAlarm.state() }));
   await w.click('#start-workout'); await w.waitForTimeout(50);
   check(await w.evaluate(() => window.__wl.req === 1 && window.__wl.locks[0].type === 'screen' && ScreenAwake.state().held), 'тренировка: экран не гаснет — Wake Lock запрошен');
   await w.evaluate(() => { window.__wl.locks[0].release(); document.dispatchEvent(new Event('visibilitychange')); }); await w.waitForTimeout(50);
@@ -333,13 +334,16 @@ await page.close();
   check(await w.evaluate(() => JSON.stringify(LOG.data.plank?.[0].s) === '[[null,37]]' && !$('#wv-rest').hidden && !RestAlarm.state().hold.length), '«Стоп» пишет секунды в подход и начинает отдых');
 
   let r = await rest();
-  check(!r.red && /^\d:\d\d$/.test(r.t) && !r.over && r.st.signals.join() === 'end,repeat,repeat,repeat' && r.st.mode === 'persist', 'отдых: по умолчанию «настойчиво» — сигнал на нуле и три повтора');
+  check(!r.red && /^\d:\d\d$/.test(r.t) && !r.done && r.st.signals.join() === 'end' && r.st.mode === 'once', `отдых: по умолчанию сигнал один раз — на нуле (${JSON.stringify(r)})`);
   const restSec = await w.evaluate(() => workout.queue[workout.last].rest);
   await adv(restSec * 1000 + 25000); r = await rest();
-  check(r.t === '+0:25' && r.over === 'сверх отдыха' && r.h === 'Пора к подходу' && r.red && r.st.fired === 2, 'после нуля: «+0:25 сверх отдыха», экран меняет цвет, сигнал повторился');
-  check(await w.evaluate(() => $('#wv-rest-minus').disabled), 'после нуля «−15 сек.» выключена');
+  check(r.t === '+0:25' && r.done && r.mark === 'Отдых окончен · +0:25' && r.h === 'Можно продолжать' && !r.red && !r.hot && r.say === 'Можно продолжать' && r.st.fired === 1,
+    `после нуля спокойно: «Можно продолжать», «Отдых окончен · +0:25», экран не краснеет, диктору — «Можно продолжать» (${JSON.stringify(r)})`);
+  check(await w.evaluate(() => $('#wv-rest-minus').disabled && $('#wv-rest-pause').disabled), 'после нуля «−15 сек.» и пауза выключены');
+  await w.click('[data-rest-mode="persist"]');
+  check(await w.evaluate(() => localStorage.getItem('podhod.restSignal') === 'persist' && RestAlarm.state().signals.join() === 'end,repeat,repeat,repeat' && $('[data-rest-mode="persist"]').getAttribute('aria-pressed') === 'true'), '«Настойчиво» — по выбору: повторы, выбор запоминается');
   await w.click('[data-rest-mode="once"]');
-  check(await w.evaluate(() => localStorage.getItem('podhod.restSignal') === 'once' && RestAlarm.state().signals.join() === 'end' && $('[data-rest-mode="once"]').getAttribute('aria-pressed') === 'true'), '«Один раз» — без повторов, выбор запоминается');
+  check(await w.evaluate(() => localStorage.getItem('podhod.restSignal') === 'once' && RestAlarm.state().signals.join() === 'end'), '«Один раз» — снова без повторов');
   await w.click('[data-rest-mode="persist"]'); await w.check('[data-rest-warn]');
   check(await w.evaluate(() => localStorage.getItem('podhod.restSignal') === 'persist' && localStorage.getItem('podhod.restWarn') === 'on' && RestAlarm.warn), 'сигнал за 10 с до конца включается и запоминается');
   await w.uncheck('[data-rest-warn]');
@@ -379,6 +383,126 @@ await page.close();
   b = await bar(6000);
   check(b.hidden && await w.evaluate(() => RestAlarm.state().end === 0), 'таймер в плане уходит через 5 с после последнего повтора');
   await w.close();
+}
+
+/* тренировка без случайных потерь (14a-workout-flow.js) на телефоне 390×844, часы подделаны: «К плану» — в плане «Продолжить
+   тренировку →» и сколько сделано, время тренировки в плане не идёт; системная «Назад» (page.goBack) закрывает тренировку
+   и разбор, а не приложение, Esc — как раньше, «Назад» в плане уходит со страницы, как раньше; пауза отдыха (время стоит,
+   ±15 с, пульс — дальше); «Пропустить» и «Заменить» под выбором упражнения; длинное название переносится; экран отдыха при
+   масштабе 150 % — таймер на виду; тренировка вчерашнего дня — вопрос «Продолжить вчерашнюю / Закончить её» */
+{
+  const f = await open(390, 844);
+  await f.evaluate(() => {
+    const base = Date.now(); window.__dt = 0; Date.now = () => base + window.__dt;
+    localStorage.removeItem('podhod.workout.v3');
+    S.customs = [{ id: 'wf', name: 'Поток', items: [{ id: 'declinepike', sets: 2 }, { id: 'dbbench', sets: 2 }, { id: 'dbrow', sets: 2 }, { id: 'squat', sets: 2 }] }];
+    S.custom = 'wf'; S.mode = 'custom'; ensureCustoms(S); openCustom('wf'); LOG.data = {}; regen();
+  });
+  const adv = ms => f.evaluate(ms => { window.__dt += ms; workoutTick(); }, ms);
+  const ws = () => f.evaluate(() => ({ open: $('#workout-view').open, btn: $('#start-workout')?.textContent, ask: !!$('#wip-ask'), el: $('#wv-elapsed').textContent, prog: $('#wv-progress-label').textContent,
+    title: $('#wv-title').textContent, stack: OverlayBack.state().stack.join(), ov: history.state?.lgOverlay || '', motion: $('#motion-view').open }));
+  /* длинное название в выборе — целиком, с переносом */
+  await f.click('#start-workout'); await f.waitForTimeout(50);
+  const pick = await f.evaluate(() => { const t = $('#wv-exercise-text'), o = $('#wv-exercise').selectedOptions[0], r = t.getBoundingClientRect(), sel = $('#wv-exercise').getBoundingClientRect();
+    return { text: t.textContent, opt: o.textContent, lines: Math.round(r.height / parseFloat(getComputedStyle(t).lineHeight)), clip: t.scrollWidth > t.clientWidth + 1, cover: Math.abs(sel.height - r.height) < 2 && Math.abs(sel.width - r.width) < 2, right: r.right <= 390 }; });
+  check(pick.text === pick.opt && /с ногами на возвышении$/.test(pick.text) && pick.lines >= 2 && !pick.clip && pick.cover && pick.right, `длинное название упражнения в выборе — целиком, переносится; выбор поверх подложки (${JSON.stringify(pick)})`);
+  check(await f.evaluate(() => { const l = $('label[for="wv-exercise"]'); return l.contains($('#wv-exercise')) && $('#wv-exercise-text').getAttribute('aria-hidden') === 'true'; }), 'выбор упражнения остаётся настоящим <select> с подписью; подложка скрыта от диктора');
+  /* подход, «К плану»: «Продолжить тренировку →» и «1 из 8 подходов»; время в плане не идёт */
+  await f.fill('#wv-reps', '8'); await f.click('#wv-done');
+  await adv(3 * 60000);
+  let s = await ws();
+  check(s.el === '3 мин в тренировке' && s.prog === '1 из 8 подходов', `время тренировки и прогресс (${JSON.stringify(s)})`);
+  await f.click('#wv-close'); s = await ws();
+  check(!s.open && s.btn === 'Продолжить тренировку →1 из 8 подходов' && await f.evaluate(() => document.activeElement === $('#start-workout')), `«К плану» без вопроса: в плане «Продолжить тренировку →», 1 из 8 подходов (${JSON.stringify(s)})`);
+  await f.evaluate(() => { window.__dt += 40 * 60000; });
+  await f.click('#start-workout'); s = await ws();
+  check(s.open && s.el === '3 мин в тренировке', `40 минут в плане — время тренировки не шло (${s.el})`);
+  /* пауза отдыха: время стоит, ±15 с от паузы, «▶» — дальше с того же места; пульсометр не мешает */
+  const rs = () => f.evaluate(() => ({ t: $('#wv-rest-time').textContent, h: $('#wv-rest-heading').textContent, p: $('#wv-rest-pause').getAttribute('aria-pressed'), name: $('#wv-rest-pause').getAttribute('aria-label'), say: $('#wv-rest-say').textContent, note: $('#wv-rest-over').textContent, end: RestAlarm.state().end, hr: !!$('#wv-hr') }));
+  check(!(await f.evaluate(() => $('#wv-rest').hidden)), 'вернулись — отдых продолжается');
+  await f.evaluate(() => { window.__dt = workout.restUntil - Date.now() + window.__dt - 60000; workoutTick(); });
+  await f.click('#wv-rest-pause'); let r = await rs();
+  check(r.p === 'true' && r.name === 'Пауза отдыха' && r.h === 'Отдых на паузе' && r.say === 'Отдых на паузе' && r.t === '1:00' && r.end === 0 && r.hr, `⏸: отдых на паузе, сигнал снят (${JSON.stringify(r)})`);
+  await adv(5 * 60000); r = await rs();
+  check(r.t === '1:00' && r.h === 'Отдых на паузе', `на паузе время стоит (${r.t})`);
+  await f.click('[data-wv-rest="15"]'); r = await rs();
+  check(r.t === '1:15', `+15 с на паузе (${r.t})`);
+  await f.click('#wv-rest-pause'); r = await rs();
+  check(r.p === 'false' && r.h === 'Отдых' && r.t === '1:15' && r.end > 0 && r.say === 'Отдых продолжается', `▶: отдых дальше с того же места, сигнал снова стоит (${JSON.stringify(r)})`);
+  await adv(16000); r = await rs();
+  check(r.t === '0:59', `после паузы время снова идёт (${r.t})`);
+  /* экран отдыха при масштабе 150 % (260×563 CSS-пикселей): фокус на «Перейти к подходу», таймер не уехал за верх */
+  await f.click('#wv-continue');
+  await f.setViewportSize({ width: 260, height: 563 });
+  await f.fill('#wv-reps', '8'); await f.click('#wv-done'); await f.waitForTimeout(50);
+  const z = await f.evaluate(() => { const t = $('#wv-rest-time').getBoundingClientRect(); return { top: t.top, bottom: t.bottom, focus: document.activeElement.id, scroll: $('#workout-view').scrollTop, wide: document.documentElement.scrollWidth <= 260 + 1 }; });
+  check(z.focus === 'wv-continue' && z.top >= 0 && z.bottom <= 563, `масштаб 150 %: фокус на «Перейти к подходу», таймер на экране (${JSON.stringify(z)})`);
+  await f.setViewportSize({ width: 390, height: 844 });
+  await f.click('#wv-continue');
+  /* «Пропустить»: следующее упражнение, «Пропущено: … Вернуть», в журнале ничего; «Вернуть» — обратно */
+  s = await ws();
+  const skipFrom = await f.evaluate(() => workout.queue[workout.index].it.ex.id);
+  await f.click('#wv-skip');
+  const sk = await f.evaluate(id => ({ cur: workout.queue[workout.index].it.ex.id, line: $('#wv-skip-line').hidden ? '' : $('#wv-skip-t').textContent, focus: document.activeElement.id, opt: [...$('#wv-exercise').options].find(o => o.value === id).textContent, log: !!LOG.data[id], prog: $('#wv-progress-label').textContent }), skipFrom);
+  check(sk.cur !== skipFrom && /^Пропущено: /.test(sk.line) && sk.focus === 'wv-unskip' && /· пропущено$/.test(sk.opt) && !sk.log && sk.prog === '2 из 6 подходов', `«Пропустить»: дальше следующее, «Пропущено: … Вернуть», в журнале ничего (${JSON.stringify(sk)})`);
+  await f.click('#wv-unskip');
+  check(await f.evaluate(id => workout.queue[workout.index].it.ex.id === id && !workout.skipped.length && $('#wv-progress-label').textContent === '2 из 8 подходов', skipFrom), '«Вернуть»: пропущенное снова в тренировке');
+  /* «Заменить»: тот же список, что в карточке плана; выбор меняет упражнение в плане и в тренировке, записанные подходы остаются */
+  await f.evaluate(() => workoutShow(0));
+  await f.click('#wv-swap');
+  const sw = await f.evaluate(() => { const it = workout.queue[workout.index].it, o = swapOptions(it.ex, plan), want = (o.close.length ? o.close : o.far).map(r => r.ex.id);
+    return { got: [...document.querySelectorAll('#wv-swap-pick [data-wv-swap]')].map(b => b.dataset.wvSwap), want, exp: $('#wv-swap').getAttribute('aria-expanded'), focus: document.activeElement.dataset.wvSwap || '' }; });
+  check(sw.got.length > 0 && sw.got.join() === sw.want.join() && sw.exp === 'true' && sw.focus === sw.got[0], `«Заменить» в тренировке — тот же список, что в карточке (${JSON.stringify(sw)})`);
+  await f.keyboard.press('Escape');
+  check(await f.evaluate(() => $('#workout-view').open && $('#wv-swap-pick').hidden && document.activeElement.id === 'wv-swap'), 'Esc сворачивает список замен, тренировка остаётся');
+  await f.click('#wv-swap'); await f.click(`#wv-swap-pick [data-wv-swap="${sw.got[0]}"]`);
+  const sd = await f.evaluate(({ to }) => ({ cur: workout.queue[workout.index].it.ex.id, plan: customOf().items.map(i => i.id).join(), log: JSON.stringify(LOG.data.declinepike?.[0].s.map(x => x[1])), prog: $('#wv-progress-label').textContent, status: $('#wv-save-status').textContent,
+    card: document.querySelector('.card[data-slot="0"] .sw-done')?.textContent || '', open: $('#workout-view').open, opt: $('#wv-exercise').value }), { to: sw.got[0] });
+  check(sd.open && sd.cur === sw.got[0] && sd.opt === sw.got[0] && sd.plan.startsWith(sw.got[0] + ',') && sd.log === '[8,8]' && sd.prog === '2 из 10 подходов' && /^Заменено: /.test(sd.status) && /Записанные подходы остаются в журнале/.test(sd.status) && /^Заменено: /.test(sd.card),
+    `замена: в плане и в тренировке новое упражнение, два записанных подхода в журнале и в прогрессе (${JSON.stringify(sd)})`);
+  /* «Назад»: тренировка закрывается, план на месте; разбор поверх тренировки — сначала разбор; Esc — как раньше */
+  const url = f.url();
+  await f.goBack(); await f.waitForTimeout(150); s = await ws();
+  check(!s.open && f.url() === url && !s.stack && !s.ov && /^Продолжить тренировку →/.test(s.btn), `«Назад» на экране тренировки — к плану, не из приложения (${JSON.stringify(s)})`);
+  await f.click('#start-workout'); await f.click('#wv-technique'); await f.waitForTimeout(50); s = await ws();
+  check(s.open && s.motion && s.stack === 'workout,motion' && s.ov === 'motion', `разбор поверх тренировки — две записи (${JSON.stringify(s)})`);
+  await f.goBack(); await f.waitForTimeout(150); s = await ws();
+  check(s.open && !s.motion && s.stack === 'workout', `«Назад» в разборе — к тренировке (${JSON.stringify(s)})`);
+  await f.keyboard.press('Escape'); await f.waitForTimeout(150); s = await ws();
+  check(!s.open && !s.stack && !s.ov && f.url() === url, `Esc по-прежнему закрывает тренировку, запись истории снята (${JSON.stringify(s)})`);
+  await f.evaluate(() => openGallery()); await f.waitForTimeout(50);
+  await f.click('[data-gallery-open]'); await f.waitForTimeout(50); s = await ws();
+  check(s.motion && s.stack === 'motion,motion-detail' && await f.evaluate(() => !$('#mv-detail').hidden), `атлас → карточка упражнения (${JSON.stringify(s)})`);
+  await f.goBack(); await f.waitForTimeout(150); s = await ws();
+  check(s.motion && s.stack === 'motion' && await f.evaluate(() => !$('#mv-gallery').hidden), `«Назад» из карточки атласа — к витрине (${JSON.stringify(s)})`);
+  await f.goBack(); await f.waitForTimeout(150); s = await ws();
+  check(!s.motion && !s.stack && f.url() === url, `«Назад» в витрине — к плану (${JSON.stringify(s)})`);
+  await f.click('#mv-close').catch(() => {});
+  /* тренировка вчерашнего дня: вопрос в плане; «Продолжить вчерашнюю» — вчерашние подходы сделаны, новый — сегодняшним днём */
+  const seedYesterday = () => f.evaluate(() => {
+    const d = new Date(); d.setDate(d.getDate() - 1); const y = dayKey(d);
+    S.customs.find(c => c.id === 'wf').items = [{ id: 'declinepike', sets: 2 }, { id: 'dbbench', sets: 2 }, { id: 'dbrow', sets: 2 }, { id: 'squat', sets: 2 }]; LOG.data = { declinepike: [{ d: y, s: [[null, 8], [null, 8]] }], dbbench: [{ d: y, s: [[20, 10]] }] };
+    regen(); const q = workoutQueue(plan);
+    localStorage.setItem('podhod.workout.v3', JSON.stringify({ stamp: workoutStamp(q), day: y, days: [y], index: 3, spent: 20 * 60000, done: 3, total: 8, drafts: {}, skipped: [], gone: [] }));
+    regen(); return y;
+  });
+  const y = await seedYesterday();
+  const ask = await f.evaluate(() => ({ h: $('#wip-ask h2')?.textContent, p: $('#wip-ask p')?.textContent, b: [...document.querySelectorAll('#wip-ask button')].map(b => b.textContent).join(), btn: $('#start-workout').textContent }));
+  check(ask.h === 'Вчерашняя тренировка не закончена' && ask.p === '3 из 8 подходов — они уже в журнале.' && ask.b === 'Продолжить вчерашнюю,Закончить её' && ask.btn === 'Начать тренировку →', `на следующий день — вопрос, а не молчаливая потеря (${JSON.stringify(ask)})`);
+  await f.click('[data-wip="go"]'); s = await ws();
+  check(s.open && s.prog === '3 из 8 подходов' && s.el === '20 мин в тренировке' && await f.evaluate(() => workout.queue[workout.index].it.ex.id === 'dbbench' && workout.queue[workout.index].k === 1), `«Продолжить вчерашнюю»: вчерашние подходы сделаны, дальше — второй подход жима (${JSON.stringify(s)})`);
+  await f.fill('#wv-kg', '20'); await f.fill('#wv-reps', '9'); await f.click('#wv-done');
+  check(await f.evaluate(y => JSON.stringify(LOG.data.dbbench.map(x => [x.d === y ? 'y' : x.d === todayKey() ? 't' : x.d, x.s.filter(Boolean).length])) === '[["y",1],["t",1]]' && $('#wv-progress-label').textContent === '4 из 8 подходов', y), 'новый подход — сегодняшним днём, вчерашний на месте');
+  await f.click('#wv-close');
+  check(await f.evaluate(() => !$('#wip-ask') && $('#start-workout').textContent === 'Продолжить тренировку →4 из 8 подходов'), 'после продолжения вопроса нет — «Продолжить тренировку →»');
+  await seedYesterday();
+  await f.click('[data-wip="end"]');
+  check(await f.evaluate(() => !$('#wip-ask') && $('#start-workout').textContent === 'Начать тренировку →' && $('#save-msg').textContent === 'Вчерашняя тренировка закончена. Её подходы — в журнале.' && document.activeElement === $('#start-workout') && JSON.parse(localStorage.getItem('podhod.workout.v3')).ended === true),
+    '«Закончить её»: вопрос убран, «Начать тренировку →», подходы — в журнале');
+  /* «Назад» в плане без окон — как раньше: уходит со страницы */
+  await f.goBack(); await f.waitForTimeout(150);
+  check(f.url() !== url, `«Назад» в плане уходит со страницы, как раньше (${f.url()})`);
+  await f.close();
 }
 
 /* вес гантелей и стороны (13a-sets.js): «Вес одной гантели, кг» и «×2 = 40 кг»; «Л/П отдельно» в тренировке и в карточке
@@ -1295,8 +1419,8 @@ const fakeBluetooth = () => {
   check(s.rnote === 'Отдых до пульса ниже 110 · в начале отдыха 149' && await h.evaluate(() => !$('#workout-view').classList.contains('rest-over')), `отдых до пульса: подпись (${s.rnote})`);
   await push(108); await push(104); await h.evaluate(() => { window.__dt += 300; workoutTick(); });
   s = await hs();
-  const r1 = await h.evaluate(() => ({ h: $('#wv-rest-heading').textContent, red: $('#workout-view').classList.contains('rest-over'), end: RestAlarm.state().end, left: workout.restUntil - Date.now() }));
-  check(r1.h === 'Пора к подходу' && r1.red && r1.left <= 0 && s.rnote === 'Пульс ниже 110 — можно к подходу · в начале отдыха 149', `пульс ниже порога — отдых кончился раньше плана (${JSON.stringify(r1)}, ${s.rnote})`);
+  const r1 = await h.evaluate(() => ({ h: $('#wv-rest-heading').textContent, red: $('#workout-view').classList.contains('rest-over'), done: !$('#wv-rest-done').hidden, end: RestAlarm.state().end, left: workout.restUntil - Date.now() }));
+  check(r1.h === 'Можно продолжать' && !r1.red && r1.done && r1.left <= 0 && s.rnote === 'Пульс ниже 110 — можно к подходу · в начале отдыха 149', `пульс ниже порога — отдых кончился раньше плана (${JSON.stringify(r1)}, ${s.rnote})`);
   await h.click('#wv-continue');
   s = await hs();
   check(JSON.stringify(s.day.rests) === '{"squat:0":[149,104]}', `отдых: пульс в начале и в конце записан (${JSON.stringify(s.day.rests)})`);

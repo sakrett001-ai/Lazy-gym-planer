@@ -32,7 +32,7 @@
 .wv-rest .wv-rest-over { color:var(--muted); font-weight:500; margin:-12px 0 14px; }
 /* пауза: время стоит — цифры приглушены */
 .wv-rest.is-paused #wv-rest-time { color:var(--muted); }
-#wv-rest-pause { min-width:48px; font-size:1rem; }
+#wv-rest-pause { min-width:52px; font-size:1.25rem; line-height:1; }
 #wv-rest-pause[aria-pressed="true"] { border-color:var(--accent); background:var(--accent-soft); }
 .wv-rest-adjust { flex-wrap:wrap; }
 
