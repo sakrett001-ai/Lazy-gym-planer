@@ -274,8 +274,9 @@ function workoutShowRest(){
   const next=workout.queue[workout.next];
   $('#wv-next-name').textContent=next.it.name;$('#wv-next-detail').textContent=`${next.phase} · подход ${next.k+1} из ${next.n} · ${planReps(next.it.rx,next.k)}${next.it.ex.kind?'':' повторов'}`;
   $('#wv-rest-note').textContent=workout.sideNote||restNote();workout.sideNote='';workout.restOver=null;paintRestPause();workoutTick();
-  /* экран отдыха — с начала (таймер на виду и при крупном масштабе), фокус на «Перейти к подходу» без прокрутки к нему */
-  $('#workout-view').scrollTop=0;$('#wv-continue').focus({preventScroll:true});
+  /* экран отдыха — с начала, фокус на «Перейти к подходу»; при крупном масштабе кнопка докручивается в окно, а таймер
+     остаётся сверху (.wv-rest-clock прилипает к верху — 40-workout-flow.css) */
+  $('#workout-view').scrollTop=0;const go=$('#wv-continue');go.focus({preventScroll:true});go.scrollIntoView({block:'nearest'});
 }
 /* после подхода: общий вес подхода, если он считается (внешний вес), и слабая сторона, если стороны отличались */
 function restNote(){

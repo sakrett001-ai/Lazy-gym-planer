@@ -26,6 +26,10 @@
 /* конец отдыха — без смены цвета экрана: заголовок «Можно продолжать» и нейтральная отметка «Отдых окончен · +0:25» */
 .wv-rest-clock { margin:22px 0; }
 .wv-rest-clock #wv-rest-time { display:inline-block; margin:0; }
+/* таймер с «Отдых окончен ·» — в обёртке: прилипает к верху вся строка (39-big-text.css держит у верха сам #wv-rest-time,
+   но внутри обёртки он прилипнуть не может). Отступ тот же: 16 px снаружи и 6 px фона = прежние 22 px */
+.wv-rest-clock { position:sticky; top:0; z-index:1; margin-block:16px; padding-block:6px; background:var(--surface); }
+.wv-rest-clock #wv-rest-time { position:static; padding-block:0; background:none; }
 .wv-rest-done { font:600 1rem/1.3 var(--f-body); color:var(--muted); }
 .wv-rest.is-done .wv-rest-clock { margin:14px 0 18px; }
 .wv-rest.is-done #wv-rest-time { font-size:1rem; letter-spacing:0; color:var(--muted); animation:none; }
