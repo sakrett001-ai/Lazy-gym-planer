@@ -223,7 +223,20 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .lt-r.done .lt-ok { background:var(--ink); border-color:var(--ink); color:var(--surface); }
 .lt-r.lt-series { border-top:1px dashed var(--line); padding-top:8px; margin-top:4px; }
 .lt-foot { display:flex; align-items:center; gap:12px; flex-wrap:wrap; font-size:12.5px; color:var(--faint); }
-.lt-add { border:0; background:transparent; padding:4px 0; font-size:13px; font-weight:600; color:var(--accent); }
+/* «− 5 подходов +»: убрать последний подход и добавить новый */
+.lt-sets { display:inline-flex; align-items:center; border:1px solid var(--line); border-radius:999px; background:var(--surface); }
+.lt-st { width:42px; height:38px; border:0; border-radius:999px; background:transparent; color:var(--accent); font:600 20px/1 var(--f-body); display:grid; place-items:center; padding:0; cursor:pointer; }
+.lt-st:disabled { color:var(--faint); opacity:.45; cursor:default; }
+.lt-st:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+.lt-sn { min-width:88px; text-align:center; font:600 13px var(--f-body); color:var(--ink); font-variant-numeric:tabular-nums; white-space:nowrap; }
+/* подтверждение в строке заполненного подхода: строка подсвечена, под полями — вопрос и две кнопки */
+.lt-r.lt-arm { background:var(--hot-soft); border-radius:10px; box-shadow:0 0 0 5px var(--hot-soft); }
+.lt-cf { grid-column:1 / -1; display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; font-size:13px; line-height:1.3; color:var(--ink); }
+.lt-cft { flex:1 0 100%; font-weight:600; padding-top:2px; }
+.lt-cfy, .lt-cfn { min-height:38px; min-width:104px; padding:0 14px; border-radius:9px; background:var(--surface); font:600 13.5px var(--f-body); cursor:pointer; }
+.lt-cfy { border:1.5px solid var(--hot); color:var(--hot); }
+.lt-cfn { border:1px solid var(--line); color:var(--ink); }
+.lt-cfy:focus-visible, .lt-cfn:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 .c-act [data-swap] { margin-left:auto; }
 .btn-ghost small { font:600 11px var(--f-mono); color:var(--muted); }
 .btn-ghost small:empty { display:none; }
@@ -1455,7 +1468,7 @@ details.rule p { margin:6px 0 0; }
 
 <dialog id="motion-view" class="motion-view" aria-labelledby="mv-title">
  <div class="mv-shell">
-  <header class="mv-head"><div class="mv-head-t"><p class="mv-eyebrow">LAZY GYM PLANNER · АТЛАС ДВИЖЕНИЙ · 4.92.0</p><h2 id="mv-title">Разбор упражнения</h2></div><button type="button" id="mv-back" class="mv-back">← Все упражнения</button><button type="button" id="mv-close" aria-label="Закрыть разбор">Закрыть ×</button></header>
+  <header class="mv-head"><div class="mv-head-t"><p class="mv-eyebrow">LAZY GYM PLANNER · АТЛАС ДВИЖЕНИЙ · 4.93.0</p><h2 id="mv-title">Разбор упражнения</h2></div><button type="button" id="mv-back" class="mv-back">← Все упражнения</button><button type="button" id="mv-close" aria-label="Закрыть разбор">Закрыть ×</button></header>
   <section id="mv-gallery" class="mv-gallery" aria-label="Все упражнения" hidden></section>
   <div id="mv-detail">
   <div class="mv-select"><button type="button" data-mv-nav="-1" aria-label="Предыдущее упражнение">←</button><label for="mv-exercise">Упражнение<select id="mv-exercise"></select></label><button type="button" data-mv-nav="1" aria-label="Следующее упражнение">→</button></div>
@@ -1477,7 +1490,7 @@ details.rule p { margin:6px 0 0; }
     <section id="mv-muscle-panel" class="muscle-panel" aria-label="Участие мышц по фазам" hidden><h3>Мышцы по фазам</h3><div class="muscle-scale" aria-hidden="true"><span>Нейтрально</span><span class="muscle-scale-gradient"></span><span>Сильнее</span></div><p class="muscle-explanation">Учебная схема: цвет показывает примерное участие мышцы, а не измеренную силу или ЭМГ. Кривые условные. Части мышцы работают совместно; для большинства частей используется общий профиль группы.</p><label class="muscle-region-select">Выделить область<select id="mv-region" aria-label="Выделить мышечную область"><option value="all">Все области</option></select></label><p id="mv-muscle-note" class="muscle-phase-note"></p><ul id="mv-muscle-list" class="muscle-list"></ul><p class="muscle-explanation">Скрытые поверхности видны в другом ракурсе.</p></section>
     <p id="mv-tempo" class="mv-small"></p>
    </section>
-   <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Работающие мышцы</h3><p class="mv-muscle-label">Основные</p><p id="mv-primary"></p><p class="mv-muscle-label">Вспомогательные</p><p id="mv-secondary"></p></div></div><p class="mv-small">На объёмной фигуре можно выделить мышечную область и сменить ракурс. Глубокие части перечислены в пояснениях.</p><h3>Как выполнять</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Ошибки и дыхание</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>О демонстрациях</summary><p>Схемы помогают разобрать последовательность движения. Амплитуда зависит от упражнения и особенностей человека; схематичный силуэт не задаёт обязательные углы суставов.</p><div id="mv-sources"></div><h4 class="mv-thanks-title">Благодарности</h4><p class="mv-small mv-thanks">Кости манекена — из открытой библиотеки моделей <a href="https://github.com/MyoHub/myo_sim" target="_blank" rel="noopener noreferrer">MyoSim</a> команды MyoSuite (лицензия Apache 2.0). Она построена на исследовательских моделях OpenSim: ноги и таз — <a href="https://doi.org/10.1109/TBME.2016.2586891" target="_blank" rel="noopener noreferrer">Rajagopal и др., 2016</a>; рука, лопатка и кисть — <a href="https://doi.org/10.1007/s10439-005-3320-7" target="_blank" rel="noopener noreferrer">Holzbaur и др., 2005</a>; поясничный отдел — <a href="https://simtk.org/projects/lumbarspine" target="_blank" rel="noopener noreferrer">модель поясничного отдела позвоночника</a>. Спасибо авторам за то, что открыли эти данные.</p><p class="mv-small mv-thanks">Форма тела в виде «Манекен» — открытая параметрическая модель человека <a href="https://github.com/naver/anny" target="_blank" rel="noopener noreferrer">Anny</a> (NAVER; код — лицензия Apache 2.0, сетка и веса MakeHuman — CC0), подогнанная под суставы манекена: скелет, мышцы и проверки поз — прежние.</p><p class="mv-small mv-thanks">Подъязычная кость, хрящи гортани и трахея построены по их размерам у взрослых мужчин из анатомических исследований: Fakhry и др., 2013; Rawal и др., 2014; Kim и Song, 2017; Gray's Anatomy, 1918.</p><p class="mv-small mv-thanks">Мышцы (вид «Анатомия») — пути из тех же моделей MyoSim; мышцы лопатки — из модели плеча <a href="https://github.com/dasproject/DAS3" target="_blank" rel="noopener noreferrer">DAS3</a> (<a href="https://doi.org/10.1109/TBME.2014.2309727" target="_blank" rel="noopener noreferrer">Chadwick и др., 2014</a>; лицензия Apache 2.0); гребенчатая — из модели ноги <a href="https://github.com/opensim-org/opensim-models" target="_blank" rel="noopener noreferrer">Gait2392</a> (<a href="https://doi.org/10.1109/10.102791" target="_blank" rel="noopener noreferrer">Delp и др., 1990</a>; лицензия CC BY 3.0); мышцы шеи и недостающие части мышц — по описаниям прикреплений в анатомических атласах. Толщина мышц — по их объёмам на МРТ 49 мужчин (<a href="https://doi.org/10.1152/japplphysiol.00772.2025" target="_blank" rel="noopener noreferrer">Riem и др., 2026</a>), мышц шеи — по МРТ (<a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC3648672/" target="_blank" rel="noopener noreferrer">Zheng и др., 2013</a>), пересчитана на рост и вес фигуры; доли сухожилий ног — по препаратам (<a href="https://doi.org/10.1007/s11999-008-0594-8" target="_blank" rel="noopener noreferrer">Ward и др., 2009</a>); межрёберные мышцы — пластом между рёбрами, их толщина — по УЗИ (<a href="https://doi.org/10.1589/jpts.31.340" target="_blank" rel="noopener noreferrer">Yoshida и др., 2019</a>) и массам слоёв у препаратов (<a href="https://doi.org/10.1111/j.1469-7793.2001.0319l.x" target="_blank" rel="noopener noreferrer">Wilson и др., 2001</a>). Укорачиваясь, мышца утолщается: её объём не меняется.</p><p class="mv-small">Версия демонстраций 4.92.0</p></details></aside>
+   <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Работающие мышцы</h3><p class="mv-muscle-label">Основные</p><p id="mv-primary"></p><p class="mv-muscle-label">Вспомогательные</p><p id="mv-secondary"></p></div></div><p class="mv-small">На объёмной фигуре можно выделить мышечную область и сменить ракурс. Глубокие части перечислены в пояснениях.</p><h3>Как выполнять</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Ошибки и дыхание</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>О демонстрациях</summary><p>Схемы помогают разобрать последовательность движения. Амплитуда зависит от упражнения и особенностей человека; схематичный силуэт не задаёт обязательные углы суставов.</p><div id="mv-sources"></div><h4 class="mv-thanks-title">Благодарности</h4><p class="mv-small mv-thanks">Кости манекена — из открытой библиотеки моделей <a href="https://github.com/MyoHub/myo_sim" target="_blank" rel="noopener noreferrer">MyoSim</a> команды MyoSuite (лицензия Apache 2.0). Она построена на исследовательских моделях OpenSim: ноги и таз — <a href="https://doi.org/10.1109/TBME.2016.2586891" target="_blank" rel="noopener noreferrer">Rajagopal и др., 2016</a>; рука, лопатка и кисть — <a href="https://doi.org/10.1007/s10439-005-3320-7" target="_blank" rel="noopener noreferrer">Holzbaur и др., 2005</a>; поясничный отдел — <a href="https://simtk.org/projects/lumbarspine" target="_blank" rel="noopener noreferrer">модель поясничного отдела позвоночника</a>. Спасибо авторам за то, что открыли эти данные.</p><p class="mv-small mv-thanks">Форма тела в виде «Манекен» — открытая параметрическая модель человека <a href="https://github.com/naver/anny" target="_blank" rel="noopener noreferrer">Anny</a> (NAVER; код — лицензия Apache 2.0, сетка и веса MakeHuman — CC0), подогнанная под суставы манекена: скелет, мышцы и проверки поз — прежние.</p><p class="mv-small mv-thanks">Подъязычная кость, хрящи гортани и трахея построены по их размерам у взрослых мужчин из анатомических исследований: Fakhry и др., 2013; Rawal и др., 2014; Kim и Song, 2017; Gray's Anatomy, 1918.</p><p class="mv-small mv-thanks">Мышцы (вид «Анатомия») — пути из тех же моделей MyoSim; мышцы лопатки — из модели плеча <a href="https://github.com/dasproject/DAS3" target="_blank" rel="noopener noreferrer">DAS3</a> (<a href="https://doi.org/10.1109/TBME.2014.2309727" target="_blank" rel="noopener noreferrer">Chadwick и др., 2014</a>; лицензия Apache 2.0); гребенчатая — из модели ноги <a href="https://github.com/opensim-org/opensim-models" target="_blank" rel="noopener noreferrer">Gait2392</a> (<a href="https://doi.org/10.1109/10.102791" target="_blank" rel="noopener noreferrer">Delp и др., 1990</a>; лицензия CC BY 3.0); мышцы шеи и недостающие части мышц — по описаниям прикреплений в анатомических атласах. Толщина мышц — по их объёмам на МРТ 49 мужчин (<a href="https://doi.org/10.1152/japplphysiol.00772.2025" target="_blank" rel="noopener noreferrer">Riem и др., 2026</a>), мышц шеи — по МРТ (<a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC3648672/" target="_blank" rel="noopener noreferrer">Zheng и др., 2013</a>), пересчитана на рост и вес фигуры; доли сухожилий ног — по препаратам (<a href="https://doi.org/10.1007/s11999-008-0594-8" target="_blank" rel="noopener noreferrer">Ward и др., 2009</a>); межрёберные мышцы — пластом между рёбрами, их толщина — по УЗИ (<a href="https://doi.org/10.1589/jpts.31.340" target="_blank" rel="noopener noreferrer">Yoshida и др., 2019</a>) и массам слоёв у препаратов (<a href="https://doi.org/10.1111/j.1469-7793.2001.0319l.x" target="_blank" rel="noopener noreferrer">Wilson и др., 2001</a>). Укорачиваясь, мышца утолщается: её объём не меняется.</p><p class="mv-small">Версия демонстраций 4.93.0</p></details></aside>
   </div>
   </div>
  </div>
@@ -6641,7 +6654,7 @@ EX.push(
  err:['Прогиб в пояснице', 'Локти разведены под 90°', 'Слишком близко к стене — нет нагрузки'],
  breath:'Вдох к стене, выдох от стены.',
  anim:{}},
-{id:'inclinepush', name:'Отжимания с рук на возвышении', eq:[['bench']], g:'chest', pri:['chest'], sec:['triceps', 'delt_f', 'serratus'], type:'c', lvl:1,
+{id:'inclinepush', name:'Отжимания с руками на возвышении', eq:[['bench']], g:'chest', pri:['chest'], sec:['triceps', 'delt_f', 'serratus'], type:'c', lvl:1,
  tech:['Ладони на скамье или устойчивом возвышении чуть шире плеч, тело прямое от пяток до макушки.', 'Опускайте грудь к краю скамьи, локти под 45° к корпусу.', 'Выжмите себя до прямых рук.'],
  err:['Провисание таза', 'Голова тянется вниз раньше груди', 'Неполная амплитуда'],
  breath:'Вдох вниз, выдох вверх.',
@@ -16267,6 +16280,14 @@ function selectMuscleRegion(prefix,id){
    тот же расчёт, что у валидатора) и по опорам упражнения (контакты спецификации), на 41 кадре повторения.
    Пороги и основания:
    колени      — сгибание ≥85° (на одной ноге ≥80°) под весом: Escamilla 2001, MSSE 33(1):127–141;
+                 без отягощения на двух ногах — сгибание ≥85° и центр колена впереди носков (сисси-присед). Колени уходят
+                 вперёд — у веса тела длиннее плечо относительно колена, момент на колене растёт: в приседе со штангой
+                 без барьера у носков момент на колене 150,1 ± 50,8 Н·м против 117,3 ± 34,2 Н·м с барьером, не пускающим
+                 колени за носки — Fry, Smith, Schilling 2003, JSCR 17(4):629–633; так же и в приседе без веса (нагрузка
+                 0, ¼ и ½ веса тела): без ограничения пиковый момент на колене больше — Lorenzetti et al. 2012,
+                 JSCR 26(10):2829–2836. Порог — линия носков, как барьер у Fry; передняя поверхность колена при этом уже
+                 на полтолщины колена за носками. Присед без веса манекена держит колени за линией носков (центр колена
+                 на 4 см позади), сисси-присед уводит их на 21 см вперёд: плечо веса тела от колена — 32 см против 20;
    колено      — разгибание в открытой цепи ближе 30° к прямой ноге: Escamilla et al. 1998, MSSE 30(4):556–569;
    поясница    — наклон корпуса ≥40° без опоры с весом: McGill 1997, J Biomech 30(5):465–475;
    плечи       — плечо за линией корпуса ≥20° в жимах и брусьях, длинный рычаг в разведениях:
@@ -16317,6 +16338,8 @@ function stressContacts(ex) {
     loaded: free || machine,
     backBar: has(/^back>bar$/),
     sole: s => has(new RegExp(s ? '^sole(' + s + ')?>' : '^sole[LR]?>')),
+    /* стопа стоит на опоре: подошвой или передним отделом (на носках) */
+    feet: s => has(new RegExp('^(sole|foot)(' + s + ')?>')),
     /* стоит на полу или коврике и ничем больше не опирается — только у таких упражнений бывает приземление */
     floorOnly: C.some(c => /^sole[LR]?>(floor|mat)$/.test(c)) && !C.some(c => /^sole[LR]?>(?!(floor|mat)$)|^(buttocks|back|upperBack|chest|knee[LR]?|th[LR]?)>|^grip[LR]?>\w+:(pullBar|pull[LR]|bar[LR]|dip[LR]|rail[LR])$/.test(c)),
     seated: has(/^(back|chest|belly|buttocks|upperBack|front|headBack|th[LR]?|thighsBack|knee[LR]?|fa[LR]?|palm[LR]?)>(?!bar$)/),
@@ -16337,7 +16360,10 @@ function stressFrame(R) {
   const A = Mannequin.jointAngles(R), V = Mannequin.V;
   const up = V.unit(V.sub(R.sh, R.hip)), trunk = Math.acos(Math.max(-1, Math.min(1, -up[1]))) * 180 / Math.PI;
   const side = s => { const a = A[s], h = R['grip' + s] && R['sh' + s] ? Math.hypot(R['grip' + s][0] - R['sh' + s][0], R['grip' + s][2] - R['sh' + s][2]) : 0;
-    return {...a, behind:a.posterior > 0 ? Math.asin(Math.min(1, a.posterior)) * 180 / Math.PI : 0, beta:Math.abs(Math.atan2(a.lat, -a.up) * 180 / Math.PI), reach:h}; };
+    /* центр колена впереди носка (см) — по горизонтали вдоль стопы от пятки к носку */
+    const toe = R['toe' + s], heel = R['heel' + s], fw = toe && heel ? V.unit([toe[0] - heel[0], 0, toe[2] - heel[2]]) : null;
+    const kneeAhead = fw ? V.dot(V.sub(R['kn' + s], toe), fw) : -Infinity;
+    return {...a, behind:a.posterior > 0 ? Math.asin(Math.min(1, a.posterior)) * 180 / Math.PI : 0, beta:Math.abs(Math.atan2(a.lat, -a.up) * 180 / Math.PI), reach:h, kneeAhead}; };
   return {A, trunk, L:side('L'), R:side('R')};
 }
 /* правила кадра: возвращают ключи меток (суставы со стороной или центральные точки) */
@@ -16348,6 +16374,8 @@ function stressRulesAt(ex, k, f) {
   if (!ex.pri.includes('calves') && !hinge) {
     const loaded = k.legPress || (k.upright && (k.loaded || k.backBar)) || (legsG && ex.uni && k.uprightUni);
     if (loaded) add('knee', both(s => k.sole(s) && f[s].knee >= (ex.uni ? 80 : 85), 'kn'));
+    /* без отягощения на двух ногах, руки не держат вес: глубокий сгиб с коленями за носками (сисси-присед) */
+    else if (legsG && !ex.uni && k.upright && !k.handsBear) add('knee', both(s => k.feet(s) && f[s].knee >= 85 && f[s].kneeAhead > 0, 'kn'));
   }
   if (k.shin) add('kneeOpen', both(s => f[s].knee <= 30, 'kn'));
   if (k.sole('') && !k.seated && (k.loaded || k.backBar) && f.trunk >= 40) add('lumbar', ['lumbar']);
@@ -19748,11 +19776,33 @@ function suggestBase(it) {
 
 /* ---------- блок записи в карточке ---------- */
 const SUG_ICON = {up:'↑', same:'→', down:'↓', deload:'↓', new:'+', plan:'≡'};
+/* строк в таблице: по плану (у круговой — кругов), но не меньше, чем уже записано сегодня */
+function logRowCount(it) {
+  const today = todaySession(it.ex.id, false);
+  return Math.max(it.rx.circ ? (it.rounds || it.rx.sets) : it.rx.sets, today ? today.s.length : 0);
+}
+/* «− N подходов +» под таблицей: убрать можно только последний подход; заполненный — после подтверждения в его строке.
+   setArm[упражнение] — номер строки, в которой ждёт подтверждение (переживает перерисовку записи) */
+const setArm = {};
+function setWords(it) { return it.rx.circ ? ['круг', 'круга', 'кругов'] : ['подход', 'подхода', 'подходов']; }
+function setStepHtml(it, n) {
+  const id = it.ex.id, circ = it.rx.circ;
+  return `<div class="lt-sets" role="group" aria-label="${circ ? 'Число кругов' : 'Число подходов'}">`
+    + `<button type="button" class="lt-st" data-delset="${id}" aria-label="${circ ? 'Убрать круг' : 'Убрать подход'} ${n}"${n <= 1 ? ' disabled' : ''}>−</button>`
+    + `<span class="lt-sn">${n} ${plural(n, ...setWords(it))}</span>`
+    + `<button type="button" class="lt-st" data-addset="${id}" aria-label="${circ ? 'Добавить круг' : 'Добавить подход'}">+</button></div>`;
+}
+function setArmHtml(it, n, done) {
+  const id = it.ex.id;
+  return `<div class="lt-cf" role="group" aria-labelledby="lt-cf-${id}"><span class="lt-cft" id="lt-cf-${id}">${it.rx.circ ? 'Круг' : 'Подход'} ${n} ${done ? 'записан. Убрать вместе с записью?' : 'заполнен. Убрать его?'}</span>`
+    + `<button type="button" class="lt-cfy" data-delyes="${id}">${'Убрать'}</button><button type="button" class="lt-cfn" data-delno="${id}">${'Оставить'}</button></div>`;
+}
 function logRows(it) {
   const ex = it.ex, lt = loadType(ex), sg = suggest(it), wl = weightLabel(it), lr = lrOn(ex);
   const today = todaySession(ex.id, false);
   const tset = today ? today.s : [];
-  const n = Math.max(it.rx.circ ? (it.rounds || it.rx.sets) : it.rx.sets, tset.length);
+  const n = logRowCount(it);
+  if (setArm[ex.id] !== n - 1 || n <= 1) delete setArm[ex.id];
   const prevSets = sg.prev ? sg.prev.s.filter(Boolean) : [];
   const [lo, hi] = parseRange(it.rx.reps);
   const SIDE = {l:'левая', r:'правая'};
@@ -19767,7 +19817,8 @@ function logRows(it) {
     const p = prevSets[k] || prevSets[prevSets.length - 1];
     const pk = planKg(it.rx, k), phKg = pk != null ? fmtKg(pk) : sg.kg != null ? fmtKg(sg.kg) : (lt === 'kg' ? '' : '—');
     const phR = sg.reps[k] ?? sg.reps[sg.reps.length - 1] ?? (lo === hi ? String(lo) : `${lo}–${hi}`);
-    const done = !!v, cls = `lt-r${done ? ' done' : ''}${lr ? ' lt-lr' : ''}${it.rx.static && k > 0 && k % 3 === 0 ? ' lt-series' : ''}`;
+    const arm = setArm[ex.id] === k, cf = arm ? setArmHtml(it, n, !!v) : '';
+    const done = !!v, cls = `lt-r${done ? ' done' : ''}${lr ? ' lt-lr' : ''}${it.rx.static && k > 0 && k % 3 === 0 ? ' lt-series' : ''}${arm ? ' lt-arm' : ''}`;
     const ok = `<button type="button" class="lt-ok" data-tick="${ex.id}" data-k="${k}" aria-pressed="${done}" aria-label="Подход ${k + 1} выполнен">${ICON.check}</button>`;
     if (lr) {
       /* Л/П: две строки в одном подходе; прошлый раз — по сторонам, если они были записаны, иначе общее значение */
@@ -19778,12 +19829,12 @@ function logRows(it) {
       ${fields(k, 'l', val('l'), phKg, phR)}
       ${ok}
       <span class="lt-p">${sideTag('r')} ${pv('r')}</span>
-      ${fields(k, 'r', val('r'), phKg, phR)}
+      ${fields(k, 'r', val('r'), phKg, phR)}${cf}
     </div>`;
     } else rows += `<div class="${cls}" data-k="${k}">
       <span class="lt-n">${k + 1}</span><span class="lt-p">${p ? prevText(p) : '—'}</span>
       ${fields(k, null, done ? v : null, phKg, phR)}
-      ${ok}
+      ${ok}${cf}
     </div>`;
   }
   const doneN = tset.slice(0, n).filter(Boolean).length;
@@ -19797,7 +19848,7 @@ function logRows(it) {
       <div class="lt-h"><span>№</span><span>Прошлый раз</span>${lt === 'none' ? '' : `<span title="${wl.full}">${wl.short}</span>`}<span>${repLabel(ex)}</span><span></span></div>
       ${rows}
     </div>
-    <div class="lt-foot"><button type="button" class="lt-add" data-addset="${ex.id}">+ подход</button>${lrBtn}${perSideNote}${x2}${it.rx.circ ? '<span>строка — один круг</span>' : ''}</div></div>`};
+    <div class="lt-foot">${setStepHtml(it, n)}${lrBtn}${perSideNote}${x2}${it.rx.circ ? '<span>строка — один круг</span>' : ''}</div></div>`};
 }
 /* вес для подсказки «×2»: записанный или введённый в первом подходе, иначе подсказка по весу */
 function firstKg(tset, sg, it) {
@@ -19868,9 +19919,9 @@ function refreshCard(card) {
   const ae = document.activeElement;
   if (box && !(box.contains(ae) && ae.tagName === 'INPUT')) {
     const refocus = !box.contains(ae) ? null : ae.dataset.k !== undefined ? `[data-${ae.dataset.tick ? 'tick' : 'addset'}][data-k="${ae.dataset.k}"]`
-      : ae.dataset.cfold ? '[data-cfold]' : ae.dataset.hist ? '[data-hist]' : ae.dataset.lr ? '[data-lr]' : null;
-    box.innerHTML = logRows(it).html;
-    syncCardLog(card);
+      : ae.dataset.cfold ? '[data-cfold]' : ae.dataset.hist ? '[data-hist]' : ae.dataset.lr ? '[data-lr]'
+      : ['addset', 'delset', 'delyes', 'delno'].map(a => ae.dataset[a] ? `[data-${a}]` : '').find(Boolean) || null;
+    renderLogBox(box, it);
     if (refocus) { const n = box.querySelector(refocus); if (n) n.focus(); }
   }
   refreshWarmup(card);
@@ -20158,6 +20209,85 @@ function editSet(inp) {
   }
   logTouch(id); refreshHist(id);
 }
+/* перерисовать запись подходов, не теряя введённого в неотмеченных строках; drop — номер убранной строки */
+function renderLogBox(box, it, drop = -1) {
+  const typed = [...box.querySelectorAll('.lt-r:not(.done) .lt-in')].filter(i => i.value !== '' && +i.closest('.lt-r').dataset.k !== drop).map(i => [i.id, i.value]);
+  box.innerHTML = logRows(it).html;
+  let kg = null;
+  for (const [id, v] of typed) {
+    const inp = box.querySelector(`[id="${id}"]`);
+    if (!inp || inp.closest('.lt-r').classList.contains('done')) continue;
+    inp.value = v; if (!kg && inp.dataset.f === 'kg') kg = inp;
+  }
+  if (kg) updatePairTotal(kg);
+  const card = box.closest('.card'); if (card) syncCardLog(card);
+}
+/* подход в план тренировки (в памяти: при новой сборке плана число подходов снова по плану, записанное остаётся);
+   возвращает номер новой строки */
+function growSets(it) {
+  const n = logRowCount(it);
+  delete setArm[it.ex.id];
+  it.extra = (it.extra || 0) + 1;
+  it.rx.sets = Math.max(it.rx.sets, n + 1);
+  if (it.rx.circ) it.rounds = Math.max(it.rounds || 0, n + 1);
+  return n;
+}
+/* последний подход — из записи дня (и цель записи, число подходов по плану) и из плана тренировки; минимум один.
+   Возвращает номер убранной строки (−1 — убирать нечего) и изменилась ли запись дня */
+function dropLastSet(it) {
+  const id = it.ex.id, n = logRowCount(it);
+  delete setArm[id];
+  if (n <= 1) return {k:-1, changed:false};
+  const k = n - 1, s = todaySession(id, false);
+  let changed = false;
+  if (s) {
+    if (s.s.length > k) { s.s.length = k; changed = true; }
+    if (s.target > k) { s.target = k; changed = true; }
+    cleanToday(id);
+  }
+  it.rx.sets = Math.max(1, Math.min(it.rx.sets, k));
+  if (it.rx.circ && it.rounds) it.rounds = Math.max(1, Math.min(it.rounds, k));
+  it.extra = Math.max(0, (it.extra || 0) - 1);
+  return {k, changed};
+}
+/* «+»: новая строка, фокус на её первом поле */
+function addSet(id, box) {
+  const it = plan && plan.items && plan.items.find(x => x.ex.id === id); if (!it || !box) return;
+  const n = growSets(it);
+  renderLogBox(box, it);
+  const inp = box.querySelector(`.lt-r[data-k="${n}"] .lt-in`); if (inp) inp.focus();
+}
+/* «−»: последний подход. Пустой убирается сразу; отмеченный или с цифрами — только после «Убрать» в его строке.
+   Повторное нажатие «−» (двойное касание) ничего не убирает — фокус на «Оставить». */
+function askRemoveSet(id, box) {
+  const it = plan && plan.items && plan.items.find(x => x.ex.id === id); if (!it || !box) return;
+  const n = logRowCount(it); if (n <= 1) return;
+  const row = box.querySelector(`.lt-r[data-k="${n - 1}"]`);
+  const armed = row && row.querySelector('.lt-cf');
+  if (armed) { armed.querySelector('[data-delno]').focus(); return; }
+  const filled = row && (row.classList.contains('done') || [...row.querySelectorAll('.lt-in')].some(i => i.value.trim() !== ''));
+  if (!filled) { removeSet(id, box); return; }
+  setArm[id] = n - 1;
+  row.classList.add('lt-arm'); row.insertAdjacentHTML('beforeend', setArmHtml(it, n, row.classList.contains('done')));
+  row.querySelector('[data-delno]').focus();
+}
+/* «Убрать» (или «−» у пустой строки): строка уходит, фокус остаётся на «−» (у последнего подхода — на «+») */
+function removeSet(id, box) {
+  delete setArm[id];
+  const it = plan && plan.items && plan.items.find(x => x.ex.id === id); if (!it || !box) return;
+  const {k, changed} = dropLastSet(it); if (k < 0) return;
+  renderLogBox(box, it, k);
+  if (changed) logTouch(id, true);
+  refreshHist(id);
+  const f = box.querySelector('[data-delset]:not([disabled])') || box.querySelector('[data-addset]'); if (f) f.focus();
+}
+/* «Оставить» или Esc: подтверждение закрывается, введённое в строке остаётся */
+function keepSet(id, box) {
+  delete setArm[id];
+  if (!box) return;
+  box.querySelectorAll('.lt-r.lt-arm').forEach(r => { r.classList.remove('lt-arm'); const c = r.querySelector('.lt-cf'); if (c) c.remove(); });
+  const b = box.querySelector('[data-delset]'); if (b) b.focus();
+}
 /* «Л/П отдельно» в карточке: запоминается для упражнения, таблица перерисовывается */
 function toggleLr(btn) {
   const id = btn.dataset.lr, ex = EXI[id]; if (!ex) return;
@@ -20200,17 +20330,10 @@ document.addEventListener('click', e => {
   if (!t) return;
   if (t.dataset.tick) { tickSet(t); return; }
   if (t.dataset.lr) { toggleLr(t); return; }
-  if (t.dataset.addset) {
-    const id = t.dataset.addset, it = plan.items.find(x => x.ex.id === id);
-    it.extra = (it.extra || 0) + 1;
-    const box = t.closest('.c-log');
-    const n = box.querySelectorAll('.lt-r').length;
-    it.rx.sets = Math.max(it.rx.sets, n + 1);
-    if (it.rx.circ) it.rounds = Math.max(it.rounds || 0, n + 1);
-    box.innerHTML = logRows(it).html; if (box.closest('.card')) syncCardLog(box.closest('.card'));
-    const inp = box.querySelector(`.lt-r[data-k="${n}"] .lt-in`); if (inp) inp.focus();
-    return;
-  }
+  if (t.dataset.addset) { addSet(t.dataset.addset, t.closest('.c-log')); return; }
+  if (t.dataset.delset) { askRemoveSet(t.dataset.delset, t.closest('.c-log')); return; }
+  if (t.dataset.delyes) { removeSet(t.dataset.delyes, t.closest('.c-log')); return; }
+  if (t.dataset.delno) { keepSet(t.dataset.delno, t.closest('.c-log')); return; }
   if (t.dataset.hist) {
     const card = t.closest('.card'), h = card.querySelector('.c-hist');
     h.hidden = !h.hidden; t.setAttribute('aria-expanded', String(!h.hidden));
@@ -20228,6 +20351,8 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('input', e => { if (e.target.classList && e.target.classList.contains('lt-in') && e.target.dataset.f === 'kg' && e.target.closest('.c-log')) updatePairTotal(e.target); });
 document.addEventListener('keydown', e => {
+  const box = e.key === 'Escape' && e.target.closest && e.target.closest('.c-log');
+  if (box && box.querySelector('.lt-cf')) { e.preventDefault(); keepSet(box.dataset.log, box); return; }
   if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('lt-in')) {
     e.preventDefault();
     const row = e.target.closest('.lt-r');
@@ -22984,6 +23109,6 @@ renderPlan();
 prefetchStressIds();
 logInit();
 
-window.PODHOD_VERSION='4.92.0';window.PODHOD_BUILD='4.92.0-928d0b8768ec';window.PODHOD_RENDER={"skin":"31c4707ea0","skeleton":"f4e7c4b726","anatomy":"48636840a9"};window.PODHOD_LANG='ru';
+window.PODHOD_VERSION='4.93.0';window.PODHOD_BUILD='4.93.0-8935ccce80c2';window.PODHOD_RENDER={"skin":"31c4707ea0","skeleton":"f4e7c4b726","anatomy":"48636840a9"};window.PODHOD_LANG='ru';
 
 </script>
