@@ -415,6 +415,17 @@ const HALO_KEYS = [
   [180, -200, 0, -8, 22, 0.5, 0.5, [-0.015,0.442,0.897], [0.015,0.442,0.897]]
 ];
 const HALO = { step: 5, keys: 73 };
+/* направления локтей ключей — сглаженные по кругу (ядро [1, 2, 1] / 4, HALO_SMOOTH проходов; φ 0 и 180 — на месте: там руки
+   зеркальны): у пути динамического программирования локоть правой руки спереди шёл зигзагом (x полюса 0,05 → 0,51 → 0,25 у
+   φ 10…20°, 0,18 → 0,38 → 0,31 → 0,46 у 30…45°) — локоть на 15 см к середине и на 7 обратно за 4 % цикла (дрожание кости
+   3,3 см за кадр, tools/anny-look/wobble.js). Один проход: 3,3 → 1,7 см (остаток — сгибание локтя у φ 150°, 66° → 82° → 75°),
+   валидатор — 0 ошибок, предупреждений 10 вместо 12; два и четыре прохода — то же */
+const HALO_SMOOTH = 1;
+const HALO_POLES = (() => {
+  let P = HALO_KEYS.map(k => [k[7], k[8]]);
+  for (let it = 0; it < HALO_SMOOTH; it++) P = P.map((p, i) => i === 0 || i === P.length - 1 ? p : [0, 1].map(j => { const a = P[i - 1][j], b = p[j], c = P[i + 1][j], v = [0, 1, 2].map(k => (a[k] + 2 * b[k] + c[k]) / 4), l = Math.hypot(...v); return v.map(x => x / l); }));
+  return P;
+})();
 /* темп: доля цикла в ключе φ = 0, 5…180° (левая половина — зеркально: t(360 − φ) = 1 − t(φ)); шаг времени — по
    перемещению локтей и запястий между ключами (не меньше 4 см на долю отрезка): где кисти перехватывают рога и гиря
    переворачивается (спереди, φ 5…20°), круг идёт медленнее — до 8,9 см на кадр проверки вместо 13 при равном темпе */
@@ -433,7 +444,8 @@ function haloPhi(t) {
 function haloAt(C, phi) {
   const f = ((phi % 360) + 360) % 360, mirror = f > 180, a = mirror ? 360 - f : f, i = Math.min(HALO_KEYS.length - 2, Math.floor(a / HALO.step)), u = (a - HALO_KEYS[i][0]) / HALO.step;
   const A = HALO_KEYS[i], B = HALO_KEYS[i + 1], mx = v => [-v[0], v[1], v[2]];
-  const o = { tilt: C.lerp(A[1], B[1], u), yaw: C.lerp(A[2], B[2], u), dy: C.lerp(A[3], B[3], u), r: C.lerp(A[4], B[4], u), uL: C.lerp(A[5], B[5], u), uR: C.lerp(A[6], B[6], u), L: arc(C, A[7], B[7], u), R: arc(C, A[8], B[8], u) };
+  const PA = HALO_POLES[i], PB = HALO_POLES[i + 1];
+  const o = { tilt: C.lerp(A[1], B[1], u), yaw: C.lerp(A[2], B[2], u), dy: C.lerp(A[3], B[3], u), r: C.lerp(A[4], B[4], u), uL: C.lerp(A[5], B[5], u), uR: C.lerp(A[6], B[6], u), L: arc(C, PA[0], PB[0], u), R: arc(C, PA[1], PB[1], u) };
   return mirror ? { tilt: o.tilt, yaw: -o.yaw, dy: o.dy, r: o.r, uL: o.uR, uR: o.uL, L: mx(o.R), R: mx(o.L) } : o;
 }
 /* ---------- Гиря ---------- */
