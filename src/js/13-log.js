@@ -60,8 +60,8 @@ async function logInit() {
   let first = true;
   LOG.col.onSnapshot(snap => {
     const remote = {};
-    let bodyDoc = null;
-    for (const d of snap.docs) { const b = d.data(); if (d.id === '_body') bodyDoc = b; else if (b && EXI[d.id] && validSessions(b.sessions)) remote[d.id] = b.sessions; }
+    let bodyDoc = null, heartDoc = null;
+    for (const d of snap.docs) { const b = d.data(); if (d.id === '_body') bodyDoc = b; else if (d.id === '_heart') heartDoc = b; else if (b && EXI[d.id] && validSessions(b.sessions)) remote[d.id] = b.sessions; }
     const changed = [], wasFirst = first;
     if (first) {
       first = false;
@@ -83,6 +83,7 @@ async function logInit() {
     }
     logSaveLocal();
     bodyRemote(bodyDoc, wasFirst);
+    heartRemote(heartDoc, wasFirst); /* пульс: 14b-heart.js */
     logRefresh(changed);
   }, err => {
     if (err && err.code === 'unavailable') return;
@@ -714,7 +715,7 @@ function trainingDays(data = LOG.data) {
 function daysHtml(by = trainingDays(), limit = 5) {
   const days = Object.values(by).sort((a, b) => a.d < b.d ? 1 : -1).slice(0, limit);
   if (!days.length) return '';
-  return `<div class="j-days"><p class="lb-h">${'Последние тренировки · общий вес'}</p><ul>${days.map(x => `<li><span class="j-dd">${fmtDay(x.d, true)}</span><span class="j-dn">${x.ex} ${plural(x.ex, 'упражнение', 'упражнения', 'упражнений')} · ${x.sets} ${plural(x.sets, 'подход', 'подхода', 'подходов')}</span><b class="j-dt">${x.t > 0 ? fmtTon(x.t) + `<small>${'кг'}</small>` : '—'}</b></li>`).join('')}</ul></div>`;
+  return `<div class="j-days"><p class="lb-h">${'Последние тренировки · общий вес'}</p><ul>${days.map(x => `<li><span class="j-dd">${fmtDay(x.d, true)}</span><span class="j-dn">${x.ex} ${plural(x.ex, 'упражнение', 'упражнения', 'упражнений')} · ${x.sets} ${plural(x.sets, 'подход', 'подхода', 'подходов')}${heartDayHtml(x.d)}</span><b class="j-dt">${x.t > 0 ? fmtTon(x.t) + `<small>${'кг'}</small>` : '—'}</b></li>`).join('')}</ul></div>`;
 }
 function heatmap(today = new Date(), by = trainingDays()) {
   const byDay = {};
@@ -853,6 +854,7 @@ function importLog(file) {
     const parts = [];
     if (r.exercises) parts.push(`записей журнала: ${r.sessions} (упражнений: ${r.exercises})`);
     if (r.body > 0) parts.push(`замеров: ${r.body}`);
+    if (r.heart > 0) parts.push(`дней с пульсом: ${r.heart}`);
     if (r.settings) parts.push('настройки');
     if (m2) m2.textContent = parts.length ? `Восстановлено: ${parts.join(', ')}. Совпадающие даты объединены.` : 'Нового в копии нет — всё из неё уже есть.';
   };

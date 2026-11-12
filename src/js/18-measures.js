@@ -130,10 +130,10 @@ bodyLoad();
 function backupObject() {
   return {app:'podhod', v:2, exported:new Date().toISOString(), version:window.PODHOD_VERSION || '',
     settings:{...S}, gear:{bar:GEAR.bar, plates:GEAR.plates}, autoreg:{dismissed:AR.dismissed, light:AR.light}, ics:{...ICS}, motion:{...motionPrefs},
-    log:LOG.data, body:BODY.rows};
+    log:LOG.data, body:BODY.rows, heart:heartBackup()};
 }
 function restoreBackup(obj) {
-  const out = {sessions:0, exercises:0, body:0, settings:false};
+  const out = {sessions:0, exercises:0, body:0, heart:0, settings:false};
   if (obj.log && typeof obj.log === 'object') {
     for (const [id, ss] of Object.entries(obj.log)) {
       if (!EXI[id] || !validSessions(ss)) continue;
@@ -151,6 +151,7 @@ function restoreBackup(obj) {
     const merged = mergeBodyRows(BODY.rows, obj.body.map(cleanBodyRow).filter(bodyHasValues));
     if (JSON.stringify(merged) !== JSON.stringify(BODY.rows)) { out.body = merged.length - BODY.rows.length; BODY.rows = merged; bodyTouch(true); }
   }
+  out.heart = heartRestore(obj.heart); /* пульс: 14b-heart.js */
   if (obj.v >= 2) {
     if (obj.settings && typeof obj.settings === 'object') {
       const s = obj.settings, ok = {};
