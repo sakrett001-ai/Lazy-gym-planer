@@ -59,12 +59,14 @@ function analogNote(a, b, E) {
 /* лучшие замены упражнения ex среди доступных при оборудовании E */
 function analogsFor(ex, E, {exclude = new Set(), lvlMax = 3, limit = 5, min = .45, ok = null} = {}) {
   const cardio = ex.g === 'cardio';
-  return EX.filter(b => b !== ex && !exclude.has(b.id) && available(b, E) && b.lvl <= lvlMax && (b.g === 'cardio') === cardio && (!ok || ok(b)))
+  /* ok (суставы, глубина колена) проверяется после сортировки и только до limit: расчёт по положениям манекена дорогой */
+  const ranked = EX.filter(b => b !== ex && !exclude.has(b.id) && available(b, E) && b.lvl <= lvlMax && (b.g === 'cardio') === cardio)
     .map(b => ({ex:b, score:analogScore(ex, b)}))
     .filter(r => r.score >= min)
-    .sort((x, y) => y.score - x.score)
-    .slice(0, limit)
-    .map(r => ({...r, note:analogNote(ex, r.ex, E)}));
+    .sort((x, y) => y.score - x.score);
+  const out = [];
+  for (const r of ranked) { if (out.length >= limit) break; if (!ok || ok(r.ex)) out.push({...r, note:analogNote(ex, r.ex, E)}); }
+  return out;
 }
 
 /* ===================== МЕСТА ТРЕНИРОВОК =====================

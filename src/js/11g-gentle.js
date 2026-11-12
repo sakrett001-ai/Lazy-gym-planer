@@ -77,6 +77,10 @@ function protectHits(ex) {
 function jointOk(ex) { return !protectHits(ex).length; }
 function gentleOk(ex) { return S.goal !== 'gentle' || (ex.lvl <= 2 && !GENTLE_SKIP.has(ex.id) && !GENTLE_SKIP_PATTERNS.has(PATTERN[ex.id])); }
 function fitsBody(ex) { return gentleOk(ex) && jointOk(ex); }
+/* замена (в своём плане, в программе другого места, кнопкой «Заменить») при «Беречь колени»: кроме меток — не присед
+   и не выпад стоя глубже порога правила колен, даже с весом тела. Гоблет-присед → присед без веса снимает лишь гантель,
+   сгиб остаётся тем же (stressKneeDepth, 09f-joint-stress.js); замена — с меньшим сгибом или без опоры на стопы (мостик) */
+function swapFits(ex) { return fitsBody(ex) && !(ensureProtect(S).includes('knees') && typeof stressKneeDeep === 'function' && stressKneeDeep(ex)); }
 const joinNames = list => list.length > 1 ? list.slice(0, -1).join(', ') + ' и ' + list[list.length - 1] : list[0] || '';
 function hitsText(hits) { return joinNames(hits.map(p => p.acc)); }
 /* почему упражнение не подходит — для замены и для списка «нечем заменить» */
