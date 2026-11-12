@@ -1480,7 +1480,7 @@ details.rule p { margin:6px 0 0; }
 
 <dialog id="motion-view" class="motion-view" aria-labelledby="mv-title">
  <div class="mv-shell">
-  <header class="mv-head"><div class="mv-head-t"><p class="mv-eyebrow">LAZY GYM PLANNER · АТЛАС ДВИЖЕНИЙ · 4.94.0</p><h2 id="mv-title">Разбор упражнения</h2></div><button type="button" id="mv-back" class="mv-back">← Все упражнения</button><button type="button" id="mv-close" aria-label="Закрыть разбор">Закрыть ×</button></header>
+  <header class="mv-head"><div class="mv-head-t"><p class="mv-eyebrow">LAZY GYM PLANNER · АТЛАС ДВИЖЕНИЙ · 4.95.0</p><h2 id="mv-title">Разбор упражнения</h2></div><button type="button" id="mv-back" class="mv-back">← Все упражнения</button><button type="button" id="mv-close" aria-label="Закрыть разбор">Закрыть ×</button></header>
   <section id="mv-gallery" class="mv-gallery" aria-label="Все упражнения" hidden></section>
   <div id="mv-detail">
   <div class="mv-select"><button type="button" data-mv-nav="-1" aria-label="Предыдущее упражнение">←</button><label for="mv-exercise">Упражнение<select id="mv-exercise"></select></label><button type="button" data-mv-nav="1" aria-label="Следующее упражнение">→</button></div>
@@ -1502,7 +1502,7 @@ details.rule p { margin:6px 0 0; }
     <section id="mv-muscle-panel" class="muscle-panel" aria-label="Участие мышц по фазам" hidden><h3>Мышцы по фазам</h3><div class="muscle-scale" aria-hidden="true"><span>Нейтрально</span><span class="muscle-scale-gradient"></span><span>Сильнее</span></div><p class="muscle-explanation">Учебная схема: цвет показывает примерное участие мышцы, а не измеренную силу или ЭМГ. Кривые условные. Части мышцы работают совместно; для большинства частей используется общий профиль группы.</p><label class="muscle-region-select">Выделить область<select id="mv-region" aria-label="Выделить мышечную область"><option value="all">Все области</option></select></label><p id="mv-muscle-note" class="muscle-phase-note"></p><ul id="mv-muscle-list" class="muscle-list"></ul><p class="muscle-explanation">Скрытые поверхности видны в другом ракурсе.</p></section>
     <p id="mv-tempo" class="mv-small"></p>
    </section>
-   <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Работающие мышцы</h3><p class="mv-muscle-label">Основные</p><p id="mv-primary"></p><p class="mv-muscle-label">Вспомогательные</p><p id="mv-secondary"></p></div></div><p class="mv-small">На объёмной фигуре можно выделить мышечную область и сменить ракурс. Глубокие части перечислены в пояснениях.</p><h3>Как выполнять</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Ошибки и дыхание</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>О демонстрациях</summary><p>Схемы помогают разобрать последовательность движения. Амплитуда зависит от упражнения и особенностей человека; схематичный силуэт не задаёт обязательные углы суставов.</p><div id="mv-sources"></div><h4 class="mv-thanks-title">Благодарности</h4><p class="mv-small mv-thanks">Кости манекена — из открытой библиотеки моделей <a href="https://github.com/MyoHub/myo_sim" target="_blank" rel="noopener noreferrer">MyoSim</a> команды MyoSuite (лицензия Apache 2.0). Она построена на исследовательских моделях OpenSim: ноги и таз — <a href="https://doi.org/10.1109/TBME.2016.2586891" target="_blank" rel="noopener noreferrer">Rajagopal и др., 2016</a>; рука, лопатка и кисть — <a href="https://doi.org/10.1007/s10439-005-3320-7" target="_blank" rel="noopener noreferrer">Holzbaur и др., 2005</a>; поясничный отдел — <a href="https://simtk.org/projects/lumbarspine" target="_blank" rel="noopener noreferrer">модель поясничного отдела позвоночника</a>. Спасибо авторам за то, что открыли эти данные.</p><p class="mv-small mv-thanks">Форма тела в виде «Манекен» — открытая параметрическая модель человека <a href="https://github.com/naver/anny" target="_blank" rel="noopener noreferrer">Anny</a> (NAVER; код — лицензия Apache 2.0, сетка и веса MakeHuman — CC0), подогнанная под суставы манекена: скелет, мышцы и проверки поз — прежние.</p><p class="mv-small mv-thanks">Подъязычная кость, хрящи гортани и трахея построены по их размерам у взрослых мужчин из анатомических исследований: Fakhry и др., 2013; Rawal и др., 2014; Kim и Song, 2017; Gray's Anatomy, 1918.</p><p class="mv-small mv-thanks">Мышцы (вид «Анатомия») — пути из тех же моделей MyoSim; мышцы лопатки — из модели плеча <a href="https://github.com/dasproject/DAS3" target="_blank" rel="noopener noreferrer">DAS3</a> (<a href="https://doi.org/10.1109/TBME.2014.2309727" target="_blank" rel="noopener noreferrer">Chadwick и др., 2014</a>; лицензия Apache 2.0); гребенчатая — из модели ноги <a href="https://github.com/opensim-org/opensim-models" target="_blank" rel="noopener noreferrer">Gait2392</a> (<a href="https://doi.org/10.1109/10.102791" target="_blank" rel="noopener noreferrer">Delp и др., 1990</a>; лицензия CC BY 3.0); мышцы шеи и недостающие части мышц — по описаниям прикреплений в анатомических атласах. Толщина мышц — по их объёмам на МРТ 49 мужчин (<a href="https://doi.org/10.1152/japplphysiol.00772.2025" target="_blank" rel="noopener noreferrer">Riem и др., 2026</a>), мышц шеи — по МРТ (<a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC3648672/" target="_blank" rel="noopener noreferrer">Zheng и др., 2013</a>), пересчитана на рост и вес фигуры; доли сухожилий ног — по препаратам (<a href="https://doi.org/10.1007/s11999-008-0594-8" target="_blank" rel="noopener noreferrer">Ward и др., 2009</a>); межрёберные мышцы — пластом между рёбрами, их толщина — по УЗИ (<a href="https://doi.org/10.1589/jpts.31.340" target="_blank" rel="noopener noreferrer">Yoshida и др., 2019</a>) и массам слоёв у препаратов (<a href="https://doi.org/10.1111/j.1469-7793.2001.0319l.x" target="_blank" rel="noopener noreferrer">Wilson и др., 2001</a>). Укорачиваясь, мышца утолщается: её объём не меняется.</p><p class="mv-small">Версия демонстраций 4.94.0</p></details></aside>
+   <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Работающие мышцы</h3><p class="mv-muscle-label">Основные</p><p id="mv-primary"></p><p class="mv-muscle-label">Вспомогательные</p><p id="mv-secondary"></p></div></div><p class="mv-small">На объёмной фигуре можно выделить мышечную область и сменить ракурс. Глубокие части перечислены в пояснениях.</p><h3>Как выполнять</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Ошибки и дыхание</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>О демонстрациях</summary><p>Схемы помогают разобрать последовательность движения. Амплитуда зависит от упражнения и особенностей человека; схематичный силуэт не задаёт обязательные углы суставов.</p><div id="mv-sources"></div><h4 class="mv-thanks-title">Благодарности</h4><p class="mv-small mv-thanks">Кости манекена — из открытой библиотеки моделей <a href="https://github.com/MyoHub/myo_sim" target="_blank" rel="noopener noreferrer">MyoSim</a> команды MyoSuite (лицензия Apache 2.0). Она построена на исследовательских моделях OpenSim: ноги и таз — <a href="https://doi.org/10.1109/TBME.2016.2586891" target="_blank" rel="noopener noreferrer">Rajagopal и др., 2016</a>; рука, лопатка и кисть — <a href="https://doi.org/10.1007/s10439-005-3320-7" target="_blank" rel="noopener noreferrer">Holzbaur и др., 2005</a>; поясничный отдел — <a href="https://simtk.org/projects/lumbarspine" target="_blank" rel="noopener noreferrer">модель поясничного отдела позвоночника</a>. Спасибо авторам за то, что открыли эти данные.</p><p class="mv-small mv-thanks">Форма тела в виде «Манекен» — открытая параметрическая модель человека <a href="https://github.com/naver/anny" target="_blank" rel="noopener noreferrer">Anny</a> (NAVER; код — лицензия Apache 2.0, сетка и веса MakeHuman — CC0), подогнанная под суставы манекена: скелет, мышцы и проверки поз — прежние.</p><p class="mv-small mv-thanks">Подъязычная кость, хрящи гортани и трахея построены по их размерам у взрослых мужчин из анатомических исследований: Fakhry и др., 2013; Rawal и др., 2014; Kim и Song, 2017; Gray's Anatomy, 1918.</p><p class="mv-small mv-thanks">Мышцы (вид «Анатомия») — пути из тех же моделей MyoSim; мышцы лопатки — из модели плеча <a href="https://github.com/dasproject/DAS3" target="_blank" rel="noopener noreferrer">DAS3</a> (<a href="https://doi.org/10.1109/TBME.2014.2309727" target="_blank" rel="noopener noreferrer">Chadwick и др., 2014</a>; лицензия Apache 2.0); гребенчатая — из модели ноги <a href="https://github.com/opensim-org/opensim-models" target="_blank" rel="noopener noreferrer">Gait2392</a> (<a href="https://doi.org/10.1109/10.102791" target="_blank" rel="noopener noreferrer">Delp и др., 1990</a>; лицензия CC BY 3.0); мышцы шеи и недостающие части мышц — по описаниям прикреплений в анатомических атласах. Толщина мышц — по их объёмам на МРТ 49 мужчин (<a href="https://doi.org/10.1152/japplphysiol.00772.2025" target="_blank" rel="noopener noreferrer">Riem и др., 2026</a>), мышц шеи — по МРТ (<a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC3648672/" target="_blank" rel="noopener noreferrer">Zheng и др., 2013</a>), пересчитана на рост и вес фигуры; доли сухожилий ног — по препаратам (<a href="https://doi.org/10.1007/s11999-008-0594-8" target="_blank" rel="noopener noreferrer">Ward и др., 2009</a>); межрёберные мышцы — пластом между рёбрами, их толщина — по УЗИ (<a href="https://doi.org/10.1589/jpts.31.340" target="_blank" rel="noopener noreferrer">Yoshida и др., 2019</a>) и массам слоёв у препаратов (<a href="https://doi.org/10.1111/j.1469-7793.2001.0319l.x" target="_blank" rel="noopener noreferrer">Wilson и др., 2001</a>). Укорачиваясь, мышца утолщается: её объём не меняется.</p><p class="mv-small">Версия демонстраций 4.95.0</p></details></aside>
   </div>
   </div>
  </div>
@@ -19899,11 +19899,13 @@ function logRows(it) {
   const tset = today ? today.s : [];
   const n = logRowCount(it);
   if (setArm[ex.id] !== n - 1 || n <= 1) delete setArm[ex.id];
-  const prevSets = sg.prev ? sg.prev.s.filter(Boolean) : [];
+  const prevSets = sg.prev ? sg.prev.s.filter(Boolean) : [], own = ownKgs(it, prevSets);
   const [lo, hi] = parseRange(it.rx.reps);
   const SIDE = {l:'левая', r:'правая'};
-  /* поле веса и повторов; side — 'l' | 'r' в режиме Л/П */
-  const fields = (k, side, val, phKg, phR) => `${lt === 'none' ? '' : `<input class="lt-in" id="kg-${ex.id}-${k}${side ? '-' + side : ''}" data-f="kg"${side ? ` data-side="${side}"` : ''} type="text" inputmode="decimal" autocomplete="off" aria-label="${wl.full}${side ? ', ' + SIDE[side] : ''}, подход ${k + 1}" placeholder="${phKg}" value="${val && val[0] != null ? fmtKg(val[0]) : ''}">`}
+  /* поле веса и повторов; side — 'l' | 'r' в режиме Л/П. Подсказка веса — вес последнего записанного сегодня подхода
+     выше (carriedKg), иначе свой вес подхода (план, пирамида прошлого раза) или прогрессия; data-ph — она же без переноса
+     (к ней поле возвращается, когда вписанный выше вес стёрт — carryKgBox) */
+  const fields = (k, side, val, phKg, phR) => `${lt === 'none' ? '' : `<input class="lt-in" id="kg-${ex.id}-${k}${side ? '-' + side : ''}" data-f="kg"${side ? ` data-side="${side}"` : ''} type="text" inputmode="decimal" autocomplete="off" aria-label="${wl.full}${side ? ', ' + SIDE[side] : ''}, подход ${k + 1}" placeholder="${carryPh(carriedKg(it, tset, k, side, own), phKg)}" data-ph="${phKg}" value="${val && val[0] != null ? fmtKg(val[0]) : ''}">`}
       <input class="lt-in" id="rp-${ex.id}-${k}${side ? '-' + side : ''}" data-f="reps"${side ? ` data-side="${side}"` : ''} type="text" inputmode="numeric" autocomplete="off" aria-label="${repLabel(ex)}${side ? ', ' + SIDE[side] : ''}, подход ${k + 1}" placeholder="${phR}" value="${val ? val[1] : ''}">`;
   const prevText = p => (p[0] ? fmtKg(p[0]) + ' × ' : '') + p[1];
   const sideTag = side => `<b class="lt-sd" aria-hidden="true">${side === 'l' ? 'Л' : 'П'}</b><span class="vh">${side === 'l' ? 'Левая:' : 'Правая:'}</span>`;
@@ -19911,23 +19913,24 @@ function logRows(it) {
   for (let k = 0; k < n; k++) {
     const v = tset[k];
     const p = prevSets[k] || prevSets[prevSets.length - 1];
-    const pk = planKg(it.rx, k), phKg = pk != null ? fmtKg(pk) : sg.kg != null ? fmtKg(sg.kg) : (lt === 'kg' ? '' : '—');
+    const pk = own(k), phKg = pk != null ? fmtKg(pk) : sg.kg != null ? fmtKg(sg.kg) : (lt === 'kg' ? '' : '—');
     const phR = sg.reps[k] ?? sg.reps[sg.reps.length - 1] ?? (lo === hi ? String(lo) : `${lo}–${hi}`);
     const arm = setArm[ex.id] === k, cf = arm ? setArmHtml(it, n, !!v) : '';
     const done = !!v, cls = `lt-r${done ? ' done' : ''}${lr ? ' lt-lr' : ''}${it.rx.static && k > 0 && k % 3 === 0 ? ' lt-series' : ''}${arm ? ' lt-arm' : ''}`;
+    const ownAt = pk != null && lt !== 'none' ? ` data-own="${pk}"` : ''; /* свой вес подхода — для переноса при вводе (carryKgBox) */
     const ok = `<button type="button" class="lt-ok" data-tick="${ex.id}" data-k="${k}" aria-pressed="${done}" aria-label="Подход ${k + 1} выполнен">${ICON.check}</button>`;
     if (lr) {
       /* Л/П: две строки в одном подходе; прошлый раз — по сторонам, если они были записаны, иначе общее значение */
       const sd = v && setSides(v, ex), psd = p && setSides(p, ex);
       const val = side => v ? (sd ? sd[side] : [v[0], v[1]]) : null, pv = side => p ? prevText(psd ? psd[side] : p) : '—';
-      rows += `<div class="${cls}" data-k="${k}">
+      rows += `<div class="${cls}" data-k="${k}"${ownAt}>
       <span class="lt-n">${k + 1}</span><span class="lt-p">${sideTag('l')} ${pv('l')}</span>
       ${fields(k, 'l', val('l'), phKg, phR)}
       ${ok}
       <span class="lt-p">${sideTag('r')} ${pv('r')}</span>
       ${fields(k, 'r', val('r'), phKg, phR)}${cf}
     </div>`;
-    } else rows += `<div class="${cls}" data-k="${k}">
+    } else rows += `<div class="${cls}" data-k="${k}"${ownAt}>
       <span class="lt-n">${k + 1}</span><span class="lt-p">${p ? prevText(p) : '—'}</span>
       ${fields(k, null, done ? v : null, phKg, phR)}
       ${ok}${cf}
@@ -19935,7 +19938,7 @@ function logRows(it) {
   }
   const doneN = tset.slice(0, n).filter(Boolean).length;
   /* вес одной гантели: подсказка «×2 = 40 кг» — по первому заполненному полю (пока не вводили — по подсказке) */
-  const x2 = wl && wl.n > 1 && !lr ? `<span class="lt-x2" data-n="${wl.n}">${wl.impl === 'kb' ? 'вес — одной гири' : 'вес — одной гантели'}<b>${pairTotalText(wl.n, firstKg(tset, sg, it))}</b></span>` : '';
+  const x2 = wl && wl.n > 1 && !lr ? `<span class="lt-x2" data-n="${wl.n}">${wl.impl === 'kb' ? 'вес — одной гири' : 'вес — одной гантели'}<b>${pairTotalText(wl.n, firstKg(tset, sg, own))}</b></span>` : '';
   const lrBtn = perSide(ex) ? `<button type="button" class="lt-lrb" data-lr="${ex.id}" aria-pressed="${lr}">${'Л/П отдельно'}</button>` : '';
   const perSideNote = perSide(ex) ? `<span>${ex.kind === 'time' ? 'секунды — на каждую сторону' : 'повторы — на каждую сторону'}</span>` : '';
   return {sg, html:`<p class="sug sug-${sg.tone}"><b aria-hidden="true">${SUG_ICON[sg.tone]}</b><span>${esc(sg.text)}</span></p>
@@ -19946,12 +19949,68 @@ function logRows(it) {
     </div>
     <div class="lt-foot">${setStepHtml(it, n)}${lrBtn}${perSideNote}${x2}${it.rx.circ ? '<span>строка — один круг</span>' : ''}</div></div>`};
 }
-/* вес для подсказки «×2»: записанный или введённый в первом подходе, иначе подсказка по весу */
-function firstKg(tset, sg, it) {
+/* вес для подсказки «×2»: записанный или введённый в первом подходе, иначе подсказка по весу первого подхода */
+function firstKg(tset, sg, own) {
   const v = tset.find(x => x && x[0] > 0);
   if (v) return v[0];
-  const pk = planKg(it.rx, 0);
+  const pk = own(0);
   return pk != null ? pk : sg.kg;
+}
+
+/* ---------- вес на следующие подходы ---------- */
+/* Вписали вес в подход или отметили его — следующие неотмеченные подходы с пустым полем берут этот вес подсказкой,
+   и отметка без ввода записывает его; другой вес вписывается как раньше. Переносится вес ближайшего подхода выше,
+   у Л/П — по своей стороне, а вписанный в левую сторону — ещё и в пустую правую того же подхода. Повторы не переносятся
+   (у них подсказка из плана). Свой вес подхода (ownKgs: по плану; без плана — пирамида или сброс прошлого раза)
+   не перетирается: свои веса обоих подходов заданы и различаются — переноса нет. То же правило — в режиме тренировки
+   (workoutFill в 14-workout-mode.js). */
+/* свой вес подхода k: по плану; без плана — вес подхода k прошлой тренировки (подходов меньше — последний), если веса
+   подходов в ней разные (пирамида, сброс); иначе null — один вес на все подходы (подсказка — по прогрессии, sg.kg).
+   prevSets — записанные подходы прошлой тренировки */
+function ownKgs(it, prevSets) {
+  if (it.rx.kgPlan) return k => planKg(it.rx, k);
+  const kgs = prevSets.map(x => x[0]);
+  if (kgs.length < 2 || kgs.some(v => v == null) || kgs.every(v => v === kgs[0])) return () => null;
+  return k => kgs[Math.min(k, kgs.length - 1)];
+}
+function kgCarries(own, i, k) { const a = own(i), b = own(k); return a == null || b == null || a === b; }
+/* вес из последнего записанного сегодня подхода до k (tset — подходы дня; side — 'l' | 'r' в режиме Л/П; own — ownKgs)
+   или null: выше ничего не записано, у записанного нет веса или у подхода k свой вес */
+function carriedKg(it, tset, k, side, own) {
+  for (let i = Math.min(k, tset.length) - 1; i >= 0; i--) {
+    const v = tset[i]; if (!v) continue;
+    const sd = side ? setSides(v, it.ex) : null, kg = sd ? sd[side][0] : v[0];
+    return kg != null && kg >= 0 && kgCarries(own, i, k) ? kg : null;
+  }
+  return null;
+}
+const carryPh = (kg, ph) => kg != null ? fmtKg(kg) : ph;
+/* подсказки веса в таблице карточки по введённому сейчас: неотмеченное пустое поле берёт вес ближайшего выше подхода,
+   где вес вписан или подход отмечен (отмеченный без веса — переноса нет), иначе прежнюю подсказку (data-ph). У Л/П левая
+   сторона — по левой; правая — по правой, а вписанный в левую сторону вес подхода становится и подсказкой его пустой
+   правой стороны и дальше идёт по правой. Свой вес подхода — data-own строки. Вписанное и отмеченное не меняется */
+function carryKgBox(box) {
+  const rows = box ? [...box.querySelectorAll('.lt-r')] : []; if (!rows.length) return;
+  const ownBy = new Map(rows.map(r => [+r.dataset.k, r.dataset.own != null ? parseNum(r.dataset.own) : null]));
+  const own = k => ownBy.get(k) ?? null, lr = rows[0].classList.contains('lt-lr');
+  const filled = (row, inp) => { if (!row.classList.contains('done') && inp.value.trim() === '') return null; const v = parseNum(inp.value); return {kg:v != null && v >= 0 ? v : null}; };
+  const hint = (inp, src, k) => { const ph = carryPh(src && kgCarries(own, src.k, k) ? src.kg : null, inp.dataset.ph ?? inp.placeholder); if (inp.placeholder !== ph) inp.placeholder = ph; };
+  let srcL = null, srcR = null;
+  for (const row of rows) {
+    const k = +row.dataset.k, L = rowFields(row, lr ? 'l' : null).kgIn; if (!L) return; /* без поля веса */
+    const fl = filled(row, L);
+    if (fl) srcL = {k, kg:fl.kg}; else hint(L, srcL, k);
+    if (!lr) continue;
+    const R = rowFields(row, 'r').kgIn, fr = filled(row, R);
+    if (fr) { srcR = {k, kg:fr.kg}; continue; }
+    if (fl) srcR = {k, kg:fl.kg}; /* левая вписана, правая пуста — правая берёт левую */
+    hint(R, srcR, k);
+  }
+}
+/* ввод веса в таблице: подсказки следующих подходов, затем «×2 = …» — по вписанному или перенесённому весу */
+function logKgInput(inp) {
+  const box = inp.closest('.c-log'); if (!box) return;
+  carryKgBox(box); updatePairTotal(inp);
 }
 function logBlock(it) { return `<div class="c-log" data-log="${it.ex.id}">${logRows(it).html}</div>`; }
 
@@ -20262,6 +20321,7 @@ function tickSet(btn) {
     s.s[k] = null; cleanToday(id);
     row.classList.remove('done'); btn.setAttribute('aria-pressed', 'false');
     for (const f of F) { if (f.kgIn) f.kgIn.value = ''; f.rIn.value = ''; }
+    carryKgBox(row.closest('.c-log'));
     logTouch(id); refreshHist(id); return;
   }
   const got = F.map(f => readFields(f, lt)), bad = got.find(g => g.bad);
@@ -20277,6 +20337,7 @@ function tickSet(btn) {
   markImpl(s, it);
   F.forEach((f, i) => { if (f.kgIn) f.kgIn.value = got[i].kg != null ? fmtKg(got[i].kg) : ''; f.rIn.value = got[i].reps; });
   row.classList.add('done'); btn.setAttribute('aria-pressed', 'true');
+  carryKgBox(row.closest('.c-log'));
   logTouch(id); refreshHist(id);
   const total = it.rx.circ ? 0 : it.rx.sets;
   const doneN = s.s.filter(Boolean).length;
@@ -20315,6 +20376,7 @@ function renderLogBox(box, it, drop = -1) {
     if (!inp || inp.closest('.lt-r').classList.contains('done')) continue;
     inp.value = v; if (!kg && inp.dataset.f === 'kg') kg = inp;
   }
+  carryKgBox(box);
   if (kg) updatePairTotal(kg);
   const card = box.closest('.card'); if (card) syncCardLog(card);
 }
@@ -20445,7 +20507,7 @@ document.addEventListener('change', e => {
   if (e.target.id === 'imp-file' && e.target.files && e.target.files[0]) { importLog(e.target.files[0]); e.target.value = ''; }
   else if (e.target.classList && e.target.classList.contains('lt-in')) editSet(e.target);
 });
-document.addEventListener('input', e => { if (e.target.classList && e.target.classList.contains('lt-in') && e.target.dataset.f === 'kg' && e.target.closest('.c-log')) updatePairTotal(e.target); });
+document.addEventListener('input', e => { if (e.target.classList && e.target.classList.contains('lt-in') && e.target.dataset.f === 'kg') logKgInput(e.target); });
 document.addEventListener('keydown', e => {
   const box = e.key === 'Escape' && e.target.closest && e.target.closest('.c-log');
   if (box && box.querySelector('.lt-cf')) { e.preventDefault(); keepSet(box.dataset.log, box); return; }
@@ -21800,14 +21862,17 @@ function workoutFill(s,sg,prev){
   $('#wv-weight-label').hidden=lt==='none';$('#wv-weight-caption').textContent=wl?wl.full:'Вес, кг';$('#wv-rep-caption').textContent=side&&!ex.kind?'Повторы на каждую сторону':repLabel(ex);
   $('#wv-lr-fields').classList.toggle('wv-lr-nokg',lt==='none');$('#wv-lr-kg-cap').textContent=wl?wl.full:'Вес, кг';$('#wv-lr-rep-cap').textContent=repLabel(ex);
   for(const id of ['wv-reps','wv-reps-l','wv-reps-r'])$('#'+id).setAttribute('inputmode',ex.kind==='dist'?'decimal':'numeric');
-  const draft=workout.drafts[workoutDraftKey(s)],today=todaySession(ex.id,false)?.s||[],last=today.slice(0,s.k).filter(Boolean).slice(-1)[0];
-  const planned=planKg(it.rx,s.k),kgText=v=>v!=null?fmtKg(v):'';
-  $('#wv-kg').value=draft?draft.kg:stored?kgText(stored[0]):planned!=null?fmtKg(planned):last?.[0]!=null?fmtKg(last[0]):prev?.[0]!=null?fmtKg(prev[0]):'';
+  const draft=workout.drafts[workoutDraftKey(s)],today=todaySession(ex.id,false)?.s||[];
+  /* вес: записанный сегодня в подходе выше (carriedKg — то же правило, что в карточке: свой вес подхода по плану или
+     по пирамиде прошлого раза не перетирается), иначе свой вес подхода, иначе из прошлой тренировки */
+  const own=ownKgs(it,sg.prev?sg.prev.s.filter(Boolean):[]),planned=own(s.k),kgText=v=>v!=null?fmtKg(v):'',carried=carriedKg(it,today,s.k,null,own);
+  $('#wv-kg').value=draft?draft.kg:stored?kgText(stored[0]):carried!=null?fmtKg(carried):planned!=null?fmtKg(planned):prev?.[0]!=null?fmtKg(prev[0]):'';
   $('#wv-reps').value=draft?draft.reps:stored?String(stored[1]):'';$('#wv-reps').placeholder=it.rx.reps;
-  /* Л/П: записанные стороны, иначе — общий вес; вес стороны по умолчанию — из прошлых сторон, если они были */
-  const ssd=stored&&setSides(stored,ex),lsd=last&&setSides(last,ex),psd=prev&&setSides(prev,ex);
+  /* Л/П: записанные стороны, иначе — общий вес; вес стороны по умолчанию — из подхода выше по своей стороне, из прошлых
+     сторон, если они были */
+  const ssd=stored&&setSides(stored,ex),psd=prev&&setSides(prev,ex);
   for(const k of ['l','r']){
-    const kgDef=planned!=null?fmtKg(planned):lsd?kgText(lsd[k][0]):last?.[0]!=null?fmtKg(last[0]):psd?kgText(psd[k][0]):prev?.[0]!=null?fmtKg(prev[0]):'';
+    const ck=carriedKg(it,today,s.k,k,own),kgDef=ck!=null?fmtKg(ck):planned!=null?fmtKg(planned):psd?kgText(psd[k][0]):prev?.[0]!=null?fmtKg(prev[0]):'';
     $('#wv-kg-'+k).value=draft&&draft['k'+k]!==undefined?draft['k'+k]:ssd?kgText(ssd[k][0]):stored?kgText(stored[0]):kgDef;
     $('#wv-reps-'+k).value=draft&&draft['r'+k]!==undefined?draft['r'+k]:ssd?String(ssd[k][1]):stored?String(stored[1]):'';$('#wv-reps-'+k).placeholder=it.rx.reps;
   }
@@ -23204,6 +23269,6 @@ renderPlan();
 prefetchStressIds();
 logInit();
 
-window.PODHOD_VERSION='4.94.0';window.PODHOD_BUILD='4.94.0-d12dfe7f3eb8';window.PODHOD_RENDER={"skin":"31c4707ea0","skeleton":"f4e7c4b726","anatomy":"48636840a9"};window.PODHOD_LANG='ru';
+window.PODHOD_VERSION='4.95.0';window.PODHOD_BUILD='4.95.0-cdd4f1868e7e';window.PODHOD_RENDER={"skin":"31c4707ea0","skeleton":"f4e7c4b726","anatomy":"48636840a9"};window.PODHOD_LANG='ru';
 
 </script>
