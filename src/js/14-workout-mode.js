@@ -110,14 +110,17 @@ function workoutFill(s,sg,prev){
   $('#wv-weight-label').hidden=lt==='none';$('#wv-weight-caption').textContent=wl?wl.full:'Вес, кг';$('#wv-rep-caption').textContent=side&&!ex.kind?'Повторы на каждую сторону':repLabel(ex);
   $('#wv-lr-fields').classList.toggle('wv-lr-nokg',lt==='none');$('#wv-lr-kg-cap').textContent=wl?wl.full:'Вес, кг';$('#wv-lr-rep-cap').textContent=repLabel(ex);
   for(const id of ['wv-reps','wv-reps-l','wv-reps-r'])$('#'+id).setAttribute('inputmode',ex.kind==='dist'?'decimal':'numeric');
-  const draft=workout.drafts[workoutDraftKey(s)],today=todaySession(ex.id,false)?.s||[],last=today.slice(0,s.k).filter(Boolean).slice(-1)[0];
-  const planned=planKg(it.rx,s.k),kgText=v=>v!=null?fmtKg(v):'';
-  $('#wv-kg').value=draft?draft.kg:stored?kgText(stored[0]):planned!=null?fmtKg(planned):last?.[0]!=null?fmtKg(last[0]):prev?.[0]!=null?fmtKg(prev[0]):'';
+  const draft=workout.drafts[workoutDraftKey(s)],today=todaySession(ex.id,false)?.s||[];
+  /* вес: записанный сегодня в подходе выше (carriedKg — то же правило, что в карточке: свой вес подхода по плану или
+     по пирамиде прошлого раза не перетирается), иначе свой вес подхода, иначе из прошлой тренировки */
+  const own=ownKgs(it,sg.prev?sg.prev.s.filter(Boolean):[]),planned=own(s.k),kgText=v=>v!=null?fmtKg(v):'',carried=carriedKg(it,today,s.k,null,own);
+  $('#wv-kg').value=draft?draft.kg:stored?kgText(stored[0]):carried!=null?fmtKg(carried):planned!=null?fmtKg(planned):prev?.[0]!=null?fmtKg(prev[0]):'';
   $('#wv-reps').value=draft?draft.reps:stored?String(stored[1]):'';$('#wv-reps').placeholder=it.rx.reps;
-  /* Л/П: записанные стороны, иначе — общий вес; вес стороны по умолчанию — из прошлых сторон, если они были */
-  const ssd=stored&&setSides(stored,ex),lsd=last&&setSides(last,ex),psd=prev&&setSides(prev,ex);
+  /* Л/П: записанные стороны, иначе — общий вес; вес стороны по умолчанию — из подхода выше по своей стороне, из прошлых
+     сторон, если они были */
+  const ssd=stored&&setSides(stored,ex),psd=prev&&setSides(prev,ex);
   for(const k of ['l','r']){
-    const kgDef=planned!=null?fmtKg(planned):lsd?kgText(lsd[k][0]):last?.[0]!=null?fmtKg(last[0]):psd?kgText(psd[k][0]):prev?.[0]!=null?fmtKg(prev[0]):'';
+    const ck=carriedKg(it,today,s.k,k,own),kgDef=ck!=null?fmtKg(ck):planned!=null?fmtKg(planned):psd?kgText(psd[k][0]):prev?.[0]!=null?fmtKg(prev[0]):'';
     $('#wv-kg-'+k).value=draft&&draft['k'+k]!==undefined?draft['k'+k]:ssd?kgText(ssd[k][0]):stored?kgText(stored[0]):kgDef;
     $('#wv-reps-'+k).value=draft&&draft['r'+k]!==undefined?draft['r'+k]:ssd?String(ssd[k][1]):stored?String(stored[1]):'';$('#wv-reps-'+k).placeholder=it.rx.reps;
   }
