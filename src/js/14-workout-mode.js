@@ -157,7 +157,7 @@ function workoutShow(index){
   holdSetup(s,sg);
   const cue=MOTION_FOCUS[ex.id];$('#wv-setup').textContent=cue?.setup||ex.tech[0];$('#wv-control').textContent=cue?.control||ex.tech[1];$('#wv-breath').textContent=ex.breath;
   disposeMotion(workout.motion);workout.motion={it,f:null,clock:0,paused:reduceMotion,durations:motionDurations(it)};$('#wv-angle').textContent=CAMERA3[motionCamera(ex)].label;
-  $('#wv-motion').textContent=reduceMotion?'Воспроизвести':'Пауза';$('#wv-motion').setAttribute('aria-pressed',String(!reduceMotion));mountWorkoutCameras();
+  $('#wv-motion').textContent=reduceMotion?'Воспроизвести':'Пауза';mountWorkoutCameras();
   $('#wv-prev').disabled=workout.index===0;$('#wv-next').disabled=workout.index===workout.queue.length-1;
   Heart.set(s);
   saveWorkout();workoutTick();
@@ -489,7 +489,7 @@ function setupWorkout(){
     if(t.id==='wv-rest-pause'){workoutRestPause();return;}
     /* ±15 с на паузе — от момента паузы (время стоит), сигнал — после «▶» */
     if(t.dataset.wvRest){const end=restAdjust(workout.restUntil,restClock(workout.restPaused,Date.now()),Number(t.dataset.wvRest));if(end!==workout.restUntil){workout.restUntil=end;if(!workout.restPaused)RestAlarm.arm(end,{from:workout.restFrom||undefined});saveWorkout();workoutTick();}return;}
-    if(t.id==='wv-motion'){const m=workout.motion;m.paused=!m.paused;t.textContent=m.paused?'Воспроизвести':'Пауза';t.setAttribute('aria-pressed',String(!m.paused));return;}
+    if(t.id==='wv-motion'){const m=workout.motion;m.paused=!m.paused;t.textContent=m.paused?'Воспроизвести':'Пауза';return;}
     if(t.id==='wv-technique'){workoutCapture();if(workout.motion)openMotionItem(workout.motion.it,workout.motion.clock);}
   });
 }

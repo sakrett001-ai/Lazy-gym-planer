@@ -1,11 +1,11 @@
 /* «Заменить»: список замен под кнопкой — в стиле списка планов «+ В свой план» (.cp-pick, 27-custom.css);
    строка «что меняется» — обычным шрифтом, а не моноширинной подписью чипа. «Вернуть» после замены и «Убрать». */
 .c-act .sw-pick { max-width:none; margin:2px 0 0; }
-.sw-pick .place small { font:400 12.5px/1.35 var(--f-body); color:var(--muted); }
-.sw-none { margin:0; font-size:13.5px; line-height:1.4; color:var(--ink); }
-.sw-done, .sw-gone { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; font-size:13.5px; line-height:1.4; color:var(--ink); }
+.sw-pick .place small { font:400 .78125rem/1.35 var(--f-body); color:var(--muted); }
+.sw-none { margin:0; font-size:.84375rem; line-height:1.4; color:var(--ink); }
+.sw-done, .sw-gone { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; font-size:.84375rem; line-height:1.4; color:var(--ink); }
 .sw-done { flex-basis:100%; margin:0; padding:8px 10px; border-radius:10px; background:var(--accent-soft); }
-.sw-done > span, .sw-gone > span { flex:1 1 180px; min-width:0; overflow-wrap:anywhere; }
+.sw-done > span, .sw-gone > span { flex:1 1 11.25rem; min-width:0; overflow-wrap:anywhere; }
 .sw-gone { list-style:none; border:1px dashed var(--line); border-radius:var(--r); background:var(--surface-2); padding:10px 14px; }
 div.sw-gone { margin-top:12px; }
 .sw-undo { flex:none; min-height:44px; padding:0 16px; border:1px solid var(--accent); border-radius:9px; background:var(--surface); color:var(--accent); font:inherit; font-weight:600; cursor:pointer; }
