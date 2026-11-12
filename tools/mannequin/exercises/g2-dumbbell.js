@@ -490,6 +490,10 @@ const KBDL = once(() => {
   const H0 = [0, KB.bottom + KB.handle, 4], lean0 = 58, hz0 = -24;
   return { H0, H1: [0, 75, 16], lean0, hz0, st: 32, toe: 12 };
 });
+/* концентрированное сгибание: центр свободной ладони — в CONC_PALM см от тазобедренного по бедру (74 % его длины), наклон
+   ладони от верха бедра к середине — из CONC_TILT° (палец, пронация, запястье — дальше от пределов). Ближе к тазу (24 см) —
+   пронация и отведение запястья за пределами (ладонь плашмя на верх бедра при почти вертикальном предплечье) */
+const CONC_PALM = 30, CONC_TILT = [0, 15, 30, 45];
 /* свободная ладонь на бедре над коленом (опора в наклоне): центр ладони — на передней поверхности бедра в 70 % его длины */
 function handOnThigh(C, q, s, at = .7) {
   const { V } = C, f = C.fk(q), hip = f.P['hip' + s], kn = f.P['kn' + s], ax = V.unit(V.sub(kn, hip)), A = V.add(hip, ax, C.M.B.th * at);
@@ -571,11 +575,23 @@ module.exports = {
         const d = V.unit(V.add(V.scale(u, Math.cos(phi)), w, Math.sin(phi))), grip = V.add(E, d, 35.6);
         C.hold(q, 'L', grip, V.unit(V.add(V.sub(E, V.mix(gh, grip, .5)), [1, 0, 0], .3)), { pron: C.lerp(-45, -86, e * e), allowShort: !pass });
       }
-      /* правая рука: ладонь на правом бедре над коленом — на верхней поверхности бедра (кожа сверху в этом месте, поджатие
-         0,2 см). Прежде ладонь ставилась на 7,6 см над осью колена и висела над округлым коленом на 1,4 см, касаясь краем */
-      const g2 = C.fk(q), knR = g2.P.knR, hipR = g2.P.hipR, tR = V.unit(V.sub(knR, hipR)), at = V.add(hipR, tR, 36);
-      const top = Math.max(...C.region(q, 'thR').filter(p => Math.hypot(p[0] - at[0], p[2] - at[2]) < 2.5).map(p => p[1]));
-      palmBest(C, q, 'R', [at[0], top - .2, at[2]], [0, 1, 0], fan(C, [0, 1, 0], tR, 20), [[-1, .3, -.3], [-1, 0, 0], [-1, .5, .3], [-.5, .3, -1]].map(v => V.unit(v)));
+      /* правая рука: ладонь на правом бедре над коленом (опора свободной рукой). До 4.98.0 центр ладони стоял в 36 см от
+         тазобедренного (88 % бедра, у колена): ладонь лежала на округлом верху колена только основанием, пальцы уходили
+         за колено в воздух (снимок владельца, 4.98.0). Теперь центр ладони — на поверхности бедра в CONC_PALM см от
+         тазобедренного, сверху или сверху-изнутри (наклон к середине подбирается: где пронация, запястье и ротация плеча
+         дальше от пределов), поджатие 0,2 см; пальцы — по бедру к колену */
+      const g2 = C.fk(q), knR = g2.P.knR, hipR = g2.P.hipR, tR = V.unit(V.sub(knR, hipR)), A = V.add(hipR, tR, CONC_PALM), med = V.scale(C.latP(q, 'R'), -1);
+      const pts = C.region(q, 'thR').filter(p => Math.abs(V.dot(V.sub(p, A), tR)) <= 2.2);
+      let best = null;
+      for (const tilt of CONC_TILT) {
+        const up = V.unit(V.perp(V.add([0, Math.cos(tilt * C.D2R), 0], med, Math.sin(tilt * C.D2R)), tR));
+        let top = null, tv = -Infinity; for (const p of pts) { const v = V.dot(V.unit(V.perp(V.sub(p, A), tR)), up); if (v > tv) { tv = v; top = p; } }
+        const n = V.unit(V.perp(V.sub(top, A), tR)), qq = C.M.clone(q);
+        const pen = palmBest(C, qq, 'R', V.add(top, n, -.2), n, fan(C, n, tR, 20), [[-1, .3, -.3], [-1, 0, 0], [-1, .5, .3], [-.5, .3, -1], [-.6, .6, -.6]].map(v => V.unit(v)));
+        if (!best || pen < best.pen - 1e-6) best = { pen, q: qq };
+      }
+      for (const k of ['shoulder', 'elbow', 'pron', 'wrist', 'clav', 'scap', 'girdle']) q.R[k] = best.q.R[k];
+      q.hands = { ...(q.hands || {}), R: best.q.hands.R }; q.girdleMode = best.q.girdleMode;
       return q;
     }
   },

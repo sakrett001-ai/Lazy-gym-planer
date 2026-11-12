@@ -218,19 +218,26 @@ const AnnySkin = (() => {
        ног, жим стоя внизу, отжимания) — там полосы нет, а рука у корпуса;
      * у подъёма к 180° — плавно до 0 от ROLL.EL0 до ROLL.EL1: разложение на размах и закрутку там вырождается (ось размаха
        неустойчива), а при 168–178° со снятой закруткой хуже «прыжки с разведением» (16 → 22) и жим Арнольда (12 → 14).
-       Большая закрутка наружу (BIG0…BIG1: от 40° до 60°) снимается и выше — подъём UP0…UP1 (168–171°) до HI0…HI1
-       (174–179°): жим гири над головой вверху (подъём 172°, закрутка 81°) — рёбер с изломом больше 40° 48 → 6, рывок гири
-       вверху (170°, 52°) — 32 → 16; с 170° и при любой закрутке хуже «прыжки с разведением», жим Арнольда, жим гантелей
-       (закрутка 13–29°), а с 162° — турецкий подъём (167–169°, 78–85°: рёбер больше 40° 8 → 12).
+       Большая закрутка наружу (BIG0…BIG1: от 40° до 60°) снимается и выше — до HI0…HI1 (174–179°): жим гири над головой
+       вверху (подъём 172°, закрутка 81°) — рёбер с изломом больше 40° 48 → 6, рывок гири вверху (170°, 52°) — 32 → 16; с 170°
+       и при любой закрутке хуже «прыжки с разведением», жим Арнольда, жим гантелей (закрутка 13–29°).
+       Снятая закрутка при данной закрутке плеча не растёт с подъёмом выше LO1 (только убывает): иначе рука, которая идёт
+       вверх, проходит «яму» — кожа плеча поворачивается назад и снова вперёд. До 4.98.0 большая закрутка снималась только с
+       подъёма UP0…UP1 (168–171°), а при 162–168° — уже не целиком (1 − EL0…EL1): у жима гири вверху снятая закрутка за 4 % повтора
+       шла 73° → 35° → 81°, кожа плеча — на 1,5 см туда и обратно при плавном суставе (виляние плеча, видео владельца); у
+       турецкого подъёма — 74° → 28° → 43°, 2,7 см; у рывка гири — 0,9 см (tools/anny-look/wobble.js). Статически «яма» была
+       выбрана под турецкий подъём (167–169°, 78–85°: рёбер с изломом больше 40° 8 при яме, 12 без неё) — 4 ребра против рывка
+       кожи в каждом повторе.
      Формы кожи строятся под скиннинг с этой рамкой (sculpt.js, correctives.py; кроме PLAIN): AnnySkin.ROLL отпечатан в
      anny.bin (tools/anny-look/inputs.js), сменился — npm run anny:build. */
-  const ROLL = { OUT: 1, IN: 0, LO0: 90, LO1: 130, EL0: 162, EL1: 172, BIG0: 40, BIG1: 60, UP0: 168, UP1: 171, HI0: 174, HI1: 179 };
+  const ROLL = { OUT: 1, IN: 0, LO0: 90, LO1: 130, EL0: 162, EL1: 172, BIG0: 40, BIG1: 60, HI0: 174, HI1: 179 };
   const flipY = v => [v[0], -v[1], v[2]], intM = f => M.M3.cols(flipY(f.x), flipY(f.y), flipY(f.z));
   const sstep = (x, a, b) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-  /* закрутка (градусы, наружу +), которую снимает рамка uar, при закрутке плеча e и подъёме el */
+  /* закрутка (градусы, наружу +), которую снимает рамка uar, при закрутке плеча e и подъёме el; выше LO1 при той же закрутке
+     только убывает с подъёмом (обе доли — невозрастающие по el) */
   function rollOff(e, el) {
     let top = 1 - sstep(el, ROLL.EL0, ROLL.EL1);
-    if (e > 0) top = Math.max(top, sstep(e, ROLL.BIG0, ROLL.BIG1) * sstep(el, ROLL.UP0, ROLL.UP1) * (1 - sstep(el, ROLL.HI0, ROLL.HI1)));
+    if (e > 0) top = Math.max(top, sstep(e, ROLL.BIG0, ROLL.BIG1) * (1 - sstep(el, ROLL.HI0, ROLL.HI1)));
     return (e > 0 ? ROLL.OUT : ROLL.IN) * e * sstep(el, ROLL.LO0, ROLL.LO1) * top;
   }
   /* доля рамки закрутки в ячейке плеча (как roll_share в build.py): 1 у плечевого сустава и до 0 на at.a1 см по оси плеча в
@@ -327,8 +334,15 @@ const AnnySkin = (() => {
       /* второй угол (касание в локте: доля по пронации) — b0 → 0, b1 → 1 */
       if (c.angle2 && w > 0) w *= ramp(src?.[c.angle2], c.b0, c.b1);
       for (const [k, c0, c1] of c.also || []) if (w > 0) w *= ramp(src?.[k], c0, c1);
-      /* нижнее продолжение (low: [угол, колено, окно]): ниже колена — не меньше, чем от 0 при угле до веса в колене, со своим окном (also к нему не применяется) */
-      if (c.low && v < c.low[1]) { let lw = ramp(c.low[1], c.a0, c.a1) * ramp(v, c.low[0], c.low[1]); for (const [k, c0, c1] of c.low[2]) lw *= ramp(src?.[k], c0, c1); w = Math.max(w, lw); }
+      /* нижнее продолжение (low: [угол, колено, окно, спад]): ниже колена — не меньше, чем от 0 при угле до веса в колене, со
+         своим окном (also к нему не применяется); выше колена — плавно сходит на нет за спад° (sstep). Без спада вес на колене
+         рвался там, где окно продолжения шире окна формы (armsFwd: отведение 12–30°): жимы стоя и сидя, Арнольд, подъём ног
+         в висе проходили подъём 155° со скачком веса 0,6–0,7 — кожа надплечья на 0,5–0,8 см за кадр (tools/anny-look/wobble.js) */
+      if (c.low && (v < c.low[1] || v < c.low[1] + (c.low[3] || 0))) {
+        let lw = ramp(c.low[1], c.a0, c.a1) * (v < c.low[1] ? ramp(v, c.low[0], c.low[1]) : 1 - sstep(v, c.low[1], c.low[1] + c.low[3]));
+        for (const [k, c0, c1] of c.low[2]) lw *= ramp(src?.[k], c0, c1);
+        w = Math.max(w, lw);
+      }
       return w;
     });
   }
@@ -555,7 +569,7 @@ const AnnySkin = (() => {
     }
     return d._regions = { fn: regionOf, ids, rid };
   }
-  return { load, decode, frameMats, rollFrame, rollShare, slotDQ, blendRot, ROLL, skinMats, dualQuats, correctiveWeights, skin, supports, supportBody, supportShape, supportSD, SUP, regions, bindInv, digitRig, digitPose, DIG, _digit: { R3, chain, xf, flexRot, flexAngle, flatThumb }, get data() { return data; }, set data(x) { data = x; } };
+  return { load, decode, frameMats, rollFrame, rollOff, rollShare, slotDQ, blendRot, ROLL, skinMats, dualQuats, correctiveWeights, skin, supports, supportBody, supportShape, supportSD, SUP, regions, bindInv, digitRig, digitPose, DIG, _digit: { R3, chain, xf, flexRot, flexAngle, flatThumb }, get data() { return data; }, set data(x) { data = x; } };
 })();
 if (typeof window !== 'undefined') window.AnnySkin = AnnySkin; /* объёмная сцена (volume.js) берёт данные и рамки отсюда */
 if (typeof module !== 'undefined' && module.exports) module.exports = AnnySkin;
