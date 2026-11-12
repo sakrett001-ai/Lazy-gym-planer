@@ -430,7 +430,7 @@ const Heart = (() => {
     text('#wv-hr-val', val); show('#wv-hr-unit', view === 'live' && !(armed && on)); text('#wv-hr-note', note); text('#wv-hr-meta', meta);
     show('#wv-hr-note', !!note); show('#wv-hr-meta', !!meta);
     const btn = q('#wv-hr-btn');
-    btn.setAttribute('aria-label', armed && on ? 'Отключить пульсометр' : view === 'live' ? `${'Пульс'} ${bpm} ${'уд/мин. Нажмите, чтобы отключить пульсометр'}` : on ? 'Пульсометр подключается. Нажмите, чтобы отключить' : 'Подключить пульсометр');
+    btn.setAttribute('aria-label', armed && on ? 'Отключить пульсометр' : view === 'live' ? `${'Пульс'} ${bpm} ${'уд/мин. Нажмите, чтобы отключить пульсометр'}` : on ? 'Пульсометр подключается. Нажмите, чтобы отключить' : 'Пульс: подключить пульсометр');
     const wv = q('#workout-view'); if (wv && view === 'live') wv.style.setProperty('--hr-beat', (60 / bpm).toFixed(2) + 's');
     show('#wv-hr-help', !!(c && c.help) && !on);
     paintRest(now, bpm, on);

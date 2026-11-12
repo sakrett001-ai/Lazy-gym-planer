@@ -36,7 +36,7 @@ function musFoldHead(ex) {
 function logFoldBar(it, n, done) {
   const id = it.ex.id, open = cardOpen('log', id), cnt = histCount(id);
   return `<div class="lt-bar"><button type="button" class="cg-h lt-tog" data-cfold="log" aria-expanded="${open}" aria-controls="lt-${id}"><span class="cg-x"><span class="cg-t">Подходы</span><span class="cg-s${done ? ' cg-done' : ''}">${logBarText(done, n)}</span></span>${chev}</button>
-    <button type="button" class="btn-ghost" data-hist="1" aria-expanded="false">${ICON.chart}<span>История</span><small>${cnt || ''}</small></button></div>`;
+    <button type="button" class="btn-ghost" data-hist="1" aria-expanded="false">${ICON.chart}<span>История</span><span class="vh">: ${esc(it.name)}</span><small>${cnt || ''}</small></button></div>`;
 }
 function logBarText(done, n) { return `${done} из ${n}`; }
 /* отметили или сняли подход — счётчик в заголовке записи */

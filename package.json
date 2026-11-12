@@ -1,6 +1,6 @@
 {
   "name": "lazy-gym-planner",
-  "version": "4.98.0",
+  "version": "4.99.0",
   "private": true,
   "description": "Lazy Gym Planner — планировщик тренировок",
   "scripts": {
@@ -13,7 +13,8 @@
     "test": "node --test tools/*.test.js",
     "i18n:audit": "node tools/i18n-audit.mjs",
     "ui:check": "node tools/ui-check.mjs",
-    "check": "npm test && node tools/mannequin/check.js --quiet && npm run skeleton:fit && npm run muscles:check && npm run anny:check && npm run audit && npm run audit:catalog && npm run audit:render && npm run build && node --check dist/app.js && node --check dist/en/app.js && node tools/check-catalog-bundle.js && node tools/i18n-audit.mjs && node tools/ui-check.mjs",
+    "a11y:check": "node tools/a11y-check.mjs",
+    "check": "npm test && node tools/mannequin/check.js --quiet && npm run skeleton:fit && npm run muscles:check && npm run anny:check && npm run audit && npm run audit:catalog && npm run audit:render && npm run build && node --check dist/app.js && node --check dist/en/app.js && node tools/check-catalog-bundle.js && node tools/i18n-audit.mjs && node tools/ui-check.mjs && node tools/a11y-check.mjs",
     "serve": "node build.js && npx --yes serve dist -l 8080",
     "deploy": "sh deploy.sh",
     "i18n": "node i18n/extract.js en",
