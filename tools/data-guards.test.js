@@ -24,7 +24,7 @@ function app({ past = {}, today = {}, items = ITEMS, set = {} } = {}) {
   m.get('renderSetup=()=>{}; logRefresh=()=>{}; startRest=()=>{}; LOG.mode="local";');
   const a = m.get(`({S,LOG,AR,WEEKS,EXI,GOALS,buildPlan,logRows,logBlock,tickSet,editSet,renderLogBox,logKgInput,todaySession,suggest,kgDoubt,kgAsk,kgYes,kgFix,
     workoutFill,commitWorkout,workoutAskHide,workoutAskFix,cleanReps,cleanCustomItem,customSetReps,customOf,planReps,parseRange,rxHtml,planFileObject,readPlanFile,
-    reserveOf,gentleHtml,journalVal,histHtml,histMetric,previewItem,PLACE_DEFAULTS,ensurePlaces,ensureCustoms,openCustom})`);
+    reserveOf,gentleHtml,journalVal,histHtml,histMetric,previewItem,workWeightOf,PLACE_DEFAULTS,ensurePlaces,ensureCustoms,openCustom})`);
   a.m = m;
   a.S.places = a.PLACE_DEFAULTS.map(p => ({ ...p, equip: p.equip.slice() })); a.S.place = 'gym'; a.S.adapt = null; a.ensurePlaces(a.S);
   Object.assign(a.S, { mode: 'custom', format: 'classic', goal: 'mass', level: 'mid', groups: ['chest', 'back'], fav: [], lr: {}, customs: [{ id: 't', name: 'Т', items: items.map(x => ({ ...x })) }], custom: 't' }, set);
@@ -75,7 +75,7 @@ function showStep(a, d, id, k) {
 test('2× last time or more (and at least 5 kg more) asks; without history — the implement’s limit', () => {
   const a = app({ past: { squat: [[52.5, 8], [52.5, 8]], dbbench: [[2, 12]] } });
   const doubt = (id, kg, k = 0) => a.kgDoubt(a.item(id), [kg], k);
-  assert.equal(doubt('squat', 5000).text, 'Это намного больше, чем в прошлый раз (52,5 кг). Записать 5000 кг?');
+  assert.equal(doubt('squat', 5000).text, 'Это намного больше, чем в прошлый раз (52,5\u00a0кг). Записать 5000\u00a0кг?');
   assert.equal(doubt('squat', 104), null, 'less than twice — no question');
   assert.ok(doubt('squat', 105), 'exactly twice — a question');
   assert.equal(doubt('dbbench', 4), null, '2 → 4 kg dumbbells: an ordinary step, not a typo');
@@ -83,7 +83,7 @@ test('2× last time or more (and at least 5 kg more) asks; without history — t
   assert.equal(doubt('squat', 0), null); assert.equal(a.kgDoubt(a.item('squat'), [null], 0), null, 'no weight — nothing to ask');
   /* без прошлых тренировок — сегодняшние подходы, кроме этого */
   a.todaySession('bbbench', true).s = [[50, 10]];
-  assert.equal(doubt('bbbench', 500, 1).text, 'Это намного больше, чем сегодня в других подходах (50 кг). Записать 500 кг?');
+  assert.equal(doubt('bbbench', 500, 1).text, 'Это намного больше, чем сегодня в других подходах (50\u00a0кг). Записать 500\u00a0кг?');
   assert.equal(doubt('bbbench', 500, 0), null, 'the set itself is not its own reference (bar limit 500 kg)');
   /* без истории: пределы по снаряду — с запасом над рекордами */
   a.LOG.data = {};
@@ -91,16 +91,19 @@ test('2× last time or more (and at least 5 kg more) asks; without history — t
   for (const [id, eq, max, word] of [['dbbench', ['db', 'bench'], 100, 'одной гантели'], ['kbswing', ['kb'], 100, 'одной гири'], ['bbbench', ['bb', 'bench'], 500, 'штанги'],
     ['legpress', ['legpress'], 1000, 'тренажёра'], ['latpull', ['cable'], 300, 'тренажёра'], ['pullup', ['bar'], 200, 'доп. веса'], ['assistpull', ['gravitron'], 150, 'противовеса']]) {
     assert.equal(lim(id, eq, max), null, `${id}: ${max} kg is still fine`);
-    assert.equal(lim(id, eq, max + 0.5).text, `Для ${word} это необычно много. Записать ${String(max + 0.5).replace('.', ',')} кг?`, id);
+    assert.equal(lim(id, eq, max + 0.5).text, `Для ${word} это необычно много. Записать ${String(max + 0.5).replace('.', ',')}\u00a0кг?`, id);
   }
   assert.equal(lim('bandrow', ['band'], 5000), null, 'nothing to weigh — never asks');
 });
 
 test('card: «5000» is not logged, the row asks «Записать / Исправить»; the answer decides', () => {
   const a = app({ past: { squat: [[52.5, 8], [52.5, 8], [52.5, 8], [52.5, 8]] } }), t = mount(a, 'squat');
-  t.type(0, '5000', '8'); t.tick(0);
+  t.type(0, '5000', '8');
+  assert.deepEqual(t.phKg().slice(1), ['52,5', '52,5', '52,5'], 'the doubtful «5000» is not carried to the next sets');
+  assert.equal(a.workWeightOf(a.item('squat'), t.box.closest('.card')), 52.5, 'nor does the warm-up lead to it');
+  t.tick(0);
   assert.equal(a.logged('squat'), null, 'nothing is logged, no empty day entry');
-  assert.deepEqual(t.ask(), { k: 0, text: 'Это намного больше, чем в прошлый раз (52,5 кг). Записать 5000 кг?', buttons: ['Записать', 'Исправить'] });
+  assert.deepEqual(t.ask(), { k: 0, text: 'Это намного больше, чем в прошлый раз (52,5\u00a0кг). Записать 5000\u00a0кг?', buttons: ['Записать', 'Исправить'] });
   assert.match(t.box.querySelector('.lt-r[data-k="0"]').className, /lt-arm/, 'the row is highlighted, as when removing a set');
   assert.equal(t.d.activeElement?.dataset.kgfix, 'squat', 'focus on «Исправить»');
   a.renderLogBox(t.box, a.item('squat'));
@@ -123,7 +126,7 @@ test('card: editing a logged set to an implausible weight keeps the old record u
   const a = app({ past: { squat: [[52.5, 8]] }, today: { squat: [[50, 8]] } }), t = mount(a, 'squat');
   t.kg(0).value = '5000'; a.editSet(t.kg(0));
   assert.deepEqual(a.logged('squat'), [[50, 8]], 'the record is unchanged');
-  assert.equal(t.ask().text, 'Это намного больше, чем в прошлый раз (52,5 кг). Записать 5000 кг?');
+  assert.equal(t.ask().text, 'Это намного больше, чем в прошлый раз (52,5\u00a0кг). Записать 5000\u00a0кг?');
   a.kgYes('squat', t.box);
   assert.deepEqual(a.logged('squat'), [[5000, 8]]);
   t.kg(0).value = '55'; a.editSet(t.kg(0));
@@ -140,7 +143,7 @@ test('workout screen: the same question under the fields, «Подход вып�
   a.commitWorkout(null);
   const ask = d.querySelector('#wv-kg-ask');
   assert.equal(ask.hidden, false); assert.equal(d.querySelector('#wv-done').hidden, true, 'one of the two answers, not «Подход выполнен»');
-  assert.equal(d.querySelector('#wv-kg-ask-t').textContent, 'Это намного больше, чем в прошлый раз (52,5 кг). Записать 5000 кг?');
+  assert.equal(d.querySelector('#wv-kg-ask-t').textContent, 'Это намного больше, чем в прошлый раз (52,5\u00a0кг). Записать 5000\u00a0кг?');
   assert.deepEqual([...ask.querySelectorAll('button')].map(b => b.textContent), ['Записать', 'Исправить']);
   assert.equal(d.activeElement.id, 'wv-kg-fix');
   assert.equal(a.logged('squat'), null, 'nothing logged');

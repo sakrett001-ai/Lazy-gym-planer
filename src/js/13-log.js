@@ -462,7 +462,13 @@ function carryKgBox(box) {
   const rows = box ? [...box.querySelectorAll('.lt-r')] : []; if (!rows.length) return;
   const ownBy = new Map(rows.map(r => [+r.dataset.k, r.dataset.own != null ? parseNum(r.dataset.own) : null]));
   const own = k => ownBy.get(k) ?? null, lr = rows[0].classList.contains('lt-lr');
-  const filled = (row, inp) => { if (!row.classList.contains('done') && inp.value.trim() === '') return null; const v = parseNum(inp.value); return {kg:v != null && v >= 0 ? v : null}; };
+  /* вписанный, но не отмеченный неправдоподобный вес («5000», kgDoubt) дальше подсказкой не идёт — сначала ответ на вопрос о нём */
+  const it = plan && plan.items && plan.items.find(x => x.ex.id === box.dataset.log);
+  const filled = (row, inp) => {
+    const done = row.classList.contains('done'); if (!done && inp.value.trim() === '') return null;
+    const v = parseNum(inp.value), odd = !done && v > 0 && it && kgDoubt(it, [v], +row.dataset.k);
+    return {kg:v != null && v >= 0 && !odd ? v : null};
+  };
   const hint = (inp, src, k) => { const ph = carryPh(src && kgCarries(own, src.k, k) ? src.kg : null, inp.dataset.ph ?? inp.placeholder); if (inp.placeholder !== ph) inp.placeholder = ph; };
   let srcL = null, srcR = null;
   for (const row of rows) {
@@ -525,8 +531,8 @@ function kgDoubt(it, kgs, k) {
   const weights = (s, skip = -1) => s ? s.s.flatMap((x, i) => { if (!x || i === skip) return []; const sd = setSides(x, ex); return sd ? [sd.l[0], sd.r[0]] : [x[0]]; }).filter(v => v > 0) : [];
   const last = pastSessions(ex.id).reverse().find(s => weights(s).length), today = weights(todaySession(ex.id, false), k);
   const ref = last ? Math.max(...weights(last)) : today.length ? Math.max(...today) : null;
-  const ask = why => ({kg, text:`${why} Записать ${fmtKg(kg)} кг?`});
-  if (ref != null) return kg >= 2 * ref && kg - ref >= 5 ? ask(last ? `Это намного больше, чем в прошлый раз (${fmtKg(ref)} кг).` : `Это намного больше, чем сегодня в других подходах (${fmtKg(ref)} кг).`) : null;
+  const ask = why => ({kg, text:`${why} Записать ${fmtKg(kg)} кг?`});
+  if (ref != null) return kg >= 2 * ref && kg - ref >= 5 ? ask(last ? `Это намного больше, чем в прошлый раз (${fmtKg(ref)} кг).` : `Это намного больше, чем сегодня в других подходах (${fmtKg(ref)} кг).`) : null;
   const kind = kgLimitOf(it);
   return kg > KG_LIMIT[kind] ? ask(KG_LIMIT_NOTE[kind]) : null;
 }
