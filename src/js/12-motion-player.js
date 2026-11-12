@@ -616,16 +616,7 @@ document.addEventListener('change', e => {
   if (e.target.id === 'place-adapt') { S.adapt = e.target.value || null; ensurePlaces(S); return regen(); }
 });
 const swapKey = () => S.mode === 'program' ? 'd' + S.day : 's';
-function regen(resetSwaps = true) { if (resetSwaps) swaps = S.swaps = {}; done = {}; saveSettings(); renderSetup(); renderPlan(); }
-/* «Заменить»: то же движение или группа, по уровню, с инвентарём места и без нагрузки на бережёмые суставы (swapFits,
-   11g-gentle.js); ближайшие по смыслу — то же движение и те же мышцы — первыми */
-function swapCandidates(cur, plan) {
-  const inPlan = new Set(plan.items.map(it => it.ex.id));
-  const lvlMax = S.level === 'beg' || S.goal === 'gentle' ? 2 : 3;
-  if (S.mode === 'custom') for (const it of customOf().items) inPlan.add(it.id);
-  return EX.filter(ex => !inPlan.has(ex.id) && available(ex, plan.E) && ex.lvl <= lvlMax && (ex.g === cur.g || PATTERN[ex.id] === PATTERN[cur.id]) && (S.format !== 'static' || staticOk(ex)) && swapFits(ex))
-    .sort((a, b) => analogScore(cur, b) - analogScore(cur, a));
-}
+function regen(resetSwaps = true) { if (resetSwaps) swaps = S.swaps = {}; done = {}; planUndo = null; saveSettings(); renderSetup(); renderPlan(); }
 document.addEventListener('click', e => {
   const t = e.target.closest('button, summary');
   if (!t) return;
@@ -667,32 +658,12 @@ document.addEventListener('click', e => {
     try { navigator.clipboard.writeText(txt).then(() => { msg.textContent = 'Скопировано — можно вставить в заметки или мессенджер.'; }, fallback); } catch (err) { fallback(); }
     return;
   }
-  if (t.dataset.swap !== undefined) {
-    const slot = +t.dataset.swap;
-    const cur = plan.items.find(it => it.slot === slot).ex;
-    const tried = new Set((swaps.__tried && swaps.__tried[swapKey() + ':' + slot]) || []);
-    let alts = swapCandidates(cur, plan);
-    const msgEl = t.querySelector('span');
-    if (!alts.length) { msgEl.textContent = 'Замены нет'; setTimeout(() => { msgEl.textContent = 'Заменить'; }, 1800); return; }
-    tried.add(cur.id);
-    let next = alts.find(ex => !tried.has(ex.id));
-    if (!next) { tried.clear(); tried.add(cur.id); next = alts[0]; }
-    swaps.__tried = swaps.__tried || {};
-    swaps.__tried[swapKey() + ':' + slot] = [...tried];
-    /* в своём плане замена записывается в сам план; правка подходов и отдыха остаётся */
-    if (S.mode === 'custom') { const item = customOf().items[slot]; if (item) { item.id = next.id; saveSettings(); } }
-    else { const k = swapKey(); swaps[k] = swaps[k] || {}; swaps[k][slot] = next.id; }
-    done = {};
-    saveSettings(); renderPlan();
-    const card = document.querySelector(`.card[data-slot="${slot}"]`);
-    if (card) { card.classList.add('flash'); card.scrollIntoView({block:'nearest', behavior:reduceMotion ? 'auto' : 'smooth'}); }
-    return;
-  }
+  /* «Заменить» — список замен под кнопкой и «Вернуть»: 12c-swap.js */
   /* порядок упражнений: ↑ ↓ на карточке (в своём плане — свои кнопки, 11d-custom.js) */
   if (t.dataset.move !== undefined) {
     const slot = +t.dataset.move, d = +t.dataset.d;
     if (!movePlanItem(slot, d)) return;
-    saveSettings(); renderPlan();
+    planUndo = null; saveSettings(); renderPlan();
     const card = document.querySelector(`.card[data-slot="${slot}"]`);
     if (card) {
       card.classList.add('flash'); card.scrollIntoView({block:'nearest', behavior:reduceMotion ? 'auto' : 'smooth'});

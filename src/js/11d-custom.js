@@ -111,7 +111,7 @@ const customHas = id => customOf().items.some(it => it.id === id);
 function customAdd(id) {
   const c = customOf();
   if (!EXI[id] || customHas(id) || c.items.length >= CUSTOM_MAX) return false;
-  c.items.push({id}); saveSettings(); return true;
+  c.items.push({id}); planUndo = null; saveSettings(); return true;
 }
 /* Новый свой план — как по кнопке «+ План»: «План N» (первый свободный номер), пустой. Цель, формат и уровень — те, что
    сейчас в параметрах (S[k]): в своём плане это настройки открытого плана, вне его — обычной тренировки (S.gen хранит их
@@ -147,10 +147,11 @@ function cpPickOrder() {
 function customMove(slot, d) {
   const items = customOf().items, j = slot + d;
   if (slot < 0 || j < 0 || slot >= items.length || j >= items.length) return;
-  [items[slot], items[j]] = [items[j], items[slot]];
+  [items[slot], items[j]] = [items[j], items[slot]]; planUndo = null;
   const a = cpOpen.has(slot), b = cpOpen.has(j); cpOpen.delete(slot); cpOpen.delete(j); if (a) cpOpen.add(j); if (b) cpOpen.add(slot);
   saveSettings();
 }
+/* убирает упражнение из открытого плана; «Убрано: … Вернуть» на его месте — planRemove (12c-swap.js) */
 function customRemove(slot) {
   const items = customOf().items; items.splice(slot, 1);
   cpOpen = new Set([...cpOpen].filter(i => i !== slot).map(i => i > slot ? i - 1 : i)); saveSettings();
@@ -161,7 +162,7 @@ function customSet(slot, key, value) {
   if (clear) delete next[key]; else next[key] = value;
   const ok = cleanCustomItem(next);
   if (!ok || (!clear && !(key in ok))) return;   /* неверное значение не стирает прежнее */
-  items[slot] = ok; saveSettings();
+  items[slot] = ok; planUndo = null; saveSettings();
 }
 
 /* дозировка по цели и формату, поверх — правка человека (кроме статодинамики: там серии заданы методом) */
@@ -389,7 +390,7 @@ document.addEventListener('click', e => {
   }
   if (S.mode !== 'custom' || S.view !== 'plan') return;
   if (t.dataset.cpMove !== undefined) { const s = +t.dataset.cpMove, d = +t.dataset.d; customMove(s, d); return customRerender(`[data-cp-move="${s + d}"][data-d="${d}"]`); }
-  if (t.dataset.cpRm !== undefined) { customRemove(+t.dataset.cpRm); return customRerender(); }
+  if (t.dataset.cpRm !== undefined) return planRemove(+t.dataset.cpRm, t);
   if (t.dataset.cpEdit !== undefined) { const s = +t.dataset.cpEdit; cpOpen.has(s) ? cpOpen.delete(s) : cpOpen.add(s); return customRerender(`[data-cp-edit="${s}"]`); }
   if (t.dataset.cpStep !== undefined) {
     const s = +t.dataset.cpStep, it = plan.items.find(x => x.slot === s);

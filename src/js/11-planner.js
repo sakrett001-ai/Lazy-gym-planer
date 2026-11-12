@@ -117,6 +117,9 @@ let eqOpen = false;
 let placeDel = false;
 let done = {};
 let plan = null, prog = null;
+/* последнее изменение плана, которое возвращается одним нажатием «Вернуть»: замена или «Убрать» в своём плане (12c-swap.js).
+   Не сохраняется: держится до следующего изменения плана или перезагрузки */
+let planUndo = null;
 
 /* ---------- утилиты ---------- */
 function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -352,9 +355,12 @@ function buildPlan(ctx = {}) {
     }).filter(Boolean);
     slots = keep;
   }
+  /* подбор до замен: по нему неделя обходит повторы (buildProgram), и замена в одном дне не меняет другие дни */
+  const picks = picked.map(ex => ex.id);
+  /* замены записаны по номеру упражнения (slot): в программе другого места часть упражнений может не войти в план */
   for (const [i, id] of Object.entries(sw)) {
-    const ex = EXI[id];
-    if (picked[i] && ex && usable(ex) && !picked.includes(ex)) picked[i] = ex;
+    const ex = EXI[id], k = slots.indexOf(+i);
+    if (k >= 0 && picked[k] && ex && usable(ex) && !picked.includes(ex)) picked[k] = ex;
   }
   if (!picked.length) return {empty:'none', pool, groups, lost};
   const G = GOALS[S.goal];
@@ -411,7 +417,7 @@ function buildPlan(ctx = {}) {
     /* дробный учёт: целевая группа — полный подход, остальные работающие — половина */
     for (const [g, x] of Object.entries(groupShare(it.ex))) gvol[g] = (gvol[g] || 0) + k * x;
   }
-  return {blocks, items, minutes:Math.round(minutes / 60), totalSets, missing:custom ? [] : missing, load, gvol, pool, E, groups, count, lost, custom:!!custom, byLog:!!lp};
+  return {blocks, items, minutes:Math.round(minutes / 60), totalSets, missing:custom ? [] : missing, load, gvol, pool, E, groups, count, lost, custom:!!custom, byLog:!!lp, picks};
 }
 
 /* ---------- сборка недели ---------- */
@@ -426,7 +432,8 @@ function buildProgram() {
     /* день «всё тело» включает мышцу акцента, даже если по шаблону её группы в этот день нет */
     const fg = S.focus && MUSCLE_GROUP[S.focus], g = DAY_T[tid].name === 'Всё тело' && fg && !DAY_T[tid].g.includes(fg) ? DAY_T[tid].g.concat(fg) : DAY_T[tid].g;
     const p = buildPlan({groups:g, count:S.count, seed:S.seed * 131 + i * 977 + 13, avoid:new Set(avoid), week, swaps:swaps['d' + i] || {}, order:swaps.__order?.['d' + i]});
-    if (p.items) p.items.forEach(it => avoid.add(it.ex.id));
+    /* следующие дни обходят и подобранное, и поставленное заменой: замена в одном дне не меняет остальные */
+    if (p.items) { p.items.forEach(it => avoid.add(it.ex.id)); p.picks.forEach(id => avoid.add(id)); }
     return {tid, i, wd:SCHEDULE[days][i], plan:p};
   });
   for (const d of out) {
@@ -619,7 +626,9 @@ function cardHtml(it, idx) {
   <div class="c-prog">${progressionHint(it)}</div>
   <div class="c-act">
     <button type="button" class="btn-ghost" data-workout="${ex.id}" aria-haspopup="dialog" aria-controls="workout-view">Начать тренировку →</button>
-    <span class="c-act-r">${S.mode === 'custom' ? '' : moveButtons(it)}<button type="button" class="btn-ghost" data-swap="${it.slot}">${ICON.swap}<span>Заменить</span></button></span>
+    <span class="c-act-r">${S.mode === 'custom' ? '' : moveButtons(it)}<button type="button" class="btn-ghost" data-swap="${it.slot}" aria-expanded="false" aria-controls="sw-pick-${it.slot}">${ICON.swap}<span>Заменить</span></button></span>
+    <div class="cp-pick sw-pick" id="sw-pick-${it.slot}" role="group" aria-labelledby="sw-pick-${it.slot}-h" hidden></div>
+    ${swapDoneHtml(it)}
   </div>
   ${S.mode === 'custom' ? customToolsHtml(it) : ''}
   <details class="tech">
@@ -656,24 +665,29 @@ function blocksHtml(p) {
   html += cardsViewHtml();
   if (S.format === 'static') html += `<p class="phase phase-static"><b>Статодинамика.</b> Вес — около половины от 1ПМ. Медленно: 3 с вниз и 3 с вверх, без пауз; не выпрямляйтесь до конца и не расслабляйтесь внизу — мышца всё время напряжена. К концу подхода (30–40 с) — сильное жжение, но не отказ. Три подхода с отдыхом 30 с — одна серия.</p>`;
   let idx = 0;
+  /* «Убрано: … Вернуть» — на месте убранной карточки своего плана (12c-swap.js) */
+  let gone = rmGoneHtml();
+  const card = it => { let pre = ''; if (gone && it.slot >= planUndo.slot) { pre = gone; gone = ''; } return pre + cardHtml(it, idx++); };
   for (const b of p.blocks) {
     if (b.kind === 'list') {
-      html += `<ol class="cards">${b.items.map(it => cardHtml(it, idx++)).join('')}</ol>`;
+      html += `<ol class="cards">${b.items.map(card).join('')}</ol>`;
     } else if (b.kind === 'pair') {
       const many = b.items.length > 1;
       html += `<section class="block">
         <header class="b-head"><h2><span class="b-letter">${b.letter}</span>${many ? 'Суперсет' : 'Отдельное упражнение'}</h2>
         <p>${many ? `${b.sets} ${plural(b.sets, 'круг', 'круга', 'кругов')}: ${b.items.map(it => it.label).join(' → ')} без паузы, затем отдых ${fmtRest(b.rest)}` : `${b.sets} ${plural(b.sets, 'подход', 'подхода', 'подходов')}, отдых ${fmtRest(b.rest)}`}</p></header>
-        <ol class="cards">${b.items.map(it => cardHtml(it, idx++)).join('')}</ol></section>`;
+        <ol class="cards">${b.items.map(card).join('')}</ol></section>`;
     } else {
       const rd = done.__rounds || 0;
       html += `<section class="block block-c">
         <header class="b-head"><h2><span class="b-letter">${ICON.loop}</span>Круг × ${b.rounds}</h2>
         <p>Выполняйте станции подряд: ${fmtRest(b.rest)} на переход между упражнениями, ${fmtRest(b.roundRest)} отдыха после круга.</p>
         <div class="sets rounds" role="group" aria-label="Отметить пройденные круги">${Array.from({length:b.rounds}, (_, k) => `<button type="button" class="set${rd > k ? ' done' : ''}" data-round="${k}" aria-label="Круг ${k + 1}">${k + 1}</button>`).join('')}<span class="rounds-l">круги</span></div></header>
-        <ol class="cards">${b.items.map(it => cardHtml(it, idx++)).join('')}</ol></section>`;
+        <ol class="cards">${b.items.map(card).join('')}</ol></section>`;
     }
   }
+  /* убрано последнее упражнение — строка после последней карточки */
+  if (gone) { const k = html.lastIndexOf('</ol>'); html = html.slice(0, k) + gone + html.slice(k); }
   html += `<p class="phase"><b>Заминка, 5 мин.</b> Спокойная ходьба и растяжка мышц, которые работали: по 20–30 секунд на каждую.</p>`;
   return html;
 }
@@ -721,12 +735,12 @@ function renderPlan() {
     return;
   }
   if (plan.empty === 'custom') {
-    root.innerHTML = `<header class="p-head p-head-c"><div class="p-sum"><p class="eyebrow">Свой план · ${GOALS[S.goal].name} · ${FORMATS[S.format].name}</p><h1 class="p-title">${esc(titleFor())}</h1>${customHeadHtml()}</div></header>` + customEmptyHtml() + customAddHtml();
+    root.innerHTML = `<header class="p-head p-head-c"><div class="p-sum"><p class="eyebrow">Свой план · ${GOALS[S.goal].name} · ${FORMATS[S.format].name}</p><h1 class="p-title">${esc(titleFor())}</h1>${customHeadHtml()}</div></header>` + rmGoneHtml('div') + customEmptyHtml() + customAddHtml();
     return;
   }
   if (plan.empty === 'none') {
     root.innerHTML = S.mode === 'custom'
-      ? `<div class="empty"><h2>Здесь нечем выполнить этот план</h2>${lostMessages(plan.lost, effEquip(S.equip)).map(m => `<p>${esc(m)}</p>`).join('')}<p>Выберите другое место или добавьте упражнения.</p></div>` + customAddHtml()
+      ? rmGoneHtml('div') + `<div class="empty"><h2>Здесь нечем выполнить этот план</h2>${lostMessages(plan.lost, effEquip(S.equip)).map(m => `<p>${esc(m)}</p>`).join('')}<p>Выберите другое место или добавьте упражнения.</p></div>` + customAddHtml()
       : `<div class="empty"><h2>Не из чего собрать тренировку</h2><p>Для выбранных мышц нет упражнений с этим оборудованием и уровнем. Добавьте оборудование или выберите другие группы мышц.</p></div>`;
     return;
   }
