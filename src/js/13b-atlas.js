@@ -169,7 +169,7 @@ function renderAtlas() {
     const it = previewItem(atlasEx);
     html += `<div class="motion-tile at-tile" id="at-preview">
         <button type="button" class="illus" data-fig="0" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Разобрать движение: ${esc(it.name)}"><span class="at-stage"></span><span class="illus-zoom" aria-hidden="true">Разобрать ↗</span></button>
-        <div class="motion-bar"><span class="motion-caption">Исходное положение</span><button type="button" data-motion-pause="0" aria-pressed="true">Пауза</button></div>
+        <div class="motion-bar"><span class="motion-caption">Исходное положение</span><button type="button" data-motion-pause="0">Пауза</button></div>
       </div>
       <div class="at-under"><p class="at-pv"><b id="at-pv-name">${esc(it.name)}</b></p><div class="at-cams" role="group" aria-label="Ракурс">${Object.entries(ATLAS_CAMS).map(([c, label]) => `<button type="button" data-atlas-cam="${c}" aria-pressed="false">${label}</button>`).join('')}</div></div>
       <div class="at-keep" id="at-keep">${atlasKeepHtml(atlasEx)}</div>
@@ -201,7 +201,7 @@ function mountAtlasPreview(m = S.atlasM) {
     const F = {btn, it, f, vis:true, paused:reduceMotion, clock:0, durations:motionDurations(it)};
     figs = [F]; paintMotion(F);
     const pause = tile.querySelector('[data-motion-pause]');
-    pause.textContent = F.paused ? 'Пуск' : 'Пауза'; pause.setAttribute('aria-pressed', String(!F.paused));
+    pause.textContent = F.paused ? 'Пуск' : 'Пауза';
   } catch (e) { console.error('Атлас', it.ex.id, e); }
   btn.setAttribute('aria-label', 'Разобрать движение: ' + it.name);
   $('#at-pv-name').textContent = it.name;

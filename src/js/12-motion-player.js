@@ -67,9 +67,8 @@ function paintMotion(F, detailed=false, svgOnly=false) {
   $('#mv-phase').textContent=m.label; $('#mv-cue').textContent=m.cue;
   $('#mv-progress').value=String(Math.round(m.progress*1000));
   $('#mv-progress').setAttribute('aria-valuetext',`${m.label}, ${Math.round(m.progress*100)}% повторения`);
+  /* имя кнопки — её надпись (WCAG 2.5.3); надпись сама говорит о состоянии, поэтому без aria-pressed */
   $('#mv-play').textContent=F.paused?'Воспроизвести':'Пауза';
-  $('#mv-play').setAttribute('aria-label',F.paused?'Воспроизвести движение':'Приостановить движение');
-  $('#mv-play').setAttribute('aria-pressed',String(!F.paused));
   $('#mv-position').textContent=`${Math.round(m.progress*100)}% повторения`;
   paintMusclePanel('mv',F,m);paintStressPanel('mv',F,m);
 }
@@ -374,7 +373,7 @@ function mountFigures() {
     if(motionProfile(it.ex.anim)){const note=document.createElement('p');note.className='muscle-tile-note';note.textContent='Цвет — учебная схема';note.hidden=!motionPrefs.muscles;tile.appendChild(note);}
     {const note=document.createElement('p');note.className='figure-tile-note';note.hidden=true;tile.appendChild(note);}
     const pause=tile.querySelector('[data-motion-pause]');
-    if(pause){pause.textContent=F.paused?'Пуск':'Пауза';pause.setAttribute('aria-pressed',String(!F.paused));pause.setAttribute('aria-label',`${F.paused?'Воспроизвести':'Приостановить'} демонстрацию: ${it.name}`);}
+    if(pause){pause.textContent=F.paused?'Пуск':'Пауза';pause.setAttribute('aria-label',`${F.paused?'Пуск':'Пауза'}: ${it.name}`);}
     const hover=on=>e=>{if(e.pointerType&&e.pointerType!=='mouse')return;F.hover=on;pickActiveCards();};
     tile.addEventListener('pointerenter',hover(true));tile.addEventListener('pointerleave',hover(false));
     btn.addEventListener('focus',()=>{F.hover=true;pickActiveCards();});btn.addEventListener('blur',()=>{F.hover=false;pickActiveCards();});
@@ -503,7 +502,7 @@ function setupMotionViewer() {
 
   document.addEventListener('click',e=>{
     const t=e.target.closest('button');if(!t)return;
-    if(t.dataset.motionPause!==undefined){const F=figs.find(f=>+f.btn.dataset.fig===+t.dataset.motionPause);if(F){F.paused=!F.paused;if(F.card){F.pick=performance.now();pickActiveCards();}t.textContent=F.paused?'Пуск':'Пауза';t.setAttribute('aria-pressed',String(!F.paused));t.setAttribute('aria-label',`${F.paused?'Воспроизвести':'Приостановить'} демонстрацию: ${F.it.name}`);}return;}
+    if(t.dataset.motionPause!==undefined){const F=figs.find(f=>+f.btn.dataset.fig===+t.dataset.motionPause);if(F){F.paused=!F.paused;if(F.card){F.pick=performance.now();pickActiveCards();}t.textContent=F.paused?'Пуск':'Пауза';t.setAttribute('aria-label',`${F.paused?'Пуск':'Пауза'}: ${F.it.name}`);}return;}
     if(t.id==='motion-atlas'){openGallery();return;}
     if(t.id==='mv-close'){closeMotion();return;}
     if(!detailMotion)return;
