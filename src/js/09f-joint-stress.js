@@ -4,6 +4,14 @@
    тот же расчёт, что у валидатора) и по опорам упражнения (контакты спецификации), на 41 кадре повторения.
    Пороги и основания:
    колени      — сгибание ≥85° (на одной ноге ≥80°) под весом: Escamilla 2001, MSSE 33(1):127–141;
+                 без отягощения на двух ногах — сгибание ≥85° и центр колена впереди носков (сисси-присед). Колени уходят
+                 вперёд — у веса тела длиннее плечо относительно колена, момент на колене растёт: в приседе со штангой
+                 без барьера у носков момент на колене 150,1 ± 50,8 Н·м против 117,3 ± 34,2 Н·м с барьером, не пускающим
+                 колени за носки — Fry, Smith, Schilling 2003, JSCR 17(4):629–633; так же и в приседе без веса (нагрузка
+                 0, ¼ и ½ веса тела): без ограничения пиковый момент на колене больше — Lorenzetti et al. 2012,
+                 JSCR 26(10):2829–2836. Порог — линия носков, как барьер у Fry; передняя поверхность колена при этом уже
+                 на полтолщины колена за носками. Присед без веса манекена держит колени за линией носков (центр колена
+                 на 4 см позади), сисси-присед уводит их на 21 см вперёд: плечо веса тела от колена — 32 см против 20;
    колено      — разгибание в открытой цепи ближе 30° к прямой ноге: Escamilla et al. 1998, MSSE 30(4):556–569;
    поясница    — наклон корпуса ≥40° без опоры с весом: McGill 1997, J Biomech 30(5):465–475;
    плечи       — плечо за линией корпуса ≥20° в жимах и брусьях, длинный рычаг в разведениях:
@@ -54,6 +62,8 @@ function stressContacts(ex) {
     loaded: free || machine,
     backBar: has(/^back>bar$/),
     sole: s => has(new RegExp(s ? '^sole(' + s + ')?>' : '^sole[LR]?>')),
+    /* стопа стоит на опоре: подошвой или передним отделом (на носках) */
+    feet: s => has(new RegExp('^(sole|foot)(' + s + ')?>')),
     /* стоит на полу или коврике и ничем больше не опирается — только у таких упражнений бывает приземление */
     floorOnly: C.some(c => /^sole[LR]?>(floor|mat)$/.test(c)) && !C.some(c => /^sole[LR]?>(?!(floor|mat)$)|^(buttocks|back|upperBack|chest|knee[LR]?|th[LR]?)>|^grip[LR]?>\w+:(pullBar|pull[LR]|bar[LR]|dip[LR]|rail[LR])$/.test(c)),
     seated: has(/^(back|chest|belly|buttocks|upperBack|front|headBack|th[LR]?|thighsBack|knee[LR]?|fa[LR]?|palm[LR]?)>(?!bar$)/),
@@ -74,7 +84,10 @@ function stressFrame(R) {
   const A = Mannequin.jointAngles(R), V = Mannequin.V;
   const up = V.unit(V.sub(R.sh, R.hip)), trunk = Math.acos(Math.max(-1, Math.min(1, -up[1]))) * 180 / Math.PI;
   const side = s => { const a = A[s], h = R['grip' + s] && R['sh' + s] ? Math.hypot(R['grip' + s][0] - R['sh' + s][0], R['grip' + s][2] - R['sh' + s][2]) : 0;
-    return {...a, behind:a.posterior > 0 ? Math.asin(Math.min(1, a.posterior)) * 180 / Math.PI : 0, beta:Math.abs(Math.atan2(a.lat, -a.up) * 180 / Math.PI), reach:h}; };
+    /* центр колена впереди носка (см) — по горизонтали вдоль стопы от пятки к носку */
+    const toe = R['toe' + s], heel = R['heel' + s], fw = toe && heel ? V.unit([toe[0] - heel[0], 0, toe[2] - heel[2]]) : null;
+    const kneeAhead = fw ? V.dot(V.sub(R['kn' + s], toe), fw) : -Infinity;
+    return {...a, behind:a.posterior > 0 ? Math.asin(Math.min(1, a.posterior)) * 180 / Math.PI : 0, beta:Math.abs(Math.atan2(a.lat, -a.up) * 180 / Math.PI), reach:h, kneeAhead}; };
   return {A, trunk, L:side('L'), R:side('R')};
 }
 /* правила кадра: возвращают ключи меток (суставы со стороной или центральные точки) */
@@ -85,6 +98,8 @@ function stressRulesAt(ex, k, f) {
   if (!ex.pri.includes('calves') && !hinge) {
     const loaded = k.legPress || (k.upright && (k.loaded || k.backBar)) || (legsG && ex.uni && k.uprightUni);
     if (loaded) add('knee', both(s => k.sole(s) && f[s].knee >= (ex.uni ? 80 : 85), 'kn'));
+    /* без отягощения на двух ногах, руки не держат вес: глубокий сгиб с коленями за носками (сисси-присед) */
+    else if (legsG && !ex.uni && k.upright && !k.handsBear) add('knee', both(s => k.feet(s) && f[s].knee >= 85 && f[s].kneeAhead > 0, 'kn'));
   }
   if (k.shin) add('kneeOpen', both(s => f[s].knee <= 30, 'kn'));
   if (k.sole('') && !k.seated && (k.loaded || k.backBar) && f.trunk >= 40) add('lumbar', ['lumbar']);

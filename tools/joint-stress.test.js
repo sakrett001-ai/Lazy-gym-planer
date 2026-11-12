@@ -26,7 +26,11 @@ test('joint angles are the validator\'s own calculation', () => {
 
 const EXPECT = {
   /* сведение на блоке: опорная нога почти прямая; копенгагенская планка: колено верхней ноги прямое, сгибания под весом нет */
-  knee: { on: ['squat', 'goblet', 'smithsquat', 'hacksquat', 'legpress', 'legpresslow', 'lunge', 'revlunge', 'bulgarian', 'stepup', 'pistolbox', 'kbfrontsquat'], off: ['dbpress', 'latpull', 'deadlift', 'jumpsquat', 'glutebridge1', 'crunch', 'legext', 'calfraise', 'cableadduct', 'copenhagen', 'bandadduct', 'bandabduct', 'bandbridge', 'bandlegext', 'sissysquat'] }, /* дома с эспандером: колено почти прямое (сведение, отведение) или без нагрузки сверху (мостик, разгибание сидя — как в тренажёре); сисси-присед — вес тела на двух ногах, как присед без веса (правило — с отягощением или на одной ноге) */
+  /* сисси-присед — без веса, но колени далеко за носками при глубоком сгибе (Fry 2003); присед без веса, прыжки, стенка,
+     мостик и бёрпи — колени не за носками, неглубоко, спина на опоре или вес на руках */
+  knee: { on: ['squat', 'goblet', 'smithsquat', 'hacksquat', 'legpress', 'legpresslow', 'lunge', 'revlunge', 'bulgarian', 'stepup', 'pistolbox', 'kbfrontsquat', 'sissysquat'],
+    off: ['dbpress', 'latpull', 'deadlift', 'jumpsquat', 'glutebridge1', 'crunch', 'legext', 'calfraise', 'cableadduct', 'copenhagen', 'bandadduct', 'bandabduct', 'bandbridge', 'bandlegext',
+      'airsquat', 'wallsit', 'bridge', 'burpee', 'nordic'] }, /* дома с эспандером: колено почти прямое (сведение, отведение) или без нагрузки сверху (мостик, разгибание сидя — как в тренажёре) */
   kneeOpen: { on: ['legext'], off: ['legcurl', 'squat', 'legpress', 'sissysquat'] },
   /* гиря: наклоны от таза и тяга в наклоне без опоры — как со штангой */
   lumbar: { on: ['deadlift', 'rdl', 'sllift', 'goodmorning', 'bbrow', 'kbswing', 'squat', 'kbdeadlift', 'kbswing1', 'kbclean', 'kbrow', 'kbsnatch', 'kbsllift'], off: ['latpull', 'cablerow', 'dbrow', 'shrug', 'ohp', 'chestrowdb', 'legpress', 'bandlatpull', 'bandbridge'] },
@@ -74,6 +78,22 @@ test('marks follow the phase: bottom of a squat and a bench press, end range of 
   }
   assert(lit >= 3, 'the arc is crossed in several frames');
   assert(at('pullup', 1).includes('neck') && at('pullup', 1).includes('pullTop'), 'pull-up top: neck and shoulders');
+});
+test('bodyweight on both legs: the knee mark needs deep flexion with the knees past the toes (sissy squat), not a deep air squat', () => {
+  const ahead = (R, s) => { const fw = M.V.unit([R['toe' + s][0] - R['heel' + s][0], 0, R['toe' + s][2] - R['heel' + s][2]]); return M.V.dot(M.V.sub(R['kn' + s], R['toe' + s]), fw); };
+  const sissy = ex('sissysquat'), lit = [];
+  for (let i = 0; i <= 40; i++) {
+    const R = sissy.anim.catalogRig(i / 40), J = M.jointAngles(R), keys = keysAt('sissysquat', 'knee', i / 40);
+    if (keys.length) { lit.push(i); for (const k of keys) { const s = k.slice(-1); assert(J[s].knee >= 84.5 && ahead(R, s) > 0, `frame ${i} ${k}: knee ${J[s].knee.toFixed(0)}°, ${ahead(R, s).toFixed(1)} cm past the toes`); } }
+  }
+  assert.deepEqual(keysAt('sissysquat', 'knee', 1).sort(), ['knL', 'knR'], 'bottom: both knees');
+  assert(!at('sissysquat', 0).includes('knee') && !at('sissysquat', .5).includes('knee'), 'upright and halfway: no mark');
+  assert(lit.length >= 3 && lit[0] >= 24, 'only the deep phase: ' + lit.join(','));
+  /* присед без веса глубже (до 110°), но колени остаются за линией носков — метки нет */
+  const air = ex('airsquat');
+  let deep = 0;
+  for (let i = 0; i <= 40; i++) { const R = air.anim.catalogRig(i / 40); if (M.jointAngles(R).L.knee >= 85) { deep++; assert(ahead(R, 'L') <= 0, 'air squat keeps the knees behind the toes'); } }
+  assert(deep > 0 && !rules('airsquat').has('knee'), 'a deep air squat is not marked');
 });
 test('fallback sets match the movement table, so marks do not change when it is not loaded', () => {
   const by = p => plain(A.EX.filter(e => A.PATTERN[e.id] === p).map(e => e.id)).sort();

@@ -262,11 +262,33 @@ function suggestBase(it) {
 
 /* ---------- блок записи в карточке ---------- */
 const SUG_ICON = {up:'↑', same:'→', down:'↓', deload:'↓', new:'+', plan:'≡'};
+/* строк в таблице: по плану (у круговой — кругов), но не меньше, чем уже записано сегодня */
+function logRowCount(it) {
+  const today = todaySession(it.ex.id, false);
+  return Math.max(it.rx.circ ? (it.rounds || it.rx.sets) : it.rx.sets, today ? today.s.length : 0);
+}
+/* «− N подходов +» под таблицей: убрать можно только последний подход; заполненный — после подтверждения в его строке.
+   setArm[упражнение] — номер строки, в которой ждёт подтверждение (переживает перерисовку записи) */
+const setArm = {};
+function setWords(it) { return it.rx.circ ? ['круг', 'круга', 'кругов'] : ['подход', 'подхода', 'подходов']; }
+function setStepHtml(it, n) {
+  const id = it.ex.id, circ = it.rx.circ;
+  return `<div class="lt-sets" role="group" aria-label="${circ ? 'Число кругов' : 'Число подходов'}">`
+    + `<button type="button" class="lt-st" data-delset="${id}" aria-label="${circ ? 'Убрать круг' : 'Убрать подход'} ${n}"${n <= 1 ? ' disabled' : ''}>−</button>`
+    + `<span class="lt-sn">${n} ${plural(n, ...setWords(it))}</span>`
+    + `<button type="button" class="lt-st" data-addset="${id}" aria-label="${circ ? 'Добавить круг' : 'Добавить подход'}">+</button></div>`;
+}
+function setArmHtml(it, n, done) {
+  const id = it.ex.id;
+  return `<div class="lt-cf" role="group" aria-labelledby="lt-cf-${id}"><span class="lt-cft" id="lt-cf-${id}">${it.rx.circ ? 'Круг' : 'Подход'} ${n} ${done ? 'записан. Убрать вместе с записью?' : 'заполнен. Убрать его?'}</span>`
+    + `<button type="button" class="lt-cfy" data-delyes="${id}">${'Убрать'}</button><button type="button" class="lt-cfn" data-delno="${id}">${'Оставить'}</button></div>`;
+}
 function logRows(it) {
   const ex = it.ex, lt = loadType(ex), sg = suggest(it), wl = weightLabel(it), lr = lrOn(ex);
   const today = todaySession(ex.id, false);
   const tset = today ? today.s : [];
-  const n = Math.max(it.rx.circ ? (it.rounds || it.rx.sets) : it.rx.sets, tset.length);
+  const n = logRowCount(it);
+  if (setArm[ex.id] !== n - 1 || n <= 1) delete setArm[ex.id];
   const prevSets = sg.prev ? sg.prev.s.filter(Boolean) : [];
   const [lo, hi] = parseRange(it.rx.reps);
   const SIDE = {l:'левая', r:'правая'};
@@ -281,7 +303,8 @@ function logRows(it) {
     const p = prevSets[k] || prevSets[prevSets.length - 1];
     const pk = planKg(it.rx, k), phKg = pk != null ? fmtKg(pk) : sg.kg != null ? fmtKg(sg.kg) : (lt === 'kg' ? '' : '—');
     const phR = sg.reps[k] ?? sg.reps[sg.reps.length - 1] ?? (lo === hi ? String(lo) : `${lo}–${hi}`);
-    const done = !!v, cls = `lt-r${done ? ' done' : ''}${lr ? ' lt-lr' : ''}${it.rx.static && k > 0 && k % 3 === 0 ? ' lt-series' : ''}`;
+    const arm = setArm[ex.id] === k, cf = arm ? setArmHtml(it, n, !!v) : '';
+    const done = !!v, cls = `lt-r${done ? ' done' : ''}${lr ? ' lt-lr' : ''}${it.rx.static && k > 0 && k % 3 === 0 ? ' lt-series' : ''}${arm ? ' lt-arm' : ''}`;
     const ok = `<button type="button" class="lt-ok" data-tick="${ex.id}" data-k="${k}" aria-pressed="${done}" aria-label="Подход ${k + 1} выполнен">${ICON.check}</button>`;
     if (lr) {
       /* Л/П: две строки в одном подходе; прошлый раз — по сторонам, если они были записаны, иначе общее значение */
@@ -292,12 +315,12 @@ function logRows(it) {
       ${fields(k, 'l', val('l'), phKg, phR)}
       ${ok}
       <span class="lt-p">${sideTag('r')} ${pv('r')}</span>
-      ${fields(k, 'r', val('r'), phKg, phR)}
+      ${fields(k, 'r', val('r'), phKg, phR)}${cf}
     </div>`;
     } else rows += `<div class="${cls}" data-k="${k}">
       <span class="lt-n">${k + 1}</span><span class="lt-p">${p ? prevText(p) : '—'}</span>
       ${fields(k, null, done ? v : null, phKg, phR)}
-      ${ok}
+      ${ok}${cf}
     </div>`;
   }
   const doneN = tset.slice(0, n).filter(Boolean).length;
@@ -311,7 +334,7 @@ function logRows(it) {
       <div class="lt-h"><span>№</span><span>Прошлый раз</span>${lt === 'none' ? '' : `<span title="${wl.full}">${wl.short}</span>`}<span>${repLabel(ex)}</span><span></span></div>
       ${rows}
     </div>
-    <div class="lt-foot"><button type="button" class="lt-add" data-addset="${ex.id}">+ подход</button>${lrBtn}${perSideNote}${x2}${it.rx.circ ? '<span>строка — один круг</span>' : ''}</div></div>`};
+    <div class="lt-foot">${setStepHtml(it, n)}${lrBtn}${perSideNote}${x2}${it.rx.circ ? '<span>строка — один круг</span>' : ''}</div></div>`};
 }
 /* вес для подсказки «×2»: записанный или введённый в первом подходе, иначе подсказка по весу */
 function firstKg(tset, sg, it) {
@@ -382,9 +405,9 @@ function refreshCard(card) {
   const ae = document.activeElement;
   if (box && !(box.contains(ae) && ae.tagName === 'INPUT')) {
     const refocus = !box.contains(ae) ? null : ae.dataset.k !== undefined ? `[data-${ae.dataset.tick ? 'tick' : 'addset'}][data-k="${ae.dataset.k}"]`
-      : ae.dataset.cfold ? '[data-cfold]' : ae.dataset.hist ? '[data-hist]' : ae.dataset.lr ? '[data-lr]' : null;
-    box.innerHTML = logRows(it).html;
-    syncCardLog(card);
+      : ae.dataset.cfold ? '[data-cfold]' : ae.dataset.hist ? '[data-hist]' : ae.dataset.lr ? '[data-lr]'
+      : ['addset', 'delset', 'delyes', 'delno'].map(a => ae.dataset[a] ? `[data-${a}]` : '').find(Boolean) || null;
+    renderLogBox(box, it);
     if (refocus) { const n = box.querySelector(refocus); if (n) n.focus(); }
   }
   refreshWarmup(card);
@@ -672,6 +695,85 @@ function editSet(inp) {
   }
   logTouch(id); refreshHist(id);
 }
+/* перерисовать запись подходов, не теряя введённого в неотмеченных строках; drop — номер убранной строки */
+function renderLogBox(box, it, drop = -1) {
+  const typed = [...box.querySelectorAll('.lt-r:not(.done) .lt-in')].filter(i => i.value !== '' && +i.closest('.lt-r').dataset.k !== drop).map(i => [i.id, i.value]);
+  box.innerHTML = logRows(it).html;
+  let kg = null;
+  for (const [id, v] of typed) {
+    const inp = box.querySelector(`[id="${id}"]`);
+    if (!inp || inp.closest('.lt-r').classList.contains('done')) continue;
+    inp.value = v; if (!kg && inp.dataset.f === 'kg') kg = inp;
+  }
+  if (kg) updatePairTotal(kg);
+  const card = box.closest('.card'); if (card) syncCardLog(card);
+}
+/* подход в план тренировки (в памяти: при новой сборке плана число подходов снова по плану, записанное остаётся);
+   возвращает номер новой строки */
+function growSets(it) {
+  const n = logRowCount(it);
+  delete setArm[it.ex.id];
+  it.extra = (it.extra || 0) + 1;
+  it.rx.sets = Math.max(it.rx.sets, n + 1);
+  if (it.rx.circ) it.rounds = Math.max(it.rounds || 0, n + 1);
+  return n;
+}
+/* последний подход — из записи дня (и цель записи, число подходов по плану) и из плана тренировки; минимум один.
+   Возвращает номер убранной строки (−1 — убирать нечего) и изменилась ли запись дня */
+function dropLastSet(it) {
+  const id = it.ex.id, n = logRowCount(it);
+  delete setArm[id];
+  if (n <= 1) return {k:-1, changed:false};
+  const k = n - 1, s = todaySession(id, false);
+  let changed = false;
+  if (s) {
+    if (s.s.length > k) { s.s.length = k; changed = true; }
+    if (s.target > k) { s.target = k; changed = true; }
+    cleanToday(id);
+  }
+  it.rx.sets = Math.max(1, Math.min(it.rx.sets, k));
+  if (it.rx.circ && it.rounds) it.rounds = Math.max(1, Math.min(it.rounds, k));
+  it.extra = Math.max(0, (it.extra || 0) - 1);
+  return {k, changed};
+}
+/* «+»: новая строка, фокус на её первом поле */
+function addSet(id, box) {
+  const it = plan && plan.items && plan.items.find(x => x.ex.id === id); if (!it || !box) return;
+  const n = growSets(it);
+  renderLogBox(box, it);
+  const inp = box.querySelector(`.lt-r[data-k="${n}"] .lt-in`); if (inp) inp.focus();
+}
+/* «−»: последний подход. Пустой убирается сразу; отмеченный или с цифрами — только после «Убрать» в его строке.
+   Повторное нажатие «−» (двойное касание) ничего не убирает — фокус на «Оставить». */
+function askRemoveSet(id, box) {
+  const it = plan && plan.items && plan.items.find(x => x.ex.id === id); if (!it || !box) return;
+  const n = logRowCount(it); if (n <= 1) return;
+  const row = box.querySelector(`.lt-r[data-k="${n - 1}"]`);
+  const armed = row && row.querySelector('.lt-cf');
+  if (armed) { armed.querySelector('[data-delno]').focus(); return; }
+  const filled = row && (row.classList.contains('done') || [...row.querySelectorAll('.lt-in')].some(i => i.value.trim() !== ''));
+  if (!filled) { removeSet(id, box); return; }
+  setArm[id] = n - 1;
+  row.classList.add('lt-arm'); row.insertAdjacentHTML('beforeend', setArmHtml(it, n, row.classList.contains('done')));
+  row.querySelector('[data-delno]').focus();
+}
+/* «Убрать» (или «−» у пустой строки): строка уходит, фокус остаётся на «−» (у последнего подхода — на «+») */
+function removeSet(id, box) {
+  delete setArm[id];
+  const it = plan && plan.items && plan.items.find(x => x.ex.id === id); if (!it || !box) return;
+  const {k, changed} = dropLastSet(it); if (k < 0) return;
+  renderLogBox(box, it, k);
+  if (changed) logTouch(id, true);
+  refreshHist(id);
+  const f = box.querySelector('[data-delset]:not([disabled])') || box.querySelector('[data-addset]'); if (f) f.focus();
+}
+/* «Оставить» или Esc: подтверждение закрывается, введённое в строке остаётся */
+function keepSet(id, box) {
+  delete setArm[id];
+  if (!box) return;
+  box.querySelectorAll('.lt-r.lt-arm').forEach(r => { r.classList.remove('lt-arm'); const c = r.querySelector('.lt-cf'); if (c) c.remove(); });
+  const b = box.querySelector('[data-delset]'); if (b) b.focus();
+}
 /* «Л/П отдельно» в карточке: запоминается для упражнения, таблица перерисовывается */
 function toggleLr(btn) {
   const id = btn.dataset.lr, ex = EXI[id]; if (!ex) return;
@@ -714,17 +816,10 @@ document.addEventListener('click', e => {
   if (!t) return;
   if (t.dataset.tick) { tickSet(t); return; }
   if (t.dataset.lr) { toggleLr(t); return; }
-  if (t.dataset.addset) {
-    const id = t.dataset.addset, it = plan.items.find(x => x.ex.id === id);
-    it.extra = (it.extra || 0) + 1;
-    const box = t.closest('.c-log');
-    const n = box.querySelectorAll('.lt-r').length;
-    it.rx.sets = Math.max(it.rx.sets, n + 1);
-    if (it.rx.circ) it.rounds = Math.max(it.rounds || 0, n + 1);
-    box.innerHTML = logRows(it).html; if (box.closest('.card')) syncCardLog(box.closest('.card'));
-    const inp = box.querySelector(`.lt-r[data-k="${n}"] .lt-in`); if (inp) inp.focus();
-    return;
-  }
+  if (t.dataset.addset) { addSet(t.dataset.addset, t.closest('.c-log')); return; }
+  if (t.dataset.delset) { askRemoveSet(t.dataset.delset, t.closest('.c-log')); return; }
+  if (t.dataset.delyes) { removeSet(t.dataset.delyes, t.closest('.c-log')); return; }
+  if (t.dataset.delno) { keepSet(t.dataset.delno, t.closest('.c-log')); return; }
   if (t.dataset.hist) {
     const card = t.closest('.card'), h = card.querySelector('.c-hist');
     h.hidden = !h.hidden; t.setAttribute('aria-expanded', String(!h.hidden));
@@ -742,6 +837,8 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('input', e => { if (e.target.classList && e.target.classList.contains('lt-in') && e.target.dataset.f === 'kg' && e.target.closest('.c-log')) updatePairTotal(e.target); });
 document.addEventListener('keydown', e => {
+  const box = e.key === 'Escape' && e.target.closest && e.target.closest('.c-log');
+  if (box && box.querySelector('.lt-cf')) { e.preventDefault(); keepSet(box.dataset.log, box); return; }
   if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('lt-in')) {
     e.preventDefault();
     const row = e.target.closest('.lt-r');

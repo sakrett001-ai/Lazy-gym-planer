@@ -924,6 +924,69 @@ await page.close();
   await p.close();
 }
 
+/* запись подходов (телефон): «− N подходов +» под таблицей. Добавить → убрать: записанное в первых подходах и введённое
+   в других строках на месте. Отмеченный или заполненный последний подход убирается только после «Убрать» в его строке;
+   повторное «−» и Esc его не убирают; минимум один подход; всё доступно с клавиатуры */
+{
+  const L = await open(390, 844), c = '.card:nth-child(1)';
+  await L.evaluate(s => { const card = document.querySelector(s); plan.items.find(x => x.ex.id === card.dataset.ex).rx.sets = 4; refreshCard(card); }, c);
+  await L.click(`${c} [data-cfold="log"]`);
+  const st = () => L.evaluate(s => {
+    const card = document.querySelector(s), id = card.dataset.ex, ae = document.activeElement, day = todaySession(id, false);
+    return { rows: card.querySelectorAll('.lt-r').length, sets: plan.items.find(x => x.ex.id === id).rx.sets, num: card.querySelector('.lt-sn').textContent,
+      bar: card.querySelector('.lt-tog .cg-s').textContent, log: day ? JSON.stringify(day.s) : null, target: day ? day.target : null,
+      ask: card.querySelectorAll('.lt-cf').length, armRow: card.querySelector('.lt-r.lt-arm')?.dataset.k ?? null,
+      focus: ae?.dataset.delset ? 'minus' : ae?.dataset.addset ? 'plus' : ae?.dataset.delno ? 'keep' : ae?.dataset.delyes ? 'remove' : ae?.closest?.('.lt-r') ? 'row' + ae.closest('.lt-r').dataset.k : '',
+      typed: card.querySelector('.lt-r[data-k="2"] [data-f="reps"]')?.value ?? null, minusOff: card.querySelector('[data-delset]').disabled };
+  }, c);
+  const log = async (k, reps) => { await L.fill(`${c} .lt-r[data-k="${k}"] [data-f="reps"]`, reps); if (await L.$(`${c} .lt-r[data-k="${k}"] [data-f="kg"]`)) await L.fill(`${c} .lt-r[data-k="${k}"] [data-f="kg"]`, '40'); await L.click(`${c} [data-tick][data-k="${k}"]`); };
+  await log(0, '10'); await log(1, '9');
+  const first = (await st()).log;
+  await L.fill(`${c} .lt-r[data-k="2"] [data-f="reps"]`, '7');
+  await L.click(`${c} [data-addset]`);
+  let s = await st();
+  check(s.rows === 5 && s.sets === 5 && s.num === '5 подходов' && s.bar === '2 из 5' && s.focus === 'row4' && s.typed === '7',
+    `«+» добавляет подход в план, счётчик и заголовок, фокус в новой строке, введённое в других строках на месте (${JSON.stringify(s)})`);
+  await L.click(`${c} [data-delset]`);
+  s = await st();
+  check(s.rows === 4 && s.sets === 4 && s.num === '4 подхода' && s.log === first && s.typed === '7' && s.focus === 'minus' && !s.ask,
+    `«−» у пустой строки убирает её сразу: записанные подходы и введённое на месте, фокус на «−» (${JSON.stringify(s)})`);
+  await log(3, '8');
+  const four = (await st()).log;
+  await L.click(`${c} [data-delset]`);
+  s = await st();
+  check(s.rows === 4 && s.log === four && s.ask === 1 && s.armRow === '3' && s.focus === 'keep' && await L.evaluate(s => /Подход 4 записан/.test(document.querySelector(s + ' .lt-cft').textContent), c),
+    `отмеченный последний подход: в его строке вопрос «Убрать / Оставить», ничего не убрано, фокус на «Оставить» (${JSON.stringify(s)})`);
+  await L.click(`${c} [data-delset]`);
+  s = await st();
+  check(s.rows === 4 && s.log === four && s.ask === 1, 'повторное «−» (двойное касание) ничего не убирает');
+  await L.keyboard.press('Escape');
+  s = await st();
+  check(s.rows === 4 && s.log === four && !s.ask && s.focus === 'minus', `Esc закрывает вопрос, подход на месте, фокус на «−» (${JSON.stringify(s)})`);
+  await L.click(`${c} [data-delset]`); await L.click(`${c} [data-delno]`);
+  s = await st();
+  check(s.rows === 4 && s.log === four && !s.ask && s.focus === 'minus', '«Оставить» — подход на месте');
+  /* с клавиатуры: Enter на «−», Shift+Tab к «Убрать», Enter */
+  await L.focus(`${c} [data-delset]`); await L.keyboard.press('Enter');
+  check((await st()).focus === 'keep', 'с клавиатуры: Enter на «−» открывает вопрос, фокус на «Оставить»');
+  await L.keyboard.press('Shift+Tab');
+  check((await st()).focus === 'remove', 'Shift+Tab — к «Убрать»');
+  await L.keyboard.press('Enter');
+  s = await st();
+  check(s.rows === 3 && s.sets === 3 && s.log === first && s.target === 3 && s.bar === '2 из 3' && s.focus === 'minus' && s.typed === '7',
+    `«Убрать» — подход ушёл из записи и из плана, первые подходы и введённое на месте, фокус на «−» (${JSON.stringify(s)})`);
+  /* строка с цифрами без отметки — тоже с подтверждением; убрать до одного */
+  await L.click(`${c} [data-delset]`);
+  s = await st();
+  check(s.ask === 1 && s.armRow === '2' && await L.evaluate(s => /Подход 3 заполнен/.test(document.querySelector(s + ' .lt-cft').textContent), c), 'строка с введёнными цифрами без отметки — тоже с вопросом');
+  await L.click(`${c} [data-delyes]`);
+  await L.click(`${c} [data-delset]`); await L.click(`${c} [data-delyes]`);
+  s = await st();
+  check(s.rows === 1 && s.sets === 1 && s.minusOff && s.focus === 'plus' && s.log === JSON.stringify(JSON.parse(first).slice(0, 1)) && s.num === '1 подход',
+    `минимум один подход: «−» выключен, фокус на «+», первый подход на месте (${JSON.stringify(s)})`);
+  await L.close();
+}
+
 /* компьютер: параметры в боковой колонке не сворачиваются */
 const desk = await open(1280);
 await desk.evaluate(() => { S.fold.setup = true; regen(); });
@@ -933,4 +996,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа (в «Анатомии» и «Манекене» — кадры из общего рендерера, кеш между сеансами, без WebGL — SVG), виды фигуры «Анатомия», «Скелет» и «Манекен» (кожа Anny в карточках и витрине, без её данных — SVG), анатомия в карточках плана и на экране тренировки (откат на манекен, без WebGL — SVG), свободная камера сцены (поворот на воспроизведении, колесо, кнопки ракурсов, двойной щелчок, клавиатура, касания на телефоне), первый экран и разбор на телефоне, карточка, журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования, панель замера скорости ?perf работают на телефоне и компьютере.');
+console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа (в «Анатомии» и «Манекене» — кадры из общего рендерера, кеш между сеансами, без WebGL — SVG), виды фигуры «Анатомия», «Скелет» и «Манекен» (кожа Anny в карточках и витрине, без её данных — SVG), анатомия в карточках плана и на экране тренировки (откат на манекен, без WebGL — SVG), свободная камера сцены (поворот на воспроизведении, колесо, кнопки ракурсов, двойной щелчок, клавиатура, касания на телефоне), первый экран и разбор на телефоне, карточка, число подходов («−» с подтверждением в строке, «+»), журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования, панель замера скорости ?perf работают на телефоне и компьютере.');
