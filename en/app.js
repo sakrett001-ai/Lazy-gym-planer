@@ -11655,7 +11655,7 @@ function renderSetup() {
     $('#f-days').innerHTML = [2, 3, 4, 5].map(d => `<button type="button" class="seg-b${d === S.days ? ' on' : ''}" data-days="${d}" aria-pressed="${d === S.days}"><b>${d}</b><small>${SCHEDULE[d].map(i => WD[i]).join(' ')}</small></button>`).join('');
     const sp = splitFor(S.days);
     const opts = Object.entries(SPLITS).filter(([, v]) => v.days[S.days]);
-    $('#f-split').style.gridTemplateColumns = `repeat(${opts.length}, 1fr)`;
+    $('#f-split').style.setProperty('--seg-n', opts.length); /* столбцов — по числу сплитов; при крупном тексте меньше (39-big-text.css) */
     $('#f-split').innerHTML = opts.map(([k, v]) => `<button type="button" class="seg-b${k === sp ? ' on' : ''}" data-split="${k}" aria-pressed="${k === sp}"><b>${v.name}</b><small>${v.hint}</small></button>`).join('');
     $('#split-note').textContent = SPLITS[sp].note;
   }
@@ -11747,13 +11747,24 @@ function rxHtml(it) {
   return `<div class="rx"><span class="rx-big">${r.sets} × ${r.reps}${unit}${side}</span><span class="rx-rest">${rest}</span>${rxKgHtml(it)}${r.light ? '<span class="rx-light">scaled down</span>' : ''}${easedTag(r)}</div>`;
 }
 
-/* суставы под пиковой нагрузкой — короткая строка в карточке; подробности в разборе движения */
-function jointsLine(ex) {
+/* суставы под пиковой нагрузкой — короткая строка в карточке. Пояснение раскрывается нажатием на строку (касанием и
+   с клавиатуры, а не только в подсказке мыши): тот же текст, что в панели «Нагрузка на суставы» внизу разбора движения */
+const PEAK_OPEN = new Set();
+function jointsLine(ex, idx) {
   const zones = typeof stressZones === 'function' ? stressZones(ex) : [];
   if (!zones.length) return '';
-  const on = typeof motionPrefs === 'undefined' || motionPrefs.stress !== false;
-  return `<p class="c-joints"${on ? '' : ' hidden'} title="Red marks in the movement breakdown show when the load peaks"><span class="stress-dot" aria-hidden="true"></span>Peak load: ${esc(zones.join(', '))}</p>`;
+  const on = typeof motionPrefs === 'undefined' || motionPrefs.stress !== false, open = PEAK_OPEN.has(ex.id);
+  const rules = typeof jointStress === 'function' ? jointStress(ex).rules : [];
+  const lead = document.querySelector('#mv-stress-panel .stress-explanation')?.textContent || 'A red mark on the mannequin is a moment of peak load on a joint, ligament or tendon. It is a reminder to keep good form, not a ban.';
+  return `<div class="c-joints"${on ? '' : ' hidden'}><button type="button" class="c-joints-b" data-peak="${ex.id}" aria-expanded="${open}" aria-controls="peak-${idx}"><span class="stress-dot" aria-hidden="true"></span><span>Peak load: ${esc(zones.join(', '))}</span><i class="cg-chev" aria-hidden="true"></i></button>`
+    + `<div class="c-joints-x" id="peak-${idx}"${open ? '' : ' hidden'}><p class="stress-explanation">${esc(lead)}</p><ul class="stress-list">${rules.map(r => `<li><span class="stress-dot" aria-hidden="true"></span><span><b>${esc(r.zone)}.</b> ${esc(r.what)} <em>${esc(r.tip)}</em></span></li>`).join('')}</ul></div></div>`;
 }
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-peak]'); if (!b) return;
+  const open = b.getAttribute('aria-expanded') !== 'true', box = document.getElementById(b.getAttribute('aria-controls'));
+  b.setAttribute('aria-expanded', String(open)); if (box) box.hidden = !open;
+  if (open) PEAK_OPEN.add(b.dataset.peak); else PEAK_OPEN.delete(b.dataset.peak);
+});
 function cardHtml(it, idx) {
   const ex = it.ex, r = it.rx;
   const lvl = {};
@@ -11766,7 +11777,7 @@ function cardHtml(it, idx) {
   const view = '3D view · 5 angles';
   return `<li class="card${cardFoldClass(ex.id)}" data-ex="${ex.id}" data-slot="${it.slot}">
   <div class="c-top">
-    <div class="motion-tile"><button type="button" class="illus" data-fig="${idx}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Break down the movement: ${esc(it.name)}"><span class="illus-v">${view}</span><span class="illus-zoom" aria-hidden="true">Zoom ↗</span></button><div class="motion-bar"><span class="motion-caption">Starting position</span><button type="button" data-motion-pause="${idx}" aria-label="Pause demo: ${esc(it.name)}" aria-pressed="false">Pause</button></div></div>
+    <div class="motion-tile"><button type="button" class="illus" data-fig="${idx}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Zoom in: ${esc(it.name)}, movement breakdown — ${view}"><span class="illus-v">${view}</span><span class="illus-zoom" aria-hidden="true">Zoom ↗</span></button><div class="motion-bar"><span class="motion-caption">Starting position</span><button type="button" data-motion-pause="${idx}" aria-label="Pause: ${esc(it.name)}">Pause</button></div></div>
     <div class="c-info">
       <div class="c-head"><span class="c-idx">${it.label}</span><span class="c-type">${ex.type === 'c' ? 'compound' : 'isolation'}</span>${favButton(ex.id)}</div>
       <h3 class="c-name">${esc(it.name)}</h3>
@@ -11783,14 +11794,14 @@ function cardHtml(it, idx) {
     <div class="c-map">${muscleMapSvg(lvl, {aria:'Working muscles: ' + ex.pri.map(m => MUSCLE_NAMES[m]).join(', ')})}</div>
     <ul class="mus">${mus}</ul>
   </div>
-  ${jointsLine(ex)}
+  ${jointsLine(ex, idx)}
   ${logBlock(it)}
   <div class="c-hist" hidden></div>
   <div class="c-warm">${warmupHtml(it, workWeightOf(it, null))}</div>
   <div class="c-prog">${progressionHint(it)}</div>
   <div class="c-act">
-    <button type="button" class="btn-ghost" data-workout="${ex.id}" aria-haspopup="dialog" aria-controls="workout-view">Start workout →</button>
-    <span class="c-act-r">${S.mode === 'custom' ? '' : moveButtons(it)}<button type="button" class="btn-ghost" data-swap="${it.slot}" aria-expanded="false" aria-controls="sw-pick-${it.slot}">${ICON.swap}<span>Swap</span></button></span>
+    <button type="button" class="btn-ghost" data-workout="${ex.id}" aria-haspopup="dialog" aria-controls="workout-view">Start workout<span class="vh">: ${esc(it.name)}</span> <span aria-hidden="true">→</span></button>
+    <span class="c-act-r">${S.mode === 'custom' ? '' : moveButtons(it)}<button type="button" class="btn-ghost" data-swap="${it.slot}" aria-expanded="false" aria-controls="sw-pick-${it.slot}">${ICON.swap}<span>Swap</span><span class="vh">: ${esc(it.name)}</span></button></span>
     <div class="cp-pick sw-pick" id="sw-pick-${it.slot}" role="group" aria-labelledby="sw-pick-${it.slot}-h" hidden></div>
     ${swapDoneHtml(it)}
   </div>
@@ -11886,7 +11897,19 @@ function focusHtml() {
 }
 function norm(load) { const mx = Math.max(1, ...Object.values(load)); const o = {}; for (const [m, v] of Object.entries(load)) o[m] = v / mx; return o; }
 
-function renderPlan() {
+/* диктор: #plan не живая область (весь план зачитывался при каждом нажатии, отчёт тестера п. 10) — после пересборки
+   коротко: «План обновлён: 6 упражнений, ≈33 мин» (#plan-status, role="status"); при первом показе — молча */
+let planSaid = null;
+function announcePlan() {
+  const box = $('#plan-status'); if (!box || S.view !== 'plan') return;
+  const n = plan && plan.items ? plan.items.length : 0, empty = $('#plan .empty h2');
+  const text = n ? `Plan updated: ${n} ${plural(n, 'exercise', 'exercises', 'exercises')}, ≈${plan.minutes} min` : empty ? empty.textContent : '';
+  if (planSaid === null) { planSaid = text; return; }
+  planSaid = text; box.textContent = ''; /* то же сообщение подряд тоже объявляется: сначала очистить, затем вписать */
+  clearTimeout(announcePlan.t); announcePlan.t = setTimeout(() => { box.textContent = text; }, 80);
+}
+function renderPlan() { renderPlanView(); announcePlan(); }
+function renderPlanView() {
   stopFigures();
   if (S.view === 'journal') { prog = null; plan = null; return renderJournal(); }
   if (S.view === 'atlas') { prog = null; plan = null; return renderAtlas(); }
@@ -12839,7 +12862,7 @@ function musFoldHead(ex) {
 function logFoldBar(it, n, done) {
   const id = it.ex.id, open = cardOpen('log', id), cnt = histCount(id);
   return `<div class="lt-bar"><button type="button" class="cg-h lt-tog" data-cfold="log" aria-expanded="${open}" aria-controls="lt-${id}"><span class="cg-x"><span class="cg-t">Sets</span><span class="cg-s${done ? ' cg-done' : ''}">${logBarText(done, n)}</span></span>${chev}</button>
-    <button type="button" class="btn-ghost" data-hist="1" aria-expanded="false">${ICON.chart}<span>History</span><small>${cnt || ''}</small></button></div>`;
+    <button type="button" class="btn-ghost" data-hist="1" aria-expanded="false">${ICON.chart}<span>History</span><span class="vh">: ${esc(it.name)}</span><small>${cnt || ''}</small></button></div>`;
 }
 function logBarText(done, n) { return `${done} of ${n}`; }
 /* отметили или сняли подход — счётчик в заголовке записи */
@@ -13422,9 +13445,8 @@ function paintMotion(F, detailed=false, svgOnly=false) {
   $('#mv-phase').textContent=m.label; $('#mv-cue').textContent=m.cue;
   $('#mv-progress').value=String(Math.round(m.progress*1000));
   $('#mv-progress').setAttribute('aria-valuetext',`${m.label}, ${Math.round(m.progress*100)}% of rep`);
+  /* имя кнопки — её надпись (WCAG 2.5.3); надпись сама говорит о состоянии, поэтому без aria-pressed */
   $('#mv-play').textContent=F.paused?'Play':'Pause';
-  $('#mv-play').setAttribute('aria-label',F.paused?'Play movement':'Pause movement');
-  $('#mv-play').setAttribute('aria-pressed',String(!F.paused));
   $('#mv-position').textContent=`${Math.round(m.progress*100)}% of rep`;
   paintMusclePanel('mv',F,m);paintStressPanel('mv',F,m);
 }
@@ -13729,7 +13751,7 @@ function mountFigures() {
     if(motionProfile(it.ex.anim)){const note=document.createElement('p');note.className='muscle-tile-note';note.textContent='Color is an educational illustration';note.hidden=!motionPrefs.muscles;tile.appendChild(note);}
     {const note=document.createElement('p');note.className='figure-tile-note';note.hidden=true;tile.appendChild(note);}
     const pause=tile.querySelector('[data-motion-pause]');
-    if(pause){pause.textContent=F.paused?'Start':'Pause';pause.setAttribute('aria-pressed',String(!F.paused));pause.setAttribute('aria-label',`${F.paused?'Play':'Pause'} demo: ${it.name}`);}
+    if(pause){pause.textContent=F.paused?'Start':'Pause';pause.setAttribute('aria-label',`${F.paused?'Start':'Pause'}: ${it.name}`);}
     const hover=on=>e=>{if(e.pointerType&&e.pointerType!=='mouse')return;F.hover=on;pickActiveCards();};
     tile.addEventListener('pointerenter',hover(true));tile.addEventListener('pointerleave',hover(false));
     btn.addEventListener('focus',()=>{F.hover=true;pickActiveCards();});btn.addEventListener('blur',()=>{F.hover=false;pickActiveCards();});
@@ -13858,7 +13880,7 @@ function setupMotionViewer() {
 
   document.addEventListener('click',e=>{
     const t=e.target.closest('button');if(!t)return;
-    if(t.dataset.motionPause!==undefined){const F=figs.find(f=>+f.btn.dataset.fig===+t.dataset.motionPause);if(F){F.paused=!F.paused;if(F.card){F.pick=performance.now();pickActiveCards();}t.textContent=F.paused?'Start':'Pause';t.setAttribute('aria-pressed',String(!F.paused));t.setAttribute('aria-label',`${F.paused?'Play':'Pause'} demo: ${F.it.name}`);}return;}
+    if(t.dataset.motionPause!==undefined){const F=figs.find(f=>+f.btn.dataset.fig===+t.dataset.motionPause);if(F){F.paused=!F.paused;if(F.card){F.pick=performance.now();pickActiveCards();}t.textContent=F.paused?'Start':'Pause';t.setAttribute('aria-label',`${F.paused?'Start':'Pause'}: ${F.it.name}`);}return;}
     if(t.id==='motion-atlas'){openGallery();return;}
     if(t.id==='mv-close'){closeMotion();return;}
     if(!detailMotion)return;
@@ -15976,7 +15998,7 @@ function renderAtlas() {
     const it = previewItem(atlasEx);
     html += `<div class="motion-tile at-tile" id="at-preview">
         <button type="button" class="illus" data-fig="0" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Break down the movement: ${esc(it.name)}"><span class="at-stage"></span><span class="illus-zoom" aria-hidden="true">Break down ↗</span></button>
-        <div class="motion-bar"><span class="motion-caption">Start position</span><button type="button" data-motion-pause="0" aria-pressed="true">Pause</button></div>
+        <div class="motion-bar"><span class="motion-caption">Start position</span><button type="button" data-motion-pause="0">Pause</button></div>
       </div>
       <div class="at-under"><p class="at-pv"><b id="at-pv-name">${esc(it.name)}</b></p><div class="at-cams" role="group" aria-label="View">${Object.entries(ATLAS_CAMS).map(([c, label]) => `<button type="button" data-atlas-cam="${c}" aria-pressed="false">${label}</button>`).join('')}</div></div>
       <div class="at-keep" id="at-keep">${atlasKeepHtml(atlasEx)}</div>
@@ -16008,7 +16030,7 @@ function mountAtlasPreview(m = S.atlasM) {
     const F = {btn, it, f, vis:true, paused:reduceMotion, clock:0, durations:motionDurations(it)};
     figs = [F]; paintMotion(F);
     const pause = tile.querySelector('[data-motion-pause]');
-    pause.textContent = F.paused ? 'Start' : 'Pause'; pause.setAttribute('aria-pressed', String(!F.paused));
+    pause.textContent = F.paused ? 'Start' : 'Pause';
   } catch (e) { console.error('Atlas', it.ex.id, e); }
   btn.setAttribute('aria-label', 'Break down the movement: ' + it.name);
   $('#at-pv-name').textContent = it.name;
@@ -16959,7 +16981,7 @@ function workoutShow(index){
   holdSetup(s,sg);
   const cue=MOTION_FOCUS[ex.id];$('#wv-setup').textContent=cue?.setup||ex.tech[0];$('#wv-control').textContent=cue?.control||ex.tech[1];$('#wv-breath').textContent=ex.breath;
   disposeMotion(workout.motion);workout.motion={it,f:null,clock:0,paused:reduceMotion,durations:motionDurations(it)};$('#wv-angle').textContent=CAMERA3[motionCamera(ex)].label;
-  $('#wv-motion').textContent=reduceMotion?'Play':'Pause';$('#wv-motion').setAttribute('aria-pressed',String(!reduceMotion));mountWorkoutCameras();
+  $('#wv-motion').textContent=reduceMotion?'Play':'Pause';mountWorkoutCameras();
   $('#wv-prev').disabled=workout.index===0;$('#wv-next').disabled=workout.index===workout.queue.length-1;
   Heart.set(s);
   saveWorkout();workoutTick();
@@ -17085,7 +17107,7 @@ function todayTonnage(ex){return sessionTonnage(ex,todaySession(ex.id,false));}
 function paintRestPhase(over){
   if(!workout)return;workout.restOver=over;
   $('#workout-view').classList.toggle('rest-over',over);$('#wv-rest-heading').textContent=over?'Time for your set':'Rest';
-  $('#wv-rest-over').textContent=over?'over rest':'';$('#wv-rest-minus').disabled=over;
+  $('#wv-rest-over').textContent=over?'over rest':'';$('#wv-rest-say').textContent=over?'Time for your set':'';$('#wv-rest-minus').disabled=over;
 }
 function workoutFinish(){
   workout.restUntil=0;workout.restFrom=0;workout.next=-1;RestAlarm.cancel();holdStop();paintRestPhase(false);$('#wv-active').hidden=true;$('#wv-rest').hidden=true;$('#wv-finish').hidden=false;
@@ -17096,7 +17118,7 @@ function workoutFinish(){
 }
 function workoutTick(){
   if(!workout)return;
-  const now=Date.now(),n=workout.queue.filter(workoutValue).length;$('#wv-progress').max=workout.queue.length;$('#wv-progress').value=n;$('#wv-progress-label').textContent=`${n} of ${workout.queue.length} sets`;
+  const now=Date.now(),n=workout.queue.filter(workoutValue).length;$('#wv-progress').max=workout.queue.length;$('#wv-progress').value=n;$('#wv-progress-label').textContent=`${n} of ${workout.queue.length} ${plural(workout.queue.length,'sets','sets','sets')}`;
   const elapsed=Math.max(0,Math.floor((now-workout.started)/60000));$('#wv-elapsed').textContent=elapsed?`${elapsed} min since start`:'';
   if(!$('#wv-rest').hidden){
     Heart.restTick(now); /* отдых «до пульса» может сдвинуть workout.restUntil */
@@ -17191,7 +17213,7 @@ function setupWorkout(){
     if(t.id==='wv-hold-go'){holdGo();return;}
     if(t.id==='wv-hold-reset'){holdStop();paintHold();return;}
     if(t.dataset.wvRest){const end=restAdjust(workout.restUntil,Date.now(),Number(t.dataset.wvRest));if(end!==workout.restUntil){workout.restUntil=end;RestAlarm.arm(end,{from:workout.restFrom||undefined});saveWorkout();workoutTick();}return;}
-    if(t.id==='wv-motion'){const m=workout.motion;m.paused=!m.paused;t.textContent=m.paused?'Play':'Pause';t.setAttribute('aria-pressed',String(!m.paused));return;}
+    if(t.id==='wv-motion'){const m=workout.motion;m.paused=!m.paused;t.textContent=m.paused?'Play':'Pause';return;}
     if(t.id==='wv-technique'){workoutCapture();if(workout.motion)openMotionItem(workout.motion.it,workout.motion.clock);}
   });
 }
@@ -17773,7 +17795,7 @@ const Heart = (() => {
     text('#wv-hr-val', val); show('#wv-hr-unit', view === 'live' && !(armed && on)); text('#wv-hr-note', note); text('#wv-hr-meta', meta);
     show('#wv-hr-note', !!note); show('#wv-hr-meta', !!meta);
     const btn = q('#wv-hr-btn');
-    btn.setAttribute('aria-label', armed && on ? 'Disconnect the heart rate monitor' : view === 'live' ? `${'Heart rate'} ${bpm} ${'bpm. Tap to disconnect the heart rate monitor'}` : on ? 'Heart rate monitor is connecting. Tap to disconnect' : 'Connect a heart rate monitor');
+    btn.setAttribute('aria-label', armed && on ? 'Disconnect the heart rate monitor' : view === 'live' ? `${'Heart rate'} ${bpm} ${'bpm. Tap to disconnect the heart rate monitor'}` : on ? 'Heart rate monitor is connecting. Tap to disconnect' : 'Heart rate: connect a monitor');
     const wv = q('#workout-view'); if (wv && view === 'live') wv.style.setProperty('--hr-beat', (60 / bpm).toFixed(2) + 's');
     show('#wv-hr-help', !!(c && c.help) && !on);
     paintRest(now, bpm, on);
@@ -18946,4 +18968,4 @@ logInit();
 plural = (n, a, b, c) => n === 1 ? a : c;
 DEC = '.';
 
-window.PODHOD_VERSION='4.98.0';window.PODHOD_BUILD='4.98.0-68ca9fbdbbf9';window.PODHOD_RENDER={"skin":"31c4707ea0","skeleton":"f4e7c4b726","anatomy":"48636840a9"};window.PODHOD_LANG='en';
+window.PODHOD_VERSION='4.99.0';window.PODHOD_BUILD='4.99.0-ed91df8d0c57';window.PODHOD_RENDER={"skin":"31c4707ea0","skeleton":"f4e7c4b726","anatomy":"48636840a9"};window.PODHOD_LANG='en';
