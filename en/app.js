@@ -11139,21 +11139,43 @@ document.addEventListener('click', e => {
 
 
 /* ===================== ПЛАНИРОВЩИК ===================== */
+/* load — начало строки нагрузки (c — базовые с весом, который можно взвесить, i — изолирующие); запас повторов к ней
+   дописывает reserveOf (rir — запас по цели без цикла; null — без числа: «почти до отказа», «до выраженного жжения») */
 const GOALS = {
   strength:{name:'Strength', hint:'3–6 reps', reps:{c:'3–5', i:'6–8'}, sets:{c:5, i:3}, rest:{c:180, i:90}, tempo:'2-0-X-0',
-    load:{c:'≈ 80–90% of 1RM, 1–2 reps in reserve', i:'heavy, 1–2 reps in reserve'}, rep:3, time:'20–30 s', dist:'20 m',
+    load:{c:'≈ 80–90% of 1RM', i:'heavy'}, rir:[1, 2], rep:3, time:'20–30 s', dist:'20 m',
     circ:{rounds:4, reps:'6–8', work:20, rest:30, roundRest:180}, ss:{rest:150}},
   mass:{name:'Muscle', hint:'6–12 reps', reps:{c:'6–10', i:'10–12'}, sets:{c:4, i:3}, rest:{c:120, i:75}, tempo:'3-0-1-0',
-    load:{c:'≈ 70–80% of 1RM, 1–2 reps in reserve', i:'1–2 reps in reserve'}, rep:4, time:'30–45 s', dist:'30 m',
+    load:{c:'≈ 70–80% of 1RM', i:''}, rir:[1, 2], rep:4, time:'30–45 s', dist:'30 m',
     circ:{rounds:3, reps:'10–12', work:30, rest:20, roundRest:120}, ss:{rest:90}},
   cut:{name:'Definition', hint:'12–20 reps', reps:{c:'12–15', i:'15–20'}, sets:{c:3, i:3}, rest:{c:60, i:40}, tempo:'2-0-1-0',
-    load:{c:'≈ 55–65% of 1RM, close to failure', i:'until a strong burn'}, rep:3, time:'45–60 s', dist:'40 m',
+    load:{c:'≈ 55–65% of 1RM', i:'until a strong burn'}, rir:null, rep:3, time:'45–60 s', dist:'40 m',
     circ:{rounds:4, reps:'15–20', work:40, rest:15, roundRest:90}, ss:{rest:60}},
   /* бережно: суставы болят или идёт восстановление (11g-gentle.js) — Garber et al., MSSE 2011, 43(7):1334–1359 */
   gentle:{name:'Gentle', hint:'12–15 reps', reps:{c:'12–15', i:'12–15'}, sets:{c:2, i:2}, rest:{c:90, i:60}, tempo:'3-0-2-0',
-    load:{c:'≈ 40–60% of 1RM, 3–4 reps in reserve, pain-free', i:'light weight, 3–4 reps in reserve, pain-free'}, rep:5, time:'20–30 s', dist:'20 m',
+    load:{c:'≈ 40–60% of 1RM', i:'light weight'}, rir:[3, 4], rep:5, time:'20–30 s', dist:'20 m',
     circ:{rounds:2, reps:'12–15', work:30, rest:30, roundRest:120}, ss:{rest:90}}
 };
+/* Запас повторов (повторы в запасе) — один источник для строки нагрузки в карточке, подсказки первой записи в журнале,
+   описания недели цикла и плашки «Бережно»: число нигде больше не пишется. Без цикла — по цели (GOALS.rir), новичку
+   в силе и массе на повтор больше (2–3); в цикле — по неделе (WEEKS.rir), в «Бережно» не меньше 3, новичку +1.
+   null — без числа: рельеф («почти до отказа») и разгрузка («без отказа»). */
+function reserveOf(week, goal = S.goal, level = S.level) {
+  if (week) {
+    if (week.deload) return null;
+    const n = (goal === 'gentle' ? Math.max(3, week.rir) : week.rir) + (level === 'beg' ? 1 : 0);
+    return {lo:n, hi:n};
+  }
+  const r = GOALS[goal] && GOALS[goal].rir; if (!r) return null;
+  const add = level === 'beg' && goal !== 'gentle' ? 1 : 0;
+  return {lo:r[0] + add, hi:r[1] + add};
+}
+/* «1–2» или «3» */
+const reserveNum = r => r.lo === r.hi ? String(r.lo) : `${r.lo}–${r.hi}`;
+/* «1–2 повтора» */
+const reserveReps = r => `${reserveNum(r)} ${plural(r.hi, 'rep', 'reps', 'reps')}`;
+/* «1–2 повтора в запасе» */
+const reserveText = r => `${reserveReps(r)} in reserve`;
 const FORMATS = {classic:{name:'Straight sets', hint:'set by set'}, superset:{name:'Supersets', hint:'pairs without rest'}, circuit:{name:'Circuit', hint:'rounds back to back'},
   static:{name:'Static-dynamic', hint:'constant tension'}};
 const LEVELS = {beg:{name:'Beginner'}, mid:{name:'Intermediate'}, adv:{name:'Advanced'}};
@@ -11226,14 +11248,15 @@ const DEFAULT_SPLIT = {2:'full', 3:'full', 4:'ul', 5:'ppl'};
 const SCHEDULE = {2:[0, 3], 3:[0, 2, 4], 4:[0, 1, 3, 4], 5:[0, 1, 2, 4, 5]};
 const WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const WD_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-/* мезоцикл: 4 недели с ростом нагрузки и разгрузкой */
+/* мезоцикл: 4 недели с ростом нагрузки и разгрузкой; запас повторов в описании недели — тот же, что в строке нагрузки
+   (reserveOf: цель и уровень открытого плана) */
 const WEEKS = [
   {name:'Intro', rir:3, add:0, pct:{strength:'≈ 75–80%', mass:'≈ 65–70%', cut:'≈ 55–60%', gentle:'≈ 40–50%'},
-    note:'Choose working weights that leave 3 reps in reserve in every set. Log weight and reps: next weeks\' progress is built on them.'},
+    get note() { return `Choose working weights that leave ${reserveText(reserveOf(this))} in every set. Log weight and reps: next weeks' progress is built on them.`; }},
   {name:'Loading', rir:2, add:1, pct:{strength:'≈ 80–85%', mass:'≈ 70–75%', cut:'≈ 60–65%', gentle:'≈ 45–55%'},
-    note:'Compound exercises get an extra set. Increase weight using double progression; keep 2 reps in reserve.'},
+    get note() { return `Compound exercises get an extra set. Increase weight using double progression, ${reserveText(reserveOf(this))}.`; }},
   {name:'Peak', rir:1, add:1, pct:{strength:'≈ 85–90%', mass:'≈ 75–80%', cut:'≈ 65–70%', gentle:'≈ 50–60%'},
-    note:'The hardest week of the cycle: 1 rep in reserve, clean technique. If your sleep or well-being is poor, stay at the week 2 load.'},
+    get note() { return `The hardest week of the cycle: ${reserveText(reserveOf(this))}, clean technique. If your sleep or well-being is poor, stay at the week 2 load.`; }},
   {name:'Deload', rir:4, deload:true, pct:{strength:'≈ 65–70%', mass:'≈ 55–60%', cut:'≈ 50–55%', gentle:'≈ 40%'},
     note:'About 40% fewer sets, weight 10–15% lower. This is recovery before a new cycle, not a skipped week: muscles grow when they have time to recover.'}
 ];
@@ -11257,12 +11280,16 @@ let eqOpen = false;
 let placeDel = false;
 let done = {};
 let plan = null, prog = null;
+/* последнее изменение плана, которое возвращается одним нажатием «Вернуть»: замена или «Убрать» в своём плане (12c-swap.js).
+   Не сохраняется: держится до следующего изменения плана или перезагрузки */
+let planUndo = null;
 
 /* ---------- утилиты ---------- */
 function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;'}[c]));
 const fmtRest = s => s >= 60 ? (s % 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s / 60} min`) : `${s} s`;
-const midOf = r => { const m = String(r).match(/(\d+)\D+(\d+)/); if (m) return (+m[1] + +m[2]) / 2; const n = parseFloat(r); return isNaN(n) ? 10 : n; };
+/* середина повторов: «8–12» → 10; по подходам «10/8/6/5» — среднее */
+const midOf = r => { const s = String(r); if (s.includes('/')) { const l = s.split('/').map(Number).filter(v => v > 0); if (l.length) return l.reduce((a, b) => a + b, 0) / l.length; } const m = s.match(/(\d+)\D+(\d+)/); if (m) return (+m[1] + +m[2]) / 2; const n = parseFloat(r); return isNaN(n) ? 10 : n; };
 function plural(n, a, b, c) { const m10 = n % 10, m100 = n % 100; if (m10 === 1 && m100 !== 11) return a; if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return b; return c; }
 /* Поиск по названиям упражнений. «ё» и «е» равны (ё раскладывается на е и две точки — U+0308, точки убираются; й остаётся
    собой), регистр и дефисы не важны. У каждого слова запроса отбрасывается окончание — «отжимание» находит «Отжимания»,
@@ -11428,11 +11455,12 @@ function prescribe(ex, week, E) {
   const band = ex.eq.length && ex.eq.every(g => g.every(id => id === 'band')), assisted = ex.eq.some(g => g.includes('gravitron'));
   const how = band ? 'band tension: ' : assisted ? 'counterweight: ' : 'pick a variation: ';
   const easy = band ? 'lighter than usual, not to failure' : assisted ? 'more than usual, not to failure' : 'an easier one, not to failure';
-  let load = t === 'c' && !pct ? how + {strength:'1–2 reps in reserve', mass:'1–2 reps in reserve', cut:'close to failure', gentle:'3–4 reps in reserve, pain-free'}[S.goal] : G.load[t];
+  /* запас повторов — из reserveOf (он же в подсказке первой записи и в описании недели); rir — в дозировку */
+  const rir = reserveOf(week);
+  const tail = rir ? reserveText(rir) + (S.goal === 'gentle' ? ', pain-free' : '') : 'close to failure';
+  let load = t === 'c' ? (pct ? `${G.load.c}, ${tail}` : how + tail) : !G.rir ? G.load.i : G.load.i ? `${G.load.i}, ${tail}` : tail;
   if (week) {
-    /* бережно: запас не меньше трёх повторов и на пиковой неделе */
-    const rir = (S.goal === 'gentle' ? Math.max(3, week.rir) : week.rir) + (S.level === 'beg' ? 1 : 0);
-    const reserve = `${rir} ${plural(rir, 'rep', 'reps', 'reps')} in reserve`;
+    const reserve = rir ? reserveText(rir) : '';
     if (week.deload) { sets = Math.max(2, Math.round(sets * 0.6)); load = pct ? `${week.pct[S.goal]} of 1RM, light weight, not to failure` : t === 'c' ? how + easy : 'light weight, not to failure'; }
     else {
       if (week.add && t === 'c') sets = Math.min(6, sets + week.add);
@@ -11444,10 +11472,9 @@ function prescribe(ex, week, E) {
   if (ex.kind === 'dist') load = S.goal === 'strength' ? 'heaviest implements possible' : S.goal === 'gentle' ? 'moderate weight, steady steps' : 'heavy implements, no stops';
   const notes = [];
   if (bodyweight && ex.kind !== 'time' && S.goal === 'strength') notes.push('If the range feels easy, add weight or slow the lowering to 4 s.');
-  if (!week && S.level === 'beg') load = load.replace('1–2 reps', '2–3 reps');
   const rest = G.rest[t];
   const work = ex.kind === 'time' ? midOf(G.time) : ex.kind === 'dist' ? 30 : midOf(reps) * G.rep * (ex.uni ? 2 : 1);
-  const rx = {sets, reps, unit, rest, load, tempo:ex.kind ? null : G.tempo, notes, work, uni:!!ex.uni};
+  const rx = {sets, reps, unit, rest, load, rir, tempo:ex.kind ? null : G.tempo, notes, work, uni:!!ex.uni};
   return S.format === 'static' && staticOk(ex) ? staticRx(rx, ex, week, E) : rx;
 }
 
@@ -11492,9 +11519,12 @@ function buildPlan(ctx = {}) {
     }).filter(Boolean);
     slots = keep;
   }
+  /* подбор до замен: по нему неделя обходит повторы (buildProgram), и замена в одном дне не меняет другие дни */
+  const picks = picked.map(ex => ex.id);
+  /* замены записаны по номеру упражнения (slot): в программе другого места часть упражнений может не войти в план */
   for (const [i, id] of Object.entries(sw)) {
-    const ex = EXI[id];
-    if (picked[i] && ex && usable(ex) && !picked.includes(ex)) picked[i] = ex;
+    const ex = EXI[id], k = slots.indexOf(+i);
+    if (k >= 0 && picked[k] && ex && usable(ex) && !picked.includes(ex)) picked[k] = ex;
   }
   if (!picked.length) return {empty:'none', pool, groups, lost};
   const G = GOALS[S.goal];
@@ -11551,7 +11581,7 @@ function buildPlan(ctx = {}) {
     /* дробный учёт: целевая группа — полный подход, остальные работающие — половина */
     for (const [g, x] of Object.entries(groupShare(it.ex))) gvol[g] = (gvol[g] || 0) + k * x;
   }
-  return {blocks, items, minutes:Math.round(minutes / 60), totalSets, missing:custom ? [] : missing, load, gvol, pool, E, groups, count, lost, custom:!!custom, byLog:!!lp};
+  return {blocks, items, minutes:Math.round(minutes / 60), totalSets, missing:custom ? [] : missing, load, gvol, pool, E, groups, count, lost, custom:!!custom, byLog:!!lp, picks};
 }
 
 /* ---------- сборка недели ---------- */
@@ -11566,7 +11596,8 @@ function buildProgram() {
     /* день «всё тело» включает мышцу акцента, даже если по шаблону её группы в этот день нет */
     const fg = S.focus && MUSCLE_GROUP[S.focus], g = DAY_T[tid].name === 'Full body' && fg && !DAY_T[tid].g.includes(fg) ? DAY_T[tid].g.concat(fg) : DAY_T[tid].g;
     const p = buildPlan({groups:g, count:S.count, seed:S.seed * 131 + i * 977 + 13, avoid:new Set(avoid), week, swaps:swaps['d' + i] || {}, order:swaps.__order?.['d' + i]});
-    if (p.items) p.items.forEach(it => avoid.add(it.ex.id));
+    /* следующие дни обходят и подобранное, и поставленное заменой: замена в одном дне не меняет остальные */
+    if (p.items) { p.items.forEach(it => avoid.add(it.ex.id)); p.picks.forEach(id => avoid.add(id)); }
     return {tid, i, wd:SCHEDULE[days][i], plan:p};
   });
   for (const d of out) {
@@ -11759,7 +11790,9 @@ function cardHtml(it, idx) {
   <div class="c-prog">${progressionHint(it)}</div>
   <div class="c-act">
     <button type="button" class="btn-ghost" data-workout="${ex.id}" aria-haspopup="dialog" aria-controls="workout-view">Start workout →</button>
-    <span class="c-act-r">${S.mode === 'custom' ? '' : moveButtons(it)}<button type="button" class="btn-ghost" data-swap="${it.slot}">${ICON.swap}<span>Swap</span></button></span>
+    <span class="c-act-r">${S.mode === 'custom' ? '' : moveButtons(it)}<button type="button" class="btn-ghost" data-swap="${it.slot}" aria-expanded="false" aria-controls="sw-pick-${it.slot}">${ICON.swap}<span>Swap</span></button></span>
+    <div class="cp-pick sw-pick" id="sw-pick-${it.slot}" role="group" aria-labelledby="sw-pick-${it.slot}-h" hidden></div>
+    ${swapDoneHtml(it)}
   </div>
   ${S.mode === 'custom' ? customToolsHtml(it) : ''}
   <details class="tech">
@@ -11796,24 +11829,29 @@ function blocksHtml(p) {
   html += cardsViewHtml();
   if (S.format === 'static') html += `<p class="phase phase-static"><b>Static-dynamic.</b> Weight — about half of your 1RM. Slowly: 3 s down and 3 s up, no pauses; don’t lock out at the top and don’t relax at the bottom — the muscle stays tense the whole time. By the end of a set (30–40 s) — a strong burn, but not failure. Three sets with 30 s rest make one series.</p>`;
   let idx = 0;
+  /* «Убрано: … Вернуть» — на месте убранной карточки своего плана (12c-swap.js) */
+  let gone = rmGoneHtml();
+  const card = it => { let pre = ''; if (gone && it.slot >= planUndo.slot) { pre = gone; gone = ''; } return pre + cardHtml(it, idx++); };
   for (const b of p.blocks) {
     if (b.kind === 'list') {
-      html += `<ol class="cards">${b.items.map(it => cardHtml(it, idx++)).join('')}</ol>`;
+      html += `<ol class="cards">${b.items.map(card).join('')}</ol>`;
     } else if (b.kind === 'pair') {
       const many = b.items.length > 1;
       html += `<section class="block">
         <header class="b-head"><h2><span class="b-letter">${b.letter}</span>${many ? 'Superset' : 'Single exercise'}</h2>
         <p>${many ? `${b.sets} ${plural(b.sets, 'round', 'rounds', 'rounds')}: ${b.items.map(it => it.label).join(' → ')} with no break, then rest ${fmtRest(b.rest)}` : `${b.sets} ${plural(b.sets, 'set', 'sets', 'sets')}, rest ${fmtRest(b.rest)}`}</p></header>
-        <ol class="cards">${b.items.map(it => cardHtml(it, idx++)).join('')}</ol></section>`;
+        <ol class="cards">${b.items.map(card).join('')}</ol></section>`;
     } else {
       const rd = done.__rounds || 0;
       html += `<section class="block block-c">
         <header class="b-head"><h2><span class="b-letter">${ICON.loop}</span>Circuit × ${b.rounds}</h2>
         <p>Do the stations back to back: ${fmtRest(b.rest)} to move between exercises, ${fmtRest(b.roundRest)} of rest after each round.</p>
         <div class="sets rounds" role="group" aria-label="Mark completed rounds">${Array.from({length:b.rounds}, (_, k) => `<button type="button" class="set${rd > k ? ' done' : ''}" data-round="${k}" aria-label="Round ${k + 1}">${k + 1}</button>`).join('')}<span class="rounds-l">rounds</span></div></header>
-        <ol class="cards">${b.items.map(it => cardHtml(it, idx++)).join('')}</ol></section>`;
+        <ol class="cards">${b.items.map(card).join('')}</ol></section>`;
     }
   }
+  /* убрано последнее упражнение — строка после последней карточки */
+  if (gone) { const k = html.lastIndexOf('</ol>'); html = html.slice(0, k) + gone + html.slice(k); }
   html += `<p class="phase"><b>Cool-down, 5 min.</b> Easy walking and stretching of the muscles you worked: 20–30 seconds each.</p>`;
   return html;
 }
@@ -11861,12 +11899,12 @@ function renderPlan() {
     return;
   }
   if (plan.empty === 'custom') {
-    root.innerHTML = `<header class="p-head p-head-c"><div class="p-sum"><p class="eyebrow">Custom plan · ${GOALS[S.goal].name} · ${FORMATS[S.format].name}</p><h1 class="p-title">${esc(titleFor())}</h1>${customHeadHtml()}</div></header>` + customEmptyHtml() + customAddHtml();
+    root.innerHTML = `<header class="p-head p-head-c"><div class="p-sum"><p class="eyebrow">Custom plan · ${GOALS[S.goal].name} · ${FORMATS[S.format].name}</p><h1 class="p-title">${esc(titleFor())}</h1>${customHeadHtml()}</div></header>` + rmGoneHtml('div') + customEmptyHtml() + customAddHtml();
     return;
   }
   if (plan.empty === 'none') {
     root.innerHTML = S.mode === 'custom'
-      ? `<div class="empty"><h2>Nothing here to do this plan with</h2>${lostMessages(plan.lost, effEquip(S.equip)).map(m => `<p>${esc(m)}</p>`).join('')}<p>Choose another place or add exercises.</p></div>` + customAddHtml()
+      ? rmGoneHtml('div') + `<div class="empty"><h2>Nothing here to do this plan with</h2>${lostMessages(plan.lost, effEquip(S.equip)).map(m => `<p>${esc(m)}</p>`).join('')}<p>Choose another place or add exercises.</p></div>` + customAddHtml()
       : `<div class="empty"><h2>Nothing to build a workout from</h2><p>There are no exercises for the selected muscles with this equipment and level. Add equipment or pick other muscle groups.</p></div>`;
     return;
   }
@@ -12129,12 +12167,23 @@ function cleanKg(v) {
 function parseKgInput(text) {
   return cleanKg(String(text || '').split(/\s*[;\/]\s*|,\s+|\s+/).map(x => x.trim()).filter(Boolean));
 }
+/* повторы: «8», «8–12» или по подходам — «10/8/6/5» (через «/», «;», запятую или пробел; 2–10 значений; одинаковые
+   сводятся к одному числу). Хранятся и выгружаются в файл плана строкой «10/8/6/5»; прежние версии такую строку
+   отбрасывают и берут повторы по цели. Неверное — null */
+function cleanReps(v) {
+  if (typeof v !== 'string') return null;
+  const s = v.trim(), m = s.match(CUSTOM_REPS);
+  if (m) return +m[1] >= 1 && (!m[2] || +m[2] >= +m[1]) ? (m[2] ? `${+m[1]}–${+m[2]}` : String(+m[1])) : null;
+  const parts = s.split(/\s*[\/;,]\s*|\s+/).filter(Boolean);
+  if (parts.length < 2 || parts.length > 10 || !parts.every(p => /^\d{1,3}$/.test(p) && +p >= 1)) return null;
+  const n = parts.map(Number);
+  return n.every(x => x === n[0]) ? String(n[0]) : n.join('/');
+}
 function cleanCustomItem(it) {
   if (!it || !EXI[it.id]) return null;
   const o = {id:it.id};
   if (Number.isInteger(it.sets) && it.sets >= 1 && it.sets <= 10) o.sets = it.sets;
-  const m = typeof it.reps === 'string' && it.reps.trim().match(CUSTOM_REPS);
-  if (m && +m[1] >= 1 && (!m[2] || +m[2] >= +m[1])) o.reps = m[2] ? `${+m[1]}–${+m[2]}` : String(+m[1]);
+  const reps = cleanReps(it.reps); if (reps) o.reps = reps;
   if (Number.isInteger(it.rest) && it.rest >= 0 && it.rest <= 600) o.rest = it.rest;
   const kg = it.kg != null ? cleanKg(it.kg) : null; if (kg) o.kg = kg;
   if (typeof it.tempo === 'string' && CUSTOM_TEMPO.test(it.tempo.trim().toUpperCase())) o.tempo = it.tempo.trim().toUpperCase();
@@ -12215,7 +12264,7 @@ const customHas = id => customOf().items.some(it => it.id === id);
 function customAdd(id) {
   const c = customOf();
   if (!EXI[id] || customHas(id) || c.items.length >= CUSTOM_MAX) return false;
-  c.items.push({id}); saveSettings(); return true;
+  c.items.push({id}); planUndo = null; saveSettings(); return true;
 }
 /* Новый свой план — как по кнопке «+ План»: «План N» (первый свободный номер), пустой. Цель, формат и уровень — те, что
    сейчас в параметрах (S[k]): в своём плане это настройки открытого плана, вне его — обычной тренировки (S.gen хранит их
@@ -12251,10 +12300,11 @@ function cpPickOrder() {
 function customMove(slot, d) {
   const items = customOf().items, j = slot + d;
   if (slot < 0 || j < 0 || slot >= items.length || j >= items.length) return;
-  [items[slot], items[j]] = [items[j], items[slot]];
+  [items[slot], items[j]] = [items[j], items[slot]]; planUndo = null;
   const a = cpOpen.has(slot), b = cpOpen.has(j); cpOpen.delete(slot); cpOpen.delete(j); if (a) cpOpen.add(j); if (b) cpOpen.add(slot);
   saveSettings();
 }
+/* убирает упражнение из открытого плана; «Убрано: … Вернуть» на его месте — planRemove (12c-swap.js) */
 function customRemove(slot) {
   const items = customOf().items; items.splice(slot, 1);
   cpOpen = new Set([...cpOpen].filter(i => i !== slot).map(i => i > slot ? i - 1 : i)); saveSettings();
@@ -12265,9 +12315,18 @@ function customSet(slot, key, value) {
   if (clear) delete next[key]; else next[key] = value;
   const ok = cleanCustomItem(next);
   if (!ok || (!clear && !(key in ok))) return;   /* неверное значение не стирает прежнее */
-  items[slot] = ok; saveSettings();
+  items[slot] = ok; planUndo = null; saveSettings();
 }
 
+/* повторы из поля «Повторов»: «8–12» или пирамида «10/8/6/5» — она задаёт и число подходов (четыре числа — четыре
+   подхода); неверное — false, прежнее значение остаётся */
+function customSetReps(slot, text) {
+  const ok = cleanCustomItem({id:customOf().items[slot]?.id, reps:text});
+  if (!ok || !ok.reps) return false;
+  customSet(slot, 'reps', ok.reps);
+  if (ok.reps.includes('/')) customSet(slot, 'sets', ok.reps.split('/').length);
+  return true;
+}
 /* дозировка по цели и формату, поверх — правка человека (кроме статодинамики: там серии заданы методом) */
 function customRx(rx, o, ex) {
   if (!o) return rx;
@@ -12379,7 +12438,7 @@ function customToolsHtml(it) {
   const edit = r.static ? `<p class="f-note">In static-dynamics the series, tempo and rest are set by the method — change the goal or level instead.</p>`
     : `<div class="cp-fields">
         ${r.circ ? '' : `<div class="cp-f"><span>Sets</span><div class="stepper sm"><button type="button" data-cp-step="${slot}" data-d="-1" aria-label="Fewer sets"${r.sets <= 1 ? ' disabled' : ''}>−</button><output>${r.sets}</output><button type="button" data-cp-step="${slot}" data-d="1" aria-label="More sets"${r.sets >= 10 ? ' disabled' : ''}>+</button></div></div>`}
-        ${it.ex.kind ? '' : `<label class="cp-f"><span>Reps</span><input type="text" inputmode="numeric" maxlength="7" data-cp-reps="${slot}" value="${esc(r.reps)}" aria-label="Reps, for example 8–12"></label>`}
+        ${it.ex.kind ? '' : `<label class="cp-f"><span>Reps</span><input type="text" inputmode="text" maxlength="40" data-cp-reps="${slot}" value="${esc(r.reps)}" aria-label="Reps: 8–12, or per set separated by “/”, e.g. 10/8/6/5" autocomplete="off"></label>`}
         ${r.circ ? '' : `<label class="cp-f"><span>Rest</span><select data-cp-rest="${slot}">${restOpts.map(s => `<option value="${s}"${s === r.rest ? ' selected' : ''}>${s ? fmtRest(s) : 'no rest'}</option>`).join('')}</select></label>`}
         ${it.ex.kind ? '' : `<label class="cp-f"><span>Tempo</span><input type="text" maxlength="11" data-cp-tempo="${slot}" value="${esc(o.tempo || '')}" placeholder="${esc(r.tempo || '3-0-1-0')}" aria-label="Tempo: lowering, pause, lifting, pause — for example 3-0-1-0" autocomplete="off"></label>`}
         ${o.sets || o.reps || o.rest !== undefined || o.tempo ? `<button type="button" class="btn-ghost cp-reset" data-cp-reset="${slot}">Use goal default</button>` : ''}
@@ -12419,7 +12478,7 @@ function freezePlan(p) {
     const r = it.rx, o = {id:it.ex.id};
     if (!r.static) {
       if (!r.circ) { o.sets = r.sets; o.rest = r.rest; }
-      if (!it.ex.kind && CUSTOM_REPS.test(String(r.reps))) o.reps = String(r.reps);
+      if (!it.ex.kind && cleanReps(String(r.reps))) o.reps = cleanReps(String(r.reps));
     }
     return cleanCustomItem(o);
   }).filter(Boolean).slice(0, CUSTOM_MAX);
@@ -12493,7 +12552,7 @@ document.addEventListener('click', e => {
   }
   if (S.mode !== 'custom' || S.view !== 'plan') return;
   if (t.dataset.cpMove !== undefined) { const s = +t.dataset.cpMove, d = +t.dataset.d; customMove(s, d); return customRerender(`[data-cp-move="${s + d}"][data-d="${d}"]`); }
-  if (t.dataset.cpRm !== undefined) { customRemove(+t.dataset.cpRm); return customRerender(); }
+  if (t.dataset.cpRm !== undefined) return planRemove(+t.dataset.cpRm, t);
   if (t.dataset.cpEdit !== undefined) { const s = +t.dataset.cpEdit; cpOpen.has(s) ? cpOpen.delete(s) : cpOpen.add(s); return customRerender(`[data-cp-edit="${s}"]`); }
   if (t.dataset.cpStep !== undefined) {
     const s = +t.dataset.cpStep, it = plan.items.find(x => x.slot === s);
@@ -12511,8 +12570,8 @@ document.addEventListener('change', e => {
   }
   if (t.id === 'cp-name') { const v = t.value.trim().slice(0, CUSTOM_NAME); if (v) customOf().name = v; saveSettings(); renderSetup(); if (S.mode === 'custom' && S.view === 'plan') renderPlan(); return; }
   if (t.dataset.cpReps !== undefined) {
-    const s = +t.dataset.cpReps, ok = cleanCustomItem({id:customOf().items[s]?.id, reps:t.value});
-    if (ok && ok.reps) customSet(s, 'reps', ok.reps); else { t.value = plan.items.find(x => x.slot === s)?.rx.reps || ''; return; }
+    const s = +t.dataset.cpReps;
+    if (!customSetReps(s, t.value)) { t.value = plan.items.find(x => x.slot === s)?.rx.reps || ''; return; }
     return customRerender(`[data-cp-reps="${s}"]`);
   }
   if (t.dataset.cpRest !== undefined) { const s = +t.dataset.cpRest; customSet(s, 'rest', +t.value); return customRerender(`[data-cp-rest="${s}"]`); }
@@ -12993,8 +13052,10 @@ function renderProtect() {
 function gentleHtml() {
   const gentle = S.goal === 'gentle', prot = ensureProtect(S).map(id => PROTECT_BY[id]);
   if (!gentle && !prot.length) return '';
+  /* запас — тот же, что в строке нагрузки карточек (reserveOf: неделя цикла, уровень) */
+  const rir = gentle ? reserveOf(S.mode === 'program' ? WEEKS[S.week - 1] : null) : null;
   const lead = gentle
-    ? `<p><b>Gentle.</b> 12–15 reps with a light weight, 3–4 in reserve, slowly and without jerking. Jumps, ballistic and advanced exercises are not picked.${prot.length ? ` No peak load on ${hitsText(prot)}.` : ''}</p>`
+    ? `<p><b>Gentle.</b> 12–15 reps with a light weight, ${rir ? reserveNum(rir) + ' in reserve' : 'not to failure'}, slowly and without jerking. Jumps, ballistic and advanced exercises are not picked.${prot.length ? ` No peak load on ${hitsText(prot)}.` : ''}</p>`
     : `<p><b>No peak load on ${hitsText(prot)}.</b> Such exercises are not picked, and in a custom plan they are replaced with similar ones.</p>`;
   return `<details class="gentle-box"${ensureFold(S).gentle ? '' : ' open'}><summary>Gentle mode: the pain rule</summary>${lead}
     <p><b>Pain during an exercise</b> on a 0–10 scale: up to 2 — keep going; 3–5 — acceptable if it is gone by the next morning and does not build up from week to week; above 5 — stop, reduce the weight or range of motion, or swap the exercise.</p>
@@ -13077,7 +13138,7 @@ document.addEventListener('click', e => {
   /* в своём плане хват записывается в сам план (подходы, вес и заметка остаются); в собранном — как замена */
   if (S.mode === 'custom') { const item = customOf().items[slot]; if (!item || customOf().items.some(x => x.id === next.id)) return; item.id = next.id; saveSettings(); }
   else { const k = swapKey(); swaps[k] = swaps[k] || {}; swaps[k][slot] = next.id; saveSettings(); }
-  done = {}; renderPlan();
+  done = {}; planUndo = null; renderPlan();
   const card = document.querySelector(`.card[data-slot="${slot}"]`), b = card && card.querySelector(`[data-variant="${next.id}"]`);
   if (b) b.focus({preventScroll:true});
 });
@@ -13910,16 +13971,7 @@ document.addEventListener('change', e => {
   if (e.target.id === 'place-adapt') { S.adapt = e.target.value || null; ensurePlaces(S); return regen(); }
 });
 const swapKey = () => S.mode === 'program' ? 'd' + S.day : 's';
-function regen(resetSwaps = true) { if (resetSwaps) swaps = S.swaps = {}; done = {}; saveSettings(); renderSetup(); renderPlan(); }
-/* «Заменить»: то же движение или группа, по уровню, с инвентарём места и без нагрузки на бережёмые суставы (swapFits,
-   11g-gentle.js); ближайшие по смыслу — то же движение и те же мышцы — первыми */
-function swapCandidates(cur, plan) {
-  const inPlan = new Set(plan.items.map(it => it.ex.id));
-  const lvlMax = S.level === 'beg' || S.goal === 'gentle' ? 2 : 3;
-  if (S.mode === 'custom') for (const it of customOf().items) inPlan.add(it.id);
-  return EX.filter(ex => !inPlan.has(ex.id) && available(ex, plan.E) && ex.lvl <= lvlMax && (ex.g === cur.g || PATTERN[ex.id] === PATTERN[cur.id]) && (S.format !== 'static' || staticOk(ex)) && swapFits(ex))
-    .sort((a, b) => analogScore(cur, b) - analogScore(cur, a));
-}
+function regen(resetSwaps = true) { if (resetSwaps) swaps = S.swaps = {}; done = {}; planUndo = null; saveSettings(); renderSetup(); renderPlan(); }
 document.addEventListener('click', e => {
   const t = e.target.closest('button, summary');
   if (!t) return;
@@ -13961,32 +14013,12 @@ document.addEventListener('click', e => {
     try { navigator.clipboard.writeText(txt).then(() => { msg.textContent = 'Copied — you can paste it into notes or a messenger.'; }, fallback); } catch (err) { fallback(); }
     return;
   }
-  if (t.dataset.swap !== undefined) {
-    const slot = +t.dataset.swap;
-    const cur = plan.items.find(it => it.slot === slot).ex;
-    const tried = new Set((swaps.__tried && swaps.__tried[swapKey() + ':' + slot]) || []);
-    let alts = swapCandidates(cur, plan);
-    const msgEl = t.querySelector('span');
-    if (!alts.length) { msgEl.textContent = 'No substitute'; setTimeout(() => { msgEl.textContent = 'Swap'; }, 1800); return; }
-    tried.add(cur.id);
-    let next = alts.find(ex => !tried.has(ex.id));
-    if (!next) { tried.clear(); tried.add(cur.id); next = alts[0]; }
-    swaps.__tried = swaps.__tried || {};
-    swaps.__tried[swapKey() + ':' + slot] = [...tried];
-    /* в своём плане замена записывается в сам план; правка подходов и отдыха остаётся */
-    if (S.mode === 'custom') { const item = customOf().items[slot]; if (item) { item.id = next.id; saveSettings(); } }
-    else { const k = swapKey(); swaps[k] = swaps[k] || {}; swaps[k][slot] = next.id; }
-    done = {};
-    saveSettings(); renderPlan();
-    const card = document.querySelector(`.card[data-slot="${slot}"]`);
-    if (card) { card.classList.add('flash'); card.scrollIntoView({block:'nearest', behavior:reduceMotion ? 'auto' : 'smooth'}); }
-    return;
-  }
+  /* «Заменить» — список замен под кнопкой и «Вернуть»: 12c-swap.js */
   /* порядок упражнений: ↑ ↓ на карточке (в своём плане — свои кнопки, 11d-custom.js) */
   if (t.dataset.move !== undefined) {
     const slot = +t.dataset.move, d = +t.dataset.d;
     if (!movePlanItem(slot, d)) return;
-    saveSettings(); renderPlan();
+    planUndo = null; saveSettings(); renderPlan();
     const card = document.querySelector(`.card[data-slot="${slot}"]`);
     if (card) {
       card.classList.add('flash'); card.scrollIntoView({block:'nearest', behavior:reduceMotion ? 'auto' : 'smooth'});
@@ -14244,6 +14276,221 @@ document.addEventListener('click', e => {
 document.addEventListener('change', e => { if (e.target.matches && e.target.matches('[data-rest-warn]')) RestAlarm.setPrefs({warn:e.target.checked}); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) RestAlarm.resync(); });
 
+/* ===================== «ЗАМЕНИТЬ» И «ВЕРНУТЬ» =====================
+   «Заменить» в карточке раскрывает прямо под кнопкой короткий список на выбор (как список планов у «+ В свой план»,
+   11d-custom.js): до пяти ближайших замен по смыслу — то же движение, те же мышцы (analogScore, 11b-analogs.js) — и одной
+   строкой, что меняется. В списке нет того, что уже стоит в этом плане и (в программе на неделю) в других днях недели,
+   и хватов той же карточки (они — в переключателе «Хват», 11h-variants.js); подбор — по тем же правилам, что план:
+   инвентарь места, уровень, статодинамика, «Беречь суставы» и бережный режим (swapFits, 11g-gentle.js).
+   Близких замен нет — так и сказано, и, если есть, одно-два упражнения на те же мышцы другим движением.
+   После выбора в карточке строка «Заменено: … → …» с кнопкой «Вернуть»; «Убрать» в своём плане оставляет на месте
+   карточки «Убрано: … Вернуть». Одно нажатие возвращает прежнее; строка держится до следующего изменения плана
+   или перезагрузки (planUndo, 11-planner.js). Страница не прыгает: нажатая кнопка остаётся на том же месте экрана. */
+const SWAP_LIMIT = 5, SWAP_FAR = 2;
+/* то же движение — близкая замена, если похоже не меньше чем на SWAP_CLOSE_MIN; другое движение — от SWAP_FAR_MIN */
+const SWAP_CLOSE_MIN = .45, SWAP_FAR_MIN = .3;
+
+/* что уже занято: этот план, свой план целиком (и то, что в нём заменено из-за места или суставов), другие дни недели */
+function swapTaken(p) {
+  const ids = new Set((p.items || []).map(it => it.ex.id));
+  if (S.mode === 'custom') for (const it of customOf().items) ids.add(it.id);
+  if (S.mode === 'program' && prog) for (const d of prog.days) for (const it of d.plan.items || []) ids.add(it.ex.id);
+  return ids;
+}
+/* все допустимые по инвентарю, уровню и формату — от самых похожих; суставы проверяются позже (расчёт дорогой) */
+function swapPool(cur, p) {
+  const taken = swapTaken(p), lvlMax = S.level === 'beg' || S.goal === 'gentle' ? 2 : 3, pat = PATTERN[cur.id];
+  for (const x of variantsFor(cur, p.E, taken)) taken.add(x.ex.id);
+  taken.add(cur.id);
+  return EX.filter(ex => !taken.has(ex.id) && available(ex, p.E) && ex.lvl <= lvlMax && (ex.g === cur.g || (!!pat && PATTERN[ex.id] === pat)) && (S.format !== 'static' || staticOk(ex)))
+    .map(ex => ({ex, score:analogScore(cur, ex)})).sort((a, b) => b.score - a.score);
+}
+/* все замены, которые можно предложить, от самых похожих (проверка бережного режима — tools/gentle.test.js) */
+function swapCandidates(cur, p) { return swapPool(cur, p).filter(r => swapFits(r.ex)).map(r => r.ex); }
+/* что меняется: как у аналогов (analogNote); где мышцы те же и вид сопротивления тот же — какая мышца становится
+   основной или какой снаряд в руках */
+function swapNote(a, b, E) {
+  const n = analogNote(a, b, E), parts = n ? n.split('; ') : [];
+  /* новая основная мышца уже работала в прежнем упражнении — analogNote о ней молчит («добавляется» — только о новых) */
+  if (b.pri[0] !== a.pri[0] && a.pri.concat(a.sec).includes(b.pri[0])) {
+    const other = PATTERN[b.id] && PATTERN[a.id] !== PATTERN[b.id] ? 1 : 0;   /* «другое движение» analogNote ставит первым */
+    parts.splice(other, 0, 'main muscle: ' + MUSCLE_NAMES[b.pri[0]].toLowerCase());
+  }
+  if (parts.length) return parts.slice(0, 3).join('; ');
+  const had = new Set(chosenEquip(a, E)), eq = id => EQUIP.find(e => e.id === id) || {}, name = id => { const v = eq(id).name || ''; return v.charAt(0).toLowerCase() + v.slice(1); };
+  const now = chosenEquip(b, E).filter(id => !had.has(id) && eq(id).name);
+  if (!now.length) return 'same movement, same muscles';
+  return (now.every(id => eq(id).cat === 'mach') ? 'different machine: ' : 'different gear: ') + now.slice(0, 2).map(name).join(', ');
+}
+/* список на выбор: close — то же движение, до SWAP_LIMIT; far — другое движение на те же мышцы, только когда близких нет */
+function swapOptions(cur, p) {
+  const pat = PATTERN[cur.id], close = [], far = [];
+  for (const r of swapPool(cur, p)) {
+    const same = pat ? PATTERN[r.ex.id] === pat : r.ex.g === cur.g;
+    if (same) {
+      if (r.score < SWAP_CLOSE_MIN || !swapFits(r.ex)) continue;
+      close.push({...r, note:swapNote(cur, r.ex, p.E)});
+      if (close.length >= SWAP_LIMIT) break;
+    } else if (!close.length && far.length < SWAP_FAR && r.score >= SWAP_FAR_MIN && swapFits(r.ex)) far.push({...r, note:swapNote(cur, r.ex, p.E)});
+  }
+  return {close, far:close.length ? [] : far};
+}
+
+/* ---------- отрисовка ---------- */
+/* суставы под пиковой нагрузкой у замены — как строка в карточке (jointsLine): по ней видно, уходит ли метка */
+function swapJoints(ex) {
+  if (typeof motionPrefs !== 'undefined' && motionPrefs.stress === false) return '';
+  const zones = [...new Set(stressIdsOf(ex).flatMap(id => STRESS_RULE[id] ? STRESS_RULE[id].parts : []))];
+  const label = 'Peak load:';
+  return zones.length ? `<small class="sw-j"><span class="stress-dot" aria-hidden="true"></span>${label} ${esc(zones.join(', '))}</small>` : '';
+}
+function swapPickHtml(it) {
+  const {close, far} = swapOptions(it.ex, plan), list = close.length ? close : far;
+  const row = r => `<button type="button" class="place cp-pick-i" data-swap-to="${r.ex.id}"><span class="cp-pick-n"><b>${esc(exName(r.ex, plan.E))}</b><small>${esc(r.note)}</small>${swapJoints(r.ex)}</span></button>`;
+  const gentle = S.goal === 'gentle' || ensureProtect(S).length > 0;
+  const none = close.length ? '' : `<p class="sw-none">${far.length ? 'No close swaps. A different movement for the same muscles:'
+    : gentle ? 'No close swaps: other exercises for these muscles are already in the plan, not available here or not suitable for gentle mode.'
+    : 'No close swaps: other exercises for these muscles are already in the plan or not available here.'}</p>`;
+  const head = 'Swap with';
+  return `<p class="cp-pick-h" id="sw-pick-${it.slot}-h">${head}</p>${none}${list.map(row).join('')}`;
+}
+/* «Вернуть»: подпись кнопки — строка рядом (aria-describedby) */
+const undoBtn = (attr, desc) => { const label = 'Undo'; return `<button type="button" class="sw-undo" ${attr} aria-describedby="${desc}">${label}</button>`; };
+const undoKey = () => S.mode === 'custom' ? 'c:' + customOf().id : swapKey();
+/* замена ещё в силе: тот же план (день, свой план), на месте — то, что поставили */
+function swapUndoLive(u) {
+  if (!u || u.kind !== 'swap' || u.key !== undoKey()) return false;
+  return S.mode === 'custom' ? customOf().items[u.slot]?.id === u.to : (swaps[u.key] || {})[u.slot] === u.to;
+}
+/* строка в карточке после замены (cardHtml, 11-planner.js) */
+function swapDoneHtml(it) {
+  const u = planUndo;
+  if (!swapUndoLive(u) || u.slot !== it.slot || it.ex.id !== u.to) return '';
+  const line = `Swapped: ${esc(u.fromName)} → ${esc(it.name)}.`;
+  return `<p class="sw-done"><span id="sw-done-${it.slot}">${line}</span>${undoBtn('data-swap-undo="1"', 'sw-done-' + it.slot)}</p>`;
+}
+/* на месте убранной карточки своего плана (blocksHtml, 11-planner.js); tag — 'li' в списке карточек */
+function rmGoneHtml(tag = 'li') {
+  const u = planUndo;
+  if (!u || u.kind !== 'rm' || S.mode !== 'custom' || u.key !== undoKey()) return '';
+  const line = `Removed: ${esc(u.name)}.`;
+  return `<${tag} class="sw-gone"><span id="sw-gone-t">${line}</span>${undoBtn('data-rm-undo="1"', 'sw-gone-t')}</${tag}>`;
+}
+
+/* ---------- действия ---------- */
+/* после перерисовки el встаёт туда, где на экране было y0 (верх нажатой кнопки), и получает фокус */
+function keepAt(el, y0) {
+  if (!el) return;
+  const dy = el.getBoundingClientRect().top - y0;
+  if (Math.abs(dy) > 1) window.scrollBy(0, dy);
+  el.focus({preventScroll:true});
+}
+/* раскрыть (open = true) или свернуть список под кнопкой «Заменить»; открытый список в другой карточке сворачивается */
+function swapToggle(btn, open = btn.getAttribute('aria-expanded') !== 'true') {
+  const box = document.getElementById(btn.getAttribute('aria-controls'));
+  if (!box || !plan || !plan.items) return;
+  if (open) for (const b of document.querySelectorAll('[data-swap][aria-expanded="true"]')) if (b !== btn) swapToggle(b, false);
+  btn.setAttribute('aria-expanded', String(open));
+  if (!open) { box.hidden = true; box.replaceChildren(); return; }
+  const it = plan.items.find(x => x.slot === +btn.dataset.swap); if (!it) return;
+  box.innerHTML = swapPickHtml(it); box.hidden = false;
+  const first = box.querySelector('[data-swap-to]');
+  if (first) first.focus({preventScroll:true});
+  box.scrollIntoView({block:'nearest', behavior:reduceMotion ? 'auto' : 'smooth'});
+}
+/* Правка плана — отдельно от экрана (проверки — tools/swap-list.test.js): возвращают true, если план изменился */
+/* замена упражнения в карточке slot открытого плана на nextId; запоминает, что вернуть */
+function swapSet(slot, nextId) {
+  const it = plan && plan.items && plan.items.find(x => x.slot === slot), next = EXI[nextId];
+  if (!it || !next || it.ex === next) return false;
+  if (S.mode === 'custom') {
+    /* в своём плане замена записывается в сам план; подходы, вес и заметка остаются */
+    const items = customOf().items, item = items[slot];
+    if (!item || items.some(x => x.id === next.id)) return false;
+    planUndo = {kind:'swap', key:undoKey(), slot, from:item.id, to:next.id, fromName:it.name};
+    item.id = next.id;
+  } else {
+    const k = swapKey(); swaps[k] = swaps[k] || {}; delete swaps.__tried; /* перебор по кругу прежних версий */
+    planUndo = {kind:'swap', key:k, slot, prev:swaps[k][slot], to:next.id, fromName:it.name};
+    swaps[k][slot] = next.id;
+  }
+  done = {}; saveSettings();
+  return true;
+}
+function swapBack() {
+  const u = planUndo; if (!swapUndoLive(u)) return false;
+  if (S.mode === 'custom') customOf().items[u.slot].id = u.from;
+  else if (u.prev === undefined) delete swaps[u.key][u.slot]; else swaps[u.key][u.slot] = u.prev;
+  planUndo = null; done = {}; saveSettings();
+  return true;
+}
+/* «Убрать» в своём плане: сразу, без подтверждения; на месте карточки — «Убрано: … Вернуть» */
+function rmItem(slot) {
+  const item = customOf().items[slot]; if (!item) return false;
+  const it = plan && plan.items && plan.items.find(x => x.slot === slot);
+  customRemove(slot);
+  planUndo = {kind:'rm', key:undoKey(), slot, item, name:it ? it.name : EXI[item.id].name};
+  saveSettings();
+  return true;
+}
+/* возвращает убранное на прежнее место; план полон или упражнение снова в нём (добавлено из атласа) — некуда */
+function rmBack() {
+  const u = planUndo;
+  if (!u || u.kind !== 'rm' || S.mode !== 'custom' || u.key !== undoKey()) return -1;
+  const items = customOf().items; planUndo = null;
+  if (items.length >= CUSTOM_MAX || items.some(x => x.id === u.item.id)) return -1;
+  const at = Math.min(u.slot, items.length);
+  items.splice(at, 0, u.item);
+  cpOpen = new Set([...cpOpen].map(i => i >= at ? i + 1 : i));
+  saveSettings();
+  return at;
+}
+
+/* экран: после перерисовки нажатая кнопка (или то, что встало на её место) — там же, где была, и с фокусом */
+function swapApply(t) {
+  const card = t.closest('.card'), slot = card ? +card.dataset.slot : -1;
+  const y0 = card ? card.querySelector('[data-swap]').getBoundingClientRect().top : 0;
+  if (!swapSet(slot, t.dataset.swapTo)) return;
+  renderPlan();
+  const c = document.querySelector(`.card[data-slot="${slot}"]`); if (!c) return;
+  c.classList.add('flash');
+  keepAt(c.querySelector('[data-swap]'), y0);
+  (c.querySelector('[data-swap-undo]') || c.querySelector('[data-swap]')).focus({preventScroll:true});
+}
+function swapRevert(t) {
+  const card = t.closest('.card'), u = planUndo; if (!card) return;
+  const y0 = card.querySelector('[data-swap]').getBoundingClientRect().top;
+  if (!swapBack()) return;
+  renderPlan();
+  keepAt(document.querySelector(`.card[data-slot="${u.slot}"] [data-swap]`), y0);
+}
+function planRemove(slot, btn) {
+  const y0 = btn.getBoundingClientRect().top;
+  if (!rmItem(slot)) return;
+  renderSetup(); renderPlan();
+  keepAt(document.querySelector('[data-rm-undo]'), y0);
+}
+function rmRevert(t) {
+  const y0 = t.getBoundingClientRect().top, at = rmBack();
+  renderSetup(); renderPlan();
+  if (at >= 0) keepAt(document.querySelector(`.card[data-slot="${at}"] [data-cp-rm]`), y0);
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.swap !== undefined) return swapToggle(t);
+  if (t.dataset.swapTo) return swapApply(t);
+  if (t.dataset.swapUndo !== undefined) return swapRevert(t);
+  if (t.dataset.rmUndo !== undefined) return rmRevert(t);
+});
+/* Esc в списке замен (или на его кнопке) сворачивает список и возвращает фокус на «Заменить» */
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || !e.target.closest || !e.target.closest('.sw-pick, [data-swap]')) return;
+  const card = e.target.closest('.card'), btn = card && card.querySelector('[data-swap][aria-expanded="true"]');
+  if (!btn) return;
+  e.preventDefault(); swapToggle(btn, false); btn.focus();
+});
+
 /* ===================== ЖУРНАЛ ===================== */
 /* Хранилище: в опубликованной версии — аккаунт (db, личный раздел пользователя),
    в офлайн-файле — браузер. Формат: LOG.data[exId] = [{d:'2026-10-05', wk?:1, eq?:'db', s:[[кг|null, повторы, отдых?, стороны?] | null, …]}, …].
@@ -14403,7 +14650,13 @@ function stepFor(it) {
   return 2.5;
 }
 const roundTo = (v, st) => Math.max(0, Math.round(v / st) * st);
-function parseRange(r) { const m = String(r).match(/(\d+)\D+(\d+)/); if (m) return [+m[1], +m[2]]; const n = parseInt(r, 10); return [n || 0, n || 0]; }
+/* повторы плана по подходам (пирамида своего плана, 11d-custom.js: cleanReps): «10/8/6/5» → [10, 8, 6, 5];
+   диапазон или одно число — null */
+function repsPlanOf(r) { const s = String(r ?? ''); if (!s.includes('/')) return null; const l = s.split('/').map(Number); return l.length > 1 && l.every(v => v > 0) ? l : null; }
+/* цель подхода k (с нуля): у пирамиды — своё число (подходов больше списка — последнее), иначе диапазон как есть */
+function planReps(rx, k) { const l = repsPlanOf(rx.reps); return l ? String(l[Math.min(k, l.length - 1)]) : String(rx.reps); }
+/* границы повторов: «8–12» → [8, 12]; у пирамиды — от меньшего до большего */
+function parseRange(r) { const l = repsPlanOf(r); if (l) return [Math.min(...l), Math.max(...l)]; const m = String(r).match(/(\d+)\D+(\d+)/); if (m) return [+m[1], +m[2]]; const n = parseInt(r, 10); return [n || 0, n || 0]; }
 const e1rm = (kg, reps) => kg * (1 + Math.min(reps, 12) / 30);
 
 /* ---------- подсказка по двойной прогрессии ---------- */
@@ -14417,7 +14670,9 @@ function suggest(it) {
 function suggestBase(it) {
   /* статодинамика и обычные подходы ведутся раздельно: вес в них отличается примерно вдвое */
   const ex = it.ex, lt = loadType(ex), all = pastSessions(ex.id), past = all.filter(s => (s.fmt === 'static') === !!it.rx.static);
-  const [lo, hi] = parseRange(it.rx.reps);
+  const [lo, hi] = parseRange(it.rx.reps), rp = repsPlanOf(it.rx.reps);
+  /* цель подхода k (с нуля): [нижняя, верхняя]; у пирамиды повторов — своё число подхода */
+  const tgt = k => { if (!rp) return [lo, hi]; const v = rp[Math.min(k, rp.length - 1)]; return [v, v]; };
   const unit = ex.kind === 'time' ? ' s' : ex.kind === 'dist' ? ' m' : '';
   const week = S.mode === 'program' ? WEEKS[S.week - 1] : null;
   const step = stepFor(it);
@@ -14427,9 +14682,12 @@ function suggestBase(it) {
     const prev = past[past.length - 1] || null, ps = prev ? prev.s.filter(Boolean) : [];
     res.tone = 'plan'; res.kgs = it.rx.kgPlan; res.kg = it.rx.kgPlan[0]; res.prev = prev;
     const what = lt === 'assist' ? 'Planned counterweight' : lt === 'extra' ? 'Planned extra weight' : 'Planned weight';
-    res.text = `${what}: ${planKgText(it.rx.kgPlan)} kg.` + (ps.length ? ` Last time: ${ps.map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(', ')}.` : '');
+    res.text = `${what}: ${planKgText(it.rx.kgPlan)} kg.` + (rp ? ` Planned reps: ${rp.join(' / ')}.` : '') + (ps.length ? ` Last time: ${ps.map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(', ')}.` : '');
     return res;
   }
+  /* прошлых тренировок нет, а сегодня подходы уже записаны — не «Первая запись», а сколько сделано и что дальше */
+  const today = !past.length && todayNote(it, lt);
+  if (today) { res.tone = 'today'; res.text = today; return res; }
   if (it.rx.static && !past.length) {
     const last = all[all.length - 1], kgs = last ? last.s.filter(Boolean).map(x => x[0]).filter(v => v > 0) : [];
     if (lt === 'kg' && kgs.length) {
@@ -14441,8 +14699,13 @@ function suggestBase(it) {
     return res;
   }
   if (!past.length) {
-    res.text = lt === 'assist' ? `First entry. Choose a counterweight that lets you do ${lo === hi ? lo : lo + '–' + hi} reps with 2 in reserve.` : lt === 'kg'
-      ? (ex.kind === 'dist' ? 'First entry. Take heavy implements you can carry the full distance without stopping.' : `First entry. Pick a weight that lets you do ${lo === hi ? lo : lo + '–' + hi}${unit} with 2 reps in reserve.`)
+    /* запас — тот же, что в строке нагрузки карточки (rx.rir из prescribe, reserveOf в 11-planner.js) */
+    const rir = it.rx.rir !== undefined ? it.rx.rir : reserveOf(week);
+    const how = rir ? '' : week && week.deload ? 'without going to failure.' : ex.type === 'i' && S.goal === 'cut' ? 'until you feel a strong burn.' : 'close to failure.';
+    const range = rp ? rp.join(' / ') : lo === hi ? String(lo) : lo + '–' + hi;
+    res.text = lt === 'assist' ? (rir ? `First entry. Choose a counterweight that lets you do ${range} reps with a reserve of ${reserveReps(rir)}.` : `First entry. Choose a counterweight that lets you do ${range} reps ${how}`) : lt === 'kg'
+      ? (ex.kind === 'dist' ? 'First entry. Take heavy implements you can carry the full distance without stopping.'
+        : rir ? `First entry. Pick a weight that lets you do ${range}${unit} with a reserve of ${reserveReps(rir)}.` : `First entry. Pick a weight that lets you do ${range}${unit} ${how}`)
       : `First entry. Note how many ${ex.kind === 'time' ? 'seconds' : ex.kind === 'dist' ? 'meters' : 'reps'} you did in each set.`;
     return res;
   }
@@ -14451,31 +14714,32 @@ function suggestBase(it) {
   const sets = prev.s.filter(Boolean);
   const kgs = sets.map(x => x[0]).filter(v => v > 0);
   const work = kgs.length ? Math.max(...kgs) : null;
-  const atWork = work ? sets.filter(x => x[0] === work) : sets;
-  const repsList = atWork.map(x => x[1]);
   const prevList = sets.map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(', ');
   if (ex.kind === 'dist') { res.tone = 'same'; res.kg = work; res.text = work ? `Last time — ${fmtKg(work)} kg. Try to cover more distance or go heavier.` : `Last time: ${prevList} m.`; return res; }
+  /* пирамида или сброс (веса подходов в прошлый раз разные): совет — по верхнему подходу, подсказки — по каждому подходу */
+  const pyr = !ex.kind && (lt === 'kg' || lt === 'extra') && pyramidAdvice(it, res, sets, past, tgt, step, week, rp);
+  if (pyr) return pyr;
   if (!week && AR.light && work && (lt === 'kg' || lt === 'assist')) {
-    res.tone = 'deload'; res.kg = lt === 'assist' ? Math.max((Math.floor(work / step) + 1) * step, roundTo(work * 1.1, step)) : roundTo(work * .9, step); res.reps = sets.map(() => lo);
+    res.tone = 'deload'; res.kg = lt === 'assist' ? Math.max((Math.floor(work / step) + 1) * step, roundTo(work * 1.1, step)) : roundTo(work * .9, step); res.reps = sets.map((x, i) => tgt(i)[0]);
     res.text = lt === 'assist' ? `Light mode: counterweight ${fmtKg(res.kg)} kg instead of ${fmtKg(work)}, not to failure.` : `Light mode: ${fmtKg(res.kg)} kg instead of ${fmtKg(work)}, not to failure.`;
     return res;
   }
   if (week && week.deload && work) {
     res.tone = 'deload'; res.kg = lt === 'assist' ? Math.max((Math.floor(work / step) + 1) * step, roundTo(work * 1.15, step)) : roundTo(work * .85, step);
-    res.reps = sets.map(() => lo);
+    res.reps = sets.map((x, i) => tgt(i)[0]);
     res.text = lt === 'assist' ? `Deload: counterweight ${fmtKg(res.kg)} kg instead of ${fmtKg(work)}, not to failure.` : `Deload: ${fmtKg(res.kg)} kg instead of ${fmtKg(work)}, not to failure.`;
     return res;
   }
   const required=prev.target || (it.rx.circ ? it.rounds : it.rx.sets) || 1;
-  const allTop=prev.s.length>=required && Array.from({length:required},(_,k)=>prev.s[k]).every(v=>v && v[1]>=hi && (!work || v[0]===work));
-  const anyLow = repsList.some(r => r < lo);
+  const allTop=prev.s.length>=required && Array.from({length:required},(_,k)=>prev.s[k]).every((v,k)=>v && v[1]>=tgt(k)[1] && (!work || v[0]===work));
+  const anyLow = sets.some((x, i) => (!work || x[0] === work) && x[1] < tgt(i)[0]);
   if (allTop) {
     if (lt === 'kg' && work) {
-      res.tone = 'up'; res.kg = work + step; res.reps = sets.map(() => lo);
-      res.text = `Increase to ${fmtKg(res.kg)} kg (+${fmtKg(step)}). Last time all sets were at the top of the range: ${prevList}.`;
+      res.tone = 'up'; res.kg = work + step; res.reps = sets.map((x, i) => tgt(i)[0]);
+      res.text = rp ? `Increase to ${fmtKg(res.kg)} kg (+${fmtKg(step)}). Last time all sets matched the plan: ${prevList}.` : `Increase to ${fmtKg(res.kg)} kg (+${fmtKg(step)}). Last time all sets were at the top of the range: ${prevList}.`;
     } else if (lt === 'assist' && work) {
-      res.tone = 'up'; res.kg = Math.max(0, work - step); res.reps = sets.map(() => lo);
-      res.text = `Reduce the counterweight to ${fmtKg(res.kg)} kg (−${fmtKg(step)}). Last time all sets were at the top of the range: ${prevList}.`;
+      res.tone = 'up'; res.kg = Math.max(0, work - step); res.reps = sets.map((x, i) => tgt(i)[0]);
+      res.text = rp ? `Reduce the counterweight to ${fmtKg(res.kg)} kg (−${fmtKg(step)}). Last time all sets matched the plan: ${prevList}.` : `Reduce the counterweight to ${fmtKg(res.kg)} kg (−${fmtKg(step)}). Last time all sets were at the top of the range: ${prevList}.`;
     } else if (ex.kind === 'time') {
       res.tone = 'up'; res.kg = work; res.reps = sets.map(() => hi + 10);
       res.text = `All sets at the top of the range. Hold 10 s longer${lt === 'extra' ? ' or add weight' : ''}.`;
@@ -14488,26 +14752,82 @@ function suggestBase(it) {
   if (anyLow) {
     const before = past.length > 1 ? past[past.length - 2].s.filter(Boolean) : [];
     const bWork = before.length ? Math.max(0, ...before.map(x => x[0] || 0)) : 0;
-    const lowAgain = work && bWork === work && before.filter(x => x[0] === work).some(x => x[1] < lo);
+    const lowAgain = work && bWork === work && before.some((x, i) => x[0] === work && x[1] < tgt(i)[0]);
     if (lt === 'kg' && work && lowAgain) {
-      res.tone = 'down'; res.kg = roundTo(work * 0.9, step); res.reps = sets.map(() => lo);
-      res.text = `Two workouts in a row below ${lo}${unit} — drop to ${fmtKg(res.kg)} kg and build the reps back up.`;
+      res.tone = 'down'; res.kg = roundTo(work * 0.9, step); res.reps = sets.map((x, i) => tgt(i)[0]);
+      res.text = rp ? `Two workouts in a row short of the plan — drop to ${fmtKg(res.kg)} kg and build the reps back up.` : `Two workouts in a row below ${lo}${unit} — drop to ${fmtKg(res.kg)} kg and build the reps back up.`;
     } else if (lt === 'assist' && work != null && lowAgain) {
-      res.tone = 'down'; res.kg = work + step; res.reps = sets.map(() => lo);
-      res.text = `Two workouts in a row below ${lo} — increase the counterweight to ${fmtKg(res.kg)} kg and build the reps back up.`;
+      res.tone = 'down'; res.kg = work + step; res.reps = sets.map((x, i) => tgt(i)[0]);
+      res.text = rp ? `Two workouts in a row short of the plan — increase the counterweight to ${fmtKg(res.kg)} kg and build the reps back up.` : `Two workouts in a row below ${lo} — increase the counterweight to ${fmtKg(res.kg)} kg and build the reps back up.`;
     } else {
-      res.tone = 'same'; res.kg = work; res.reps = sets.map(x => Math.max(lo, x[1]));
-      res.text = `${work ? `Keep ${fmtKg(work)} kg` : 'Same variation'} and build up to ${lo}${unit} in every set. Last time: ${prevList}.`;
+      res.tone = 'same'; res.kg = work; res.reps = sets.map((x, i) => Math.max(tgt(i)[0], x[1]));
+      const keep = work ? `Keep ${fmtKg(work)} kg` : 'Same variation';
+      res.text = rp ? `${keep} and build up to the plan: ${rp.join(' / ')}. Last time: ${prevList}.` : `${keep} and build up to ${lo}${unit} in every set. Last time: ${prevList}.`;
     }
     return res;
   }
-  res.tone = 'same'; res.kg = work; res.reps = sets.map(x => Math.min(hi, x[1] + 1));
+  res.tone = 'same'; res.kg = work; res.reps = sets.map((x, i) => Math.min(tgt(i)[1], x[1] + 1));
   res.text = `${work ? `${lt === 'assist' ? 'Same counterweight' : 'Same weight'} — ${fmtKg(work)} kg` : 'Same variation'}, aim for 1${unit || ' rep'} more: last time ${prevList}.`;
   return res;
 }
+/* Пирамида или сброс в прошлый раз: веса подходов разные (все записаны с весом). Совет — по верхнему подходу (самый
+   тяжёлый вес; таких подходов может быть несколько), остальные подходы — как в прошлый раз; не «оставьте верхний вес
+   в каждом подходе». res.kgs — вес каждого подхода (подсказки в таблице и в режиме тренировки, ownKgs), res.reps —
+   повторы. Иначе null — один вес на все подходы, обычная двойная прогрессия. */
+function pyramidAdvice(it, res, sets, past, tgt, step, week, rp) {
+  const pk = sets.map(x => x[0]);
+  if (pk.length < 2 || pk.some(v => !(v > 0)) || pk.every(v => v === pk[0])) return null;
+  const W = Math.max(...pk), top = pk.map((v, i) => i).filter(i => pk[i] === W), one = top.length === 1;
+  res.kgs = pk.slice(); res.reps = sets.map((x, i) => rp ? tgt(i)[0] : x[1]);
+  const topText = one ? `Top set: ${fmtKg(W)} kg × ${sets[top[0]][1]}` : `Sets with ${fmtKg(W)} kg: ${top.map(i => sets[i][1]).join(', ')}`;
+  const rest = 'Other sets — as last time.';
+  const ease = !week && AR.light ? .9 : week && week.deload ? .85 : 0;
+  if (ease) {
+    res.tone = 'deload'; res.kgs = pk.map(v => roundTo(v * ease, step)); res.reps = sets.map((x, i) => tgt(i)[0]); res.kg = res.kgs[0];
+    res.text = `${ease === .9 ? 'Light mode' : 'Deload'}: weights ${Math.round((1 - ease) * 100)}% lighter than last time — ${res.kgs.map(fmtKg).join(' / ')} kg, not to failure.`;
+    return res;
+  }
+  if (top.every(i => sets[i][1] >= tgt(i)[1])) {
+    const nw = W + step;
+    for (const i of top) { res.kgs[i] = nw; res.reps[i] = tgt(i)[0]; }
+    res.tone = 'up'; res.kg = res.kgs[0];
+    res.text = `${topText} — ${one ? 'at the top of the range. Next time use' : 'all at the top of the range. Next time use'} ${fmtKg(nw)} kg (+${fmtKg(step)}). ${rest}`;
+    return res;
+  }
+  /* верхний подход второй раз подряд ниже нижней границы при том же весе — снизить его */
+  const before = past.length > 1 ? past[past.length - 2].s.filter(Boolean) : [];
+  const bW = before.length ? Math.max(0, ...before.map(x => x[0] || 0)) : 0;
+  const lowAgain = bW === W && top.some(i => sets[i][1] < tgt(i)[0]) && before.some((x, i) => x[0] === W && x[1] < tgt(i)[0]);
+  if (lowAgain) {
+    const nw = roundTo(W * .9, step);
+    for (const i of top) { res.kgs[i] = nw; res.reps[i] = tgt(i)[0]; }
+    res.tone = 'down'; res.kg = res.kgs[0];
+    res.text = one ? `Two workouts in a row the top set fell short on reps — next time use ${fmtKg(nw)} kg and build the reps back up. ${rest}`
+      : `Two workouts in a row the sets with ${fmtKg(W)} kg fell short on reps — next time use ${fmtKg(nw)} kg and build the reps back up. ${rest}`;
+    return res;
+  }
+  const goal = top.map(i => { const [a, b] = tgt(i), r = sets[i][1]; return r < a ? a : Math.min(b, r + 1); });
+  top.forEach((i, j) => { res.reps[i] = goal[j]; });
+  const same = goal.every(v => v === goal[0]);
+  res.tone = 'same'; res.kg = res.kgs[0];
+  res.text = `${topText} — next time build up to ${same ? goal[0] : goal.join(', ')}${one || !same ? '' : ' in each of them'}. ${rest}`;
+  return res;
+}
+/* Сегодня уже записаны подходы, а прошлых тренировок нет: «Сегодня: 3 из 4. Следующий — с тем же весом (50 кг).»;
+   все подходы сделаны — «упражнение выполнено». Нет записей сегодня — '' (подсказка первой записи) */
+function todayNote(it, lt) {
+  const t = todaySession(it.ex.id, false), done = t ? t.s.filter(Boolean) : [];
+  if (!done.length) return '';
+  const total = Math.max(it.rx.circ ? (it.rounds || it.rx.sets) : it.rx.sets, done.length), n = done.length;
+  const head = `Today: ${n} of ${total}.`;
+  if (n >= total) return `${head} Exercise done — next time you'll see a progression tip here.`;
+  const kgs = done.map(x => x[0]);
+  if (lt !== 'none' && kgs[0] > 0 && kgs.every(v => v === kgs[0])) return `${head} Next set: ${lt === 'assist' ? 'same counterweight' : 'same weight'} (${fmtKg(kgs[0])} kg).`;
+  return head;
+}
 
 /* ---------- блок записи в карточке ---------- */
-const SUG_ICON = {up:'↑', same:'→', down:'↓', deload:'↓', new:'+', plan:'≡'};
+const SUG_ICON = {up:'↑', same:'→', down:'↓', deload:'↓', new:'+', plan:'≡', today:'✓'};
 /* строк в таблице: по плану (у круговой — кругов), но не меньше, чем уже записано сегодня */
 function logRowCount(it) {
   const today = todaySession(it.ex.id, false);
@@ -14535,8 +14855,11 @@ function logRows(it) {
   const tset = today ? today.s : [];
   const n = logRowCount(it);
   if (setArm[ex.id] !== n - 1 || n <= 1) delete setArm[ex.id];
-  const prevSets = sg.prev ? sg.prev.s.filter(Boolean) : [], own = ownKgs(it, prevSets);
-  const [lo, hi] = parseRange(it.rx.reps);
+  /* вопрос о весе переживает перерисовку, пока строка не отмечена; вопрос о правке отмеченной — нет (в поле снова записанное) */
+  const kq = kgAsk[ex.id];
+  if (kq && (kq.edit || kq.k >= n || tset[kq.k])) delete kgAsk[ex.id];
+  const prevSets = sg.prev ? sg.prev.s.filter(Boolean) : [], own = ownKgs(it, prevSets, sg);
+  const [lo, hi] = parseRange(it.rx.reps), rp = repsPlanOf(it.rx.reps);
   const SIDE = {l:'left', r:'right'};
   /* поле веса и повторов; side — 'l' | 'r' в режиме Л/П. Подсказка веса — вес последнего записанного сегодня подхода
      выше (carriedKg), иначе свой вес подхода (план, пирамида прошлого раза) или прогрессия; data-ph — она же без переноса
@@ -14550,9 +14873,10 @@ function logRows(it) {
     const v = tset[k];
     const p = prevSets[k] || prevSets[prevSets.length - 1];
     const pk = own(k), phKg = pk != null ? fmtKg(pk) : sg.kg != null ? fmtKg(sg.kg) : (lt === 'kg' ? '' : '—');
-    const phR = sg.reps[k] ?? sg.reps[sg.reps.length - 1] ?? (lo === hi ? String(lo) : `${lo}–${hi}`);
-    const arm = setArm[ex.id] === k, cf = arm ? setArmHtml(it, n, !!v) : '';
-    const done = !!v, cls = `lt-r${done ? ' done' : ''}${lr ? ' lt-lr' : ''}${it.rx.static && k > 0 && k % 3 === 0 ? ' lt-series' : ''}${arm ? ' lt-arm' : ''}`;
+    /* повторы: по прогрессии, у пирамиды плана — число подхода, иначе диапазон плана */
+    const phR = sg.reps[k] ?? (rp ? planReps(it.rx, k) : sg.reps[sg.reps.length - 1] ?? (lo === hi ? String(lo) : `${lo}–${hi}`));
+    const ask = kgAsk[ex.id] && kgAsk[ex.id].k === k, arm = !ask && setArm[ex.id] === k, cf = arm ? setArmHtml(it, n, !!v) : ask ? kgAskHtml(ex.id, kgAsk[ex.id]) : '';
+    const done = !!v, cls = `lt-r${done ? ' done' : ''}${lr ? ' lt-lr' : ''}${it.rx.static && k > 0 && k % 3 === 0 ? ' lt-series' : ''}${arm || ask ? ' lt-arm' : ''}`;
     const ownAt = pk != null && lt !== 'none' ? ` data-own="${pk}"` : ''; /* свой вес подхода — для переноса при вводе (carryKgBox) */
     const ok = `<button type="button" class="lt-ok" data-tick="${ex.id}" data-k="${k}" aria-pressed="${done}" aria-label="Set ${k + 1} done">${ICON.check}</button>`;
     if (lr) {
@@ -14603,8 +14927,10 @@ function firstKg(tset, sg, own) {
 /* свой вес подхода k: по плану; без плана — вес подхода k прошлой тренировки (подходов меньше — последний), если веса
    подходов в ней разные (пирамида, сброс); иначе null — один вес на все подходы (подсказка — по прогрессии, sg.kg).
    prevSets — записанные подходы прошлой тренировки */
-function ownKgs(it, prevSets) {
+function ownKgs(it, prevSets, sg) {
   if (it.rx.kgPlan) return k => planKg(it.rx, k);
+  /* пирамида прошлого раза с советом по верхнему подходу (pyramidAdvice): вес каждого подхода — из совета */
+  if (sg && Array.isArray(sg.kgs) && sg.kgs.length) return k => sg.kgs[Math.min(k, sg.kgs.length - 1)];
   const kgs = prevSets.map(x => x[0]);
   if (kgs.length < 2 || kgs.some(v => v == null) || kgs.every(v => v === kgs[0])) return () => null;
   return k => kgs[Math.min(k, kgs.length - 1)];
@@ -14629,7 +14955,13 @@ function carryKgBox(box) {
   const rows = box ? [...box.querySelectorAll('.lt-r')] : []; if (!rows.length) return;
   const ownBy = new Map(rows.map(r => [+r.dataset.k, r.dataset.own != null ? parseNum(r.dataset.own) : null]));
   const own = k => ownBy.get(k) ?? null, lr = rows[0].classList.contains('lt-lr');
-  const filled = (row, inp) => { if (!row.classList.contains('done') && inp.value.trim() === '') return null; const v = parseNum(inp.value); return {kg:v != null && v >= 0 ? v : null}; };
+  /* вписанный, но не отмеченный неправдоподобный вес («5000», kgDoubt) дальше подсказкой не идёт — сначала ответ на вопрос о нём */
+  const it = plan && plan.items && plan.items.find(x => x.ex.id === box.dataset.log);
+  const filled = (row, inp) => {
+    const done = row.classList.contains('done'); if (!done && inp.value.trim() === '') return null;
+    const v = parseNum(inp.value), odd = !done && v > 0 && it && kgDoubt(it, [v], +row.dataset.k);
+    return {kg:v != null && v >= 0 && !odd ? v : null};
+  };
   const hint = (inp, src, k) => { const ph = carryPh(src && kgCarries(own, src.k, k) ? src.kg : null, inp.dataset.ph ?? inp.placeholder); if (inp.placeholder !== ph) inp.placeholder = ph; };
   let srcL = null, srcR = null;
   for (const row of rows) {
@@ -14646,9 +14978,96 @@ function carryKgBox(box) {
 /* ввод веса в таблице: подсказки следующих подходов, затем «×2 = …» — по вписанному или перенесённому весу */
 function logKgInput(inp) {
   const box = inp.closest('.c-log'); if (!box) return;
+  /* вес исправляют — вопрос о нём больше не нужен */
+  const a = kgAsk[box.dataset.log], row = inp.closest('.lt-r');
+  if (a && row && +row.dataset.k === a.k) dropKgAsk(box.dataset.log, box);
   carryKgBox(box); updatePairTotal(inp);
 }
+/* подсказка над таблицей после отметки: «Первая запись…» сменяется на «Сегодня: 1 из 4…» */
+function refreshSug(box, it) {
+  const p = box && box.querySelector('.sug'); if (!p) return;
+  const sg = suggest(it), b = p.querySelector('b'), t = p.querySelector('span');
+  p.className = `sug sug-${sg.tone}`; if (b) b.textContent = SUG_ICON[sg.tone]; if (t && t.textContent !== sg.text) t.textContent = sg.text;
+}
 function logBlock(it) { return `<div class="c-log" data-log="${it.ex.id}">${logRows(it).html}</div>`; }
+
+/* ---------- неправдоподобный вес: переспросить в строке подхода ---------- */
+/* «5000» вместо «50» не записывается молча: от записанного считаются разминка, прогрессия, рекорды и общий вес. Вес —
+   одного снаряда, как он записывается. С историей — вписанный вес в 2 раза и больше прошлого (самый тяжёлый подход
+   последней тренировки с весом; без прошлых — сегодняшних подходов) и больше него хотя бы на 5 кг: шаг гантелей
+   2 → 4 кг — обычная прибавка, а не опечатка. Без истории — больше предела снаряда. Пределы — с большим запасом над
+   рекордами и самым тяжёлым инвентарём, чтобы не мешать сильным людям, но ловить лишний ноль:
+   гантель или гиря — 100 кг (самые тяжёлые серийные гантели и гири — около 90–100 кг);
+   штанга и Смит — 500 кг (рекорды в приседе и становой тяге — около 500 кг; столько же допускает вес в своём плане);
+   жим ногами и гакк-машина — 1000 кг (платформа с грузом у сильных людей — несколько сотен килограммов);
+   остальные тренажёры и блоки — 300 кг (стеки — обычно 100–150 кг, рычажные с блинами — до 250–300 кг);
+   доп. вес к собственному (пояс, жилет) — 200 кг (рекордные отягощения в подтягиваниях и на брусьях — 100–150 кг);
+   противовес гравитрона — 150 кг (стек — около 100 кг, противовес больше веса тела не нужен). */
+const KG_LIMIT = {db:100, kb:100, bb:500, press:1000, machine:300, extra:200, assist:150};
+const KG_LIMIT_NOTE = {db:'That\'s unusually heavy for one dumbbell.', kb:'That\'s unusually heavy for one kettlebell.', bb:'That\'s unusually heavy for a barbell.',
+  press:'That\'s unusually heavy for a machine.', machine:'That\'s unusually heavy for a machine.', extra:'That\'s unusually heavy for extra weight.', assist:'That\'s an unusually large counterweight.'};
+function kgLimitOf(it) {
+  const lt = loadType(it.ex), ids = it.eqIds || [];
+  if (lt === 'assist') return 'assist';
+  if (ids.includes('legpress') || ids.includes('hack')) return 'press';
+  if (ids.includes('bb') || ids.includes('smith')) return 'bb';
+  if (ids.some(i => MACHINE.has(i))) return 'machine';
+  const impl = typeof itemImpl === 'function' ? itemImpl(it) : null;
+  if (impl === 'db' || impl === 'kb') return impl;
+  return lt === 'extra' ? 'extra' : 'bb';
+}
+/* вписанный вес подхода k (kgs — общий или левая и правая) неправдоподобен: {kg, text} — что спросить; иначе null */
+function kgDoubt(it, kgs, k) {
+  const ex = it.ex; if (loadType(ex) === 'none') return null;
+  const vs = kgs.filter(v => v > 0); if (!vs.length) return null;
+  const kg = Math.max(...vs);
+  const weights = (s, skip = -1) => s ? s.s.flatMap((x, i) => { if (!x || i === skip) return []; const sd = setSides(x, ex); return sd ? [sd.l[0], sd.r[0]] : [x[0]]; }).filter(v => v > 0) : [];
+  const last = pastSessions(ex.id).reverse().find(s => weights(s).length), today = weights(todaySession(ex.id, false), k);
+  const ref = last ? Math.max(...weights(last)) : today.length ? Math.max(...today) : null;
+  const ask = why => ({kg, text:`${why} Log ${fmtKg(kg)} kg?`});
+  if (ref != null) return kg >= 2 * ref && kg - ref >= 5 ? ask(last ? `That's far more than last time (${fmtKg(ref)} kg).` : `That's far more than your other sets today (${fmtKg(ref)} kg).`) : null;
+  const kind = kgLimitOf(it);
+  return kg > KG_LIMIT[kind] ? ask(KG_LIMIT_NOTE[kind]) : null;
+}
+/* kgAsk[упражнение] = {k, text, side, edit} — строка, где ждёт ответ «Записать / Исправить» (как подтверждение «Убрать»
+   у подхода: строка подсвечена, вопрос и две кнопки под полями); edit — правка уже отмеченного подхода */
+const kgAsk = {};
+function kgAskHtml(id, a) {
+  return `<div class="lt-kq" role="group" aria-labelledby="lt-kq-${id}"><span class="lt-cft" id="lt-kq-${id}">${esc(a.text)}</span>`
+    + `<button type="button" class="lt-cfy" data-kgyes="${id}">${'Log'}</button><button type="button" class="lt-cfn" data-kgfix="${id}">${'Fix'}</button></div>`;
+}
+function askKg(row, it, k, q, extra = {}) {
+  const id = it.ex.id, box = row.closest('.c-log');
+  dropKgAsk(id, box);
+  if (setArm[id] !== undefined) { delete setArm[id]; box.querySelectorAll('.lt-r.lt-arm').forEach(r => { r.classList.remove('lt-arm'); const c = r.querySelector('.lt-cf'); if (c) c.remove(); }); }
+  kgAsk[id] = {k, text:q.text, side:extra.side || null, edit:!!extra.edit};
+  row.classList.add('lt-arm'); row.insertAdjacentHTML('beforeend', kgAskHtml(id, kgAsk[id]));
+  row.querySelector('[data-kgfix]').focus();
+}
+function dropKgAsk(id, box) {
+  delete kgAsk[id];
+  if (box) box.querySelectorAll('.lt-kq').forEach(q => { const r = q.closest('.lt-r'); q.remove(); if (r && !r.querySelector('.lt-cf')) r.classList.remove('lt-arm'); });
+}
+/* поле веса, о котором спросили: сторона из вопроса, иначе общее */
+function kgAskField(box, a) {
+  const row = box && box.querySelector(`.lt-r[data-k="${a.k}"]`); if (!row) return {row:null, inp:null};
+  return {row, inp:rowFields(row, row.classList.contains('lt-lr') ? a.side || 'l' : null).kgIn};
+}
+/* «Записать»: подход записывается с вписанным весом (правка отмеченного — правится) */
+function kgYes(id, box) {
+  const a = kgAsk[id]; if (!a || !box) return;
+  const {row, inp} = kgAskField(box, a);
+  dropKgAsk(id, box); if (!row) return;
+  if (a.edit) { if (inp) { editSet(inp, true); inp.focus(); } return; }
+  const tick = row.querySelector('[data-tick]'); tickSet(tick, true); tick.focus();
+}
+/* «Исправить» или Esc: вопрос закрывается, фокус — в поле веса, вписанное выделено */
+function kgFix(id, box) {
+  const a = kgAsk[id]; if (!a || !box) return;
+  const {inp} = kgAskField(box, a);
+  dropKgAsk(id, box);
+  if (inp) { inp.focus(); inp.select(); }
+}
 
 /* ---------- история упражнения ---------- */
 function metricOf(ex) {
@@ -14657,6 +15076,39 @@ function metricOf(ex) {
   if (ex.kind === 'time') return {name:'Best set', unit:'s', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
   if (ex.kind === 'dist') return {name:'Best distance', unit:'m', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
   return {name:'Best set', unit:'reps', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
+}
+/* самый тяжёлый подход записи: вес и лучшие повторы с ним (статодинамика и записи без веса — null) */
+function topSet(s) {
+  if (!s || s.fmt === 'static') return null;
+  const xs = s.s.filter(x => x && x[0] > 0); if (!xs.length) return null;
+  const w = Math.max(...xs.map(x => x[0]));
+  return {w, r:Math.max(...xs.filter(x => x[0] === w).map(x => x[1]))};
+}
+/* график истории: у упражнений с весом — расчётный максимум; если вес во всех записях один и тот же (одни гантели дома),
+   максимум почти не меняется (повторы больше 12 в нём не считаются) — тогда график повторов с этим весом */
+function histMetric(ex, ss) {
+  const m = metricOf(ex);
+  if (loadType(ex) !== 'kg' || ex.kind) return m;
+  const tops = ss.map(topSet).filter(Boolean);
+  if (tops.length < 2 || !tops.every(t => t.w === tops[0].w)) return m;
+  const w = tops[0].w;
+  return {name:`Reps with ${fmtKg(w)} kg`, unit:'reps', bare:true, f:s => { const t = topSet(s); return t && t.w === w ? t.r : null; }};
+}
+/* Сводка упражнения в строке журнала. С весом: крупно — рабочий вес и лучшие повторы с ним в последней записи, мельче
+   и с подписью — расчётный максимум; изменение с первой записи — по весу, а при том же весе — по повторам («+3 повт.»,
+   а не «0 %»: с одними гантелями прогресс — это повторы). Без веса — как раньше: значение метрики и изменение в процентах. */
+function journalVal(ex, ss) {
+  const m = metricOf(ex), tops = loadType(ex) === 'kg' && !ex.kind ? ss.map(topSet).filter(Boolean) : [];
+  if (!tops.length) {
+    const vals = ss.map(s => m.f(s)).filter(v => v != null), firstV = vals[0], lastV = vals[vals.length - 1];
+    const ch = vals.length > 1 && firstV ? Math.round((lastV / firstV - 1) * 100) : null;
+    return `<span class="j-val">${lastV != null ? fmtKg(Math.round(lastV * 2) / 2) : '—'}<small>${m.unit}</small>${ch != null ? `<em class="${ch > 0 ? 'pos' : ch < 0 ? 'neg' : ''}">${ch > 0 ? '+' : ''}${ch}%</em>` : ''}</span>`;
+  }
+  const a = tops[0], b = tops[tops.length - 1], e = [...ss].reverse().map(m.f).find(v => v != null);
+  const chip = (d, u) => `<em class="${d > 0 ? 'pos' : 'neg'}">${d > 0 ? '+' : '−'}${u === 'kg' ? fmtKg(Math.abs(d)) : Math.abs(d)} ${u}</em>`;
+  const ch = tops.length < 2 ? '' : b.w !== a.w ? chip(b.w - a.w, 'kg') : b.r !== a.r ? chip(b.r - a.r, 'reps') : '';
+  return `<span class="j-val j-wr"><span class="j-big"><span class="vh">${'Working weight'} </span>${fmtKg(b.w)}<small>kg</small> × ${b.r}<span class="vh"> ${'reps'}</span></span>`
+    + `${e != null ? `<small class="j-e1">${'est. 1RM'} ${fmtKg(Math.round(e * 2) / 2)} kg</small>` : ''}${ch}</span>`;
 }
 function sparkSvg(pts, unit, step = 0.5) {
   if (!pts.length) return '';
@@ -14690,13 +15142,13 @@ function histSets(ex, s) {
 function histHtml(ex) {
   const ss = (LOG.data[ex.id] || []).filter(x => x.s.some(Boolean));
   if (!ss.length) return `<p class="h-empty">No entries yet. Log your sets above — history and a chart will appear here.</p>${variantHistNote(ex)}`;
-  const m = metricOf(ex);
+  const m = histMetric(ex, ss);
   const pts = ss.map(s => ({d:s.d, v:m.f(s)})).filter(p => p.v != null).slice(-24);
   const best = pts.length ? Math.max(...pts.map(p => p.v)) : null;
   const rows = ss.slice(-6).reverse().map(s => `<li><span class="h-d">${fmtDay(s.d, true)}${s.wk ? `<small>wk ${s.wk}</small>` : ''}${s.fmt === 'static' ? '<small>static-dynamic</small>' : ''}</span>
     <span class="h-s">${histSets(ex, s)}</span>
     <button type="button" class="h-del" data-del="${ex.id}" data-d="${s.d}" aria-label="Delete entry for ${fmtDay(s.d, true)}">Delete</button></li>`).join('');
-  return `<div class="h-chart"><p class="h-cap">${m.name}, ${m.unit}${best != null ? ` · best ${fmtKg(Math.round(best * 2) / 2)}` : ''}</p>${sparkSvg(pts, m.unit)}</div>
+  return `<div class="h-chart"><p class="h-cap">${m.name}${m.bare ? '' : ', ' + m.unit}${best != null ? ` · best ${fmtKg(Math.round(best * 2) / 2)}` : ''}</p>${sparkSvg(pts, m.unit)}</div>
     <ul class="h-list">${rows}</ul>${ss.length > 6 ? `<p class="h-more">Total entries: ${ss.length}. Full history is in the “Log” section.</p>` : ''}${variantHistNote(ex)}`;
 }
 function histCount(id) { return (LOG.data[id] || []).filter(x => x.s.some(Boolean)).length; }
@@ -14816,22 +15268,20 @@ function renderJournal() {
     html += `<div class="empty"><h2>No entries yet</h2><p>Open the plan and log sets in the exercise cards: weight and reps will be saved here, and the planner will start suggesting when to add weight.</p><button type="button" class="btn" data-view="plan">Go to plan</button></div>`;
   } else {
     html += `<ul class="j-list">${entries.map(([id, ss]) => {
-      const ex = EXI[id], m = metricOf(ex);
-      const vals = ss.map(s => m.f(s)).filter(v => v != null);
-      const firstV = vals[0], lastV = vals[vals.length - 1];
-      const ch = vals.length > 1 && firstV ? Math.round((lastV / firstV - 1) * 100) : null;
+      const ex = EXI[id];
       const lastS = ss[ss.length - 1];
       return `<li class="j-row">
         <details>
           <summary>
             <span class="j-name">${esc(ex.name)}<small>${GN[ex.g]} · ${ss.length} ${plural(ss.length, 'entry', 'entries', 'entries')} · ${fmtDay(lastS.d, true)}</small></span>
-            <span class="j-val">${lastV != null ? fmtKg(Math.round(lastV * 2) / 2) : '—'}<small>${m.unit}</small>${ch != null ? `<em class="${ch > 0 ? 'pos' : ch < 0 ? 'neg' : ''}">${ch > 0 ? '+' : ''}${ch}%</em>` : ''}</span>
+            ${journalVal(ex, ss)}
           </summary>
           <div class="j-body">${histHtml(ex).replace(/<p class="h-more">.*?<\/p>/, '')}${ss.length > 6 ? `<details class="j-all"><summary>All entries (${ss.length})</summary><ul class="h-list">${ss.slice(0, -6).reverse().map(s => `<li><span class="h-d">${fmtDay(s.d, true)}</span><span class="h-s">${histSets(ex, s)}</span><button type="button" class="h-del" data-del="${id}" data-d="${s.d}">Delete</button></li>`).join('')}</ul></details>` : ''}</div>
         </details>
       </li>`;
     }).join('')}</ul>
-    <p class="legend">Estimated 1RM is the weight you could lift once, per the Epley formula: weight × (1 + reps / 30). It rises both when you add weight and when you do more reps with the same weight. For dumbbells and kettlebells it uses the weight of one implement.</p>
+    <p class="legend">On the right: your working weight and the best reps with it in the last workout; below it, the estimated 1RM and the change since the first entry — in weight, or in reps when the weight is the same. For dumbbells and kettlebells the weight is that of one implement.</p>
+    <p class="legend">Estimated 1RM is the weight you could lift once, per the Epley formula: weight × (1 + reps / 30). It rises both when you add weight and when you do more reps with the same weight, but reps above 12 are not counted. If every entry uses the same weight, the chart shows your reps with it.</p>
     <p class="legend">Total weight is the sum of “weight × reps” over all implements and sides: a dumbbell press with 2 × 20 kg for 10 reps is 400 kg, a one-arm dumbbell row with 30 kg for 10 reps per side is 600 kg. Only external load counts: dumbbells, kettlebells, barbell, machine, extra weight; body weight, assisted-machine counterweight, timed holds and distance are not included. L/R — a set with the left and right side logged separately: progress and records follow the weaker side.</p>`;
   }
   $('#plan').innerHTML = html;
@@ -14946,7 +15396,8 @@ function readFields({kgIn, rIn}, lt) {
   if (kg != null && kg < 0) kg = null;
   return {kg, reps:Math.round(reps * 10) / 10};
 }
-function tickSet(btn) {
+/* sure — вес уже подтвердили («Записать» в вопросе о весе) */
+function tickSet(btn, sure) {
   const id = btn.dataset.tick, k = +btn.dataset.k;
   const row = btn.closest('.lt-r');
   const it = plan.items.find(x => x.ex.id === id);
@@ -14954,11 +15405,12 @@ function tickSet(btn) {
   const F = (lr ? ['l', 'r'] : [null]).map(side => rowFields(row, side));
   const s = todaySession(id, true);
   if (s.s[k]) {
+    if (kgAsk[id] && kgAsk[id].k === k) dropKgAsk(id, row.closest('.c-log'));
     s.s[k] = null; cleanToday(id);
     row.classList.remove('done'); btn.setAttribute('aria-pressed', 'false');
     for (const f of F) { if (f.kgIn) f.kgIn.value = ''; f.rIn.value = ''; }
     carryKgBox(row.closest('.c-log'));
-    logTouch(id); refreshHist(id); return;
+    logTouch(id); refreshHist(id); refreshSug(row.closest('.c-log'), it); return;
   }
   const got = F.map(f => readFields(f, lt)), bad = got.find(g => g.bad);
   if (bad) {
@@ -14966,6 +15418,10 @@ function tickSet(btn) {
     bad.bad.focus(); bad.bad.classList.add('need'); setTimeout(() => bad.bad.classList.remove('need'), 1600);
     return;
   }
+  /* неправдоподобный вес — не записывать, переспросить в строке */
+  const q = !sure && kgDoubt(it, got.map(g => g.kg), k);
+  if (q) { cleanToday(id); askKg(row, it, k, q, {side:lr ? (got[1].kg > got[0].kg ? 'r' : 'l') : null}); return; }
+  dropKgAsk(id, row.closest('.c-log'));
   while (s.s.length < k) s.s.push(null);
   s.s[k] = lr ? makeSidedSet([got[0].kg, got[0].reps], [got[1].kg, got[1].reps], it.ex) : [got[0].kg, got[0].reps];
   s.target=Math.max(s.target||0,it.rx.circ?(it.rounds||it.rx.sets):it.rx.sets);
@@ -14974,7 +15430,7 @@ function tickSet(btn) {
   F.forEach((f, i) => { if (f.kgIn) f.kgIn.value = got[i].kg != null ? fmtKg(got[i].kg) : ''; f.rIn.value = got[i].reps; });
   row.classList.add('done'); btn.setAttribute('aria-pressed', 'true');
   carryKgBox(row.closest('.c-log'));
-  logTouch(id); refreshHist(id);
+  logTouch(id); refreshHist(id); refreshSug(row.closest('.c-log'), it);
   const total = it.rx.circ ? 0 : it.rx.sets;
   const doneN = s.s.filter(Boolean).length;
   if (!it.rx.circ) {
@@ -14982,11 +15438,18 @@ function tickSet(btn) {
     if (r) startRest(r, doneN >= total ? 'Rest before the next exercise' : it.rx.static && doneN % 3 === 0 ? `Rest after series ${doneN / 3}` : `Rest after set ${doneN}`);
   }
 }
-function editSet(inp) {
+/* правка отмеченного подхода; sure — вес уже подтвердили */
+function editSet(inp, sure) {
   const row = inp.closest('.lt-r'); if (!row || !row.classList.contains('done')) return;
   const box = inp.closest('.c-log'), id = box.dataset.log, k = +row.dataset.k, ex = EXI[id];
   const s = todaySession(id, false); if (!s || !s.s[k]) return;
   const v = parseNum(inp.value), x = s.s[k], side = inp.dataset.side;
+  /* неправдоподобный вес — запись прежняя, вопрос в строке */
+  if (inp.dataset.f === 'kg' && v > 0 && !sure) {
+    const it = (plan && plan.items && plan.items.find(y => y.ex.id === id)) || {ex, rx:{}}, q = kgDoubt(it, [v], k);
+    if (q) { askKg(row, it, k, q, {side, edit:true}); return; }
+  }
+  if (kgAsk[id] && kgAsk[id].k === k) dropKgAsk(id, box);
   if (side) {
     /* Л/П: правится одна сторона, основные поля — снова слабая сторона, отдых остаётся */
     const sd = setSides(x, ex), l = sd ? [...sd.l] : [x[0], x[1]], r = sd ? [...sd.r] : [x[0], x[1]], p = side === 'l' ? l : r;
@@ -15056,6 +15519,7 @@ function addSet(id, box) {
 function askRemoveSet(id, box) {
   const it = plan && plan.items && plan.items.find(x => x.ex.id === id); if (!it || !box) return;
   const n = logRowCount(it); if (n <= 1) return;
+  if (kgAsk[id]) dropKgAsk(id, box);
   const row = box.querySelector(`.lt-r[data-k="${n - 1}"]`);
   const armed = row && row.querySelector('.lt-cf');
   if (armed) { armed.querySelector('[data-delno]').focus(); return; }
@@ -15128,6 +15592,8 @@ document.addEventListener('click', e => {
   if (t.dataset.delset) { askRemoveSet(t.dataset.delset, t.closest('.c-log')); return; }
   if (t.dataset.delyes) { removeSet(t.dataset.delyes, t.closest('.c-log')); return; }
   if (t.dataset.delno) { keepSet(t.dataset.delno, t.closest('.c-log')); return; }
+  if (t.dataset.kgyes) { kgYes(t.dataset.kgyes, t.closest('.c-log')); return; }
+  if (t.dataset.kgfix) { kgFix(t.dataset.kgfix, t.closest('.c-log')); return; }
   if (t.dataset.hist) {
     const card = t.closest('.card'), h = card.querySelector('.c-hist');
     h.hidden = !h.hidden; t.setAttribute('aria-expanded', String(!h.hidden));
@@ -15146,6 +15612,7 @@ document.addEventListener('change', e => {
 document.addEventListener('input', e => { if (e.target.classList && e.target.classList.contains('lt-in') && e.target.dataset.f === 'kg') logKgInput(e.target); });
 document.addEventListener('keydown', e => {
   const box = e.key === 'Escape' && e.target.closest && e.target.closest('.c-log');
+  if (box && box.querySelector('.lt-kq')) { e.preventDefault(); kgFix(box.dataset.log, box); return; }
   if (box && box.querySelector('.lt-cf')) { e.preventDefault(); keepSet(box.dataset.log, box); return; }
   if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('lt-in')) {
     e.preventDefault();
@@ -16467,16 +16934,19 @@ function closeWorkout(){
 }
 function workoutShow(index){
   if(!workout)return;
-  workout.index=Math.max(0,Math.min(workout.queue.length-1,index));workout.restUntil=0;workout.restFrom=0;workout.next=-1;workout.sideNote='';workout.holdPair=null;RestAlarm.cancel();paintRestPhase(false);
+  workout.index=Math.max(0,Math.min(workout.queue.length-1,index));workout.restUntil=0;workout.restFrom=0;workout.next=-1;workout.sideNote='';workout.holdPair=null;RestAlarm.cancel();paintRestPhase(false);workoutAskHide();
   const s=workout.queue[workout.index],it=s.it,ex=it.ex,stored=workoutValue(s),sg=suggest(it),hold=isHold(ex);
   const prev=sg.prev?.s[s.k]||sg.prev?.s.filter(Boolean).slice(-1)[0];
   $('#wv-active').hidden=false;$('#wv-rest').hidden=true;$('#wv-finish').hidden=true;
   $('#wv-title').textContent=it.name;$('#wv-exercise').value=ex.id;
   $('#wv-set-label').textContent=`${s.phase} · set ${s.k+1} of ${s.n}`;
   $('#wv-equipment').textContent=it.eqLine;
-  $('#wv-target').textContent=it.rx.reps+(ex.kind?'':' reps');
+  /* цель подхода: у пирамиды повторов своего плана — число этого подхода */
+  $('#wv-target').textContent=planReps(it.rx,s.k)+(ex.kind?'':' reps');
   const unit=ex.kind==='time'?'s':ex.kind==='dist'?'m':'reps',psd=prev&&setSides(prev,ex);
-  $('#wv-previous').textContent=psd?`${setText(prev,ex)} ${unit}`:prev?`${prev[0]!=null?fmtKg(prev[0])+' kg × ':''}${prev[1]} ${unit}`:'First entry';
+  /* прошлых тренировок нет: «Первая запись», пока сегодня ничего не записано, потом — «—» */
+  const todayN=(todaySession(ex.id,false)?.s||[]).filter(Boolean).length;
+  $('#wv-previous').textContent=psd?`${setText(prev,ex)} ${unit}`:prev?`${prev[0]!=null?fmtKg(prev[0])+' kg × ':''}${prev[1]} ${unit}`:todayN?'—':'First entry';
   $('#wv-previous-date').textContent=sg.prev?fmtDay(sg.prev.d,true):'';
   $('#wv-set-chips').innerHTML=workout.queue.map((x,i)=>x.it.ex.id===ex.id?`<button type="button" data-wv-index="${i}" class="${workoutValue(x)?'is-done ':''}${i===workout.index?'is-current':''}" aria-label="Set ${x.k+1}${workoutValue(x)?', done':''}" aria-current="${i===workout.index?'step':'false'}">${workoutValue(x)?'✓ ':''}${x.k+1}</button>`:'').join('');
   workoutFill(s,sg,prev);
@@ -16501,16 +16971,18 @@ function workoutFill(s,sg,prev){
   const draft=workout.drafts[workoutDraftKey(s)],today=todaySession(ex.id,false)?.s||[];
   /* вес: записанный сегодня в подходе выше (carriedKg — то же правило, что в карточке: свой вес подхода по плану или
      по пирамиде прошлого раза не перетирается), иначе свой вес подхода, иначе из прошлой тренировки */
-  const own=ownKgs(it,sg.prev?sg.prev.s.filter(Boolean):[]),planned=own(s.k),kgText=v=>v!=null?fmtKg(v):'',carried=carriedKg(it,today,s.k,null,own);
+  const own=ownKgs(it,sg.prev?sg.prev.s.filter(Boolean):[],sg),planned=own(s.k),kgText=v=>v!=null?fmtKg(v):'',carried=carriedKg(it,today,s.k,null,own);
   $('#wv-kg').value=draft?draft.kg:stored?kgText(stored[0]):carried!=null?fmtKg(carried):planned!=null?fmtKg(planned):prev?.[0]!=null?fmtKg(prev[0]):'';
-  $('#wv-reps').value=draft?draft.reps:stored?String(stored[1]):'';$('#wv-reps').placeholder=it.rx.reps;
+  /* подсказка повторов — цель подхода со словом «цель»: серое «12–15» без него выглядело введённым */
+  const goal='goal '+planReps(it.rx,s.k);
+  $('#wv-reps').value=draft?draft.reps:stored?String(stored[1]):'';$('#wv-reps').placeholder=goal;
   /* Л/П: записанные стороны, иначе — общий вес; вес стороны по умолчанию — из подхода выше по своей стороне, из прошлых
      сторон, если они были */
   const ssd=stored&&setSides(stored,ex),psd=prev&&setSides(prev,ex);
   for(const k of ['l','r']){
     const ck=carriedKg(it,today,s.k,k,own),kgDef=ck!=null?fmtKg(ck):planned!=null?fmtKg(planned):psd?kgText(psd[k][0]):prev?.[0]!=null?fmtKg(prev[0]):'';
     $('#wv-kg-'+k).value=draft&&draft['k'+k]!==undefined?draft['k'+k]:ssd?kgText(ssd[k][0]):stored?kgText(stored[0]):kgDef;
-    $('#wv-reps-'+k).value=draft&&draft['r'+k]!==undefined?draft['r'+k]:ssd?String(ssd[k][1]):stored?String(stored[1]):'';$('#wv-reps-'+k).placeholder=it.rx.reps;
+    $('#wv-reps-'+k).value=draft&&draft['r'+k]!==undefined?draft['r'+k]:ssd?String(ssd[k][1]):stored?String(stored[1]):'';$('#wv-reps-'+k).placeholder=goal;
   }
   workoutPairTotal();
   $('#wv-input-hint').textContent=hold?(lt==='extra'?'Extra weight can be left empty. ':'')+'“Stop” logs the seconds and starts the rest. You can also type the seconds in.'
@@ -16539,8 +17011,14 @@ function workoutLrToggle(){
 /* в «Анатомии» фаза — по сетке кадров карточек (cardClock, отличие от точного времени ≤17 мс): со второго круга матрицы костей
    фаз берутся из памяти фигуры (memoBones в src/volume/main.mjs) */
 function paintWorkoutMotion(){if(!workout?.motion)return;const F=workout.motion,m=motionFrame(F,workoutAnatomyLive()?cardClock(F):F.clock);F.f.at(m.t,m);if($('#wv-cue').textContent!==m.cue)$('#wv-cue').textContent=m.cue;paintMusclePanel('wv',F,m);paintStressPanel('wv',F,m);}
+/* вопрос о весе под полями подхода: «Записать» записывает как есть, «Исправить» (и Esc) — фокус в поле веса; пока вопрос
+   открыт, «Подход выполнен» скрыта — ответ один из двух; правка веса закрывает вопрос */
+function workoutAsk(q,side){const b=$('#wv-kg-ask');$('#wv-kg-ask-t').textContent=q.text;b.dataset.side=side||'';b.hidden=false;$('#wv-done').hidden=true;$('#wv-kg-fix').focus();}
+function workoutAskHide(){const b=$('#wv-kg-ask');if(!b||b.hidden)return false;b.hidden=true;$('#wv-done').hidden=false;return true;}
+function workoutAskFix(){const side=$('#wv-kg-ask').dataset.side;workoutAskHide();const inp=$(side?'#wv-kg-'+side:'#wv-kg');inp.focus();inp.select();}
 function strictWorkoutNumber(value){const s=String(value).trim().replace(',','.');return /^\d+(\.\d+)?$/.test(s)?Number(s):null;}
-function commitWorkout(e){
+/* sure — вес уже подтвердили («Записать» в вопросе о весе) */
+function commitWorkout(e,sure){
   if(e)e.preventDefault();if(!workout||$('#wv-active').hidden)return;
   const step=workout.queue[workout.index],ex=step.it.ex,lt=loadType(ex),lr=lrOn(ex);
   /* одна пара «вес × повторы» или две — левая и правая */
@@ -16554,6 +17032,10 @@ function commitWorkout(e){
   const got=lr?[read($('#wv-kg-l'),$('#wv-reps-l')),read($('#wv-kg-r'),$('#wv-reps-r'))]:[read($('#wv-kg'),$('#wv-reps'))],bad=got.find(g=>g.bad),pair=workout.holdPair;
   workout.holdPair=null;
   if(bad){$('#wv-error').textContent=bad.msg;bad.bad.setAttribute('aria-invalid','true');bad.bad.focus();return;}
+  /* неправдоподобный вес («5000» вместо «50») — не записывать, переспросить под полями: «Записать» / «Исправить» (kgDoubt, 13-log.js) */
+  const q=!sure&&kgDoubt(step.it,got.map(g=>g.kg),step.k);
+  if(q){workout.holdPair=pair;workoutAsk(q,lr?(got[1].kg>got[0].kg?'r':'l'):'');return;}
+  workoutAskHide();
   /* отдых, уже записанный у этого подхода (третье поле), при исправлении сохраняется */
   const already=!!workoutValue(step),session=todaySession(ex.id,true),rest=already?restField(session.s[step.k][2]):null;
   while(session.s.length<step.k)session.s.push(null);
@@ -16580,7 +17062,7 @@ function workoutRestTaken(){
 function workoutShowRest(){
   holdStop();$('#wv-active').hidden=true;$('#wv-rest').hidden=false;$('#wv-finish').hidden=true;RestAlarm.paintButton($('#wv-sound'));RestAlarm.paintPrefs();
   const next=workout.queue[workout.next];
-  $('#wv-next-name').textContent=next.it.name;$('#wv-next-detail').textContent=`${next.phase} · set ${next.k+1} of ${next.n} · ${next.it.rx.reps}${next.it.ex.kind?'':' reps'}`;
+  $('#wv-next-name').textContent=next.it.name;$('#wv-next-detail').textContent=`${next.phase} · set ${next.k+1} of ${next.n} · ${planReps(next.it.rx,next.k)}${next.it.ex.kind?'':' reps'}`;
   $('#wv-rest-note').textContent=workout.sideNote||restNote();workout.sideNote='';workout.restOver=null;workoutTick();$('#wv-continue').focus();
 }
 /* после подхода: общий вес подхода, если он считается (внешний вес), и слабая сторона, если стороны отличались */
@@ -16678,9 +17160,10 @@ function holdCommit(){
 function holdStop(){if(workout?.hold){workout.hold.h=null;workout.hold.last=null;}RestAlarm.hush();}
 function setupWorkout(){
   $('#wv-form').addEventListener('submit',commitWorkout);
-  for(const id of ['wv-kg','wv-reps','wv-kg-l','wv-reps-l','wv-kg-r','wv-reps-r'])$('#'+id).addEventListener('input',()=>{workoutCapture();$('#wv-error').textContent='';$('#'+id).removeAttribute('aria-invalid');if(id==='wv-kg')workoutPairTotal();});
+  for(const id of ['wv-kg','wv-reps','wv-kg-l','wv-reps-l','wv-kg-r','wv-reps-r'])$('#'+id).addEventListener('input',()=>{workoutCapture();$('#wv-error').textContent='';$('#'+id).removeAttribute('aria-invalid');if(id==='wv-kg')workoutPairTotal();if(id.startsWith('wv-kg'))workoutAskHide();});
   $('#wv-exercise').addEventListener('change',e=>{workoutCapture();const i=workout.queue.findIndex(s=>s.it.ex.id===e.target.value&&!workoutValue(s));workoutShow(i>=0?i:workout.queue.findIndex(s=>s.it.ex.id===e.target.value));});
-  $('#workout-view').addEventListener('cancel',e=>{e.preventDefault();closeWorkout();});
+  /* Esc: открыт вопрос о весе — он закрывается («Исправить»), тренировка остаётся */
+  $('#workout-view').addEventListener('cancel',e=>{e.preventDefault();if(!$('#wv-kg-ask').hidden){workoutAskFix();return;}closeWorkout();});
   /* вернулись на экран: таймеры страницы в фоне редки — обновить отдых и удержание сразу */
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&workout&&$('#workout-view').open)workoutTick();});
   document.addEventListener('click',e=>{
@@ -16694,6 +17177,8 @@ function setupWorkout(){
     if(t.id==='wv-undo'){workoutShow(workout.last);return;}
     if(t.id==='wv-continue'){workoutRestTaken();workoutShow(workout.next);return;}
     if(t.id==='wv-lr'){workoutLrToggle();return;}
+    if(t.id==='wv-kg-yes'){commitWorkout(null,true);return;}
+    if(t.id==='wv-kg-fix'){workoutAskFix();return;}
     if(t.id==='wv-hold-go'){holdGo();return;}
     if(t.id==='wv-hold-reset'){holdStop();paintHold();return;}
     if(t.dataset.wvRest){const end=restAdjust(workout.restUntil,Date.now(),Number(t.dataset.wvRest));if(end!==workout.restUntil){workout.restUntil=end;RestAlarm.arm(end,{from:workout.restFrom||undefined});saveWorkout();workoutTick();}return;}
@@ -17081,9 +17566,13 @@ function warmupHtml(it, work) {
     <p class="wu-note-f">Rest 30–60 s between warm-up sets. ${impl === 'bb' ? `Bar ${fmtKg(GEAR.bar)} kg, plates: ${GEAR.plates.map(fmtKg).join(' · ')} — <button type="button" class="lk" data-gear="1">adjust</button>.` : impl === 'machine' ? 'Weight stack increment assumed to be 5 kg.' : ''}</p>
   </details>`;
 }
-/* рабочий вес для разминки: из первого введённого поля, иначе из подсказки */
+/* рабочий вес для разминки: из первого введённого поля (неправдоподобный и ещё не подтверждённый — «5000», kgDoubt
+   в 13-log.js — не в счёт), иначе из подсказки */
 function workWeightOf(it, card) {
-  if (card) { const inp = card.querySelector('.lt-r:not(.done) [data-f="kg"], .lt-r [data-f="kg"]'); if (inp && inp.value) { const v = parseNum(inp.value); if (v > 0) return v; } }
+  if (card) {
+    const inp = card.querySelector('.lt-r:not(.done) [data-f="kg"], .lt-r [data-f="kg"]'), row = inp && inp.closest('.lt-r');
+    if (inp && inp.value) { const v = parseNum(inp.value); if (v > 0 && !(row && !row.classList.contains('done') && kgDoubt(it, [v], +row.dataset.k))) return v; }
+  }
   const sg = suggest(it); return sg.kg && sg.kg > 0 ? sg.kg : null;
 }
 function refreshWarmup(card) {
@@ -17908,4 +18397,4 @@ logInit();
 plural = (n, a, b, c) => n === 1 ? a : c;
 DEC = '.';
 
-window.PODHOD_VERSION='4.96.0';window.PODHOD_BUILD='4.96.0-d61ba6b62500';window.PODHOD_RENDER={"skin":"31c4707ea0","skeleton":"f4e7c4b726","anatomy":"48636840a9"};window.PODHOD_LANG='en';
+window.PODHOD_VERSION='4.97.0';window.PODHOD_BUILD='4.97.0-4d9dd8798163';window.PODHOD_RENDER={"skin":"31c4707ea0","skeleton":"f4e7c4b726","anatomy":"48636840a9"};window.PODHOD_LANG='en';

@@ -231,7 +231,7 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .lt-sn { min-width:88px; text-align:center; font:600 13px var(--f-body); color:var(--ink); font-variant-numeric:tabular-nums; white-space:nowrap; }
 /* подтверждение в строке заполненного подхода: строка подсвечена, под полями — вопрос и две кнопки */
 .lt-r.lt-arm { background:var(--hot-soft); border-radius:10px; box-shadow:0 0 0 5px var(--hot-soft); }
-.lt-cf { grid-column:1 / -1; display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; font-size:13px; line-height:1.3; color:var(--ink); }
+.lt-cf, .lt-kq { grid-column:1 / -1; display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; font-size:13px; line-height:1.3; color:var(--ink); }
 .lt-cft { flex:1 0 100%; font-weight:600; padding-top:2px; }
 .lt-cfy, .lt-cfn { min-height:38px; min-width:104px; padding:0 14px; border-radius:9px; background:var(--surface); font:600 13.5px var(--f-body); cursor:pointer; }
 .lt-cfy { border:1.5px solid var(--hot); color:var(--hot); }
@@ -356,6 +356,10 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .j-val small { font:500 11.5px var(--f-body); color:var(--muted); }
 .j-val em { font:600 12px var(--f-mono); font-style:normal; color:var(--muted); }
 .j-val em.pos { color:var(--good); } .j-val em.neg { color:var(--hot); }
+/* с весом: «5 кг × 15» крупно, расчётный максимум мелко с подписью */
+.j-big { white-space:nowrap; }
+.j-big small { font:500 13px var(--f-body); color:var(--muted); margin:0 2px 0 3px; }
+.j-val .j-e1 { font:500 11.5px var(--f-body); color:var(--muted); white-space:nowrap; }
 .j-body { display:grid; gap:10px; padding:0 14px 14px; }
 .j-all summary { cursor:pointer; font-size:13px; font-weight:600; color:var(--accent); padding:4px 0; }
 .empty .btn { margin-top:14px; }
@@ -689,6 +693,14 @@ html.workout-open{overflow:hidden}
 .wv-fields input{width:100%;height:66px;min-width:0;border:1.5px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);padding:8px 12px;font:600 26px var(--f-mono);text-align:center;font-variant-numeric:tabular-nums}
 .wv-fields input::placeholder{color:var(--faint);font-size:22px;font-weight:400}.wv-fields input:focus{outline:2px solid var(--accent);outline-offset:1px}.wv-fields input[aria-invalid="true"]{border-color:var(--hot)}
 #wv-error{color:var(--hot);font-size:13px;line-height:1.4;min-height:0;margin:5px 0}#wv-error:empty{display:none}
+/* вопрос о неправдоподобном весе под полями подхода: «Записать» / «Исправить» (как подтверждение в строке карточки) */
+.wv-ask{margin-top:12px;padding:12px;border-radius:12px;background:var(--hot-soft);display:grid;gap:10px}.wv-ask[hidden]{display:none}
+.wv-ask-t{margin:0;font-weight:600;font-size:14.5px;line-height:1.35;color:var(--ink)}.wv-ask-b{display:flex;gap:8px;flex-wrap:wrap}
+.wv-ask-b button{flex:1 1 120px;min-height:48px;border-radius:10px;background:var(--surface);font:600 15px var(--f-body);cursor:pointer;padding:0 14px}
+.wv-ask-yes{border:1.5px solid var(--hot);color:var(--hot)}.wv-ask-fix{border:1px solid var(--line);color:var(--ink)}
+.wv-ask-b button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* подсказка повторов «цель 12–15» — обычным шрифтом и мельче цифр: не выглядит введённой и помещается в поле на 320 px */
+.wv-fields input::placeholder{font-family:var(--f-body);font-size:17px;font-weight:400}
 .wv-primary{width:100%;min-height:54px;border:0;border-radius:12px;background:var(--accent);color:var(--accent-ink);padding:14px 20px;font:600 16px var(--f-body);cursor:pointer;margin-top:12px}
 .wv-primary:active{transform:translateY(1px)}.wv-link{border:0;background:none;padding:12px;min-height:44px;color:var(--muted);font-size:13px;cursor:pointer}
 .wv-rest,.wv-finish{text-align:center;max-width:540px;margin:36px auto 12px;padding:8px 0}
@@ -1362,8 +1374,8 @@ details.rule p { margin:6px 0 0; }
 .wv-lr-fields.wv-lr-nokg { grid-template-columns:62px minmax(0, 1fr); }
 .wv-lr-fields.wv-lr-nokg .wv-lr-kg { display:none; }
 .wv-lr-side { font:600 13px var(--f-body); color:var(--ink); }
-.wv-lr-fields input { width:100%; height:56px; min-width:0; border:1.5px solid var(--line); border-radius:12px; background:var(--surface); color:var(--ink); padding:6px 10px; font:600 23px var(--f-mono); text-align:center; font-variant-numeric:tabular-nums; }
-.wv-lr-fields input::placeholder { color:var(--faint); font-size:19px; font-weight:400; }
+.wv-lr-fields input { width:100%; height:56px; min-width:0; border:1.5px solid var(--line); border-radius:12px; background:var(--surface); color:var(--ink); padding:6px; font:600 23px var(--f-mono); text-align:center; font-variant-numeric:tabular-nums; }
+.wv-lr-fields input::placeholder { color:var(--faint); font:400 14px var(--f-body); } /* «цель 12–15» помещается и на 320 px */
 .wv-lr-fields input:focus { outline:2px solid var(--accent); outline-offset:1px; }
 .wv-lr-fields input[aria-invalid="true"] { border-color:var(--hot); }
 #wv-summary strong small { font:500 12px var(--f-mono); color:var(--muted); margin-right:8px; }
@@ -1412,6 +1424,21 @@ details.rule p { margin:6px 0 0; }
 #perf-panel .perf-msg:empty { display:none; }
 #perf-panel .perf-msg textarea { display:block; width:100%; margin-top:6px; font:400 11px/1.4 var(--f-mono); color:var(--ink); background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:6px; }
 @media print { #perf-panel { display:none !important; } }
+
+/* «Заменить»: список замен под кнопкой — в стиле списка планов «+ В свой план» (.cp-pick, 27-custom.css);
+   строка «что меняется» — обычным шрифтом, а не моноширинной подписью чипа. «Вернуть» после замены и «Убрать». */
+.c-act .sw-pick { max-width:none; margin:2px 0 0; }
+.sw-pick .place small { font:400 12.5px/1.35 var(--f-body); color:var(--muted); }
+.sw-none { margin:0; font-size:13.5px; line-height:1.4; color:var(--ink); }
+.sw-done, .sw-gone { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; font-size:13.5px; line-height:1.4; color:var(--ink); }
+.sw-done { flex-basis:100%; margin:0; padding:8px 10px; border-radius:10px; background:var(--accent-soft); }
+.sw-done > span, .sw-gone > span { flex:1 1 180px; min-width:0; overflow-wrap:anywhere; }
+.sw-gone { list-style:none; border:1px dashed var(--line); border-radius:var(--r); background:var(--surface-2); padding:10px 14px; }
+div.sw-gone { margin-top:12px; }
+.sw-undo { flex:none; min-height:44px; padding:0 16px; border:1px solid var(--accent); border-radius:9px; background:var(--surface); color:var(--accent); font:inherit; font-weight:600; cursor:pointer; }
+@media (hover:hover) { .sw-undo:hover { background:var(--accent); color:var(--accent-ink); } }
+.sw-pick .place small.sw-j { display:flex; align-items:center; gap:6px; font-weight:600; color:color-mix(in srgb, var(--hot) 82%, var(--ink)); }
+.sw-j .stress-dot { width:8px; height:8px; margin-top:0; }
 
 </style>
 </head>
@@ -1463,7 +1490,7 @@ details.rule p { margin:6px 0 0; }
     <section class="wv-record" aria-label="Текущий подход"><p id="wv-set-label" class="wv-eyebrow"></p><h2 id="wv-title"></h2><p id="wv-equipment" class="wv-muted"></p><div id="wv-set-chips" class="wv-set-chips" aria-label="Подходы упражнения"></div>
      <div class="wv-target"><div><span>Задание</span><strong id="wv-target"></strong></div><div><span>Прошлый раз</span><strong id="wv-previous"></strong><small id="wv-previous-date"></small></div></div>
      <p id="wv-unilateral" class="wv-note" hidden></p>
-     <form id="wv-form" novalidate><div id="wv-hold" class="wv-hold" hidden><div class="wv-hold-top"><span id="wv-hold-mode" class="wv-hold-mode">Таймер удержания</span><button type="button" id="wv-hold-sound" data-rest-sound aria-pressed="true" aria-label="Звук таймеров">🔔</button></div><p id="wv-hold-time" class="wv-hold-time" role="timer"></p><p id="wv-hold-goal" class="wv-hold-goal"></p><p id="wv-hold-sides" class="wv-hold-sides" role="status" hidden></p><button type="button" id="wv-hold-go" class="wv-primary wv-hold-go">Старт</button><button type="button" id="wv-hold-reset" class="wv-link" hidden>Сбросить таймер</button></div><div id="wv-lr-bar" class="wv-lr-bar" hidden><button type="button" id="wv-lr" class="wv-lr" aria-pressed="false">Л/П отдельно</button></div><div id="wv-one" class="wv-fields"><label id="wv-weight-label" for="wv-kg"><span id="wv-weight-caption">Вес, кг</span><input id="wv-kg" type="text" inputmode="decimal" autocomplete="off" aria-describedby="wv-input-hint wv-kg-total"><small id="wv-kg-total" class="wv-x2" aria-live="polite"></small></label><label for="wv-reps"><span id="wv-rep-caption">Повторы</span><input id="wv-reps" type="text" inputmode="numeric" autocomplete="off" required aria-describedby="wv-input-hint wv-error"></label></div><div id="wv-lr-fields" class="wv-lr-fields" role="group" aria-label="Левая и правая сторона" hidden><span></span><span id="wv-lr-kg-cap" class="wv-lr-kg">Вес, кг</span><span id="wv-lr-rep-cap">Повторы</span><span id="wv-lr-l" class="wv-lr-side">Левая</span><input id="wv-kg-l" class="wv-lr-kg" type="text" inputmode="decimal" autocomplete="off" aria-labelledby="wv-lr-l wv-lr-kg-cap"><input id="wv-reps-l" type="text" inputmode="numeric" autocomplete="off" aria-labelledby="wv-lr-l wv-lr-rep-cap"><span id="wv-lr-r" class="wv-lr-side">Правая</span><input id="wv-kg-r" class="wv-lr-kg" type="text" inputmode="decimal" autocomplete="off" aria-labelledby="wv-lr-r wv-lr-kg-cap"><input id="wv-reps-r" type="text" inputmode="numeric" autocomplete="off" aria-labelledby="wv-lr-r wv-lr-rep-cap"></div><p id="wv-input-hint" class="wv-muted">Укажите фактический результат подхода.</p><p id="wv-error" role="alert"></p><button id="wv-done" class="wv-primary" type="submit">Подход выполнен</button></form>
+     <form id="wv-form" novalidate><div id="wv-hold" class="wv-hold" hidden><div class="wv-hold-top"><span id="wv-hold-mode" class="wv-hold-mode">Таймер удержания</span><button type="button" id="wv-hold-sound" data-rest-sound aria-pressed="true" aria-label="Звук таймеров">🔔</button></div><p id="wv-hold-time" class="wv-hold-time" role="timer"></p><p id="wv-hold-goal" class="wv-hold-goal"></p><p id="wv-hold-sides" class="wv-hold-sides" role="status" hidden></p><button type="button" id="wv-hold-go" class="wv-primary wv-hold-go">Старт</button><button type="button" id="wv-hold-reset" class="wv-link" hidden>Сбросить таймер</button></div><div id="wv-lr-bar" class="wv-lr-bar" hidden><button type="button" id="wv-lr" class="wv-lr" aria-pressed="false">Л/П отдельно</button></div><div id="wv-one" class="wv-fields"><label id="wv-weight-label" for="wv-kg"><span id="wv-weight-caption">Вес, кг</span><input id="wv-kg" type="text" inputmode="decimal" autocomplete="off" aria-describedby="wv-input-hint wv-kg-total"><small id="wv-kg-total" class="wv-x2" aria-live="polite"></small></label><label for="wv-reps"><span id="wv-rep-caption">Повторы</span><input id="wv-reps" type="text" inputmode="numeric" autocomplete="off" required aria-describedby="wv-input-hint wv-error"></label></div><div id="wv-lr-fields" class="wv-lr-fields" role="group" aria-label="Левая и правая сторона" hidden><span></span><span id="wv-lr-kg-cap" class="wv-lr-kg">Вес, кг</span><span id="wv-lr-rep-cap">Повторы</span><span id="wv-lr-l" class="wv-lr-side">Левая</span><input id="wv-kg-l" class="wv-lr-kg" type="text" inputmode="decimal" autocomplete="off" aria-labelledby="wv-lr-l wv-lr-kg-cap"><input id="wv-reps-l" type="text" inputmode="numeric" autocomplete="off" aria-labelledby="wv-lr-l wv-lr-rep-cap"><span id="wv-lr-r" class="wv-lr-side">Правая</span><input id="wv-kg-r" class="wv-lr-kg" type="text" inputmode="decimal" autocomplete="off" aria-labelledby="wv-lr-r wv-lr-kg-cap"><input id="wv-reps-r" type="text" inputmode="numeric" autocomplete="off" aria-labelledby="wv-lr-r wv-lr-rep-cap"></div><p id="wv-input-hint" class="wv-muted">Укажите фактический результат подхода.</p><p id="wv-error" role="alert"></p><div id="wv-kg-ask" class="wv-ask" role="group" aria-labelledby="wv-kg-ask-t" hidden><p id="wv-kg-ask-t" class="wv-ask-t"></p><div class="wv-ask-b"><button type="button" id="wv-kg-yes" class="wv-ask-yes">Записать</button><button type="button" id="wv-kg-fix" class="wv-ask-fix">Исправить</button></div></div><button id="wv-done" class="wv-primary" type="submit">Подход выполнен</button></form>
      <p id="wv-save-status" class="wv-muted" role="status"></p><details class="wv-guide"><summary>Подсказка по нагрузке</summary><p id="wv-suggestion"></p></details>
     </section>
     <section class="wv-visual" aria-label="Техника упражнения"><div id="wv-cameras" class="motion-cameras" role="group" aria-label="Ракурс движения" hidden></div><div class="wv-stage-wrap"><span id="wv-angle"></span><div id="wv-figure" class="wv-figure" role="group" aria-label="Фигура" aria-describedby="wv-figure-note"><button type="button" data-wv-figure="anatomy" aria-pressed="true">Анатомия</button><button type="button" data-wv-figure="skeleton" aria-pressed="false">Скелет</button><button type="button" data-wv-figure="mannequin" aria-pressed="false">Манекен</button></div><div id="wv-stage"></div><div class="wv-figure-tools"><button type="button" id="wv-motion" aria-pressed="true">Пауза</button><button type="button" id="wv-technique">Разобрать технику ↗</button></div></div><p id="wv-figure-note" class="wv-figure-note" role="status" hidden></p><div class="muscle-tools"><label><input type="checkbox" id="wv-muscle-toggle" aria-describedby="wv-muscle-availability"> Мышцы по фазам</label><label><input type="checkbox" id="wv-stress-toggle" checked aria-describedby="wv-stress-none"> Нагрузка на суставы</label></div><p id="wv-muscle-availability" class="muscle-availability" hidden>Мышечный профиль для этого упражнения пока отсутствует.</p><p id="wv-stress-none" class="muscle-availability" hidden>В этом упражнении меток нагрузки на суставы нет.</p><p id="wv-cue" class="wv-cue"></p>
@@ -1480,7 +1507,7 @@ details.rule p { margin:6px 0 0; }
 
 <dialog id="motion-view" class="motion-view" aria-labelledby="mv-title">
  <div class="mv-shell">
-  <header class="mv-head"><div class="mv-head-t"><p class="mv-eyebrow">LAZY GYM PLANNER · АТЛАС ДВИЖЕНИЙ · 4.96.0</p><h2 id="mv-title">Разбор упражнения</h2></div><button type="button" id="mv-back" class="mv-back">← Все упражнения</button><button type="button" id="mv-close" aria-label="Закрыть разбор">Закрыть ×</button></header>
+  <header class="mv-head"><div class="mv-head-t"><p class="mv-eyebrow">LAZY GYM PLANNER · АТЛАС ДВИЖЕНИЙ · 4.97.0</p><h2 id="mv-title">Разбор упражнения</h2></div><button type="button" id="mv-back" class="mv-back">← Все упражнения</button><button type="button" id="mv-close" aria-label="Закрыть разбор">Закрыть ×</button></header>
   <section id="mv-gallery" class="mv-gallery" aria-label="Все упражнения" hidden></section>
   <div id="mv-detail">
   <div class="mv-select"><button type="button" data-mv-nav="-1" aria-label="Предыдущее упражнение">←</button><label for="mv-exercise">Упражнение<select id="mv-exercise"></select></label><button type="button" data-mv-nav="1" aria-label="Следующее упражнение">→</button></div>
@@ -1502,7 +1529,7 @@ details.rule p { margin:6px 0 0; }
     <section id="mv-muscle-panel" class="muscle-panel" aria-label="Участие мышц по фазам" hidden><h3>Мышцы по фазам</h3><div class="muscle-scale" aria-hidden="true"><span>Нейтрально</span><span class="muscle-scale-gradient"></span><span>Сильнее</span></div><p class="muscle-explanation">Учебная схема: цвет показывает примерное участие мышцы, а не измеренную силу или ЭМГ. Кривые условные. Части мышцы работают совместно; для большинства частей используется общий профиль группы.</p><label class="muscle-region-select">Выделить область<select id="mv-region" aria-label="Выделить мышечную область"><option value="all">Все области</option></select></label><p id="mv-muscle-note" class="muscle-phase-note"></p><ul id="mv-muscle-list" class="muscle-list"></ul><p class="muscle-explanation">Скрытые поверхности видны в другом ракурсе.</p></section>
     <p id="mv-tempo" class="mv-small"></p>
    </section>
-   <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Работающие мышцы</h3><p class="mv-muscle-label">Основные</p><p id="mv-primary"></p><p class="mv-muscle-label">Вспомогательные</p><p id="mv-secondary"></p></div></div><p class="mv-small">На объёмной фигуре можно выделить мышечную область и сменить ракурс. Глубокие части перечислены в пояснениях.</p><h3>Как выполнять</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Ошибки и дыхание</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>О демонстрациях</summary><p>Схемы помогают разобрать последовательность движения. Амплитуда зависит от упражнения и особенностей человека; схематичный силуэт не задаёт обязательные углы суставов.</p><div id="mv-sources"></div><h4 class="mv-thanks-title">Благодарности</h4><p class="mv-small mv-thanks">Кости манекена — из открытой библиотеки моделей <a href="https://github.com/MyoHub/myo_sim" target="_blank" rel="noopener noreferrer">MyoSim</a> команды MyoSuite (лицензия Apache 2.0). Она построена на исследовательских моделях OpenSim: ноги и таз — <a href="https://doi.org/10.1109/TBME.2016.2586891" target="_blank" rel="noopener noreferrer">Rajagopal и др., 2016</a>; рука, лопатка и кисть — <a href="https://doi.org/10.1007/s10439-005-3320-7" target="_blank" rel="noopener noreferrer">Holzbaur и др., 2005</a>; поясничный отдел — <a href="https://simtk.org/projects/lumbarspine" target="_blank" rel="noopener noreferrer">модель поясничного отдела позвоночника</a>. Спасибо авторам за то, что открыли эти данные.</p><p class="mv-small mv-thanks">Форма тела в виде «Манекен» — открытая параметрическая модель человека <a href="https://github.com/naver/anny" target="_blank" rel="noopener noreferrer">Anny</a> (NAVER; код — лицензия Apache 2.0, сетка и веса MakeHuman — CC0), подогнанная под суставы манекена: скелет, мышцы и проверки поз — прежние.</p><p class="mv-small mv-thanks">Подъязычная кость, хрящи гортани и трахея построены по их размерам у взрослых мужчин из анатомических исследований: Fakhry и др., 2013; Rawal и др., 2014; Kim и Song, 2017; Gray's Anatomy, 1918.</p><p class="mv-small mv-thanks">Мышцы (вид «Анатомия») — пути из тех же моделей MyoSim; мышцы лопатки — из модели плеча <a href="https://github.com/dasproject/DAS3" target="_blank" rel="noopener noreferrer">DAS3</a> (<a href="https://doi.org/10.1109/TBME.2014.2309727" target="_blank" rel="noopener noreferrer">Chadwick и др., 2014</a>; лицензия Apache 2.0); гребенчатая — из модели ноги <a href="https://github.com/opensim-org/opensim-models" target="_blank" rel="noopener noreferrer">Gait2392</a> (<a href="https://doi.org/10.1109/10.102791" target="_blank" rel="noopener noreferrer">Delp и др., 1990</a>; лицензия CC BY 3.0); мышцы шеи и недостающие части мышц — по описаниям прикреплений в анатомических атласах. Толщина мышц — по их объёмам на МРТ 49 мужчин (<a href="https://doi.org/10.1152/japplphysiol.00772.2025" target="_blank" rel="noopener noreferrer">Riem и др., 2026</a>), мышц шеи — по МРТ (<a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC3648672/" target="_blank" rel="noopener noreferrer">Zheng и др., 2013</a>), пересчитана на рост и вес фигуры; доли сухожилий ног — по препаратам (<a href="https://doi.org/10.1007/s11999-008-0594-8" target="_blank" rel="noopener noreferrer">Ward и др., 2009</a>); межрёберные мышцы — пластом между рёбрами, их толщина — по УЗИ (<a href="https://doi.org/10.1589/jpts.31.340" target="_blank" rel="noopener noreferrer">Yoshida и др., 2019</a>) и массам слоёв у препаратов (<a href="https://doi.org/10.1111/j.1469-7793.2001.0319l.x" target="_blank" rel="noopener noreferrer">Wilson и др., 2001</a>). Укорачиваясь, мышца утолщается: её объём не меняется.</p><p class="mv-small">Версия демонстраций 4.96.0</p></details></aside>
+   <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Работающие мышцы</h3><p class="mv-muscle-label">Основные</p><p id="mv-primary"></p><p class="mv-muscle-label">Вспомогательные</p><p id="mv-secondary"></p></div></div><p class="mv-small">На объёмной фигуре можно выделить мышечную область и сменить ракурс. Глубокие части перечислены в пояснениях.</p><h3>Как выполнять</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Ошибки и дыхание</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>О демонстрациях</summary><p>Схемы помогают разобрать последовательность движения. Амплитуда зависит от упражнения и особенностей человека; схематичный силуэт не задаёт обязательные углы суставов.</p><div id="mv-sources"></div><h4 class="mv-thanks-title">Благодарности</h4><p class="mv-small mv-thanks">Кости манекена — из открытой библиотеки моделей <a href="https://github.com/MyoHub/myo_sim" target="_blank" rel="noopener noreferrer">MyoSim</a> команды MyoSuite (лицензия Apache 2.0). Она построена на исследовательских моделях OpenSim: ноги и таз — <a href="https://doi.org/10.1109/TBME.2016.2586891" target="_blank" rel="noopener noreferrer">Rajagopal и др., 2016</a>; рука, лопатка и кисть — <a href="https://doi.org/10.1007/s10439-005-3320-7" target="_blank" rel="noopener noreferrer">Holzbaur и др., 2005</a>; поясничный отдел — <a href="https://simtk.org/projects/lumbarspine" target="_blank" rel="noopener noreferrer">модель поясничного отдела позвоночника</a>. Спасибо авторам за то, что открыли эти данные.</p><p class="mv-small mv-thanks">Форма тела в виде «Манекен» — открытая параметрическая модель человека <a href="https://github.com/naver/anny" target="_blank" rel="noopener noreferrer">Anny</a> (NAVER; код — лицензия Apache 2.0, сетка и веса MakeHuman — CC0), подогнанная под суставы манекена: скелет, мышцы и проверки поз — прежние.</p><p class="mv-small mv-thanks">Подъязычная кость, хрящи гортани и трахея построены по их размерам у взрослых мужчин из анатомических исследований: Fakhry и др., 2013; Rawal и др., 2014; Kim и Song, 2017; Gray's Anatomy, 1918.</p><p class="mv-small mv-thanks">Мышцы (вид «Анатомия») — пути из тех же моделей MyoSim; мышцы лопатки — из модели плеча <a href="https://github.com/dasproject/DAS3" target="_blank" rel="noopener noreferrer">DAS3</a> (<a href="https://doi.org/10.1109/TBME.2014.2309727" target="_blank" rel="noopener noreferrer">Chadwick и др., 2014</a>; лицензия Apache 2.0); гребенчатая — из модели ноги <a href="https://github.com/opensim-org/opensim-models" target="_blank" rel="noopener noreferrer">Gait2392</a> (<a href="https://doi.org/10.1109/10.102791" target="_blank" rel="noopener noreferrer">Delp и др., 1990</a>; лицензия CC BY 3.0); мышцы шеи и недостающие части мышц — по описаниям прикреплений в анатомических атласах. Толщина мышц — по их объёмам на МРТ 49 мужчин (<a href="https://doi.org/10.1152/japplphysiol.00772.2025" target="_blank" rel="noopener noreferrer">Riem и др., 2026</a>), мышц шеи — по МРТ (<a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC3648672/" target="_blank" rel="noopener noreferrer">Zheng и др., 2013</a>), пересчитана на рост и вес фигуры; доли сухожилий ног — по препаратам (<a href="https://doi.org/10.1007/s11999-008-0594-8" target="_blank" rel="noopener noreferrer">Ward и др., 2009</a>); межрёберные мышцы — пластом между рёбрами, их толщина — по УЗИ (<a href="https://doi.org/10.1589/jpts.31.340" target="_blank" rel="noopener noreferrer">Yoshida и др., 2019</a>) и массам слоёв у препаратов (<a href="https://doi.org/10.1111/j.1469-7793.2001.0319l.x" target="_blank" rel="noopener noreferrer">Wilson и др., 2001</a>). Укорачиваясь, мышца утолщается: её объём не меняется.</p><p class="mv-small">Версия демонстраций 4.97.0</p></details></aside>
   </div>
   </div>
  </div>
@@ -16596,21 +16623,43 @@ document.addEventListener('click', e => {
 
 
 /* ===================== ПЛАНИРОВЩИК ===================== */
+/* load — начало строки нагрузки (c — базовые с весом, который можно взвесить, i — изолирующие); запас повторов к ней
+   дописывает reserveOf (rir — запас по цели без цикла; null — без числа: «почти до отказа», «до выраженного жжения») */
 const GOALS = {
   strength:{name:'Сила', hint:'3–6 повт.', reps:{c:'3–5', i:'6–8'}, sets:{c:5, i:3}, rest:{c:180, i:90}, tempo:'2-0-X-0',
-    load:{c:'≈ 80–90% от 1ПМ, 1–2 повтора в запасе', i:'тяжело, 1–2 повтора в запасе'}, rep:3, time:'20–30 с', dist:'20 м',
+    load:{c:'≈ 80–90% от 1ПМ', i:'тяжело'}, rir:[1, 2], rep:3, time:'20–30 с', dist:'20 м',
     circ:{rounds:4, reps:'6–8', work:20, rest:30, roundRest:180}, ss:{rest:150}},
   mass:{name:'Масса', hint:'6–12 повт.', reps:{c:'6–10', i:'10–12'}, sets:{c:4, i:3}, rest:{c:120, i:75}, tempo:'3-0-1-0',
-    load:{c:'≈ 70–80% от 1ПМ, 1–2 повтора в запасе', i:'1–2 повтора в запасе'}, rep:4, time:'30–45 с', dist:'30 м',
+    load:{c:'≈ 70–80% от 1ПМ', i:''}, rir:[1, 2], rep:4, time:'30–45 с', dist:'30 м',
     circ:{rounds:3, reps:'10–12', work:30, rest:20, roundRest:120}, ss:{rest:90}},
   cut:{name:'Рельеф', hint:'12–20 повт.', reps:{c:'12–15', i:'15–20'}, sets:{c:3, i:3}, rest:{c:60, i:40}, tempo:'2-0-1-0',
-    load:{c:'≈ 55–65% от 1ПМ, почти до отказа', i:'до выраженного жжения'}, rep:3, time:'45–60 с', dist:'40 м',
+    load:{c:'≈ 55–65% от 1ПМ', i:'до выраженного жжения'}, rir:null, rep:3, time:'45–60 с', dist:'40 м',
     circ:{rounds:4, reps:'15–20', work:40, rest:15, roundRest:90}, ss:{rest:60}},
   /* бережно: суставы болят или идёт восстановление (11g-gentle.js) — Garber et al., MSSE 2011, 43(7):1334–1359 */
   gentle:{name:'Бережно', hint:'12–15 повт.', reps:{c:'12–15', i:'12–15'}, sets:{c:2, i:2}, rest:{c:90, i:60}, tempo:'3-0-2-0',
-    load:{c:'≈ 40–60% от 1ПМ, 3–4 повтора в запасе, без боли', i:'лёгкий вес, 3–4 повтора в запасе, без боли'}, rep:5, time:'20–30 с', dist:'20 м',
+    load:{c:'≈ 40–60% от 1ПМ', i:'лёгкий вес'}, rir:[3, 4], rep:5, time:'20–30 с', dist:'20 м',
     circ:{rounds:2, reps:'12–15', work:30, rest:30, roundRest:120}, ss:{rest:90}}
 };
+/* Запас повторов (повторы в запасе) — один источник для строки нагрузки в карточке, подсказки первой записи в журнале,
+   описания недели цикла и плашки «Бережно»: число нигде больше не пишется. Без цикла — по цели (GOALS.rir), новичку
+   в силе и массе на повтор больше (2–3); в цикле — по неделе (WEEKS.rir), в «Бережно» не меньше 3, новичку +1.
+   null — без числа: рельеф («почти до отказа») и разгрузка («без отказа»). */
+function reserveOf(week, goal = S.goal, level = S.level) {
+  if (week) {
+    if (week.deload) return null;
+    const n = (goal === 'gentle' ? Math.max(3, week.rir) : week.rir) + (level === 'beg' ? 1 : 0);
+    return {lo:n, hi:n};
+  }
+  const r = GOALS[goal] && GOALS[goal].rir; if (!r) return null;
+  const add = level === 'beg' && goal !== 'gentle' ? 1 : 0;
+  return {lo:r[0] + add, hi:r[1] + add};
+}
+/* «1–2» или «3» */
+const reserveNum = r => r.lo === r.hi ? String(r.lo) : `${r.lo}–${r.hi}`;
+/* «1–2 повтора» */
+const reserveReps = r => `${reserveNum(r)} ${plural(r.hi, 'повтор', 'повтора', 'повторов')}`;
+/* «1–2 повтора в запасе» */
+const reserveText = r => `${reserveReps(r)} в запасе`;
 const FORMATS = {classic:{name:'Классика', hint:'по подходам'}, superset:{name:'Суперсеты', hint:'пары без отдыха'}, circuit:{name:'Круговая', hint:'круги подряд'},
   static:{name:'Статодинамика', hint:'без расслабления'}};
 const LEVELS = {beg:{name:'Новичок'}, mid:{name:'Средний'}, adv:{name:'Опытный'}};
@@ -16683,14 +16732,15 @@ const DEFAULT_SPLIT = {2:'full', 3:'full', 4:'ul', 5:'ppl'};
 const SCHEDULE = {2:[0, 3], 3:[0, 2, 4], 4:[0, 1, 3, 4], 5:[0, 1, 2, 4, 5]};
 const WD = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const WD_FULL = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
-/* мезоцикл: 4 недели с ростом нагрузки и разгрузкой */
+/* мезоцикл: 4 недели с ростом нагрузки и разгрузкой; запас повторов в описании недели — тот же, что в строке нагрузки
+   (reserveOf: цель и уровень открытого плана) */
 const WEEKS = [
   {name:'Вход', rir:3, add:0, pct:{strength:'≈ 75–80%', mass:'≈ 65–70%', cut:'≈ 55–60%', gentle:'≈ 40–50%'},
-    note:'Подберите рабочие веса так, чтобы в каждом подходе оставалось 3 повтора в запасе. Записывайте вес и повторы: от них строится прогресс следующих недель.'},
+    get note() { return `Подберите рабочие веса так, чтобы в каждом подходе оставалось ${reserveText(reserveOf(this))}. Записывайте вес и повторы: от них строится прогресс следующих недель.`; }},
   {name:'Нагрузка', rir:2, add:1, pct:{strength:'≈ 80–85%', mass:'≈ 70–75%', cut:'≈ 60–65%', gentle:'≈ 45–55%'},
-    note:'В базовых упражнениях добавляется подход. Вес увеличивайте по правилу двойной прогрессии, запас — 2 повтора.'},
+    get note() { return `В базовых упражнениях добавляется подход. Вес увеличивайте по правилу двойной прогрессии, ${reserveText(reserveOf(this))}.`; }},
   {name:'Пик', rir:1, add:1, pct:{strength:'≈ 85–90%', mass:'≈ 75–80%', cut:'≈ 65–70%', gentle:'≈ 50–60%'},
-    note:'Самая тяжёлая неделя цикла: 1 повтор в запасе, техника без срывов. Если сон и самочувствие плохие, оставайтесь на нагрузке второй недели.'},
+    get note() { return `Самая тяжёлая неделя цикла: ${reserveText(reserveOf(this))}, техника без срывов. Если сон и самочувствие плохие, оставайтесь на нагрузке второй недели.`; }},
   {name:'Разгрузка', rir:4, deload:true, pct:{strength:'≈ 65–70%', mass:'≈ 55–60%', cut:'≈ 50–55%', gentle:'≈ 40%'},
     note:'Подходов примерно на 40% меньше, вес на 10–15% ниже. Это восстановление перед новым циклом, а не пропуск: мышцы растут, когда успевают восстановиться.'}
 ];
@@ -16714,12 +16764,16 @@ let eqOpen = false;
 let placeDel = false;
 let done = {};
 let plan = null, prog = null;
+/* последнее изменение плана, которое возвращается одним нажатием «Вернуть»: замена или «Убрать» в своём плане (12c-swap.js).
+   Не сохраняется: держится до следующего изменения плана или перезагрузки */
+let planUndo = null;
 
 /* ---------- утилиты ---------- */
 function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;'}[c]));
 const fmtRest = s => s >= 60 ? (s % 60 ? `${Math.floor(s / 60)} мин ${s % 60} с` : `${s / 60} мин`) : `${s} с`;
-const midOf = r => { const m = String(r).match(/(\d+)\D+(\d+)/); if (m) return (+m[1] + +m[2]) / 2; const n = parseFloat(r); return isNaN(n) ? 10 : n; };
+/* середина повторов: «8–12» → 10; по подходам «10/8/6/5» — среднее */
+const midOf = r => { const s = String(r); if (s.includes('/')) { const l = s.split('/').map(Number).filter(v => v > 0); if (l.length) return l.reduce((a, b) => a + b, 0) / l.length; } const m = s.match(/(\d+)\D+(\d+)/); if (m) return (+m[1] + +m[2]) / 2; const n = parseFloat(r); return isNaN(n) ? 10 : n; };
 function plural(n, a, b, c) { const m10 = n % 10, m100 = n % 100; if (m10 === 1 && m100 !== 11) return a; if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return b; return c; }
 /* Поиск по названиям упражнений. «ё» и «е» равны (ё раскладывается на е и две точки — U+0308, точки убираются; й остаётся
    собой), регистр и дефисы не важны. У каждого слова запроса отбрасывается окончание — «отжимание» находит «Отжимания»,
@@ -16885,11 +16939,12 @@ function prescribe(ex, week, E) {
   const band = ex.eq.length && ex.eq.every(g => g.every(id => id === 'band')), assisted = ex.eq.some(g => g.includes('gravitron'));
   const how = band ? 'натяжение ленты: ' : assisted ? 'противовес: ' : 'вариант по силам: ';
   const easy = band ? 'слабее обычного, без отказа' : assisted ? 'больше обычного, без отказа' : 'облегчённый, без отказа';
-  let load = t === 'c' && !pct ? how + {strength:'1–2 повтора в запасе', mass:'1–2 повтора в запасе', cut:'почти до отказа', gentle:'3–4 повтора в запасе, без боли'}[S.goal] : G.load[t];
+  /* запас повторов — из reserveOf (он же в подсказке первой записи и в описании недели); rir — в дозировку */
+  const rir = reserveOf(week);
+  const tail = rir ? reserveText(rir) + (S.goal === 'gentle' ? ', без боли' : '') : 'почти до отказа';
+  let load = t === 'c' ? (pct ? `${G.load.c}, ${tail}` : how + tail) : !G.rir ? G.load.i : G.load.i ? `${G.load.i}, ${tail}` : tail;
   if (week) {
-    /* бережно: запас не меньше трёх повторов и на пиковой неделе */
-    const rir = (S.goal === 'gentle' ? Math.max(3, week.rir) : week.rir) + (S.level === 'beg' ? 1 : 0);
-    const reserve = `${rir} ${plural(rir, 'повтор', 'повтора', 'повторов')} в запасе`;
+    const reserve = rir ? reserveText(rir) : '';
     if (week.deload) { sets = Math.max(2, Math.round(sets * 0.6)); load = pct ? `${week.pct[S.goal]} от 1ПМ, лёгкий вес без отказа` : t === 'c' ? how + easy : 'лёгкий вес, без отказа'; }
     else {
       if (week.add && t === 'c') sets = Math.min(6, sets + week.add);
@@ -16901,10 +16956,9 @@ function prescribe(ex, week, E) {
   if (ex.kind === 'dist') load = S.goal === 'strength' ? 'максимально тяжёлые снаряды' : S.goal === 'gentle' ? 'умеренный вес, ровным шагом' : 'тяжёлые снаряды, без остановок';
   const notes = [];
   if (bodyweight && ex.kind !== 'time' && S.goal === 'strength') notes.push('Если диапазон даётся легко, добавьте отягощение или замедлите опускание до 4 с.');
-  if (!week && S.level === 'beg') load = load.replace('1–2 повтора', '2–3 повтора');
   const rest = G.rest[t];
   const work = ex.kind === 'time' ? midOf(G.time) : ex.kind === 'dist' ? 30 : midOf(reps) * G.rep * (ex.uni ? 2 : 1);
-  const rx = {sets, reps, unit, rest, load, tempo:ex.kind ? null : G.tempo, notes, work, uni:!!ex.uni};
+  const rx = {sets, reps, unit, rest, load, rir, tempo:ex.kind ? null : G.tempo, notes, work, uni:!!ex.uni};
   return S.format === 'static' && staticOk(ex) ? staticRx(rx, ex, week, E) : rx;
 }
 
@@ -16949,9 +17003,12 @@ function buildPlan(ctx = {}) {
     }).filter(Boolean);
     slots = keep;
   }
+  /* подбор до замен: по нему неделя обходит повторы (buildProgram), и замена в одном дне не меняет другие дни */
+  const picks = picked.map(ex => ex.id);
+  /* замены записаны по номеру упражнения (slot): в программе другого места часть упражнений может не войти в план */
   for (const [i, id] of Object.entries(sw)) {
-    const ex = EXI[id];
-    if (picked[i] && ex && usable(ex) && !picked.includes(ex)) picked[i] = ex;
+    const ex = EXI[id], k = slots.indexOf(+i);
+    if (k >= 0 && picked[k] && ex && usable(ex) && !picked.includes(ex)) picked[k] = ex;
   }
   if (!picked.length) return {empty:'none', pool, groups, lost};
   const G = GOALS[S.goal];
@@ -17008,7 +17065,7 @@ function buildPlan(ctx = {}) {
     /* дробный учёт: целевая группа — полный подход, остальные работающие — половина */
     for (const [g, x] of Object.entries(groupShare(it.ex))) gvol[g] = (gvol[g] || 0) + k * x;
   }
-  return {blocks, items, minutes:Math.round(minutes / 60), totalSets, missing:custom ? [] : missing, load, gvol, pool, E, groups, count, lost, custom:!!custom, byLog:!!lp};
+  return {blocks, items, minutes:Math.round(minutes / 60), totalSets, missing:custom ? [] : missing, load, gvol, pool, E, groups, count, lost, custom:!!custom, byLog:!!lp, picks};
 }
 
 /* ---------- сборка недели ---------- */
@@ -17023,7 +17080,8 @@ function buildProgram() {
     /* день «всё тело» включает мышцу акцента, даже если по шаблону её группы в этот день нет */
     const fg = S.focus && MUSCLE_GROUP[S.focus], g = DAY_T[tid].name === 'Всё тело' && fg && !DAY_T[tid].g.includes(fg) ? DAY_T[tid].g.concat(fg) : DAY_T[tid].g;
     const p = buildPlan({groups:g, count:S.count, seed:S.seed * 131 + i * 977 + 13, avoid:new Set(avoid), week, swaps:swaps['d' + i] || {}, order:swaps.__order?.['d' + i]});
-    if (p.items) p.items.forEach(it => avoid.add(it.ex.id));
+    /* следующие дни обходят и подобранное, и поставленное заменой: замена в одном дне не меняет остальные */
+    if (p.items) { p.items.forEach(it => avoid.add(it.ex.id)); p.picks.forEach(id => avoid.add(id)); }
     return {tid, i, wd:SCHEDULE[days][i], plan:p};
   });
   for (const d of out) {
@@ -17216,7 +17274,9 @@ function cardHtml(it, idx) {
   <div class="c-prog">${progressionHint(it)}</div>
   <div class="c-act">
     <button type="button" class="btn-ghost" data-workout="${ex.id}" aria-haspopup="dialog" aria-controls="workout-view">Начать тренировку →</button>
-    <span class="c-act-r">${S.mode === 'custom' ? '' : moveButtons(it)}<button type="button" class="btn-ghost" data-swap="${it.slot}">${ICON.swap}<span>Заменить</span></button></span>
+    <span class="c-act-r">${S.mode === 'custom' ? '' : moveButtons(it)}<button type="button" class="btn-ghost" data-swap="${it.slot}" aria-expanded="false" aria-controls="sw-pick-${it.slot}">${ICON.swap}<span>Заменить</span></button></span>
+    <div class="cp-pick sw-pick" id="sw-pick-${it.slot}" role="group" aria-labelledby="sw-pick-${it.slot}-h" hidden></div>
+    ${swapDoneHtml(it)}
   </div>
   ${S.mode === 'custom' ? customToolsHtml(it) : ''}
   <details class="tech">
@@ -17253,24 +17313,29 @@ function blocksHtml(p) {
   html += cardsViewHtml();
   if (S.format === 'static') html += `<p class="phase phase-static"><b>Статодинамика.</b> Вес — около половины от 1ПМ. Медленно: 3 с вниз и 3 с вверх, без пауз; не выпрямляйтесь до конца и не расслабляйтесь внизу — мышца всё время напряжена. К концу подхода (30–40 с) — сильное жжение, но не отказ. Три подхода с отдыхом 30 с — одна серия.</p>`;
   let idx = 0;
+  /* «Убрано: … Вернуть» — на месте убранной карточки своего плана (12c-swap.js) */
+  let gone = rmGoneHtml();
+  const card = it => { let pre = ''; if (gone && it.slot >= planUndo.slot) { pre = gone; gone = ''; } return pre + cardHtml(it, idx++); };
   for (const b of p.blocks) {
     if (b.kind === 'list') {
-      html += `<ol class="cards">${b.items.map(it => cardHtml(it, idx++)).join('')}</ol>`;
+      html += `<ol class="cards">${b.items.map(card).join('')}</ol>`;
     } else if (b.kind === 'pair') {
       const many = b.items.length > 1;
       html += `<section class="block">
         <header class="b-head"><h2><span class="b-letter">${b.letter}</span>${many ? 'Суперсет' : 'Отдельное упражнение'}</h2>
         <p>${many ? `${b.sets} ${plural(b.sets, 'круг', 'круга', 'кругов')}: ${b.items.map(it => it.label).join(' → ')} без паузы, затем отдых ${fmtRest(b.rest)}` : `${b.sets} ${plural(b.sets, 'подход', 'подхода', 'подходов')}, отдых ${fmtRest(b.rest)}`}</p></header>
-        <ol class="cards">${b.items.map(it => cardHtml(it, idx++)).join('')}</ol></section>`;
+        <ol class="cards">${b.items.map(card).join('')}</ol></section>`;
     } else {
       const rd = done.__rounds || 0;
       html += `<section class="block block-c">
         <header class="b-head"><h2><span class="b-letter">${ICON.loop}</span>Круг × ${b.rounds}</h2>
         <p>Выполняйте станции подряд: ${fmtRest(b.rest)} на переход между упражнениями, ${fmtRest(b.roundRest)} отдыха после круга.</p>
         <div class="sets rounds" role="group" aria-label="Отметить пройденные круги">${Array.from({length:b.rounds}, (_, k) => `<button type="button" class="set${rd > k ? ' done' : ''}" data-round="${k}" aria-label="Круг ${k + 1}">${k + 1}</button>`).join('')}<span class="rounds-l">круги</span></div></header>
-        <ol class="cards">${b.items.map(it => cardHtml(it, idx++)).join('')}</ol></section>`;
+        <ol class="cards">${b.items.map(card).join('')}</ol></section>`;
     }
   }
+  /* убрано последнее упражнение — строка после последней карточки */
+  if (gone) { const k = html.lastIndexOf('</ol>'); html = html.slice(0, k) + gone + html.slice(k); }
   html += `<p class="phase"><b>Заминка, 5 мин.</b> Спокойная ходьба и растяжка мышц, которые работали: по 20–30 секунд на каждую.</p>`;
   return html;
 }
@@ -17318,12 +17383,12 @@ function renderPlan() {
     return;
   }
   if (plan.empty === 'custom') {
-    root.innerHTML = `<header class="p-head p-head-c"><div class="p-sum"><p class="eyebrow">Свой план · ${GOALS[S.goal].name} · ${FORMATS[S.format].name}</p><h1 class="p-title">${esc(titleFor())}</h1>${customHeadHtml()}</div></header>` + customEmptyHtml() + customAddHtml();
+    root.innerHTML = `<header class="p-head p-head-c"><div class="p-sum"><p class="eyebrow">Свой план · ${GOALS[S.goal].name} · ${FORMATS[S.format].name}</p><h1 class="p-title">${esc(titleFor())}</h1>${customHeadHtml()}</div></header>` + rmGoneHtml('div') + customEmptyHtml() + customAddHtml();
     return;
   }
   if (plan.empty === 'none') {
     root.innerHTML = S.mode === 'custom'
-      ? `<div class="empty"><h2>Здесь нечем выполнить этот план</h2>${lostMessages(plan.lost, effEquip(S.equip)).map(m => `<p>${esc(m)}</p>`).join('')}<p>Выберите другое место или добавьте упражнения.</p></div>` + customAddHtml()
+      ? rmGoneHtml('div') + `<div class="empty"><h2>Здесь нечем выполнить этот план</h2>${lostMessages(plan.lost, effEquip(S.equip)).map(m => `<p>${esc(m)}</p>`).join('')}<p>Выберите другое место или добавьте упражнения.</p></div>` + customAddHtml()
       : `<div class="empty"><h2>Не из чего собрать тренировку</h2><p>Для выбранных мышц нет упражнений с этим оборудованием и уровнем. Добавьте оборудование или выберите другие группы мышц.</p></div>`;
     return;
   }
@@ -17586,12 +17651,23 @@ function cleanKg(v) {
 function parseKgInput(text) {
   return cleanKg(String(text || '').split(/\s*[;\/]\s*|,\s+|\s+/).map(x => x.trim()).filter(Boolean));
 }
+/* повторы: «8», «8–12» или по подходам — «10/8/6/5» (через «/», «;», запятую или пробел; 2–10 значений; одинаковые
+   сводятся к одному числу). Хранятся и выгружаются в файл плана строкой «10/8/6/5»; прежние версии такую строку
+   отбрасывают и берут повторы по цели. Неверное — null */
+function cleanReps(v) {
+  if (typeof v !== 'string') return null;
+  const s = v.trim(), m = s.match(CUSTOM_REPS);
+  if (m) return +m[1] >= 1 && (!m[2] || +m[2] >= +m[1]) ? (m[2] ? `${+m[1]}–${+m[2]}` : String(+m[1])) : null;
+  const parts = s.split(/\s*[\/;,]\s*|\s+/).filter(Boolean);
+  if (parts.length < 2 || parts.length > 10 || !parts.every(p => /^\d{1,3}$/.test(p) && +p >= 1)) return null;
+  const n = parts.map(Number);
+  return n.every(x => x === n[0]) ? String(n[0]) : n.join('/');
+}
 function cleanCustomItem(it) {
   if (!it || !EXI[it.id]) return null;
   const o = {id:it.id};
   if (Number.isInteger(it.sets) && it.sets >= 1 && it.sets <= 10) o.sets = it.sets;
-  const m = typeof it.reps === 'string' && it.reps.trim().match(CUSTOM_REPS);
-  if (m && +m[1] >= 1 && (!m[2] || +m[2] >= +m[1])) o.reps = m[2] ? `${+m[1]}–${+m[2]}` : String(+m[1]);
+  const reps = cleanReps(it.reps); if (reps) o.reps = reps;
   if (Number.isInteger(it.rest) && it.rest >= 0 && it.rest <= 600) o.rest = it.rest;
   const kg = it.kg != null ? cleanKg(it.kg) : null; if (kg) o.kg = kg;
   if (typeof it.tempo === 'string' && CUSTOM_TEMPO.test(it.tempo.trim().toUpperCase())) o.tempo = it.tempo.trim().toUpperCase();
@@ -17672,7 +17748,7 @@ const customHas = id => customOf().items.some(it => it.id === id);
 function customAdd(id) {
   const c = customOf();
   if (!EXI[id] || customHas(id) || c.items.length >= CUSTOM_MAX) return false;
-  c.items.push({id}); saveSettings(); return true;
+  c.items.push({id}); planUndo = null; saveSettings(); return true;
 }
 /* Новый свой план — как по кнопке «+ План»: «План N» (первый свободный номер), пустой. Цель, формат и уровень — те, что
    сейчас в параметрах (S[k]): в своём плане это настройки открытого плана, вне его — обычной тренировки (S.gen хранит их
@@ -17708,10 +17784,11 @@ function cpPickOrder() {
 function customMove(slot, d) {
   const items = customOf().items, j = slot + d;
   if (slot < 0 || j < 0 || slot >= items.length || j >= items.length) return;
-  [items[slot], items[j]] = [items[j], items[slot]];
+  [items[slot], items[j]] = [items[j], items[slot]]; planUndo = null;
   const a = cpOpen.has(slot), b = cpOpen.has(j); cpOpen.delete(slot); cpOpen.delete(j); if (a) cpOpen.add(j); if (b) cpOpen.add(slot);
   saveSettings();
 }
+/* убирает упражнение из открытого плана; «Убрано: … Вернуть» на его месте — planRemove (12c-swap.js) */
 function customRemove(slot) {
   const items = customOf().items; items.splice(slot, 1);
   cpOpen = new Set([...cpOpen].filter(i => i !== slot).map(i => i > slot ? i - 1 : i)); saveSettings();
@@ -17722,9 +17799,18 @@ function customSet(slot, key, value) {
   if (clear) delete next[key]; else next[key] = value;
   const ok = cleanCustomItem(next);
   if (!ok || (!clear && !(key in ok))) return;   /* неверное значение не стирает прежнее */
-  items[slot] = ok; saveSettings();
+  items[slot] = ok; planUndo = null; saveSettings();
 }
 
+/* повторы из поля «Повторов»: «8–12» или пирамида «10/8/6/5» — она задаёт и число подходов (четыре числа — четыре
+   подхода); неверное — false, прежнее значение остаётся */
+function customSetReps(slot, text) {
+  const ok = cleanCustomItem({id:customOf().items[slot]?.id, reps:text});
+  if (!ok || !ok.reps) return false;
+  customSet(slot, 'reps', ok.reps);
+  if (ok.reps.includes('/')) customSet(slot, 'sets', ok.reps.split('/').length);
+  return true;
+}
 /* дозировка по цели и формату, поверх — правка человека (кроме статодинамики: там серии заданы методом) */
 function customRx(rx, o, ex) {
   if (!o) return rx;
@@ -17836,7 +17922,7 @@ function customToolsHtml(it) {
   const edit = r.static ? `<p class="f-note">В статодинамике серии, темп и отдых заданы методом — меняются цель и уровень.</p>`
     : `<div class="cp-fields">
         ${r.circ ? '' : `<div class="cp-f"><span>Подходов</span><div class="stepper sm"><button type="button" data-cp-step="${slot}" data-d="-1" aria-label="Меньше подходов"${r.sets <= 1 ? ' disabled' : ''}>−</button><output>${r.sets}</output><button type="button" data-cp-step="${slot}" data-d="1" aria-label="Больше подходов"${r.sets >= 10 ? ' disabled' : ''}>+</button></div></div>`}
-        ${it.ex.kind ? '' : `<label class="cp-f"><span>Повторов</span><input type="text" inputmode="numeric" maxlength="7" data-cp-reps="${slot}" value="${esc(r.reps)}" aria-label="Повторов, например 8–12"></label>`}
+        ${it.ex.kind ? '' : `<label class="cp-f"><span>Повторов</span><input type="text" inputmode="text" maxlength="40" data-cp-reps="${slot}" value="${esc(r.reps)}" aria-label="Повторов: 8–12 или по подходам через «/», например 10/8/6/5" autocomplete="off"></label>`}
         ${r.circ ? '' : `<label class="cp-f"><span>Отдых</span><select data-cp-rest="${slot}">${restOpts.map(s => `<option value="${s}"${s === r.rest ? ' selected' : ''}>${s ? fmtRest(s) : 'без отдыха'}</option>`).join('')}</select></label>`}
         ${it.ex.kind ? '' : `<label class="cp-f"><span>Темп</span><input type="text" maxlength="11" data-cp-tempo="${slot}" value="${esc(o.tempo || '')}" placeholder="${esc(r.tempo || '3-0-1-0')}" aria-label="Темп: опускание, пауза, подъём, пауза — например 3-0-1-0" autocomplete="off"></label>`}
         ${o.sets || o.reps || o.rest !== undefined || o.tempo ? `<button type="button" class="btn-ghost cp-reset" data-cp-reset="${slot}">Как по цели</button>` : ''}
@@ -17876,7 +17962,7 @@ function freezePlan(p) {
     const r = it.rx, o = {id:it.ex.id};
     if (!r.static) {
       if (!r.circ) { o.sets = r.sets; o.rest = r.rest; }
-      if (!it.ex.kind && CUSTOM_REPS.test(String(r.reps))) o.reps = String(r.reps);
+      if (!it.ex.kind && cleanReps(String(r.reps))) o.reps = cleanReps(String(r.reps));
     }
     return cleanCustomItem(o);
   }).filter(Boolean).slice(0, CUSTOM_MAX);
@@ -17950,7 +18036,7 @@ document.addEventListener('click', e => {
   }
   if (S.mode !== 'custom' || S.view !== 'plan') return;
   if (t.dataset.cpMove !== undefined) { const s = +t.dataset.cpMove, d = +t.dataset.d; customMove(s, d); return customRerender(`[data-cp-move="${s + d}"][data-d="${d}"]`); }
-  if (t.dataset.cpRm !== undefined) { customRemove(+t.dataset.cpRm); return customRerender(); }
+  if (t.dataset.cpRm !== undefined) return planRemove(+t.dataset.cpRm, t);
   if (t.dataset.cpEdit !== undefined) { const s = +t.dataset.cpEdit; cpOpen.has(s) ? cpOpen.delete(s) : cpOpen.add(s); return customRerender(`[data-cp-edit="${s}"]`); }
   if (t.dataset.cpStep !== undefined) {
     const s = +t.dataset.cpStep, it = plan.items.find(x => x.slot === s);
@@ -17968,8 +18054,8 @@ document.addEventListener('change', e => {
   }
   if (t.id === 'cp-name') { const v = t.value.trim().slice(0, CUSTOM_NAME); if (v) customOf().name = v; saveSettings(); renderSetup(); if (S.mode === 'custom' && S.view === 'plan') renderPlan(); return; }
   if (t.dataset.cpReps !== undefined) {
-    const s = +t.dataset.cpReps, ok = cleanCustomItem({id:customOf().items[s]?.id, reps:t.value});
-    if (ok && ok.reps) customSet(s, 'reps', ok.reps); else { t.value = plan.items.find(x => x.slot === s)?.rx.reps || ''; return; }
+    const s = +t.dataset.cpReps;
+    if (!customSetReps(s, t.value)) { t.value = plan.items.find(x => x.slot === s)?.rx.reps || ''; return; }
     return customRerender(`[data-cp-reps="${s}"]`);
   }
   if (t.dataset.cpRest !== undefined) { const s = +t.dataset.cpRest; customSet(s, 'rest', +t.value); return customRerender(`[data-cp-rest="${s}"]`); }
@@ -18450,8 +18536,10 @@ function renderProtect() {
 function gentleHtml() {
   const gentle = S.goal === 'gentle', prot = ensureProtect(S).map(id => PROTECT_BY[id]);
   if (!gentle && !prot.length) return '';
+  /* запас — тот же, что в строке нагрузки карточек (reserveOf: неделя цикла, уровень) */
+  const rir = gentle ? reserveOf(S.mode === 'program' ? WEEKS[S.week - 1] : null) : null;
   const lead = gentle
-    ? `<p><b>Бережно.</b> 12–15 повторов лёгким весом, 3–4 в запасе, медленно и без рывков. Прыжки, рывковые и сложные упражнения не подбираются.${prot.length ? ` Без пиковой нагрузки на ${hitsText(prot)}.` : ''}</p>`
+    ? `<p><b>Бережно.</b> 12–15 повторов лёгким весом, ${rir ? reserveNum(rir) + ' в запасе' : 'без отказа'}, медленно и без рывков. Прыжки, рывковые и сложные упражнения не подбираются.${prot.length ? ` Без пиковой нагрузки на ${hitsText(prot)}.` : ''}</p>`
     : `<p><b>Без пиковой нагрузки на ${hitsText(prot)}.</b> Такие упражнения не подбираются, а в своём плане заменяются похожими.</p>`;
   return `<details class="gentle-box"${ensureFold(S).gentle ? '' : ' open'}><summary>Бережный режим: правило боли</summary>${lead}
     <p><b>Боль во время упражнения</b> по шкале от 0 до 10: до 2 — продолжайте; 3–5 — можно, если к утру боль проходит и от недели к неделе не нарастает; больше 5 — остановитесь, уменьшите вес или амплитуду либо замените упражнение.</p>
@@ -18534,7 +18622,7 @@ document.addEventListener('click', e => {
   /* в своём плане хват записывается в сам план (подходы, вес и заметка остаются); в собранном — как замена */
   if (S.mode === 'custom') { const item = customOf().items[slot]; if (!item || customOf().items.some(x => x.id === next.id)) return; item.id = next.id; saveSettings(); }
   else { const k = swapKey(); swaps[k] = swaps[k] || {}; swaps[k][slot] = next.id; saveSettings(); }
-  done = {}; renderPlan();
+  done = {}; planUndo = null; renderPlan();
   const card = document.querySelector(`.card[data-slot="${slot}"]`), b = card && card.querySelector(`[data-variant="${next.id}"]`);
   if (b) b.focus({preventScroll:true});
 });
@@ -19367,16 +19455,7 @@ document.addEventListener('change', e => {
   if (e.target.id === 'place-adapt') { S.adapt = e.target.value || null; ensurePlaces(S); return regen(); }
 });
 const swapKey = () => S.mode === 'program' ? 'd' + S.day : 's';
-function regen(resetSwaps = true) { if (resetSwaps) swaps = S.swaps = {}; done = {}; saveSettings(); renderSetup(); renderPlan(); }
-/* «Заменить»: то же движение или группа, по уровню, с инвентарём места и без нагрузки на бережёмые суставы (swapFits,
-   11g-gentle.js); ближайшие по смыслу — то же движение и те же мышцы — первыми */
-function swapCandidates(cur, plan) {
-  const inPlan = new Set(plan.items.map(it => it.ex.id));
-  const lvlMax = S.level === 'beg' || S.goal === 'gentle' ? 2 : 3;
-  if (S.mode === 'custom') for (const it of customOf().items) inPlan.add(it.id);
-  return EX.filter(ex => !inPlan.has(ex.id) && available(ex, plan.E) && ex.lvl <= lvlMax && (ex.g === cur.g || PATTERN[ex.id] === PATTERN[cur.id]) && (S.format !== 'static' || staticOk(ex)) && swapFits(ex))
-    .sort((a, b) => analogScore(cur, b) - analogScore(cur, a));
-}
+function regen(resetSwaps = true) { if (resetSwaps) swaps = S.swaps = {}; done = {}; planUndo = null; saveSettings(); renderSetup(); renderPlan(); }
 document.addEventListener('click', e => {
   const t = e.target.closest('button, summary');
   if (!t) return;
@@ -19418,32 +19497,12 @@ document.addEventListener('click', e => {
     try { navigator.clipboard.writeText(txt).then(() => { msg.textContent = 'Скопировано — можно вставить в заметки или мессенджер.'; }, fallback); } catch (err) { fallback(); }
     return;
   }
-  if (t.dataset.swap !== undefined) {
-    const slot = +t.dataset.swap;
-    const cur = plan.items.find(it => it.slot === slot).ex;
-    const tried = new Set((swaps.__tried && swaps.__tried[swapKey() + ':' + slot]) || []);
-    let alts = swapCandidates(cur, plan);
-    const msgEl = t.querySelector('span');
-    if (!alts.length) { msgEl.textContent = 'Замены нет'; setTimeout(() => { msgEl.textContent = 'Заменить'; }, 1800); return; }
-    tried.add(cur.id);
-    let next = alts.find(ex => !tried.has(ex.id));
-    if (!next) { tried.clear(); tried.add(cur.id); next = alts[0]; }
-    swaps.__tried = swaps.__tried || {};
-    swaps.__tried[swapKey() + ':' + slot] = [...tried];
-    /* в своём плане замена записывается в сам план; правка подходов и отдыха остаётся */
-    if (S.mode === 'custom') { const item = customOf().items[slot]; if (item) { item.id = next.id; saveSettings(); } }
-    else { const k = swapKey(); swaps[k] = swaps[k] || {}; swaps[k][slot] = next.id; }
-    done = {};
-    saveSettings(); renderPlan();
-    const card = document.querySelector(`.card[data-slot="${slot}"]`);
-    if (card) { card.classList.add('flash'); card.scrollIntoView({block:'nearest', behavior:reduceMotion ? 'auto' : 'smooth'}); }
-    return;
-  }
+  /* «Заменить» — список замен под кнопкой и «Вернуть»: 12c-swap.js */
   /* порядок упражнений: ↑ ↓ на карточке (в своём плане — свои кнопки, 11d-custom.js) */
   if (t.dataset.move !== undefined) {
     const slot = +t.dataset.move, d = +t.dataset.d;
     if (!movePlanItem(slot, d)) return;
-    saveSettings(); renderPlan();
+    planUndo = null; saveSettings(); renderPlan();
     const card = document.querySelector(`.card[data-slot="${slot}"]`);
     if (card) {
       card.classList.add('flash'); card.scrollIntoView({block:'nearest', behavior:reduceMotion ? 'auto' : 'smooth'});
@@ -19701,6 +19760,221 @@ document.addEventListener('click', e => {
 document.addEventListener('change', e => { if (e.target.matches && e.target.matches('[data-rest-warn]')) RestAlarm.setPrefs({warn:e.target.checked}); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) RestAlarm.resync(); });
 
+/* ===================== «ЗАМЕНИТЬ» И «ВЕРНУТЬ» =====================
+   «Заменить» в карточке раскрывает прямо под кнопкой короткий список на выбор (как список планов у «+ В свой план»,
+   11d-custom.js): до пяти ближайших замен по смыслу — то же движение, те же мышцы (analogScore, 11b-analogs.js) — и одной
+   строкой, что меняется. В списке нет того, что уже стоит в этом плане и (в программе на неделю) в других днях недели,
+   и хватов той же карточки (они — в переключателе «Хват», 11h-variants.js); подбор — по тем же правилам, что план:
+   инвентарь места, уровень, статодинамика, «Беречь суставы» и бережный режим (swapFits, 11g-gentle.js).
+   Близких замен нет — так и сказано, и, если есть, одно-два упражнения на те же мышцы другим движением.
+   После выбора в карточке строка «Заменено: … → …» с кнопкой «Вернуть»; «Убрать» в своём плане оставляет на месте
+   карточки «Убрано: … Вернуть». Одно нажатие возвращает прежнее; строка держится до следующего изменения плана
+   или перезагрузки (planUndo, 11-planner.js). Страница не прыгает: нажатая кнопка остаётся на том же месте экрана. */
+const SWAP_LIMIT = 5, SWAP_FAR = 2;
+/* то же движение — близкая замена, если похоже не меньше чем на SWAP_CLOSE_MIN; другое движение — от SWAP_FAR_MIN */
+const SWAP_CLOSE_MIN = .45, SWAP_FAR_MIN = .3;
+
+/* что уже занято: этот план, свой план целиком (и то, что в нём заменено из-за места или суставов), другие дни недели */
+function swapTaken(p) {
+  const ids = new Set((p.items || []).map(it => it.ex.id));
+  if (S.mode === 'custom') for (const it of customOf().items) ids.add(it.id);
+  if (S.mode === 'program' && prog) for (const d of prog.days) for (const it of d.plan.items || []) ids.add(it.ex.id);
+  return ids;
+}
+/* все допустимые по инвентарю, уровню и формату — от самых похожих; суставы проверяются позже (расчёт дорогой) */
+function swapPool(cur, p) {
+  const taken = swapTaken(p), lvlMax = S.level === 'beg' || S.goal === 'gentle' ? 2 : 3, pat = PATTERN[cur.id];
+  for (const x of variantsFor(cur, p.E, taken)) taken.add(x.ex.id);
+  taken.add(cur.id);
+  return EX.filter(ex => !taken.has(ex.id) && available(ex, p.E) && ex.lvl <= lvlMax && (ex.g === cur.g || (!!pat && PATTERN[ex.id] === pat)) && (S.format !== 'static' || staticOk(ex)))
+    .map(ex => ({ex, score:analogScore(cur, ex)})).sort((a, b) => b.score - a.score);
+}
+/* все замены, которые можно предложить, от самых похожих (проверка бережного режима — tools/gentle.test.js) */
+function swapCandidates(cur, p) { return swapPool(cur, p).filter(r => swapFits(r.ex)).map(r => r.ex); }
+/* что меняется: как у аналогов (analogNote); где мышцы те же и вид сопротивления тот же — какая мышца становится
+   основной или какой снаряд в руках */
+function swapNote(a, b, E) {
+  const n = analogNote(a, b, E), parts = n ? n.split('; ') : [];
+  /* новая основная мышца уже работала в прежнем упражнении — analogNote о ней молчит («добавляется» — только о новых) */
+  if (b.pri[0] !== a.pri[0] && a.pri.concat(a.sec).includes(b.pri[0])) {
+    const other = PATTERN[b.id] && PATTERN[a.id] !== PATTERN[b.id] ? 1 : 0;   /* «другое движение» analogNote ставит первым */
+    parts.splice(other, 0, 'основная мышца: ' + MUSCLE_NAMES[b.pri[0]].toLowerCase());
+  }
+  if (parts.length) return parts.slice(0, 3).join('; ');
+  const had = new Set(chosenEquip(a, E)), eq = id => EQUIP.find(e => e.id === id) || {}, name = id => { const v = eq(id).name || ''; return v.charAt(0).toLowerCase() + v.slice(1); };
+  const now = chosenEquip(b, E).filter(id => !had.has(id) && eq(id).name);
+  if (!now.length) return 'то же движение и те же мышцы';
+  return (now.every(id => eq(id).cat === 'mach') ? 'другой тренажёр: ' : 'другой снаряд: ') + now.slice(0, 2).map(name).join(', ');
+}
+/* список на выбор: close — то же движение, до SWAP_LIMIT; far — другое движение на те же мышцы, только когда близких нет */
+function swapOptions(cur, p) {
+  const pat = PATTERN[cur.id], close = [], far = [];
+  for (const r of swapPool(cur, p)) {
+    const same = pat ? PATTERN[r.ex.id] === pat : r.ex.g === cur.g;
+    if (same) {
+      if (r.score < SWAP_CLOSE_MIN || !swapFits(r.ex)) continue;
+      close.push({...r, note:swapNote(cur, r.ex, p.E)});
+      if (close.length >= SWAP_LIMIT) break;
+    } else if (!close.length && far.length < SWAP_FAR && r.score >= SWAP_FAR_MIN && swapFits(r.ex)) far.push({...r, note:swapNote(cur, r.ex, p.E)});
+  }
+  return {close, far:close.length ? [] : far};
+}
+
+/* ---------- отрисовка ---------- */
+/* суставы под пиковой нагрузкой у замены — как строка в карточке (jointsLine): по ней видно, уходит ли метка */
+function swapJoints(ex) {
+  if (typeof motionPrefs !== 'undefined' && motionPrefs.stress === false) return '';
+  const zones = [...new Set(stressIdsOf(ex).flatMap(id => STRESS_RULE[id] ? STRESS_RULE[id].parts : []))];
+  const label = 'Пиковая нагрузка:';
+  return zones.length ? `<small class="sw-j"><span class="stress-dot" aria-hidden="true"></span>${label} ${esc(zones.join(', '))}</small>` : '';
+}
+function swapPickHtml(it) {
+  const {close, far} = swapOptions(it.ex, plan), list = close.length ? close : far;
+  const row = r => `<button type="button" class="place cp-pick-i" data-swap-to="${r.ex.id}"><span class="cp-pick-n"><b>${esc(exName(r.ex, plan.E))}</b><small>${esc(r.note)}</small>${swapJoints(r.ex)}</span></button>`;
+  const gentle = S.goal === 'gentle' || ensureProtect(S).length > 0;
+  const none = close.length ? '' : `<p class="sw-none">${far.length ? 'Близких замен нет. На те же мышцы — другое движение:'
+    : gentle ? 'Близких замен нет: другие упражнения на эти мышцы уже в плане, здесь недоступны или не подходят бережному режиму.'
+    : 'Близких замен нет: другие упражнения на эти мышцы уже в плане или здесь недоступны.'}</p>`;
+  const head = 'Чем заменить';
+  return `<p class="cp-pick-h" id="sw-pick-${it.slot}-h">${head}</p>${none}${list.map(row).join('')}`;
+}
+/* «Вернуть»: подпись кнопки — строка рядом (aria-describedby) */
+const undoBtn = (attr, desc) => { const label = 'Вернуть'; return `<button type="button" class="sw-undo" ${attr} aria-describedby="${desc}">${label}</button>`; };
+const undoKey = () => S.mode === 'custom' ? 'c:' + customOf().id : swapKey();
+/* замена ещё в силе: тот же план (день, свой план), на месте — то, что поставили */
+function swapUndoLive(u) {
+  if (!u || u.kind !== 'swap' || u.key !== undoKey()) return false;
+  return S.mode === 'custom' ? customOf().items[u.slot]?.id === u.to : (swaps[u.key] || {})[u.slot] === u.to;
+}
+/* строка в карточке после замены (cardHtml, 11-planner.js) */
+function swapDoneHtml(it) {
+  const u = planUndo;
+  if (!swapUndoLive(u) || u.slot !== it.slot || it.ex.id !== u.to) return '';
+  const line = `Заменено: ${esc(u.fromName)} → ${esc(it.name)}.`;
+  return `<p class="sw-done"><span id="sw-done-${it.slot}">${line}</span>${undoBtn('data-swap-undo="1"', 'sw-done-' + it.slot)}</p>`;
+}
+/* на месте убранной карточки своего плана (blocksHtml, 11-planner.js); tag — 'li' в списке карточек */
+function rmGoneHtml(tag = 'li') {
+  const u = planUndo;
+  if (!u || u.kind !== 'rm' || S.mode !== 'custom' || u.key !== undoKey()) return '';
+  const line = `Убрано: ${esc(u.name)}.`;
+  return `<${tag} class="sw-gone"><span id="sw-gone-t">${line}</span>${undoBtn('data-rm-undo="1"', 'sw-gone-t')}</${tag}>`;
+}
+
+/* ---------- действия ---------- */
+/* после перерисовки el встаёт туда, где на экране было y0 (верх нажатой кнопки), и получает фокус */
+function keepAt(el, y0) {
+  if (!el) return;
+  const dy = el.getBoundingClientRect().top - y0;
+  if (Math.abs(dy) > 1) window.scrollBy(0, dy);
+  el.focus({preventScroll:true});
+}
+/* раскрыть (open = true) или свернуть список под кнопкой «Заменить»; открытый список в другой карточке сворачивается */
+function swapToggle(btn, open = btn.getAttribute('aria-expanded') !== 'true') {
+  const box = document.getElementById(btn.getAttribute('aria-controls'));
+  if (!box || !plan || !plan.items) return;
+  if (open) for (const b of document.querySelectorAll('[data-swap][aria-expanded="true"]')) if (b !== btn) swapToggle(b, false);
+  btn.setAttribute('aria-expanded', String(open));
+  if (!open) { box.hidden = true; box.replaceChildren(); return; }
+  const it = plan.items.find(x => x.slot === +btn.dataset.swap); if (!it) return;
+  box.innerHTML = swapPickHtml(it); box.hidden = false;
+  const first = box.querySelector('[data-swap-to]');
+  if (first) first.focus({preventScroll:true});
+  box.scrollIntoView({block:'nearest', behavior:reduceMotion ? 'auto' : 'smooth'});
+}
+/* Правка плана — отдельно от экрана (проверки — tools/swap-list.test.js): возвращают true, если план изменился */
+/* замена упражнения в карточке slot открытого плана на nextId; запоминает, что вернуть */
+function swapSet(slot, nextId) {
+  const it = plan && plan.items && plan.items.find(x => x.slot === slot), next = EXI[nextId];
+  if (!it || !next || it.ex === next) return false;
+  if (S.mode === 'custom') {
+    /* в своём плане замена записывается в сам план; подходы, вес и заметка остаются */
+    const items = customOf().items, item = items[slot];
+    if (!item || items.some(x => x.id === next.id)) return false;
+    planUndo = {kind:'swap', key:undoKey(), slot, from:item.id, to:next.id, fromName:it.name};
+    item.id = next.id;
+  } else {
+    const k = swapKey(); swaps[k] = swaps[k] || {}; delete swaps.__tried; /* перебор по кругу прежних версий */
+    planUndo = {kind:'swap', key:k, slot, prev:swaps[k][slot], to:next.id, fromName:it.name};
+    swaps[k][slot] = next.id;
+  }
+  done = {}; saveSettings();
+  return true;
+}
+function swapBack() {
+  const u = planUndo; if (!swapUndoLive(u)) return false;
+  if (S.mode === 'custom') customOf().items[u.slot].id = u.from;
+  else if (u.prev === undefined) delete swaps[u.key][u.slot]; else swaps[u.key][u.slot] = u.prev;
+  planUndo = null; done = {}; saveSettings();
+  return true;
+}
+/* «Убрать» в своём плане: сразу, без подтверждения; на месте карточки — «Убрано: … Вернуть» */
+function rmItem(slot) {
+  const item = customOf().items[slot]; if (!item) return false;
+  const it = plan && plan.items && plan.items.find(x => x.slot === slot);
+  customRemove(slot);
+  planUndo = {kind:'rm', key:undoKey(), slot, item, name:it ? it.name : EXI[item.id].name};
+  saveSettings();
+  return true;
+}
+/* возвращает убранное на прежнее место; план полон или упражнение снова в нём (добавлено из атласа) — некуда */
+function rmBack() {
+  const u = planUndo;
+  if (!u || u.kind !== 'rm' || S.mode !== 'custom' || u.key !== undoKey()) return -1;
+  const items = customOf().items; planUndo = null;
+  if (items.length >= CUSTOM_MAX || items.some(x => x.id === u.item.id)) return -1;
+  const at = Math.min(u.slot, items.length);
+  items.splice(at, 0, u.item);
+  cpOpen = new Set([...cpOpen].map(i => i >= at ? i + 1 : i));
+  saveSettings();
+  return at;
+}
+
+/* экран: после перерисовки нажатая кнопка (или то, что встало на её место) — там же, где была, и с фокусом */
+function swapApply(t) {
+  const card = t.closest('.card'), slot = card ? +card.dataset.slot : -1;
+  const y0 = card ? card.querySelector('[data-swap]').getBoundingClientRect().top : 0;
+  if (!swapSet(slot, t.dataset.swapTo)) return;
+  renderPlan();
+  const c = document.querySelector(`.card[data-slot="${slot}"]`); if (!c) return;
+  c.classList.add('flash');
+  keepAt(c.querySelector('[data-swap]'), y0);
+  (c.querySelector('[data-swap-undo]') || c.querySelector('[data-swap]')).focus({preventScroll:true});
+}
+function swapRevert(t) {
+  const card = t.closest('.card'), u = planUndo; if (!card) return;
+  const y0 = card.querySelector('[data-swap]').getBoundingClientRect().top;
+  if (!swapBack()) return;
+  renderPlan();
+  keepAt(document.querySelector(`.card[data-slot="${u.slot}"] [data-swap]`), y0);
+}
+function planRemove(slot, btn) {
+  const y0 = btn.getBoundingClientRect().top;
+  if (!rmItem(slot)) return;
+  renderSetup(); renderPlan();
+  keepAt(document.querySelector('[data-rm-undo]'), y0);
+}
+function rmRevert(t) {
+  const y0 = t.getBoundingClientRect().top, at = rmBack();
+  renderSetup(); renderPlan();
+  if (at >= 0) keepAt(document.querySelector(`.card[data-slot="${at}"] [data-cp-rm]`), y0);
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.swap !== undefined) return swapToggle(t);
+  if (t.dataset.swapTo) return swapApply(t);
+  if (t.dataset.swapUndo !== undefined) return swapRevert(t);
+  if (t.dataset.rmUndo !== undefined) return rmRevert(t);
+});
+/* Esc в списке замен (или на его кнопке) сворачивает список и возвращает фокус на «Заменить» */
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || !e.target.closest || !e.target.closest('.sw-pick, [data-swap]')) return;
+  const card = e.target.closest('.card'), btn = card && card.querySelector('[data-swap][aria-expanded="true"]');
+  if (!btn) return;
+  e.preventDefault(); swapToggle(btn, false); btn.focus();
+});
+
 /* ===================== ЖУРНАЛ ===================== */
 /* Хранилище: в опубликованной версии — аккаунт (db, личный раздел пользователя),
    в офлайн-файле — браузер. Формат: LOG.data[exId] = [{d:'2026-10-05', wk?:1, eq?:'db', s:[[кг|null, повторы, отдых?, стороны?] | null, …]}, …].
@@ -19860,7 +20134,13 @@ function stepFor(it) {
   return 2.5;
 }
 const roundTo = (v, st) => Math.max(0, Math.round(v / st) * st);
-function parseRange(r) { const m = String(r).match(/(\d+)\D+(\d+)/); if (m) return [+m[1], +m[2]]; const n = parseInt(r, 10); return [n || 0, n || 0]; }
+/* повторы плана по подходам (пирамида своего плана, 11d-custom.js: cleanReps): «10/8/6/5» → [10, 8, 6, 5];
+   диапазон или одно число — null */
+function repsPlanOf(r) { const s = String(r ?? ''); if (!s.includes('/')) return null; const l = s.split('/').map(Number); return l.length > 1 && l.every(v => v > 0) ? l : null; }
+/* цель подхода k (с нуля): у пирамиды — своё число (подходов больше списка — последнее), иначе диапазон как есть */
+function planReps(rx, k) { const l = repsPlanOf(rx.reps); return l ? String(l[Math.min(k, l.length - 1)]) : String(rx.reps); }
+/* границы повторов: «8–12» → [8, 12]; у пирамиды — от меньшего до большего */
+function parseRange(r) { const l = repsPlanOf(r); if (l) return [Math.min(...l), Math.max(...l)]; const m = String(r).match(/(\d+)\D+(\d+)/); if (m) return [+m[1], +m[2]]; const n = parseInt(r, 10); return [n || 0, n || 0]; }
 const e1rm = (kg, reps) => kg * (1 + Math.min(reps, 12) / 30);
 
 /* ---------- подсказка по двойной прогрессии ---------- */
@@ -19874,7 +20154,9 @@ function suggest(it) {
 function suggestBase(it) {
   /* статодинамика и обычные подходы ведутся раздельно: вес в них отличается примерно вдвое */
   const ex = it.ex, lt = loadType(ex), all = pastSessions(ex.id), past = all.filter(s => (s.fmt === 'static') === !!it.rx.static);
-  const [lo, hi] = parseRange(it.rx.reps);
+  const [lo, hi] = parseRange(it.rx.reps), rp = repsPlanOf(it.rx.reps);
+  /* цель подхода k (с нуля): [нижняя, верхняя]; у пирамиды повторов — своё число подхода */
+  const tgt = k => { if (!rp) return [lo, hi]; const v = rp[Math.min(k, rp.length - 1)]; return [v, v]; };
   const unit = ex.kind === 'time' ? ' с' : ex.kind === 'dist' ? ' м' : '';
   const week = S.mode === 'program' ? WEEKS[S.week - 1] : null;
   const step = stepFor(it);
@@ -19884,9 +20166,12 @@ function suggestBase(it) {
     const prev = past[past.length - 1] || null, ps = prev ? prev.s.filter(Boolean) : [];
     res.tone = 'plan'; res.kgs = it.rx.kgPlan; res.kg = it.rx.kgPlan[0]; res.prev = prev;
     const what = lt === 'assist' ? 'Противовес по плану' : lt === 'extra' ? 'Доп. вес по плану' : 'Вес по плану';
-    res.text = `${what}: ${planKgText(it.rx.kgPlan)} кг.` + (ps.length ? ` В прошлый раз: ${ps.map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(', ')}.` : '');
+    res.text = `${what}: ${planKgText(it.rx.kgPlan)} кг.` + (rp ? ` Повторы по плану: ${rp.join(' / ')}.` : '') + (ps.length ? ` В прошлый раз: ${ps.map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(', ')}.` : '');
     return res;
   }
+  /* прошлых тренировок нет, а сегодня подходы уже записаны — не «Первая запись», а сколько сделано и что дальше */
+  const today = !past.length && todayNote(it, lt);
+  if (today) { res.tone = 'today'; res.text = today; return res; }
   if (it.rx.static && !past.length) {
     const last = all[all.length - 1], kgs = last ? last.s.filter(Boolean).map(x => x[0]).filter(v => v > 0) : [];
     if (lt === 'kg' && kgs.length) {
@@ -19898,8 +20183,13 @@ function suggestBase(it) {
     return res;
   }
   if (!past.length) {
-    res.text = lt === 'assist' ? `Первая запись. Подберите противовес, с которым ${lo === hi ? lo : lo + '–' + hi} повторов даются с запасом в 2.` : lt === 'kg'
-      ? (ex.kind === 'dist' ? 'Первая запись. Возьмите тяжёлые снаряды, с которыми проходите дистанцию без остановок.' : `Первая запись. Подберите вес, с которым ${lo === hi ? lo : lo + '–' + hi}${unit} даются с запасом в 2 повтора.`)
+    /* запас — тот же, что в строке нагрузки карточки (rx.rir из prescribe, reserveOf в 11-planner.js) */
+    const rir = it.rx.rir !== undefined ? it.rx.rir : reserveOf(week);
+    const how = rir ? '' : week && week.deload ? 'даются без отказа.' : ex.type === 'i' && S.goal === 'cut' ? 'даются до выраженного жжения.' : 'даются почти до отказа.';
+    const range = rp ? rp.join(' / ') : lo === hi ? String(lo) : lo + '–' + hi;
+    res.text = lt === 'assist' ? (rir ? `Первая запись. Подберите противовес, с которым ${range} повторов даются с запасом ${reserveReps(rir)}.` : `Первая запись. Подберите противовес, с которым ${range} повторов ${how}`) : lt === 'kg'
+      ? (ex.kind === 'dist' ? 'Первая запись. Возьмите тяжёлые снаряды, с которыми проходите дистанцию без остановок.'
+        : rir ? `Первая запись. Подберите вес, с которым ${range}${unit} даются с запасом ${reserveReps(rir)}.` : `Первая запись. Подберите вес, с которым ${range}${unit} ${how}`)
       : `Первая запись. Отметьте, сколько ${ex.kind === 'time' ? 'секунд' : ex.kind === 'dist' ? 'метров' : 'повторов'} получилось в каждом подходе.`;
     return res;
   }
@@ -19908,31 +20198,32 @@ function suggestBase(it) {
   const sets = prev.s.filter(Boolean);
   const kgs = sets.map(x => x[0]).filter(v => v > 0);
   const work = kgs.length ? Math.max(...kgs) : null;
-  const atWork = work ? sets.filter(x => x[0] === work) : sets;
-  const repsList = atWork.map(x => x[1]);
   const prevList = sets.map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(', ');
   if (ex.kind === 'dist') { res.tone = 'same'; res.kg = work; res.text = work ? `В прошлый раз — ${fmtKg(work)} кг. Попробуйте пройти дальше или взять тяжелее.` : `В прошлый раз: ${prevList} м.`; return res; }
+  /* пирамида или сброс (веса подходов в прошлый раз разные): совет — по верхнему подходу, подсказки — по каждому подходу */
+  const pyr = !ex.kind && (lt === 'kg' || lt === 'extra') && pyramidAdvice(it, res, sets, past, tgt, step, week, rp);
+  if (pyr) return pyr;
   if (!week && AR.light && work && (lt === 'kg' || lt === 'assist')) {
-    res.tone = 'deload'; res.kg = lt === 'assist' ? Math.max((Math.floor(work / step) + 1) * step, roundTo(work * 1.1, step)) : roundTo(work * .9, step); res.reps = sets.map(() => lo);
+    res.tone = 'deload'; res.kg = lt === 'assist' ? Math.max((Math.floor(work / step) + 1) * step, roundTo(work * 1.1, step)) : roundTo(work * .9, step); res.reps = sets.map((x, i) => tgt(i)[0]);
     res.text = lt === 'assist' ? `Облегчённый режим: противовес ${fmtKg(res.kg)} кг вместо ${fmtKg(work)}, без отказа.` : `Облегчённый режим: ${fmtKg(res.kg)} кг вместо ${fmtKg(work)}, без отказа.`;
     return res;
   }
   if (week && week.deload && work) {
     res.tone = 'deload'; res.kg = lt === 'assist' ? Math.max((Math.floor(work / step) + 1) * step, roundTo(work * 1.15, step)) : roundTo(work * .85, step);
-    res.reps = sets.map(() => lo);
+    res.reps = sets.map((x, i) => tgt(i)[0]);
     res.text = lt === 'assist' ? `Разгрузка: противовес ${fmtKg(res.kg)} кг вместо ${fmtKg(work)}, без отказа.` : `Разгрузка: ${fmtKg(res.kg)} кг вместо ${fmtKg(work)}, без отказа.`;
     return res;
   }
   const required=prev.target || (it.rx.circ ? it.rounds : it.rx.sets) || 1;
-  const allTop=prev.s.length>=required && Array.from({length:required},(_,k)=>prev.s[k]).every(v=>v && v[1]>=hi && (!work || v[0]===work));
-  const anyLow = repsList.some(r => r < lo);
+  const allTop=prev.s.length>=required && Array.from({length:required},(_,k)=>prev.s[k]).every((v,k)=>v && v[1]>=tgt(k)[1] && (!work || v[0]===work));
+  const anyLow = sets.some((x, i) => (!work || x[0] === work) && x[1] < tgt(i)[0]);
   if (allTop) {
     if (lt === 'kg' && work) {
-      res.tone = 'up'; res.kg = work + step; res.reps = sets.map(() => lo);
-      res.text = `Прибавьте до ${fmtKg(res.kg)} кг (+${fmtKg(step)}). В прошлый раз все подходы на верхней границе: ${prevList}.`;
+      res.tone = 'up'; res.kg = work + step; res.reps = sets.map((x, i) => tgt(i)[0]);
+      res.text = rp ? `Прибавьте до ${fmtKg(res.kg)} кг (+${fmtKg(step)}). В прошлый раз все подходы по плану: ${prevList}.` : `Прибавьте до ${fmtKg(res.kg)} кг (+${fmtKg(step)}). В прошлый раз все подходы на верхней границе: ${prevList}.`;
     } else if (lt === 'assist' && work) {
-      res.tone = 'up'; res.kg = Math.max(0, work - step); res.reps = sets.map(() => lo);
-      res.text = `Уменьшите противовес до ${fmtKg(res.kg)} кг (−${fmtKg(step)}). В прошлый раз все подходы на верхней границе: ${prevList}.`;
+      res.tone = 'up'; res.kg = Math.max(0, work - step); res.reps = sets.map((x, i) => tgt(i)[0]);
+      res.text = rp ? `Уменьшите противовес до ${fmtKg(res.kg)} кг (−${fmtKg(step)}). В прошлый раз все подходы по плану: ${prevList}.` : `Уменьшите противовес до ${fmtKg(res.kg)} кг (−${fmtKg(step)}). В прошлый раз все подходы на верхней границе: ${prevList}.`;
     } else if (ex.kind === 'time') {
       res.tone = 'up'; res.kg = work; res.reps = sets.map(() => hi + 10);
       res.text = `Все подходы на верхней границе. Держите на 10 с дольше${lt === 'extra' ? ' или добавьте отягощение' : ''}.`;
@@ -19945,26 +20236,82 @@ function suggestBase(it) {
   if (anyLow) {
     const before = past.length > 1 ? past[past.length - 2].s.filter(Boolean) : [];
     const bWork = before.length ? Math.max(0, ...before.map(x => x[0] || 0)) : 0;
-    const lowAgain = work && bWork === work && before.filter(x => x[0] === work).some(x => x[1] < lo);
+    const lowAgain = work && bWork === work && before.some((x, i) => x[0] === work && x[1] < tgt(i)[0]);
     if (lt === 'kg' && work && lowAgain) {
-      res.tone = 'down'; res.kg = roundTo(work * 0.9, step); res.reps = sets.map(() => lo);
-      res.text = `Две тренировки подряд меньше ${lo}${unit} — снизьте до ${fmtKg(res.kg)} кг и наберите повторы.`;
+      res.tone = 'down'; res.kg = roundTo(work * 0.9, step); res.reps = sets.map((x, i) => tgt(i)[0]);
+      res.text = rp ? `Две тренировки подряд меньше плана — снизьте до ${fmtKg(res.kg)} кг и наберите повторы.` : `Две тренировки подряд меньше ${lo}${unit} — снизьте до ${fmtKg(res.kg)} кг и наберите повторы.`;
     } else if (lt === 'assist' && work != null && lowAgain) {
-      res.tone = 'down'; res.kg = work + step; res.reps = sets.map(() => lo);
-      res.text = `Две тренировки подряд меньше ${lo} — увеличьте противовес до ${fmtKg(res.kg)} кг и наберите повторы.`;
+      res.tone = 'down'; res.kg = work + step; res.reps = sets.map((x, i) => tgt(i)[0]);
+      res.text = rp ? `Две тренировки подряд меньше плана — увеличьте противовес до ${fmtKg(res.kg)} кг и наберите повторы.` : `Две тренировки подряд меньше ${lo} — увеличьте противовес до ${fmtKg(res.kg)} кг и наберите повторы.`;
     } else {
-      res.tone = 'same'; res.kg = work; res.reps = sets.map(x => Math.max(lo, x[1]));
-      res.text = `${work ? `Оставьте ${fmtKg(work)} кг` : 'Тот же вариант'} и доберите до ${lo}${unit} в каждом подходе. В прошлый раз: ${prevList}.`;
+      res.tone = 'same'; res.kg = work; res.reps = sets.map((x, i) => Math.max(tgt(i)[0], x[1]));
+      const keep = work ? `Оставьте ${fmtKg(work)} кг` : 'Тот же вариант';
+      res.text = rp ? `${keep} и доберите до плана: ${rp.join(' / ')}. В прошлый раз: ${prevList}.` : `${keep} и доберите до ${lo}${unit} в каждом подходе. В прошлый раз: ${prevList}.`;
     }
     return res;
   }
-  res.tone = 'same'; res.kg = work; res.reps = sets.map(x => Math.min(hi, x[1] + 1));
+  res.tone = 'same'; res.kg = work; res.reps = sets.map((x, i) => Math.min(tgt(i)[1], x[1] + 1));
   res.text = `${work ? `${lt === 'assist' ? 'Тот же противовес' : 'Тот же вес'} — ${fmtKg(work)} кг` : 'Тот же вариант'}, цель — на 1${unit || ' повтор'} больше: в прошлый раз ${prevList}.`;
   return res;
 }
+/* Пирамида или сброс в прошлый раз: веса подходов разные (все записаны с весом). Совет — по верхнему подходу (самый
+   тяжёлый вес; таких подходов может быть несколько), остальные подходы — как в прошлый раз; не «оставьте верхний вес
+   в каждом подходе». res.kgs — вес каждого подхода (подсказки в таблице и в режиме тренировки, ownKgs), res.reps —
+   повторы. Иначе null — один вес на все подходы, обычная двойная прогрессия. */
+function pyramidAdvice(it, res, sets, past, tgt, step, week, rp) {
+  const pk = sets.map(x => x[0]);
+  if (pk.length < 2 || pk.some(v => !(v > 0)) || pk.every(v => v === pk[0])) return null;
+  const W = Math.max(...pk), top = pk.map((v, i) => i).filter(i => pk[i] === W), one = top.length === 1;
+  res.kgs = pk.slice(); res.reps = sets.map((x, i) => rp ? tgt(i)[0] : x[1]);
+  const topText = one ? `Верхний подход: ${fmtKg(W)} кг × ${sets[top[0]][1]}` : `Подходы с ${fmtKg(W)} кг: ${top.map(i => sets[i][1]).join(', ')}`;
+  const rest = 'Остальные подходы — как в прошлый раз.';
+  const ease = !week && AR.light ? .9 : week && week.deload ? .85 : 0;
+  if (ease) {
+    res.tone = 'deload'; res.kgs = pk.map(v => roundTo(v * ease, step)); res.reps = sets.map((x, i) => tgt(i)[0]); res.kg = res.kgs[0];
+    res.text = `${ease === .9 ? 'Облегчённый режим' : 'Разгрузка'}: веса на ${Math.round((1 - ease) * 100)}% меньше прошлых — ${res.kgs.map(fmtKg).join(' / ')} кг, без отказа.`;
+    return res;
+  }
+  if (top.every(i => sets[i][1] >= tgt(i)[1])) {
+    const nw = W + step;
+    for (const i of top) { res.kgs[i] = nw; res.reps[i] = tgt(i)[0]; }
+    res.tone = 'up'; res.kg = res.kgs[0];
+    res.text = `${topText} — ${one ? 'на верхней границе. В следующий раз в нём' : 'все на верхней границе. В следующий раз в них'} ${fmtKg(nw)} кг (+${fmtKg(step)}). ${rest}`;
+    return res;
+  }
+  /* верхний подход второй раз подряд ниже нижней границы при том же весе — снизить его */
+  const before = past.length > 1 ? past[past.length - 2].s.filter(Boolean) : [];
+  const bW = before.length ? Math.max(0, ...before.map(x => x[0] || 0)) : 0;
+  const lowAgain = bW === W && top.some(i => sets[i][1] < tgt(i)[0]) && before.some((x, i) => x[0] === W && x[1] < tgt(i)[0]);
+  if (lowAgain) {
+    const nw = roundTo(W * .9, step);
+    for (const i of top) { res.kgs[i] = nw; res.reps[i] = tgt(i)[0]; }
+    res.tone = 'down'; res.kg = res.kgs[0];
+    res.text = one ? `Две тренировки подряд в верхнем подходе не хватило повторов — в следующий раз возьмите в нём ${fmtKg(nw)} кг и наберите повторы. ${rest}`
+      : `Две тренировки подряд в подходах с ${fmtKg(W)} кг не хватило повторов — в следующий раз возьмите в них ${fmtKg(nw)} кг и наберите повторы. ${rest}`;
+    return res;
+  }
+  const goal = top.map(i => { const [a, b] = tgt(i), r = sets[i][1]; return r < a ? a : Math.min(b, r + 1); });
+  top.forEach((i, j) => { res.reps[i] = goal[j]; });
+  const same = goal.every(v => v === goal[0]);
+  res.tone = 'same'; res.kg = res.kgs[0];
+  res.text = `${topText} — в следующий раз доберите до ${same ? goal[0] : goal.join(', ')}${one || !same ? '' : ' в каждом из них'}. ${rest}`;
+  return res;
+}
+/* Сегодня уже записаны подходы, а прошлых тренировок нет: «Сегодня: 3 из 4. Следующий — с тем же весом (50 кг).»;
+   все подходы сделаны — «упражнение выполнено». Нет записей сегодня — '' (подсказка первой записи) */
+function todayNote(it, lt) {
+  const t = todaySession(it.ex.id, false), done = t ? t.s.filter(Boolean) : [];
+  if (!done.length) return '';
+  const total = Math.max(it.rx.circ ? (it.rounds || it.rx.sets) : it.rx.sets, done.length), n = done.length;
+  const head = `Сегодня: ${n} из ${total}.`;
+  if (n >= total) return `${head} Упражнение выполнено — в следующий раз здесь будет подсказка по прогрессии.`;
+  const kgs = done.map(x => x[0]);
+  if (lt !== 'none' && kgs[0] > 0 && kgs.every(v => v === kgs[0])) return `${head} Следующий — ${lt === 'assist' ? 'с тем же противовесом' : 'с тем же весом'} (${fmtKg(kgs[0])} кг).`;
+  return head;
+}
 
 /* ---------- блок записи в карточке ---------- */
-const SUG_ICON = {up:'↑', same:'→', down:'↓', deload:'↓', new:'+', plan:'≡'};
+const SUG_ICON = {up:'↑', same:'→', down:'↓', deload:'↓', new:'+', plan:'≡', today:'✓'};
 /* строк в таблице: по плану (у круговой — кругов), но не меньше, чем уже записано сегодня */
 function logRowCount(it) {
   const today = todaySession(it.ex.id, false);
@@ -19992,8 +20339,11 @@ function logRows(it) {
   const tset = today ? today.s : [];
   const n = logRowCount(it);
   if (setArm[ex.id] !== n - 1 || n <= 1) delete setArm[ex.id];
-  const prevSets = sg.prev ? sg.prev.s.filter(Boolean) : [], own = ownKgs(it, prevSets);
-  const [lo, hi] = parseRange(it.rx.reps);
+  /* вопрос о весе переживает перерисовку, пока строка не отмечена; вопрос о правке отмеченной — нет (в поле снова записанное) */
+  const kq = kgAsk[ex.id];
+  if (kq && (kq.edit || kq.k >= n || tset[kq.k])) delete kgAsk[ex.id];
+  const prevSets = sg.prev ? sg.prev.s.filter(Boolean) : [], own = ownKgs(it, prevSets, sg);
+  const [lo, hi] = parseRange(it.rx.reps), rp = repsPlanOf(it.rx.reps);
   const SIDE = {l:'левая', r:'правая'};
   /* поле веса и повторов; side — 'l' | 'r' в режиме Л/П. Подсказка веса — вес последнего записанного сегодня подхода
      выше (carriedKg), иначе свой вес подхода (план, пирамида прошлого раза) или прогрессия; data-ph — она же без переноса
@@ -20007,9 +20357,10 @@ function logRows(it) {
     const v = tset[k];
     const p = prevSets[k] || prevSets[prevSets.length - 1];
     const pk = own(k), phKg = pk != null ? fmtKg(pk) : sg.kg != null ? fmtKg(sg.kg) : (lt === 'kg' ? '' : '—');
-    const phR = sg.reps[k] ?? sg.reps[sg.reps.length - 1] ?? (lo === hi ? String(lo) : `${lo}–${hi}`);
-    const arm = setArm[ex.id] === k, cf = arm ? setArmHtml(it, n, !!v) : '';
-    const done = !!v, cls = `lt-r${done ? ' done' : ''}${lr ? ' lt-lr' : ''}${it.rx.static && k > 0 && k % 3 === 0 ? ' lt-series' : ''}${arm ? ' lt-arm' : ''}`;
+    /* повторы: по прогрессии, у пирамиды плана — число подхода, иначе диапазон плана */
+    const phR = sg.reps[k] ?? (rp ? planReps(it.rx, k) : sg.reps[sg.reps.length - 1] ?? (lo === hi ? String(lo) : `${lo}–${hi}`));
+    const ask = kgAsk[ex.id] && kgAsk[ex.id].k === k, arm = !ask && setArm[ex.id] === k, cf = arm ? setArmHtml(it, n, !!v) : ask ? kgAskHtml(ex.id, kgAsk[ex.id]) : '';
+    const done = !!v, cls = `lt-r${done ? ' done' : ''}${lr ? ' lt-lr' : ''}${it.rx.static && k > 0 && k % 3 === 0 ? ' lt-series' : ''}${arm || ask ? ' lt-arm' : ''}`;
     const ownAt = pk != null && lt !== 'none' ? ` data-own="${pk}"` : ''; /* свой вес подхода — для переноса при вводе (carryKgBox) */
     const ok = `<button type="button" class="lt-ok" data-tick="${ex.id}" data-k="${k}" aria-pressed="${done}" aria-label="Подход ${k + 1} выполнен">${ICON.check}</button>`;
     if (lr) {
@@ -20060,8 +20411,10 @@ function firstKg(tset, sg, own) {
 /* свой вес подхода k: по плану; без плана — вес подхода k прошлой тренировки (подходов меньше — последний), если веса
    подходов в ней разные (пирамида, сброс); иначе null — один вес на все подходы (подсказка — по прогрессии, sg.kg).
    prevSets — записанные подходы прошлой тренировки */
-function ownKgs(it, prevSets) {
+function ownKgs(it, prevSets, sg) {
   if (it.rx.kgPlan) return k => planKg(it.rx, k);
+  /* пирамида прошлого раза с советом по верхнему подходу (pyramidAdvice): вес каждого подхода — из совета */
+  if (sg && Array.isArray(sg.kgs) && sg.kgs.length) return k => sg.kgs[Math.min(k, sg.kgs.length - 1)];
   const kgs = prevSets.map(x => x[0]);
   if (kgs.length < 2 || kgs.some(v => v == null) || kgs.every(v => v === kgs[0])) return () => null;
   return k => kgs[Math.min(k, kgs.length - 1)];
@@ -20086,7 +20439,13 @@ function carryKgBox(box) {
   const rows = box ? [...box.querySelectorAll('.lt-r')] : []; if (!rows.length) return;
   const ownBy = new Map(rows.map(r => [+r.dataset.k, r.dataset.own != null ? parseNum(r.dataset.own) : null]));
   const own = k => ownBy.get(k) ?? null, lr = rows[0].classList.contains('lt-lr');
-  const filled = (row, inp) => { if (!row.classList.contains('done') && inp.value.trim() === '') return null; const v = parseNum(inp.value); return {kg:v != null && v >= 0 ? v : null}; };
+  /* вписанный, но не отмеченный неправдоподобный вес («5000», kgDoubt) дальше подсказкой не идёт — сначала ответ на вопрос о нём */
+  const it = plan && plan.items && plan.items.find(x => x.ex.id === box.dataset.log);
+  const filled = (row, inp) => {
+    const done = row.classList.contains('done'); if (!done && inp.value.trim() === '') return null;
+    const v = parseNum(inp.value), odd = !done && v > 0 && it && kgDoubt(it, [v], +row.dataset.k);
+    return {kg:v != null && v >= 0 && !odd ? v : null};
+  };
   const hint = (inp, src, k) => { const ph = carryPh(src && kgCarries(own, src.k, k) ? src.kg : null, inp.dataset.ph ?? inp.placeholder); if (inp.placeholder !== ph) inp.placeholder = ph; };
   let srcL = null, srcR = null;
   for (const row of rows) {
@@ -20103,9 +20462,96 @@ function carryKgBox(box) {
 /* ввод веса в таблице: подсказки следующих подходов, затем «×2 = …» — по вписанному или перенесённому весу */
 function logKgInput(inp) {
   const box = inp.closest('.c-log'); if (!box) return;
+  /* вес исправляют — вопрос о нём больше не нужен */
+  const a = kgAsk[box.dataset.log], row = inp.closest('.lt-r');
+  if (a && row && +row.dataset.k === a.k) dropKgAsk(box.dataset.log, box);
   carryKgBox(box); updatePairTotal(inp);
 }
+/* подсказка над таблицей после отметки: «Первая запись…» сменяется на «Сегодня: 1 из 4…» */
+function refreshSug(box, it) {
+  const p = box && box.querySelector('.sug'); if (!p) return;
+  const sg = suggest(it), b = p.querySelector('b'), t = p.querySelector('span');
+  p.className = `sug sug-${sg.tone}`; if (b) b.textContent = SUG_ICON[sg.tone]; if (t && t.textContent !== sg.text) t.textContent = sg.text;
+}
 function logBlock(it) { return `<div class="c-log" data-log="${it.ex.id}">${logRows(it).html}</div>`; }
+
+/* ---------- неправдоподобный вес: переспросить в строке подхода ---------- */
+/* «5000» вместо «50» не записывается молча: от записанного считаются разминка, прогрессия, рекорды и общий вес. Вес —
+   одного снаряда, как он записывается. С историей — вписанный вес в 2 раза и больше прошлого (самый тяжёлый подход
+   последней тренировки с весом; без прошлых — сегодняшних подходов) и больше него хотя бы на 5 кг: шаг гантелей
+   2 → 4 кг — обычная прибавка, а не опечатка. Без истории — больше предела снаряда. Пределы — с большим запасом над
+   рекордами и самым тяжёлым инвентарём, чтобы не мешать сильным людям, но ловить лишний ноль:
+   гантель или гиря — 100 кг (самые тяжёлые серийные гантели и гири — около 90–100 кг);
+   штанга и Смит — 500 кг (рекорды в приседе и становой тяге — около 500 кг; столько же допускает вес в своём плане);
+   жим ногами и гакк-машина — 1000 кг (платформа с грузом у сильных людей — несколько сотен килограммов);
+   остальные тренажёры и блоки — 300 кг (стеки — обычно 100–150 кг, рычажные с блинами — до 250–300 кг);
+   доп. вес к собственному (пояс, жилет) — 200 кг (рекордные отягощения в подтягиваниях и на брусьях — 100–150 кг);
+   противовес гравитрона — 150 кг (стек — около 100 кг, противовес больше веса тела не нужен). */
+const KG_LIMIT = {db:100, kb:100, bb:500, press:1000, machine:300, extra:200, assist:150};
+const KG_LIMIT_NOTE = {db:'Для одной гантели это необычно много.', kb:'Для одной гири это необычно много.', bb:'Для штанги это необычно много.',
+  press:'Для тренажёра это необычно много.', machine:'Для тренажёра это необычно много.', extra:'Для доп. веса это необычно много.', assist:'Для противовеса это необычно много.'};
+function kgLimitOf(it) {
+  const lt = loadType(it.ex), ids = it.eqIds || [];
+  if (lt === 'assist') return 'assist';
+  if (ids.includes('legpress') || ids.includes('hack')) return 'press';
+  if (ids.includes('bb') || ids.includes('smith')) return 'bb';
+  if (ids.some(i => MACHINE.has(i))) return 'machine';
+  const impl = typeof itemImpl === 'function' ? itemImpl(it) : null;
+  if (impl === 'db' || impl === 'kb') return impl;
+  return lt === 'extra' ? 'extra' : 'bb';
+}
+/* вписанный вес подхода k (kgs — общий или левая и правая) неправдоподобен: {kg, text} — что спросить; иначе null */
+function kgDoubt(it, kgs, k) {
+  const ex = it.ex; if (loadType(ex) === 'none') return null;
+  const vs = kgs.filter(v => v > 0); if (!vs.length) return null;
+  const kg = Math.max(...vs);
+  const weights = (s, skip = -1) => s ? s.s.flatMap((x, i) => { if (!x || i === skip) return []; const sd = setSides(x, ex); return sd ? [sd.l[0], sd.r[0]] : [x[0]]; }).filter(v => v > 0) : [];
+  const last = pastSessions(ex.id).reverse().find(s => weights(s).length), today = weights(todaySession(ex.id, false), k);
+  const ref = last ? Math.max(...weights(last)) : today.length ? Math.max(...today) : null;
+  const ask = why => ({kg, text:`${why} Записать ${fmtKg(kg)} кг?`});
+  if (ref != null) return kg >= 2 * ref && kg - ref >= 5 ? ask(last ? `Это намного больше, чем в прошлый раз (${fmtKg(ref)} кг).` : `Это намного больше, чем сегодня в других подходах (${fmtKg(ref)} кг).`) : null;
+  const kind = kgLimitOf(it);
+  return kg > KG_LIMIT[kind] ? ask(KG_LIMIT_NOTE[kind]) : null;
+}
+/* kgAsk[упражнение] = {k, text, side, edit} — строка, где ждёт ответ «Записать / Исправить» (как подтверждение «Убрать»
+   у подхода: строка подсвечена, вопрос и две кнопки под полями); edit — правка уже отмеченного подхода */
+const kgAsk = {};
+function kgAskHtml(id, a) {
+  return `<div class="lt-kq" role="group" aria-labelledby="lt-kq-${id}"><span class="lt-cft" id="lt-kq-${id}">${esc(a.text)}</span>`
+    + `<button type="button" class="lt-cfy" data-kgyes="${id}">${'Записать'}</button><button type="button" class="lt-cfn" data-kgfix="${id}">${'Исправить'}</button></div>`;
+}
+function askKg(row, it, k, q, extra = {}) {
+  const id = it.ex.id, box = row.closest('.c-log');
+  dropKgAsk(id, box);
+  if (setArm[id] !== undefined) { delete setArm[id]; box.querySelectorAll('.lt-r.lt-arm').forEach(r => { r.classList.remove('lt-arm'); const c = r.querySelector('.lt-cf'); if (c) c.remove(); }); }
+  kgAsk[id] = {k, text:q.text, side:extra.side || null, edit:!!extra.edit};
+  row.classList.add('lt-arm'); row.insertAdjacentHTML('beforeend', kgAskHtml(id, kgAsk[id]));
+  row.querySelector('[data-kgfix]').focus();
+}
+function dropKgAsk(id, box) {
+  delete kgAsk[id];
+  if (box) box.querySelectorAll('.lt-kq').forEach(q => { const r = q.closest('.lt-r'); q.remove(); if (r && !r.querySelector('.lt-cf')) r.classList.remove('lt-arm'); });
+}
+/* поле веса, о котором спросили: сторона из вопроса, иначе общее */
+function kgAskField(box, a) {
+  const row = box && box.querySelector(`.lt-r[data-k="${a.k}"]`); if (!row) return {row:null, inp:null};
+  return {row, inp:rowFields(row, row.classList.contains('lt-lr') ? a.side || 'l' : null).kgIn};
+}
+/* «Записать»: подход записывается с вписанным весом (правка отмеченного — правится) */
+function kgYes(id, box) {
+  const a = kgAsk[id]; if (!a || !box) return;
+  const {row, inp} = kgAskField(box, a);
+  dropKgAsk(id, box); if (!row) return;
+  if (a.edit) { if (inp) { editSet(inp, true); inp.focus(); } return; }
+  const tick = row.querySelector('[data-tick]'); tickSet(tick, true); tick.focus();
+}
+/* «Исправить» или Esc: вопрос закрывается, фокус — в поле веса, вписанное выделено */
+function kgFix(id, box) {
+  const a = kgAsk[id]; if (!a || !box) return;
+  const {inp} = kgAskField(box, a);
+  dropKgAsk(id, box);
+  if (inp) { inp.focus(); inp.select(); }
+}
 
 /* ---------- история упражнения ---------- */
 function metricOf(ex) {
@@ -20114,6 +20560,39 @@ function metricOf(ex) {
   if (ex.kind === 'time') return {name:'Лучший подход', unit:'с', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
   if (ex.kind === 'dist') return {name:'Лучшая дистанция', unit:'м', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
   return {name:'Лучший подход', unit:'повт.', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
+}
+/* самый тяжёлый подход записи: вес и лучшие повторы с ним (статодинамика и записи без веса — null) */
+function topSet(s) {
+  if (!s || s.fmt === 'static') return null;
+  const xs = s.s.filter(x => x && x[0] > 0); if (!xs.length) return null;
+  const w = Math.max(...xs.map(x => x[0]));
+  return {w, r:Math.max(...xs.filter(x => x[0] === w).map(x => x[1]))};
+}
+/* график истории: у упражнений с весом — расчётный максимум; если вес во всех записях один и тот же (одни гантели дома),
+   максимум почти не меняется (повторы больше 12 в нём не считаются) — тогда график повторов с этим весом */
+function histMetric(ex, ss) {
+  const m = metricOf(ex);
+  if (loadType(ex) !== 'kg' || ex.kind) return m;
+  const tops = ss.map(topSet).filter(Boolean);
+  if (tops.length < 2 || !tops.every(t => t.w === tops[0].w)) return m;
+  const w = tops[0].w;
+  return {name:`Повторы с ${fmtKg(w)} кг`, unit:'повт.', bare:true, f:s => { const t = topSet(s); return t && t.w === w ? t.r : null; }};
+}
+/* Сводка упражнения в строке журнала. С весом: крупно — рабочий вес и лучшие повторы с ним в последней записи, мельче
+   и с подписью — расчётный максимум; изменение с первой записи — по весу, а при том же весе — по повторам («+3 повт.»,
+   а не «0 %»: с одними гантелями прогресс — это повторы). Без веса — как раньше: значение метрики и изменение в процентах. */
+function journalVal(ex, ss) {
+  const m = metricOf(ex), tops = loadType(ex) === 'kg' && !ex.kind ? ss.map(topSet).filter(Boolean) : [];
+  if (!tops.length) {
+    const vals = ss.map(s => m.f(s)).filter(v => v != null), firstV = vals[0], lastV = vals[vals.length - 1];
+    const ch = vals.length > 1 && firstV ? Math.round((lastV / firstV - 1) * 100) : null;
+    return `<span class="j-val">${lastV != null ? fmtKg(Math.round(lastV * 2) / 2) : '—'}<small>${m.unit}</small>${ch != null ? `<em class="${ch > 0 ? 'pos' : ch < 0 ? 'neg' : ''}">${ch > 0 ? '+' : ''}${ch}%</em>` : ''}</span>`;
+  }
+  const a = tops[0], b = tops[tops.length - 1], e = [...ss].reverse().map(m.f).find(v => v != null);
+  const chip = (d, u) => `<em class="${d > 0 ? 'pos' : 'neg'}">${d > 0 ? '+' : '−'}${u === 'кг' ? fmtKg(Math.abs(d)) : Math.abs(d)} ${u}</em>`;
+  const ch = tops.length < 2 ? '' : b.w !== a.w ? chip(b.w - a.w, 'кг') : b.r !== a.r ? chip(b.r - a.r, 'повт.') : '';
+  return `<span class="j-val j-wr"><span class="j-big"><span class="vh">${'Рабочий вес'} </span>${fmtKg(b.w)}<small>кг</small> × ${b.r}<span class="vh"> ${'повт.'}</span></span>`
+    + `${e != null ? `<small class="j-e1">${'расч. максимум'} ${fmtKg(Math.round(e * 2) / 2)} кг</small>` : ''}${ch}</span>`;
 }
 function sparkSvg(pts, unit, step = 0.5) {
   if (!pts.length) return '';
@@ -20147,13 +20626,13 @@ function histSets(ex, s) {
 function histHtml(ex) {
   const ss = (LOG.data[ex.id] || []).filter(x => x.s.some(Boolean));
   if (!ss.length) return `<p class="h-empty">Записей пока нет. Отметьте подходы выше — здесь появится история и график.</p>${variantHistNote(ex)}`;
-  const m = metricOf(ex);
+  const m = histMetric(ex, ss);
   const pts = ss.map(s => ({d:s.d, v:m.f(s)})).filter(p => p.v != null).slice(-24);
   const best = pts.length ? Math.max(...pts.map(p => p.v)) : null;
   const rows = ss.slice(-6).reverse().map(s => `<li><span class="h-d">${fmtDay(s.d, true)}${s.wk ? `<small>нед. ${s.wk}</small>` : ''}${s.fmt === 'static' ? '<small>статодинамика</small>' : ''}</span>
     <span class="h-s">${histSets(ex, s)}</span>
     <button type="button" class="h-del" data-del="${ex.id}" data-d="${s.d}" aria-label="Удалить запись за ${fmtDay(s.d, true)}">Удалить</button></li>`).join('');
-  return `<div class="h-chart"><p class="h-cap">${m.name}, ${m.unit}${best != null ? ` · лучший ${fmtKg(Math.round(best * 2) / 2)}` : ''}</p>${sparkSvg(pts, m.unit)}</div>
+  return `<div class="h-chart"><p class="h-cap">${m.name}${m.bare ? '' : ', ' + m.unit}${best != null ? ` · лучший ${fmtKg(Math.round(best * 2) / 2)}` : ''}</p>${sparkSvg(pts, m.unit)}</div>
     <ul class="h-list">${rows}</ul>${ss.length > 6 ? `<p class="h-more">Всего записей: ${ss.length}. Полная история — в разделе «Журнал».</p>` : ''}${variantHistNote(ex)}`;
 }
 function histCount(id) { return (LOG.data[id] || []).filter(x => x.s.some(Boolean)).length; }
@@ -20273,22 +20752,20 @@ function renderJournal() {
     html += `<div class="empty"><h2>Записей пока нет</h2><p>Откройте план и отмечайте подходы в карточках упражнений: вес и повторы сохранятся здесь, а планировщик начнёт подсказывать, когда прибавлять вес.</p><button type="button" class="btn" data-view="plan">Перейти к плану</button></div>`;
   } else {
     html += `<ul class="j-list">${entries.map(([id, ss]) => {
-      const ex = EXI[id], m = metricOf(ex);
-      const vals = ss.map(s => m.f(s)).filter(v => v != null);
-      const firstV = vals[0], lastV = vals[vals.length - 1];
-      const ch = vals.length > 1 && firstV ? Math.round((lastV / firstV - 1) * 100) : null;
+      const ex = EXI[id];
       const lastS = ss[ss.length - 1];
       return `<li class="j-row">
         <details>
           <summary>
             <span class="j-name">${esc(ex.name)}<small>${GN[ex.g]} · ${ss.length} ${plural(ss.length, 'запись', 'записи', 'записей')} · ${fmtDay(lastS.d, true)}</small></span>
-            <span class="j-val">${lastV != null ? fmtKg(Math.round(lastV * 2) / 2) : '—'}<small>${m.unit}</small>${ch != null ? `<em class="${ch > 0 ? 'pos' : ch < 0 ? 'neg' : ''}">${ch > 0 ? '+' : ''}${ch}%</em>` : ''}</span>
+            ${journalVal(ex, ss)}
           </summary>
           <div class="j-body">${histHtml(ex).replace(/<p class="h-more">.*?<\/p>/, '')}${ss.length > 6 ? `<details class="j-all"><summary>Все записи (${ss.length})</summary><ul class="h-list">${ss.slice(0, -6).reverse().map(s => `<li><span class="h-d">${fmtDay(s.d, true)}</span><span class="h-s">${histSets(ex, s)}</span><button type="button" class="h-del" data-del="${id}" data-d="${s.d}">Удалить</button></li>`).join('')}</ul></details>` : ''}</div>
         </details>
       </li>`;
     }).join('')}</ul>
-    <p class="legend">Расчётный максимум — вес, который вы, по формуле Эпли, подняли бы один раз: вес × (1 + повторы / 30). Он растёт и когда прибавляете вес, и когда делаете больше повторов с тем же весом. У гантелей и гирь он — по весу одного снаряда.</p>
+    <p class="legend">Справа — рабочий вес и лучшие повторы с ним в последней тренировке, ниже — расчётный максимум и изменение с первой записи: по весу, а при том же весе — по повторам. У гантелей и гирь вес — одного снаряда.</p>
+    <p class="legend">Расчётный максимум — вес, который вы, по формуле Эпли, подняли бы один раз: вес × (1 + повторы / 30). Он растёт и когда прибавляете вес, и когда делаете больше повторов с тем же весом, но повторы сверх 12 в нём не учитываются. Если вес во всех записях один, график показывает повторы с ним.</p>
     <p class="legend">Общий вес — сумма «вес × повторы» по всем снарядам и сторонам: жим гантелей 2 × 20 кг на 10 повторов — 400 кг, тяга гантели одной рукой 30 кг по 10 на каждую сторону — 600 кг. Считается только внешний вес: гантели, гири, штанга, тренажёр, доп. вес; вес тела, противовес гравитрона, удержания на время и дистанция не входят. Л/П — подход с левой и правой стороной отдельно: прогресс и рекорды — по слабой стороне.</p>`;
   }
   $('#plan').innerHTML = html;
@@ -20403,7 +20880,8 @@ function readFields({kgIn, rIn}, lt) {
   if (kg != null && kg < 0) kg = null;
   return {kg, reps:Math.round(reps * 10) / 10};
 }
-function tickSet(btn) {
+/* sure — вес уже подтвердили («Записать» в вопросе о весе) */
+function tickSet(btn, sure) {
   const id = btn.dataset.tick, k = +btn.dataset.k;
   const row = btn.closest('.lt-r');
   const it = plan.items.find(x => x.ex.id === id);
@@ -20411,11 +20889,12 @@ function tickSet(btn) {
   const F = (lr ? ['l', 'r'] : [null]).map(side => rowFields(row, side));
   const s = todaySession(id, true);
   if (s.s[k]) {
+    if (kgAsk[id] && kgAsk[id].k === k) dropKgAsk(id, row.closest('.c-log'));
     s.s[k] = null; cleanToday(id);
     row.classList.remove('done'); btn.setAttribute('aria-pressed', 'false');
     for (const f of F) { if (f.kgIn) f.kgIn.value = ''; f.rIn.value = ''; }
     carryKgBox(row.closest('.c-log'));
-    logTouch(id); refreshHist(id); return;
+    logTouch(id); refreshHist(id); refreshSug(row.closest('.c-log'), it); return;
   }
   const got = F.map(f => readFields(f, lt)), bad = got.find(g => g.bad);
   if (bad) {
@@ -20423,6 +20902,10 @@ function tickSet(btn) {
     bad.bad.focus(); bad.bad.classList.add('need'); setTimeout(() => bad.bad.classList.remove('need'), 1600);
     return;
   }
+  /* неправдоподобный вес — не записывать, переспросить в строке */
+  const q = !sure && kgDoubt(it, got.map(g => g.kg), k);
+  if (q) { cleanToday(id); askKg(row, it, k, q, {side:lr ? (got[1].kg > got[0].kg ? 'r' : 'l') : null}); return; }
+  dropKgAsk(id, row.closest('.c-log'));
   while (s.s.length < k) s.s.push(null);
   s.s[k] = lr ? makeSidedSet([got[0].kg, got[0].reps], [got[1].kg, got[1].reps], it.ex) : [got[0].kg, got[0].reps];
   s.target=Math.max(s.target||0,it.rx.circ?(it.rounds||it.rx.sets):it.rx.sets);
@@ -20431,7 +20914,7 @@ function tickSet(btn) {
   F.forEach((f, i) => { if (f.kgIn) f.kgIn.value = got[i].kg != null ? fmtKg(got[i].kg) : ''; f.rIn.value = got[i].reps; });
   row.classList.add('done'); btn.setAttribute('aria-pressed', 'true');
   carryKgBox(row.closest('.c-log'));
-  logTouch(id); refreshHist(id);
+  logTouch(id); refreshHist(id); refreshSug(row.closest('.c-log'), it);
   const total = it.rx.circ ? 0 : it.rx.sets;
   const doneN = s.s.filter(Boolean).length;
   if (!it.rx.circ) {
@@ -20439,11 +20922,18 @@ function tickSet(btn) {
     if (r) startRest(r, doneN >= total ? 'Отдых перед следующим упражнением' : it.rx.static && doneN % 3 === 0 ? `Отдых после серии ${doneN / 3}` : `Отдых после подхода ${doneN}`);
   }
 }
-function editSet(inp) {
+/* правка отмеченного подхода; sure — вес уже подтвердили */
+function editSet(inp, sure) {
   const row = inp.closest('.lt-r'); if (!row || !row.classList.contains('done')) return;
   const box = inp.closest('.c-log'), id = box.dataset.log, k = +row.dataset.k, ex = EXI[id];
   const s = todaySession(id, false); if (!s || !s.s[k]) return;
   const v = parseNum(inp.value), x = s.s[k], side = inp.dataset.side;
+  /* неправдоподобный вес — запись прежняя, вопрос в строке */
+  if (inp.dataset.f === 'kg' && v > 0 && !sure) {
+    const it = (plan && plan.items && plan.items.find(y => y.ex.id === id)) || {ex, rx:{}}, q = kgDoubt(it, [v], k);
+    if (q) { askKg(row, it, k, q, {side, edit:true}); return; }
+  }
+  if (kgAsk[id] && kgAsk[id].k === k) dropKgAsk(id, box);
   if (side) {
     /* Л/П: правится одна сторона, основные поля — снова слабая сторона, отдых остаётся */
     const sd = setSides(x, ex), l = sd ? [...sd.l] : [x[0], x[1]], r = sd ? [...sd.r] : [x[0], x[1]], p = side === 'l' ? l : r;
@@ -20513,6 +21003,7 @@ function addSet(id, box) {
 function askRemoveSet(id, box) {
   const it = plan && plan.items && plan.items.find(x => x.ex.id === id); if (!it || !box) return;
   const n = logRowCount(it); if (n <= 1) return;
+  if (kgAsk[id]) dropKgAsk(id, box);
   const row = box.querySelector(`.lt-r[data-k="${n - 1}"]`);
   const armed = row && row.querySelector('.lt-cf');
   if (armed) { armed.querySelector('[data-delno]').focus(); return; }
@@ -20585,6 +21076,8 @@ document.addEventListener('click', e => {
   if (t.dataset.delset) { askRemoveSet(t.dataset.delset, t.closest('.c-log')); return; }
   if (t.dataset.delyes) { removeSet(t.dataset.delyes, t.closest('.c-log')); return; }
   if (t.dataset.delno) { keepSet(t.dataset.delno, t.closest('.c-log')); return; }
+  if (t.dataset.kgyes) { kgYes(t.dataset.kgyes, t.closest('.c-log')); return; }
+  if (t.dataset.kgfix) { kgFix(t.dataset.kgfix, t.closest('.c-log')); return; }
   if (t.dataset.hist) {
     const card = t.closest('.card'), h = card.querySelector('.c-hist');
     h.hidden = !h.hidden; t.setAttribute('aria-expanded', String(!h.hidden));
@@ -20603,6 +21096,7 @@ document.addEventListener('change', e => {
 document.addEventListener('input', e => { if (e.target.classList && e.target.classList.contains('lt-in') && e.target.dataset.f === 'kg') logKgInput(e.target); });
 document.addEventListener('keydown', e => {
   const box = e.key === 'Escape' && e.target.closest && e.target.closest('.c-log');
+  if (box && box.querySelector('.lt-kq')) { e.preventDefault(); kgFix(box.dataset.log, box); return; }
   if (box && box.querySelector('.lt-cf')) { e.preventDefault(); keepSet(box.dataset.log, box); return; }
   if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('lt-in')) {
     e.preventDefault();
@@ -21924,16 +22418,19 @@ function closeWorkout(){
 }
 function workoutShow(index){
   if(!workout)return;
-  workout.index=Math.max(0,Math.min(workout.queue.length-1,index));workout.restUntil=0;workout.restFrom=0;workout.next=-1;workout.sideNote='';workout.holdPair=null;RestAlarm.cancel();paintRestPhase(false);
+  workout.index=Math.max(0,Math.min(workout.queue.length-1,index));workout.restUntil=0;workout.restFrom=0;workout.next=-1;workout.sideNote='';workout.holdPair=null;RestAlarm.cancel();paintRestPhase(false);workoutAskHide();
   const s=workout.queue[workout.index],it=s.it,ex=it.ex,stored=workoutValue(s),sg=suggest(it),hold=isHold(ex);
   const prev=sg.prev?.s[s.k]||sg.prev?.s.filter(Boolean).slice(-1)[0];
   $('#wv-active').hidden=false;$('#wv-rest').hidden=true;$('#wv-finish').hidden=true;
   $('#wv-title').textContent=it.name;$('#wv-exercise').value=ex.id;
   $('#wv-set-label').textContent=`${s.phase} · подход ${s.k+1} из ${s.n}`;
   $('#wv-equipment').textContent=it.eqLine;
-  $('#wv-target').textContent=it.rx.reps+(ex.kind?'':' повторов');
+  /* цель подхода: у пирамиды повторов своего плана — число этого подхода */
+  $('#wv-target').textContent=planReps(it.rx,s.k)+(ex.kind?'':' повторов');
   const unit=ex.kind==='time'?'с':ex.kind==='dist'?'м':'повт.',psd=prev&&setSides(prev,ex);
-  $('#wv-previous').textContent=psd?`${setText(prev,ex)} ${unit}`:prev?`${prev[0]!=null?fmtKg(prev[0])+' кг × ':''}${prev[1]} ${unit}`:'Первая запись';
+  /* прошлых тренировок нет: «Первая запись», пока сегодня ничего не записано, потом — «—» */
+  const todayN=(todaySession(ex.id,false)?.s||[]).filter(Boolean).length;
+  $('#wv-previous').textContent=psd?`${setText(prev,ex)} ${unit}`:prev?`${prev[0]!=null?fmtKg(prev[0])+' кг × ':''}${prev[1]} ${unit}`:todayN?'—':'Первая запись';
   $('#wv-previous-date').textContent=sg.prev?fmtDay(sg.prev.d,true):'';
   $('#wv-set-chips').innerHTML=workout.queue.map((x,i)=>x.it.ex.id===ex.id?`<button type="button" data-wv-index="${i}" class="${workoutValue(x)?'is-done ':''}${i===workout.index?'is-current':''}" aria-label="Подход ${x.k+1}${workoutValue(x)?', выполнен':''}" aria-current="${i===workout.index?'step':'false'}">${workoutValue(x)?'✓ ':''}${x.k+1}</button>`:'').join('');
   workoutFill(s,sg,prev);
@@ -21958,16 +22455,18 @@ function workoutFill(s,sg,prev){
   const draft=workout.drafts[workoutDraftKey(s)],today=todaySession(ex.id,false)?.s||[];
   /* вес: записанный сегодня в подходе выше (carriedKg — то же правило, что в карточке: свой вес подхода по плану или
      по пирамиде прошлого раза не перетирается), иначе свой вес подхода, иначе из прошлой тренировки */
-  const own=ownKgs(it,sg.prev?sg.prev.s.filter(Boolean):[]),planned=own(s.k),kgText=v=>v!=null?fmtKg(v):'',carried=carriedKg(it,today,s.k,null,own);
+  const own=ownKgs(it,sg.prev?sg.prev.s.filter(Boolean):[],sg),planned=own(s.k),kgText=v=>v!=null?fmtKg(v):'',carried=carriedKg(it,today,s.k,null,own);
   $('#wv-kg').value=draft?draft.kg:stored?kgText(stored[0]):carried!=null?fmtKg(carried):planned!=null?fmtKg(planned):prev?.[0]!=null?fmtKg(prev[0]):'';
-  $('#wv-reps').value=draft?draft.reps:stored?String(stored[1]):'';$('#wv-reps').placeholder=it.rx.reps;
+  /* подсказка повторов — цель подхода со словом «цель»: серое «12–15» без него выглядело введённым */
+  const goal='цель '+planReps(it.rx,s.k);
+  $('#wv-reps').value=draft?draft.reps:stored?String(stored[1]):'';$('#wv-reps').placeholder=goal;
   /* Л/П: записанные стороны, иначе — общий вес; вес стороны по умолчанию — из подхода выше по своей стороне, из прошлых
      сторон, если они были */
   const ssd=stored&&setSides(stored,ex),psd=prev&&setSides(prev,ex);
   for(const k of ['l','r']){
     const ck=carriedKg(it,today,s.k,k,own),kgDef=ck!=null?fmtKg(ck):planned!=null?fmtKg(planned):psd?kgText(psd[k][0]):prev?.[0]!=null?fmtKg(prev[0]):'';
     $('#wv-kg-'+k).value=draft&&draft['k'+k]!==undefined?draft['k'+k]:ssd?kgText(ssd[k][0]):stored?kgText(stored[0]):kgDef;
-    $('#wv-reps-'+k).value=draft&&draft['r'+k]!==undefined?draft['r'+k]:ssd?String(ssd[k][1]):stored?String(stored[1]):'';$('#wv-reps-'+k).placeholder=it.rx.reps;
+    $('#wv-reps-'+k).value=draft&&draft['r'+k]!==undefined?draft['r'+k]:ssd?String(ssd[k][1]):stored?String(stored[1]):'';$('#wv-reps-'+k).placeholder=goal;
   }
   workoutPairTotal();
   $('#wv-input-hint').textContent=hold?(lt==='extra'?'Доп. вес можно оставить пустым. ':'')+'«Стоп» запишет секунды и начнёт отдых. Секунды можно ввести и вручную.'
@@ -21996,8 +22495,14 @@ function workoutLrToggle(){
 /* в «Анатомии» фаза — по сетке кадров карточек (cardClock, отличие от точного времени ≤17 мс): со второго круга матрицы костей
    фаз берутся из памяти фигуры (memoBones в src/volume/main.mjs) */
 function paintWorkoutMotion(){if(!workout?.motion)return;const F=workout.motion,m=motionFrame(F,workoutAnatomyLive()?cardClock(F):F.clock);F.f.at(m.t,m);if($('#wv-cue').textContent!==m.cue)$('#wv-cue').textContent=m.cue;paintMusclePanel('wv',F,m);paintStressPanel('wv',F,m);}
+/* вопрос о весе под полями подхода: «Записать» записывает как есть, «Исправить» (и Esc) — фокус в поле веса; пока вопрос
+   открыт, «Подход выполнен» скрыта — ответ один из двух; правка веса закрывает вопрос */
+function workoutAsk(q,side){const b=$('#wv-kg-ask');$('#wv-kg-ask-t').textContent=q.text;b.dataset.side=side||'';b.hidden=false;$('#wv-done').hidden=true;$('#wv-kg-fix').focus();}
+function workoutAskHide(){const b=$('#wv-kg-ask');if(!b||b.hidden)return false;b.hidden=true;$('#wv-done').hidden=false;return true;}
+function workoutAskFix(){const side=$('#wv-kg-ask').dataset.side;workoutAskHide();const inp=$(side?'#wv-kg-'+side:'#wv-kg');inp.focus();inp.select();}
 function strictWorkoutNumber(value){const s=String(value).trim().replace(',','.');return /^\d+(\.\d+)?$/.test(s)?Number(s):null;}
-function commitWorkout(e){
+/* sure — вес уже подтвердили («Записать» в вопросе о весе) */
+function commitWorkout(e,sure){
   if(e)e.preventDefault();if(!workout||$('#wv-active').hidden)return;
   const step=workout.queue[workout.index],ex=step.it.ex,lt=loadType(ex),lr=lrOn(ex);
   /* одна пара «вес × повторы» или две — левая и правая */
@@ -22011,6 +22516,10 @@ function commitWorkout(e){
   const got=lr?[read($('#wv-kg-l'),$('#wv-reps-l')),read($('#wv-kg-r'),$('#wv-reps-r'))]:[read($('#wv-kg'),$('#wv-reps'))],bad=got.find(g=>g.bad),pair=workout.holdPair;
   workout.holdPair=null;
   if(bad){$('#wv-error').textContent=bad.msg;bad.bad.setAttribute('aria-invalid','true');bad.bad.focus();return;}
+  /* неправдоподобный вес («5000» вместо «50») — не записывать, переспросить под полями: «Записать» / «Исправить» (kgDoubt, 13-log.js) */
+  const q=!sure&&kgDoubt(step.it,got.map(g=>g.kg),step.k);
+  if(q){workout.holdPair=pair;workoutAsk(q,lr?(got[1].kg>got[0].kg?'r':'l'):'');return;}
+  workoutAskHide();
   /* отдых, уже записанный у этого подхода (третье поле), при исправлении сохраняется */
   const already=!!workoutValue(step),session=todaySession(ex.id,true),rest=already?restField(session.s[step.k][2]):null;
   while(session.s.length<step.k)session.s.push(null);
@@ -22037,7 +22546,7 @@ function workoutRestTaken(){
 function workoutShowRest(){
   holdStop();$('#wv-active').hidden=true;$('#wv-rest').hidden=false;$('#wv-finish').hidden=true;RestAlarm.paintButton($('#wv-sound'));RestAlarm.paintPrefs();
   const next=workout.queue[workout.next];
-  $('#wv-next-name').textContent=next.it.name;$('#wv-next-detail').textContent=`${next.phase} · подход ${next.k+1} из ${next.n} · ${next.it.rx.reps}${next.it.ex.kind?'':' повторов'}`;
+  $('#wv-next-name').textContent=next.it.name;$('#wv-next-detail').textContent=`${next.phase} · подход ${next.k+1} из ${next.n} · ${planReps(next.it.rx,next.k)}${next.it.ex.kind?'':' повторов'}`;
   $('#wv-rest-note').textContent=workout.sideNote||restNote();workout.sideNote='';workout.restOver=null;workoutTick();$('#wv-continue').focus();
 }
 /* после подхода: общий вес подхода, если он считается (внешний вес), и слабая сторона, если стороны отличались */
@@ -22135,9 +22644,10 @@ function holdCommit(){
 function holdStop(){if(workout?.hold){workout.hold.h=null;workout.hold.last=null;}RestAlarm.hush();}
 function setupWorkout(){
   $('#wv-form').addEventListener('submit',commitWorkout);
-  for(const id of ['wv-kg','wv-reps','wv-kg-l','wv-reps-l','wv-kg-r','wv-reps-r'])$('#'+id).addEventListener('input',()=>{workoutCapture();$('#wv-error').textContent='';$('#'+id).removeAttribute('aria-invalid');if(id==='wv-kg')workoutPairTotal();});
+  for(const id of ['wv-kg','wv-reps','wv-kg-l','wv-reps-l','wv-kg-r','wv-reps-r'])$('#'+id).addEventListener('input',()=>{workoutCapture();$('#wv-error').textContent='';$('#'+id).removeAttribute('aria-invalid');if(id==='wv-kg')workoutPairTotal();if(id.startsWith('wv-kg'))workoutAskHide();});
   $('#wv-exercise').addEventListener('change',e=>{workoutCapture();const i=workout.queue.findIndex(s=>s.it.ex.id===e.target.value&&!workoutValue(s));workoutShow(i>=0?i:workout.queue.findIndex(s=>s.it.ex.id===e.target.value));});
-  $('#workout-view').addEventListener('cancel',e=>{e.preventDefault();closeWorkout();});
+  /* Esc: открыт вопрос о весе — он закрывается («Исправить»), тренировка остаётся */
+  $('#workout-view').addEventListener('cancel',e=>{e.preventDefault();if(!$('#wv-kg-ask').hidden){workoutAskFix();return;}closeWorkout();});
   /* вернулись на экран: таймеры страницы в фоне редки — обновить отдых и удержание сразу */
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&workout&&$('#workout-view').open)workoutTick();});
   document.addEventListener('click',e=>{
@@ -22151,6 +22661,8 @@ function setupWorkout(){
     if(t.id==='wv-undo'){workoutShow(workout.last);return;}
     if(t.id==='wv-continue'){workoutRestTaken();workoutShow(workout.next);return;}
     if(t.id==='wv-lr'){workoutLrToggle();return;}
+    if(t.id==='wv-kg-yes'){commitWorkout(null,true);return;}
+    if(t.id==='wv-kg-fix'){workoutAskFix();return;}
     if(t.id==='wv-hold-go'){holdGo();return;}
     if(t.id==='wv-hold-reset'){holdStop();paintHold();return;}
     if(t.dataset.wvRest){const end=restAdjust(workout.restUntil,Date.now(),Number(t.dataset.wvRest));if(end!==workout.restUntil){workout.restUntil=end;RestAlarm.arm(end,{from:workout.restFrom||undefined});saveWorkout();workoutTick();}return;}
@@ -22538,9 +23050,13 @@ function warmupHtml(it, work) {
     <p class="wu-note-f">Отдых между разминочными 30–60 с. ${impl === 'bb' ? `Гриф ${fmtKg(GEAR.bar)} кг, блины: ${GEAR.plates.map(fmtKg).join(' · ')} — <button type="button" class="lk" data-gear="1">настроить</button>.` : impl === 'machine' ? 'Шаг стека принят 5 кг.' : ''}</p>
   </details>`;
 }
-/* рабочий вес для разминки: из первого введённого поля, иначе из подсказки */
+/* рабочий вес для разминки: из первого введённого поля (неправдоподобный и ещё не подтверждённый — «5000», kgDoubt
+   в 13-log.js — не в счёт), иначе из подсказки */
 function workWeightOf(it, card) {
-  if (card) { const inp = card.querySelector('.lt-r:not(.done) [data-f="kg"], .lt-r [data-f="kg"]'); if (inp && inp.value) { const v = parseNum(inp.value); if (v > 0) return v; } }
+  if (card) {
+    const inp = card.querySelector('.lt-r:not(.done) [data-f="kg"], .lt-r [data-f="kg"]'), row = inp && inp.closest('.lt-r');
+    if (inp && inp.value) { const v = parseNum(inp.value); if (v > 0 && !(row && !row.classList.contains('done') && kgDoubt(it, [v], +row.dataset.k))) return v; }
+  }
   const sg = suggest(it); return sg.kg && sg.kg > 0 ? sg.kg : null;
 }
 function refreshWarmup(card) {
@@ -23362,6 +23878,6 @@ renderPlan();
 prefetchStressIds();
 logInit();
 
-window.PODHOD_VERSION='4.96.0';window.PODHOD_BUILD='4.96.0-d61ba6b62500';window.PODHOD_RENDER={"skin":"31c4707ea0","skeleton":"f4e7c4b726","anatomy":"48636840a9"};window.PODHOD_LANG='ru';
+window.PODHOD_VERSION='4.97.0';window.PODHOD_BUILD='4.97.0-4d9dd8798163';window.PODHOD_RENDER={"skin":"31c4707ea0","skeleton":"f4e7c4b726","anatomy":"48636840a9"};window.PODHOD_LANG='ru';
 
 </script>

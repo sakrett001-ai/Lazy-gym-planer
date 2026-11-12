@@ -229,7 +229,7 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .lt-sn { min-width:88px; text-align:center; font:600 13px var(--f-body); color:var(--ink); font-variant-numeric:tabular-nums; white-space:nowrap; }
 /* подтверждение в строке заполненного подхода: строка подсвечена, под полями — вопрос и две кнопки */
 .lt-r.lt-arm { background:var(--hot-soft); border-radius:10px; box-shadow:0 0 0 5px var(--hot-soft); }
-.lt-cf { grid-column:1 / -1; display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; font-size:13px; line-height:1.3; color:var(--ink); }
+.lt-cf, .lt-kq { grid-column:1 / -1; display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; font-size:13px; line-height:1.3; color:var(--ink); }
 .lt-cft { flex:1 0 100%; font-weight:600; padding-top:2px; }
 .lt-cfy, .lt-cfn { min-height:38px; min-width:104px; padding:0 14px; border-radius:9px; background:var(--surface); font:600 13.5px var(--f-body); cursor:pointer; }
 .lt-cfy { border:1.5px solid var(--hot); color:var(--hot); }
@@ -354,6 +354,10 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .j-val small { font:500 11.5px var(--f-body); color:var(--muted); }
 .j-val em { font:600 12px var(--f-mono); font-style:normal; color:var(--muted); }
 .j-val em.pos { color:var(--good); } .j-val em.neg { color:var(--hot); }
+/* с весом: «5 кг × 15» крупно, расчётный максимум мелко с подписью */
+.j-big { white-space:nowrap; }
+.j-big small { font:500 13px var(--f-body); color:var(--muted); margin:0 2px 0 3px; }
+.j-val .j-e1 { font:500 11.5px var(--f-body); color:var(--muted); white-space:nowrap; }
 .j-body { display:grid; gap:10px; padding:0 14px 14px; }
 .j-all summary { cursor:pointer; font-size:13px; font-weight:600; color:var(--accent); padding:4px 0; }
 .empty .btn { margin-top:14px; }
@@ -687,6 +691,14 @@ html.workout-open{overflow:hidden}
 .wv-fields input{width:100%;height:66px;min-width:0;border:1.5px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);padding:8px 12px;font:600 26px var(--f-mono);text-align:center;font-variant-numeric:tabular-nums}
 .wv-fields input::placeholder{color:var(--faint);font-size:22px;font-weight:400}.wv-fields input:focus{outline:2px solid var(--accent);outline-offset:1px}.wv-fields input[aria-invalid="true"]{border-color:var(--hot)}
 #wv-error{color:var(--hot);font-size:13px;line-height:1.4;min-height:0;margin:5px 0}#wv-error:empty{display:none}
+/* вопрос о неправдоподобном весе под полями подхода: «Записать» / «Исправить» (как подтверждение в строке карточки) */
+.wv-ask{margin-top:12px;padding:12px;border-radius:12px;background:var(--hot-soft);display:grid;gap:10px}.wv-ask[hidden]{display:none}
+.wv-ask-t{margin:0;font-weight:600;font-size:14.5px;line-height:1.35;color:var(--ink)}.wv-ask-b{display:flex;gap:8px;flex-wrap:wrap}
+.wv-ask-b button{flex:1 1 120px;min-height:48px;border-radius:10px;background:var(--surface);font:600 15px var(--f-body);cursor:pointer;padding:0 14px}
+.wv-ask-yes{border:1.5px solid var(--hot);color:var(--hot)}.wv-ask-fix{border:1px solid var(--line);color:var(--ink)}
+.wv-ask-b button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* подсказка повторов «цель 12–15» — обычным шрифтом и мельче цифр: не выглядит введённой и помещается в поле на 320 px */
+.wv-fields input::placeholder{font-family:var(--f-body);font-size:17px;font-weight:400}
 .wv-primary{width:100%;min-height:54px;border:0;border-radius:12px;background:var(--accent);color:var(--accent-ink);padding:14px 20px;font:600 16px var(--f-body);cursor:pointer;margin-top:12px}
 .wv-primary:active{transform:translateY(1px)}.wv-link{border:0;background:none;padding:12px;min-height:44px;color:var(--muted);font-size:13px;cursor:pointer}
 .wv-rest,.wv-finish{text-align:center;max-width:540px;margin:36px auto 12px;padding:8px 0}
@@ -1360,8 +1372,8 @@ details.rule p { margin:6px 0 0; }
 .wv-lr-fields.wv-lr-nokg { grid-template-columns:62px minmax(0, 1fr); }
 .wv-lr-fields.wv-lr-nokg .wv-lr-kg { display:none; }
 .wv-lr-side { font:600 13px var(--f-body); color:var(--ink); }
-.wv-lr-fields input { width:100%; height:56px; min-width:0; border:1.5px solid var(--line); border-radius:12px; background:var(--surface); color:var(--ink); padding:6px 10px; font:600 23px var(--f-mono); text-align:center; font-variant-numeric:tabular-nums; }
-.wv-lr-fields input::placeholder { color:var(--faint); font-size:19px; font-weight:400; }
+.wv-lr-fields input { width:100%; height:56px; min-width:0; border:1.5px solid var(--line); border-radius:12px; background:var(--surface); color:var(--ink); padding:6px; font:600 23px var(--f-mono); text-align:center; font-variant-numeric:tabular-nums; }
+.wv-lr-fields input::placeholder { color:var(--faint); font:400 14px var(--f-body); } /* «цель 12–15» помещается и на 320 px */
 .wv-lr-fields input:focus { outline:2px solid var(--accent); outline-offset:1px; }
 .wv-lr-fields input[aria-invalid="true"] { border-color:var(--hot); }
 #wv-summary strong small { font:500 12px var(--f-mono); color:var(--muted); margin-right:8px; }
@@ -1410,3 +1422,18 @@ details.rule p { margin:6px 0 0; }
 #perf-panel .perf-msg:empty { display:none; }
 #perf-panel .perf-msg textarea { display:block; width:100%; margin-top:6px; font:400 11px/1.4 var(--f-mono); color:var(--ink); background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:6px; }
 @media print { #perf-panel { display:none !important; } }
+
+/* «Заменить»: список замен под кнопкой — в стиле списка планов «+ В свой план» (.cp-pick, 27-custom.css);
+   строка «что меняется» — обычным шрифтом, а не моноширинной подписью чипа. «Вернуть» после замены и «Убрать». */
+.c-act .sw-pick { max-width:none; margin:2px 0 0; }
+.sw-pick .place small { font:400 12.5px/1.35 var(--f-body); color:var(--muted); }
+.sw-none { margin:0; font-size:13.5px; line-height:1.4; color:var(--ink); }
+.sw-done, .sw-gone { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; font-size:13.5px; line-height:1.4; color:var(--ink); }
+.sw-done { flex-basis:100%; margin:0; padding:8px 10px; border-radius:10px; background:var(--accent-soft); }
+.sw-done > span, .sw-gone > span { flex:1 1 180px; min-width:0; overflow-wrap:anywhere; }
+.sw-gone { list-style:none; border:1px dashed var(--line); border-radius:var(--r); background:var(--surface-2); padding:10px 14px; }
+div.sw-gone { margin-top:12px; }
+.sw-undo { flex:none; min-height:44px; padding:0 16px; border:1px solid var(--accent); border-radius:9px; background:var(--surface); color:var(--accent); font:inherit; font-weight:600; cursor:pointer; }
+@media (hover:hover) { .sw-undo:hover { background:var(--accent); color:var(--accent-ink); } }
+.sw-pick .place small.sw-j { display:flex; align-items:center; gap:6px; font-weight:600; color:color-mix(in srgb, var(--hot) 82%, var(--ink)); }
+.sw-j .stress-dot { width:8px; height:8px; margin-top:0; }
