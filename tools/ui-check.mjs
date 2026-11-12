@@ -1020,6 +1020,161 @@ await page.close();
   await W.close();
 }
 
+/* «Заменить» (телефон 390×844): кнопка раскрывает под собой список замен (role="group" с подписью, aria-expanded),
+   пункты не ниже 44 px, без того, что уже в плане; Esc и повторное нажатие сворачивают, фокус — на кнопку; выбор меняет
+   упражнение в той же карточке, «Заменено: … Вернуть» с фокусом на «Вернуть», карточка на месте; «Вернуть» — прежнее.
+   В программе — без повторов недели; «Убрать» в своём плане → «Убрано: … Вернуть» на месте карточки; «Беречь колени» —
+   в заменах приседа нет глубокого сгиба стоя. */
+{
+  const w = await open(390, 844);
+  await w.evaluate(() => { S.fold = { setup: true, load: true, cards: 'compact' }; Object.assign(S, { count: 6, seed: 7 }); regen(); });
+  const at = async slot => {
+    const card = `.card[data-slot="${slot}"]`;
+    await w.evaluate(s => document.querySelector(s).scrollIntoView({ block: 'center' }), `${card} [data-swap]`);
+    return { card, btn: `${card} [data-swap]`, box: `#sw-pick-${slot}` };
+  };
+  const st = s => w.evaluate(({ card, btn, box }) => {
+    const b = document.querySelector(btn), x = document.querySelector(box), c = document.querySelector(card), r = b.getBoundingClientRect(), items = [...x.querySelectorAll('[data-swap-to]')];
+    const a = document.activeElement, inPlan = new Set(plan.items.map(it => it.ex.id)), u = c.querySelector('[data-swap-undo]');
+    return { exp: b.getAttribute('aria-expanded'), ctl: b.getAttribute('aria-controls') === x.id, open: !x.hidden && x.getClientRects().length > 0,
+      label: x.getAttribute('role') === 'group' && document.getElementById(x.getAttribute('aria-labelledby'))?.textContent, none: x.querySelector('.sw-none')?.textContent || '',
+      ids: items.map(i => i.dataset.swapTo), notes: items.every(i => (i.querySelector('small')?.textContent || '').length > 3),
+      minH: items.length ? Math.min(...items.map(i => i.getBoundingClientRect().height)) : 0, below: items.every(i => i.getBoundingClientRect().top >= r.bottom - 1),
+      inside: items.every(i => i.getBoundingClientRect().left >= 0 && i.getBoundingClientRect().right <= innerWidth), dup: items.some(i => inPlan.has(i.dataset.swapTo)),
+      focus: a === b ? 'button' : a?.dataset.swapTo ?? (a?.dataset.swapUndo ? 'undo' : a?.tagName), ex: c.dataset.ex, top: r.top,
+      line: c.querySelector('.sw-done')?.textContent.trim() || '', undoH: u ? u.getBoundingClientRect().height : 0, wide: document.documentElement.scrollWidth > document.documentElement.clientWidth };
+  }, s);
+  const slot = await w.evaluate(() => plan.blocks[0].items[1].slot), other = await w.evaluate(() => plan.blocks[0].items[2].slot);
+  let s1 = await at(slot), s = await st(s1);
+  check(s.exp === 'false' && s.ctl && !s.open, '«Заменить»: список свёрнут, у кнопки aria-expanded="false" и aria-controls');
+  await w.click(s1.btn); s = await st(s1);
+  check(s.exp === 'true' && s.open && s.label === 'Чем заменить' && s.ids.length >= 3 && s.ids.length <= 5 && s.notes && s.focus === s.ids[0] && !s.dup && !s.wide,
+    `«Заменить» раскрывает под кнопкой 3–5 замен со строкой «что меняется», фокус на первой, без упражнений плана (${JSON.stringify(s)})`);
+  check(s.minH >= 44 && s.below && s.inside, `замены: пункты не ниже 44 px, под кнопкой, в пределах экрана (${s.minH})`);
+  const before = s.ex, pick = s.ids[1];
+  await w.keyboard.press('Escape'); s = await st(s1);
+  check(s.exp === 'false' && !s.open && s.focus === 'button' && s.ex === before, 'Esc сворачивает список замен, фокус — на «Заменить», упражнение прежнее');
+  await w.click(s1.btn); await w.click(s1.btn); s = await st(s1);
+  check(s.exp === 'false' && !s.open, 'повторное нажатие на «Заменить» сворачивает список');
+  await w.click(s1.btn); const s2 = await at(other); await w.click(s2.btn);
+  check(!(await st(s1)).open && (await st(s2)).open, 'список в другой карточке сворачивает первый');
+  await w.keyboard.press('Escape'); s1 = await at(slot); await w.click(s1.btn); await w.waitForTimeout(700); /* список докручивается в экран плавно */
+  const y0 = (await st(s1)).top;
+  await w.click(`${s1.box} [data-swap-to="${pick}"]`); s = await st(s1);
+  const names = await w.evaluate(([a, b]) => [a, b].map(id => exName(EXI[id], plan.E)), [before, pick]);
+  check(s.ex === pick && s.line === `Заменено: ${names[0]} → ${names[1]}.Вернуть` && s.focus === 'undo' && s.undoH >= 44 && Math.abs(s.top - y0) < 2,
+    `выбор меняет упражнение в той же карточке: «Заменено: … Вернуть», фокус на «Вернуть», карточка на месте (${JSON.stringify({ ...s, y0, names })})`);
+  check(await w.evaluate(([sl, id]) => S.swaps.s[sl] === id && JSON.parse(localStorage.getItem('podhod.settings.v1')).swaps.s[sl] === id, [slot, pick]), 'замена сохраняется с настройками');
+  await w.click(`${s1.card} [data-swap-undo]`); s = await st(s1);
+  check(s.ex === before && !s.line && s.focus === 'button' && Math.abs(s.top - y0) < 2 && await w.evaluate(sl => !(sl in S.swaps.s), slot),
+    `«Вернуть» одним нажатием возвращает прежнее, фокус — на «Заменить» (${JSON.stringify(s)})`);
+  /* программа на неделю: в списке нет упражнений других дней */
+  await w.evaluate(() => { S.mode = 'program'; S.day = 0; regen(); });
+  const ps = await w.evaluate(() => plan.blocks[0].items[0].slot); s1 = await at(ps); await w.click(s1.btn); s = await st(s1);
+  const week = await w.evaluate(() => prog.days.flatMap(d => (d.plan.items || []).map(it => it.ex.id)));
+  check(s.open && s.ids.length > 0 && !s.ids.some(id => week.includes(id)), `программа: в заменах нет упражнений других дней недели (${JSON.stringify(s.ids)})`);
+  await w.click(`${s1.box} [data-swap-to="${s.ids[0]}"]`);
+  check(await w.evaluate(([sl, id]) => S.swaps.d0[sl] === id && document.querySelector(`.card[data-slot="${sl}"]`).dataset.ex === id && !!document.querySelector('[data-swap-undo]'), [ps, s.ids[0]]), 'программа: замена в дне и «Вернуть»');
+  /* свой план: «Убрать» сразу, «Убрано: … Вернуть» на месте карточки, страница не прыгает */
+  await w.evaluate(() => { S.customs = [{ id: 'sw', name: 'Верх', items: [{ id: 'bbbench', sets: 5 }, { id: 'latpull', kg: [40] }, { id: 'ohp' }] }]; ensureCustoms(S); openCustom('sw'); regen(); });
+  await w.evaluate(() => document.querySelector('.card[data-slot="1"] [data-cp-rm]').scrollIntoView({ block: 'center' }));
+  const rm = await w.evaluate(() => ({ top: document.querySelector('.card[data-slot="1"] [data-cp-rm]').getBoundingClientRect().top, name: document.querySelector('.card[data-slot="1"] .c-name').textContent }));
+  await w.click('.card[data-slot="1"] [data-cp-rm]');
+  let g = await w.evaluate(() => { const u = document.querySelector('[data-rm-undo]'), li = u?.closest('.sw-gone'); return { items: customOf().items.map(i => i.id).join(), text: li?.textContent.trim(), top: u?.getBoundingClientRect().top, h: u?.getBoundingClientRect().height, focus: document.activeElement === u, next: li?.nextElementSibling?.dataset.ex }; });
+  check(g.items === 'bbbench,ohp' && g.text === `Убрано: ${rm.name}.Вернуть` && g.focus && g.h >= 44 && g.next === 'ohp' && Math.abs(g.top - rm.top) < 2,
+    `«Убрать»: сразу, «Убрано: … Вернуть» на месте карточки, фокус на «Вернуть», страница не прыгает (${JSON.stringify({ ...g, rm })})`);
+  await w.click('[data-rm-undo]');
+  g = await w.evaluate(() => { const b = document.querySelector('.card[data-slot="1"] [data-cp-rm]'); return { items: JSON.stringify(customOf().items), gone: !!document.querySelector('.sw-gone'), focus: document.activeElement === b, top: b.getBoundingClientRect().top }; });
+  check(g.items === '[{"id":"bbbench","sets":5},{"id":"latpull","kg":[40]},{"id":"ohp"}]' && !g.gone && g.focus && Math.abs(g.top - rm.top) < 2, `«Вернуть» возвращает упражнение на место с его весом, фокус — на его «Убрать» (${JSON.stringify(g)})`);
+  /* свой план: «Заменить» работает так же и сохраняет подходы */
+  s1 = await at(0); await w.click(s1.btn); s = await st(s1);
+  check(s.open && !s.ids.some(id => ['latpull', 'ohp'].includes(id)), 'свой план: в заменах нет упражнений плана');
+  await w.click(`${s1.box} [data-swap-to="${s.ids[0]}"]`);
+  check(await w.evaluate(id => customOf().items[0].id === id && customOf().items[0].sets === 5 && !!document.querySelector('.card[data-slot="0"] [data-swap-undo]'), s.ids[0]), 'свой план: замена записана в план, подходы сохранены, «Вернуть» на месте');
+  /* «Беречь колени» (бережно): в заменах упражнения на присед — без глубокого сгиба стоя */
+  await w.evaluate(() => { S.mode = 'single'; switchModeSettings('custom'); Object.assign(S, { goal: 'gentle', groups: ['quads', 'glutes', 'hams'], protect: ['knees'] }); regen(); });
+  const sq = await w.evaluate(() => plan.items.find(it => PATTERN[it.ex.id] === 'squat')?.slot);
+  if (sq === undefined) check(false, 'бережно с «Беречь колени»: в плане нет упражнения на присед для проверки замен');
+  else {
+    s1 = await at(sq); await w.click(s1.btn); s = await st(s1);
+    check(s.open && (s.ids.length > 0 || /Близких замен нет/.test(s.none)) && await w.evaluate(ids => ids.every(id => !stressKneeDeep(EXI[id]) && fitsBody(EXI[id])), s.ids),
+      `«Беречь колени»: замены приседа без глубокого сгиба стоя (${JSON.stringify(s.ids)})`);
+  }
+  await w.close();
+}
+
+/* защита журнала (телефон, 13-log.js, 14-workout-mode.js): «5000» вместо «50» — вопрос в строке подхода «Записать /
+   Исправить», ничего не записано, фокус на «Исправить», Esc — в поле веса; «Записать» пишет как есть. Без прошлых
+   тренировок после отметки — «Сегодня: 1 из 3…», в тренировке «Прошлый раз: —». Пирамида повторов «10/8/6/5» в поле
+   «Повторов»: карточка «4 × 10/8/6/5», цели подходов в таблице и в тренировке («6 повторов», «цель 6»). Тот же вопрос
+   о весе в тренировке: «Подход выполнен» ждёт, Esc закрывает вопрос, а не тренировку. Журнал: «5 кг × 15» крупно */
+{
+  const G = await open(390, 844), sq = '.card[data-ex="squat"]', db = '.card[data-ex="dbbench"]';
+  await G.evaluate(() => {
+    const y = dayKey(new Date(Date.now() - 864e5));
+    S.customs = [{ id: 'dg', name: 'Защита', items: [{ id: 'squat', sets: 4 }, { id: 'dbbench', sets: 3 }, { id: 'bbbench', sets: 3 }] }];
+    S.custom = 'dg'; S.mode = 'custom'; ensureCustoms(S); openCustom('dg');
+    LOG.data = { squat: [{ d: y, s: [[52.5, 8], [52.5, 8], [52.5, 8], [52.5, 8]] }] }; regen();
+  });
+  await G.click(`${sq} [data-cfold="log"]`); await G.click(`${db} [data-cfold="log"]`);
+  const q = s => G.evaluate(s => { const k = document.querySelector(s + ' .lt-kq'), ae = document.activeElement;
+    return { text: k?.querySelector('.lt-cft').textContent ?? null, row: k?.closest('.lt-r').dataset.k ?? null, arm: !!k?.closest('.lt-r.lt-arm'),
+      focus: ae?.dataset.kgfix ? 'fix' : ae?.dataset.kgyes ? 'yes' : ae?.dataset.tick ? 'tick' + ae.dataset.k : ae?.dataset.f ? ae.dataset.f + ae.closest('.lt-r').dataset.k : '',
+      log: JSON.stringify(todaySession(document.querySelector(s).dataset.ex, false)?.s ?? null), wide: document.documentElement.scrollWidth > innerWidth + 1,
+      btn: k ? Math.min(...[...k.querySelectorAll('button')].map(b => b.getBoundingClientRect().height)) : 0 }; }, s);
+  await G.fill(`${sq} .lt-r[data-k="0"] [data-f="kg"]`, '5000'); await G.fill(`${sq} .lt-r[data-k="0"] [data-f="reps"]`, '8');
+  await G.click(`${sq} [data-tick][data-k="0"]`);
+  let r = await q(sq);
+  check(r.text === 'Это намного больше, чем в прошлый раз (52,5\u00a0кг). Записать 5000\u00a0кг?' && r.row === '0' && r.arm && r.focus === 'fix' && r.log === 'null' && !r.wide && r.btn >= 38,
+    `«5000» не записано: вопрос в строке подхода, фокус на «Исправить», кнопки не меньше 38 px, без прокрутки вбок (${JSON.stringify(r)})`);
+  await G.keyboard.press('Escape'); r = await q(sq);
+  check(r.text === null && r.focus === 'kg0' && r.log === 'null' && await G.evaluate(s => getSelection().toString() === '5000' || document.activeElement.selectionEnd - document.activeElement.selectionStart === 4, sq),
+    `Esc закрывает вопрос, фокус в поле веса, вписанное выделено (${JSON.stringify(r)})`);
+  await G.keyboard.type('50'); await G.click(`${sq} [data-tick][data-k="0"]`); r = await q(sq);
+  check(r.log === '[[50,8]]' && r.text === null, `исправленный вес записан сразу (${JSON.stringify(r)})`);
+  await G.fill(`${sq} .lt-r[data-k="1"] [data-f="kg"]`, '5000'); await G.fill(`${sq} .lt-r[data-k="1"] [data-f="reps"]`, '8'); await G.click(`${sq} [data-tick][data-k="1"]`);
+  await G.click(`${sq} [data-kgyes]`); r = await q(sq);
+  check(r.log === '[[50,8],[5000,8]]' && r.text === null && r.focus === 'tick1', `«Записать» пишет как вписано, фокус на отметке подхода (${JSON.stringify(r)})`);
+  /* без истории: после отметки — «Сегодня: 1 из 3» */
+  const sug = s => G.evaluate(s => document.querySelector(s + ' .sug span').textContent, s);
+  check(/^Первая запись/.test(await sug(db)), 'жим гантелей без истории — «Первая запись…»');
+  await G.fill(`${db} .lt-r[data-k="0"] [data-f="kg"]`, '20'); await G.fill(`${db} .lt-r[data-k="0"] [data-f="reps"]`, '10'); await G.click(`${db} [data-tick][data-k="0"]`);
+  check(await sug(db) === 'Сегодня: 1 из 3. Следующий — с тем же весом (20 кг).', `после отметки — «Сегодня: 1 из 3…» (${await sug(db)})`);
+  /* пирамида повторов в поле «Повторов» своего плана */
+  await G.click('[data-cp-edit="2"]');
+  await G.fill('[data-cp-reps="2"]', '10 / 8 / 6 / 5'); await G.press('[data-cp-reps="2"]', 'Tab'); await G.waitForTimeout(100);
+  const pyr = await G.evaluate(() => { const c = document.querySelector('.card[data-ex="bbbench"]');
+    return { rx: c.querySelector('.rx-big').textContent, field: c.querySelector('[data-cp-reps]').value, ph: [...c.querySelectorAll('.lt-r [data-f="reps"]')].map(i => i.placeholder).join(), item: JSON.stringify(customOf().items[2]) }; });
+  check(pyr.rx.startsWith('4 × 10/8/6/5') && pyr.field === '10/8/6/5' && pyr.ph === '10,8,6,5' && pyr.item === '{"id":"bbbench","sets":4,"reps":"10/8/6/5"}',
+    `«10 / 8 / 6 / 5» в поле «Повторов»: 4 подхода, карточка «4 × 10/8/6/5», цели подходов в таблице (${JSON.stringify(pyr)})`);
+  /* тренировка: цель подхода пирамиды, «Прошлый раз: —», вопрос о весе */
+  await G.click('#start-workout'); await G.waitForTimeout(200);
+  const wv = () => G.evaluate(() => ({ target: $('#wv-target').textContent, ph: $('#wv-reps').placeholder, prev: $('#wv-previous').textContent, ask: !$('#wv-kg-ask').hidden,
+    askText: $('#wv-kg-ask-t').textContent, done: !$('#wv-done').hidden, open: $('#workout-view').open, focus: document.activeElement?.id, log: JSON.stringify(todaySession(workout.queue[workout.index].it.ex.id, false)?.s ?? null) }));
+  await G.evaluate(() => workoutShow(workout.queue.findIndex(s => s.it.ex.id === 'bbbench' && s.k === 2)));
+  let w = await wv();
+  check(w.target === '6 повторов' && w.ph === 'цель 6', `тренировка: цель третьего подхода пирамиды — «6 повторов», подсказка «цель 6» (${JSON.stringify(w)})`);
+  await G.evaluate(() => workoutShow(workout.queue.findIndex(s => s.it.ex.id === 'dbbench' && s.k === 1)));
+  w = await wv();
+  check(w.prev === '—' && w.ph === 'цель 6–10', `без прошлых тренировок, но с записью сегодня — «Прошлый раз: —» (${JSON.stringify(w)})`);
+  await G.fill('#wv-kg', '5000'); await G.fill('#wv-reps', '10'); await G.click('#wv-done');
+  w = await wv();
+  check(w.ask && !w.done && w.focus === 'wv-kg-fix' && w.askText === 'Это намного больше, чем сегодня в других подходах (20\u00a0кг). Записать 5000\u00a0кг?' && w.log === '[[20,10]]',
+    `тренировка: вопрос о весе под полями, «Подход выполнен» ждёт, ничего не записано (${JSON.stringify(w)})`);
+  await G.keyboard.press('Escape'); w = await wv();
+  check(w.open && !w.ask && w.done && w.focus === 'wv-kg', `Esc закрывает вопрос, а не тренировку; фокус в поле веса (${JSON.stringify(w)})`);
+  await G.click('#wv-done'); await G.click('#wv-kg-yes');
+  check(await G.evaluate(() => JSON.stringify(todaySession('dbbench', false).s) === '[[20,10],[5000,10]]' && !$('#wv-rest').hidden), '«Записать» в тренировке пишет подход и начинает отдых');
+  await G.click('#wv-close');
+  /* журнал: рабочий вес и повторы крупно, расчётный максимум мелко */
+  await G.evaluate(() => { const d = n => dayKey(new Date(Date.now() - n * 864e5)); LOG.data = { dbcurl: [{ d: d(9), s: [[5, 12], [5, 12]] }, { d: d(5), s: [[5, 13]] }, { d: d(2), s: [[5, 15], [5, 14]] }] }; S.view = 'journal'; renderSetup(); renderPlan(); });
+  const j = await G.evaluate(() => { const v = document.querySelector('.j-row .j-val'), big = v.querySelector('.j-big'), e1 = v.querySelector('.j-e1');
+    return { big: [...big.childNodes].filter(n => !n.classList?.contains('vh')).map(n => n.textContent).join('').replace(/\s+/g, ' ').trim(), e1: e1.textContent, em: v.querySelector('em')?.textContent, size: [parseFloat(getComputedStyle(big).fontSize), parseFloat(getComputedStyle(e1).fontSize)], wide: document.documentElement.scrollWidth > innerWidth + 1 }; });
+  check(j.big === '5кг × 15' && j.e1 === 'расч. максимум 7 кг' && j.em === '+3 повт.' && j.size[0] > j.size[1] * 1.4 && !j.wide,
+    `журнал: «5 кг × 15» крупно, расчётный максимум мелко с подписью, «+3 повт.» вместо «0 %» (${JSON.stringify(j)})`);
+  await G.close();
+}
+
 /* «+ В свой план» (телефон): в атласе мышц и в разборе кнопка раскрывает под собой список своих планов и «+ Новый план».
    Выбор добавляет в выбранный план и не открывает его; повторное нажатие и Esc сворачивают список, фокус — на кнопку;
    последний выбранный — первым. На странице своего плана кнопка, как раньше, добавляет в открытый план. */
@@ -1098,4 +1253,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание блоков, хваты, «+ В свой план» с выбором плана, поиск витрины (ё = е), бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа (в «Анатомии» и «Манекене» — кадры из общего рендерера, кеш между сеансами, без WebGL — SVG), виды фигуры «Анатомия», «Скелет» и «Манекен» (кожа Anny в карточках и витрине, без её данных — SVG), анатомия в карточках плана и на экране тренировки (откат на манекен, без WebGL — SVG), свободная камера сцены (поворот на воспроизведении, колесо, кнопки ракурсов, двойной щелчок, клавиатура, касания на телефоне), первый экран и разбор на телефоне, карточка, число подходов («−» с подтверждением в строке, «+»), вес на следующие подходы, журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования, панель замера скорости ?perf работают на телефоне и компьютере.');
+console.log('Интерфейс: сворачивание блоков, хваты, «Заменить» со списком и «Вернуть», «Убрать» с «Вернуть», «+ В свой план» с выбором плана, поиск витрины (ё = е), бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа (в «Анатомии» и «Манекене» — кадры из общего рендерера, кеш между сеансами, без WebGL — SVG), виды фигуры «Анатомия», «Скелет» и «Манекен» (кожа Anny в карточках и витрине, без её данных — SVG), анатомия в карточках плана и на экране тренировки (откат на манекен, без WebGL — SVG), свободная камера сцены (поворот на воспроизведении, колесо, кнопки ракурсов, двойной щелчок, клавиатура, касания на телефоне), первый экран и разбор на телефоне, карточка, число подходов («−» с подтверждением в строке, «+»), вес на следующие подходы, вопрос о неправдоподобном весе, «Сегодня: N из M», пирамида повторов, журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования, панель замера скорости ?perf работают на телефоне и компьютере.');

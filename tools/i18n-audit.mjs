@@ -97,12 +97,26 @@ await scan('place delete armed, equipment open');
 await run(`(()=>{placeDel=false;S.place='gym';S.adapt=null;ensurePlaces(S);setFocus('biceps');regen();})()`);
 await scan('focus chip');
 await run(`(()=>{setFocus(null);regen();})()`);
+/* «Заменить»: список замен (с меткой пиковой нагрузки), «Близких замен нет», строка «Заменено … Вернуть» */
+step('2a. замены');
+await run(`(()=>{Object.assign(S,{groups:['chest','back','shoulders']});regen();document.querySelector('.card [data-swap]').click();})()`);
+await scan('swap list');
+await run(`(()=>{document.querySelector('.sw-pick [data-swap-to]').click();})()`);
+await scan('swapped, undo line');
+await run(`(()=>{S.place='street';ensurePlaces(S);regen();const it=plan.items.find(x=>x.ex.id==='pullup')||plan.items[0];document.querySelector('.card[data-slot="'+it.slot+'"] [data-swap]').click();})()`);
+await scan('swap list without close swaps');
+await run(`(()=>{Object.assign(S,{place:'home',goal:'gentle',protect:['knees'],groups:['quads','glutes','hams']});ensurePlaces(S);regen();const box=document.getElementById('sw-pick-0');box.innerHTML=swapPickHtml({ex:EXI.goblet,slot:0,name:''});box.hidden=false;})()`);
+await scan('swap list: nothing in gentle mode');
+await run(`(()=>{Object.assign(S,{place:'gym',goal:'mass',protect:[]});ensurePlaces(S);regen();})()`);
 /* свой план: пустой, с правкой подходов, список «по мышцам» целиком, все форматы, место без инвентаря */
 step('2b. свой план');
 await run(`(()=>{Object.assign(S,{view:'plan',mode:'custom',format:'classic',goal:'mass',level:'mid',groups:['chest','back','shoulders']});S.fav=['bbbench','latpull','squat'];S.customs=[];S.custom=null;ensureCustoms(S);cpTab=null;regen();})()`);
 await scan('custom empty');
 await run(`(()=>{S.customs[0].items=[{id:'bbbench',sets:5,reps:'5',rest:180},{id:'dbfly'},{id:'ohp'},{id:'latpull'}];cpOpen=new Set([0,1]);regen();})()`);
 await scan('custom plan', await run('planText()'));
+await run(`(()=>{document.querySelector('.card[data-slot="1"] [data-cp-rm]').click();})()`);
+await scan('custom plan: removed, undo line');
+await run(`(()=>{document.querySelector('[data-rm-undo]').click();})()`);
 await run(`(()=>{cpTab='groups';renderPlan();document.querySelectorAll('[data-cp-more]').forEach(b=>b.click());})()`);
 await scan('custom add by muscles');
 for (const format of ['superset', 'circuit', 'static']) { await run(`(()=>{S.format='${format}';cpOpen=new Set([0]);regen();})()`); await scan('custom ' + format, await run('planText()')); }
@@ -264,6 +278,39 @@ await run(`(()=>{workoutFinish();})()`); await scan('finish with total weight');
 await run(`(()=>{closeWorkout();S.view='journal';renderSetup();renderPlan();document.querySelectorAll('details').forEach(x=>x.open=true);})()`);
 await scan('journal with L/R and total weight', await run('csvText()'));
 await run(`(()=>{S.lr={};S.view='plan';S.mode='single';regen();})()`);
+/* 7в. вес под вопросом, пирамида, «сегодня»: вопрос «Записать / Исправить» в карточке и в тренировке, пирамида повторов
+   своего плана, совет по верхнему подходу (все ветки — текстами), «Сегодня: 1 из 3», первая запись с запасом из строки
+   нагрузки (все цели), журнал «вес × повторы» и график повторов при одном весе */
+step('7в. вес, пирамида, сегодня');
+await run(`(()=>{const d=n=>{const x=new Date();x.setDate(x.getDate()-n);return dayKey(x);};
+  S.customs=[{id:'i18n-pyr',name:'Pyr',items:[{id:'bbbench',sets:4,reps:'10/8/6/5'},{id:'squat',sets:4},{id:'dbbench',sets:3},{id:'latpull',sets:3,reps:'12/10/8',kg:[40,45,50]}]}];S.custom='i18n-pyr';S.mode='custom';ensureCustoms(S);openCustom('i18n-pyr');
+  LOG.data={squat:[{d:d(9),s:[[60,10],[80,8],[90,6],[100,5]]},{d:d(2),s:[[60,10],[80,8],[90,6],[100,5]]}],bbbench:[{d:d(2),s:[[60,10],[60,8],[60,5],[60,5]]}],dbcurl:[{d:d(9),s:[[5,12],[5,12]]},{d:d(2),s:[[5,15],[5,14]]}]};
+  todaySession('dbbench',true).s=[[20,10]];cpOpen=new Set([0]);
+  regen();document.querySelectorAll('[data-cfold="log"]').forEach(b=>{if(b.getAttribute('aria-expanded')!=='true')b.click();});})()`);
+const sugTexts = () => run(`(()=>{const it=plan.items.find(x=>x.ex.id==='squat'),y=dayKey(new Date(Date.now()-864e5)),out=[],keep=JSON.parse(JSON.stringify(LOG.data));
+  const at=(s,extra)=>{LOG.data={squat:[{d:'2020-01-01',s:[[60,8],[80,8],[100,4],[100,4]]},{d:y,s}]};Object.assign(it.rx,extra||{});out.push(suggest(it).text);};
+  at([[60,10],[80,8],[90,6],[100,10]]);at([[60,10],[80,8],[100,10],[100,10]]);at([[60,10],[80,8],[100,7],[100,8]]);at([[60,10],[80,8],[100,4],[100,4]]);at([[60,10],[80,8],[100,4]]);
+  AR.light=true;at([[60,10],[80,8],[90,6],[100,5]]);AR.light=false;
+  const S0={...S};Object.assign(S,{mode:'program',week:4});at([[60,10],[80,8],[90,6],[100,5]]);Object.assign(S,{mode:S0.mode,week:S0.week});
+  const rx=it.rx.reps;it.rx.reps='10/8/6/5';at([[60,10],[60,8],[60,6],[60,5]]);at([[60,8],[60,8],[60,6],[60,5]]);LOG.data={squat:[{d:'2020-01-01',s:[[60,8],[60,8],[60,6],[60,4]]},{d:y,s:[[60,8],[60,8],[60,6],[60,4]]}]};out.push(suggest(it).text);it.rx.reps=rx;
+  for(const [id,eq] of [['dbbench',['db','bench']],['kbswing',['kb']],['bbbench',['bb','bench']],['legpress',['legpress']],['latpull',['cable']],['pullup',['bar']],['assistpull',['gravitron']]]){LOG.data={};out.push(kgDoubt({...previewItem(id),eqIds:eq},[5000],0)?.text||'');}
+  LOG.data={squat:[{d:y,s:[[50,10]]}]};out.push(kgDoubt(it,[5000],0).text);LOG.data={squat:[{d:todayKey(),s:[[50,10]]}]};out.push(kgDoubt(it,[5000],1).text);
+  for(const goal of ['strength','mass','cut','gentle'])for(const level of ['beg','mid'])for(const mode of ['custom','program'])for(const week of [1,2,3,4]){Object.assign(S,{goal,level,mode,week});LOG.data={};
+    for(const id of ['squat','dbcurl','assistpull'])out.push(suggest({...previewItem(id),eqIds:id==='assistpull'?['gravitron']:id==='dbcurl'?['db']:['bb','rack']}).text);out.push(WEEKS[week-1].note);}
+  Object.assign(S,S0);LOG.data=keep;return out.join('\\n');})()`);
+await scan('pyramid, today, plan reps', await sugTexts());
+await run(`(()=>{const i=document.querySelector('.card[data-ex="dbbench"] .lt-r[data-k="1"] [data-f="kg"]');i.value='5000';logKgInput(i);document.querySelector('.card[data-ex="dbbench"] [data-tick][data-k="1"]').click();})()`);
+await scan('card: weight question');
+await run(`(()=>{document.querySelector('.card[data-ex="dbbench"] [data-kgfix]').click();})()`);
+await page.click('#start-workout'); await page.waitForTimeout(200);
+await run(`(()=>{const i=workout.queue.findIndex(s=>s.it.ex.id==='bbbench');workoutShow(i);})()`);
+await scan('workout: pyramid target');
+await page.fill('#wv-kg', '5000'); await page.fill('#wv-reps', '10'); await page.click('#wv-done'); await scan('workout: weight question');
+await page.click('#wv-kg-fix');
+await run(`(()=>{const i=workout.queue.findIndex(s=>s.it.ex.id==='dbbench'&&s.k===1);workoutShow(i);})()`); await scan('workout: today, no last time');
+await run(`(()=>{closeWorkout();S.view='journal';renderSetup();renderPlan();document.querySelectorAll('details').forEach(x=>x.open=true);})()`);
+await scan('journal: weight × reps, reps chart');
+await run(`(()=>{LOG.data={};S.customs=S.customs.filter(c=>c.id!=='i18n-pyr');ensureCustoms(S);S.view='plan';S.mode='single';regen();})()`);
 
 /* 8. скрытая панель замера скорости (?perf): живые цифры, устройство, идёт замер, итог, текст результата, все подписи */
 step('8. замер скорости');
