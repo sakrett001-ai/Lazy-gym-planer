@@ -97,12 +97,26 @@ await scan('place delete armed, equipment open');
 await run(`(()=>{placeDel=false;S.place='gym';S.adapt=null;ensurePlaces(S);setFocus('biceps');regen();})()`);
 await scan('focus chip');
 await run(`(()=>{setFocus(null);regen();})()`);
+/* «Заменить»: список замен (с меткой пиковой нагрузки), «Близких замен нет», строка «Заменено … Вернуть» */
+step('2a. замены');
+await run(`(()=>{Object.assign(S,{groups:['chest','back','shoulders']});regen();document.querySelector('.card [data-swap]').click();})()`);
+await scan('swap list');
+await run(`(()=>{document.querySelector('.sw-pick [data-swap-to]').click();})()`);
+await scan('swapped, undo line');
+await run(`(()=>{S.place='street';ensurePlaces(S);regen();const it=plan.items.find(x=>x.ex.id==='pullup')||plan.items[0];document.querySelector('.card[data-slot="'+it.slot+'"] [data-swap]').click();})()`);
+await scan('swap list without close swaps');
+await run(`(()=>{Object.assign(S,{place:'home',goal:'gentle',protect:['knees'],groups:['quads','glutes','hams']});ensurePlaces(S);regen();const box=document.getElementById('sw-pick-0');box.innerHTML=swapPickHtml({ex:EXI.goblet,slot:0,name:''});box.hidden=false;})()`);
+await scan('swap list: nothing in gentle mode');
+await run(`(()=>{Object.assign(S,{place:'gym',goal:'mass',protect:[]});ensurePlaces(S);regen();})()`);
 /* свой план: пустой, с правкой подходов, список «по мышцам» целиком, все форматы, место без инвентаря */
 step('2b. свой план');
 await run(`(()=>{Object.assign(S,{view:'plan',mode:'custom',format:'classic',goal:'mass',level:'mid',groups:['chest','back','shoulders']});S.fav=['bbbench','latpull','squat'];S.customs=[];S.custom=null;ensureCustoms(S);cpTab=null;regen();})()`);
 await scan('custom empty');
 await run(`(()=>{S.customs[0].items=[{id:'bbbench',sets:5,reps:'5',rest:180},{id:'dbfly'},{id:'ohp'},{id:'latpull'}];cpOpen=new Set([0,1]);regen();})()`);
 await scan('custom plan', await run('planText()'));
+await run(`(()=>{document.querySelector('.card[data-slot="1"] [data-cp-rm]').click();})()`);
+await scan('custom plan: removed, undo line');
+await run(`(()=>{document.querySelector('[data-rm-undo]').click();})()`);
 await run(`(()=>{cpTab='groups';renderPlan();document.querySelectorAll('[data-cp-more]').forEach(b=>b.click());})()`);
 await scan('custom add by muscles');
 for (const format of ['superset', 'circuit', 'static']) { await run(`(()=>{S.format='${format}';cpOpen=new Set([0]);regen();})()`); await scan('custom ' + format, await run('planText()')); }
