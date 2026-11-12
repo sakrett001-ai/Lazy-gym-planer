@@ -342,7 +342,7 @@ function buildPlan(ctx = {}) {
   let slots = picked.map((_, i) => i);
   if (ref || custom) {
     const lvlMax = custom ? 3 : S.level === 'beg' ? 2 : 3, used = new Set(picked.filter(usable).map(ex => ex.id));
-    const keep = [], ok = S.format === 'static' ? b => staticOk(b) && fitsBody(b) : fitsBody;
+    const keep = [], ok = S.format === 'static' ? b => staticOk(b) && swapFits(b) : swapFits;
     picked = picked.map((ex, i) => {
       if (usable(ex)) { keep.push(i); return ex; }
       const alt = analogsFor(ex, E, {exclude:used, lvlMax, limit:1, ok})[0];

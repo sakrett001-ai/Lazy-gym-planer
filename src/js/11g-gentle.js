@@ -76,13 +76,22 @@ function protectHits(ex) {
 }
 function jointOk(ex) { return !protectHits(ex).length; }
 function gentleOk(ex) { return S.goal !== 'gentle' || (ex.lvl <= 2 && !GENTLE_SKIP.has(ex.id) && !GENTLE_SKIP_PATTERNS.has(PATTERN[ex.id])); }
-function fitsBody(ex) { return gentleOk(ex) && jointOk(ex); }
+/* «Беречь колени»: кроме меток — никакого приседа и выпада стоя глубже порога правила колен (85°, на одной ноге 80°;
+   Fry et al. 2003, Lorenzetti et al. 2012 — 09f-joint-stress.js), даже с весом тела и с коленями за носками: ни в подборе,
+   ни в замене, ни в своём плане. Решение владельца 12.11.2026: «по коленям надо максимально застраховаться от того, что
+   человек травмирует колено по нашей рекомендации». Гоблет-присед → присед без веса снимает лишь гантель, сгиб остаётся
+   тем же (stressKneeDepth); подходят меньший сгиб или упражнения без опоры на стопы (мостик, сгибания ног) */
+function kneeDeepBlocked(ex) { return ensureProtect(S).includes('knees') && typeof stressKneeDeep === 'function' && stressKneeDeep(ex); }
+function fitsBody(ex) { return gentleOk(ex) && jointOk(ex) && !kneeDeepBlocked(ex); }
+/* замена (в своём плане, в программе другого места, кнопкой «Заменить») — по тем же правилам, что подбор */
+function swapFits(ex) { return fitsBody(ex); }
 const joinNames = list => list.length > 1 ? list.slice(0, -1).join(', ') + ' и ' + list[list.length - 1] : list[0] || '';
 function hitsText(hits) { return joinNames(hits.map(p => p.acc)); }
 /* почему упражнение не подходит — для замены и для списка «нечем заменить» */
 function unfitWhy(ex) {
   const hits = protectHits(ex);
   if (hits.length) return `нагружает ${hitsText(hits)}`;
+  if (kneeDeepBlocked(ex)) return 'глубокий сгиб колена';
   if (!gentleOk(ex)) return ex.lvl > 2 ? 'сложный вариант' : 'ударная или рывковая нагрузка';
   return '';
 }

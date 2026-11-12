@@ -617,6 +617,15 @@ document.addEventListener('change', e => {
 });
 const swapKey = () => S.mode === 'program' ? 'd' + S.day : 's';
 function regen(resetSwaps = true) { if (resetSwaps) swaps = S.swaps = {}; done = {}; saveSettings(); renderSetup(); renderPlan(); }
+/* «Заменить»: то же движение или группа, по уровню, с инвентарём места и без нагрузки на бережёмые суставы (swapFits,
+   11g-gentle.js); ближайшие по смыслу — то же движение и те же мышцы — первыми */
+function swapCandidates(cur, plan) {
+  const inPlan = new Set(plan.items.map(it => it.ex.id));
+  const lvlMax = S.level === 'beg' || S.goal === 'gentle' ? 2 : 3;
+  if (S.mode === 'custom') for (const it of customOf().items) inPlan.add(it.id);
+  return EX.filter(ex => !inPlan.has(ex.id) && available(ex, plan.E) && ex.lvl <= lvlMax && (ex.g === cur.g || PATTERN[ex.id] === PATTERN[cur.id]) && (S.format !== 'static' || staticOk(ex)) && swapFits(ex))
+    .sort((a, b) => analogScore(cur, b) - analogScore(cur, a));
+}
 document.addEventListener('click', e => {
   const t = e.target.closest('button, summary');
   if (!t) return;
@@ -661,13 +670,8 @@ document.addEventListener('click', e => {
   if (t.dataset.swap !== undefined) {
     const slot = +t.dataset.swap;
     const cur = plan.items.find(it => it.slot === slot).ex;
-    const inPlan = new Set(plan.items.map(it => it.ex.id));
-    const lvlMax = S.level === 'beg' || S.goal === 'gentle' ? 2 : 3;
     const tried = new Set((swaps.__tried && swaps.__tried[swapKey() + ':' + slot]) || []);
-    /* ближайшие по смыслу: то же движение и те же мышцы — первыми */
-    if (S.mode === 'custom') for (const it of customOf().items) inPlan.add(it.id);
-    let alts = EX.filter(ex => !inPlan.has(ex.id) && available(ex, plan.E) && ex.lvl <= lvlMax && (ex.g === cur.g || PATTERN[ex.id] === PATTERN[cur.id]) && (S.format !== 'static' || staticOk(ex)) && fitsBody(ex))
-      .sort((a, b) => analogScore(cur, b) - analogScore(cur, a));
+    let alts = swapCandidates(cur, plan);
     const msgEl = t.querySelector('span');
     if (!alts.length) { msgEl.textContent = 'Замены нет'; setTimeout(() => { msgEl.textContent = 'Заменить'; }, 1800); return; }
     tried.add(cur.id);

@@ -23,7 +23,8 @@ test('every red-mark rule belongs to a joint you can protect, and the cached lis
   const covered = new Set(a.PROTECT.flatMap(p => p.rules));
   for (const r of a.STRESS_RULES) assert(covered.has(r.id), r.id + ' is protectable');
   for (const p of a.PROTECT) assert(p.rules.length, p.id + ' maps to rules');
-  assert.deepEqual(plain(a.PROTECT_BY.knees.rules), ['knee', 'kneeOpen', 'landing']);
+  assert.deepEqual(plain(a.PROTECT_BY.knees.rules), ['knee', 'kneeOpen', 'kneel', 'landing']);
+  assert.deepEqual(plain(a.PROTECT_BY.lumbar.rules), ['lumbar', 'lumbarLever']);
   for (const ex of a.EX) assert.deepEqual(plain(a.stressIdsOf(ex)), plain(a.jointStress(ex).rules.map(r => r.id)), ex.id);
 });
 
@@ -101,7 +102,8 @@ test('knees protected: the sissy squat is not picked, not offered as a substitut
     if (a.buildPlan().items.some(it => it.ex.id === 'sissysquat' && it.sub && it.sub.from.id === 'legext')) offered++;
     a.S.protect = ['knees'];
     const p = a.buildPlan();
-    assert(!p.items.some(it => it.ex.id === 'sissysquat'), `${place}: not offered instead of the leg extension: ${all(p)}`);
+    /* на улице без замены без глубокого сгиба план может остаться пустым — тогда всё в списке «нечем заменить» */
+    assert(!(p.items || []).some(it => it.ex.id === 'sissysquat'), `${place}: not offered instead of the leg extension: ${p.items ? all(p) : p.empty}`);
   }
   assert(seen > 0 && offered > 0, `without protection it does come up (picked ${seen}, offered ${offered}) — the check above is not empty`);
   reset({ mode: 'custom', protect: ['knees'] }); a.S.place = 'homeband'; a.ensurePlaces(a.S);
@@ -110,6 +112,98 @@ test('knees protected: the sissy squat is not picked, not offered as a substitut
   assert(!p.items.some(it => it.ex.id === 'sissysquat'), 'a custom plan does not keep it: ' + all(p));
   const sub = p.items.find(it => it.sub && it.sub.from.id === 'sissysquat');
   if (sub) assert.match(sub.sub.note, /нагружает колени/); else assert(p.lost.some(ex => ex.id === 'sissysquat'));
+});
+
+/* отчёт тестера 4.94.0 (58 лет, колено после операции, поясница): «Бережно» + «Новичок» + беречь колени и поясницу, дом —
+   в плане были выкатывание ролика с колен и тяга эспандера на коленях без меток. Теперь: упор на колени — метка «колени»,
+   длинный рычаг выкатывания — метка «поясница»; ни одно упражнение с меткой по отмеченному суставу не попадает в план —
+   ни в разовую тренировку, ни в неделю, ни в замену (свой план, программа другого места, «Заменить») */
+test('gentle, every level, knees and lower back protected, every place: no exercise marked on a protected joint', () => {
+  const PLACES = ['gym', 'home', 'homeband', 'street'], FULL = ['chest', 'back', 'shoulders', 'quads', 'hams', 'glutes', 'abs'];
+  const SETS = [FULL, ['chest', 'back', 'shoulders'], ['quads', 'hams', 'glutes', 'calves'], ['abs', 'back']];
+  const swapAlts = m.get('swapCandidates'), deep = m.get('stressKneeDeep');
+  for (const protect of [['knees', 'lumbar'], ['knees'], ['lumbar']]) {
+    const bad = rulesOf(protect);
+    const clean = (list, what) => { for (const ex of list) assert(!a.stressIdsOf(ex).some(r => bad.has(r)), `${protect} ${what}: ${ex.id} ${a.stressIdsOf(ex)}`); };
+    for (const level of ['beg', 'mid', 'adv']) for (const place of PLACES) {
+      for (const groups of SETS) for (const seed of [1, 7, 23, 51]) {
+        reset({ goal: 'gentle', level, protect, groups, seed, count: 6 }); a.S.place = place; a.ensurePlaces(a.S);
+        const p = a.buildPlan();
+        clean((p.items || []).map(it => it.ex), `${level} ${place} ${groups} ${seed}`);
+        if (protect.includes('knees')) for (const it of p.items || []) assert(!deep(it.ex), `${level} ${place} ${groups} ${seed}: ${it.ex.id} deep knee bend`);
+        /* «Заменить» на каждой карточке: кандидаты тоже без меток и, при «Беречь колени», без глубокого сгиба стоя */
+        for (const it of (p.items || []).slice(0, 3)) {
+          const alts = swapAlts(it.ex, p);
+          clean(alts, `swap ${it.ex.id}`);
+          if (protect.includes('knees')) for (const x of alts) assert(!deep(x), `swap ${it.ex.id} → ${x.id}: deep knee bend`);
+        }
+      }
+      reset({ goal: 'gentle', level, protect, mode: 'program', days: 3, seed: 7 }); a.S.place = place; a.ensurePlaces(a.S);
+      for (const w of [1, 2, 3, 4]) { a.S.week = w; for (const d of a.buildProgram().days) clean((d.plan.items || []).map(it => it.ex), `program ${level} ${place} week ${w}`); }
+      /* программа зала дома и на улице: замены недоступного тоже без меток */
+      if (place !== 'gym') {
+        reset({ goal: 'gentle', level, protect, mode: 'program', days: 3, seed: 7, adapt: 'gym' }); a.S.place = place; a.S.adapt = 'gym'; a.ensurePlaces(a.S);
+        for (const d of a.buildProgram().days) clean((d.plan.items || []).map(it => it.ex), `program as in the gym ${level} ${place}`);
+      }
+    }
+  }
+  /* именно эти два упражнения: метки есть, в план «дома» не попадают, в своём плане заменяются или не входят */
+  assert(a.stressIdsOf(a.EXI.rollout).includes('kneel') && a.stressIdsOf(a.EXI.rollout).includes('lumbarLever'), 'rollout: kneeling and a long lever');
+  assert(a.stressIdsOf(a.EXI.bandlatpull).includes('kneel'), 'kneeling band pulldown: kneeling');
+  for (const protect of [['knees'], ['lumbar']]) {
+    reset({ mode: 'custom', goal: 'gentle', level: 'beg', protect }); a.S.place = 'home'; a.ensurePlaces(a.S);
+    a.S.customs = [{ id: 'v1', name: 'Дом', items: [{ id: 'rollout' }, { id: 'bandlatpull' }, { id: 'kneepush' }, { id: 'birddog' }, { id: 'dbrow' }] }]; a.ensureCustoms(a.S); a.openCustom('v1');
+    const p = a.buildPlan(), bad = rulesOf(protect);
+    for (const it of p.items || []) assert(!a.stressIdsOf(it.ex).some(r => bad.has(r)), `${protect} custom: ${it.ex.id}`);
+    const gone = (p.items || []).filter(it => it.sub).map(it => it.sub.from.id).concat((p.lost || []).map(ex => ex.id));
+    if (protect[0] === 'knees') for (const id of ['rollout', 'bandlatpull', 'kneepush', 'birddog', 'dbrow']) assert(gone.includes(id), `knees: ${id} is replaced or left out`);
+    else assert(gone.includes('rollout') && !gone.includes('bandlatpull'), 'lower back: only the rollout goes');
+  }
+});
+test('gentle + beginner: the kneeling rollout is an advanced exercise and is not picked', () => {
+  assert.equal(a.EXI.rollout.lvl, 3, 'ACE: roll-out — advanced');
+  let seen = 0;
+  for (const level of ['beg', 'mid']) for (const goal of ['gentle', 'mass']) for (const seed of [1, 3, 7, 11, 23, 31, 51, 77]) for (const groups of [['abs'], ['abs', 'back'], ['chest', 'back', 'shoulders', 'quads', 'hams', 'glutes', 'abs']]) {
+    reset({ level, goal, seed, groups, count: 6 }); a.S.place = 'home'; a.ensurePlaces(a.S);
+    const has = (a.buildPlan().items || []).some(it => it.ex.id === 'rollout');
+    if (level === 'beg' || goal === 'gentle') assert(!has, `${level} ${goal} ${groups} ${seed}`); else if (has) seen++;
+  }
+  assert(seen > 0, 'an intermediate lifter still gets it at home');
+});
+/* отчёт тренера: при «Беречь колени» гоблет-присед в своём плане заменялся приседом без веса — тот же сгиб колена */
+test('knees protected: a substitute does not bend the knee as deep while standing — no air squat instead of a goblet squat', () => {
+  const deep = m.get('stressKneeDeep'), depth = m.get('stressKneeDepth');
+  for (const place of ['home', 'homeband', 'street', 'gym']) for (const id of ['goblet', 'squat', 'lunge', 'kbfrontsquat', 'stepup', 'legpress']) {
+    reset({ mode: 'custom', protect: ['knees'] }); a.S.place = place; a.ensurePlaces(a.S);
+    a.S.customs = [{ id: 'g1', name: 'Ноги', items: [{ id }] }]; a.ensureCustoms(a.S); a.openCustom('g1');
+    const p = a.buildPlan();
+    for (const it of p.items || []) {
+      assert(!a.stressIdsOf(it.ex).some(r => rulesOf(['knees']).has(r)), `${place} ${id}: ${it.ex.id}`);
+      assert(!deep(it.ex), `${place}: ${id} → ${it.ex.id}, standing knee ${depth(it.ex).toFixed(0)}°`);
+    }
+    if (!(p.items || []).length) assert((p.lost || []).some(ex => ex.id === id), `${place} ${id}: said it has no substitute`);
+  }
+  /* без «Беречь колени» прежний подбор: присед без веса — обычная замена гоблета дома без гантелей */
+  reset({ mode: 'custom' }); a.S.place = 'homeband'; a.ensurePlaces(a.S);
+  a.S.customs = [{ id: 'g2', name: 'Ноги', items: [{ id: 'goblet' }] }]; a.ensureCustoms(a.S); a.openCustom('g2');
+  assert((a.buildPlan().items || []).length, 'something replaces the goblet squat without protection');
+});
+test('knees protected: no standing deep knee bend is picked at all, even without weight; the reason is shown', () => {
+  const deep = m.get('stressKneeDeep');
+  assert(deep(a.EXI.airsquat), 'the air squat bends the knee past the threshold while standing');
+  for (const goal of ['mass', 'gentle', 'strength']) for (const level of ['beg', 'mid', 'adv']) for (const place of ['gym', 'home', 'homeband', 'street']) for (const seed of [1, 7, 23]) {
+    reset({ goal, level, protect: ['knees'], groups: ['quads', 'glutes', 'hams', 'calves'], seed, count: 6 }); a.S.place = place; a.ensurePlaces(a.S);
+    for (const it of a.buildPlan().items || []) assert(!deep(it.ex), `${goal} ${level} ${place} ${seed}: ${it.ex.id}`);
+  }
+  reset({ protect: ['knees'] });
+  assert.equal(a.unfitWhy(a.EXI.airsquat), 'глубокий сгиб колена');
+  reset({ mode: 'custom', protect: ['knees'] }); a.S.place = 'homeband'; a.ensurePlaces(a.S);
+  a.S.customs = [{ id: 'k1', name: 'Ноги', items: [{ id: 'airsquat' }] }]; a.ensureCustoms(a.S); a.openCustom('k1');
+  const p = a.buildPlan();
+  assert(!(p.items || []).some(it => it.ex.id === 'airsquat'), 'the air squat is replaced or left out of a custom plan');
+  /* без «Беречь колени» присед без веса подбирается как раньше */
+  reset({ groups: ['quads', 'glutes', 'hams', 'calves'] }); a.S.place = 'street'; a.ensurePlaces(a.S);
+  assert(a.fitsBody(a.EXI.airsquat), 'no protection — the air squat fits');
 });
 
 test('custom plan: an exercise that loads a protected joint is replaced and says why; nothing silently lost', () => {

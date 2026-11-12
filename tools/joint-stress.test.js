@@ -32,8 +32,16 @@ const EXPECT = {
     off: ['dbpress', 'latpull', 'deadlift', 'jumpsquat', 'glutebridge1', 'crunch', 'legext', 'calfraise', 'cableadduct', 'copenhagen', 'bandadduct', 'bandabduct', 'bandbridge', 'bandlegext',
       'airsquat', 'wallsit', 'bridge', 'burpee', 'nordic'] }, /* дома с эспандером: колено почти прямое (сведение, отведение) или без нагрузки сверху (мостик, разгибание сидя — как в тренажёре) */
   kneeOpen: { on: ['legext'], off: ['legcurl', 'squat', 'legpress', 'sissysquat'] },
+  /* упор на колени: колено стоит на коврике, скамье, подушке гравитрона или валике — передней поверхностью в опору.
+     Молчит: колени в валиках сбоку (сведение, разведение), под валиком скамьи для пресса, боком на скамье
+     (копенгагенская планка), голени на валиках скамьи с наклоном, выпады без касания пола коленом */
+  kneel: { on: ['rollout', 'bandlatpull', 'kneepush', 'birddog', 'cablecrunch', 'dbrow', 'kickback', 'nordic', 'assistpull', 'assistdip', 'kbtgu'],
+    off: ['abduction', 'adduction', 'declinecrunch', 'copenhagenknee', 'copenhagen', 'declinebb', 'legext', 'legcurl', 'squat', 'lunge', 'revlunge', 'bulgarian', 'plank', 'pushup', 'bridge', 'mountain', 'burpee'] },
   /* гиря: наклоны от таза и тяга в наклоне без опоры — как со штангой */
   lumbar: { on: ['deadlift', 'rdl', 'sllift', 'goodmorning', 'bbrow', 'kbswing', 'squat', 'kbdeadlift', 'kbswing1', 'kbclean', 'kbrow', 'kbsnatch', 'kbsllift'], off: ['latpull', 'cablerow', 'dbrow', 'shrug', 'ohp', 'chestrowdb', 'legpress', 'bandlatpull', 'bandbridge'] },
+  /* длинный рычаг: руки над головой в упоре при вытянутом теле. Планка, отжимания, скалолаз — кисти под плечами;
+     пуловер и «супермен» — туловище лежит на опоре; жимы в упоре согнувшись — таз согнут */
+  lumbarLever: { on: ['rollout'], off: ['plank', 'plankup', 'pushup', 'kneepush', 'mountain', 'burpee', 'birddog', 'sideplank', 'pullover', 'superman', 'pikepush', 'declinepike', 'hollow', 'deadbug', 'legraise', 'hangknee', 'kbtgu'] },
   /* вращение плеча наружу: плечо у бока, не уходит за линию корпуса */
   shPress: { on: ['bbbench', 'smithbench', 'inclinebb', 'closegrip', 'dip', 'assistdip', 'benchdip', 'pecdeck'], off: ['ohp', 'pushup', 'latpull', 'bbrow', 'dbcurl', 'cableextrot', 'bandextrot', 'kbfloorpress', 'bandlatpull', 'bandfloorpress'] }, /* жим лёжа на полу (с гирей и с эспандером): пол не пускает локоть ниже корпуса */
   shLever: { on: ['dbfly', 'pullover'], off: ['bbbench', 'cablefly', 'latraise', 'bandfly', 'bandfloorpress'] }, /* сведение у двери — стоя, как кроссовер */
@@ -94,6 +102,61 @@ test('bodyweight on both legs: the knee mark needs deep flexion with the knees p
   let deep = 0;
   for (let i = 0; i <= 40; i++) { const R = air.anim.catalogRig(i / 40); if (M.jointAngles(R).L.knee >= 85) { deep++; assert(ahead(R, 'L') <= 0, 'air squat keeps the knees behind the toes'); } }
   assert(deep > 0 && !rules('airsquat').has('knee'), 'a deep air squat is not marked');
+});
+test('kneeling: the mark sits on the knee that rests on the support, in the phase it rests there, with the front of the knee down', () => {
+  const V = M.V, down = (R, s) => { const d = V.sub(V.unit(V.sub(R['kn' + s], R['hip' + s])), V.unit(V.sub(R['an' + s], R['kn' + s]))); return d[1] / Math.hypot(...d); };
+  for (const id of ['rollout', 'bandlatpull', 'kneepush', 'cablecrunch']) {
+    for (const t of [0, .5, 1]) assert.deepEqual(keysAt(id, 'kneel', t).sort(), ['knL', 'knR'], `${id} at ${t}: both knees`);
+  }
+  assert.deepEqual(plain([...new Set(A.jointStress(ex('dbrow')).rules.find(r => r.id === 'kneel').f.flat())]), ['knR'], 'one-arm row: only the knee on the bench');
+  /* турецкий подъём: колено на полу только в выпаде (контакт с окном времени) — не лёжа и не стоя */
+  const tgu = A.jointStress(ex('kbtgu')).rules.find(r => r.id === 'kneel'), win = m.get('CATALOG_POSES').kbtgu.contacts.find(c => c.body === 'kneeR').when;
+  const lit = tgu.f.map((k, i) => k.length ? i : -1).filter(i => i >= 0);
+  assert(lit.length >= 3, 'the kneeling phase is marked: ' + lit.join(','));
+  for (const i of lit) assert(i / 40 >= win[0] - 1e-6 && i / 40 <= win[1] + 1e-6, `frame ${i} is inside the kneeling window ${win}`);
+  assert(!at('kbtgu', 0).includes('kneel') && !at('kbtgu', 1).includes('kneel'), 'lying and standing: no kneel mark');
+  /* передняя поверхность колена: в упоре — вниз, в валиках тренажёра и под валиком скамьи — вверх */
+  for (const id of ['bandlatpull', 'birddog', 'assistpull']) assert(down(ex(id).anim.catalogRig(0), 'L') >= .6, id + ': front of the knee faces the support');
+  for (const id of ['abduction', 'declinecrunch']) assert(down(ex(id).anim.catalogRig(0), 'L') < 0, id + ': front of the knee faces up');
+});
+test('long lever: the lower back is marked only while the arms reach overhead with the body extended', () => {
+  const roll = ex('rollout'), lit = [];
+  for (let i = 0; i <= 40; i++) {
+    const R = roll.anim.catalogRig(i / 40), J = M.jointAngles(R), on = at('rollout', i / 40).includes('lumbarLever');
+    if (on) { lit.push(i); assert(Math.max(J.L.elevation, J.R.elevation) >= 119.5 && Math.max(J.L.hipFlex, J.R.hipFlex) <= 30.5, `frame ${i}: arm ${J.L.elevation.toFixed(0)}°, hip ${J.L.hipFlex.toFixed(0)}°`); }
+    else assert(Math.max(J.L.elevation, J.R.elevation) < 120 || Math.max(J.L.hipFlex, J.R.hipFlex) > 30, `frame ${i} reaches far but is not marked`);
+  }
+  assert(lit.length >= 10 && !lit.includes(0) && lit.includes(40), 'start on the knees is not marked, full extension is: ' + lit.join(','));
+  assert.deepEqual(keysAt('rollout', 'lumbarLever', 1), ['lumbar'], 'the mark is on the lower back');
+  /* планка на предплечьях: плечо у 90° — метки нет при том же вытянутом теле */
+  const P = M.jointAngles(ex('plank').anim.catalogRig(.5));
+  assert(P.L.elevation < 100 && P.L.hipFlex < 10, 'plank: arm about 90°, body straight');
+});
+test('rowing machine: the knee mark is on the drive, not on the recovery with no resistance', () => {
+  const S = A.jointStress(ex('rower')).rules.find(r => r.id === 'knee');
+  assert(S && S.f.some(k => k.length), 'drive: deep knee bend while the legs push');
+  assert(S.b.every(k => !k.length), 'recovery: the flywheel spins freely, no mark');
+  assert(at('rower', 0, 0).includes('knee') && !at('rower', 0, 2).includes('knee'), 'catch: marked when starting the drive, not when sliding in');
+  /* резина и тренажёры с нагрузкой в обе стороны — как раньше */
+  const lp = A.jointStress(ex('legpress')).rules.find(r => r.id === 'knee');
+  assert.deepEqual(plain(lp.f), plain(lp.b), 'leg press: the sled loads both ways');
+});
+test('Turkish get-up has its own texts: the supporting arm, not push-up advice', () => {
+  const gen = id => A.STRESS_RULES.find(r => r.id === id), own = id => A.jointStress(ex('kbtgu')).rules.find(r => r.id === id);
+  for (const id of ['shPress', 'wrist']) {
+    const r = own(id);
+    assert(r, 'kbtgu is marked: ' + id);
+    assert.notEqual(r.what, gen(id).what); assert.notEqual(r.tip, gen(id).tip);
+    assert(!/отжиман|комфортной глубины/i.test(r.what + r.tip), id + ': no push-up wording: ' + r.tip);
+    assert(/опорн/i.test(r.what + r.tip), id + ': speaks of the supporting arm');
+  }
+  assert.equal(A.jointStress(ex('pushup')).rules.find(r => r.id === 'wrist').tip, gen('wrist').tip, 'push-ups keep the general text');
+});
+test('standing knee depth for substitutes: air squat and wall sit bend as deep as a goblet squat, a bridge does not count', () => {
+  const D = m.get('stressKneeDepth'), deep = m.get('stressKneeDeep');
+  for (const id of ['airsquat', 'wallsit', 'goblet', 'squat']) assert(deep(ex(id)), `${id}: ${D(ex(id)).toFixed(0)}°`);
+  for (const id of ['bridge', 'hipthrust', 'glutebridge1', 'legpresshigh', 'rdl', 'legext', 'bandlegext', 'bandabduct']) assert(!deep(ex(id)), `${id}: ${D(ex(id)).toFixed(0)}°`);
+  assert(D(ex('airsquat')) >= D(ex('goblet')) - 5, 'the air squat is no shallower than the goblet squat');
 });
 test('fallback sets match the movement table, so marks do not change when it is not loaded', () => {
   const by = p => plain(A.EX.filter(e => A.PATTERN[e.id] === p).map(e => e.id)).sort();
