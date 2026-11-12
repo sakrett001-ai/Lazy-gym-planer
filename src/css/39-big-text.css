@@ -31,8 +31,6 @@ body { overflow-wrap:break-word; }
 @container card (max-width:15rem) {
   .c-top { grid-template-columns:minmax(0, 1fr); }
   .c-top .motion-tile { width:min(100%, 280px); }
-}
-@container card (max-width:15rem) {
   .c-top .motion-caption { white-space:normal; }
 }
 /* фаза под миниатюрой на телефоне — единственная подпись мельче 12 px (11 px): в колонке рисунка (108–119 px на 360–390 px)

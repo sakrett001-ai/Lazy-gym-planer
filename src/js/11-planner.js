@@ -515,7 +515,7 @@ function renderSetup() {
     $('#f-days').innerHTML = [2, 3, 4, 5].map(d => `<button type="button" class="seg-b${d === S.days ? ' on' : ''}" data-days="${d}" aria-pressed="${d === S.days}"><b>${d}</b><small>${SCHEDULE[d].map(i => WD[i]).join(' ')}</small></button>`).join('');
     const sp = splitFor(S.days);
     const opts = Object.entries(SPLITS).filter(([, v]) => v.days[S.days]);
-    $('#f-split').style.gridTemplateColumns = `repeat(${opts.length}, 1fr)`;
+    $('#f-split').style.setProperty('--seg-n', opts.length); /* столбцов — по числу сплитов; при крупном тексте меньше (39-big-text.css) */
     $('#f-split').innerHTML = opts.map(([k, v]) => `<button type="button" class="seg-b${k === sp ? ' on' : ''}" data-split="${k}" aria-pressed="${k === sp}"><b>${v.name}</b><small>${v.hint}</small></button>`).join('');
     $('#split-note').textContent = SPLITS[sp].note;
   }
