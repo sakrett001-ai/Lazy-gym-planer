@@ -29,8 +29,9 @@ const galleryThumbs = new Map();
 let galleryIO = null, galleryQueue = [], galleryRaf = 0;
 
 function galleryList(kind = gallery.kind) {
-  const E = effEquip(S.equip), q = gallery.q.trim().toLowerCase();
-  return EX.filter(ex => (kind === 'all' || workKind(ex) === kind) && (!gallery.here || available(ex, E)) && (!q || ex.name.toLowerCase().includes(q)));
+  /* поиск: «ё» и «е» равны, окончания слов не важны (searchMatcher, 11-planner.js) */
+  const E = effEquip(S.equip), match = searchMatcher(gallery.q);
+  return EX.filter(ex => (kind === 'all' || workKind(ex) === kind) && (!gallery.here || available(ex, E)) && match(ex.name));
 }
 function galleryTile(ex, E, all) {
   const here = available(ex, E), name = exName(ex, here ? E : all), fav = isFav(ex.id);

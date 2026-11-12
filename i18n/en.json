@@ -2325,8 +2325,6 @@
  "\" data-d=\"-1\" aria-label=\"Выше\"": "\" data-d=\"-1\" aria-label=\"Move up\"",
  "\" data-d=\"1\" aria-label=\"Ниже\"": "\" data-d=\"1\" aria-label=\"Move down\"",
  "\">Убрать</button>\n  </div>": "\">Remove</button>\n  </div>",
- "В плане не больше": "A plan holds at most",
- "\">+ В свой план</button><p class=\"cp-msg\" hidden><span></span> <button type=\"button\" class=\"link\" data-cp-go=\"1\">Открыть план →</button></p>": "\">+ Add to custom plan</button><p class=\"cp-msg\" hidden><span></span> <button type=\"button\" class=\"link\" data-cp-go=\"1\">Open plan →</button></p>",
  "<header class=\"at-head\">\n    <p class=\"eyebrow\">Атлас мышц</p>\n    <h1 class=\"p-title\">Выберите мышцу</h1>\n    <p class=\"at-lead\">Нажмите на мышцу — покажем упражнения, в которых она работает, из инвентаря выбранного места.</p>\n    <p class=\"at-favs\"><span>★ В избранном: <b class=\"at-favn\">": "<header class=\"at-head\">\n    <p class=\"eyebrow\">Muscle atlas</p>\n    <h1 class=\"p-title\">Pick a muscle</h1>\n    <p class=\"at-lead\">Tap a muscle to see the exercises that work it, using the equipment of the selected place.</p>\n    <p class=\"at-favs\"><span>★ Favorites: <b class=\"at-favn\">",
  "</b></span><button type=\"button\" class=\"link\" data-cp-go=\"1\">Собрать свой план →</button></p>\n  </header>\n  <div class=\"at-grid\">\n    <section class=\"at-pick\" aria-label=\"Мышцы\">\n      <div class=\"at-map\">": "</b></span><button type=\"button\" class=\"link\" data-cp-go=\"1\">Build a custom plan →</button></p>\n  </header>\n  <div class=\"at-grid\">\n    <section class=\"at-pick\" aria-label=\"Muscles\">\n      <div class=\"at-map\">",
  "</div>\n      <p class=\"at-hint\">Оранжевым выделена выбранная мышца: чем ярче цвет, тем сильнее она работает в этот момент повторения.</p>": "</div>\n      <p class=\"at-hint\">The chosen muscle is shown in orange: the brighter the color, the harder it works at that moment of the rep.</p>",
@@ -3183,5 +3181,16 @@
  "Спиной к двери, лента на уровне груди позади, шаг вперёд; руки в стороны, локти мягко согнуты.": "Back to the door, band at chest height behind you, one step forward; arms out to the sides, elbows softly bent.",
  "Угол в локтях не меняется; корпус неподвижен, ладони в конце друг к другу.": "The elbow angle stays the same; the torso is still, palms face each other at the end.",
  "Боком к дверному проёму, рука на краю проёма, на носках; тело от колен до плеч прямое.": "Side-on to a doorway, hand on the edge of the doorway, on the balls of the feet; body straight from knees to shoulders.",
- "Таз не уходит назад — сгибаются только колени; пятки подняты, рука лишь страхует.": "The pelvis does not move back — only the knees bend; heels raised, the hand only steadies you."
+ "Таз не уходит назад — сгибаются только колени; пятки подняты, рука лишь страхует.": "The pelvis does not move back — only the knees bend; heels raised, the hand only steadies you.",
+ "Создан план «": "Created plan “",
+ "», упражнение добавлено.": "”, exercise added.",
+ "План «": "Plan “",
+ "» полон: в нём уже": "” is full: it already has",
+ "упражнений.": "exercises.",
+ ">+ В свой план</button>": ">+ Add to custom plan</button>",
+ "<p class=\"cp-msg\" role=\"status\" hidden><span></span> <button type=\"button\" class=\"link\" data-cp-go=\"1\">Открыть план →</button></p>": "<p class=\"cp-msg\" role=\"status\" hidden><span></span> <button type=\"button\" class=\"link\" data-cp-go=\"1\">Open plan →</button></p>",
+ "<span class=\"cp-pick-st in\">✓ уже в плане</span>": "<span class=\"cp-pick-st in\">✓ already in plan</span>",
+ "<span class=\"cp-pick-st\">полон</span>": "<span class=\"cp-pick-st\">full</span>",
+ "-h\">В какой план добавить</p>": "-h\">Choose a plan</p>",
+ "<button type=\"button\" class=\"place place-add cp-pick-i\" data-cp-to=\"\">+ Новый план</button>": "<button type=\"button\" class=\"place place-add cp-pick-i\" data-cp-to=\"\">+ New plan</button>"
 }

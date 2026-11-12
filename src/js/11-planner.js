@@ -100,6 +100,7 @@ const WEEKS = [
 
 const DEFAULTS = {goal:'mass', format:'classic', level:'mid', count:6, groups:['chest', 'back', 'shoulders'], equip:EQUIP.map(e => e.id), seed:7,
   mode:'single', days:3, split:'full', week:1, day:0, view:'plan', atlasM:'chest', focus:null, fav:[], customs:[], custom:null, gen:null, author:'', fold:null, protect:[],
+  cpLast:null /* свой план, куда последним добавляли из атласа или разбора (11d-custom.js) */,
   lr:{} /* «Л/П отдельно» по упражнениям: {exId:true} (13a-sets.js) */};
 const STORE = 'podhod.settings.v1';
 function loadSettings() {
@@ -123,6 +124,15 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;', '<':'&lt;', '>
 const fmtRest = s => s >= 60 ? (s % 60 ? `${Math.floor(s / 60)} мин ${s % 60} с` : `${s / 60} мин`) : `${s} с`;
 const midOf = r => { const m = String(r).match(/(\d+)\D+(\d+)/); if (m) return (+m[1] + +m[2]) / 2; const n = parseFloat(r); return isNaN(n) ? 10 : n; };
 function plural(n, a, b, c) { const m10 = n % 10, m100 = n % 100; if (m10 === 1 && m100 !== 11) return a; if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return b; return c; }
+/* Поиск по названиям упражнений. «ё» и «е» равны (ё раскладывается на е и две точки — U+0308, точки убираются; й остаётся
+   собой), регистр и дефисы не важны. У каждого слова запроса отбрасывается окончание — «отжимание» находит «Отжимания»,
+   «тяги» — «Тяга», «presses» — «press»; название подходит, если в нём есть все слова запроса без окончаний. */
+const searchFold = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/̈/g, '').normalize('NFC').replace(/[-‐-―]/g, '');
+const SEARCH_END = /(?:ями|ами|ого|его|ому|ему|ыми|ими|ой|ей|ий|ый|ая|яя|ое|ее|ие|ые|ую|юю|ом|ем|ам|ям|ах|ях|ов|ев|ия|ья|ье|ью|ию|[аяоеиыуюйь]|es|s)$/;
+function searchMatcher(query) {
+  const words = searchFold(query).split(/[^\p{L}\p{N}]+/u).filter(Boolean).map(w => { const st = w.replace(SEARCH_END, ''); return st.length >= 3 ? st : w; });
+  return words.length ? name => { const n = searchFold(name); return words.every(w => n.includes(w)); } : () => true;
+}
 const fmtNum = v => Number.isInteger(v) ? String(v) : v.toFixed(1).replace('.', DEC); /* DEC — 13-log.js: в английской сборке точка */
 
 /* можно ли взвесить отягощение: свободные веса, тренажёры, блок, машина Смита (а не лента, турник, скамья или вес тела) */

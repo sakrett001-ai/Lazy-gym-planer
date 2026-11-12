@@ -130,10 +130,8 @@ function atlasRow(r, m, sel) {
   return `<li class="at-row${sel ? ' on' : ''}">${favButton(ex.id)}<button type="button" class="at-ex" data-atlas-ex="${ex.id}" aria-pressed="${sel}"><span class="at-sw" style="background:${muscleColor(r.v)}" title="${MUSCLE_BANDS[muscleBand(r.v)]}"></span><span class="at-n"><b>${esc(name)}</b><small>${esc(equipLine(ex, E))} · ${esc(how)}${ex.lvl >= 3 ? ' · сложное' : ''}${unfitHtml(ex)}</small></span></button>`
     + `<button type="button" class="at-open" data-atlas-open="${ex.id}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Разобрать движение: ${esc(name)}">↗</button></li>`;
 }
-/* избранное и свой план для упражнения в превью */
-function atlasKeepHtml(id) {
-  return `${favButton(id, true)}<button type="button" class="btn-ghost" data-cp-add="${id}">+ В свой план</button><p class="cp-msg" hidden><span></span> <button type="button" class="link" data-cp-go="1">Открыть план →</button></p>`;
-}
+/* избранное и свой план для упражнения в превью (выбор плана — 11d-custom.js) */
+function atlasKeepHtml(id) { return cpKeepHtml(id, 'at'); }
 function atlasList(rows, m, sel, limit) {
   return `<ol class="at-list">${rows.map((r, i) => atlasRow(r, m, r.ex.id === sel).replace('<li class="at-row', i >= limit ? '<li hidden class="at-more at-row' : '<li class="at-row')).join('')}</ol>`
     + (rows.length > limit ? `<button type="button" class="at-show" data-atlas-show="1">Показать все: ${rows.length}</button>` : '');
