@@ -62,6 +62,7 @@ function startWorkout(id){
   /* каждое открытие тренировки — новая попытка показать кости и мышцы (и загрузить их, если прошлая не удалась) */
   workoutFigure.slow=false;workoutFigure.failed=false;workoutFigure.pace.reset();
   const d=$('#workout-view');if(!d.open)d.showModal();document.documentElement.classList.add('workout-open');stopRest();ScreenAwake.on();
+  Heart.open(); /* пульсометр: 14b-heart.js */
   $('#wv-context').textContent=S.mode==='program'?`${WD_FULL[prog.days[S.day].wd]} · ${prog.days[S.day].name}`:`${GOALS[S.goal].name} · ${FORMATS[S.format].name}`;
   const its=[...new Map(queue.map(x=>[x.it.ex.id,x.it])).values()];
   $('#wv-exercise').innerHTML=its.map(it=>`<option value="${it.ex.id}">${esc(it.label+'. '+it.name)}</option>`).join('');
@@ -72,6 +73,7 @@ function startWorkout(id){
 }
 function closeWorkout(){
   if(!workout)return;holdStop();workoutCapture();saveWorkout();disposeMotion(workout.motion);clearInterval(workoutTimer);workoutTimer=0;ScreenAwake.off();
+  Heart.close();
   const d=$('#workout-view');if(d.open)d.close();document.documentElement.classList.remove('workout-open');d.classList.remove('rest-over');workout.restOver=null;
   logRefresh(null);if(workoutReturn?.isConnected)workoutReturn.focus();workoutReturn=null;
   /* вид фигуры мог смениться на экране тренировки — карточки плана берут его же */
@@ -102,6 +104,7 @@ function workoutShow(index){
   disposeMotion(workout.motion);workout.motion={it,f:null,clock:0,paused:reduceMotion,durations:motionDurations(it)};$('#wv-angle').textContent=CAMERA3[motionCamera(ex)].label;
   $('#wv-motion').textContent=reduceMotion?'Воспроизвести':'Пауза';mountWorkoutCameras();
   $('#wv-prev').disabled=workout.index===0;$('#wv-next').disabled=workout.index===workout.queue.length-1;
+  Heart.set(s);
   saveWorkout();workoutTick();
 }
 /* поля подхода: подписи (вес одной гантели, повторы на каждую сторону), общий ввод или Л/П, подстановка веса */
@@ -191,6 +194,7 @@ function commitWorkout(e,sure){
   session.s[step.k]=rec;session.target=Math.max(session.target||0,step.n);if(step.it.rx.static)session.fmt='static';markImpl(session,step.it);delete workout.drafts[workoutDraftKey(step)];
   logTouch(ex.id);logRefresh([ex.id]);workout.last=workout.index;
   if(already){workoutShow(workout.index);$('#wv-save-status').textContent='Изменения сохранены.';return;}
+  Heart.setDone(step);
   const next=workoutFirstOpen(workout.queue,workout.index);
   if(next<0){workoutFinish();return;}
   if(step.rest>0){const now=Date.now();workout.next=next;workout.restTotal=step.rest;workout.restFrom=now;workout.restUntil=now+step.rest*1000;RestAlarm.unlock();RestAlarm.arm(workout.restUntil,{from:now});workoutShowRest();}
@@ -199,6 +203,7 @@ function commitWorkout(e,sure){
 }
 /* фактический отдых — от записи подхода до «Перейти к подходу» — третьим полем в запись подхода, после которого отдыхали */
 function workoutRestTaken(){
+  Heart.restDone();
   const sec=restActual(workout.restFrom,Date.now()),step=workout.queue[workout.last];workout.restFrom=0;
   if(!sec||!step)return;
   const v=todaySession(step.it.ex.id,false)?.s[step.k];
@@ -229,6 +234,7 @@ function workoutFinish(){
   workout.restUntil=0;workout.restFrom=0;workout.next=-1;RestAlarm.cancel();holdStop();paintRestPhase(false);$('#wv-active').hidden=true;$('#wv-rest').hidden=true;$('#wv-finish').hidden=false;
   const n=workout.queue.filter(workoutValue).length,its=[...new Map(workout.queue.map(s=>[s.it.ex.id,s.it])).values()],tons=its.map(it=>todayTonnage(it.ex)),total=tons.reduce((a,b)=>a+b,0);
   $('#wv-finish-text').textContent=`Выполнено ${n} ${plural(n,'подход','подхода','подходов')} в ${its.length} ${plural(its.length,'упражнении','упражнениях','упражнениях')}.`+(total>0?` Общий вес — ${fmtTon(total)} кг.`:'');
+  Heart.finish();
   $('#wv-summary').innerHTML=its.map((it,i)=>`<p><span>${esc(it.name)}</span><strong>${tons[i]>0?`<small>${fmtTon(tons[i])+' кг'}</small>`:''}${workout.queue.filter(s=>s.it.ex.id===it.ex.id&&workoutValue(s)).length} ✓</strong></p>`).join('');saveWorkout();workoutTick();
 }
 function workoutTick(){
@@ -236,6 +242,7 @@ function workoutTick(){
   const now=Date.now(),n=workout.queue.filter(workoutValue).length;$('#wv-progress').max=workout.queue.length;$('#wv-progress').value=n;$('#wv-progress-label').textContent=`${n} из ${workout.queue.length} ${plural(workout.queue.length,'подхода','подходов','подходов')}`;
   const elapsed=Math.max(0,Math.floor((now-workout.started)/60000));$('#wv-elapsed').textContent=elapsed?`${elapsed} мин с начала`:'';
   if(!$('#wv-rest').hidden){
+    Heart.restTick(now); /* отдых «до пульса» может сдвинуть workout.restUntil */
     const v=restView(workout.restUntil,now);RestAlarm.poll(now);
     if($('#wv-rest-time').textContent!==v.text)$('#wv-rest-time').textContent=v.text;
     if(v.over!==workout.restOver)paintRestPhase(v.over);
