@@ -127,7 +127,7 @@ function plural(n, a, b, c) { const m10 = n % 10, m100 = n % 100; if (m10 === 1 
 /* Поиск по названиям упражнений. «ё» и «е» равны (ё раскладывается на е и две точки — U+0308, точки убираются; й остаётся
    собой), регистр и дефисы не важны. У каждого слова запроса отбрасывается окончание — «отжимание» находит «Отжимания»,
    «тяги» — «Тяга», «presses» — «press»; название подходит, если в нём есть все слова запроса без окончаний. */
-const searchFold = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/̈/g, '').normalize('NFC').replace(/[-‐-―]/g, '');
+const searchFold = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/\u0308/g, '').normalize('NFC').replace(/[-\u2010-\u2015]/g, '');
 const SEARCH_END = /(?:ями|ами|ого|его|ому|ему|ыми|ими|ой|ей|ий|ый|ая|яя|ое|ее|ие|ые|ую|юю|ом|ем|ам|ям|ах|ях|ов|ев|ия|ья|ье|ью|ию|[аяоеиыуюйь]|es|s)$/;
 function searchMatcher(query) {
   const words = searchFold(query).split(/[^\p{L}\p{N}]+/u).filter(Boolean).map(w => { const st = w.replace(SEARCH_END, ''); return st.length >= 3 ? st : w; });
