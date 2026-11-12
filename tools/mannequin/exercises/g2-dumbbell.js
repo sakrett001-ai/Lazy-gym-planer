@@ -503,9 +503,10 @@ const KBDL = once(() => {
   return { H0, H1: [0, 75, 16], lean0, hz0, st: 32, toe: 12 };
 });
 /* концентрированное сгибание: центр свободной ладони — в CONC_PALM см от тазобедренного по бедру (74 % его длины), наклон
-   ладони от верха бедра к середине — из CONC_TILT° (палец, пронация, запястье — дальше от пределов). Ближе к тазу (24 см) —
-   пронация и отведение запястья за пределами (ладонь плашмя на верх бедра при почти вертикальном предплечье) */
-const CONC_PALM = 30, CONC_TILT = [0, 15, 30, 45];
+   ладони от верха бедра к середине — из CONC_TILT° (пальцы — веером через 10°; пронация, запястье и ротация плеча — дальше
+   от пределов). Ближе к тазу (24 см) — пронация и отведение запястья за пределами (ладонь плашмя на верх бедра при почти
+   вертикальном предплечье); наклон больше 30° — ладонь уже не смотрит вниз на бедро (tools/hand-holds.test.js) */
+const CONC_PALM = 30, CONC_TILT = [0, 10, 20, 30];
 /* свободная ладонь на бедре над коленом (опора в наклоне): центр ладони — на передней поверхности бедра в 70 % его длины */
 function handOnThigh(C, q, s, at = .7) {
   const { V } = C, f = C.fk(q), hip = f.P['hip' + s], kn = f.P['kn' + s], ax = V.unit(V.sub(kn, hip)), A = V.add(hip, ax, C.M.B.th * at);
@@ -599,7 +600,7 @@ module.exports = {
         const up = V.unit(V.perp(V.add([0, Math.cos(tilt * C.D2R), 0], med, Math.sin(tilt * C.D2R)), tR));
         let top = null, tv = -Infinity; for (const p of pts) { const v = V.dot(V.unit(V.perp(V.sub(p, A), tR)), up); if (v > tv) { tv = v; top = p; } }
         const n = V.unit(V.perp(V.sub(top, A), tR)), qq = C.M.clone(q);
-        const pen = palmBest(C, qq, 'R', V.add(top, n, -.2), n, fan(C, n, tR, 20), [[-1, .3, -.3], [-1, 0, 0], [-1, .5, .3], [-.5, .3, -1], [-.6, .6, -.6]].map(v => V.unit(v)));
+        const pen = palmBest(C, qq, 'R', V.add(top, n, -.2), n, fan(C, n, tR, 10), [[-1, .3, -.3], [-1, 0, 0], [-1, .5, .3], [-.5, .3, -1], [-.6, .6, -.6]].map(v => V.unit(v)));
         if (!best || pen < best.pen - 1e-6) best = { pen, q: qq };
       }
       for (const k of ['shoulder', 'elbow', 'pron', 'wrist', 'clav', 'scap', 'girdle']) q.R[k] = best.q.R[k];
