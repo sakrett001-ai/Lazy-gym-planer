@@ -3,7 +3,7 @@
 .cg-h:hover { background:var(--surface-2); }
 .cg-x { flex:1 1 auto; min-width:0; display:flex; flex-wrap:wrap; align-items:baseline; gap:3px 12px; }
 .cg-t { flex:0 1 auto; font:600 .75rem/1.2 var(--f-body); letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
-.cg-s { flex:1 1 150px; min-width:0; font-size:.84375rem; line-height:1.35; color:var(--ink); }
+.cg-s { flex:1 1 9.375rem; min-width:0; font-size:.84375rem; line-height:1.35; color:var(--ink); }
 .cg-chev { flex:none; width:8px; height:8px; margin:0 4px 3px auto; border-right:2px solid var(--muted); border-bottom:2px solid var(--muted); transform:rotate(45deg); transition:transform .15s; }
 [aria-expanded="true"] > .cg-chev { transform:rotate(-135deg); margin-bottom:-3px; }
 @media (prefers-reduced-motion:reduce) { .cg-chev { transition:none; } }

@@ -1,0 +1,131 @@
+/* Крупный шрифт и масштаб страницы (отчёт тестера «Виктор Петрович», п. 5, 6; WCAG 1.4.4, 1.4.10).
+   Размеры шрифтов — в rem: текст следует настройке размера шрифта браузера и телефона. При настройке по умолчанию
+   (16 px) раскладка прежняя; ниже — правила, которые срабатывают, только когда текст крупный относительно ширины:
+   при шрифте 150–200 % или масштабе страницы 150–200 % (ширина окна 260 и 195 px). Пороги — в rem: колонки и строки
+   перестраиваются по тому, сколько букв помещается, а не по ширине экрана в пикселях. */
+
+/* ---------- страница: колонки не шире экрана — длинное содержимое переносится внутри, а не раздвигает страницу ---------- */
+.layout, .plan, .p-head { grid-template-columns:minmax(0, 1fr); }
+@media (min-width:700px) { .p-head { grid-template-columns:minmax(0, 1fr) minmax(0, 1.05fr); } }
+/* слово длиннее строки переносится, а не вылезает за край (при обычном шрифте все слова помещаются — ничего не меняется) */
+body { overflow-wrap:break-word; }
+
+/* ---------- шапка: разделы переносятся строкой ниже, «EN» не налезает на «Журнал» ---------- */
+.views { flex-wrap:wrap; }
+.top .atlas-button { max-width:100%; }
+
+/* ---------- параметры: кнопки-переключатели в столбцах по ширине текста ----------
+   Столбцов не больше, чем было (3, 2 или 4), но и не уже --seg-min: при крупном тексте кнопки встают в два ряда или в столбик.
+   --seg-min подобран так, что при обычном шрифте на экране 320 px столбцов столько же, сколько было. */
+.seg { --seg-n:3; --seg-min:4.9rem; grid-template-columns:repeat(auto-fit, minmax(min(100%, max(var(--seg-min), (100% - (var(--seg-n) - 1) * 4px) / var(--seg-n))), 1fr)); }
+.seg-2 { --seg-n:2; --seg-min:6.6rem; grid-template-columns:repeat(auto-fit, minmax(min(100%, max(var(--seg-min), (100% - (var(--seg-n) - 1) * 4px) / var(--seg-n))), 1fr)); }
+.seg-4 { --seg-n:4; --seg-min:3.6rem; grid-template-columns:repeat(auto-fit, minmax(min(100%, max(var(--seg-min), (100% - (var(--seg-n) - 1) * 4px) / var(--seg-n))), 1fr)); }
+.seg-b { overflow-wrap:anywhere; }
+/* «Оборудование места 34 из 34» и «Изменить список»: кнопка уходит строкой ниже, если рядом не помещается самое длинное слово */
+.e-head { flex-wrap:wrap; }
+.e-head .lbl { flex:1 1 0; min-width:min-content; }
+.e-toggle-top { margin-left:auto; }
+
+/* ---------- карточка упражнения: при крупном тексте рисунок над описанием, а не сбоку ---------- */
+.card { container:card / inline-size; }
+@container card (max-width:15rem) {
+  .c-top { grid-template-columns:minmax(0, 1fr); }
+  .c-top .motion-tile { width:min(100%, 280px); }
+}
+@container card (max-width:15rem) {
+  .c-top .motion-caption { white-space:normal; }
+}
+/* колонки внутри карточки не раздвигаются длинным содержимым */
+@media (max-width:699px) { .card { grid-template-columns:minmax(0, 1fr); } }
+.c-log, .c-info, .motion-tile, .lt, .lt-fold, .c-hist { grid-template-columns:minmax(0, 1fr); }
+.c-head { flex-wrap:wrap; }
+.c-act .c-act-r { flex-wrap:wrap; justify-content:flex-end; max-width:100%; }
+/* «Подходы 0 из 4» и «История»: кнопка уходит строкой ниже, если рядом не помещается */
+.lt-bar { flex-wrap:wrap; }
+.lt-bar .lt-tog { flex:1 1 0; min-width:min-content; }
+.lt-tog .cg-x { flex-wrap:wrap; }
+/* мышцы карточки: схема над списком */
+@container card (max-width:15rem) {
+  .c-mus { grid-template-columns:minmax(0, 1fr); }
+  .c-map { max-width:8rem; }
+}
+/* запись подходов: столбцы растут вместе с текстом; в узкой карточке — «прошлый раз» строкой над полями */
+.lt-h, .lt-r { grid-template-columns:1.375rem minmax(0, 1fr) 4.25rem 3.875rem 2.5rem; }
+.lt-nokg .lt-h, .lt-nokg .lt-r { grid-template-columns:1.375rem minmax(0, 1fr) 4.25rem 2.5rem; }
+.lt-in { height:2.375rem; }
+.lt-ok { width:2.5rem; height:2.375rem; }
+@container card (max-width:15rem) {
+  .lt-h, .lt-r { grid-template-columns:1.375rem minmax(0, 1fr) minmax(0, 1fr) 2.5rem; }
+  .lt-nokg .lt-h, .lt-nokg .lt-r { grid-template-columns:1.375rem minmax(0, 1fr) 2.5rem; }
+  .lt-h > :nth-child(2), .lt-r > .lt-p { grid-column:2 / -1; }
+  .lt-r > .lt-n { grid-row:span 2; }
+  .lt-r.lt-lr > .lt-n, .lt-r.lt-lr > .lt-ok { grid-row:1 / span 4; }
+  .lt-r.lt-lr > .lt-p { grid-column:2 / -2; }
+  .lt-r.lt-lr { grid-template-rows:none; }
+}
+
+/* ---------- параметры и шапка плана ---------- */
+/* «Параметры» и «Свернуть», «− 6 +» и подпись: кнопка или подпись уходит строкой ниже, если рядом не помещается */
+.sb-head { flex-wrap:wrap; }
+.sb-head .lbl { flex:1 1 0; min-width:min-content; }
+.stepper { flex-wrap:wrap; }
+.stepper p { flex:1 1 0; min-width:min-content; }
+.fold-seg { flex-wrap:wrap; max-width:100%; }
+.fold-seg button { flex:1 1 auto; }
+/* нагрузка по мышцам: при крупном тексте схема над столбиками */
+.p-head { container:phead / inline-size; }
+@container phead (max-width:15rem) {
+  .p-load { grid-template-columns:minmax(0, 1fr); }
+  .p-load .p-map { max-width:10rem; }
+}
+
+/* ---------- атлас мышц ---------- */
+@media (max-width:899px) { .at-grid { grid-template-columns:minmax(0, 1fr); } }
+.at-detail { grid-template-columns:minmax(0, 1fr); }
+.at-cams { flex-wrap:wrap; max-width:100%; }
+.at-cams button { flex:1 1 auto; }
+/* упражнения мышцы: название переносится в своей колонке; в узком списке «↗» — полосой под строкой */
+.at-n { grid-template-columns:minmax(0, 1fr); }
+.at-list { container:atlist / inline-size; }
+@container atlist (max-width:13rem) {
+  .at-row { grid-template-columns:auto minmax(0, 1fr); }
+  .at-row > .at-open { grid-column:1 / -1; min-height:36px; border-left:0; border-top:1px solid var(--line); }
+}
+
+/* ---------- журнал ---------- */
+.j-list, .j-row details, .j-body, .ml, .ml-head { grid-template-columns:minmax(0, 1fr); }
+@media (min-width:700px) { .ml-head { grid-template-columns:minmax(0, 1fr) auto; } }
+.ml-act .btn { white-space:normal; }
+.ml-sum span { flex-wrap:wrap; max-width:100%; }
+/* последние тренировки: строка «1 упражнение · 2 подхода» переносится, а не обрезается многоточием */
+.j-days li { grid-template-columns:4.75rem minmax(0, 1fr) auto; }
+.j-dn { white-space:normal; overflow:visible; }
+.j-days { container:jdays / inline-size; }
+@container jdays (max-width:15rem) {
+  .j-days li { grid-template-columns:minmax(0, 1fr) auto; }
+  .j-dn { grid-column:1 / -1; grid-row:2; }
+}
+/* упражнение в журнале: при крупном тексте вес и повторы строкой под названием */
+.j-list { container:jlist / inline-size; }
+@container jlist (max-width:17rem) {
+  .j-row > details > summary { grid-template-columns:minmax(0, 1fr); }
+  .j-val { justify-items:start; text-align:left; }
+}
+
+/* ---------- разбор движения и экран тренировки: мышцы по фазам ---------- */
+.muscle-list { max-height:22.5rem; }
+.muscle-level { max-width:6.125rem; }
+/* подпись ракурса и переключатель «Анатомия · Скелет · Манекен» над рисунком: при крупном тексте — строкой над сценой */
+.wv-visual { container:wvvisual / inline-size; }
+@container wvvisual (max-width:20rem) {
+  .wv-stage-wrap { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; padding:7px 7px 0; }
+  .wv-stage-wrap > #wv-angle { position:static; flex:1 1 auto; margin-left:8px; }
+  .wv-stage-wrap > .wv-figure { position:static; margin-left:auto; max-width:100%; flex-wrap:wrap; }
+  .wv-stage-wrap > #wv-stage { flex:1 1 100%; margin:0 -7px; }
+}
+.wv-figure-tools { flex-wrap:wrap; }
+
+/* ---------- отдых: при крупном тексте или масштабе экран отдыха длиннее окна — таймер остаётся сверху, когда фокус
+   уходит вниз на «Перейти к подходу» (отчёт тестера, п. 17). Отступ тот же, что был (22 px): 16 px снаружи и 6 px фона. */
+#wv-rest-time { position:sticky; top:0; z-index:1; margin-block:16px; padding-block:6px; background:var(--surface); }
+.workout-view.rest-over #wv-rest-time { background:var(--hot-soft); }

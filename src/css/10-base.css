@@ -124,7 +124,7 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .place-tools { display:flex; flex-wrap:wrap; align-items:end; gap:8px 12px; }
 .place-tools .f-note { flex-basis:100%; margin:0; }
 .place-name, .place-adapt { display:grid; gap:4px; font-size:.75rem; color:var(--muted); min-width:0; }
-.place-name { flex:1 1 150px; }
+.place-name { flex:1 1 9.375rem; }
 .place-adapt { flex:1 1 100%; }
 .place-name input, .place-adapt select { min-height:40px; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--ink); padding:7px 10px; font:inherit; font-size:.875rem; min-width:0; max-width:100%; }
 .place-del { border:0; background:transparent; color:var(--muted); font-size:.8125rem; padding:10px 2px; }
@@ -471,7 +471,7 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 /* ---------- таймер ---------- */
 .timer { position:fixed; left:0; right:0; bottom:0; z-index:5; background:var(--surface); border-top:1px solid var(--line); padding:10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); box-shadow:0 -8px 24px rgba(10, 14, 24, .08); }
 .t-in { max-width:1200px; margin:0 auto; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-.t-txt { display:grid; gap:2px; min-width:0; flex:1 1 140px; }
+.t-txt { display:grid; gap:2px; min-width:0; flex:1 1 8.75rem; }
 #t-label { font-size:.8125rem; color:var(--muted); }
 #t-time { font:600 1.875rem/1 var(--f-mono); font-variant-numeric:tabular-nums; }
 .timer.over #t-time { color:var(--hot); }
@@ -529,7 +529,7 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .b-chips b small { font:500 .75rem var(--f-body); color:var(--muted); margin-left:2px; }
 .b-chips em { font:600 .75rem var(--f-mono); font-style:normal; color:var(--faint); }
 .b-chart { min-width:0; }
-.b-form { display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr)); gap:8px; align-items:end; padding-top:12px; border-top:1px solid var(--line); }
+.b-form { display:grid; grid-template-columns:repeat(auto-fill, minmax(6rem, 1fr)); gap:8px; align-items:end; padding-top:12px; border-top:1px solid var(--line); }
 .b-form label { display:grid; gap:4px; font-size:.75rem; color:var(--muted); }
 .b-form .b-date { grid-column:span 2; }
 .b-form input[type=date] { height:38px; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--ink); font:500 .875rem var(--f-mono); padding:0 8px; }

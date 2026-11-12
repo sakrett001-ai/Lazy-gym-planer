@@ -47,7 +47,7 @@ html.workout-open{overflow:hidden}
 /* вопрос о неправдоподобном весе под полями подхода: «Записать» / «Исправить» (как подтверждение в строке карточки) */
 .wv-ask{margin-top:12px;padding:12px;border-radius:12px;background:var(--hot-soft);display:grid;gap:10px}.wv-ask[hidden]{display:none}
 .wv-ask-t{margin:0;font-weight:600;font-size:.90625rem;line-height:1.35;color:var(--ink)}.wv-ask-b{display:flex;gap:8px;flex-wrap:wrap}
-.wv-ask-b button{flex:1 1 120px;min-height:48px;border-radius:10px;background:var(--surface);font:600 .9375rem var(--f-body);cursor:pointer;padding:0 14px}
+.wv-ask-b button{flex:1 1 7.5rem;min-height:48px;border-radius:10px;background:var(--surface);font:600 .9375rem var(--f-body);cursor:pointer;padding:0 14px}
 .wv-ask-yes{border:1.5px solid var(--hot);color:var(--hot)}.wv-ask-fix{border:1px solid var(--line);color:var(--ink)}
 .wv-ask-b button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 /* подсказка повторов «цель 12–15» — обычным шрифтом и мельче цифр: не выглядит введённой и помещается в поле на 320 px */
