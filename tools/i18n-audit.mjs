@@ -261,6 +261,29 @@ await page.click('#wv-hold-go'); await scan('side plank recorded');
 await run(`(()=>{closeWorkout();S.mode='single';regen();startRest(30);window.__dt+=45000;tick();})()`);
 await scan('plan rest timer overtime');
 await run(`(()=>{stopRest();})()`);
+/* 7а. тренировка без потерь (14a-workout-flow.js): «Продолжить тренировку →» и сколько сделано, время в тренировке, пауза
+   отдыха, спокойный конец отдыха, «Пропустить» и «Заменить» в тренировке, итоги с пропущенным и заменённым, вопрос о
+   тренировке прошлого дня и её «Закончить» */
+step('7а. продолжение, пропуск, замена');
+await run(`(()=>{localStorage.removeItem('podhod.workout.v3');S.customs=[{id:'i18n-wf',name:'Flow',items:[{id:'declinepike',sets:2},{id:'dbbench',sets:2},{id:'dbrow',sets:1}]}];S.custom='i18n-wf';S.mode='custom';ensureCustoms(S);openCustom('i18n-wf');LOG.data={};regen();
+  document.querySelector('#start-workout').click();})()`);
+await page.fill('#wv-reps', '8'); await page.click('#wv-done'); await tickBy(10000);
+await page.click('#wv-rest-pause'); await scan('workout flow: rest paused');
+await page.click('#wv-rest-pause'); await tickBy(600000); await scan('workout flow: rest over, calm');
+await page.click('#wv-close'); await scan('plan: continue workout');
+await page.click('#start-workout'); await page.click('#wv-continue');
+await page.click('#wv-skip'); await scan('workout flow: skipped');
+await page.click('#wv-unskip'); await page.click('#wv-swap'); await scan('workout flow: swap list');
+await run(`(()=>{document.querySelector('#wv-swap-pick [data-wv-swap]').click();})()`); await scan('workout flow: swapped');
+await run(`(()=>{const id=workout.queue.at(-1).it.ex.id;workout.skipped.push(id);workoutOptions();workoutFinish();})()`); await scan('workout flow: summary with skipped and swapped');
+await run(`(()=>{closeWorkout();const d=new Date();d.setDate(d.getDate()-1);const y=dayKey(d),q=workoutQueue(plan);LOG.data={[q[0].it.ex.id]:[{d:y,s:[[null,8]]}]};
+  localStorage.setItem('podhod.workout.v3',JSON.stringify({stamp:workoutStamp(q),day:y,days:[y],done:1,total:q.length}));regen();})()`);
+await scan('plan: yesterday not finished');
+await run(`(()=>{const d=new Date();d.setDate(d.getDate()-3);const y=dayKey(d);const o=JSON.parse(localStorage.getItem('podhod.workout.v3'));o.day=y;o.days=[y];LOG.data={};localStorage.setItem('podhod.workout.v3',JSON.stringify(o));
+  S.customs.find(c=>c.id==='i18n-wf').items=[{id:'squat'}];regen();})()`);
+await scan('plan: older workout, plan changed');
+await page.click('[data-wip="end"]'); await scan('plan: workout finished from the question');
+await run(`(()=>{localStorage.removeItem('podhod.workout.v3');LOG.data={};S.customs=S.customs.filter(c=>c.id!=='i18n-wf');ensureCustoms(S);S.mode='single';regen();})()`);
 /* 7б. вес гантелей и стороны: «вес одной гантели», «×2», «Л/П отдельно» в карточке и в тренировке, общий вес после
    подхода и в итогах, слабая сторона, журнал с последними тренировками и «Л … · П …», таблица для Excel */
 step('7б. гантели и Л/П');

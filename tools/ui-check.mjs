@@ -470,7 +470,7 @@ await page.close();
   check(s.open && !s.motion && s.stack === 'workout', `«Назад» в разборе — к тренировке (${JSON.stringify(s)})`);
   await f.keyboard.press('Escape'); await f.waitForTimeout(150); s = await ws();
   check(!s.open && !s.stack && !s.ov && f.url() === url, `Esc по-прежнему закрывает тренировку, запись истории снята (${JSON.stringify(s)})`);
-  await f.evaluate(() => openGallery()); await f.waitForTimeout(50);
+  await f.click('#motion-atlas'); await f.waitForTimeout(50);
   await f.click('[data-gallery-open]'); await f.waitForTimeout(50); s = await ws();
   check(s.motion && s.stack === 'motion,motion-detail' && await f.evaluate(() => !$('#mv-detail').hidden), `атлас → карточка упражнения (${JSON.stringify(s)})`);
   await f.goBack(); await f.waitForTimeout(150); s = await ws();
