@@ -394,7 +394,8 @@ function mountFigures() {
   scheduleMotionLoop();
 }
 function stopFigures() {
-  if(workout && $('#workout-view').open)closeWorkout();
+  /* план пересобирается и при замене упражнения на экране тренировки (workoutSwap) — тогда тренировка остаётся открытой */
+  if(workout && $('#workout-view').open && !workoutReplanning)closeWorkout();
   if(detailMotion) closeMotion();
   cancelAnimationFrame(rafId);framePrefetchGen++;if(io)io.disconnect();if(ioSeen)ioSeen.disconnect();cardAnatomy.far?.disconnect();io=ioSeen=cardAnatomy.far=null;
   for(const F of figs){disposeMotion(F);if(F.av){F.av.handle.release();F.av.canvas.width=F.av.canvas.height=0;}}figs=[];
@@ -486,11 +487,14 @@ function openMotionItem(it,clock=0){
   showDetail();selectMotion(it,clock);
   const d=$('#motion-view');if(!d.open)d.showModal();
   document.documentElement.classList.add('motion-open');
+  OverlayBack.open('motion',()=>closeMotion(true)); /* системная «Назад» закрывает разбор (12d-back.js) */
   $('#mv-close').focus();scheduleMotionLoop();
 }
-function closeMotion() {
+/* fromBack — закрыт системной «Назад»: запись истории уже снята */
+function closeMotion(fromBack) {
   const d=$('#motion-view');disposeMotion(detailMotion);detailMotion=null;closeGallery();
   if(d&&d.open)d.close();
+  if(fromBack!==true)OverlayBack.closed('motion');
   document.documentElement.classList.remove('motion-open');
   if(detailReturn&&detailReturn.isConnected)detailReturn.focus();
   detailReturn=null;
@@ -525,7 +529,7 @@ function setupMotionViewer() {
   for(const prefix of ['mv','wv'])$('#'+prefix+'-stress-toggle').addEventListener('change',e=>changeStressPreference(e.target.checked));
   for(const prefix of ['mv','wv'])$('#'+prefix+'-region').addEventListener('change',e=>selectMuscleRegion(prefix,e.target.value));
   $('#motion-view').addEventListener('cancel',e=>{e.preventDefault();closeMotion();});
-  $('#motion-view').addEventListener('close',()=>{disposeMotion(detailMotion);detailMotion=null;closeGallery();document.documentElement.classList.remove('motion-open');});
+  $('#motion-view').addEventListener('close',()=>{disposeMotion(detailMotion);detailMotion=null;closeGallery();document.documentElement.classList.remove('motion-open');OverlayBack.closed('motion');});
   /* объёмная графика грузится после первого экрана (build.js): если разбор или тренировка открыты раньше, показывается
      плоская схема, а с приходом объёма та же фаза перерисовывается в нём */
   window.addEventListener('gym-volume',()=>{

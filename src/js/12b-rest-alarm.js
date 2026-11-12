@@ -5,15 +5,21 @@
    заблокирован), и её время стоит, — поэтому при возвращении на экран очередь ставится заново по часам (resync):
    прошедшие сигналы не догоняют, будущие звучат вовремя. Звуковую карту браузеры разрешают включить только по нажатию —
    поэтому unlock() вызывается из нажатий «Подход выполнен», «Начать тренировку», «Старт» таймера удержания.
-   Сигнал «настойчиво» (по умолчанию): после нуля — повтор раз в 20 с, не больше трёх, пока не начат следующий подход;
-   «один раз» — только на нуле. По желанию — короткий мягкий сигнал за 10 с до конца (по умолчанию выключен).
+   Сигнал «один раз» (по умолчанию) — только на нуле; «настойчиво» — после нуля повтор раз в 20 с, не больше трёх,
+   пока не начат следующий подход. По желанию — короткий мягкий сигнал за 10 с до конца (по умолчанию выключен).
    Вибрация (Chrome на Android; Safari на iPhone её не умеет) и запасной звук, если очередь не была поставлена, — из шага
    таймера на экране (poll), тоже по меткам времени. Звук выключается кнопкой 🔔, выбор запоминается. */
+/* Сигнал по умолчанию: выбор человека — как был; кто им не пользовался, но уже работал с приложением (есть настройки,
+   журнал или тренировка), остаётся на прежнем «настойчиво»; новый — «один раз». Решение записывается при первом запуске,
+   иначе со второго запуска новый человек считался бы «старым». */
+function restSignalMode(stored, known) { return stored === 'once' || stored === 'persist' ? stored : known ? 'persist' : 'once'; }
 const RestAlarm = (() => {
   const KEY = 'podhod.restSound', MODE_KEY = 'podhod.restSignal', WARN_KEY = 'podhod.restWarn';
   const read = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const write = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
-  let ctx = null, on = read(KEY) !== 'off', mode = read(MODE_KEY) === 'once' ? 'once' : 'persist', warn = read(WARN_KEY) === 'on';
+  const stored = read(MODE_KEY), known = ['podhod.settings.v1', 'podhod.log.v1', 'podhod.workout.v3'].some(k => read(k) != null);
+  let ctx = null, on = read(KEY) !== 'off', mode = restSignalMode(stored, known), warn = read(WARN_KEY) === 'on';
+  if (stored !== mode) write(MODE_KEY, mode);
   /* очереди звуков: отдых и таймер удержания снимаются независимо */
   const ch = {rest:[], hold:[]};
   let sig = [], fired = [], queued = [], end = 0, from = 0, cues = [];

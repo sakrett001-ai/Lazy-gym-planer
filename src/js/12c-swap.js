@@ -66,15 +66,16 @@ function swapJoints(ex) {
   const label = 'Пиковая нагрузка:';
   return zones.length ? `<small class="sw-j"><span class="stress-dot" aria-hidden="true"></span>${label} ${esc(zones.join(', '))}</small>` : '';
 }
-function swapPickHtml(it) {
+/* attr — атрибут кнопки выбора, hid — id заголовка списка (экран тренировки: data-wv-swap, 14-workout-mode.js) */
+function swapPickHtml(it, {attr = 'data-swap-to', hid = `sw-pick-${it.slot}-h`} = {}) {
   const {close, far} = swapOptions(it.ex, plan), list = close.length ? close : far;
-  const row = r => `<button type="button" class="place cp-pick-i" data-swap-to="${r.ex.id}"><span class="cp-pick-n"><b>${esc(exName(r.ex, plan.E))}</b><small>${esc(r.note)}</small>${swapJoints(r.ex)}</span></button>`;
+  const row = r => `<button type="button" class="place cp-pick-i" ${attr}="${r.ex.id}"><span class="cp-pick-n"><b>${esc(exName(r.ex, plan.E))}</b><small>${esc(r.note)}</small>${swapJoints(r.ex)}</span></button>`;
   const gentle = S.goal === 'gentle' || ensureProtect(S).length > 0;
   const none = close.length ? '' : `<p class="sw-none">${far.length ? 'Близких замен нет. На те же мышцы — другое движение:'
     : gentle ? 'Близких замен нет: другие упражнения на эти мышцы уже в плане, здесь недоступны или не подходят бережному режиму.'
     : 'Близких замен нет: другие упражнения на эти мышцы уже в плане или здесь недоступны.'}</p>`;
   const head = 'Чем заменить';
-  return `<p class="cp-pick-h" id="sw-pick-${it.slot}-h">${head}</p>${none}${list.map(row).join('')}`;
+  return `<p class="cp-pick-h" id="${hid}">${head}</p>${none}${list.map(row).join('')}`;
 }
 /* «Вернуть»: подпись кнопки — строка рядом (aria-describedby) */
 const undoBtn = (attr, desc) => { const label = 'Вернуть'; return `<button type="button" class="sw-undo" ${attr} aria-describedby="${desc}">${label}</button>`; };
