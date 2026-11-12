@@ -121,9 +121,9 @@ function hrClient({bluetooth, timers = globalThis, now = () => Date.now(), retry
       if (chr) chr.removeEventListener('characteristicvaluechanged', onValue);
       ch.removeEventListener('characteristicvaluechanged', onValue);
       ch.addEventListener('characteristicvaluechanged', onValue);
-      await ch.startNotifications(); if (my !== gen) return false;
       chr = ch;
       set({state:'waiting', attempt:0, error:'', help:false, bpm:null});
+      await ch.startNotifications(); if (my !== gen) return false;
       battery(server, my);
       return true;
     } catch (e) {
@@ -350,7 +350,11 @@ const Heart = (() => {
     return typeof navigator !== 'undefined' ? navigator.bluetooth : null;
   }
   function policy() {
-    try { const pp = document.permissionsPolicy || document.featurePolicy; if (pp && typeof pp.allowsFeature === 'function') return pp.allowsFeature('bluetooth'); } catch (e) {}
+    /* браузер, которому Bluetooth неизвестен, на allowsFeature тоже отвечает «нет» — тогда судит наличие navigator.bluetooth */
+    try {
+      const pp = document.permissionsPolicy || document.featurePolicy;
+      if (pp && typeof pp.allowsFeature === 'function') return typeof pp.features === 'function' && !pp.features().includes('bluetooth') ? null : pp.allowsFeature('bluetooth');
+    } catch (e) {}
     return null;
   }
   const support = () => hrSupport({sim:sim(), bluetooth:bt(), secure:typeof isSecureContext === 'boolean' ? isSecureContext : null, policy:policy()});
@@ -484,6 +488,15 @@ const Heart = (() => {
     else { inp.setAttribute('aria-invalid', 'true'); return; }
     savePrefs(); cur.rule = null; if (typeof workout !== 'undefined' && workout) restTick();
   }
+  /* шаг таймера отдыха (workoutTick): отдых «до пульса» двигает конец отдыха (workout.restUntil) и сигнал */
+  function restTick(now = Date.now()) {
+    if (typeof workout === 'undefined' || !workout || !(workout.restFrom > 0)) return;
+    if (!cur.rule || cur.ruleFrom !== workout.restFrom) { cur.rule = {below:0, lastAt:0, done:null, ext:0}; cur.ruleFrom = workout.restFrom; }
+    const c = C(), r = hrRestStep(cur.rule, {mode:P.rest, thr:P.thr, now, until:workout.restUntil, bpm:live(now), at:c ? c.at : 0});
+    if (r.act) { workout.restUntil = r.until; RestAlarm.arm(r.until, {from:workout.restFrom}); saveWorkout(); }
+    cur.why = r.why;
+    if (mounted) paintRest(now, live(now), !!c && ['connecting', 'waiting', 'live', 'nocontact', 'reconnecting'].includes(c.state));
+  }
   if (typeof document !== 'undefined' && document.addEventListener) {
     document.addEventListener('click', e => {
       const t = e.target && e.target.closest ? e.target.closest('button') : null; if (!t) return;
@@ -512,15 +525,7 @@ const Heart = (() => {
       if (step && cur.rest && cur.rest.key === hrKey(step)) { const to = live(); if (cur.rest.from > 0 || to > 0) { hrRestDone(heartDay(todayKey(), true), cur.rest.key, cur.rest.from, to); heartTouch(); } }
       cur.rest = null; cur.rule = null;
     },
-    /* шаг таймера отдыха (workoutTick): отдых «до пульса» двигает конец отдыха (workout.restUntil) и сигнал */
-    restTick(now = Date.now()) {
-      if (typeof workout === 'undefined' || !workout || !(workout.restFrom > 0)) return;
-      if (!cur.rule || cur.ruleFrom !== workout.restFrom) { cur.rule = {below:0, lastAt:0, done:null, ext:0}; cur.ruleFrom = workout.restFrom; }
-      const c = C(), r = hrRestStep(cur.rule, {mode:P.rest, thr:P.thr, now, until:workout.restUntil, bpm:live(now), at:c ? c.at : 0});
-      if (r.act) { workout.restUntil = r.until; RestAlarm.arm(r.until, {from:workout.restFrom}); saveWorkout(); }
-      cur.why = r.why;
-      if (mounted) paintRest(now, live(now), !!c && ['connecting', 'waiting', 'live', 'nocontact', 'reconnecting'].includes(c.state));
-    },
+    restTick,
     finish() { if (HEART.days[todayKey()]) heartTouch(); paintFinish(); },
     prefs:() => ({...P}),
     setPrefs(p) { P = cleanPrefs({...P, ...p}); savePrefs(); paintPrefs(); },

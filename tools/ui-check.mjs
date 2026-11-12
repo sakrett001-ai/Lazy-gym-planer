@@ -1089,6 +1089,107 @@ await page.close();
   await k.close();
 }
 
+/* пульсометр (14b-heart.js) на телефоне — navigator.bluetooth подменён до загрузки (addInitScript): плашка «♥ Пульс» до
+   подключения, окно выбора только с датчиками пульса, живой пульс и максимум подхода, запись пульса подхода и отдыха,
+   отдых «пульс или время» (кончается раньше плана) и «по пульсу» (продление на 15 с), обрыв и переподключение без окна
+   выбора, нет контакта с кожей, итоги тренировки и журнал, полная копия, отключение с подтверждением; без Web Bluetooth —
+   честная строка вместо кнопки */
+const fakeBluetooth = () => {
+  const ev = o => { const l = {}; o.addEventListener = (t, f) => { (l[t] = l[t] || []).includes(f) || l[t].push(f); }; o.removeEventListener = (t, f) => { l[t] = (l[t] || []).filter(x => x !== f); }; o.fire = (t, e) => (l[t] || []).slice().forEach(f => f(e)); return o; };
+  const s = { connected: false, opts: [], connects: 0 };
+  const chr = ev({ value: null, async startNotifications() {}, async stopNotifications() {} });
+  const server = { async getPrimaryService(n) { if (n === 'heart_rate') return { async getCharacteristic() { return chr; } }; if (n === 'battery_service') return { async getCharacteristic() { return { async readValue() { return new DataView(Uint8Array.of(64).buffer); } }; } }; throw Object.assign(new Error('No Services matching UUID'), { name: 'NotFoundError' }); } };
+  const dev = ev({ name: 'Polar H10', gatt: { get connected() { return s.connected; }, async connect() { s.connects++; s.connected = true; return server; }, disconnect() { s.connected = false; } } });
+  const bt = { async requestDevice(o) { s.opts.push(o); return dev; }, async getAvailability() { return true; } };
+  Object.defineProperty(navigator, 'bluetooth', { configurable: true, get: () => bt });
+  /* показание: флаги 0x16 — 8 бит, контакт есть, RR; contact=false — флаги 0x14, пульс 0 */
+  window.__hr = { s, push(bpm, contact = true) { chr.value = new DataView(Uint8Array.of(contact ? 0x16 : 0x14, contact ? bpm : 0, 0, 3).buffer); chr.fire('characteristicvaluechanged', { target: chr }); }, drop() { s.connected = false; dev.fire('gattserverdisconnected', { target: dev }); } };
+};
+{
+  const h = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  h.on('pageerror', e => errors.push(String(e)));
+  await h.addInitScript(fakeBluetooth);
+  await h.goto('file://' + file); await h.waitForTimeout(500); await fakeFigures(h);
+  await h.evaluate(() => {
+    const base = Date.now(); window.__dt = 0; Date.now = () => base + window.__dt;
+    localStorage.removeItem('podhod.heart.v1'); localStorage.removeItem('podhod.heart.prefs.v1'); HEART.days = {}; Heart.setPrefs({ rest: 'time', thr: null });
+    S.customs = [{ id: 'hr', name: 'Пульс', items: [{ id: 'squat', sets: 3, kg: [60] }, { id: 'pushup', sets: 1 }] }]; S.custom = 'hr'; S.mode = 'custom'; ensureCustoms(S); openCustom('hr'); LOG.data = {}; regen();
+  });
+  const hs = () => h.evaluate(() => ({ st: $('#wv-hr').dataset.state, val: $('#wv-hr-val').textContent, note: $('#wv-hr-note').hidden ? '' : $('#wv-hr-note').textContent, meta: $('#wv-hr-meta').hidden ? '' : $('#wv-hr-meta').textContent,
+    btn: !$('#wv-hr-btn').hidden, unit: !$('#wv-hr-unit').hidden, rest: !$('#wv-hr-rest').hidden && $('#wv-hr-rest-val').textContent, rnote: $('#wv-hr-rest-note').textContent, day: HEART.days[todayKey()] && JSON.parse(JSON.stringify(HEART.days[todayKey()])) }));
+  const push = bpm => h.evaluate(b => { window.__dt += 1000; window.__hr.push(b); workoutTick(); }, bpm);
+  await h.click('#start-workout'); await h.waitForTimeout(50);
+  let s = await hs();
+  check(s.st === 'idle' && s.btn && s.val === 'Пульс' && s.note === 'Часы или нагрудный датчик по Bluetooth' && await shown(h, '#wv-hr-btn'), `пульс: до подключения — плашка «♥ Пульс» (${JSON.stringify(s)})`);
+  check(apart(await rect(h, '#wv-hr-btn'), await rect(h, '#wv-close')) && (await rect(h, '#wv-hr')).r <= 390, 'плашка пульса не наезжает на «К плану» и не выходит за экран');
+  await h.click('#wv-hr-btn'); await h.waitForTimeout(50);
+  s = await hs();
+  check(await h.evaluate(() => JSON.stringify(window.__hr.s.opts[0]) === JSON.stringify({ filters: [{ services: ['heart_rate'] }], optionalServices: ['battery_service'] })) && s.st === 'waiting' && s.val === '—' && /Polar H10/.test(s.note), `окно выбора — только датчики пульса; подключено, ждём пульс (${JSON.stringify(s)})`);
+  await push(131); await push(152); await push(149);
+  s = await hs();
+  check(s.st === 'live' && s.val === '149' && s.unit && /^макс\. за подход 152 · Polar H10 · батарея 64 %$/.test(s.meta), `живой пульс крупно, максимум подхода, батарея (${JSON.stringify(s)})`);
+  await h.fill('#wv-kg', '60'); await h.fill('#wv-reps', '8'); await h.click('#wv-done');
+  s = await hs();
+  check(JSON.stringify(s.day?.sets) === '{"squat:0":[149,152]}' && s.day.max === 152 && s.day.t >= 2, `подход: пульс в конце и максимум записаны (${JSON.stringify(s.day)})`);
+  check(s.rest === '149' && s.rnote === 'В начале отдыха 149' && await shown(h, '#wv-hr-rest') && await shown(h, '#wv-hr-set'), `отдых: пульс крупно, «в начале отдыха», настройка конца отдыха (${JSON.stringify(s)})`);
+  check(await h.evaluate(() => [...document.querySelectorAll('[data-hr-rest]')].map(b => b.textContent + ':' + b.getAttribute('aria-pressed')).join() === 'Время:true,Пульс:false,Пульс или время:false' && $('.wv-hr-thr').hidden && /не медицинское измерение/.test($('#wv-hr-set').textContent)), 'по умолчанию отдых по времени, порога нет, строка «не медицинское измерение»');
+  /* «пульс или время»: порог 110 — отдых кончается раньше плана, когда пульс ниже порога два показания подряд */
+  await h.click('[data-hr-rest="first"]'); await h.fill('#wv-hr-thr', '110');
+  check(await h.evaluate(() => JSON.stringify(Heart.prefs()) === '{"rest":"first","thr":110}' && JSON.parse(localStorage.getItem('podhod.heart.prefs.v1')).thr === 110), 'выбор «Пульс или время» и порог запоминаются');
+  await push(126); s = await hs();
+  check(s.rnote === 'Отдых до пульса ниже 110 · в начале отдыха 149' && await h.evaluate(() => !$('#workout-view').classList.contains('rest-over')), `отдых до пульса: подпись (${s.rnote})`);
+  await push(108); await push(104); await h.evaluate(() => { window.__dt += 300; workoutTick(); });
+  s = await hs();
+  const r1 = await h.evaluate(() => ({ h: $('#wv-rest-heading').textContent, red: $('#workout-view').classList.contains('rest-over'), end: RestAlarm.state().end, left: workout.restUntil - Date.now() }));
+  check(r1.h === 'Пора к подходу' && r1.red && r1.left <= 0 && s.rnote === 'Пульс ниже 110 — можно к подходу · в начале отдыха 149', `пульс ниже порога — отдых кончился раньше плана (${JSON.stringify(r1)}, ${s.rnote})`);
+  await h.click('#wv-continue');
+  s = await hs();
+  check(JSON.stringify(s.day.rests) === '{"squat:0":[149,104]}', `отдых: пульс в начале и в конце записан (${JSON.stringify(s.day.rests)})`);
+  /* «по пульсу»: к концу плана пульс выше порога — отдых продлевается на 15 с, сигнал переносится */
+  await h.fill('#wv-reps', '8'); /* второй подход: вес подставлен из первого */
+  await h.click('#wv-done');
+  await h.click('[data-hr-rest="hr"]');
+  const until = await h.evaluate(() => workout.restUntil);
+  await h.evaluate(() => { window.__dt = workout.restUntil - Date.now() + window.__dt - 600; window.__hr.push(124); workoutTick(); });
+  s = await hs();
+  const r2 = await h.evaluate(() => ({ until: workout.restUntil, end: RestAlarm.state().end, red: $('#workout-view').classList.contains('rest-over'), t: $('#wv-rest-time').textContent }));
+  check(r2.until === until + 15000 && r2.end === r2.until && !r2.red && r2.t === '0:16' && /^Пульс выше 110 — отдых продлён на 15 с/.test(s.rnote), `«по пульсу»: пульс выше порога к концу плана — +15 с (${JSON.stringify(r2)}, ${s.rnote})`);
+  /* обрыв: переподключение к тому же устройству без окна выбора */
+  await h.evaluate(() => window.__hr.drop());
+  s = await hs();
+  check(s.st === 'reconnecting' && s.note === 'Связь прервалась — переподключаюсь, попытка 1 из 5' && s.val === '…' && s.rest === '—', `обрыв: «переподключаюсь» (${JSON.stringify(s)})`);
+  await h.waitForFunction(() => Heart.state().client.state === 'waiting', null, { timeout: 5000, polling: 50 }).catch(() => {});
+  await push(118); s = await hs();
+  check(s.st === 'live' && s.val === '118' && await h.evaluate(() => window.__hr.s.opts.length === 1 && window.__hr.s.connects === 2), `переподключился сам, без нового окна выбора (${JSON.stringify(s)})`);
+  await h.evaluate(() => { window.__dt += 1000; window.__hr.push(0, false); });
+  s = await hs();
+  check(s.st === 'nocontact' && s.val === '—' && s.note === 'Нет контакта с кожей — поправьте ремешок или датчик', `нет контакта с кожей (${JSON.stringify(s)})`);
+  await push(112);
+  /* итоги и журнал: средний и максимальный пульс */
+  await h.evaluate(() => workoutFinish());
+  const fin = await h.evaluate(() => ({ t: $('#wv-hr-finish').textContent, shown: !$('#wv-hr-finish').hidden, sum: hrSummary(HEART.days[todayKey()]) }));
+  check(fin.shown && fin.t === `♥ Пульс за тренировку: средний ${fin.sum.avg}, максимальный 152.` && fin.sum.avg > 100 && fin.sum.avg < 152, `итоги тренировки: средний и максимальный пульс (${JSON.stringify(fin)})`);
+  /* отключение — с подтверждением */
+  await h.click('#wv-hr-btn'); s = await hs();
+  check(s.st === 'armed' && s.val === 'Отключить?' && await h.evaluate(() => Heart.state().client.state === 'live'), 'первое нажатие по плашке — «Отключить?»');
+  await h.click('#wv-hr-btn'); s = await hs();
+  check(s.st === 'off' && s.note === 'Пульсометр отключён.' && s.val === 'Пульс', `второе — отключает (${JSON.stringify(s)})`);
+  await h.evaluate(() => { closeWorkout(); S.view = 'journal'; renderSetup(); renderPlan(); });
+  const j = await h.evaluate(() => document.querySelector('.j-days .j-hr')?.textContent);
+  check(j === `♥ ср. ${fin.sum.avg} · макс. 152`, `журнал: пульс тренировки за день (${j})`);
+  check(await h.evaluate(() => { const b = backupObject(); return !!b.heart.days[todayKey()].sets['squat:0'] && b.heart.prefs.rest === 'hr'; }), 'пульс и настройки — в полной копии');
+  await h.close();
+  /* без Web Bluetooth (iPhone, Safari, Firefox): честная строка там же, без кнопки и без настройки отдыха по пульсу */
+  const n = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  n.on('pageerror', e => errors.push(String(e)));
+  await n.addInitScript(() => { Object.defineProperty(Navigator.prototype, 'bluetooth', { configurable: true, get: () => undefined }); try { delete navigator.bluetooth; } catch (e) {} });
+  await n.goto('file://' + file); await n.waitForTimeout(500); await fakeFigures(n);
+  await n.evaluate(() => { S.mode = 'single'; regen(); }); await n.click('#start-workout'); await n.waitForTimeout(50);
+  const u = await n.evaluate(() => ({ line: $('#wv-hr-line').textContent, shown: !$('#wv-hr-line').hidden, btn: !$('#wv-hr-btn').hidden, set: !$('#wv-hr-set').hidden, st: $('#wv-hr').dataset.state }));
+  check(u.shown && !u.btn && !u.set && u.st === 'unsupported' && u.line === '♥ Пульсометр работает в Chrome и Edge на Android и компьютере.', `без Web Bluetooth — честная строка вместо кнопки (${JSON.stringify(u)})`);
+  await n.close();
+}
+
 /* компьютер: параметры в боковой колонке не сворачиваются */
 const desk = await open(1280);
 await desk.evaluate(() => { S.fold.setup = true; regen(); });
