@@ -1492,7 +1492,7 @@ details.rule p { margin:6px 0 0; }
 
 <dialog id="motion-view" class="motion-view" aria-labelledby="mv-title">
  <div class="mv-shell">
-  <header class="mv-head"><div class="mv-head-t"><p class="mv-eyebrow">LAZY GYM PLANNER · АТЛАС ДВИЖЕНИЙ · 4.95.0</p><h2 id="mv-title">Разбор упражнения</h2></div><button type="button" id="mv-back" class="mv-back">← Все упражнения</button><button type="button" id="mv-close" aria-label="Закрыть разбор">Закрыть ×</button></header>
+  <header class="mv-head"><div class="mv-head-t"><p class="mv-eyebrow">LAZY GYM PLANNER · АТЛАС ДВИЖЕНИЙ · 4.96.0</p><h2 id="mv-title">Разбор упражнения</h2></div><button type="button" id="mv-back" class="mv-back">← Все упражнения</button><button type="button" id="mv-close" aria-label="Закрыть разбор">Закрыть ×</button></header>
   <section id="mv-gallery" class="mv-gallery" aria-label="Все упражнения" hidden></section>
   <div id="mv-detail">
   <div class="mv-select"><button type="button" data-mv-nav="-1" aria-label="Предыдущее упражнение">←</button><label for="mv-exercise">Упражнение<select id="mv-exercise"></select></label><button type="button" data-mv-nav="1" aria-label="Следующее упражнение">→</button></div>
@@ -1514,7 +1514,7 @@ details.rule p { margin:6px 0 0; }
     <section id="mv-muscle-panel" class="muscle-panel" aria-label="Участие мышц по фазам" hidden><h3>Мышцы по фазам</h3><div class="muscle-scale" aria-hidden="true"><span>Нейтрально</span><span class="muscle-scale-gradient"></span><span>Сильнее</span></div><p class="muscle-explanation">Учебная схема: цвет показывает примерное участие мышцы, а не измеренную силу или ЭМГ. Кривые условные. Части мышцы работают совместно; для большинства частей используется общий профиль группы.</p><label class="muscle-region-select">Выделить область<select id="mv-region" aria-label="Выделить мышечную область"><option value="all">Все области</option></select></label><p id="mv-muscle-note" class="muscle-phase-note"></p><ul id="mv-muscle-list" class="muscle-list"></ul><p class="muscle-explanation">Скрытые поверхности видны в другом ракурсе.</p></section>
     <p id="mv-tempo" class="mv-small"></p>
    </section>
-   <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Работающие мышцы</h3><p class="mv-muscle-label">Основные</p><p id="mv-primary"></p><p class="mv-muscle-label">Вспомогательные</p><p id="mv-secondary"></p></div></div><p class="mv-small">На объёмной фигуре можно выделить мышечную область и сменить ракурс. Глубокие части перечислены в пояснениях.</p><h3>Как выполнять</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Ошибки и дыхание</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>О демонстрациях</summary><p>Схемы помогают разобрать последовательность движения. Амплитуда зависит от упражнения и особенностей человека; схематичный силуэт не задаёт обязательные углы суставов.</p><div id="mv-sources"></div><h4 class="mv-thanks-title">Благодарности</h4><p class="mv-small mv-thanks">Кости манекена — из открытой библиотеки моделей <a href="https://github.com/MyoHub/myo_sim" target="_blank" rel="noopener noreferrer">MyoSim</a> команды MyoSuite (лицензия Apache 2.0). Она построена на исследовательских моделях OpenSim: ноги и таз — <a href="https://doi.org/10.1109/TBME.2016.2586891" target="_blank" rel="noopener noreferrer">Rajagopal и др., 2016</a>; рука, лопатка и кисть — <a href="https://doi.org/10.1007/s10439-005-3320-7" target="_blank" rel="noopener noreferrer">Holzbaur и др., 2005</a>; поясничный отдел — <a href="https://simtk.org/projects/lumbarspine" target="_blank" rel="noopener noreferrer">модель поясничного отдела позвоночника</a>. Спасибо авторам за то, что открыли эти данные.</p><p class="mv-small mv-thanks">Форма тела в виде «Манекен» — открытая параметрическая модель человека <a href="https://github.com/naver/anny" target="_blank" rel="noopener noreferrer">Anny</a> (NAVER; код — лицензия Apache 2.0, сетка и веса MakeHuman — CC0), подогнанная под суставы манекена: скелет, мышцы и проверки поз — прежние.</p><p class="mv-small mv-thanks">Подъязычная кость, хрящи гортани и трахея построены по их размерам у взрослых мужчин из анатомических исследований: Fakhry и др., 2013; Rawal и др., 2014; Kim и Song, 2017; Gray's Anatomy, 1918.</p><p class="mv-small mv-thanks">Мышцы (вид «Анатомия») — пути из тех же моделей MyoSim; мышцы лопатки — из модели плеча <a href="https://github.com/dasproject/DAS3" target="_blank" rel="noopener noreferrer">DAS3</a> (<a href="https://doi.org/10.1109/TBME.2014.2309727" target="_blank" rel="noopener noreferrer">Chadwick и др., 2014</a>; лицензия Apache 2.0); гребенчатая — из модели ноги <a href="https://github.com/opensim-org/opensim-models" target="_blank" rel="noopener noreferrer">Gait2392</a> (<a href="https://doi.org/10.1109/10.102791" target="_blank" rel="noopener noreferrer">Delp и др., 1990</a>; лицензия CC BY 3.0); мышцы шеи и недостающие части мышц — по описаниям прикреплений в анатомических атласах. Толщина мышц — по их объёмам на МРТ 49 мужчин (<a href="https://doi.org/10.1152/japplphysiol.00772.2025" target="_blank" rel="noopener noreferrer">Riem и др., 2026</a>), мышц шеи — по МРТ (<a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC3648672/" target="_blank" rel="noopener noreferrer">Zheng и др., 2013</a>), пересчитана на рост и вес фигуры; доли сухожилий ног — по препаратам (<a href="https://doi.org/10.1007/s11999-008-0594-8" target="_blank" rel="noopener noreferrer">Ward и др., 2009</a>); межрёберные мышцы — пластом между рёбрами, их толщина — по УЗИ (<a href="https://doi.org/10.1589/jpts.31.340" target="_blank" rel="noopener noreferrer">Yoshida и др., 2019</a>) и массам слоёв у препаратов (<a href="https://doi.org/10.1111/j.1469-7793.2001.0319l.x" target="_blank" rel="noopener noreferrer">Wilson и др., 2001</a>). Укорачиваясь, мышца утолщается: её объём не меняется.</p><p class="mv-small">Версия демонстраций 4.95.0</p></details></aside>
+   <aside class="mv-instruction"><div class="mv-muscle-box"><div id="mv-muscles"></div><div><h3>Работающие мышцы</h3><p class="mv-muscle-label">Основные</p><p id="mv-primary"></p><p class="mv-muscle-label">Вспомогательные</p><p id="mv-secondary"></p></div></div><p class="mv-small">На объёмной фигуре можно выделить мышечную область и сменить ракурс. Глубокие части перечислены в пояснениях.</p><h3>Как выполнять</h3><ol id="mv-steps"></ol><details class="mv-extra"><summary>Ошибки и дыхание</summary><ul id="mv-errors"></ul><p id="mv-breath"></p><p id="mv-note"></p></details><details class="mv-extra"><summary>О демонстрациях</summary><p>Схемы помогают разобрать последовательность движения. Амплитуда зависит от упражнения и особенностей человека; схематичный силуэт не задаёт обязательные углы суставов.</p><div id="mv-sources"></div><h4 class="mv-thanks-title">Благодарности</h4><p class="mv-small mv-thanks">Кости манекена — из открытой библиотеки моделей <a href="https://github.com/MyoHub/myo_sim" target="_blank" rel="noopener noreferrer">MyoSim</a> команды MyoSuite (лицензия Apache 2.0). Она построена на исследовательских моделях OpenSim: ноги и таз — <a href="https://doi.org/10.1109/TBME.2016.2586891" target="_blank" rel="noopener noreferrer">Rajagopal и др., 2016</a>; рука, лопатка и кисть — <a href="https://doi.org/10.1007/s10439-005-3320-7" target="_blank" rel="noopener noreferrer">Holzbaur и др., 2005</a>; поясничный отдел — <a href="https://simtk.org/projects/lumbarspine" target="_blank" rel="noopener noreferrer">модель поясничного отдела позвоночника</a>. Спасибо авторам за то, что открыли эти данные.</p><p class="mv-small mv-thanks">Форма тела в виде «Манекен» — открытая параметрическая модель человека <a href="https://github.com/naver/anny" target="_blank" rel="noopener noreferrer">Anny</a> (NAVER; код — лицензия Apache 2.0, сетка и веса MakeHuman — CC0), подогнанная под суставы манекена: скелет, мышцы и проверки поз — прежние.</p><p class="mv-small mv-thanks">Подъязычная кость, хрящи гортани и трахея построены по их размерам у взрослых мужчин из анатомических исследований: Fakhry и др., 2013; Rawal и др., 2014; Kim и Song, 2017; Gray's Anatomy, 1918.</p><p class="mv-small mv-thanks">Мышцы (вид «Анатомия») — пути из тех же моделей MyoSim; мышцы лопатки — из модели плеча <a href="https://github.com/dasproject/DAS3" target="_blank" rel="noopener noreferrer">DAS3</a> (<a href="https://doi.org/10.1109/TBME.2014.2309727" target="_blank" rel="noopener noreferrer">Chadwick и др., 2014</a>; лицензия Apache 2.0); гребенчатая — из модели ноги <a href="https://github.com/opensim-org/opensim-models" target="_blank" rel="noopener noreferrer">Gait2392</a> (<a href="https://doi.org/10.1109/10.102791" target="_blank" rel="noopener noreferrer">Delp и др., 1990</a>; лицензия CC BY 3.0); мышцы шеи и недостающие части мышц — по описаниям прикреплений в анатомических атласах. Толщина мышц — по их объёмам на МРТ 49 мужчин (<a href="https://doi.org/10.1152/japplphysiol.00772.2025" target="_blank" rel="noopener noreferrer">Riem и др., 2026</a>), мышц шеи — по МРТ (<a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC3648672/" target="_blank" rel="noopener noreferrer">Zheng и др., 2013</a>), пересчитана на рост и вес фигуры; доли сухожилий ног — по препаратам (<a href="https://doi.org/10.1007/s11999-008-0594-8" target="_blank" rel="noopener noreferrer">Ward и др., 2009</a>); межрёберные мышцы — пластом между рёбрами, их толщина — по УЗИ (<a href="https://doi.org/10.1589/jpts.31.340" target="_blank" rel="noopener noreferrer">Yoshida и др., 2019</a>) и массам слоёв у препаратов (<a href="https://doi.org/10.1111/j.1469-7793.2001.0319l.x" target="_blank" rel="noopener noreferrer">Wilson и др., 2001</a>). Укорачиваясь, мышца утолщается: её объём не меняется.</p><p class="mv-small">Версия демонстраций 4.96.0</p></details></aside>
   </div>
   </div>
  </div>
@@ -6477,7 +6477,10 @@ EX.push(
  err:['Раскачка маятником', 'Бросок ног вниз', 'Подъём коленей без подкрутки таза'],
  breath:'Выдох при подъёме, вдох при опускании.',
  anim:{}},
-{id:'rollout', name:'Выкатывание ролика с колен', eq:[['abwheel']], g:'abs', pri:['abs'], sec:['obliques', 'lats', 'delt_f'], type:'c', lvl:2,
+/* уровень 3: выкатывание с колен — упражнение продвинутого уровня (ACE Exercise Library, «Roll-out», Advanced); сжатие
+   позвоночника выше, чем в скручиваниях, при нарушениях со стороны позвоночника может не подходить (Youdas et al. 2008,
+   JSCR 22(6):1939–1946). Новичку и в бережном режиме не подбирается */
+{id:'rollout', name:'Выкатывание ролика с колен', eq:[['abwheel']], g:'abs', pri:['abs'], sec:['obliques', 'lats', 'delt_f'], type:'c', lvl:3,
  tech:['Встаньте на колени, ролик под плечами на прямых руках. Напрягите пресс и ягодицы, поясница слегка округлена.',
    'Катите ролик вперёд, вытягивая тело, пока поясница остаётся ровной.',
    'Вернитесь в исходное положение усилием пресса, а не рук.'],
@@ -16312,8 +16315,28 @@ function selectMuscleRegion(prefix,id){
                  JSCR 26(10):2829–2836. Порог — линия носков, как барьер у Fry; передняя поверхность колена при этом уже
                  на полтолщины колена за носками. Присед без веса манекена держит колени за линией носков (центр колена
                  на 4 см позади), сисси-присед уводит их на 21 см вперёд: плечо веса тела от колена — 32 см против 20;
+                 На гребном тренажёре колено нагружено только в толчке: ноги толкают из полного сжатия, пик силы — когда
+                 колено проходит 90° (British Rowing Plus, 2024, «Applying biomechanics: an analysis of the rowing stroke»);
+                 в возврате маховик идёт по инерции, сопротивления нет — метка горит в толчке и молчит в возврате;
    колено      — разгибание в открытой цепи ближе 30° к прямой ноге: Escamilla et al. 1998, MSSE 30(4):556–569;
+   упор на колени — колено стоит на опоре и несёт вес тела: передняя поверхность колена смотрит в опору (вниз —
+                 не дальше 53° от вертикали, косинус ≥ 0,6). Стоя на коленях при сгибе 90° на переднюю поверхность колена
+                 приходится в среднем 97 % веса тела, давление — на надколенник и бугристость большеберцовой кости, после
+                 эндопротеза давление в надколенниково-бедренном суставе растёт сильнее: Lee 2014, Clin Orthop Surg 6(2):117–126
+                 (обзор, данные Hassaballa et al.). Стоять на коленях — то, что хуже всего восстанавливается после эндопротеза:
+                 через 5 лет 67 % с большим трудом или не могут — Shah et al. 2023, Arthroplasty 5:32 (систематический обзор);
+                 после пластики ПКС сухожилием надколенника сильные трудности — у 21,3 % через 2 года — Rahardja et al. 2023,
+                 AJSM 51(13):3464–3472. Не упор: колено в валиках тренажёра сбоку (сведение, разведение), под валиком скамьи
+                 для пресса (передняя поверхность смотрит вверх), боком на скамье в копенгагенской планке;
    поясница    — наклон корпуса ≥40° без опоры с весом: McGill 1997, J Biomech 30(5):465–475;
+   поясница, длинный рычаг — упор руками далеко впереди при вытянутом теле (выкатывание ролика): плечо поднято ≥120°,
+                 корпус почти горизонтален (наклон 50–110°), таз раскрыт (сгибание бедра ≤30°), туловище ничем не подпёрто.
+                 В планке и отжиманиях плечо у 90° и меньше — кисти под плечами; в полном выкате 150–180° — руки на линии
+                 корпуса. С 120° кисти уже впереди головы: вес тела висит между коленями и кистями, пресс держит поясницу
+                 от прогиба. Выкатывание повышает сжатие позвоночника и может не подходить при нарушениях со стороны
+                 позвоночника — Youdas et al. 2008, JSCR 22(6):1939–1946 (Ab-Slide); упражнения передней цепи с длинным
+                 рычагом (выход из упора лёжа, «пила») — 2400–2700 Н сжатия L4/L5, выполнить их могли только тренированные —
+                 McGill, Andersen, Cannon 2015, J Sports Sci 33(4):419–426;
    плечи       — плечо за линией корпуса ≥20° в жимах и брусьях, длинный рычаг в разведениях:
                  Fees et al. 1998, AJSM 26(5):732–742; брусья — McKenzie et al. 2022, IJERPH 19(21):14390;
    плечи вверх — жим над головой: плечо поднято на 90–120° под весом — подакромиальное пространство здесь самое узкое
@@ -16329,7 +16352,9 @@ function selectMuscleRegion(prefix,id){
 const STRESS_RULES = [
   {id:'knee', parts:['колени'], zone:'Колени', what:'Глубокий сгиб под весом — пик нагрузки на надколенник и связки колена.', tip:'Колени по линии стоп, не проваливайтесь и не расслабляйтесь внизу.'},
   {id:'kneeOpen', parts:['колени'], zone:'Колени', what:'Последние 30° до прямой ноги — сильнее всего натянута передняя крестообразная связка.', tip:'Разгибайте без рывка и удара в конце.'},
+  {id:'kneel', parts:['колени'], zone:'Колени', what:'Упор на колени: вес тела давит на надколенник и бугристость большеберцовой кости.', tip:'Подложите мягкий коврик; если стоять на коленях больно, выберите вариант стоя или сидя.'},
   {id:'lumbar', parts:['поясница'], zone:'Поясница', what:'Наклон корпуса с весом без опоры — пик нагрузки на поясницу.', tip:'Спина нейтральная, движение от таза, вес ближе к ногам.'},
+  {id:'lumbarLever', parts:['поясница'], zone:'Поясница', what:'Длинный рычаг: руки далеко впереди, тело вытянуто — пресс держит поясницу от прогиба, нагрузка на поясничный отдел самая большая.', tip:'Уходите вперёд, только пока поясница не прогибается; при боли в спине — короче амплитуда или планка.'},
   {id:'shPress', parts:['плечи'], zone:'Плечи', what:'Плечо ушло за линию корпуса под весом — нагрузка на переднюю часть сустава.', tip:'Опускайтесь до комфортной глубины, лопатки сведены и прижаты.'},
   {id:'shLever', parts:['плечи'], zone:'Плечи', what:'Длинный рычаг: вес далеко от плеча.', tip:'Локти слегка согнуты, без провала в нижней точке.'},
   {id:'shOverhead', parts:['плечи'], zone:'Плечи', what:'Рука проходит дугу 90–120° под весом — пространство под акромионом самое узкое, сухожилия плеча сдавлены сильнее всего.', tip:'Жмите перед головой, не из-за головы, локти чуть впереди корпуса; при боли — остановитесь ниже или замените упражнение.'},
@@ -16343,8 +16368,20 @@ const STRESS_RULES = [
   {id:'hams', parts:['задняя поверхность бедра'], zone:'Задняя поверхность бедра', what:'Мышцы задней поверхности бедра растянуты под весом.', tip:'Опускайтесь до ощутимого натяжения, без рывка из нижней точки.'}
 ];
 const STRESS_RULE = Object.fromEntries(STRESS_RULES.map(r => [r.id, r]));
+/* свои тексты, где общие не подходят: в турецком подъёме плечо и кисть нагружает опорная рука, а не жим или отжимание */
+const STRESS_TEXT = {
+  kbtgu:{
+    shPress:{what:'Плечо уходит за линию корпуса, когда на руку переносится вес тела или гири, — нагрузка на переднюю часть сустава.', tip:'Опорная ладонь под плечом, плечи опущены от ушей, рука с гирей вертикально над плечом; переходите из положения в положение без рывка.'},
+    wrist:{what:'Опорная кисть разогнута под весом тела, пока вы сидите на ладони.', tip:'Ладонь плоско, пальцы врозь, вес на основание ладони; при боли в запястье переходите с локтя на ладонь плавно и не задерживайтесь на ней.'}
+  }
+};
+/* части тела, которые опираются туловищем или бёдрами: тогда тело не висит между кистями и коленями (стопами) */
+const STRESS_TRUNK_REST = /^(back|chest|belly|buttocks|upperBack|front|headBack|th[LR]?|thighsBack)>(?!bar$)/;
+const stressIn = (c, t) => !c.when || t == null || (t >= c.when[0] - 1e-6 && t <= c.when[1] + 1e-6);
 const STRESS_FRAMES = 40;
 const STRESS_CACHE = new Map();
+/* глубокий сгиб колена под весом — порог правила «колени» (Escamilla 2001); на одной ноге — раньше */
+const STRESS_KNEE_DEEP = 85, STRESS_KNEE_DEEP_UNI = 80;
 /* наклоны от таза, если таблица движений планировщика ещё не загружена (проверка рисунков без приложения) */
 const STRESS_HINGE = new Set(['deadlift', 'rdl', 'sllift', 'goodmorning', 'kbswing', 'hyper', 'pullthrough', 'kbdeadlift', 'kbswing1', 'kbclean', 'kbsnatch', 'kbsllift']);
 /* жимы вверх — так же, на случай проверки без таблицы движений */
@@ -16352,8 +16389,13 @@ const STRESS_VPUSH = new Set(['dbpress', 'ohp', 'pikepush', 'arnold', 'declinepi
 
 /* что держит и на что опирается тело — по контактам спецификации */
 function stressContacts(ex) {
-  const C = (typeof CATALOG_POSES !== 'undefined' && CATALOG_POSES[ex.id]?.contacts || []).map(c => c.body + '>' + c.prop);
+  const P = typeof CATALOG_POSES !== 'undefined' && CATALOG_POSES[ex.id] || {}, K = P.contacts || [];
+  const C = K.map(c => c.body + '>' + c.prop);
   const has = re => C.some(c => re.test(c));
+  /* ролик для пресса: хват за его ось — упор руками, как ладонями в пол */
+  const wheels = new Set((P.equipment || []).filter(e => e.type === 'abWheel').map(e => e.id));
+  const leverHand = c => (/^(palm|fa)[LR]?$/.test(c.body) && !/:(panel|top)$/.test(c.prop)) || (/^grip[LR]?$/.test(c.body) && wheels.has(c.prop.split(':')[0]));
+  const knees = K.filter(c => /^knee[LR]?$/.test(c.body));
   const legs = ['quads', 'glutes', 'hams', 'calves', 'cardio'].includes(ex.g);
   /* свободный вес: гриф, гантель, гиря; ладони на диске гантели (пуловер, разгибание из-за головы) */
   const free = has(/^grip[LR]?>(bar|db[LR]?|kb[LR]?|tbar|\w+:horn[LR])$/) || has(/^(hand|palm[LR]?)>\w+:top$/);
@@ -16376,19 +16418,34 @@ function stressContacts(ex) {
     palmTop: has(/^palm[LR]?>\w+:top$/),
     handsBear: has(/^(palm[LR]?|fa[LR]?)>|^grip[LR]?>\w+:(bar[LR]|dip[LR]|seat|pad|top)$/),
     bar: has(/^grip[LR]?>\w+:(pullBar|pull[LR])$/),
-    kneelAnchored: has(/^knee[LR]?>pad$/) && has(/^foot[LR]?>\w+:base$/)
+    kneelAnchored: has(/^knee[LR]?>pad$/) && has(/^foot[LR]?>\w+:base$/),
+    /* колено касается опоры в этом кадре (контакты с окном времени — только в своей фазе) */
+    kneeOn: (s, t) => knees.some(c => (c.body === 'knee' || c.body === 'knee' + s) && stressIn(c, t)),
+    /* упор руками (ладони, предплечья, ось ролика) в этом кадре; туловище и бёдра ничем не подпёрты */
+    leverHands: t => K.some(c => leverHand(c) && stressIn(c, t)),
+    /* сидит, лежит или стоит на коленях в этом кадре — вес не на стопах; спиной к стене (стульчик) — стоя */
+    restOn: (t, trunk) => K.some(c => stressIn(c, t) && (/^(buttocks|th[LR]?|thighsBack|knee[LR]?)$/.test(c.body) || (/^(back|upperBack|headBack|chest|belly)$/.test(c.body) && c.prop !== 'bar' && trunk > 20))),
+    trunkFree: !has(STRESS_TRUNK_REST),
+    /* гребной тренажёр: сопротивление маховика только в толчке */
+    flywheel: (P.equipment || []).some(e => e.type === 'rowerErg')
   };
 }
 /* углы и вспомогательные величины кадра */
-function stressFrame(R) {
+function stressFrame(R, t = null) {
   const A = Mannequin.jointAngles(R), V = Mannequin.V;
   const up = V.unit(V.sub(R.sh, R.hip)), trunk = Math.acos(Math.max(-1, Math.min(1, -up[1]))) * 180 / Math.PI;
   const side = s => { const a = A[s], h = R['grip' + s] && R['sh' + s] ? Math.hypot(R['grip' + s][0] - R['sh' + s][0], R['grip' + s][2] - R['sh' + s][2]) : 0;
     /* центр колена впереди носка (см) — по горизонтали вдоль стопы от пятки к носку */
     const toe = R['toe' + s], heel = R['heel' + s], fw = toe && heel ? V.unit([toe[0] - heel[0], 0, toe[2] - heel[2]]) : null;
     const kneeAhead = fw ? V.dot(V.sub(R['kn' + s], toe), fw) : -Infinity;
-    return {...a, behind:a.posterior > 0 ? Math.asin(Math.min(1, a.posterior)) * 180 / Math.PI : 0, beta:Math.abs(Math.atan2(a.lat, -a.up) * 180 / Math.PI), reach:h, kneeAhead}; };
-  return {A, trunk, L:side('L'), R:side('R')};
+    /* куда смотрит передняя поверхность согнутого колена: биссектриса угла между бедром и голенью, наружу от сгиба;
+       kneeDown — её доля вниз (ось y каталога направлена вниз): 1 — прямо в пол, −1 — вверх. При почти прямом колене
+       (сгиб меньше 20°) направление не определено — 0 */
+    const hip = R['hip' + s], kn = R['kn' + s], an = R['an' + s];
+    let kneeDown = 0;
+    if (hip && kn && an) { const d = V.sub(V.unit(V.sub(kn, hip)), V.unit(V.sub(an, kn))), n = Math.hypot(...d); if (n > .35) kneeDown = d[1] / n; }
+    return {...a, behind:a.posterior > 0 ? Math.asin(Math.min(1, a.posterior)) * 180 / Math.PI : 0, beta:Math.abs(Math.atan2(a.lat, -a.up) * 180 / Math.PI), reach:h, kneeAhead, kneeDown}; };
+  return {A, t, trunk, L:side('L'), R:side('R')};
 }
 /* правила кадра: возвращают ключи меток (суставы со стороной или центральные точки) */
 function stressRulesAt(ex, k, f) {
@@ -16397,12 +16454,16 @@ function stressRulesAt(ex, k, f) {
   const hinge = typeof PATTERN !== 'undefined' ? PATTERN[ex.id] === 'hinge' : STRESS_HINGE.has(ex.id), legsG = ['quads', 'glutes', 'hams'].includes(ex.g);
   if (!ex.pri.includes('calves') && !hinge) {
     const loaded = k.legPress || (k.upright && (k.loaded || k.backBar)) || (legsG && ex.uni && k.uprightUni);
-    if (loaded) add('knee', both(s => k.sole(s) && f[s].knee >= (ex.uni ? 80 : 85), 'kn'));
+    if (loaded) add('knee', both(s => k.sole(s) && f[s].knee >= (ex.uni ? STRESS_KNEE_DEEP_UNI : STRESS_KNEE_DEEP), 'kn'));
     /* без отягощения на двух ногах, руки не держат вес: глубокий сгиб с коленями за носками (сисси-присед) */
-    else if (legsG && !ex.uni && k.upright && !k.handsBear) add('knee', both(s => k.feet(s) && f[s].knee >= 85 && f[s].kneeAhead > 0, 'kn'));
+    else if (legsG && !ex.uni && k.upright && !k.handsBear) add('knee', both(s => k.feet(s) && f[s].knee >= STRESS_KNEE_DEEP && f[s].kneeAhead > 0, 'kn'));
   }
   if (k.shin) add('kneeOpen', both(s => f[s].knee <= 30, 'kn'));
+  /* упор на колени: колено на опоре передней поверхностью */
+  add('kneel', both(s => k.kneeOn(s, f.t) && f[s].kneeDown >= .6, 'kn'));
   if (k.sole('') && !k.seated && (k.loaded || k.backBar) && f.trunk >= 40) add('lumbar', ['lumbar']);
+  /* длинный рычаг: тело вытянуто между упором рук далеко впереди и коленями или стопами */
+  if (k.trunkFree && k.leverHands(f.t) && f.trunk >= 50 && f.trunk <= 110 && Math.max(f.L.hipFlex, f.R.hipFlex) <= 30 && Math.max(f.L.elevation, f.R.elevation) >= 120) add('lumbarLever', ['lumbar']);
   const push = ['chest', 'triceps', 'shoulders'].includes(ex.g);
   if (push && (k.loaded || k.handsBear)) add('shPress', both(s => f[s].behind >= 20, 'sh'));
   /* жим вверх: плечо в дуге 90–120° — только в жимах, а не в тяге к лицу или махах (там другая задача и малый вес) */
@@ -16428,13 +16489,17 @@ function jointStress(ex) {
   let result = {rules:[]};
   const rig = ex.anim.catalogRig;
   if (rig && typeof CATALOG_POSES !== 'undefined' && CATALOG_POSES[ex.id]) {
-    const k = stressContacts(ex), frames = [], clear = [], hip = [];
+    const k = stressContacts(ex), frames = [], clear = [], hip = [], legsG = ['quads', 'glutes', 'hams'].includes(ex.g);
+    let kneeDepth = 0;
     for (let i = 0; i <= STRESS_FRAMES; i++) {
-      const R = rig(i / STRESS_FRAMES);
+      const t = i / STRESS_FRAMES, R = rig(t);
       if (!R.frames) { frames.length = 0; break; }
-      frames.push(stressRulesAt(ex, k, stressFrame(R)));
+      const f = stressFrame(R, t);
+      frames.push(stressRulesAt(ex, k, f));
       clear.push(Math.max(R.heelL[1], R.toeL[1], R.heelR[1], R.toeR[1])); hip.push(R.hip[1]);
+      if (legsG && !k.restOn(t, f.trunk) && f.trunk <= 60) for (const s of ['L', 'R']) if (k.feet(s)) kneeDepth = Math.max(kneeDepth, f[s].knee);
     }
+    result.kneeDepth = frames.length ? kneeDepth : 0;
     if (frames.length) {
       const ground = Math.max(...clear), gap = clear.map(y => ground - y);
       const landing = order => { const hit = new Array(frames.length).fill(false); let since = Infinity;
@@ -16446,13 +16511,26 @@ function jointStress(ex) {
       const fw = k.floorOnly ? landing(idx) : none, bw = !k.floorOnly ? none : ex.anim.loop ? fw : landing(idx.slice().reverse());
       const ids = new Set(frames.flatMap(f => Object.keys(f)));
       if (fw.some(Boolean) || bw.some(Boolean)) ids.add('landing');
-      const keysOf = (id, i, dir) => id === 'landing' ? ((dir === 'b' ? bw : fw)[i] ? ['knL', 'knR', 'anL', 'anR'] : []) : frames[i][id] || [];
-      result = {rules:STRESS_RULES.filter(r => ids.has(r.id)).map(r => ({...r, f:frames.map((_, i) => keysOf(r.id, i, 'f')), b:frames.map((_, i) => keysOf(r.id, i, 'b'))}))};
+      /* гребной тренажёр: вперёд — толчок (захват → финиш), назад — возврат без сопротивления */
+      const keysOf = (id, i, dir) => id === 'landing' ? ((dir === 'b' ? bw : fw)[i] ? ['knL', 'knR', 'anL', 'anR'] : [])
+        : id === 'knee' && k.flywheel && dir === 'b' && !ex.anim.loop ? [] : frames[i][id] || [];
+      const text = STRESS_TEXT[ex.id] || {};
+      result = {kneeDepth:result.kneeDepth, rules:STRESS_RULES.filter(r => ids.has(r.id)).map(r => ({...r, ...text[r.id], f:frames.map((_, i) => keysOf(r.id, i, 'f')), b:frames.map((_, i) => keysOf(r.id, i, 'b'))}))};
     }
   }
   STRESS_CACHE.set(ex.id, result);
   return result;
 }
+/* самый глубокий сгиб колена стоя на стопе в упражнениях на ноги (без опоры тазом, бёдрами, коленом или спиной на скамье;
+   спина у стены — тоже стоя), в градусах.
+   Для замен при «Беречь колени» (11g-gentle.js): присед или выпад с весом тела до того же сгиба нагружает колено
+   почти как с гантелью. Момент на колене задаёт прежде всего вес тела над коленом и плечо до него: гантель в 10–16 кг —
+   это 13–20 % веса тела; в приседе с ¼ и ½ веса тела момент на колене при сгибе 60° больше, чем без веса, лишь на 10
+   и 14 % (Lorenzetti et al., ISB 2009, предварительные данные одного испытуемого; полная работа — JSCR 2012,
+   26(10):2829–2836: в нижней точке колено 86° с барьером у носков и 106° без него). А снижают момент меньшее сгибание
+   и колени за линией носков (Fry 2003). Поэтому замена при «Беречь колени» не уходит стоя глубже порога правила. */
+function stressKneeDepth(ex) { return ['quads', 'glutes', 'hams'].includes(ex.g) ? jointStress(ex).kneeDepth || 0 : 0; }
+function stressKneeDeep(ex) { return stressKneeDepth(ex) >= (ex.uni ? STRESS_KNEE_DEEP_UNI : STRESS_KNEE_DEEP); }
 function stressExercise(anim) { return anim.catalogId ? (typeof EXI !== 'undefined' ? EXI[anim.catalogId] : EX.find(e => e.id === anim.catalogId)) : null; }
 /* активные правила в положении t; index 2 и 3 — обратный ход (кроме замкнутых циклов) */
 function jointStressAt(ex, t, index = 0) {
@@ -16873,7 +16951,7 @@ function buildPlan(ctx = {}) {
   let slots = picked.map((_, i) => i);
   if (ref || custom) {
     const lvlMax = custom ? 3 : S.level === 'beg' ? 2 : 3, used = new Set(picked.filter(usable).map(ex => ex.id));
-    const keep = [], ok = S.format === 'static' ? b => staticOk(b) && fitsBody(b) : fitsBody;
+    const keep = [], ok = S.format === 'static' ? b => staticOk(b) && swapFits(b) : swapFits;
     picked = picked.map((ex, i) => {
       if (usable(ex)) { keep.push(i); return ex; }
       const alt = analogsFor(ex, E, {exclude:used, lvlMax, limit:1, ok})[0];
@@ -17401,12 +17479,14 @@ function analogNote(a, b, E) {
 /* лучшие замены упражнения ex среди доступных при оборудовании E */
 function analogsFor(ex, E, {exclude = new Set(), lvlMax = 3, limit = 5, min = .45, ok = null} = {}) {
   const cardio = ex.g === 'cardio';
-  return EX.filter(b => b !== ex && !exclude.has(b.id) && available(b, E) && b.lvl <= lvlMax && (b.g === 'cardio') === cardio && (!ok || ok(b)))
+  /* ok (суставы, глубина колена) проверяется после сортировки и только до limit: расчёт по положениям манекена дорогой */
+  const ranked = EX.filter(b => b !== ex && !exclude.has(b.id) && available(b, E) && b.lvl <= lvlMax && (b.g === 'cardio') === cardio)
     .map(b => ({ex:b, score:analogScore(ex, b)}))
     .filter(r => r.score >= min)
-    .sort((x, y) => y.score - x.score)
-    .slice(0, limit)
-    .map(r => ({...r, note:analogNote(ex, r.ex, E)}));
+    .sort((x, y) => y.score - x.score);
+  const out = [];
+  for (const r of ranked) { if (out.length >= limit) break; if (!ok || ok(r.ex)) out.push({...r, note:analogNote(ex, r.ex, E)}); }
+  return out;
 }
 
 /* ===================== МЕСТА ТРЕНИРОВОК =====================
@@ -18336,13 +18416,22 @@ function protectHits(ex) {
 }
 function jointOk(ex) { return !protectHits(ex).length; }
 function gentleOk(ex) { return S.goal !== 'gentle' || (ex.lvl <= 2 && !GENTLE_SKIP.has(ex.id) && !GENTLE_SKIP_PATTERNS.has(PATTERN[ex.id])); }
-function fitsBody(ex) { return gentleOk(ex) && jointOk(ex); }
+/* «Беречь колени»: кроме меток — никакого приседа и выпада стоя глубже порога правила колен (85°, на одной ноге 80°;
+   Fry et al. 2003, Lorenzetti et al. 2012 — 09f-joint-stress.js), даже с весом тела и с коленями за носками: ни в подборе,
+   ни в замене, ни в своём плане. Решение владельца 12.11.2026: «по коленям надо максимально застраховаться от того, что
+   человек травмирует колено по нашей рекомендации». Гоблет-присед → присед без веса снимает лишь гантель, сгиб остаётся
+   тем же (stressKneeDepth); подходят меньший сгиб или упражнения без опоры на стопы (мостик, сгибания ног) */
+function kneeDeepBlocked(ex) { return ensureProtect(S).includes('knees') && typeof stressKneeDeep === 'function' && stressKneeDeep(ex); }
+function fitsBody(ex) { return gentleOk(ex) && jointOk(ex) && !kneeDeepBlocked(ex); }
+/* замена (в своём плане, в программе другого места, кнопкой «Заменить») — по тем же правилам, что подбор */
+function swapFits(ex) { return fitsBody(ex); }
 const joinNames = list => list.length > 1 ? list.slice(0, -1).join(', ') + ' и ' + list[list.length - 1] : list[0] || '';
 function hitsText(hits) { return joinNames(hits.map(p => p.acc)); }
 /* почему упражнение не подходит — для замены и для списка «нечем заменить» */
 function unfitWhy(ex) {
   const hits = protectHits(ex);
   if (hits.length) return `нагружает ${hitsText(hits)}`;
+  if (kneeDeepBlocked(ex)) return 'глубокий сгиб колена';
   if (!gentleOk(ex)) return ex.lvl > 2 ? 'сложный вариант' : 'ударная или рывковая нагрузка';
   return '';
 }
@@ -19291,6 +19380,15 @@ document.addEventListener('change', e => {
 });
 const swapKey = () => S.mode === 'program' ? 'd' + S.day : 's';
 function regen(resetSwaps = true) { if (resetSwaps) swaps = S.swaps = {}; done = {}; saveSettings(); renderSetup(); renderPlan(); }
+/* «Заменить»: то же движение или группа, по уровню, с инвентарём места и без нагрузки на бережёмые суставы (swapFits,
+   11g-gentle.js); ближайшие по смыслу — то же движение и те же мышцы — первыми */
+function swapCandidates(cur, plan) {
+  const inPlan = new Set(plan.items.map(it => it.ex.id));
+  const lvlMax = S.level === 'beg' || S.goal === 'gentle' ? 2 : 3;
+  if (S.mode === 'custom') for (const it of customOf().items) inPlan.add(it.id);
+  return EX.filter(ex => !inPlan.has(ex.id) && available(ex, plan.E) && ex.lvl <= lvlMax && (ex.g === cur.g || PATTERN[ex.id] === PATTERN[cur.id]) && (S.format !== 'static' || staticOk(ex)) && swapFits(ex))
+    .sort((a, b) => analogScore(cur, b) - analogScore(cur, a));
+}
 document.addEventListener('click', e => {
   const t = e.target.closest('button, summary');
   if (!t) return;
@@ -19335,13 +19433,8 @@ document.addEventListener('click', e => {
   if (t.dataset.swap !== undefined) {
     const slot = +t.dataset.swap;
     const cur = plan.items.find(it => it.slot === slot).ex;
-    const inPlan = new Set(plan.items.map(it => it.ex.id));
-    const lvlMax = S.level === 'beg' || S.goal === 'gentle' ? 2 : 3;
     const tried = new Set((swaps.__tried && swaps.__tried[swapKey() + ':' + slot]) || []);
-    /* ближайшие по смыслу: то же движение и те же мышцы — первыми */
-    if (S.mode === 'custom') for (const it of customOf().items) inPlan.add(it.id);
-    let alts = EX.filter(ex => !inPlan.has(ex.id) && available(ex, plan.E) && ex.lvl <= lvlMax && (ex.g === cur.g || PATTERN[ex.id] === PATTERN[cur.id]) && (S.format !== 'static' || staticOk(ex)) && fitsBody(ex))
-      .sort((a, b) => analogScore(cur, b) - analogScore(cur, a));
+    let alts = swapCandidates(cur, plan);
     const msgEl = t.querySelector('span');
     if (!alts.length) { msgEl.textContent = 'Замены нет'; setTimeout(() => { msgEl.textContent = 'Заменить'; }, 1800); return; }
     tried.add(cur.id);
@@ -23281,7 +23374,7 @@ renderPlan();
 prefetchStressIds();
 logInit();
 
-window.PODHOD_VERSION='4.95.0';window.PODHOD_BUILD='4.95.0-cdd4f1868e7e';window.PODHOD_RENDER={"skin":"31c4707ea0","skeleton":"f4e7c4b726","anatomy":"48636840a9"};window.PODHOD_LANG='ru';
+window.PODHOD_VERSION='4.96.0';window.PODHOD_BUILD='4.96.0-d61ba6b62500';window.PODHOD_RENDER={"skin":"31c4707ea0","skeleton":"f4e7c4b726","anatomy":"48636840a9"};window.PODHOD_LANG='ru';
 
 </script>
 
