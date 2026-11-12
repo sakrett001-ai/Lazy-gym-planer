@@ -158,7 +158,13 @@ function stepFor(it) {
   return 2.5;
 }
 const roundTo = (v, st) => Math.max(0, Math.round(v / st) * st);
-function parseRange(r) { const m = String(r).match(/(\d+)\D+(\d+)/); if (m) return [+m[1], +m[2]]; const n = parseInt(r, 10); return [n || 0, n || 0]; }
+/* повторы плана по подходам (пирамида своего плана, 11d-custom.js: cleanReps): «10/8/6/5» → [10, 8, 6, 5];
+   диапазон или одно число — null */
+function repsPlanOf(r) { const s = String(r ?? ''); if (!s.includes('/')) return null; const l = s.split('/').map(Number); return l.length > 1 && l.every(v => v > 0) ? l : null; }
+/* цель подхода k (с нуля): у пирамиды — своё число (подходов больше списка — последнее), иначе диапазон как есть */
+function planReps(rx, k) { const l = repsPlanOf(rx.reps); return l ? String(l[Math.min(k, l.length - 1)]) : String(rx.reps); }
+/* границы повторов: «8–12» → [8, 12]; у пирамиды — от меньшего до большего */
+function parseRange(r) { const l = repsPlanOf(r); if (l) return [Math.min(...l), Math.max(...l)]; const m = String(r).match(/(\d+)\D+(\d+)/); if (m) return [+m[1], +m[2]]; const n = parseInt(r, 10); return [n || 0, n || 0]; }
 const e1rm = (kg, reps) => kg * (1 + Math.min(reps, 12) / 30);
 
 /* ---------- подсказка по двойной прогрессии ---------- */
@@ -172,7 +178,9 @@ function suggest(it) {
 function suggestBase(it) {
   /* статодинамика и обычные подходы ведутся раздельно: вес в них отличается примерно вдвое */
   const ex = it.ex, lt = loadType(ex), all = pastSessions(ex.id), past = all.filter(s => (s.fmt === 'static') === !!it.rx.static);
-  const [lo, hi] = parseRange(it.rx.reps);
+  const [lo, hi] = parseRange(it.rx.reps), rp = repsPlanOf(it.rx.reps);
+  /* цель подхода k (с нуля): [нижняя, верхняя]; у пирамиды повторов — своё число подхода */
+  const tgt = k => { if (!rp) return [lo, hi]; const v = rp[Math.min(k, rp.length - 1)]; return [v, v]; };
   const unit = ex.kind === 'time' ? ' с' : ex.kind === 'dist' ? ' м' : '';
   const week = S.mode === 'program' ? WEEKS[S.week - 1] : null;
   const step = stepFor(it);
@@ -182,9 +190,12 @@ function suggestBase(it) {
     const prev = past[past.length - 1] || null, ps = prev ? prev.s.filter(Boolean) : [];
     res.tone = 'plan'; res.kgs = it.rx.kgPlan; res.kg = it.rx.kgPlan[0]; res.prev = prev;
     const what = lt === 'assist' ? 'Противовес по плану' : lt === 'extra' ? 'Доп. вес по плану' : 'Вес по плану';
-    res.text = `${what}: ${planKgText(it.rx.kgPlan)} кг.` + (ps.length ? ` В прошлый раз: ${ps.map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(', ')}.` : '');
+    res.text = `${what}: ${planKgText(it.rx.kgPlan)} кг.` + (rp ? ` Повторы по плану: ${rp.join(' / ')}.` : '') + (ps.length ? ` В прошлый раз: ${ps.map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(', ')}.` : '');
     return res;
   }
+  /* прошлых тренировок нет, а сегодня подходы уже записаны — не «Первая запись», а сколько сделано и что дальше */
+  const today = !past.length && todayNote(it, lt);
+  if (today) { res.tone = 'today'; res.text = today; return res; }
   if (it.rx.static && !past.length) {
     const last = all[all.length - 1], kgs = last ? last.s.filter(Boolean).map(x => x[0]).filter(v => v > 0) : [];
     if (lt === 'kg' && kgs.length) {
@@ -196,8 +207,13 @@ function suggestBase(it) {
     return res;
   }
   if (!past.length) {
-    res.text = lt === 'assist' ? `Первая запись. Подберите противовес, с которым ${lo === hi ? lo : lo + '–' + hi} повторов даются с запасом в 2.` : lt === 'kg'
-      ? (ex.kind === 'dist' ? 'Первая запись. Возьмите тяжёлые снаряды, с которыми проходите дистанцию без остановок.' : `Первая запись. Подберите вес, с которым ${lo === hi ? lo : lo + '–' + hi}${unit} даются с запасом в 2 повтора.`)
+    /* запас — тот же, что в строке нагрузки карточки (rx.rir из prescribe, reserveOf в 11-planner.js) */
+    const rir = it.rx.rir !== undefined ? it.rx.rir : reserveOf(week);
+    const how = rir ? '' : week && week.deload ? 'даются без отказа.' : ex.type === 'i' && S.goal === 'cut' ? 'даются до выраженного жжения.' : 'даются почти до отказа.';
+    const range = rp ? rp.join(' / ') : lo === hi ? String(lo) : lo + '–' + hi;
+    res.text = lt === 'assist' ? (rir ? `Первая запись. Подберите противовес, с которым ${range} повторов даются с запасом ${reserveReps(rir)}.` : `Первая запись. Подберите противовес, с которым ${range} повторов ${how}`) : lt === 'kg'
+      ? (ex.kind === 'dist' ? 'Первая запись. Возьмите тяжёлые снаряды, с которыми проходите дистанцию без остановок.'
+        : rir ? `Первая запись. Подберите вес, с которым ${range}${unit} даются с запасом ${reserveReps(rir)}.` : `Первая запись. Подберите вес, с которым ${range}${unit} ${how}`)
       : `Первая запись. Отметьте, сколько ${ex.kind === 'time' ? 'секунд' : ex.kind === 'dist' ? 'метров' : 'повторов'} получилось в каждом подходе.`;
     return res;
   }
@@ -206,31 +222,32 @@ function suggestBase(it) {
   const sets = prev.s.filter(Boolean);
   const kgs = sets.map(x => x[0]).filter(v => v > 0);
   const work = kgs.length ? Math.max(...kgs) : null;
-  const atWork = work ? sets.filter(x => x[0] === work) : sets;
-  const repsList = atWork.map(x => x[1]);
   const prevList = sets.map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(', ');
   if (ex.kind === 'dist') { res.tone = 'same'; res.kg = work; res.text = work ? `В прошлый раз — ${fmtKg(work)} кг. Попробуйте пройти дальше или взять тяжелее.` : `В прошлый раз: ${prevList} м.`; return res; }
+  /* пирамида или сброс (веса подходов в прошлый раз разные): совет — по верхнему подходу, подсказки — по каждому подходу */
+  const pyr = !ex.kind && (lt === 'kg' || lt === 'extra') && pyramidAdvice(it, res, sets, past, tgt, step, week, rp);
+  if (pyr) return pyr;
   if (!week && AR.light && work && (lt === 'kg' || lt === 'assist')) {
-    res.tone = 'deload'; res.kg = lt === 'assist' ? Math.max((Math.floor(work / step) + 1) * step, roundTo(work * 1.1, step)) : roundTo(work * .9, step); res.reps = sets.map(() => lo);
+    res.tone = 'deload'; res.kg = lt === 'assist' ? Math.max((Math.floor(work / step) + 1) * step, roundTo(work * 1.1, step)) : roundTo(work * .9, step); res.reps = sets.map((x, i) => tgt(i)[0]);
     res.text = lt === 'assist' ? `Облегчённый режим: противовес ${fmtKg(res.kg)} кг вместо ${fmtKg(work)}, без отказа.` : `Облегчённый режим: ${fmtKg(res.kg)} кг вместо ${fmtKg(work)}, без отказа.`;
     return res;
   }
   if (week && week.deload && work) {
     res.tone = 'deload'; res.kg = lt === 'assist' ? Math.max((Math.floor(work / step) + 1) * step, roundTo(work * 1.15, step)) : roundTo(work * .85, step);
-    res.reps = sets.map(() => lo);
+    res.reps = sets.map((x, i) => tgt(i)[0]);
     res.text = lt === 'assist' ? `Разгрузка: противовес ${fmtKg(res.kg)} кг вместо ${fmtKg(work)}, без отказа.` : `Разгрузка: ${fmtKg(res.kg)} кг вместо ${fmtKg(work)}, без отказа.`;
     return res;
   }
   const required=prev.target || (it.rx.circ ? it.rounds : it.rx.sets) || 1;
-  const allTop=prev.s.length>=required && Array.from({length:required},(_,k)=>prev.s[k]).every(v=>v && v[1]>=hi && (!work || v[0]===work));
-  const anyLow = repsList.some(r => r < lo);
+  const allTop=prev.s.length>=required && Array.from({length:required},(_,k)=>prev.s[k]).every((v,k)=>v && v[1]>=tgt(k)[1] && (!work || v[0]===work));
+  const anyLow = sets.some((x, i) => (!work || x[0] === work) && x[1] < tgt(i)[0]);
   if (allTop) {
     if (lt === 'kg' && work) {
-      res.tone = 'up'; res.kg = work + step; res.reps = sets.map(() => lo);
-      res.text = `Прибавьте до ${fmtKg(res.kg)} кг (+${fmtKg(step)}). В прошлый раз все подходы на верхней границе: ${prevList}.`;
+      res.tone = 'up'; res.kg = work + step; res.reps = sets.map((x, i) => tgt(i)[0]);
+      res.text = rp ? `Прибавьте до ${fmtKg(res.kg)} кг (+${fmtKg(step)}). В прошлый раз все подходы по плану: ${prevList}.` : `Прибавьте до ${fmtKg(res.kg)} кг (+${fmtKg(step)}). В прошлый раз все подходы на верхней границе: ${prevList}.`;
     } else if (lt === 'assist' && work) {
-      res.tone = 'up'; res.kg = Math.max(0, work - step); res.reps = sets.map(() => lo);
-      res.text = `Уменьшите противовес до ${fmtKg(res.kg)} кг (−${fmtKg(step)}). В прошлый раз все подходы на верхней границе: ${prevList}.`;
+      res.tone = 'up'; res.kg = Math.max(0, work - step); res.reps = sets.map((x, i) => tgt(i)[0]);
+      res.text = rp ? `Уменьшите противовес до ${fmtKg(res.kg)} кг (−${fmtKg(step)}). В прошлый раз все подходы по плану: ${prevList}.` : `Уменьшите противовес до ${fmtKg(res.kg)} кг (−${fmtKg(step)}). В прошлый раз все подходы на верхней границе: ${prevList}.`;
     } else if (ex.kind === 'time') {
       res.tone = 'up'; res.kg = work; res.reps = sets.map(() => hi + 10);
       res.text = `Все подходы на верхней границе. Держите на 10 с дольше${lt === 'extra' ? ' или добавьте отягощение' : ''}.`;
@@ -243,26 +260,82 @@ function suggestBase(it) {
   if (anyLow) {
     const before = past.length > 1 ? past[past.length - 2].s.filter(Boolean) : [];
     const bWork = before.length ? Math.max(0, ...before.map(x => x[0] || 0)) : 0;
-    const lowAgain = work && bWork === work && before.filter(x => x[0] === work).some(x => x[1] < lo);
+    const lowAgain = work && bWork === work && before.some((x, i) => x[0] === work && x[1] < tgt(i)[0]);
     if (lt === 'kg' && work && lowAgain) {
-      res.tone = 'down'; res.kg = roundTo(work * 0.9, step); res.reps = sets.map(() => lo);
-      res.text = `Две тренировки подряд меньше ${lo}${unit} — снизьте до ${fmtKg(res.kg)} кг и наберите повторы.`;
+      res.tone = 'down'; res.kg = roundTo(work * 0.9, step); res.reps = sets.map((x, i) => tgt(i)[0]);
+      res.text = rp ? `Две тренировки подряд меньше плана — снизьте до ${fmtKg(res.kg)} кг и наберите повторы.` : `Две тренировки подряд меньше ${lo}${unit} — снизьте до ${fmtKg(res.kg)} кг и наберите повторы.`;
     } else if (lt === 'assist' && work != null && lowAgain) {
-      res.tone = 'down'; res.kg = work + step; res.reps = sets.map(() => lo);
-      res.text = `Две тренировки подряд меньше ${lo} — увеличьте противовес до ${fmtKg(res.kg)} кг и наберите повторы.`;
+      res.tone = 'down'; res.kg = work + step; res.reps = sets.map((x, i) => tgt(i)[0]);
+      res.text = rp ? `Две тренировки подряд меньше плана — увеличьте противовес до ${fmtKg(res.kg)} кг и наберите повторы.` : `Две тренировки подряд меньше ${lo} — увеличьте противовес до ${fmtKg(res.kg)} кг и наберите повторы.`;
     } else {
-      res.tone = 'same'; res.kg = work; res.reps = sets.map(x => Math.max(lo, x[1]));
-      res.text = `${work ? `Оставьте ${fmtKg(work)} кг` : 'Тот же вариант'} и доберите до ${lo}${unit} в каждом подходе. В прошлый раз: ${prevList}.`;
+      res.tone = 'same'; res.kg = work; res.reps = sets.map((x, i) => Math.max(tgt(i)[0], x[1]));
+      const keep = work ? `Оставьте ${fmtKg(work)} кг` : 'Тот же вариант';
+      res.text = rp ? `${keep} и доберите до плана: ${rp.join(' / ')}. В прошлый раз: ${prevList}.` : `${keep} и доберите до ${lo}${unit} в каждом подходе. В прошлый раз: ${prevList}.`;
     }
     return res;
   }
-  res.tone = 'same'; res.kg = work; res.reps = sets.map(x => Math.min(hi, x[1] + 1));
+  res.tone = 'same'; res.kg = work; res.reps = sets.map((x, i) => Math.min(tgt(i)[1], x[1] + 1));
   res.text = `${work ? `${lt === 'assist' ? 'Тот же противовес' : 'Тот же вес'} — ${fmtKg(work)} кг` : 'Тот же вариант'}, цель — на 1${unit || ' повтор'} больше: в прошлый раз ${prevList}.`;
   return res;
 }
+/* Пирамида или сброс в прошлый раз: веса подходов разные (все записаны с весом). Совет — по верхнему подходу (самый
+   тяжёлый вес; таких подходов может быть несколько), остальные подходы — как в прошлый раз; не «оставьте верхний вес
+   в каждом подходе». res.kgs — вес каждого подхода (подсказки в таблице и в режиме тренировки, ownKgs), res.reps —
+   повторы. Иначе null — один вес на все подходы, обычная двойная прогрессия. */
+function pyramidAdvice(it, res, sets, past, tgt, step, week, rp) {
+  const pk = sets.map(x => x[0]);
+  if (pk.length < 2 || pk.some(v => !(v > 0)) || pk.every(v => v === pk[0])) return null;
+  const W = Math.max(...pk), top = pk.map((v, i) => i).filter(i => pk[i] === W), one = top.length === 1;
+  res.kgs = pk.slice(); res.reps = sets.map((x, i) => rp ? tgt(i)[0] : x[1]);
+  const topText = one ? `Верхний подход: ${fmtKg(W)} кг × ${sets[top[0]][1]}` : `Подходы с ${fmtKg(W)} кг: ${top.map(i => sets[i][1]).join(', ')}`;
+  const rest = 'Остальные подходы — как в прошлый раз.';
+  const ease = !week && AR.light ? .9 : week && week.deload ? .85 : 0;
+  if (ease) {
+    res.tone = 'deload'; res.kgs = pk.map(v => roundTo(v * ease, step)); res.reps = sets.map((x, i) => tgt(i)[0]); res.kg = res.kgs[0];
+    res.text = `${ease === .9 ? 'Облегчённый режим' : 'Разгрузка'}: веса на ${Math.round((1 - ease) * 100)}% меньше прошлых — ${res.kgs.map(fmtKg).join(' / ')} кг, без отказа.`;
+    return res;
+  }
+  if (top.every(i => sets[i][1] >= tgt(i)[1])) {
+    const nw = W + step;
+    for (const i of top) { res.kgs[i] = nw; res.reps[i] = tgt(i)[0]; }
+    res.tone = 'up'; res.kg = res.kgs[0];
+    res.text = `${topText} — ${one ? 'на верхней границе. В следующий раз в нём' : 'все на верхней границе. В следующий раз в них'} ${fmtKg(nw)} кг (+${fmtKg(step)}). ${rest}`;
+    return res;
+  }
+  /* верхний подход второй раз подряд ниже нижней границы при том же весе — снизить его */
+  const before = past.length > 1 ? past[past.length - 2].s.filter(Boolean) : [];
+  const bW = before.length ? Math.max(0, ...before.map(x => x[0] || 0)) : 0;
+  const lowAgain = bW === W && top.some(i => sets[i][1] < tgt(i)[0]) && before.some((x, i) => x[0] === W && x[1] < tgt(i)[0]);
+  if (lowAgain) {
+    const nw = roundTo(W * .9, step);
+    for (const i of top) { res.kgs[i] = nw; res.reps[i] = tgt(i)[0]; }
+    res.tone = 'down'; res.kg = res.kgs[0];
+    res.text = one ? `Две тренировки подряд в верхнем подходе не хватило повторов — в следующий раз возьмите в нём ${fmtKg(nw)} кг и наберите повторы. ${rest}`
+      : `Две тренировки подряд в подходах с ${fmtKg(W)} кг не хватило повторов — в следующий раз возьмите в них ${fmtKg(nw)} кг и наберите повторы. ${rest}`;
+    return res;
+  }
+  const goal = top.map(i => { const [a, b] = tgt(i), r = sets[i][1]; return r < a ? a : Math.min(b, r + 1); });
+  top.forEach((i, j) => { res.reps[i] = goal[j]; });
+  const same = goal.every(v => v === goal[0]);
+  res.tone = 'same'; res.kg = res.kgs[0];
+  res.text = `${topText} — в следующий раз доберите до ${same ? goal[0] : goal.join(', ')}${one || !same ? '' : ' в каждом из них'}. ${rest}`;
+  return res;
+}
+/* Сегодня уже записаны подходы, а прошлых тренировок нет: «Сегодня: 3 из 4. Следующий — с тем же весом (50 кг).»;
+   все подходы сделаны — «упражнение выполнено». Нет записей сегодня — '' (подсказка первой записи) */
+function todayNote(it, lt) {
+  const t = todaySession(it.ex.id, false), done = t ? t.s.filter(Boolean) : [];
+  if (!done.length) return '';
+  const total = Math.max(it.rx.circ ? (it.rounds || it.rx.sets) : it.rx.sets, done.length), n = done.length;
+  const head = `Сегодня: ${n} из ${total}.`;
+  if (n >= total) return `${head} Упражнение выполнено — в следующий раз здесь будет подсказка по прогрессии.`;
+  const kgs = done.map(x => x[0]);
+  if (lt !== 'none' && kgs[0] > 0 && kgs.every(v => v === kgs[0])) return `${head} Следующий — ${lt === 'assist' ? 'с тем же противовесом' : 'с тем же весом'} (${fmtKg(kgs[0])} кг).`;
+  return head;
+}
 
 /* ---------- блок записи в карточке ---------- */
-const SUG_ICON = {up:'↑', same:'→', down:'↓', deload:'↓', new:'+', plan:'≡'};
+const SUG_ICON = {up:'↑', same:'→', down:'↓', deload:'↓', new:'+', plan:'≡', today:'✓'};
 /* строк в таблице: по плану (у круговой — кругов), но не меньше, чем уже записано сегодня */
 function logRowCount(it) {
   const today = todaySession(it.ex.id, false);
@@ -290,8 +363,11 @@ function logRows(it) {
   const tset = today ? today.s : [];
   const n = logRowCount(it);
   if (setArm[ex.id] !== n - 1 || n <= 1) delete setArm[ex.id];
-  const prevSets = sg.prev ? sg.prev.s.filter(Boolean) : [], own = ownKgs(it, prevSets);
-  const [lo, hi] = parseRange(it.rx.reps);
+  /* вопрос о весе переживает перерисовку, пока строка не отмечена; вопрос о правке отмеченной — нет (в поле снова записанное) */
+  const kq = kgAsk[ex.id];
+  if (kq && (kq.edit || kq.k >= n || tset[kq.k])) delete kgAsk[ex.id];
+  const prevSets = sg.prev ? sg.prev.s.filter(Boolean) : [], own = ownKgs(it, prevSets, sg);
+  const [lo, hi] = parseRange(it.rx.reps), rp = repsPlanOf(it.rx.reps);
   const SIDE = {l:'левая', r:'правая'};
   /* поле веса и повторов; side — 'l' | 'r' в режиме Л/П. Подсказка веса — вес последнего записанного сегодня подхода
      выше (carriedKg), иначе свой вес подхода (план, пирамида прошлого раза) или прогрессия; data-ph — она же без переноса
@@ -305,9 +381,10 @@ function logRows(it) {
     const v = tset[k];
     const p = prevSets[k] || prevSets[prevSets.length - 1];
     const pk = own(k), phKg = pk != null ? fmtKg(pk) : sg.kg != null ? fmtKg(sg.kg) : (lt === 'kg' ? '' : '—');
-    const phR = sg.reps[k] ?? sg.reps[sg.reps.length - 1] ?? (lo === hi ? String(lo) : `${lo}–${hi}`);
-    const arm = setArm[ex.id] === k, cf = arm ? setArmHtml(it, n, !!v) : '';
-    const done = !!v, cls = `lt-r${done ? ' done' : ''}${lr ? ' lt-lr' : ''}${it.rx.static && k > 0 && k % 3 === 0 ? ' lt-series' : ''}${arm ? ' lt-arm' : ''}`;
+    /* повторы: по прогрессии, у пирамиды плана — число подхода, иначе диапазон плана */
+    const phR = sg.reps[k] ?? (rp ? planReps(it.rx, k) : sg.reps[sg.reps.length - 1] ?? (lo === hi ? String(lo) : `${lo}–${hi}`));
+    const ask = kgAsk[ex.id] && kgAsk[ex.id].k === k, arm = !ask && setArm[ex.id] === k, cf = arm ? setArmHtml(it, n, !!v) : ask ? kgAskHtml(ex.id, kgAsk[ex.id]) : '';
+    const done = !!v, cls = `lt-r${done ? ' done' : ''}${lr ? ' lt-lr' : ''}${it.rx.static && k > 0 && k % 3 === 0 ? ' lt-series' : ''}${arm || ask ? ' lt-arm' : ''}`;
     const ownAt = pk != null && lt !== 'none' ? ` data-own="${pk}"` : ''; /* свой вес подхода — для переноса при вводе (carryKgBox) */
     const ok = `<button type="button" class="lt-ok" data-tick="${ex.id}" data-k="${k}" aria-pressed="${done}" aria-label="Подход ${k + 1} выполнен">${ICON.check}</button>`;
     if (lr) {
@@ -358,8 +435,10 @@ function firstKg(tset, sg, own) {
 /* свой вес подхода k: по плану; без плана — вес подхода k прошлой тренировки (подходов меньше — последний), если веса
    подходов в ней разные (пирамида, сброс); иначе null — один вес на все подходы (подсказка — по прогрессии, sg.kg).
    prevSets — записанные подходы прошлой тренировки */
-function ownKgs(it, prevSets) {
+function ownKgs(it, prevSets, sg) {
   if (it.rx.kgPlan) return k => planKg(it.rx, k);
+  /* пирамида прошлого раза с советом по верхнему подходу (pyramidAdvice): вес каждого подхода — из совета */
+  if (sg && Array.isArray(sg.kgs) && sg.kgs.length) return k => sg.kgs[Math.min(k, sg.kgs.length - 1)];
   const kgs = prevSets.map(x => x[0]);
   if (kgs.length < 2 || kgs.some(v => v == null) || kgs.every(v => v === kgs[0])) return () => null;
   return k => kgs[Math.min(k, kgs.length - 1)];
@@ -384,7 +463,13 @@ function carryKgBox(box) {
   const rows = box ? [...box.querySelectorAll('.lt-r')] : []; if (!rows.length) return;
   const ownBy = new Map(rows.map(r => [+r.dataset.k, r.dataset.own != null ? parseNum(r.dataset.own) : null]));
   const own = k => ownBy.get(k) ?? null, lr = rows[0].classList.contains('lt-lr');
-  const filled = (row, inp) => { if (!row.classList.contains('done') && inp.value.trim() === '') return null; const v = parseNum(inp.value); return {kg:v != null && v >= 0 ? v : null}; };
+  /* вписанный, но не отмеченный неправдоподобный вес («5000», kgDoubt) дальше подсказкой не идёт — сначала ответ на вопрос о нём */
+  const it = plan && plan.items && plan.items.find(x => x.ex.id === box.dataset.log);
+  const filled = (row, inp) => {
+    const done = row.classList.contains('done'); if (!done && inp.value.trim() === '') return null;
+    const v = parseNum(inp.value), odd = !done && v > 0 && it && kgDoubt(it, [v], +row.dataset.k);
+    return {kg:v != null && v >= 0 && !odd ? v : null};
+  };
   const hint = (inp, src, k) => { const ph = carryPh(src && kgCarries(own, src.k, k) ? src.kg : null, inp.dataset.ph ?? inp.placeholder); if (inp.placeholder !== ph) inp.placeholder = ph; };
   let srcL = null, srcR = null;
   for (const row of rows) {
@@ -401,9 +486,96 @@ function carryKgBox(box) {
 /* ввод веса в таблице: подсказки следующих подходов, затем «×2 = …» — по вписанному или перенесённому весу */
 function logKgInput(inp) {
   const box = inp.closest('.c-log'); if (!box) return;
+  /* вес исправляют — вопрос о нём больше не нужен */
+  const a = kgAsk[box.dataset.log], row = inp.closest('.lt-r');
+  if (a && row && +row.dataset.k === a.k) dropKgAsk(box.dataset.log, box);
   carryKgBox(box); updatePairTotal(inp);
 }
+/* подсказка над таблицей после отметки: «Первая запись…» сменяется на «Сегодня: 1 из 4…» */
+function refreshSug(box, it) {
+  const p = box && box.querySelector('.sug'); if (!p) return;
+  const sg = suggest(it), b = p.querySelector('b'), t = p.querySelector('span');
+  p.className = `sug sug-${sg.tone}`; if (b) b.textContent = SUG_ICON[sg.tone]; if (t && t.textContent !== sg.text) t.textContent = sg.text;
+}
 function logBlock(it) { return `<div class="c-log" data-log="${it.ex.id}">${logRows(it).html}</div>`; }
+
+/* ---------- неправдоподобный вес: переспросить в строке подхода ---------- */
+/* «5000» вместо «50» не записывается молча: от записанного считаются разминка, прогрессия, рекорды и общий вес. Вес —
+   одного снаряда, как он записывается. С историей — вписанный вес в 2 раза и больше прошлого (самый тяжёлый подход
+   последней тренировки с весом; без прошлых — сегодняшних подходов) и больше него хотя бы на 5 кг: шаг гантелей
+   2 → 4 кг — обычная прибавка, а не опечатка. Без истории — больше предела снаряда. Пределы — с большим запасом над
+   рекордами и самым тяжёлым инвентарём, чтобы не мешать сильным людям, но ловить лишний ноль:
+   гантель или гиря — 100 кг (самые тяжёлые серийные гантели и гири — около 90–100 кг);
+   штанга и Смит — 500 кг (рекорды в приседе и становой тяге — около 500 кг; столько же допускает вес в своём плане);
+   жим ногами и гакк-машина — 1000 кг (платформа с грузом у сильных людей — несколько сотен килограммов);
+   остальные тренажёры и блоки — 300 кг (стеки — обычно 100–150 кг, рычажные с блинами — до 250–300 кг);
+   доп. вес к собственному (пояс, жилет) — 200 кг (рекордные отягощения в подтягиваниях и на брусьях — 100–150 кг);
+   противовес гравитрона — 150 кг (стек — около 100 кг, противовес больше веса тела не нужен). */
+const KG_LIMIT = {db:100, kb:100, bb:500, press:1000, machine:300, extra:200, assist:150};
+const KG_LIMIT_NOTE = {db:'Для одной гантели это необычно много.', kb:'Для одной гири это необычно много.', bb:'Для штанги это необычно много.',
+  press:'Для тренажёра это необычно много.', machine:'Для тренажёра это необычно много.', extra:'Для доп. веса это необычно много.', assist:'Для противовеса это необычно много.'};
+function kgLimitOf(it) {
+  const lt = loadType(it.ex), ids = it.eqIds || [];
+  if (lt === 'assist') return 'assist';
+  if (ids.includes('legpress') || ids.includes('hack')) return 'press';
+  if (ids.includes('bb') || ids.includes('smith')) return 'bb';
+  if (ids.some(i => MACHINE.has(i))) return 'machine';
+  const impl = typeof itemImpl === 'function' ? itemImpl(it) : null;
+  if (impl === 'db' || impl === 'kb') return impl;
+  return lt === 'extra' ? 'extra' : 'bb';
+}
+/* вписанный вес подхода k (kgs — общий или левая и правая) неправдоподобен: {kg, text} — что спросить; иначе null */
+function kgDoubt(it, kgs, k) {
+  const ex = it.ex; if (loadType(ex) === 'none') return null;
+  const vs = kgs.filter(v => v > 0); if (!vs.length) return null;
+  const kg = Math.max(...vs);
+  const weights = (s, skip = -1) => s ? s.s.flatMap((x, i) => { if (!x || i === skip) return []; const sd = setSides(x, ex); return sd ? [sd.l[0], sd.r[0]] : [x[0]]; }).filter(v => v > 0) : [];
+  const last = pastSessions(ex.id).reverse().find(s => weights(s).length), today = weights(todaySession(ex.id, false), k);
+  const ref = last ? Math.max(...weights(last)) : today.length ? Math.max(...today) : null;
+  const ask = why => ({kg, text:`${why} Записать ${fmtKg(kg)} кг?`});
+  if (ref != null) return kg >= 2 * ref && kg - ref >= 5 ? ask(last ? `Это намного больше, чем в прошлый раз (${fmtKg(ref)} кг).` : `Это намного больше, чем сегодня в других подходах (${fmtKg(ref)} кг).`) : null;
+  const kind = kgLimitOf(it);
+  return kg > KG_LIMIT[kind] ? ask(KG_LIMIT_NOTE[kind]) : null;
+}
+/* kgAsk[упражнение] = {k, text, side, edit} — строка, где ждёт ответ «Записать / Исправить» (как подтверждение «Убрать»
+   у подхода: строка подсвечена, вопрос и две кнопки под полями); edit — правка уже отмеченного подхода */
+const kgAsk = {};
+function kgAskHtml(id, a) {
+  return `<div class="lt-kq" role="group" aria-labelledby="lt-kq-${id}"><span class="lt-cft" id="lt-kq-${id}">${esc(a.text)}</span>`
+    + `<button type="button" class="lt-cfy" data-kgyes="${id}">${'Записать'}</button><button type="button" class="lt-cfn" data-kgfix="${id}">${'Исправить'}</button></div>`;
+}
+function askKg(row, it, k, q, extra = {}) {
+  const id = it.ex.id, box = row.closest('.c-log');
+  dropKgAsk(id, box);
+  if (setArm[id] !== undefined) { delete setArm[id]; box.querySelectorAll('.lt-r.lt-arm').forEach(r => { r.classList.remove('lt-arm'); const c = r.querySelector('.lt-cf'); if (c) c.remove(); }); }
+  kgAsk[id] = {k, text:q.text, side:extra.side || null, edit:!!extra.edit};
+  row.classList.add('lt-arm'); row.insertAdjacentHTML('beforeend', kgAskHtml(id, kgAsk[id]));
+  row.querySelector('[data-kgfix]').focus();
+}
+function dropKgAsk(id, box) {
+  delete kgAsk[id];
+  if (box) box.querySelectorAll('.lt-kq').forEach(q => { const r = q.closest('.lt-r'); q.remove(); if (r && !r.querySelector('.lt-cf')) r.classList.remove('lt-arm'); });
+}
+/* поле веса, о котором спросили: сторона из вопроса, иначе общее */
+function kgAskField(box, a) {
+  const row = box && box.querySelector(`.lt-r[data-k="${a.k}"]`); if (!row) return {row:null, inp:null};
+  return {row, inp:rowFields(row, row.classList.contains('lt-lr') ? a.side || 'l' : null).kgIn};
+}
+/* «Записать»: подход записывается с вписанным весом (правка отмеченного — правится) */
+function kgYes(id, box) {
+  const a = kgAsk[id]; if (!a || !box) return;
+  const {row, inp} = kgAskField(box, a);
+  dropKgAsk(id, box); if (!row) return;
+  if (a.edit) { if (inp) { editSet(inp, true); inp.focus(); } return; }
+  const tick = row.querySelector('[data-tick]'); tickSet(tick, true); tick.focus();
+}
+/* «Исправить» или Esc: вопрос закрывается, фокус — в поле веса, вписанное выделено */
+function kgFix(id, box) {
+  const a = kgAsk[id]; if (!a || !box) return;
+  const {inp} = kgAskField(box, a);
+  dropKgAsk(id, box);
+  if (inp) { inp.focus(); inp.select(); }
+}
 
 /* ---------- история упражнения ---------- */
 function metricOf(ex) {
@@ -412,6 +584,39 @@ function metricOf(ex) {
   if (ex.kind === 'time') return {name:'Лучший подход', unit:'с', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
   if (ex.kind === 'dist') return {name:'Лучшая дистанция', unit:'м', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
   return {name:'Лучший подход', unit:'повт.', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
+}
+/* самый тяжёлый подход записи: вес и лучшие повторы с ним (статодинамика и записи без веса — null) */
+function topSet(s) {
+  if (!s || s.fmt === 'static') return null;
+  const xs = s.s.filter(x => x && x[0] > 0); if (!xs.length) return null;
+  const w = Math.max(...xs.map(x => x[0]));
+  return {w, r:Math.max(...xs.filter(x => x[0] === w).map(x => x[1]))};
+}
+/* график истории: у упражнений с весом — расчётный максимум; если вес во всех записях один и тот же (одни гантели дома),
+   максимум почти не меняется (повторы больше 12 в нём не считаются) — тогда график повторов с этим весом */
+function histMetric(ex, ss) {
+  const m = metricOf(ex);
+  if (loadType(ex) !== 'kg' || ex.kind) return m;
+  const tops = ss.map(topSet).filter(Boolean);
+  if (tops.length < 2 || !tops.every(t => t.w === tops[0].w)) return m;
+  const w = tops[0].w;
+  return {name:`Повторы с ${fmtKg(w)} кг`, unit:'повт.', bare:true, f:s => { const t = topSet(s); return t && t.w === w ? t.r : null; }};
+}
+/* Сводка упражнения в строке журнала. С весом: крупно — рабочий вес и лучшие повторы с ним в последней записи, мельче
+   и с подписью — расчётный максимум; изменение с первой записи — по весу, а при том же весе — по повторам («+3 повт.»,
+   а не «0 %»: с одними гантелями прогресс — это повторы). Без веса — как раньше: значение метрики и изменение в процентах. */
+function journalVal(ex, ss) {
+  const m = metricOf(ex), tops = loadType(ex) === 'kg' && !ex.kind ? ss.map(topSet).filter(Boolean) : [];
+  if (!tops.length) {
+    const vals = ss.map(s => m.f(s)).filter(v => v != null), firstV = vals[0], lastV = vals[vals.length - 1];
+    const ch = vals.length > 1 && firstV ? Math.round((lastV / firstV - 1) * 100) : null;
+    return `<span class="j-val">${lastV != null ? fmtKg(Math.round(lastV * 2) / 2) : '—'}<small>${m.unit}</small>${ch != null ? `<em class="${ch > 0 ? 'pos' : ch < 0 ? 'neg' : ''}">${ch > 0 ? '+' : ''}${ch}%</em>` : ''}</span>`;
+  }
+  const a = tops[0], b = tops[tops.length - 1], e = [...ss].reverse().map(m.f).find(v => v != null);
+  const chip = (d, u) => `<em class="${d > 0 ? 'pos' : 'neg'}">${d > 0 ? '+' : '−'}${u === 'кг' ? fmtKg(Math.abs(d)) : Math.abs(d)} ${u}</em>`;
+  const ch = tops.length < 2 ? '' : b.w !== a.w ? chip(b.w - a.w, 'кг') : b.r !== a.r ? chip(b.r - a.r, 'повт.') : '';
+  return `<span class="j-val j-wr"><span class="j-big"><span class="vh">${'Рабочий вес'} </span>${fmtKg(b.w)}<small>кг</small> × ${b.r}<span class="vh"> ${'повт.'}</span></span>`
+    + `${e != null ? `<small class="j-e1">${'расч. максимум'} ${fmtKg(Math.round(e * 2) / 2)} кг</small>` : ''}${ch}</span>`;
 }
 function sparkSvg(pts, unit, step = 0.5) {
   if (!pts.length) return '';
@@ -445,13 +650,13 @@ function histSets(ex, s) {
 function histHtml(ex) {
   const ss = (LOG.data[ex.id] || []).filter(x => x.s.some(Boolean));
   if (!ss.length) return `<p class="h-empty">Записей пока нет. Отметьте подходы выше — здесь появится история и график.</p>${variantHistNote(ex)}`;
-  const m = metricOf(ex);
+  const m = histMetric(ex, ss);
   const pts = ss.map(s => ({d:s.d, v:m.f(s)})).filter(p => p.v != null).slice(-24);
   const best = pts.length ? Math.max(...pts.map(p => p.v)) : null;
   const rows = ss.slice(-6).reverse().map(s => `<li><span class="h-d">${fmtDay(s.d, true)}${s.wk ? `<small>нед. ${s.wk}</small>` : ''}${s.fmt === 'static' ? '<small>статодинамика</small>' : ''}</span>
     <span class="h-s">${histSets(ex, s)}</span>
     <button type="button" class="h-del" data-del="${ex.id}" data-d="${s.d}" aria-label="Удалить запись за ${fmtDay(s.d, true)}">Удалить</button></li>`).join('');
-  return `<div class="h-chart"><p class="h-cap">${m.name}, ${m.unit}${best != null ? ` · лучший ${fmtKg(Math.round(best * 2) / 2)}` : ''}</p>${sparkSvg(pts, m.unit)}</div>
+  return `<div class="h-chart"><p class="h-cap">${m.name}${m.bare ? '' : ', ' + m.unit}${best != null ? ` · лучший ${fmtKg(Math.round(best * 2) / 2)}` : ''}</p>${sparkSvg(pts, m.unit)}</div>
     <ul class="h-list">${rows}</ul>${ss.length > 6 ? `<p class="h-more">Всего записей: ${ss.length}. Полная история — в разделе «Журнал».</p>` : ''}${variantHistNote(ex)}`;
 }
 function histCount(id) { return (LOG.data[id] || []).filter(x => x.s.some(Boolean)).length; }
@@ -571,22 +776,20 @@ function renderJournal() {
     html += `<div class="empty"><h2>Записей пока нет</h2><p>Откройте план и отмечайте подходы в карточках упражнений: вес и повторы сохранятся здесь, а планировщик начнёт подсказывать, когда прибавлять вес.</p><button type="button" class="btn" data-view="plan">Перейти к плану</button></div>`;
   } else {
     html += `<ul class="j-list">${entries.map(([id, ss]) => {
-      const ex = EXI[id], m = metricOf(ex);
-      const vals = ss.map(s => m.f(s)).filter(v => v != null);
-      const firstV = vals[0], lastV = vals[vals.length - 1];
-      const ch = vals.length > 1 && firstV ? Math.round((lastV / firstV - 1) * 100) : null;
+      const ex = EXI[id];
       const lastS = ss[ss.length - 1];
       return `<li class="j-row">
         <details>
           <summary>
             <span class="j-name">${esc(ex.name)}<small>${GN[ex.g]} · ${ss.length} ${plural(ss.length, 'запись', 'записи', 'записей')} · ${fmtDay(lastS.d, true)}</small></span>
-            <span class="j-val">${lastV != null ? fmtKg(Math.round(lastV * 2) / 2) : '—'}<small>${m.unit}</small>${ch != null ? `<em class="${ch > 0 ? 'pos' : ch < 0 ? 'neg' : ''}">${ch > 0 ? '+' : ''}${ch}%</em>` : ''}</span>
+            ${journalVal(ex, ss)}
           </summary>
           <div class="j-body">${histHtml(ex).replace(/<p class="h-more">.*?<\/p>/, '')}${ss.length > 6 ? `<details class="j-all"><summary>Все записи (${ss.length})</summary><ul class="h-list">${ss.slice(0, -6).reverse().map(s => `<li><span class="h-d">${fmtDay(s.d, true)}</span><span class="h-s">${histSets(ex, s)}</span><button type="button" class="h-del" data-del="${id}" data-d="${s.d}">Удалить</button></li>`).join('')}</ul></details>` : ''}</div>
         </details>
       </li>`;
     }).join('')}</ul>
-    <p class="legend">Расчётный максимум — вес, который вы, по формуле Эпли, подняли бы один раз: вес × (1 + повторы / 30). Он растёт и когда прибавляете вес, и когда делаете больше повторов с тем же весом. У гантелей и гирь он — по весу одного снаряда.</p>
+    <p class="legend">Справа — рабочий вес и лучшие повторы с ним в последней тренировке, ниже — расчётный максимум и изменение с первой записи: по весу, а при том же весе — по повторам. У гантелей и гирь вес — одного снаряда.</p>
+    <p class="legend">Расчётный максимум — вес, который вы, по формуле Эпли, подняли бы один раз: вес × (1 + повторы / 30). Он растёт и когда прибавляете вес, и когда делаете больше повторов с тем же весом, но повторы сверх 12 в нём не учитываются. Если вес во всех записях один, график показывает повторы с ним.</p>
     <p class="legend">Общий вес — сумма «вес × повторы» по всем снарядам и сторонам: жим гантелей 2 × 20 кг на 10 повторов — 400 кг, тяга гантели одной рукой 30 кг по 10 на каждую сторону — 600 кг. Считается только внешний вес: гантели, гири, штанга, тренажёр, доп. вес; вес тела, противовес гравитрона, удержания на время и дистанция не входят. Л/П — подход с левой и правой стороной отдельно: прогресс и рекорды — по слабой стороне.</p>`;
   }
   $('#plan').innerHTML = html;
@@ -702,7 +905,8 @@ function readFields({kgIn, rIn}, lt) {
   if (kg != null && kg < 0) kg = null;
   return {kg, reps:Math.round(reps * 10) / 10};
 }
-function tickSet(btn) {
+/* sure — вес уже подтвердили («Записать» в вопросе о весе) */
+function tickSet(btn, sure) {
   const id = btn.dataset.tick, k = +btn.dataset.k;
   const row = btn.closest('.lt-r');
   const it = plan.items.find(x => x.ex.id === id);
@@ -710,11 +914,12 @@ function tickSet(btn) {
   const F = (lr ? ['l', 'r'] : [null]).map(side => rowFields(row, side));
   const s = todaySession(id, true);
   if (s.s[k]) {
+    if (kgAsk[id] && kgAsk[id].k === k) dropKgAsk(id, row.closest('.c-log'));
     s.s[k] = null; cleanToday(id);
     row.classList.remove('done'); btn.setAttribute('aria-pressed', 'false');
     for (const f of F) { if (f.kgIn) f.kgIn.value = ''; f.rIn.value = ''; }
     carryKgBox(row.closest('.c-log'));
-    logTouch(id); refreshHist(id); return;
+    logTouch(id); refreshHist(id); refreshSug(row.closest('.c-log'), it); return;
   }
   const got = F.map(f => readFields(f, lt)), bad = got.find(g => g.bad);
   if (bad) {
@@ -722,6 +927,10 @@ function tickSet(btn) {
     bad.bad.focus(); bad.bad.classList.add('need'); setTimeout(() => bad.bad.classList.remove('need'), 1600);
     return;
   }
+  /* неправдоподобный вес — не записывать, переспросить в строке */
+  const q = !sure && kgDoubt(it, got.map(g => g.kg), k);
+  if (q) { cleanToday(id); askKg(row, it, k, q, {side:lr ? (got[1].kg > got[0].kg ? 'r' : 'l') : null}); return; }
+  dropKgAsk(id, row.closest('.c-log'));
   while (s.s.length < k) s.s.push(null);
   s.s[k] = lr ? makeSidedSet([got[0].kg, got[0].reps], [got[1].kg, got[1].reps], it.ex) : [got[0].kg, got[0].reps];
   s.target=Math.max(s.target||0,it.rx.circ?(it.rounds||it.rx.sets):it.rx.sets);
@@ -730,7 +939,7 @@ function tickSet(btn) {
   F.forEach((f, i) => { if (f.kgIn) f.kgIn.value = got[i].kg != null ? fmtKg(got[i].kg) : ''; f.rIn.value = got[i].reps; });
   row.classList.add('done'); btn.setAttribute('aria-pressed', 'true');
   carryKgBox(row.closest('.c-log'));
-  logTouch(id); refreshHist(id);
+  logTouch(id); refreshHist(id); refreshSug(row.closest('.c-log'), it);
   const total = it.rx.circ ? 0 : it.rx.sets;
   const doneN = s.s.filter(Boolean).length;
   if (!it.rx.circ) {
@@ -738,11 +947,18 @@ function tickSet(btn) {
     if (r) startRest(r, doneN >= total ? 'Отдых перед следующим упражнением' : it.rx.static && doneN % 3 === 0 ? `Отдых после серии ${doneN / 3}` : `Отдых после подхода ${doneN}`);
   }
 }
-function editSet(inp) {
+/* правка отмеченного подхода; sure — вес уже подтвердили */
+function editSet(inp, sure) {
   const row = inp.closest('.lt-r'); if (!row || !row.classList.contains('done')) return;
   const box = inp.closest('.c-log'), id = box.dataset.log, k = +row.dataset.k, ex = EXI[id];
   const s = todaySession(id, false); if (!s || !s.s[k]) return;
   const v = parseNum(inp.value), x = s.s[k], side = inp.dataset.side;
+  /* неправдоподобный вес — запись прежняя, вопрос в строке */
+  if (inp.dataset.f === 'kg' && v > 0 && !sure) {
+    const it = (plan && plan.items && plan.items.find(y => y.ex.id === id)) || {ex, rx:{}}, q = kgDoubt(it, [v], k);
+    if (q) { askKg(row, it, k, q, {side, edit:true}); return; }
+  }
+  if (kgAsk[id] && kgAsk[id].k === k) dropKgAsk(id, box);
   if (side) {
     /* Л/П: правится одна сторона, основные поля — снова слабая сторона, отдых остаётся */
     const sd = setSides(x, ex), l = sd ? [...sd.l] : [x[0], x[1]], r = sd ? [...sd.r] : [x[0], x[1]], p = side === 'l' ? l : r;
@@ -812,6 +1028,7 @@ function addSet(id, box) {
 function askRemoveSet(id, box) {
   const it = plan && plan.items && plan.items.find(x => x.ex.id === id); if (!it || !box) return;
   const n = logRowCount(it); if (n <= 1) return;
+  if (kgAsk[id]) dropKgAsk(id, box);
   const row = box.querySelector(`.lt-r[data-k="${n - 1}"]`);
   const armed = row && row.querySelector('.lt-cf');
   if (armed) { armed.querySelector('[data-delno]').focus(); return; }
@@ -884,6 +1101,8 @@ document.addEventListener('click', e => {
   if (t.dataset.delset) { askRemoveSet(t.dataset.delset, t.closest('.c-log')); return; }
   if (t.dataset.delyes) { removeSet(t.dataset.delyes, t.closest('.c-log')); return; }
   if (t.dataset.delno) { keepSet(t.dataset.delno, t.closest('.c-log')); return; }
+  if (t.dataset.kgyes) { kgYes(t.dataset.kgyes, t.closest('.c-log')); return; }
+  if (t.dataset.kgfix) { kgFix(t.dataset.kgfix, t.closest('.c-log')); return; }
   if (t.dataset.hist) {
     const card = t.closest('.card'), h = card.querySelector('.c-hist');
     h.hidden = !h.hidden; t.setAttribute('aria-expanded', String(!h.hidden));
@@ -902,6 +1121,7 @@ document.addEventListener('change', e => {
 document.addEventListener('input', e => { if (e.target.classList && e.target.classList.contains('lt-in') && e.target.dataset.f === 'kg') logKgInput(e.target); });
 document.addEventListener('keydown', e => {
   const box = e.key === 'Escape' && e.target.closest && e.target.closest('.c-log');
+  if (box && box.querySelector('.lt-kq')) { e.preventDefault(); kgFix(box.dataset.log, box); return; }
   if (box && box.querySelector('.lt-cf')) { e.preventDefault(); keepSet(box.dataset.log, box); return; }
   if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('lt-in')) {
     e.preventDefault();

@@ -72,9 +72,13 @@ function warmupHtml(it, work) {
     <p class="wu-note-f">Отдых между разминочными 30–60 с. ${impl === 'bb' ? `Гриф ${fmtKg(GEAR.bar)} кг, блины: ${GEAR.plates.map(fmtKg).join(' · ')} — <button type="button" class="lk" data-gear="1">настроить</button>.` : impl === 'machine' ? 'Шаг стека принят 5 кг.' : ''}</p>
   </details>`;
 }
-/* рабочий вес для разминки: из первого введённого поля, иначе из подсказки */
+/* рабочий вес для разминки: из первого введённого поля (неправдоподобный и ещё не подтверждённый — «5000», kgDoubt
+   в 13-log.js — не в счёт), иначе из подсказки */
 function workWeightOf(it, card) {
-  if (card) { const inp = card.querySelector('.lt-r:not(.done) [data-f="kg"], .lt-r [data-f="kg"]'); if (inp && inp.value) { const v = parseNum(inp.value); if (v > 0) return v; } }
+  if (card) {
+    const inp = card.querySelector('.lt-r:not(.done) [data-f="kg"], .lt-r [data-f="kg"]'), row = inp && inp.closest('.lt-r');
+    if (inp && inp.value) { const v = parseNum(inp.value); if (v > 0 && !(row && !row.classList.contains('done') && kgDoubt(it, [v], +row.dataset.k))) return v; }
+  }
   const sg = suggest(it); return sg.kg && sg.kg > 0 ? sg.kg : null;
 }
 function refreshWarmup(card) {
