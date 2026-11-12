@@ -1103,6 +1103,78 @@ await page.close();
   await w.close();
 }
 
+/* защита журнала (телефон, 13-log.js, 14-workout-mode.js): «5000» вместо «50» — вопрос в строке подхода «Записать /
+   Исправить», ничего не записано, фокус на «Исправить», Esc — в поле веса; «Записать» пишет как есть. Без прошлых
+   тренировок после отметки — «Сегодня: 1 из 3…», в тренировке «Прошлый раз: —». Пирамида повторов «10/8/6/5» в поле
+   «Повторов»: карточка «4 × 10/8/6/5», цели подходов в таблице и в тренировке («6 повторов», «цель 6»). Тот же вопрос
+   о весе в тренировке: «Подход выполнен» ждёт, Esc закрывает вопрос, а не тренировку. Журнал: «5 кг × 15» крупно */
+{
+  const G = await open(390, 844), sq = '.card[data-ex="squat"]', db = '.card[data-ex="dbbench"]';
+  await G.evaluate(() => {
+    const y = dayKey(new Date(Date.now() - 864e5));
+    S.customs = [{ id: 'dg', name: 'Защита', items: [{ id: 'squat', sets: 4 }, { id: 'dbbench', sets: 3 }, { id: 'bbbench', sets: 3 }] }];
+    S.custom = 'dg'; S.mode = 'custom'; ensureCustoms(S); openCustom('dg');
+    LOG.data = { squat: [{ d: y, s: [[52.5, 8], [52.5, 8], [52.5, 8], [52.5, 8]] }] }; regen();
+  });
+  await G.click(`${sq} [data-cfold="log"]`); await G.click(`${db} [data-cfold="log"]`);
+  const q = s => G.evaluate(s => { const k = document.querySelector(s + ' .lt-kq'), ae = document.activeElement;
+    return { text: k?.querySelector('.lt-cft').textContent ?? null, row: k?.closest('.lt-r').dataset.k ?? null, arm: !!k?.closest('.lt-r.lt-arm'),
+      focus: ae?.dataset.kgfix ? 'fix' : ae?.dataset.kgyes ? 'yes' : ae?.dataset.tick ? 'tick' + ae.dataset.k : ae?.dataset.f ? ae.dataset.f + ae.closest('.lt-r').dataset.k : '',
+      log: JSON.stringify(todaySession(document.querySelector(s).dataset.ex, false)?.s ?? null), wide: document.documentElement.scrollWidth > innerWidth + 1,
+      btn: k ? Math.min(...[...k.querySelectorAll('button')].map(b => b.getBoundingClientRect().height)) : 0 }; }, s);
+  await G.fill(`${sq} .lt-r[data-k="0"] [data-f="kg"]`, '5000'); await G.fill(`${sq} .lt-r[data-k="0"] [data-f="reps"]`, '8');
+  await G.click(`${sq} [data-tick][data-k="0"]`);
+  let r = await q(sq);
+  check(r.text === 'Это намного больше, чем в прошлый раз (52,5\u00a0кг). Записать 5000\u00a0кг?' && r.row === '0' && r.arm && r.focus === 'fix' && r.log === 'null' && !r.wide && r.btn >= 38,
+    `«5000» не записано: вопрос в строке подхода, фокус на «Исправить», кнопки не меньше 38 px, без прокрутки вбок (${JSON.stringify(r)})`);
+  await G.keyboard.press('Escape'); r = await q(sq);
+  check(r.text === null && r.focus === 'kg0' && r.log === 'null' && await G.evaluate(s => getSelection().toString() === '5000' || document.activeElement.selectionEnd - document.activeElement.selectionStart === 4, sq),
+    `Esc закрывает вопрос, фокус в поле веса, вписанное выделено (${JSON.stringify(r)})`);
+  await G.keyboard.type('50'); await G.click(`${sq} [data-tick][data-k="0"]`); r = await q(sq);
+  check(r.log === '[[50,8]]' && r.text === null, `исправленный вес записан сразу (${JSON.stringify(r)})`);
+  await G.fill(`${sq} .lt-r[data-k="1"] [data-f="kg"]`, '5000'); await G.fill(`${sq} .lt-r[data-k="1"] [data-f="reps"]`, '8'); await G.click(`${sq} [data-tick][data-k="1"]`);
+  await G.click(`${sq} [data-kgyes]`); r = await q(sq);
+  check(r.log === '[[50,8],[5000,8]]' && r.text === null && r.focus === 'tick1', `«Записать» пишет как вписано, фокус на отметке подхода (${JSON.stringify(r)})`);
+  /* без истории: после отметки — «Сегодня: 1 из 3» */
+  const sug = s => G.evaluate(s => document.querySelector(s + ' .sug span').textContent, s);
+  check(/^Первая запись/.test(await sug(db)), 'жим гантелей без истории — «Первая запись…»');
+  await G.fill(`${db} .lt-r[data-k="0"] [data-f="kg"]`, '20'); await G.fill(`${db} .lt-r[data-k="0"] [data-f="reps"]`, '10'); await G.click(`${db} [data-tick][data-k="0"]`);
+  check(await sug(db) === 'Сегодня: 1 из 3. Следующий — с тем же весом (20 кг).', `после отметки — «Сегодня: 1 из 3…» (${await sug(db)})`);
+  /* пирамида повторов в поле «Повторов» своего плана */
+  await G.click('[data-cp-edit="2"]');
+  await G.fill('[data-cp-reps="2"]', '10 / 8 / 6 / 5'); await G.press('[data-cp-reps="2"]', 'Tab'); await G.waitForTimeout(100);
+  const pyr = await G.evaluate(() => { const c = document.querySelector('.card[data-ex="bbbench"]');
+    return { rx: c.querySelector('.rx-big').textContent, field: c.querySelector('[data-cp-reps]').value, ph: [...c.querySelectorAll('.lt-r [data-f="reps"]')].map(i => i.placeholder).join(), item: JSON.stringify(customOf().items[2]) }; });
+  check(pyr.rx.startsWith('4 × 10/8/6/5') && pyr.field === '10/8/6/5' && pyr.ph === '10,8,6,5' && pyr.item === '{"id":"bbbench","sets":4,"reps":"10/8/6/5"}',
+    `«10 / 8 / 6 / 5» в поле «Повторов»: 4 подхода, карточка «4 × 10/8/6/5», цели подходов в таблице (${JSON.stringify(pyr)})`);
+  /* тренировка: цель подхода пирамиды, «Прошлый раз: —», вопрос о весе */
+  await G.click('#start-workout'); await G.waitForTimeout(200);
+  const wv = () => G.evaluate(() => ({ target: $('#wv-target').textContent, ph: $('#wv-reps').placeholder, prev: $('#wv-previous').textContent, ask: !$('#wv-kg-ask').hidden,
+    askText: $('#wv-kg-ask-t').textContent, done: !$('#wv-done').hidden, open: $('#workout-view').open, focus: document.activeElement?.id, log: JSON.stringify(todaySession(workout.queue[workout.index].it.ex.id, false)?.s ?? null) }));
+  await G.evaluate(() => workoutShow(workout.queue.findIndex(s => s.it.ex.id === 'bbbench' && s.k === 2)));
+  let w = await wv();
+  check(w.target === '6 повторов' && w.ph === 'цель 6', `тренировка: цель третьего подхода пирамиды — «6 повторов», подсказка «цель 6» (${JSON.stringify(w)})`);
+  await G.evaluate(() => workoutShow(workout.queue.findIndex(s => s.it.ex.id === 'dbbench' && s.k === 1)));
+  w = await wv();
+  check(w.prev === '—' && w.ph === 'цель 6–10', `без прошлых тренировок, но с записью сегодня — «Прошлый раз: —» (${JSON.stringify(w)})`);
+  await G.fill('#wv-kg', '5000'); await G.fill('#wv-reps', '10'); await G.click('#wv-done');
+  w = await wv();
+  check(w.ask && !w.done && w.focus === 'wv-kg-fix' && w.askText === 'Это намного больше, чем сегодня в других подходах (20\u00a0кг). Записать 5000\u00a0кг?' && w.log === '[[20,10]]',
+    `тренировка: вопрос о весе под полями, «Подход выполнен» ждёт, ничего не записано (${JSON.stringify(w)})`);
+  await G.keyboard.press('Escape'); w = await wv();
+  check(w.open && !w.ask && w.done && w.focus === 'wv-kg', `Esc закрывает вопрос, а не тренировку; фокус в поле веса (${JSON.stringify(w)})`);
+  await G.click('#wv-done'); await G.click('#wv-kg-yes');
+  check(await G.evaluate(() => JSON.stringify(todaySession('dbbench', false).s) === '[[20,10],[5000,10]]' && !$('#wv-rest').hidden), '«Записать» в тренировке пишет подход и начинает отдых');
+  await G.click('#wv-close');
+  /* журнал: рабочий вес и повторы крупно, расчётный максимум мелко */
+  await G.evaluate(() => { const d = n => dayKey(new Date(Date.now() - n * 864e5)); LOG.data = { dbcurl: [{ d: d(9), s: [[5, 12], [5, 12]] }, { d: d(5), s: [[5, 13]] }, { d: d(2), s: [[5, 15], [5, 14]] }] }; S.view = 'journal'; renderSetup(); renderPlan(); });
+  const j = await G.evaluate(() => { const v = document.querySelector('.j-row .j-val'), big = v.querySelector('.j-big'), e1 = v.querySelector('.j-e1');
+    return { big: [...big.childNodes].filter(n => !n.classList?.contains('vh')).map(n => n.textContent).join('').replace(/\s+/g, ' ').trim(), e1: e1.textContent, em: v.querySelector('em')?.textContent, size: [parseFloat(getComputedStyle(big).fontSize), parseFloat(getComputedStyle(e1).fontSize)], wide: document.documentElement.scrollWidth > innerWidth + 1 }; });
+  check(j.big === '5кг × 15' && j.e1 === 'расч. максимум 7 кг' && j.em === '+3 повт.' && j.size[0] > j.size[1] * 1.4 && !j.wide,
+    `журнал: «5 кг × 15» крупно, расчётный максимум мелко с подписью, «+3 повт.» вместо «0 %» (${JSON.stringify(j)})`);
+  await G.close();
+}
+
 /* «+ В свой план» (телефон): в атласе мышц и в разборе кнопка раскрывает под собой список своих планов и «+ Новый план».
    Выбор добавляет в выбранный план и не открывает его; повторное нажатие и Esc сворачивают список, фокус — на кнопку;
    последний выбранный — первым. На странице своего плана кнопка, как раньше, добавляет в открытый план. */
@@ -1181,4 +1253,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание блоков, хваты, «Заменить» со списком и «Вернуть», «Убрать» с «Вернуть», «+ В свой план» с выбором плана, поиск витрины (ё = е), бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа (в «Анатомии» и «Манекене» — кадры из общего рендерера, кеш между сеансами, без WebGL — SVG), виды фигуры «Анатомия», «Скелет» и «Манекен» (кожа Anny в карточках и витрине, без её данных — SVG), анатомия в карточках плана и на экране тренировки (откат на манекен, без WebGL — SVG), свободная камера сцены (поворот на воспроизведении, колесо, кнопки ракурсов, двойной щелчок, клавиатура, касания на телефоне), первый экран и разбор на телефоне, карточка, число подходов («−» с подтверждением в строке, «+»), вес на следующие подходы, журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования, панель замера скорости ?perf работают на телефоне и компьютере.');
+console.log('Интерфейс: сворачивание блоков, хваты, «Заменить» со списком и «Вернуть», «Убрать» с «Вернуть», «+ В свой план» с выбором плана, поиск витрины (ё = е), бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа (в «Анатомии» и «Манекене» — кадры из общего рендерера, кеш между сеансами, без WebGL — SVG), виды фигуры «Анатомия», «Скелет» и «Манекен» (кожа Anny в карточках и витрине, без её данных — SVG), анатомия в карточках плана и на экране тренировки (откат на манекен, без WebGL — SVG), свободная камера сцены (поворот на воспроизведении, колесо, кнопки ракурсов, двойной щелчок, клавиатура, касания на телефоне), первый экран и разбор на телефоне, карточка, число подходов («−» с подтверждением в строке, «+»), вес на следующие подходы, вопрос о неправдоподобном весе, «Сегодня: N из M», пирамида повторов, журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования, панель замера скорости ?perf работают на телефоне и компьютере.');

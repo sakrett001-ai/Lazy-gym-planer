@@ -25,12 +25,23 @@ function cleanKg(v) {
 function parseKgInput(text) {
   return cleanKg(String(text || '').split(/\s*[;\/]\s*|,\s+|\s+/).map(x => x.trim()).filter(Boolean));
 }
+/* повторы: «8», «8–12» или по подходам — «10/8/6/5» (через «/», «;», запятую или пробел; 2–10 значений; одинаковые
+   сводятся к одному числу). Хранятся и выгружаются в файл плана строкой «10/8/6/5»; прежние версии такую строку
+   отбрасывают и берут повторы по цели. Неверное — null */
+function cleanReps(v) {
+  if (typeof v !== 'string') return null;
+  const s = v.trim(), m = s.match(CUSTOM_REPS);
+  if (m) return +m[1] >= 1 && (!m[2] || +m[2] >= +m[1]) ? (m[2] ? `${+m[1]}–${+m[2]}` : String(+m[1])) : null;
+  const parts = s.split(/\s*[\/;,]\s*|\s+/).filter(Boolean);
+  if (parts.length < 2 || parts.length > 10 || !parts.every(p => /^\d{1,3}$/.test(p) && +p >= 1)) return null;
+  const n = parts.map(Number);
+  return n.every(x => x === n[0]) ? String(n[0]) : n.join('/');
+}
 function cleanCustomItem(it) {
   if (!it || !EXI[it.id]) return null;
   const o = {id:it.id};
   if (Number.isInteger(it.sets) && it.sets >= 1 && it.sets <= 10) o.sets = it.sets;
-  const m = typeof it.reps === 'string' && it.reps.trim().match(CUSTOM_REPS);
-  if (m && +m[1] >= 1 && (!m[2] || +m[2] >= +m[1])) o.reps = m[2] ? `${+m[1]}–${+m[2]}` : String(+m[1]);
+  const reps = cleanReps(it.reps); if (reps) o.reps = reps;
   if (Number.isInteger(it.rest) && it.rest >= 0 && it.rest <= 600) o.rest = it.rest;
   const kg = it.kg != null ? cleanKg(it.kg) : null; if (kg) o.kg = kg;
   if (typeof it.tempo === 'string' && CUSTOM_TEMPO.test(it.tempo.trim().toUpperCase())) o.tempo = it.tempo.trim().toUpperCase();
@@ -165,6 +176,15 @@ function customSet(slot, key, value) {
   items[slot] = ok; planUndo = null; saveSettings();
 }
 
+/* повторы из поля «Повторов»: «8–12» или пирамида «10/8/6/5» — она задаёт и число подходов (четыре числа — четыре
+   подхода); неверное — false, прежнее значение остаётся */
+function customSetReps(slot, text) {
+  const ok = cleanCustomItem({id:customOf().items[slot]?.id, reps:text});
+  if (!ok || !ok.reps) return false;
+  customSet(slot, 'reps', ok.reps);
+  if (ok.reps.includes('/')) customSet(slot, 'sets', ok.reps.split('/').length);
+  return true;
+}
 /* дозировка по цели и формату, поверх — правка человека (кроме статодинамики: там серии заданы методом) */
 function customRx(rx, o, ex) {
   if (!o) return rx;
@@ -276,7 +296,7 @@ function customToolsHtml(it) {
   const edit = r.static ? `<p class="f-note">В статодинамике серии, темп и отдых заданы методом — меняются цель и уровень.</p>`
     : `<div class="cp-fields">
         ${r.circ ? '' : `<div class="cp-f"><span>Подходов</span><div class="stepper sm"><button type="button" data-cp-step="${slot}" data-d="-1" aria-label="Меньше подходов"${r.sets <= 1 ? ' disabled' : ''}>−</button><output>${r.sets}</output><button type="button" data-cp-step="${slot}" data-d="1" aria-label="Больше подходов"${r.sets >= 10 ? ' disabled' : ''}>+</button></div></div>`}
-        ${it.ex.kind ? '' : `<label class="cp-f"><span>Повторов</span><input type="text" inputmode="numeric" maxlength="7" data-cp-reps="${slot}" value="${esc(r.reps)}" aria-label="Повторов, например 8–12"></label>`}
+        ${it.ex.kind ? '' : `<label class="cp-f"><span>Повторов</span><input type="text" inputmode="text" maxlength="40" data-cp-reps="${slot}" value="${esc(r.reps)}" aria-label="Повторов: 8–12 или по подходам через «/», например 10/8/6/5" autocomplete="off"></label>`}
         ${r.circ ? '' : `<label class="cp-f"><span>Отдых</span><select data-cp-rest="${slot}">${restOpts.map(s => `<option value="${s}"${s === r.rest ? ' selected' : ''}>${s ? fmtRest(s) : 'без отдыха'}</option>`).join('')}</select></label>`}
         ${it.ex.kind ? '' : `<label class="cp-f"><span>Темп</span><input type="text" maxlength="11" data-cp-tempo="${slot}" value="${esc(o.tempo || '')}" placeholder="${esc(r.tempo || '3-0-1-0')}" aria-label="Темп: опускание, пауза, подъём, пауза — например 3-0-1-0" autocomplete="off"></label>`}
         ${o.sets || o.reps || o.rest !== undefined || o.tempo ? `<button type="button" class="btn-ghost cp-reset" data-cp-reset="${slot}">Как по цели</button>` : ''}
@@ -316,7 +336,7 @@ function freezePlan(p) {
     const r = it.rx, o = {id:it.ex.id};
     if (!r.static) {
       if (!r.circ) { o.sets = r.sets; o.rest = r.rest; }
-      if (!it.ex.kind && CUSTOM_REPS.test(String(r.reps))) o.reps = String(r.reps);
+      if (!it.ex.kind && cleanReps(String(r.reps))) o.reps = cleanReps(String(r.reps));
     }
     return cleanCustomItem(o);
   }).filter(Boolean).slice(0, CUSTOM_MAX);
@@ -408,8 +428,8 @@ document.addEventListener('change', e => {
   }
   if (t.id === 'cp-name') { const v = t.value.trim().slice(0, CUSTOM_NAME); if (v) customOf().name = v; saveSettings(); renderSetup(); if (S.mode === 'custom' && S.view === 'plan') renderPlan(); return; }
   if (t.dataset.cpReps !== undefined) {
-    const s = +t.dataset.cpReps, ok = cleanCustomItem({id:customOf().items[s]?.id, reps:t.value});
-    if (ok && ok.reps) customSet(s, 'reps', ok.reps); else { t.value = plan.items.find(x => x.slot === s)?.rx.reps || ''; return; }
+    const s = +t.dataset.cpReps;
+    if (!customSetReps(s, t.value)) { t.value = plan.items.find(x => x.slot === s)?.rx.reps || ''; return; }
     return customRerender(`[data-cp-reps="${s}"]`);
   }
   if (t.dataset.cpRest !== undefined) { const s = +t.dataset.cpRest; customSet(s, 'rest', +t.value); return customRerender(`[data-cp-rest="${s}"]`); }
