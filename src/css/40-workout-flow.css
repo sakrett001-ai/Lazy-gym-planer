@@ -11,8 +11,6 @@
   background-position:calc(100% - 16px) 50%, calc(100% - 11px) 50%; background-size:5px 5px, 5px 5px; background-repeat:no-repeat; }
 .wv-select .wv-pick select { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0; }
 .wv-pick:focus-within .wv-pick-t { outline:2px solid var(--accent); outline-offset:1px; }
-.wv-select { align-items:center; }
-.wv-select > label { align-self:stretch; }
 
 /* «Заменить», «Пропустить» и «Пропущено: … Вернуть» */
 .wv-ex-tools { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:6px 8px; margin:-10px 0 14px; }
