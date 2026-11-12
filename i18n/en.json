@@ -43,7 +43,7 @@
  "Отключить пульсометр": "Disconnect the heart rate monitor",
  "уд/мин. Нажмите, чтобы отключить пульсометр": "bpm. Tap to disconnect the heart rate monitor",
  "Пульсометр подключается. Нажмите, чтобы отключить": "Heart rate monitor is connecting. Tap to disconnect",
- "Подключить пульсометр": "Connect a heart rate monitor",
+ "Пульс: подключить пульсометр": "Heart rate: connect a monitor",
  "в начале отдыха": "at rest start",
  "Порог пульса не задан — отдых по времени": "No heart rate threshold set — rest by time",
  "Пульс ниже": "Heart rate below",

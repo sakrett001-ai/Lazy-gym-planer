@@ -10,6 +10,7 @@
       областей; имя кнопки содержит её видимую надпись (WCAG 2.5.3), одинаковые кнопки карточек различаются упражнением;
       конец отдыха объявляется «Пора к подходу».
    4. «Пиковая нагрузка» в карточке раскрывается кнопкой (aria-expanded) — тот же текст, что в разборе движения.
+   Плашка пульса (14b-heart.js) — с подменой Web Bluetooth, чтобы её раскладка и имя кнопки тоже проверялись.
    5. «0 из 21 подхода»; «легче · тяжелее» — цели не меньше 24×24 px (WCAG 2.5.8); на экране отдыха при масштабе 150 %
       таймер виден, когда фокус на «Перейти к подходу». */
 import { createRequire } from 'node:module';
@@ -28,6 +29,8 @@ const check = (ok, what) => { if (!ok) fails.push(what); };
 /* страница: рисунки движений — заглушки (проверяется раскладка и текст, а не фигура) */
 async function open({ width, height = Math.round(width * 844 / 390), font = 100, theme = 'light' }) {
   const ctx = await browser.newContext({ viewport: { width, height }, isMobile: true, hasTouch: true, colorScheme: theme, reducedMotion: 'reduce' });
+  /* Web Bluetooth есть (подмена): на экране тренировки и отдыха видна плашка «♥ Пульс» и настройка конца отдыха (14b-heart.js) */
+  await ctx.addInitScript(() => { const bt = { async requestDevice() { throw Object.assign(new Error('отмена'), { name: 'NotFoundError' }); }, async getAvailability() { return true; } }; Object.defineProperty(navigator, 'bluetooth', { configurable: true, get: () => bt }); });
   const page = await ctx.newPage();
   page.on('pageerror', e => errors.push(String(e)));
   await page.goto('file://' + file); await page.waitForTimeout(300);
@@ -264,6 +267,7 @@ for (const theme of ['light', 'dark']) {
   await SCREENS.rest(page);
   await page.evaluate(() => { workout.restUntil = Date.now() - 1000; workoutTick(); });
   const rest = await page.evaluate(() => ({ say: $('#wv-rest-say').textContent, role: $('#wv-rest-say').getAttribute('role'), over: $('#wv-rest-over').textContent, overRole: $('#wv-rest-over').getAttribute('role') }));
+  check(await page.evaluate(() => !$('#wv-hr-btn').hidden), 'на экране тренировки видна плашка «♥ Пульс» (проверена и её раскладка)');
   check(rest.say === 'Пора к подходу' && rest.role === 'status' && rest.over === 'сверх отдыха' && !rest.overRole, `конец отдыха объявляется «Пора к подходу» (${JSON.stringify(rest)})`);
   await ctx.close();
 }
