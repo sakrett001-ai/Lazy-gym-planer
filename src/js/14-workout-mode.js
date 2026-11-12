@@ -37,11 +37,13 @@ function workoutQueue(p){
    (14a-workout-flow.js) */
 function workoutStamp(q){return JSON.stringify([S.mode,S.day,S.week,S.format,S.goal,q.map(x=>[x.it.ex.id,x.k,x.n,x.rest,x.it.rx.reps])]);}
 /* дни журнала этой тренировки и сегодняшний */
-function workoutDays(){return wkDaysWith(workout?workout.days:[],todayKey());}
+function workoutDays(){return wkDaysWith(workout?.days||[],todayKey());}
 /* записанный подход: в любом дне тренировки (вчерашние подходы продолженной тренировки — сделаны) */
 function workoutValue(step){return wkSet(LOG.data,step.it.ex.id,step.k,workoutDays());}
 /* запись дня, где лежит подход (правка вчерашнего подхода — во вчерашней записи), или сегодняшняя для нового */
 function workoutSession(step,create){return wkSession(LOG.data,step.it.ex.id,step.k,workoutDays())||todaySession(step.it.ex.id,!!create);}
+/* подходы упражнения во всех днях тренировки по номерам (сегодняшние — поверх вчерашних): как запись дня в карточке */
+function workoutSetsOf(id){const days=workoutDays(),out=[];for(let i=days.length-1;i>=0;i--){const x=(LOG.data[id]||[]).find(v=>v.d===days[i]);if(x)x.s.forEach((v,k)=>{if(v&&!out[k])out[k]=v;});}return out;}
 function workoutFirstOpen(q,after=-1){return wkFirstOpen(q,after,workoutValue,workout?.skipped);}
 function workoutCount(){return workout?wkCount(workout.queue,workoutValue,workout,(id,k)=>wkSet(LOG.data,id,k,workoutDays())):{done:0,total:0};}
 function workoutDraftKey(step){return step.it.ex.id+':'+step.k;}
@@ -145,7 +147,7 @@ function workoutShow(index){
   $('#wv-target').textContent=planReps(it.rx,s.k)+(ex.kind?'':' повторов');
   const unit=ex.kind==='time'?'с':ex.kind==='dist'?'м':'повт.',psd=prev&&setSides(prev,ex);
   /* прошлых тренировок нет: «Первая запись», пока в тренировке ничего не записано, потом — «—» */
-  const todayN=workout.queue.filter(x=>x.it.ex.id===ex.id&&workoutValue(x)).length;
+  const todayN=workoutSetsOf(ex.id).filter(Boolean).length;
   $('#wv-previous').textContent=psd?`${setText(prev,ex)} ${unit}`:prev?`${prev[0]!=null?fmtKg(prev[0])+' кг × ':''}${prev[1]} ${unit}`:todayN?'—':'Первая запись';
   $('#wv-previous-date').textContent=sg.prev?fmtDay(sg.prev.d,true):'';
   $('#wv-set-chips').innerHTML=workout.queue.map((x,i)=>x.it.ex.id===ex.id?`<button type="button" data-wv-index="${i}" class="${workoutValue(x)?'is-done ':''}${i===workout.index?'is-current':''}" aria-label="Подход ${x.k+1}${workoutValue(x)?', выполнен':''}" aria-current="${i===workout.index?'step':'false'}">${workoutValue(x)?'✓ ':''}${x.k+1}</button>`:'').join('');
@@ -170,7 +172,7 @@ function workoutFill(s,sg,prev){
   $('#wv-lr-fields').classList.toggle('wv-lr-nokg',lt==='none');$('#wv-lr-kg-cap').textContent=wl?wl.full:'Вес, кг';$('#wv-lr-rep-cap').textContent=repLabel(ex);
   for(const id of ['wv-reps','wv-reps-l','wv-reps-r'])$('#'+id).setAttribute('inputmode',ex.kind==='dist'?'decimal':'numeric');
   /* подходы упражнения в этой тренировке (продолженной — и вчерашние): по ним вес на следующие подходы */
-  const draft=workout.drafts[workoutDraftKey(s)],today=workout.queue.filter(x=>x.it.ex.id===ex.id).reduce((a,x)=>{a[x.k]=workoutValue(x);return a;},[]);
+  const draft=workout.drafts[workoutDraftKey(s)],today=workoutSetsOf(ex.id);
   /* вес: записанный сегодня в подходе выше (carriedKg — то же правило, что в карточке: свой вес подхода по плану или
      по пирамиде прошлого раза не перетирается), иначе свой вес подхода, иначе из прошлой тренировки */
   const own=ownKgs(it,sg.prev?sg.prev.s.filter(Boolean):[],sg),planned=own(s.k),kgText=v=>v!=null?fmtKg(v):'',carried=carriedKg(it,today,s.k,null,own);
