@@ -285,5 +285,5 @@ test('journal: working weight × best reps large, estimated 1RM small and labell
   assert.equal(a.histMetric(ex, ss).name, 'Повторы с 5 кг');
   assert.equal(a.histMetric(ex, [ss[0], { d: '2026-11-20', s: [[7, 8]] }]).name, 'Расчётный максимум');
   a.LOG.data = { dbcurl: ss };
-  assert.match(a.histHtml(ex), /<p class="h-cap">Повторы с 5 кг, повт\. · лучший 15<\/p>/);
+  assert.match(a.histHtml(ex), /<p class="h-cap">Повторы с 5 кг · лучший 15<\/p>/);
 });

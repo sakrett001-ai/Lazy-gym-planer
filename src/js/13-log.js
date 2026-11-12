@@ -599,7 +599,7 @@ function histMetric(ex, ss) {
   const tops = ss.map(topSet).filter(Boolean);
   if (tops.length < 2 || !tops.every(t => t.w === tops[0].w)) return m;
   const w = tops[0].w;
-  return {name:`Повторы с ${fmtKg(w)} кг`, unit:'повт.', f:s => { const t = topSet(s); return t && t.w === w ? t.r : null; }};
+  return {name:`Повторы с ${fmtKg(w)} кг`, unit:'повт.', bare:true, f:s => { const t = topSet(s); return t && t.w === w ? t.r : null; }};
 }
 /* Сводка упражнения в строке журнала. С весом: крупно — рабочий вес и лучшие повторы с ним в последней записи, мельче
    и с подписью — расчётный максимум; изменение с первой записи — по весу, а при том же весе — по повторам («+3 повт.»,
@@ -655,7 +655,7 @@ function histHtml(ex) {
   const rows = ss.slice(-6).reverse().map(s => `<li><span class="h-d">${fmtDay(s.d, true)}${s.wk ? `<small>нед. ${s.wk}</small>` : ''}${s.fmt === 'static' ? '<small>статодинамика</small>' : ''}</span>
     <span class="h-s">${histSets(ex, s)}</span>
     <button type="button" class="h-del" data-del="${ex.id}" data-d="${s.d}" aria-label="Удалить запись за ${fmtDay(s.d, true)}">Удалить</button></li>`).join('');
-  return `<div class="h-chart"><p class="h-cap">${m.name}, ${m.unit}${best != null ? ` · лучший ${fmtKg(Math.round(best * 2) / 2)}` : ''}</p>${sparkSvg(pts, m.unit)}</div>
+  return `<div class="h-chart"><p class="h-cap">${m.name}${m.bare ? '' : ', ' + m.unit}${best != null ? ` · лучший ${fmtKg(Math.round(best * 2) / 2)}` : ''}</p>${sparkSvg(pts, m.unit)}</div>
     <ul class="h-list">${rows}</ul>${ss.length > 6 ? `<p class="h-more">Всего записей: ${ss.length}. Полная история — в разделе «Журнал».</p>` : ''}${variantHistNote(ex)}`;
 }
 function histCount(id) { return (LOG.data[id] || []).filter(x => x.s.some(Boolean)).length; }
