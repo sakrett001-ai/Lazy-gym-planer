@@ -265,6 +265,45 @@ await run(`(()=>{closeWorkout();S.view='journal';renderSetup();renderPlan();docu
 await scan('journal with L/R and total weight', await run('csvText()'));
 await run(`(()=>{S.lr={};S.view='plan';S.mode='single';regen();})()`);
 
+/* 7в. пульсометр (14b-heart.js): navigator.bluetooth подменён на странице — плашка до подключения, ожидание, живой пульс,
+   нет контакта, обрыв, «Отключить?», отключён; отдых с пульсом во всех режимах конца отдыха; итоги, журнал; без Web Bluetooth —
+   строка вместо кнопки */
+step('7в. пульсометр');
+await run(`(()=>{
+  const ev=o=>{const l={};o.addEventListener=(t,f)=>{(l[t]=l[t]||[]).includes(f)||l[t].push(f);};o.removeEventListener=(t,f)=>{l[t]=(l[t]||[]).filter(x=>x!==f);};o.fire=(t,e)=>(l[t]||[]).slice().forEach(f=>f(e));return o;};
+  const st={connected:false},chr=ev({value:null,async startNotifications(){},async stopNotifications(){}});
+  const server={async getPrimaryService(n){if(n==='heart_rate')return{async getCharacteristic(){return chr;}};return{async getCharacteristic(){return{async readValue(){return new DataView(Uint8Array.of(70).buffer);}};}};}};
+  const dev=ev({name:'Polar H10',gatt:{get connected(){return st.connected;},async connect(){st.connected=true;return server;},disconnect(){st.connected=false;}}});
+  Object.defineProperty(navigator,'bluetooth',{configurable:true,value:{async requestDevice(){return dev;}}});
+  window.__hr={push(b,c=true){chr.value=new DataView(Uint8Array.of(c?0x16:0x14,c?b:0,0,3).buffer);chr.fire('characteristicvaluechanged',{target:chr});},drop(){st.connected=false;dev.fire('gattserverdisconnected',{target:dev});}};
+  Heart.setPrefs({rest:'time',thr:null});
+  S.customs=[{id:'i18n-hr',name:'HR',items:[{id:'squat',sets:3,kg:[60]}]}];S.custom='i18n-hr';S.mode='custom';ensureCustoms(S);openCustom('i18n-hr');LOG.data={};regen();
+  document.querySelector('#start-workout').click();})()`);
+await scan('heart rate: before connecting');
+const hrPush = b => run(`(()=>{window.__dt+=1000;window.__hr.push(${b});workoutTick();Heart.paint();})()`);
+await page.click('#wv-hr-btn'); await page.waitForTimeout(50); await scan('heart rate: waiting');
+await hrPush(131); await hrPush(150); await scan('heart rate: live, set max');
+await run(`(()=>{window.__dt+=1000;window.__hr.push(0,false);Heart.paint();})()`); await scan('heart rate: no skin contact');
+await hrPush(148);
+await page.fill('#wv-reps', '8'); await page.click('#wv-done'); await scan('heart rate: rest');
+for (const mode of ['first', 'hr']) { await page.click(`[data-hr-rest="${mode}"]`); await scan('heart rate: rest mode ' + mode + ', no threshold'); }
+await page.fill('#wv-hr-thr', '110'); await hrPush(125); await scan('heart rate: rest until heart rate');
+await run(`(()=>{window.__dt+=workout.restUntil-Date.now()-600;window.__hr.push(124);workoutTick();})()`); await scan('heart rate: rest extended');
+await hrPush(108); await hrPush(104); await run(`(()=>{window.__dt+=300;workoutTick();})()`); await scan('heart rate: below threshold');
+await run(`(()=>{window.__hr.drop();Heart.paint();})()`); await scan('heart rate: reconnecting');
+await page.waitForFunction(() => Heart.state().client.state === 'waiting', null, { timeout: 5000, polling: 50 }).catch(() => {});
+await hrPush(112); await page.click('#wv-hr-btn'); await scan('heart rate: disconnect?');
+await page.click('#wv-hr-btn'); await scan('heart rate: disconnected');
+await run(`(()=>{workoutFinish();})()`); await scan('heart rate: workout summary');
+await run(`(()=>{closeWorkout();S.view='journal';renderSetup();renderPlan();})()`); await scan('heart rate: journal');
+await run(`(()=>{Object.defineProperty(navigator,'bluetooth',{configurable:true,value:undefined});Heart.setPrefs({rest:'time',thr:null});S.view='plan';S.mode='single';regen();document.querySelector('#start-workout').click();})()`);
+await scan('heart rate: no Web Bluetooth');
+for (const [name, message] of [['NotFoundError', 'User cancelled the requestDevice() chooser.'], ['SecurityError', 'Access to the feature "bluetooth" is disallowed by permissions policy.'], ['NetworkError', 'Connection attempt failed.']]) {
+  await run(`(()=>{Object.defineProperty(navigator,'bluetooth',{configurable:true,value:{async requestDevice(){throw Object.assign(new Error(${JSON.stringify(message)}),{name:'${name}'});}}});Heart.paint();})()`);
+  await page.click('#wv-hr-btn'); await page.waitForTimeout(50); await scan('heart rate: ' + name);
+}
+await run(`(()=>{closeWorkout();})()`);
+
 /* 8. скрытая панель замера скорости (?perf): живые цифры, устройство, идёт замер, итог, текст результата, все подписи */
 step('8. замер скорости');
 /* Без --full фигуры — заглушки, но карточки плана и витрина в замере рисовали бы настоящие кадры общим рендерером: одиннадцать

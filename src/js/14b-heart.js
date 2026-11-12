@@ -318,7 +318,7 @@ function heartRestore(o) {
 /* журнал: средний и максимальный пульс тренировки за день */
 function heartDayHtml(d) {
   const s = hrSummary(HEART.days[d]);
-  return s ? `<span class="j-hr">${'♥ ср.'} ${s.avg} ${'· макс.'} ${s.max}</span>` : '';
+  return s ? `<span class="j-hr"><i aria-hidden="true">♥</i> ${'ср.'} ${s.avg} ${'· макс.'} ${s.max}</span>` : '';
 }
 
 /* ---------- экран тренировки ----------
@@ -379,7 +379,7 @@ const Heart = (() => {
     const row = el('div', {id:'wv-hr', class:'wv-hr', 'data-state':'idle'},
       `<button type="button" id="wv-hr-btn" class="wv-hr-btn" aria-describedby="wv-hr-note wv-hr-meta"><span class="wv-hr-heart" aria-hidden="true">♥</span><span id="wv-hr-val" class="wv-hr-val">${'Пульс'}</span><small id="wv-hr-unit" class="wv-hr-unit" hidden>${'уд/мин'}</small></button>`
       + `<div class="wv-hr-text"><p id="wv-hr-note" class="wv-hr-note" role="status"></p><p id="wv-hr-meta" class="wv-hr-meta"></p></div>`
-      + `<p id="wv-hr-line" class="wv-hr-line" hidden></p>`
+      + `<p id="wv-hr-line" class="wv-hr-line" hidden><span class="wv-hr-heart" aria-hidden="true">♥</span> <span id="wv-hr-line-t"></span></p>`
       + `<p id="wv-hr-help" class="wv-hr-help" hidden>${'Часов нет в списке? Включите на них трансляцию пульса: на Galaxy Watch — приложение, которое транслирует пульс как датчик.'} <button type="button" id="wv-hr-all" class="wv-hr-all">${'Показать все устройства'}</button></p>`);
     prog.after(row);
     const over = q('#wv-rest-over');
@@ -393,7 +393,7 @@ const Heart = (() => {
       + `<p id="wv-hr-thr-note" class="wv-signal-note">${'Порог задаёте вы: общего числа для отдыха между подходами в исследованиях нет.'}</p>`
       + `<p class="wv-signal-note wv-hr-med">${'Пульс с часов и датчиков — ориентир, а не медицинское измерение.'}</p>`));
     const fin = q('#wv-finish-text');
-    if (fin) fin.after(el('p', {id:'wv-hr-finish', class:'wv-hr-finish', hidden:''}));
+    if (fin) fin.after(el('p', {id:'wv-hr-finish', class:'wv-hr-finish', hidden:''}, `<span class="wv-hr-heart" aria-hidden="true">♥</span> <span id="wv-hr-finish-t"></span>`));
     mounted = true; paintPrefs(); return true;
   }
   const text = (sel, t) => { const e = q(sel); if (e && e.textContent !== t) e.textContent = t; };
@@ -404,7 +404,7 @@ const Heart = (() => {
     const sup = support(), row = q('#wv-hr');
     if (!sup.ok) {
       row.dataset.state = 'unsupported'; show('#wv-hr-btn', false); show('.wv-hr-text', false); show('#wv-hr-help', false);
-      text('#wv-hr-line', '♥ ' + sup.line); show('#wv-hr-line', true); show('#wv-hr-rest', false); show('#wv-hr-set', false); return;
+      text('#wv-hr-line-t', sup.line); show('#wv-hr-line', true); show('#wv-hr-rest', false); show('#wv-hr-set', false); return;
     }
     show('#wv-hr-btn', true); show('.wv-hr-text', true); show('#wv-hr-line', false); show('#wv-hr-set', true);
     const c = C(), st = c ? c.state : 'idle', bpm = live(now), name = c && c.name || 'датчик';
@@ -426,7 +426,7 @@ const Heart = (() => {
     else if (view === 'error') note = c.error;
     const on = ['connecting', 'waiting', 'live', 'nocontact', 'reconnecting'].includes(st);
     if (armed && on) { val = 'Отключить?'; note = 'Нажмите ещё раз, чтобы отключить пульсометр.'; }
-    row.dataset.state = armed && on ? 'armed' : view;
+    row.dataset.state = armed && on ? 'armed' : view; row.dataset.screen = phase();
     text('#wv-hr-val', val); show('#wv-hr-unit', view === 'live' && !(armed && on)); text('#wv-hr-note', note); text('#wv-hr-meta', meta);
     show('#wv-hr-note', !!note); show('#wv-hr-meta', !!meta);
     const btn = q('#wv-hr-btn');
@@ -468,7 +468,7 @@ const Heart = (() => {
   function paintFinish() {
     const s = hrSummary(HEART.days[todayKey()]);
     show('#wv-hr-finish', !!s);
-    if (s) text('#wv-hr-finish', `${'♥ Пульс за тренировку: средний'} ${s.avg}, ${'максимальный'} ${s.max}.`);
+    if (s) text('#wv-hr-finish-t', `${'Пульс за тренировку: средний'} ${s.avg}, ${'максимальный'} ${s.max}.`);
   }
   /* ---------- действия ---------- */
   function press(all) {
@@ -495,6 +495,7 @@ const Heart = (() => {
     const c = C(), r = hrRestStep(cur.rule, {mode:P.rest, thr:P.thr, now, until:workout.restUntil, bpm:live(now), at:c ? c.at : 0});
     if (r.act) { workout.restUntil = r.until; RestAlarm.arm(r.until, {from:workout.restFrom}); saveWorkout(); }
     cur.why = r.why;
+    const row = q('#wv-hr'); if (row && row.dataset.screen !== 'rest') row.dataset.screen = 'rest';
     if (mounted) paintRest(now, live(now), !!c && ['connecting', 'waiting', 'live', 'nocontact', 'reconnecting'].includes(c.state));
   }
   if (typeof document !== 'undefined' && document.addEventListener) {

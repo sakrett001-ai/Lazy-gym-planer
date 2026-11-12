@@ -1167,8 +1167,8 @@ const fakeBluetooth = () => {
   await push(112);
   /* итоги и журнал: средний и максимальный пульс */
   await h.evaluate(() => workoutFinish());
-  const fin = await h.evaluate(() => ({ t: $('#wv-hr-finish').textContent, shown: !$('#wv-hr-finish').hidden, sum: hrSummary(HEART.days[todayKey()]) }));
-  check(fin.shown && fin.t === `♥ Пульс за тренировку: средний ${fin.sum.avg}, максимальный 152.` && fin.sum.avg > 100 && fin.sum.avg < 152, `итоги тренировки: средний и максимальный пульс (${JSON.stringify(fin)})`);
+  const fin = await h.evaluate(() => ({ t: $('#wv-hr-finish-t').textContent, shown: !$('#wv-hr-finish').hidden, sum: hrSummary(HEART.days[todayKey()]) }));
+  check(fin.shown && fin.t === `Пульс за тренировку: средний ${fin.sum.avg}, максимальный 152.` && fin.sum.avg > 100 && fin.sum.avg < 152, `итоги тренировки: средний и максимальный пульс (${JSON.stringify(fin)})`);
   /* отключение — с подтверждением */
   await h.click('#wv-hr-btn'); s = await hs();
   check(s.st === 'armed' && s.val === 'Отключить?' && await h.evaluate(() => Heart.state().client.state === 'live'), 'первое нажатие по плашке — «Отключить?»');
@@ -1185,8 +1185,8 @@ const fakeBluetooth = () => {
   await n.addInitScript(() => { Object.defineProperty(Navigator.prototype, 'bluetooth', { configurable: true, get: () => undefined }); try { delete navigator.bluetooth; } catch (e) {} });
   await n.goto('file://' + file); await n.waitForTimeout(500); await fakeFigures(n);
   await n.evaluate(() => { S.mode = 'single'; regen(); }); await n.click('#start-workout'); await n.waitForTimeout(50);
-  const u = await n.evaluate(() => ({ line: $('#wv-hr-line').textContent, shown: !$('#wv-hr-line').hidden, btn: !$('#wv-hr-btn').hidden, set: !$('#wv-hr-set').hidden, st: $('#wv-hr').dataset.state }));
-  check(u.shown && !u.btn && !u.set && u.st === 'unsupported' && u.line === '♥ Пульсометр работает в Chrome и Edge на Android и компьютере.', `без Web Bluetooth — честная строка вместо кнопки (${JSON.stringify(u)})`);
+  const u = await n.evaluate(() => ({ line: $('#wv-hr-line-t').textContent, shown: !$('#wv-hr-line').hidden, btn: !$('#wv-hr-btn').hidden, set: !$('#wv-hr-set').hidden, st: $('#wv-hr').dataset.state }));
+  check(u.shown && !u.btn && !u.set && u.st === 'unsupported' && u.line === 'Пульсометр работает в Chrome и Edge на Android и компьютере.', `без Web Bluetooth — честная строка вместо кнопки (${JSON.stringify(u)})`);
   await n.close();
 }
 
