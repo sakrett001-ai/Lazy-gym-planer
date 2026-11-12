@@ -11162,6 +11162,7 @@ const WEEKS = [
 
 const DEFAULTS = {goal:'mass', format:'classic', level:'mid', count:6, groups:['chest', 'back', 'shoulders'], equip:EQUIP.map(e => e.id), seed:7,
   mode:'single', days:3, split:'full', week:1, day:0, view:'plan', atlasM:'chest', focus:null, fav:[], customs:[], custom:null, gen:null, author:'', fold:null, protect:[],
+  cpLast:null /* свой план, куда последним добавляли из атласа или разбора (11d-custom.js) */,
   lr:{} /* «Л/П отдельно» по упражнениям: {exId:true} (13a-sets.js) */};
 const STORE = 'podhod.settings.v1';
 function loadSettings() {
@@ -11185,6 +11186,15 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;', '<':'&lt;', '>
 const fmtRest = s => s >= 60 ? (s % 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s / 60} min`) : `${s} s`;
 const midOf = r => { const m = String(r).match(/(\d+)\D+(\d+)/); if (m) return (+m[1] + +m[2]) / 2; const n = parseFloat(r); return isNaN(n) ? 10 : n; };
 function plural(n, a, b, c) { const m10 = n % 10, m100 = n % 100; if (m10 === 1 && m100 !== 11) return a; if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return b; return c; }
+/* Поиск по названиям упражнений. «ё» и «е» равны (ё раскладывается на е и две точки — U+0308, точки убираются; й остаётся
+   собой), регистр и дефисы не важны. У каждого слова запроса отбрасывается окончание — «отжимание» находит «Отжимания»,
+   «тяги» — «Тяга», «presses» — «press»; название подходит, если в нём есть все слова запроса без окончаний. */
+const searchFold = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/\u0308/g, '').normalize('NFC').replace(/[-\u2010-\u2015]/g, '');
+const SEARCH_END = /(?:ями|ами|ого|его|ому|ему|ыми|ими|ой|ей|ий|ый|ая|яя|ое|ее|ие|ые|ую|юю|ом|ем|ам|ям|ах|ях|ов|ев|ия|ья|ье|ью|ию|[аяоеиыуюйь]|es|s)$/;
+function searchMatcher(query) {
+  const words = searchFold(query).split(/[^\p{L}\p{N}]+/u).filter(Boolean).map(w => { const st = w.replace(SEARCH_END, ''); return st.length >= 3 ? st : w; });
+  return words.length ? name => { const n = searchFold(name); return words.every(w => n.includes(w)); } : () => true;
+}
 const fmtNum = v => Number.isInteger(v) ? String(v) : v.toFixed(1).replace('.', DEC); /* DEC — 13-log.js: в английской сборке точка */
 
 /* можно ли взвесить отягощение: свободные веса, тренажёры, блок, машина Смита (а не лента, турник, скамья или вес тела) */
@@ -12021,7 +12031,7 @@ const CUSTOM_MAX = 12, CUSTOM_NAME = 40, CUSTOM_TEXT = 40, CUSTOM_NOTE = 400, IT
 const CUSTOM_REPS = /^(\d{1,3})(?:\s*[–-]\s*(\d{1,3}))?$/;
 const CUSTOM_TEMPO = /^[0-9X]{1,2}-[0-9X]{1,2}-[0-9X]{1,2}-[0-9X]{1,2}$/;
 const PLAN_KEYS = ['goal', 'format', 'level'];
-let cpTab = null, cpOpen = new Set(), cpDel = false, cpMsg = '';
+let cpTab = null, cpOpen = new Set(), cpDel = false;
 
 /* текст от человека или из чужого файла: без управляющих символов, с ограничением длины (переводы строк в заметках остаются) */
 function cleanText(v, max, lines = false) {
@@ -12066,6 +12076,8 @@ function ensureCustoms(s) {
   s.customs = (Array.isArray(s.customs) ? s.customs : []).filter(c => c && typeof c.id === 'string' && /^[\w-]{1,24}$/.test(c.id) && !seen.has(c.id) && seen.add(c.id)).map(c => cleanPlan(c, c.id));
   if (!s.customs.length) s.customs.push({id:'c1', name:'My plan', items:[]});
   if (!s.customs.some(c => c.id === s.custom)) s.custom = s.customs[0].id;
+  /* последний выбранный в «+ В свой план» план: удалён или испорчен — забывается, первым в списке станет открытый */
+  if (!s.customs.some(c => c.id === s.cpLast)) s.cpLast = null;
   if (!MODES[s.mode]) s.mode = 'single';
   s.author = cleanText(s.author, CUSTOM_TEXT);
   /* цель, формат и уровень обычных планов, пока открыт свой план (у своего — свои) */
@@ -12124,6 +12136,37 @@ function customAdd(id) {
   const c = customOf();
   if (!EXI[id] || customHas(id) || c.items.length >= CUSTOM_MAX) return false;
   c.items.push({id}); saveSettings(); return true;
+}
+/* Новый свой план — как по кнопке «+ План»: «План N» (первый свободный номер), пустой. Цель, формат и уровень — те, что
+   сейчас в параметрах (S[k]): в своём плане это настройки открытого плана, вне его — обычной тренировки (S.gen хранит их
+   только пока открыт свой план, а вне его может отставать от S[k]). Программу (group) новый план берёт у открытого,
+   как «+ План», только когда свой план открыт: из обычной тренировки план не попадает в чужую программу. */
+function newCustomPlan() {
+  const c = customOf(), taken = new Set(S.customs.map(p => p.name));
+  let n = S.customs.length + 1; while (taken.has('Plan ' + n)) n++;
+  return {id:newPlanId(), name:'Plan ' + n, items:[], ...(S.mode === 'custom' && c.group ? {group:c.group} : {}), ...Object.fromEntries(PLAN_KEYS.map(k => [k, S[k]]))};
+}
+/* «+ В свой план» в атласе и в разборе: в выбранный план (planId) или в новый (planId пустой). Открытый план, режим
+   и вид не меняются (S.custom, S.mode, S.view). Добавленное запоминает план первым в списке (S.cpLast). */
+function customAddTo(id, planId) {
+  if (!EXI[id]) return null;
+  let c = planId ? S.customs.find(p => p.id === planId) : null, created = false;
+  if (planId && !c) return null;
+  if (!c) { c = newCustomPlan(); S.customs.push(c); created = true; }
+  const has = c.items.some(it => it.id === id), full = !has && c.items.length >= CUSTOM_MAX;
+  if (!has && !full) { c.items.push({id}); S.cpLast = c.id; }
+  saveSettings();
+  return {plan:c, added:!has && !full, created, has, full};
+}
+function customAddMsg(r) {
+  const name = r.plan.name;
+  return r.created ? `Created plan “${name}”, exercise added.` : r.added ? `Added to plan: ${name}.`
+    : r.has ? `Already in plan: ${name}.` : `Plan “${name}” is full: it already has ${CUSTOM_MAX} exercises.`;
+}
+/* порядок в списке: последний выбранный, без него — открытый, дальше — как в параметрах */
+function cpPickOrder() {
+  const first = S.customs.find(c => c.id === S.cpLast) || customOf();
+  return [first, ...S.customs.filter(c => c !== first)];
 }
 function customMove(slot, d) {
   const items = customOf().items, j = slot + d;
@@ -12229,6 +12272,25 @@ function customAddHtml() {
     <p class="f-note">The star ☆ adds an exercise to favorites. More options with muscle details are in the atlas. <button type="button" class="link" data-view="atlas">Open the muscle atlas →</button></p>
   </section>`;
 }
+/* Под превью атласа (at = 'at') и в разборе движения (at = 'mv'): избранное и «+ В свой план». Вне страницы своего плана
+   кнопка раскрывает прямо под собой список своих планов (cpPickHtml) — его наполняет нажатие, так он всегда свежий. */
+function cpKeepHtml(id, at) {
+  const pick = !(S.view === 'plan' && S.mode === 'custom');
+  return `${favButton(id, true)}<button type="button" class="btn-ghost" data-cp-add="${id}"${pick ? ` aria-expanded="false" aria-controls="cp-pick-${at}"` : ''}>+ Add to custom plan</button>`
+    + `<div class="cp-pick" id="cp-pick-${at}" role="group" aria-labelledby="cp-pick-${at}-h" hidden></div>`
+    + `<p class="cp-msg" role="status" hidden><span></span> <button type="button" class="link" data-cp-go="1">Open plan →</button></p>`;
+}
+/* пункты: свои планы с числом упражнений (и программой, если есть), последним — «+ Новый план». План, где упражнение уже
+   есть, и полный план не добавляют (aria-disabled: пункт остаётся в порядке фокуса и сообщает, почему) */
+function cpPickHtml(id, boxId) {
+  const rows = cpPickOrder().map(p => {
+    const n = p.items.length, has = p.items.some(it => it.id === id), full = !has && n >= CUSTOM_MAX;
+    const count = n ? n + ' ' + plural(n, 'exercise', 'exercises', 'exercises') : 'empty';
+    const state = has ? `<span class="cp-pick-st in">✓ already in plan</span>` : full ? `<span class="cp-pick-st">full</span>` : '';
+    return `<button type="button" class="place cp-pick-i" data-cp-to="${p.id}"${has || full ? ' aria-disabled="true"' : ''}><span class="cp-pick-n"><b>${esc(p.name)}</b><small>${p.group ? esc(p.group) + ' · ' : ''}${count}</small></span>${state}</button>`;
+  }).join('');
+  return `<p class="cp-pick-h" id="${boxId}-h">Choose a plan</p>${rows}<button type="button" class="place place-add cp-pick-i" data-cp-to="">+ New plan</button>`;
+}
 /* панель под карточкой своего плана: порядок, подходы, повторы, отдых */
 function customToolsHtml(it) {
   const c = customOf(), slot = it.slot, o = c.items[slot] || {}, r = it.rx, open = cpOpen.has(slot), n = c.items.length;
@@ -12293,6 +12355,16 @@ function savePlansFrom() {
 }
 
 /* ---------- события ---------- */
+/* раскрыть (open = true) или свернуть список планов под кнопкой «+ В свой план»; раскрытый — фокус на первом пункте */
+function cpPickToggle(btn, open = btn.getAttribute('aria-expanded') !== 'true') {
+  const box = btn.parentElement.querySelector('.cp-pick');
+  if (!box) return;
+  btn.setAttribute('aria-expanded', String(open));
+  if (!open) { box.hidden = true; box.replaceChildren(); return; }
+  const m = btn.parentElement.querySelector('.cp-msg'); if (m) m.hidden = true;
+  box.innerHTML = cpPickHtml(btn.dataset.cpAdd, box.id); box.hidden = false;
+  box.querySelector('.cp-pick-i').focus();
+}
 function customRerender(focusSel) {
   const y = window.scrollY; saveSettings(); renderSetup(); renderPlan(); window.scrollTo(0, y);
   if (focusSel) { const el = document.querySelector(focusSel); if (el) el.focus(); }
@@ -12302,10 +12374,15 @@ document.addEventListener('click', e => {
   if (!t) return;
   if (t.dataset.fav) { toggleFav(t.dataset.fav); return; }
   if (t.dataset.cpAdd) {
-    const id = t.dataset.cpAdd, ok = customAdd(id);
-    if (S.view === 'plan' && S.mode === 'custom') return customRerender(`[data-cp-tab="${cpTab || (S.fav.length ? 'fav' : 'groups')}"]`);
-    cpMsg = ok ? `Added to plan: ${customOf().name}` : customHas(id) ? `Already in plan: ${customOf().name}` : `A plan holds at most ${CUSTOM_MAX} exercises`;
-    for (const m of document.querySelectorAll('.cp-msg')) { m.hidden = false; m.querySelector('span').textContent = cpMsg; }
+    /* на странице своего плана — сразу в открытый план, как раньше; в атласе и разборе — список планов */
+    if (S.view === 'plan' && S.mode === 'custom') { customAdd(t.dataset.cpAdd); return customRerender(`[data-cp-tab="${cpTab || (S.fav.length ? 'fav' : 'groups')}"]`); }
+    return cpPickToggle(t);
+  }
+  if (t.dataset.cpTo !== undefined && t.closest('.cp-pick')) {
+    const box = t.closest('.cp-pick'), btn = box.parentElement.querySelector('[data-cp-add]'), r = customAddTo(btn.dataset.cpAdd, t.dataset.cpTo || null);
+    cpPickToggle(btn, false); btn.focus();
+    const m = box.parentElement.querySelector('.cp-msg');
+    if (r && m) { m.hidden = false; m.querySelector('span').textContent = customAddMsg(r); m.querySelector('[data-cp-go]').dataset.cpGo = r.plan.id; }
     return;
   }
   if (t.id === 'save-plan') {
@@ -12319,9 +12396,8 @@ document.addEventListener('click', e => {
   if (t.dataset.cpTab) { cpTab = t.dataset.cpTab; for (const b of document.querySelectorAll('[data-cp-tab]')) { const on = b === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); } $('#cp-list').innerHTML = customListHtml(); return; }
   if (t.dataset.cpPlan) { openCustom(t.dataset.cpPlan); return regen(); }
   if (t.dataset.cpNew !== undefined) {
-    const c = customOf(), id = newPlanId();
-    S.customs.push({id, name:'Plan ' + (S.customs.length + 1), items:[], ...(c.group ? {group:c.group} : {}), ...Object.fromEntries(PLAN_KEYS.map(k => [k, S[k]]))});
-    openCustom(id); regen();
+    const c = newCustomPlan();
+    S.customs.push(c); openCustom(c.id); regen();
     const inp = $('#cp-name'); if (inp) { inp.focus(); inp.select(); }
     return;
   }
@@ -12371,6 +12447,14 @@ document.addEventListener('change', e => {
     customSet(s, 'tempo', v || null); return customRerender(`[data-cp-tempo="${s}"]`);
   }
   if (t.dataset.cpNote !== undefined) { const s = +t.dataset.cpNote; customSet(s, 'note', cleanText(t.value, ITEM_NOTE, true) || null); return customRerender(`[data-cp-note="${s}"]`); }
+});
+/* Escape в списке планов (или на его кнопке) сворачивает список и возвращает фокус на кнопку; разбор движения при этом
+   не закрывается — preventDefault отменяет у окна запрос на закрытие */
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || !e.target.closest) return;
+  const at = e.target.closest('.cp-pick, [data-cp-add]'), btn = at && at.parentElement.querySelector('[data-cp-add][aria-expanded="true"]');
+  if (!btn) return;
+  e.preventDefault(); e.stopPropagation(); cpPickToggle(btn, false); btn.focus();
 });
 
 /* ===================== ФАЙЛЫ ПЛАНОВ =====================
@@ -13533,7 +13617,7 @@ function selectMotion(it, clock=0) {
   detailMotion={it,f:null,clock,paused:true,durations:motionDurations(it)};
   $('#mv-title').textContent=it.name;
   $('#mv-exercise').value=it.ex.id;
-  $('#mv-tools').innerHTML=`${favButton(it.ex.id,true)}<button type="button" class="btn-ghost" data-cp-add="${it.ex.id}">+ Add to custom plan</button><p class="cp-msg" hidden><span></span> <button type="button" class="link" data-cp-go="1">Open plan →</button></p>`;
+  $('#mv-tools').innerHTML=cpKeepHtml(it.ex.id,'mv');
   $('#mv-view').textContent=CAMERA3[motionCamera(it.ex)].label;
   $('#mv-speed').value=String(motionPrefs.speed);$('#mv-joints').checked=!!motionPrefs.joints;$('#mv-trace').checked=!!motionPrefs.trace;$('#mv-vectors').checked=!!motionPrefs.vectors;
   $('#mv-tempo').textContent=it.ex.anim.hold?'Hold the position and breathe steadily.':it.ex.anim.timing||it.ex.g==='cardio'||it.ex.kind?'The rhythm is shown schematically. Slowing it down helps you study the movement.':it.rx.static?`Static-dynamic: tempo ${it.rx.tempo} with no pauses; the working part of the range is shown — no lockout at the top and no relaxing at the bottom.`:`Prescribed tempo: ${it.rx.tempo}. Playback speed doesn't change the prescription.`;
@@ -15229,10 +15313,8 @@ function atlasRow(r, m, sel) {
   return `<li class="at-row${sel ? ' on' : ''}">${favButton(ex.id)}<button type="button" class="at-ex" data-atlas-ex="${ex.id}" aria-pressed="${sel}"><span class="at-sw" style="background:${muscleColor(r.v)}" title="${MUSCLE_BANDS[muscleBand(r.v)]}"></span><span class="at-n"><b>${esc(name)}</b><small>${esc(equipLine(ex, E))} · ${esc(how)}${ex.lvl >= 3 ? ' · advanced' : ''}${unfitHtml(ex)}</small></span></button>`
     + `<button type="button" class="at-open" data-atlas-open="${ex.id}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Break down the movement: ${esc(name)}">↗</button></li>`;
 }
-/* избранное и свой план для упражнения в превью */
-function atlasKeepHtml(id) {
-  return `${favButton(id, true)}<button type="button" class="btn-ghost" data-cp-add="${id}">+ Add to custom plan</button><p class="cp-msg" hidden><span></span> <button type="button" class="link" data-cp-go="1">Open plan →</button></p>`;
-}
+/* избранное и свой план для упражнения в превью (выбор плана — 11d-custom.js) */
+function atlasKeepHtml(id) { return cpKeepHtml(id, 'at'); }
 function atlasList(rows, m, sel, limit) {
   return `<ol class="at-list">${rows.map((r, i) => atlasRow(r, m, r.ex.id === sel).replace('<li class="at-row', i >= limit ? '<li hidden class="at-more at-row' : '<li class="at-row')).join('')}</ol>`
     + (rows.length > limit ? `<button type="button" class="at-show" data-atlas-show="1">Show all: ${rows.length}</button>` : '');
@@ -15369,8 +15451,9 @@ const galleryThumbs = new Map();
 let galleryIO = null, galleryQueue = [], galleryRaf = 0;
 
 function galleryList(kind = gallery.kind) {
-  const E = effEquip(S.equip), q = gallery.q.trim().toLowerCase();
-  return EX.filter(ex => (kind === 'all' || workKind(ex) === kind) && (!gallery.here || available(ex, E)) && (!q || ex.name.toLowerCase().includes(q)));
+  /* поиск: «ё» и «е» равны, окончания слов не важны (searchMatcher, 11-planner.js) */
+  const E = effEquip(S.equip), match = searchMatcher(gallery.q);
+  return EX.filter(ex => (kind === 'all' || workKind(ex) === kind) && (!gallery.here || available(ex, E)) && match(ex.name));
 }
 function galleryTile(ex, E, all) {
   const here = available(ex, E), name = exName(ex, here ? E : all), fav = isFav(ex.id);
@@ -17667,4 +17750,4 @@ logInit();
 plural = (n, a, b, c) => n === 1 ? a : c;
 DEC = '.';
 
-window.PODHOD_VERSION='4.93.0';window.PODHOD_BUILD='4.93.0-8935ccce80c2';window.PODHOD_RENDER={"skin":"31c4707ea0","skeleton":"f4e7c4b726","anatomy":"48636840a9"};window.PODHOD_LANG='en';
+window.PODHOD_VERSION='4.94.0';window.PODHOD_BUILD='4.94.0-d12dfe7f3eb8';window.PODHOD_RENDER={"skin":"31c4707ea0","skeleton":"f4e7c4b726","anatomy":"48636840a9"};window.PODHOD_LANG='en';
