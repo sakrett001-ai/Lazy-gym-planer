@@ -11,7 +11,7 @@ const sha='a'.repeat(40);
 const html=lang=>`<!doctype html><html><body><script>window.PODHOD_VERSION='4.7.0';window.PODHOD_LANG='${lang}';</script></body></html>`;
 const document=lang=>({path:`floot/releases/${sha}/planner-${lang}.html`,bytes:Buffer.byteLength(html(lang)),sha256:createHash('sha256').update(html(lang)).digest('hex')});
 function fixture(change=m=>m,changeHtml=h=>h){
-  const manifest=change({schemaVersion:1,repository:'sakrett001-ai/Lazy-gym-planer',sourceBranch:'main',sourceCommit:sha,version:'4.7.0',checks:'passed',builtAt:'2026-10-09T00:00:00Z',documents:{ru:document('ru'),en:document('en')}});
+  const manifest=change({schemaVersion:1,repository:'sakrett001-ai/Lazy-gym-planner',sourceBranch:'main',sourceCommit:sha,version:'4.7.0',checks:'passed',builtAt:'2026-10-09T00:00:00Z',documents:{ru:document('ru'),en:document('en')}});
   const urls=[];
   const fetcher=async url=>{
     urls.push(url);
@@ -24,7 +24,7 @@ test('Floot loads both languages from the immutable source commit and checks the
     const {fetcher,urls}=fixture();
     const result=await plannerRelease.read(lang,fetcher);
     assert.equal(result.html,html(lang));assert.equal(result.sourceCommit,sha);
-    assert.equal(urls[1],`https://raw.githubusercontent.com/sakrett001-ai/Lazy-gym-planer/gh-pages/floot/releases/${sha}/planner-${lang}.html`);
+    assert.equal(urls[1],`https://raw.githubusercontent.com/sakrett001-ai/Lazy-gym-planner/gh-pages/floot/releases/${sha}/planner-${lang}.html`);
   }
 });
 test('Floot refuses a document altered after the manifest was published',async()=>{
@@ -34,19 +34,26 @@ test('Floot refuses a document altered after the manifest was published',async()
 test('Floot refuses unapproved builds and other repositories before downloading code',async()=>{
   for(const change of [m=>({...m,checks:'failed'}),m=>({...m,repository:'someone/else'}),m=>({...m,sourceBranch:'feat/unreviewed'})]){
     const {fetcher,urls}=fixture(change);
-    await assert.rejects(plannerRelease.read('ru',fetcher),/подтвердить/);assert.equal(urls.length,1);
+    await assert.rejects(plannerRelease.read('ru',fetcher),/подтвердить/);assert.ok(urls.length<=2&&urls.every(u=>u.includes('floot-release.json')));
   }
 });
 test('Floot refuses external paths, traversal and mixed source revisions',async()=>{
   for(const unsafe of ['https://example.invalid/attack.html','../attack.html',`floot/releases/${'b'.repeat(40)}/planner-ru.html`]){
     const {fetcher,urls}=fixture(m=>({...m,documents:{...m.documents,ru:{...m.documents.ru,path:unsafe}}}));
-    await assert.rejects(plannerRelease.read('ru',fetcher),/описание/);assert.equal(urls.length,1);
+    await assert.rejects(plannerRelease.read('ru',fetcher),/описание/);assert.ok(urls.length<=2&&urls.every(u=>u.includes('floot-release.json')));
   }
 });
 test('Floot refuses oversized builds and an invalid language',async()=>{
   const {fetcher}=fixture(m=>({...m,documents:{...m.documents,ru:{...m.documents.ru,bytes:5_000_000}}}));
   await assert.rejects(plannerRelease.read('ru',fetcher),/описание/);
   await assert.rejects(plannerRelease.read('../en',fetcher),/язык/);
+});
+test('Floot falls back to the old repository name while the rename is in progress',async()=>{
+  const {fetcher:inner}=fixture(m=>({...m,repository:'sakrett001-ai/Lazy-gym-planer'})),urls=[];
+  const fetcher=async url=>{urls.push(url);return url.includes('/Lazy-gym-planner/')?new Response('Not found',{status:404}):inner(url);};
+  const result=await plannerRelease.read('ru',fetcher);
+  assert.equal(result.html,html('ru'));
+  assert.ok(urls[0].includes('/Lazy-gym-planner/')&&urls.slice(1).every(u=>u.includes('/Lazy-gym-planer/')));
 });
 test('Floot reports an upstream outage instead of executing an error response',async()=>{
   await assert.rejects(plannerRelease.read('ru',async()=>new Response('Not found',{status:404})),/временно недоступен/);

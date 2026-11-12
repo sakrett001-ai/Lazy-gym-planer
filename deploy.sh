@@ -38,4 +38,4 @@ fi
 git -c user.name="podhod-deploy" -c user.email="deploy@podhod" commit -q -m "$deploy_message"
 # Обычный fast-forward push отклоняет конкурентную публикацию.
 git push origin HEAD:refs/heads/gh-pages
-echo "Опубликовано: https://sakrett001-ai.github.io/Lazy-gym-planer/"
+echo "Опубликовано: https://sakrett001-ai.github.io/Lazy-gym-planner/"
