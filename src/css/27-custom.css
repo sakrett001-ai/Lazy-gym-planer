@@ -22,6 +22,18 @@ button.link { border:0; background:none; padding:0; color:var(--accent); font:in
 .at-keep { margin:2px 0 10px; }
 .mv-tools { margin:8px 0 0; }
 .cp-msg { flex-basis:100%; margin:0; font-size:13px; color:var(--good); }
+/* «+ В свой план»: список своих планов прямо под кнопкой — чипы планов из параметров, по одному в строке, не ниже 44 px */
+.cp-pick { flex-basis:100%; display:grid; gap:6px; max-width:440px; margin:0 0 2px; }
+.cp-pick-h { margin:0; font-size:12.5px; color:var(--muted); }
+.cp-pick .place { display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:44px; width:100%; color:var(--ink); cursor:pointer; }
+@media (hover:hover) { .cp-pick .place:not([aria-disabled="true"]):hover { border-color:var(--accent); } }
+.cp-pick .place[aria-disabled="true"] { background:var(--surface-2); border-color:var(--line); cursor:default; }
+.cp-pick .place[aria-disabled="true"] b { color:var(--muted); }
+.cp-pick .place-add { justify-content:flex-start; color:var(--muted); }
+.cp-pick-n { display:grid; gap:1px; min-width:0; }
+.cp-pick-n b { overflow-wrap:anywhere; }
+.cp-pick-st { flex:none; font-size:12.5px; font-weight:600; color:var(--muted); white-space:nowrap; }
+.cp-pick-st.in { color:var(--good); }
 .at-favs { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; margin:6px 0 0; font-size:14px; color:var(--muted); }
 .at-favs b { color:var(--ink); }
 

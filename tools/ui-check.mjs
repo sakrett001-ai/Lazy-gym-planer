@@ -120,6 +120,14 @@ await page.close();
   await g.click('#mv-ghere');
   await g.fill('#mv-gq', 'тяга верхнего');
   check(await g.evaluate(() => { const t = [...document.querySelectorAll('.mv-tile')].map(b => b.dataset.galleryOpen); return t.includes('latpull') && t.every(id => EXI[id].name.toLowerCase().includes('тяга верхнего')) && document.activeElement.id === 'mv-gq'; }), 'поиск по названию, курсор остаётся в поле');
+  /* «ё» и «е» равны, окончания не важны: «отжимание» находит «Отжимания…», «жим лежа» — «Жим штанги лёжа» */
+  const tiles = () => g.evaluate(() => [...document.querySelectorAll('.mv-tile')].map(b => b.dataset.galleryOpen));
+  await g.fill('#mv-gq', 'отжимание'); let found = await tiles();
+  check(found.includes('pushup') && found.includes('dip') && await g.evaluate(ids => ids.every(id => /отжимани/i.test(EXI[id].name)), found), '«отжимание» находит «Отжимания от пола», «Отжимания на брусьях» — и только отжимания');
+  await g.fill('#mv-gq', 'жим лежа'); found = await tiles();
+  await g.fill('#mv-gq', 'ЖИМ ЛЁЖА');
+  check(found.includes('bbbench') && JSON.stringify(found) === JSON.stringify(await tiles()), '«жим лежа» и «ЖИМ ЛЁЖА» находят одно и то же, в том числе «Жим штанги лёжа»');
+  await g.fill('#mv-gq', 'тяга верхнего');
   await g.click('[data-gallery-open="latpull"]'); await g.waitForTimeout(100);
   check(await shown(g, '#mv-detail') && !(await shown(g, '#mv-gallery')) && await g.evaluate(() => $('#mv-exercise').value === 'latpull' && detailMotion?.it.ex.id === 'latpull'), 'миниатюра открывает разбор этого упражнения');
   await g.click('#mv-back'); await g.waitForTimeout(100);
@@ -987,6 +995,75 @@ await page.close();
   await L.close();
 }
 
+/* «+ В свой план» (телефон): в атласе мышц и в разборе кнопка раскрывает под собой список своих планов и «+ Новый план».
+   Выбор добавляет в выбранный план и не открывает его; повторное нажатие и Esc сворачивают список, фокус — на кнопку;
+   последний выбранный — первым. На странице своего плана кнопка, как раньше, добавляет в открытый план. */
+{
+  const k = await open(390, 844), add = '#at-keep [data-cp-add]', box = '#cp-pick-at';
+  await k.evaluate(() => {
+    Object.assign(S, { view: 'atlas', mode: 'single', atlasM: 'chest', cpLast: null, custom: 'up',
+      customs: [{ id: 'up', name: 'Верх', items: [{ id: 'bbbench' }] }, { id: 'low', name: 'Низ', group: 'Сила', items: [{ id: 'squat' }] }, { id: 'band', name: 'Дома с эспандером', items: [] }] });
+    ensureCustoms(S); atlasEx = 'bbbench'; regen();
+  });
+  const st = (sel = box, btn = add) => k.evaluate(([sel, btn]) => {
+    const b = document.querySelector(btn), x = document.querySelector(sel), m = b.parentElement.querySelector('.cp-msg'), r = b.getBoundingClientRect();
+    const items = [...x.querySelectorAll('.cp-pick-i')];
+    return { exp: b.getAttribute('aria-expanded'), open: !x.hidden && x.getClientRects().length > 0, label: x.getAttribute('role') === 'group' && document.getElementById(x.getAttribute('aria-labelledby'))?.textContent,
+      names: items.map(i => i.querySelector('b')?.textContent || i.textContent), first: items[0]?.dataset.cpTo, firstState: items[0]?.querySelector('.cp-pick-st')?.textContent || '', firstOff: items[0]?.getAttribute('aria-disabled'),
+      minH: Math.min(...items.map(i => i.getBoundingClientRect().height)), below: items.every(i => i.getBoundingClientRect().top >= r.bottom - 1), inside: items.every(i => i.getBoundingClientRect().right <= innerWidth && i.getBoundingClientRect().left >= 0),
+      focus: document.activeElement === b ? 'button' : document.activeElement?.dataset.cpTo ?? document.activeElement?.tagName,
+      msg: m && !m.hidden ? m.textContent.trim() : '', go: m?.querySelector('[data-cp-go]').dataset.cpGo, where: [S.custom, S.mode, S.view].join() };
+  }, [sel, btn]);
+  let s = await st();
+  check(s.exp === 'false' && !s.open, 'атлас: список планов свёрнут, у кнопки aria-expanded="false"');
+  await k.click(add); s = await st();
+  check(s.exp === 'true' && s.open && s.label === 'В какой план добавить' && s.names.join('|') === 'Верх|Низ|Дома с эспандером|+ Новый план' && s.focus === 'up',
+    `нажатие раскрывает под кнопкой список: планы и «+ Новый план» последним, первым — открытый план, фокус на нём (${JSON.stringify(s)})`);
+  check(s.firstOff === 'true' && s.firstState === '✓ уже в плане', 'план, где упражнение уже есть, помечен «✓ уже в плане»');
+  check(s.minH >= 44 && s.below && s.inside, `пункты не ниже 44 px, под кнопкой, в пределах экрана (${s.minH})`);
+  await k.keyboard.press('Escape'); s = await st();
+  check(s.exp === 'false' && !s.open && s.focus === 'button', 'Esc сворачивает список, фокус возвращается на кнопку');
+  await k.click(add); await k.click(add); s = await st();
+  check(s.exp === 'false' && !s.open, 'повторное нажатие на кнопку сворачивает список');
+  await k.click(add); await k.click(`${box} [data-cp-to="up"]`, { force: true }); s = await st(); /* aria-disabled: Playwright без force не нажимает */
+  check(!s.open && s.msg === 'Уже в плане: Верх. Открыть план →' && await k.evaluate(() => customOf().items.length === 1), '«✓ уже в плане» не добавляет повторно и сообщает об этом');
+  await k.click(add); await k.click(`${box} [data-cp-to="low"]`); s = await st();
+  check(!s.open && s.exp === 'false' && s.focus === 'button' && s.msg === 'Добавлено в план: Низ. Открыть план →' && s.go === 'low' && s.where === 'up,single,atlas'
+    && await k.evaluate(() => S.customs.find(c => c.id === 'low').items.map(i => i.id).join() === 'squat,bbbench' && S.cpLast === 'low' && JSON.parse(localStorage.getItem('podhod.settings.v1')).cpLast === 'low'),
+    `выбор второго плана: упражнение в нём, открытый план, режим и вид прежние, сообщение со ссылкой на этот план (${JSON.stringify(s)})`);
+  await k.click(add); s = await st();
+  check(s.first === 'low' && s.firstState === '✓ уже в плане' && !s.msg, 'последний выбранный план — первым; прежнее сообщение убрано');
+  await k.click(`${box} [data-cp-to=""]`); s = await st();
+  const made = await k.evaluate(() => { const c = S.customs.at(-1); return { n: S.customs.length, name: c.name, items: c.items.map(i => i.id).join(), id: c.id, last: S.cpLast }; });
+  check(made.n === 4 && made.name === 'План 4' && made.items === 'bbbench' && made.last === made.id && s.go === made.id && s.where === 'up,single,atlas' && s.msg === 'Создан план «План 4», упражнение добавлено. Открыть план →',
+    `«+ Новый план» создаёт «План 4» с упражнением и не открывает его (${JSON.stringify({ ...made, ...s })})`);
+  await k.click('#at-keep [data-cp-go]');
+  check(await k.evaluate(id => S.custom === id && S.mode === 'custom' && S.view === 'plan' && document.querySelector('.p-title')?.textContent === 'План 4', made.id), '«Открыть план →» открывает именно этот план');
+  /* разбор движения поверх атласа: тот же список, Esc сворачивает его, а разбор остаётся открытым */
+  await k.evaluate(() => { S.custom = 'up'; S.mode = 'single'; switchModeSettings('custom'); S.view = 'atlas'; regen(); openMotionItem(previewItem('dbcurl')); });
+  const mv = ['#cp-pick-mv', '#mv-tools [data-cp-add]'];
+  await k.click(mv[1]); s = await st(...mv);
+  check(s.open && s.exp === 'true' && s.first === made.id && s.focus === made.id && s.minH >= 44 && s.inside, `разбор: список планов под кнопкой, первым — последний выбранный (${JSON.stringify(s)})`);
+  await k.keyboard.press('Escape'); s = await st(...mv);
+  check(!s.open && s.focus === 'button' && await k.evaluate(() => $('#motion-view').open), 'разбор: Esc сворачивает список, а не закрывает разбор');
+  await k.click(mv[1]); await k.click(`${mv[0]} [data-cp-to="band"]`); s = await st(...mv);
+  check(s.msg === 'Добавлено в план: Дома с эспандером. Открыть план →' && s.go === 'band' && s.where === 'up,single,atlas' && await k.evaluate(() => $('#motion-view').open && S.customs.find(c => c.id === 'band').items[0]?.id === 'dbcurl'),
+    `разбор: выбор плана добавляет в него, разбор открыт, план не открылся (${JSON.stringify(s)})`);
+  /* полный план — «полон», без добавления */
+  await k.evaluate(() => { const c = S.customs.find(c => c.id === 'low'); c.items = EX.filter(ex => ex.id !== 'dbcurl').slice(0, CUSTOM_MAX).map(ex => ({ id: ex.id })); });
+  await k.click(mv[1]);
+  check(await k.evaluate(() => { const b = document.querySelector('#cp-pick-mv [data-cp-to="low"]'); return b.getAttribute('aria-disabled') === 'true' && b.querySelector('.cp-pick-st').textContent === 'полон'; }), 'полный план помечен «полон»');
+  await k.click(`${mv[0]} [data-cp-to="low"]`, { force: true }); s = await st(...mv);
+  check(/^План «Низ» полон/.test(s.msg) && await k.evaluate(() => S.customs.find(c => c.id === 'low').items.length === CUSTOM_MAX), 'полный план не принимает упражнение');
+  await k.evaluate(() => closeMotion());
+  /* страница своего плана: как раньше — сразу в открытый план, без списка */
+  await k.evaluate(() => { openCustom('band'); regen(); openMotionItem(previewItem('legext')); });
+  check(await k.evaluate(() => !document.querySelector('#mv-tools [data-cp-add]').hasAttribute('aria-expanded')), 'на странице своего плана у кнопки нет списка');
+  await k.click('#mv-tools [data-cp-add]');
+  check(await k.evaluate(() => customOf().id === 'band' && customOf().items.some(i => i.id === 'legext') && document.querySelector('#cp-pick-mv')?.hidden !== false), 'на странице своего плана кнопка добавляет в открытый план, как раньше');
+  await k.close();
+}
+
 /* компьютер: параметры в боковой колонке не сворачиваются */
 const desk = await open(1280);
 await desk.evaluate(() => { S.fold.setup = true; regen(); });
@@ -996,4 +1073,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание блоков, хваты, бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа (в «Анатомии» и «Манекене» — кадры из общего рендерера, кеш между сеансами, без WebGL — SVG), виды фигуры «Анатомия», «Скелет» и «Манекен» (кожа Anny в карточках и витрине, без её данных — SVG), анатомия в карточках плана и на экране тренировки (откат на манекен, без WebGL — SVG), свободная камера сцены (поворот на воспроизведении, колесо, кнопки ракурсов, двойной щелчок, клавиатура, касания на телефоне), первый экран и разбор на телефоне, карточка, число подходов («−» с подтверждением в строке, «+»), журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования, панель замера скорости ?perf работают на телефоне и компьютере.');
+console.log('Интерфейс: сворачивание блоков, хваты, «+ В свой план» с выбором плана, поиск витрины (ё = е), бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа (в «Анатомии» и «Манекене» — кадры из общего рендерера, кеш между сеансами, без WebGL — SVG), виды фигуры «Анатомия», «Скелет» и «Манекен» (кожа Anny в карточках и витрине, без её данных — SVG), анатомия в карточках плана и на экране тренировки (откат на манекен, без WebGL — SVG), свободная камера сцены (поворот на воспроизведении, колесо, кнопки ракурсов, двойной щелчок, клавиатура, касания на телефоне), первый экран и разбор на телефоне, карточка, число подходов («−» с подтверждением в строке, «+»), журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования, панель замера скорости ?perf работают на телефоне и компьютере.');

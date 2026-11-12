@@ -412,7 +412,7 @@ function selectMotion(it, clock=0) {
   detailMotion={it,f:null,clock,paused:true,durations:motionDurations(it)};
   $('#mv-title').textContent=it.name;
   $('#mv-exercise').value=it.ex.id;
-  $('#mv-tools').innerHTML=`${favButton(it.ex.id,true)}<button type="button" class="btn-ghost" data-cp-add="${it.ex.id}">+ В свой план</button><p class="cp-msg" hidden><span></span> <button type="button" class="link" data-cp-go="1">Открыть план →</button></p>`;
+  $('#mv-tools').innerHTML=cpKeepHtml(it.ex.id,'mv');
   $('#mv-view').textContent=CAMERA3[motionCamera(it.ex)].label;
   $('#mv-speed').value=String(motionPrefs.speed);$('#mv-joints').checked=!!motionPrefs.joints;$('#mv-trace').checked=!!motionPrefs.trace;$('#mv-vectors').checked=!!motionPrefs.vectors;
   $('#mv-tempo').textContent=it.ex.anim.hold?'Удерживайте положение и дышите ровно.':it.ex.anim.timing||it.ex.g==='cardio'||it.ex.kind?'Ритм показан схематично. Замедление помогает разобрать движение.':it.rx.static?`Статодинамика: темп ${it.rx.tempo} без пауз, показана рабочая часть амплитуды — без выпрямления до конца и без расслабления внизу.`:`Темп задания: ${it.rx.tempo}. Скорость просмотра не меняет задание.`;

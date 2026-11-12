@@ -157,6 +157,17 @@ for (const place of ['gym', 'home', 'street']) for (const m of await run('ATLAS_
   await scan(`atlas ${place}/${m}`);
 }
 await run(`(()=>{S.place='gym';ensurePlaces(S);})()`);
+/* «+ В свой план» с выбором плана: список, «добавлено», «уже в плане», новый план, полный план — в атласе и в разборе */
+const pick = (box, id) => run(`(()=>{const b=document.querySelector('${box}').parentElement.querySelector('[data-cp-add]');if(b.getAttribute('aria-expanded')!=='true')b.click();document.querySelector('${box} [data-cp-to="${id}"]').click();})()`);
+await run(`(()=>{S.customs.push({id:'pk2',name:'Lower',group:'Block A',items:[]});S.atlasM='chest';atlasEx=null;renderAtlas();document.querySelector('#at-keep [data-cp-add]').click();})()`);
+await scan('atlas plan picker');
+await pick('#cp-pick-at', 'pk2'); await scan('atlas picker: added');
+await pick('#cp-pick-at', 'pk2'); await scan('atlas picker: already in plan');
+await pick('#cp-pick-at', ''); await scan('atlas picker: new plan');
+await run(`(()=>{S.customs.find(p=>p.id==='pk2').items=EX.slice(0,CUSTOM_MAX).map(e=>({id:e.id}));openMotionItem(previewItem(EX.at(-1).id));document.querySelector('#mv-tools [data-cp-add]').click();})()`);
+await scan('motion plan picker, full plan');
+await pick('#cp-pick-mv', 'pk2'); await scan('motion picker: plan is full');
+await run(`(()=>{closeMotion();S.customs=S.customs.slice(0,1);S.custom=S.customs[0].id;S.cpLast=null;})()`);
 /* 4. журнал с записями: вес, вес тела, время, статодинамика, замеры */
 step('4. журнал');
 await run(`(()=>{const d=n=>{const x=new Date();x.setDate(x.getDate()-n);return x.toISOString().slice(0,10);};
