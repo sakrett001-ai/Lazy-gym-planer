@@ -292,8 +292,10 @@ function logRows(it) {
   const prevSets = sg.prev ? sg.prev.s.filter(Boolean) : [];
   const [lo, hi] = parseRange(it.rx.reps);
   const SIDE = {l:'левая', r:'правая'};
-  /* поле веса и повторов; side — 'l' | 'r' в режиме Л/П */
-  const fields = (k, side, val, phKg, phR) => `${lt === 'none' ? '' : `<input class="lt-in" id="kg-${ex.id}-${k}${side ? '-' + side : ''}" data-f="kg"${side ? ` data-side="${side}"` : ''} type="text" inputmode="decimal" autocomplete="off" aria-label="${wl.full}${side ? ', ' + SIDE[side] : ''}, подход ${k + 1}" placeholder="${phKg}" value="${val && val[0] != null ? fmtKg(val[0]) : ''}">`}
+  /* поле веса и повторов; side — 'l' | 'r' в режиме Л/П. Подсказка веса — вес последнего записанного сегодня подхода
+     выше (carriedKg), иначе по плану или прогрессии; data-ph — она же без переноса (к ней поле возвращается, когда
+     вписанный выше вес стёрт — carryKgBox) */
+  const fields = (k, side, val, phKg, phR) => `${lt === 'none' ? '' : `<input class="lt-in" id="kg-${ex.id}-${k}${side ? '-' + side : ''}" data-f="kg"${side ? ` data-side="${side}"` : ''} type="text" inputmode="decimal" autocomplete="off" aria-label="${wl.full}${side ? ', ' + SIDE[side] : ''}, подход ${k + 1}" placeholder="${carryPh(carriedKg(it, tset, k, side), phKg)}" data-ph="${phKg}" value="${val && val[0] != null ? fmtKg(val[0]) : ''}">`}
       <input class="lt-in" id="rp-${ex.id}-${k}${side ? '-' + side : ''}" data-f="reps"${side ? ` data-side="${side}"` : ''} type="text" inputmode="numeric" autocomplete="off" aria-label="${repLabel(ex)}${side ? ', ' + SIDE[side] : ''}, подход ${k + 1}" placeholder="${phR}" value="${val ? val[1] : ''}">`;
   const prevText = p => (p[0] ? fmtKg(p[0]) + ' × ' : '') + p[1];
   const sideTag = side => `<b class="lt-sd" aria-hidden="true">${side === 'l' ? 'Л' : 'П'}</b><span class="vh">${side === 'l' ? 'Левая:' : 'Правая:'}</span>`;
@@ -342,6 +344,47 @@ function firstKg(tset, sg, it) {
   if (v) return v[0];
   const pk = planKg(it.rx, 0);
   return pk != null ? pk : sg.kg;
+}
+
+/* ---------- вес на следующие подходы ---------- */
+/* Вписали вес в подход или отметили его — следующие неотмеченные подходы с пустым полем берут этот вес подсказкой,
+   и отметка без ввода записывает его; другой вес вписывается как раньше. Переносится вес ближайшего подхода выше,
+   у Л/П — по своей стороне. Повторы не переносятся (у них подсказка из плана). Свой вес подхода в плане (пирамида,
+   сброс) не перетирается: плановые веса обоих подходов заданы и различаются — переноса нет. То же правило — в режиме
+   тренировки (workoutFill в 14-workout-mode.js). */
+function kgCarries(rx, i, k) { const a = planKg(rx, i), b = planKg(rx, k); return a == null || b == null || a === b; }
+/* вес из последнего записанного сегодня подхода до k (tset — подходы дня; side — 'l' | 'r' в режиме Л/П) или null:
+   выше ничего не записано, у записанного нет веса или план даёт подходу k свой вес */
+function carriedKg(it, tset, k, side) {
+  for (let i = Math.min(k, tset.length) - 1; i >= 0; i--) {
+    const v = tset[i]; if (!v) continue;
+    const sd = side ? setSides(v, it.ex) : null, kg = sd ? sd[side][0] : v[0];
+    return kg != null && kg >= 0 && kgCarries(it.rx, i, k) ? kg : null;
+  }
+  return null;
+}
+const carryPh = (kg, ph) => kg != null ? fmtKg(kg) : ph;
+/* подсказки веса в таблице карточки по введённому сейчас: неотмеченная строка с пустым полем берёт вес ближайшей строки
+   выше, где вес вписан или подход отмечен (отмеченный без веса — переноса нет), иначе прежнюю подсказку (data-ph).
+   Вписанное и отмеченное не меняется */
+function carryKgBox(box) {
+  const it = box && plan && plan.items && plan.items.find(x => x.ex.id === box.dataset.log); if (!it) return;
+  const rows = [...box.querySelectorAll('.lt-r')];
+  for (const side of rows.some(r => r.classList.contains('lt-lr')) ? ['l', 'r'] : [null]) {
+    let src = null;
+    for (const row of rows) {
+      const {kgIn} = rowFields(row, side); if (!kgIn) continue;
+      const k = +row.dataset.k;
+      if (row.classList.contains('done') || kgIn.value.trim() !== '') { const v = parseNum(kgIn.value); src = {k, kg:v != null && v >= 0 ? v : null}; continue; }
+      const ph = carryPh(src && kgCarries(it.rx, src.k, k) ? src.kg : null, kgIn.dataset.ph ?? kgIn.placeholder);
+      if (kgIn.placeholder !== ph) kgIn.placeholder = ph;
+    }
+  }
+}
+/* ввод веса в таблице: подсказки следующих подходов, затем «×2 = …» — по вписанному или перенесённому весу */
+function logKgInput(inp) {
+  const box = inp.closest('.c-log'); if (!box) return;
+  carryKgBox(box); updatePairTotal(inp);
 }
 function logBlock(it) { return `<div class="c-log" data-log="${it.ex.id}">${logRows(it).html}</div>`; }
 
@@ -652,6 +695,7 @@ function tickSet(btn) {
     s.s[k] = null; cleanToday(id);
     row.classList.remove('done'); btn.setAttribute('aria-pressed', 'false');
     for (const f of F) { if (f.kgIn) f.kgIn.value = ''; f.rIn.value = ''; }
+    carryKgBox(row.closest('.c-log'));
     logTouch(id); refreshHist(id); return;
   }
   const got = F.map(f => readFields(f, lt)), bad = got.find(g => g.bad);
@@ -667,6 +711,7 @@ function tickSet(btn) {
   markImpl(s, it);
   F.forEach((f, i) => { if (f.kgIn) f.kgIn.value = got[i].kg != null ? fmtKg(got[i].kg) : ''; f.rIn.value = got[i].reps; });
   row.classList.add('done'); btn.setAttribute('aria-pressed', 'true');
+  carryKgBox(row.closest('.c-log'));
   logTouch(id); refreshHist(id);
   const total = it.rx.circ ? 0 : it.rx.sets;
   const doneN = s.s.filter(Boolean).length;
@@ -705,6 +750,7 @@ function renderLogBox(box, it, drop = -1) {
     if (!inp || inp.closest('.lt-r').classList.contains('done')) continue;
     inp.value = v; if (!kg && inp.dataset.f === 'kg') kg = inp;
   }
+  carryKgBox(box);
   if (kg) updatePairTotal(kg);
   const card = box.closest('.card'); if (card) syncCardLog(card);
 }
@@ -835,7 +881,7 @@ document.addEventListener('change', e => {
   if (e.target.id === 'imp-file' && e.target.files && e.target.files[0]) { importLog(e.target.files[0]); e.target.value = ''; }
   else if (e.target.classList && e.target.classList.contains('lt-in')) editSet(e.target);
 });
-document.addEventListener('input', e => { if (e.target.classList && e.target.classList.contains('lt-in') && e.target.dataset.f === 'kg' && e.target.closest('.c-log')) updatePairTotal(e.target); });
+document.addEventListener('input', e => { if (e.target.classList && e.target.classList.contains('lt-in') && e.target.dataset.f === 'kg') logKgInput(e.target); });
 document.addEventListener('keydown', e => {
   const box = e.key === 'Escape' && e.target.closest && e.target.closest('.c-log');
   if (box && box.querySelector('.lt-cf')) { e.preventDefault(); keepSet(box.dataset.log, box); return; }
