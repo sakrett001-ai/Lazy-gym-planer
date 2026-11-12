@@ -111,16 +111,16 @@ function workoutFill(s,sg,prev){
   $('#wv-lr-fields').classList.toggle('wv-lr-nokg',lt==='none');$('#wv-lr-kg-cap').textContent=wl?wl.full:'Вес, кг';$('#wv-lr-rep-cap').textContent=repLabel(ex);
   for(const id of ['wv-reps','wv-reps-l','wv-reps-r'])$('#'+id).setAttribute('inputmode',ex.kind==='dist'?'decimal':'numeric');
   const draft=workout.drafts[workoutDraftKey(s)],today=todaySession(ex.id,false)?.s||[];
-  /* вес: записанный сегодня в подходе выше (carriedKg — то же правило, что в карточке: свой вес подхода в плане не
-     перетирается), иначе по плану, иначе из прошлой тренировки */
-  const planned=planKg(it.rx,s.k),kgText=v=>v!=null?fmtKg(v):'',carried=carriedKg(it,today,s.k);
+  /* вес: записанный сегодня в подходе выше (carriedKg — то же правило, что в карточке: свой вес подхода по плану или
+     по пирамиде прошлого раза не перетирается), иначе свой вес подхода, иначе из прошлой тренировки */
+  const own=ownKgs(it,sg.prev?sg.prev.s.filter(Boolean):[]),planned=own(s.k),kgText=v=>v!=null?fmtKg(v):'',carried=carriedKg(it,today,s.k,null,own);
   $('#wv-kg').value=draft?draft.kg:stored?kgText(stored[0]):carried!=null?fmtKg(carried):planned!=null?fmtKg(planned):prev?.[0]!=null?fmtKg(prev[0]):'';
   $('#wv-reps').value=draft?draft.reps:stored?String(stored[1]):'';$('#wv-reps').placeholder=it.rx.reps;
   /* Л/П: записанные стороны, иначе — общий вес; вес стороны по умолчанию — из подхода выше по своей стороне, из прошлых
      сторон, если они были */
   const ssd=stored&&setSides(stored,ex),psd=prev&&setSides(prev,ex);
   for(const k of ['l','r']){
-    const ck=carriedKg(it,today,s.k,k),kgDef=ck!=null?fmtKg(ck):planned!=null?fmtKg(planned):psd?kgText(psd[k][0]):prev?.[0]!=null?fmtKg(prev[0]):'';
+    const ck=carriedKg(it,today,s.k,k,own),kgDef=ck!=null?fmtKg(ck):planned!=null?fmtKg(planned):psd?kgText(psd[k][0]):prev?.[0]!=null?fmtKg(prev[0]):'';
     $('#wv-kg-'+k).value=draft&&draft['k'+k]!==undefined?draft['k'+k]:ssd?kgText(ssd[k][0]):stored?kgText(stored[0]):kgDef;
     $('#wv-reps-'+k).value=draft&&draft['r'+k]!==undefined?draft['r'+k]:ssd?String(ssd[k][1]):stored?String(stored[1]):'';$('#wv-reps-'+k).placeholder=it.rx.reps;
   }

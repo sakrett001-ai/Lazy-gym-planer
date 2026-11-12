@@ -1,9 +1,11 @@
 'use strict';
 /* Вес переносится на следующие подходы (13-log.js: carriedKg, carryKgBox, logKgInput; 14-workout-mode.js: workoutFill).
    Вписали вес в подход или отметили его — у следующих неотмеченных подходов с пустым полем подсказка становится этим
-   весом, отметка без ввода записывает его. Вписанное и отмеченное не трогается, свой вес подхода в плане (пирамида,
-   сброс) не перетирается, Л/П — по своей стороне, повторы не переносятся; после перерисовки и в режиме тренировки — то же
-   правило. Таблица — в JSDOM, обработчики вызываются те же, что у событий; в браузере — tools/ui-check.mjs. */
+   весом, отметка без ввода записывает его. Вписанное и отмеченное не трогается, свой вес подхода (по плану; без плана —
+   пирамида или сброс прошлой тренировки: подсказка подхода — его прошлый вес) не перетирается, Л/П — по своей стороне,
+   а вписанное в левую сторону — ещё и в пустую правую того же подхода; повторы не переносятся; после перерисовки
+   и в режиме тренировки — то же правило. Таблица — в JSDOM, обработчики вызываются те же, что у событий; в браузере —
+   tools/ui-check.mjs. */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -13,19 +15,25 @@ const { loadModel } = require('./biomechanics-audit');
 const plain = x => JSON.parse(JSON.stringify(x));
 
 /* свой план: жим гантелей (две гантели, «×2»), тяга гантели одной рукой (Л/П), жим штанги пирамидой по плану,
-   жим гантелей с одним весом на все подходы, подтягивания (доп. вес) */
-const ITEMS = [{ id: 'dbbench', sets: 4 }, { id: 'dbrow', sets: 3 }, { id: 'bbbench', sets: 4, kg: [60, 60, 70, 50] }, { id: 'dbpress', sets: 3, kg: [20] }, { id: 'pullup', sets: 3 }];
-function app({ lr = {}, today = {} } = {}) {
+   жим гантелей с одним весом на все подходы, подтягивания (доп. вес), приседания и жим стоя (без веса в плане —
+   по прошлой тренировке), болгарские выпады (Л/П, доп. вес) */
+const ITEMS = [{ id: 'dbbench', sets: 4 }, { id: 'dbrow', sets: 3 }, { id: 'bbbench', sets: 4, kg: [60, 60, 70, 50] }, { id: 'dbpress', sets: 3, kg: [20] }, { id: 'pullup', sets: 3 },
+  { id: 'squat', sets: 4 }, { id: 'ohp', sets: 3 }, { id: 'bulgarian', sets: 4 }];
+/* past — подходы прошлой тренировки (вчера), today — сегодняшние */
+function app({ lr = {}, today = {}, past = {} } = {}) {
   const m = loadModel({ fullApp: true });
   m.get('renderSetup=()=>{}; logRefresh=()=>{}; startRest=()=>{}; LOG.mode="local";');
   const a = m.get('({S,LOG,buildPlan,logRows,logBlock,carriedKg,carryKgBox,logKgInput,tickSet,renderLogBox,todaySession,suggest,workoutFill,PLACE_DEFAULTS,ensurePlaces,ensureCustoms})');
+  a.m = m;
   a.S.places = a.PLACE_DEFAULTS.map(p => ({ ...p, equip: p.equip.slice() })); a.S.place = 'gym'; a.S.adapt = null; a.ensurePlaces(a.S);
   Object.assign(a.S, { mode: 'custom', format: 'classic', goal: 'mass', level: 'mid', groups: ['chest', 'back'], fav: [], lr, customs: [{ id: 't', name: 'Т', items: ITEMS.map(x => ({ ...x })) }], custom: 't' });
   a.ensureCustoms(a.S);
   a.LOG.data = {};
+  const yesterday = a.m.get('dayKey(new Date(Date.now() - 864e5))');
+  for (const [id, s] of Object.entries(past)) a.LOG.data[id] = [{ d: yesterday, s }];
   for (const [id, s] of Object.entries(today)) a.todaySession(id, true).s = s;
   m.get('plan = buildPlan()');
-  a.plan = m.get('plan'); a.m = m;
+  a.plan = m.get('plan');
   a.item = id => a.plan.items.find(x => x.ex.id === id);
   a.day = id => { const s = a.todaySession(id, false); return s ? plain(s.s) : null; };
   return a;
@@ -122,6 +130,40 @@ test('«Л/П отдельно»: each side carries its own weight', () => {
   assert.deepEqual(a.day('dbrow')[1], [28, 9, null, { l: [30, 9], r: [28, 9] }], 'set 2 logs both sides with their carried weights');
 });
 
+test('«Л/П отдельно»: the weight typed on the left of a set is the hint of its empty right side and goes down both sides', () => {
+  const a = app({ lr: { bulgarian: true } }), t = mount(a, 'bulgarian');
+  assert.deepEqual([t.phs('l'), t.phs('r')], [['—', '—', '—', '—'], ['—', '—', '—', '—']], 'no extra weight yet');
+  t.type(0, '16', 'l');
+  assert.deepEqual([t.phs('l').slice(1), t.phs('r')], [['16', '16', '16'], ['16', '16', '16', '16']], 'one «16» — all eight fields');
+  for (let k = 0; k < 4; k++) { for (const s of ['l', 'r']) t.reps(k, s).value = '10'; t.tick(k); }
+  assert.deepEqual(a.day('bulgarian').map(x => [x[3].l[0], x[3].r[0]]), [[16, 16], [16, 16], [16, 16], [16, 16]], 'four sets logged with 16 on both sides');
+  /* стороны разные: правая идёт по правой; вписанное в левую следующего подхода — в его правую и ниже */
+  const b = app({ lr: { bulgarian: true } }), u = mount(b, 'bulgarian');
+  u.type(0, '16', 'l'); u.type(0, '14', 'r');
+  assert.deepEqual([u.phs('l').slice(1), u.phs('r').slice(1)], [['16', '16', '16'], ['14', '14', '14']], 'the right side keeps its own 14');
+  u.type(2, '18', 'l');
+  assert.deepEqual([u.ph(1, 'r'), u.ph(2, 'r'), u.ph(3, 'r'), u.ph(3, 'l')], ['14', '18', '18', '18'], 'left 18 in set 3 — its right side and below');
+  u.type(0, '', 'r');
+  assert.equal(u.ph(0, 'r'), '16', 'the right side erased — the left of the same set again');
+});
+
+test('last session’s pyramid: each set’s hint is its weight from last time, a tick writes it; equal weights — one hint', () => {
+  const a = app({ past: { squat: [[60, 10], [80, 8], [90, 6], [100, 5]], ohp: [[40, 8], [40, 8], [40, 6]] } }), t = mount(a, 'squat');
+  assert.deepEqual(t.phs(), ['60', '80', '90', '100'], 'not 100 in every set');
+  t.reps(0).value = '10'; t.tick(0);
+  assert.deepEqual(a.day('squat'), [[60, 10]], 'a tick on set 1 writes 60 × 10, not a false 100 × 10');
+  assert.deepEqual(t.phs().slice(1), ['80', '90', '100'], 'the ticked 60 does not overwrite the heavier sets');
+  t.type(1, '85');
+  assert.deepEqual([t.ph(2), t.ph(3)], ['90', '100'], 'nor does a typed weight');
+  assert.match(a.logRows(a.item('squat')).html, /class="lt-r"[^>]*data-k="1" data-own="80"/, 'the row knows its own weight');
+  assert.deepEqual([1, 2, 3].map(k => ph(a.logRows(a.item('squat')).html, k)), ['80', '90', '100'], 'after re-rendering — the same');
+  /* прошлые веса одинаковые — как раньше: одна подсказка по прогрессии, вписанный вес переносится */
+  const o = mount(a, 'ohp'), sg = a.suggest(a.item('ohp'));
+  assert.deepEqual(o.phs(), Array(3).fill(String(sg.kg).replace('.', ',')));
+  o.type(0, '42,5');
+  assert.deepEqual(o.phs().slice(1), ['42,5', '42,5']);
+});
+
 test('reps are not carried; a bodyweight exercise carries its extra weight', () => {
   const a = app(), t = mount(a, 'dbbench');
   const before = t.reps(1).placeholder;
@@ -179,4 +221,10 @@ test('the workout screen uses the same rule', () => {
   a.S.lr = { dbrow: true };
   const lr = fill('dbrow', 1);
   assert.deepEqual([lr.l, lr.r], ['30', '28'], 'left/right by side');
+  /* пирамида прошлого раза: свой вес подхода, записанный сегодня вес его не перетирает */
+  const b = app({ past: { squat: [[60, 10], [80, 8], [90, 6], [100, 5]] }, today: { squat: [[60, 10]] } });
+  b.m.get('(d => { globalThis.document = d; })')(d);
+  const it = b.item('squat'), sg = b.suggest(it), step = k => ({ it, k, n: it.rx.sets });
+  const show = k => { b.m.get('(s => { workout = {queue:[s], index:0, drafts:{}}; })')(step(k)); b.workoutFill(step(k), sg, sg.prev?.s[k]); return d.querySelector('#wv-kg').value; };
+  assert.deepEqual([show(1), show(3)], ['80', '100'], 'the workout screen keeps last time’s pyramid');
 });

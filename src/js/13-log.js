@@ -289,13 +289,13 @@ function logRows(it) {
   const tset = today ? today.s : [];
   const n = logRowCount(it);
   if (setArm[ex.id] !== n - 1 || n <= 1) delete setArm[ex.id];
-  const prevSets = sg.prev ? sg.prev.s.filter(Boolean) : [];
+  const prevSets = sg.prev ? sg.prev.s.filter(Boolean) : [], own = ownKgs(it, prevSets);
   const [lo, hi] = parseRange(it.rx.reps);
   const SIDE = {l:'левая', r:'правая'};
   /* поле веса и повторов; side — 'l' | 'r' в режиме Л/П. Подсказка веса — вес последнего записанного сегодня подхода
-     выше (carriedKg), иначе по плану или прогрессии; data-ph — она же без переноса (к ней поле возвращается, когда
-     вписанный выше вес стёрт — carryKgBox) */
-  const fields = (k, side, val, phKg, phR) => `${lt === 'none' ? '' : `<input class="lt-in" id="kg-${ex.id}-${k}${side ? '-' + side : ''}" data-f="kg"${side ? ` data-side="${side}"` : ''} type="text" inputmode="decimal" autocomplete="off" aria-label="${wl.full}${side ? ', ' + SIDE[side] : ''}, подход ${k + 1}" placeholder="${carryPh(carriedKg(it, tset, k, side), phKg)}" data-ph="${phKg}" value="${val && val[0] != null ? fmtKg(val[0]) : ''}">`}
+     выше (carriedKg), иначе свой вес подхода (план, пирамида прошлого раза) или прогрессия; data-ph — она же без переноса
+     (к ней поле возвращается, когда вписанный выше вес стёрт — carryKgBox) */
+  const fields = (k, side, val, phKg, phR) => `${lt === 'none' ? '' : `<input class="lt-in" id="kg-${ex.id}-${k}${side ? '-' + side : ''}" data-f="kg"${side ? ` data-side="${side}"` : ''} type="text" inputmode="decimal" autocomplete="off" aria-label="${wl.full}${side ? ', ' + SIDE[side] : ''}, подход ${k + 1}" placeholder="${carryPh(carriedKg(it, tset, k, side, own), phKg)}" data-ph="${phKg}" value="${val && val[0] != null ? fmtKg(val[0]) : ''}">`}
       <input class="lt-in" id="rp-${ex.id}-${k}${side ? '-' + side : ''}" data-f="reps"${side ? ` data-side="${side}"` : ''} type="text" inputmode="numeric" autocomplete="off" aria-label="${repLabel(ex)}${side ? ', ' + SIDE[side] : ''}, подход ${k + 1}" placeholder="${phR}" value="${val ? val[1] : ''}">`;
   const prevText = p => (p[0] ? fmtKg(p[0]) + ' × ' : '') + p[1];
   const sideTag = side => `<b class="lt-sd" aria-hidden="true">${side === 'l' ? 'Л' : 'П'}</b><span class="vh">${side === 'l' ? 'Левая:' : 'Правая:'}</span>`;
@@ -303,23 +303,24 @@ function logRows(it) {
   for (let k = 0; k < n; k++) {
     const v = tset[k];
     const p = prevSets[k] || prevSets[prevSets.length - 1];
-    const pk = planKg(it.rx, k), phKg = pk != null ? fmtKg(pk) : sg.kg != null ? fmtKg(sg.kg) : (lt === 'kg' ? '' : '—');
+    const pk = own(k), phKg = pk != null ? fmtKg(pk) : sg.kg != null ? fmtKg(sg.kg) : (lt === 'kg' ? '' : '—');
     const phR = sg.reps[k] ?? sg.reps[sg.reps.length - 1] ?? (lo === hi ? String(lo) : `${lo}–${hi}`);
     const arm = setArm[ex.id] === k, cf = arm ? setArmHtml(it, n, !!v) : '';
     const done = !!v, cls = `lt-r${done ? ' done' : ''}${lr ? ' lt-lr' : ''}${it.rx.static && k > 0 && k % 3 === 0 ? ' lt-series' : ''}${arm ? ' lt-arm' : ''}`;
+    const ownAt = pk != null && lt !== 'none' ? ` data-own="${pk}"` : ''; /* свой вес подхода — для переноса при вводе (carryKgBox) */
     const ok = `<button type="button" class="lt-ok" data-tick="${ex.id}" data-k="${k}" aria-pressed="${done}" aria-label="Подход ${k + 1} выполнен">${ICON.check}</button>`;
     if (lr) {
       /* Л/П: две строки в одном подходе; прошлый раз — по сторонам, если они были записаны, иначе общее значение */
       const sd = v && setSides(v, ex), psd = p && setSides(p, ex);
       const val = side => v ? (sd ? sd[side] : [v[0], v[1]]) : null, pv = side => p ? prevText(psd ? psd[side] : p) : '—';
-      rows += `<div class="${cls}" data-k="${k}">
+      rows += `<div class="${cls}" data-k="${k}"${ownAt}>
       <span class="lt-n">${k + 1}</span><span class="lt-p">${sideTag('l')} ${pv('l')}</span>
       ${fields(k, 'l', val('l'), phKg, phR)}
       ${ok}
       <span class="lt-p">${sideTag('r')} ${pv('r')}</span>
       ${fields(k, 'r', val('r'), phKg, phR)}${cf}
     </div>`;
-    } else rows += `<div class="${cls}" data-k="${k}">
+    } else rows += `<div class="${cls}" data-k="${k}"${ownAt}>
       <span class="lt-n">${k + 1}</span><span class="lt-p">${p ? prevText(p) : '—'}</span>
       ${fields(k, null, done ? v : null, phKg, phR)}
       ${ok}${cf}
@@ -327,7 +328,7 @@ function logRows(it) {
   }
   const doneN = tset.slice(0, n).filter(Boolean).length;
   /* вес одной гантели: подсказка «×2 = 40 кг» — по первому заполненному полю (пока не вводили — по подсказке) */
-  const x2 = wl && wl.n > 1 && !lr ? `<span class="lt-x2" data-n="${wl.n}">${wl.impl === 'kb' ? 'вес — одной гири' : 'вес — одной гантели'}<b>${pairTotalText(wl.n, firstKg(tset, sg, it))}</b></span>` : '';
+  const x2 = wl && wl.n > 1 && !lr ? `<span class="lt-x2" data-n="${wl.n}">${wl.impl === 'kb' ? 'вес — одной гири' : 'вес — одной гантели'}<b>${pairTotalText(wl.n, firstKg(tset, sg, own))}</b></span>` : '';
   const lrBtn = perSide(ex) ? `<button type="button" class="lt-lrb" data-lr="${ex.id}" aria-pressed="${lr}">${'Л/П отдельно'}</button>` : '';
   const perSideNote = perSide(ex) ? `<span>${ex.kind === 'time' ? 'секунды — на каждую сторону' : 'повторы — на каждую сторону'}</span>` : '';
   return {sg, html:`<p class="sug sug-${sg.tone}"><b aria-hidden="true">${SUG_ICON[sg.tone]}</b><span>${esc(sg.text)}</span></p>
@@ -338,47 +339,62 @@ function logRows(it) {
     </div>
     <div class="lt-foot">${setStepHtml(it, n)}${lrBtn}${perSideNote}${x2}${it.rx.circ ? '<span>строка — один круг</span>' : ''}</div></div>`};
 }
-/* вес для подсказки «×2»: записанный или введённый в первом подходе, иначе подсказка по весу */
-function firstKg(tset, sg, it) {
+/* вес для подсказки «×2»: записанный или введённый в первом подходе, иначе подсказка по весу первого подхода */
+function firstKg(tset, sg, own) {
   const v = tset.find(x => x && x[0] > 0);
   if (v) return v[0];
-  const pk = planKg(it.rx, 0);
+  const pk = own(0);
   return pk != null ? pk : sg.kg;
 }
 
 /* ---------- вес на следующие подходы ---------- */
 /* Вписали вес в подход или отметили его — следующие неотмеченные подходы с пустым полем берут этот вес подсказкой,
    и отметка без ввода записывает его; другой вес вписывается как раньше. Переносится вес ближайшего подхода выше,
-   у Л/П — по своей стороне. Повторы не переносятся (у них подсказка из плана). Свой вес подхода в плане (пирамида,
-   сброс) не перетирается: плановые веса обоих подходов заданы и различаются — переноса нет. То же правило — в режиме
-   тренировки (workoutFill в 14-workout-mode.js). */
-function kgCarries(rx, i, k) { const a = planKg(rx, i), b = planKg(rx, k); return a == null || b == null || a === b; }
-/* вес из последнего записанного сегодня подхода до k (tset — подходы дня; side — 'l' | 'r' в режиме Л/П) или null:
-   выше ничего не записано, у записанного нет веса или план даёт подходу k свой вес */
-function carriedKg(it, tset, k, side) {
+   у Л/П — по своей стороне, а вписанный в левую сторону — ещё и в пустую правую того же подхода. Повторы не переносятся
+   (у них подсказка из плана). Свой вес подхода (ownKgs: по плану; без плана — пирамида или сброс прошлого раза)
+   не перетирается: свои веса обоих подходов заданы и различаются — переноса нет. То же правило — в режиме тренировки
+   (workoutFill в 14-workout-mode.js). */
+/* свой вес подхода k: по плану; без плана — вес подхода k прошлой тренировки (подходов меньше — последний), если веса
+   подходов в ней разные (пирамида, сброс); иначе null — один вес на все подходы (подсказка — по прогрессии, sg.kg).
+   prevSets — записанные подходы прошлой тренировки */
+function ownKgs(it, prevSets) {
+  if (it.rx.kgPlan) return k => planKg(it.rx, k);
+  const kgs = prevSets.map(x => x[0]);
+  if (kgs.length < 2 || kgs.some(v => v == null) || kgs.every(v => v === kgs[0])) return () => null;
+  return k => kgs[Math.min(k, kgs.length - 1)];
+}
+function kgCarries(own, i, k) { const a = own(i), b = own(k); return a == null || b == null || a === b; }
+/* вес из последнего записанного сегодня подхода до k (tset — подходы дня; side — 'l' | 'r' в режиме Л/П; own — ownKgs)
+   или null: выше ничего не записано, у записанного нет веса или у подхода k свой вес */
+function carriedKg(it, tset, k, side, own) {
   for (let i = Math.min(k, tset.length) - 1; i >= 0; i--) {
     const v = tset[i]; if (!v) continue;
     const sd = side ? setSides(v, it.ex) : null, kg = sd ? sd[side][0] : v[0];
-    return kg != null && kg >= 0 && kgCarries(it.rx, i, k) ? kg : null;
+    return kg != null && kg >= 0 && kgCarries(own, i, k) ? kg : null;
   }
   return null;
 }
 const carryPh = (kg, ph) => kg != null ? fmtKg(kg) : ph;
-/* подсказки веса в таблице карточки по введённому сейчас: неотмеченная строка с пустым полем берёт вес ближайшей строки
-   выше, где вес вписан или подход отмечен (отмеченный без веса — переноса нет), иначе прежнюю подсказку (data-ph).
-   Вписанное и отмеченное не меняется */
+/* подсказки веса в таблице карточки по введённому сейчас: неотмеченное пустое поле берёт вес ближайшего выше подхода,
+   где вес вписан или подход отмечен (отмеченный без веса — переноса нет), иначе прежнюю подсказку (data-ph). У Л/П левая
+   сторона — по левой; правая — по правой, а вписанный в левую сторону вес подхода становится и подсказкой его пустой
+   правой стороны и дальше идёт по правой. Свой вес подхода — data-own строки. Вписанное и отмеченное не меняется */
 function carryKgBox(box) {
-  const it = box && plan && plan.items && plan.items.find(x => x.ex.id === box.dataset.log); if (!it) return;
-  const rows = [...box.querySelectorAll('.lt-r')];
-  for (const side of rows.some(r => r.classList.contains('lt-lr')) ? ['l', 'r'] : [null]) {
-    let src = null;
-    for (const row of rows) {
-      const {kgIn} = rowFields(row, side); if (!kgIn) continue;
-      const k = +row.dataset.k;
-      if (row.classList.contains('done') || kgIn.value.trim() !== '') { const v = parseNum(kgIn.value); src = {k, kg:v != null && v >= 0 ? v : null}; continue; }
-      const ph = carryPh(src && kgCarries(it.rx, src.k, k) ? src.kg : null, kgIn.dataset.ph ?? kgIn.placeholder);
-      if (kgIn.placeholder !== ph) kgIn.placeholder = ph;
-    }
+  const rows = box ? [...box.querySelectorAll('.lt-r')] : []; if (!rows.length) return;
+  const ownBy = new Map(rows.map(r => [+r.dataset.k, r.dataset.own != null ? parseNum(r.dataset.own) : null]));
+  const own = k => ownBy.get(k) ?? null, lr = rows[0].classList.contains('lt-lr');
+  const filled = (row, inp) => { if (!row.classList.contains('done') && inp.value.trim() === '') return null; const v = parseNum(inp.value); return {kg:v != null && v >= 0 ? v : null}; };
+  const hint = (inp, src, k) => { const ph = carryPh(src && kgCarries(own, src.k, k) ? src.kg : null, inp.dataset.ph ?? inp.placeholder); if (inp.placeholder !== ph) inp.placeholder = ph; };
+  let srcL = null, srcR = null;
+  for (const row of rows) {
+    const k = +row.dataset.k, L = rowFields(row, lr ? 'l' : null).kgIn; if (!L) return; /* без поля веса */
+    const fl = filled(row, L);
+    if (fl) srcL = {k, kg:fl.kg}; else hint(L, srcL, k);
+    if (!lr) continue;
+    const R = rowFields(row, 'r').kgIn, fr = filled(row, R);
+    if (fr) { srcR = {k, kg:fr.kg}; continue; }
+    if (fl) srcR = {k, kg:fl.kg}; /* левая вписана, правая пуста — правая берёт левую */
+    hint(R, srcR, k);
   }
 }
 /* ввод веса в таблице: подсказки следующих подходов, затем «×2 = …» — по вписанному или перенесённому весу */
