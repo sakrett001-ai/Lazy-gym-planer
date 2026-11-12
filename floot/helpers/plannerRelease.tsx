@@ -1,7 +1,9 @@
 import {createHash} from 'node:crypto';
 
-const repository = 'sakrett001-ai/Lazy-gym-planer';
-const upstream = `https://raw.githubusercontent.com/${repository}/gh-pages/`;
+/* Репозиторий переименован из Lazy-gym-planer в Lazy-gym-planner. Пока переезд не завершён, релиз читается
+   с нового имени, а при его отсутствии — со старого; описание релиза может называть любое из двух. */
+const repositories = ['sakrett001-ai/Lazy-gym-planner', 'sakrett001-ai/Lazy-gym-planer'];
+const upstreamOf = (repository:string) => `https://raw.githubusercontent.com/${repository}/gh-pages/`;
 const maxBytes = 4_500_000;
 type Lang = 'ru' | 'en';
 type Release = {schemaVersion:1; repository:string; sourceBranch:'main'; sourceCommit:string;
@@ -9,7 +11,7 @@ type Release = {schemaVersion:1; repository:string; sourceBranch:'main'; sourceC
 
 function validate(value:unknown):Release {
   const m = value as Release;
-  if (!m || m.schemaVersion !== 1 || m.repository !== repository || m.sourceBranch !== 'main' || m.checks !== 'passed'
+  if (!m || m.schemaVersion !== 1 || !repositories.includes(m.repository) || m.sourceBranch !== 'main' || m.checks !== 'passed'
     || !/^[a-f0-9]{40}$/.test(m.sourceCommit) || !/^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(m.version)) {
     throw new Error('Не удалось подтвердить проверенный релиз планировщика');
   }
@@ -35,6 +37,14 @@ async function download(url:string, fetcher:typeof fetch, limit:number) {
 
 async function read(lang:Lang, fetcher:typeof fetch = fetch) {
   if (lang !== 'ru' && lang !== 'en') throw new Error('Неизвестный язык');
+  let failure:unknown;
+  for (const repository of repositories) {
+    try { return await readFrom(upstreamOf(repository), lang, fetcher); } catch (e) { failure = e; }
+  }
+  throw failure;
+}
+
+async function readFrom(upstream:string, lang:Lang, fetcher:typeof fetch) {
   const manifestBytes = await download(`${upstream}floot-release.json?t=${Math.floor(Date.now()/60000)}`, fetcher, 16384);
   const release = validate(JSON.parse(new TextDecoder().decode(manifestBytes)));
   const document = release.documents[lang];

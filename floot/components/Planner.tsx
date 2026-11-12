@@ -48,7 +48,7 @@ export default function Planner({lang='ru',className=''}:{lang?:'ru'|'en';classN
       <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
       <meta name="theme-color" content="#ECEFF3"/><link rel="manifest" href="/manifest.json"/>
     </Helmet>
-    {document&&<iframe ref={frame} className={styles.frame} title={en?'Workout planner':'Планировщик тренировок'} srcDoc={document} allow="fullscreen"/>}
+    {document&&<iframe ref={frame} className={styles.frame} title={en?'Workout planner':'Планировщик тренировок'} srcDoc={document} allow="fullscreen; bluetooth"/>}
     {(!ready||error)&&<div className={styles.message} role={error?'alert':'status'}>
       <h1 className={styles.logo}>Lazy<span>Gym</span>Planner</h1>
       {error?<><p>{error}</p><button className={styles.button} onClick={()=>setAttempt(a=>a+1)}>{en?'Retry':'Повторить'}</button></>:<><div className={styles.progress} aria-hidden="true"/><p>{en?'Loading your workout planner…':'Загружаем планировщик тренировок…'}</p></>}
