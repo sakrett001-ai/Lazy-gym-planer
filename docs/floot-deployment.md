@@ -1,6 +1,9 @@
 # Lazy Gym во Floot: автоматические обновления из GitHub
 
-Исходники: `sakrett001-ai/Lazy-gym-planer`, ветка `main`.
+Исходники: `sakrett001-ai/Lazy-gym-planner`, ветка `main`.
+До ноября 2026 года репозиторий назывался `Lazy-gym-planer` (опечатка в слове planner). Загрузчик Floot (`helpers/plannerRelease.tsx`)
+читает релиз сначала с нового имени, затем со старого и принимает в `floot-release.json` любое из двух; старое имя из него
+можно убрать, когда переезд завершён.
 Проект Floot: `4e32b84e-4f12-4e44-bd4a-e6f3a6f7a152`.
 
 ## Как обновляется приложение

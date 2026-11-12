@@ -6,7 +6,7 @@ import {initLab} from '../src/main.mjs';
 import {makePose,sampleCycle} from '../src/model.mjs';
 const html=await fs.readFile(new URL('../index.html',import.meta.url),'utf8');
 function mount(){
-  const dom=new JSDOM(html,{url:'https://sakrett001-ai.github.io/Lazy-gym-planer/motion-lab/',pretendToBeVisual:true}),w=dom.window,d=w.document;
+  const dom=new JSDOM(html,{url:'https://sakrett001-ai.github.io/Lazy-gym-planner/motion-lab/',pretendToBeVisual:true}),w=dom.window,d=w.document;
   let scheduled=0,callback;w.requestAnimationFrame=cb=>{callback=cb;return ++scheduled;};w.cancelAnimationFrame=()=>{};
   const app=initLab(d,w,{createRenderer:doc=>({domElement:doc.createElement('canvas'),setSize(){},render(scene,camera){assert(Number.isFinite(camera.projectionMatrix.elements[0]));assert(scene.getObjectByName('bar-shaft'));},dispose(){}})});
   return{dom,w,d,app,$:id=>d.getElementById(id),tick:t=>callback(t),close(){app.destroy();dom.window.close();}};

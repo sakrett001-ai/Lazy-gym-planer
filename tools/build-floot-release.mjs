@@ -19,7 +19,7 @@ for (const lang of ['ru', 'en']) {
   await fs.writeFile(path.join(dist, relativePath), html);
   documents[lang] = {path:relativePath, sha256:createHash('sha256').update(html).digest('hex'), bytes:html.byteLength};
 }
-const manifest = {schemaVersion:1, repository:'sakrett001-ai/Lazy-gym-planer', sourceBranch:'main', sourceCommit,
+const manifest = {schemaVersion:1, repository:'sakrett001-ai/Lazy-gym-planner', sourceBranch:'main', sourceCommit,
   version:pkg.version, checks:'passed', builtAt:new Date().toISOString(), documents};
 await fs.writeFile(path.join(dist, 'floot-release.json'), JSON.stringify(manifest, null, 2) + '\n');
 console.log(`Релиз для Floot: ${pkg.version}, исходники ${sourceCommit}`);

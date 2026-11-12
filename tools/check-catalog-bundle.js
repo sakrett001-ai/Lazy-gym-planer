@@ -9,7 +9,7 @@ for(const lang of ['ru','en']){
  const cached=new Set(shellFor([lang]).map(p=>new URL(p,'https://test.invalid/').href));
  assert(![...cached].some(u=>lang==='ru'?u.includes('/en/'):/^https:\/\/test\.invalid\/(index\.html|app\.|pwa\.|manifest\.|$)/.test(u)),'Shell of '+lang+' carries the other language');
  const dir=path.join(root,'dist',lang==='ru'?'':'en'),html=fs.readFileSync(path.join(dir,'index.html'),'utf8'),errors=[],vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));vc.on('error',(...a)=>errors.push(a.map(String).join(' ')));
- const dom=new JSDOM(html,{url:'https://sakrett001-ai.github.io/Lazy-gym-planer/atlas-preview/'+(lang==='en'?'en/':''),runScripts:'outside-only',pretendToBeVisual:true,virtualConsole:vc}),w=dom.window,d=w.document;
+ const dom=new JSDOM(html,{url:'https://sakrett001-ai.github.io/Lazy-gym-planner/atlas-preview/'+(lang==='en'?'en/':''),runScripts:'outside-only',pretendToBeVisual:true,virtualConsole:vc}),w=dom.window,d=w.document;
  const base='https://test.invalid/'+(lang==='en'?'en/':'');
  for(const node of d.querySelectorAll('script[src],link[rel=stylesheet],link[rel=manifest],link[rel=icon],link[rel=apple-touch-icon]'))assert(cached.has(new URL(node.getAttribute('src')||node.getAttribute('href'),base).href),'Offline shell misses a rendered asset');
  /* иконки: адрес — по хэшу содержимого, а не по версии (иначе ≈0,3 МБ заново в каждом выпуске); те же адреса — в манифесте и в оболочке */

@@ -11,7 +11,7 @@ const sha='a'.repeat(40);
 const html=lang=>`<!doctype html><html><body><script>window.PODHOD_VERSION='4.7.0';window.PODHOD_LANG='${lang}';</script></body></html>`;
 const document=lang=>({path:`floot/releases/${sha}/planner-${lang}.html`,bytes:Buffer.byteLength(html(lang)),sha256:createHash('sha256').update(html(lang)).digest('hex')});
 function fixture(change=m=>m,changeHtml=h=>h){
-  const manifest=change({schemaVersion:1,repository:'sakrett001-ai/Lazy-gym-planer',sourceBranch:'main',sourceCommit:sha,version:'4.7.0',checks:'passed',builtAt:'2026-10-09T00:00:00Z',documents:{ru:document('ru'),en:document('en')}});
+  const manifest=change({schemaVersion:1,repository:'sakrett001-ai/Lazy-gym-planner',sourceBranch:'main',sourceCommit:sha,version:'4.7.0',checks:'passed',builtAt:'2026-10-09T00:00:00Z',documents:{ru:document('ru'),en:document('en')}});
   const urls=[];
   const fetcher=async url=>{
     urls.push(url);
@@ -24,7 +24,7 @@ test('Floot loads both languages from the immutable source commit and checks the
     const {fetcher,urls}=fixture();
     const result=await plannerRelease.read(lang,fetcher);
     assert.equal(result.html,html(lang));assert.equal(result.sourceCommit,sha);
-    assert.equal(urls[1],`https://raw.githubusercontent.com/sakrett001-ai/Lazy-gym-planer/gh-pages/floot/releases/${sha}/planner-${lang}.html`);
+    assert.equal(urls[1],`https://raw.githubusercontent.com/sakrett001-ai/Lazy-gym-planner/gh-pages/floot/releases/${sha}/planner-${lang}.html`);
   }
 });
 test('Floot refuses a document altered after the manifest was published',async()=>{
