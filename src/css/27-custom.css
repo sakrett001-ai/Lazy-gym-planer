@@ -26,7 +26,7 @@ button.link { border:0; background:none; padding:0; color:var(--accent); font:in
 .cp-pick { flex-basis:100%; display:grid; gap:6px; max-width:440px; margin:0 0 2px; }
 .cp-pick-h { margin:0; font-size:12.5px; color:var(--muted); }
 .cp-pick .place { display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:44px; width:100%; color:var(--ink); cursor:pointer; }
-.cp-pick .place:hover { border-color:var(--accent); }
+@media (hover:hover) { .cp-pick .place:not([aria-disabled="true"]):hover { border-color:var(--accent); } }
 .cp-pick .place[aria-disabled="true"] { background:var(--surface-2); border-color:var(--line); cursor:default; }
 .cp-pick .place[aria-disabled="true"] b { color:var(--muted); }
 .cp-pick .place-add { justify-content:flex-start; color:var(--muted); }
