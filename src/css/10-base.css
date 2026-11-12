@@ -1,15 +1,15 @@
 /* Макет: журнал тренировок. Слева — пульт параметров (липкий на широком экране), справа — план: шапка с картой нагрузки и лента карточек упражнений. На телефоне — одна колонка. */
 :root {
   --bg:#ECEFF3; --surface:#FFFFFF; --surface-2:#F4F6F9; --illus:#F2F4F7;
-  --ink:#141A23; --muted:#5B6574; --faint:#8993A2; --line:#DCE1E8;
+  --ink:#141A23; --muted:#5B6574; --faint:#606A7A; --line:#DCE1E8; /* faint, hot, good — не меньше 4,5:1 на фоне, поверхностях и мягких подложках (WCAG 1.4.3) */
   --accent:#2347C8; --accent-soft:#E4EAFB; --accent-ink:#FFFFFF;
-  --hot:#DC3B37; --hot-soft:#FBE3E1;
+  --hot:#C92723; --hot-soft:#FBE3E1;
   --mus:#E8670E; --mus-soft:#FDEBD9; /* мышцы: от жёлтого к оранжевому; красный — только ошибки и суставы */
   --fig:#384152; --fig-far:#B2BAC5; --work:#E8670E; --work-far:#F4C9A4;
   --steel:#6F7988; --plate:#1E2532; --pad:#9AA5B3; --band:#2C8A5C;
   --mm-base:#D4DAE2; --mm-n:#E6E9EE;
   --warn-bg:#FFF4DC; --warn-ink:#8A5A00;
-  --good:#1F8A55; --good-soft:#E2F4EA;
+  --good:#1B7749; --good-soft:#E2F4EA;
   --ath-skin-0:#DAE1EB; --ath-skin-1:#95A6BD; --ath-skin-2:#62758F;
   --ath-far-0:#C9D2DF; --ath-far-1:#A3B1C5; --ath-far-2:#8292A8;
   --ath-kit-0:#8CA9E1; --ath-kit-1:#44649C; --ath-kit-2:#263F6B;
@@ -22,7 +22,7 @@
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg:#0E1116; --surface:#161B22; --surface-2:#1C222B; --illus:#1A2029;
-  --ink:#E6EAF0; --muted:#9BA5B3; --faint:#6F7988; --line:#29313C;
+  --ink:#E6EAF0; --muted:#9BA5B3; --faint:#88919E; --line:#29313C;
   --accent:#7D96FF; --accent-soft:#1F2945; --accent-ink:#0A0E18;
   --hot:#FF5D56; --hot-soft:#3D2023;
   --mus:#FF8A2A; --mus-soft:#3D2A18;
@@ -40,7 +40,7 @@
 } }
 :root[data-theme="dark"] {
   --bg:#0E1116; --surface:#161B22; --surface-2:#1C222B; --illus:#1A2029;
-  --ink:#E6EAF0; --muted:#9BA5B3; --faint:#6F7988; --line:#29313C;
+  --ink:#E6EAF0; --muted:#9BA5B3; --faint:#88919E; --line:#29313C;
   --accent:#7D96FF; --accent-soft:#1F2945; --accent-ink:#0A0E18;
   --hot:#FF5D56; --hot-soft:#3D2023;
   --mus:#FF8A2A; --mus-soft:#3D2A18;
@@ -278,7 +278,7 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .pl-empty { font-size:.78125rem; color:var(--muted); }
 .pl-diff { font-size:.75rem; color:var(--warn-ink); }
 .wu-note-f { margin:8px 0 2px; font-size:.78125rem; color:var(--muted); }
-.lk { border:0; background:transparent; padding:0; color:var(--accent); font:inherit; font-weight:600; cursor:pointer; text-decoration:underline; }
+.lk { border:0; background:transparent; padding:3px 0; margin:-3px 0; color:var(--accent); font:inherit; font-weight:600; cursor:pointer; text-decoration:underline; } /* поле нажатия не ниже 24 px (WCAG 2.5.8), строка — прежней высоты */
 .gear-view { border:1px solid var(--line); border-radius:16px; background:var(--surface); color:var(--ink); padding:0; width:min(440px, calc(100vw - 32px)); }
 .gear-view::backdrop { background:#08121b99; }
 .gear { padding:20px; display:grid; gap:12px; }

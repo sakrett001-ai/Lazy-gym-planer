@@ -100,7 +100,7 @@ function workoutShow(index){
   holdSetup(s,sg);
   const cue=MOTION_FOCUS[ex.id];$('#wv-setup').textContent=cue?.setup||ex.tech[0];$('#wv-control').textContent=cue?.control||ex.tech[1];$('#wv-breath').textContent=ex.breath;
   disposeMotion(workout.motion);workout.motion={it,f:null,clock:0,paused:reduceMotion,durations:motionDurations(it)};$('#wv-angle').textContent=CAMERA3[motionCamera(ex)].label;
-  $('#wv-motion').textContent=reduceMotion?'Воспроизвести':'Пауза';$('#wv-motion').setAttribute('aria-pressed',String(!reduceMotion));mountWorkoutCameras();
+  $('#wv-motion').textContent=reduceMotion?'Воспроизвести':'Пауза';mountWorkoutCameras();
   $('#wv-prev').disabled=workout.index===0;$('#wv-next').disabled=workout.index===workout.queue.length-1;
   saveWorkout();workoutTick();
 }
@@ -223,7 +223,7 @@ function todayTonnage(ex){return sessionTonnage(ex,todaySession(ex.id,false));}
 function paintRestPhase(over){
   if(!workout)return;workout.restOver=over;
   $('#workout-view').classList.toggle('rest-over',over);$('#wv-rest-heading').textContent=over?'Пора к подходу':'Отдых';
-  $('#wv-rest-over').textContent=over?'сверх отдыха':'';$('#wv-rest-minus').disabled=over;
+  $('#wv-rest-over').textContent=over?'сверх отдыха':'';$('#wv-rest-say').textContent=over?'Пора к подходу':'';$('#wv-rest-minus').disabled=over;
 }
 function workoutFinish(){
   workout.restUntil=0;workout.restFrom=0;workout.next=-1;RestAlarm.cancel();holdStop();paintRestPhase(false);$('#wv-active').hidden=true;$('#wv-rest').hidden=true;$('#wv-finish').hidden=false;
@@ -233,7 +233,7 @@ function workoutFinish(){
 }
 function workoutTick(){
   if(!workout)return;
-  const now=Date.now(),n=workout.queue.filter(workoutValue).length;$('#wv-progress').max=workout.queue.length;$('#wv-progress').value=n;$('#wv-progress-label').textContent=`${n} из ${workout.queue.length} подходов`;
+  const now=Date.now(),n=workout.queue.filter(workoutValue).length;$('#wv-progress').max=workout.queue.length;$('#wv-progress').value=n;$('#wv-progress-label').textContent=`${n} из ${workout.queue.length} ${plural(workout.queue.length,'подхода','подходов','подходов')}`;
   const elapsed=Math.max(0,Math.floor((now-workout.started)/60000));$('#wv-elapsed').textContent=elapsed?`${elapsed} мин с начала`:'';
   if(!$('#wv-rest').hidden){
     const v=restView(workout.restUntil,now);RestAlarm.poll(now);
@@ -327,7 +327,7 @@ function setupWorkout(){
     if(t.id==='wv-hold-go'){holdGo();return;}
     if(t.id==='wv-hold-reset'){holdStop();paintHold();return;}
     if(t.dataset.wvRest){const end=restAdjust(workout.restUntil,Date.now(),Number(t.dataset.wvRest));if(end!==workout.restUntil){workout.restUntil=end;RestAlarm.arm(end,{from:workout.restFrom||undefined});saveWorkout();workoutTick();}return;}
-    if(t.id==='wv-motion'){const m=workout.motion;m.paused=!m.paused;t.textContent=m.paused?'Воспроизвести':'Пауза';t.setAttribute('aria-pressed',String(!m.paused));return;}
+    if(t.id==='wv-motion'){const m=workout.motion;m.paused=!m.paused;t.textContent=m.paused?'Воспроизвести':'Пауза';return;}
     if(t.id==='wv-technique'){workoutCapture();if(workout.motion)openMotionItem(workout.motion.it,workout.motion.clock);}
   });
 }

@@ -607,13 +607,24 @@ function rxHtml(it) {
   return `<div class="rx"><span class="rx-big">${r.sets} × ${r.reps}${unit}${side}</span><span class="rx-rest">${rest}</span>${rxKgHtml(it)}${r.light ? '<span class="rx-light">облегчено</span>' : ''}${easedTag(r)}</div>`;
 }
 
-/* суставы под пиковой нагрузкой — короткая строка в карточке; подробности в разборе движения */
-function jointsLine(ex) {
+/* суставы под пиковой нагрузкой — короткая строка в карточке. Пояснение раскрывается нажатием на строку (касанием и
+   с клавиатуры, а не только в подсказке мыши): тот же текст, что в панели «Нагрузка на суставы» внизу разбора движения */
+const PEAK_OPEN = new Set();
+function jointsLine(ex, idx) {
   const zones = typeof stressZones === 'function' ? stressZones(ex) : [];
   if (!zones.length) return '';
-  const on = typeof motionPrefs === 'undefined' || motionPrefs.stress !== false;
-  return `<p class="c-joints"${on ? '' : ' hidden'} title="Красные метки в разборе движения показывают, когда нагрузка наибольшая"><span class="stress-dot" aria-hidden="true"></span>Пиковая нагрузка: ${esc(zones.join(', '))}</p>`;
+  const on = typeof motionPrefs === 'undefined' || motionPrefs.stress !== false, open = PEAK_OPEN.has(ex.id);
+  const rules = typeof jointStress === 'function' ? jointStress(ex).rules : [];
+  const lead = document.querySelector('#mv-stress-panel .stress-explanation')?.textContent || 'Красная метка на манекене — момент пиковой нагрузки на сустав, связки или сухожилие. Это напоминание держать технику, а не запрет.';
+  return `<div class="c-joints"${on ? '' : ' hidden'}><button type="button" class="c-joints-b" data-peak="${ex.id}" aria-expanded="${open}" aria-controls="peak-${idx}"><span class="stress-dot" aria-hidden="true"></span><span>Пиковая нагрузка: ${esc(zones.join(', '))}</span><i class="cg-chev" aria-hidden="true"></i></button>`
+    + `<div class="c-joints-x" id="peak-${idx}"${open ? '' : ' hidden'}><p class="stress-explanation">${esc(lead)}</p><ul class="stress-list">${rules.map(r => `<li><span class="stress-dot" aria-hidden="true"></span><span><b>${esc(r.zone)}.</b> ${esc(r.what)} <em>${esc(r.tip)}</em></span></li>`).join('')}</ul></div></div>`;
 }
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-peak]'); if (!b) return;
+  const open = b.getAttribute('aria-expanded') !== 'true', box = document.getElementById(b.getAttribute('aria-controls'));
+  b.setAttribute('aria-expanded', String(open)); if (box) box.hidden = !open;
+  if (open) PEAK_OPEN.add(b.dataset.peak); else PEAK_OPEN.delete(b.dataset.peak);
+});
 function cardHtml(it, idx) {
   const ex = it.ex, r = it.rx;
   const lvl = {};
@@ -626,7 +637,7 @@ function cardHtml(it, idx) {
   const view = 'Изометрия · 5 ракурсов';
   return `<li class="card${cardFoldClass(ex.id)}" data-ex="${ex.id}" data-slot="${it.slot}">
   <div class="c-top">
-    <div class="motion-tile"><button type="button" class="illus" data-fig="${idx}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Разобрать движение: ${esc(it.name)}"><span class="illus-v">${view}</span><span class="illus-zoom" aria-hidden="true">Увеличить ↗</span></button><div class="motion-bar"><span class="motion-caption">Исходное положение</span><button type="button" data-motion-pause="${idx}" aria-label="Пауза демонстрации: ${esc(it.name)}" aria-pressed="false">Пауза</button></div></div>
+    <div class="motion-tile"><button type="button" class="illus" data-fig="${idx}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Увеличить: ${esc(it.name)}, разбор движения — ${view}"><span class="illus-v">${view}</span><span class="illus-zoom" aria-hidden="true">Увеличить ↗</span></button><div class="motion-bar"><span class="motion-caption">Исходное положение</span><button type="button" data-motion-pause="${idx}" aria-label="Пауза: ${esc(it.name)}">Пауза</button></div></div>
     <div class="c-info">
       <div class="c-head"><span class="c-idx">${it.label}</span><span class="c-type">${ex.type === 'c' ? 'базовое' : 'изолирующее'}</span>${favButton(ex.id)}</div>
       <h3 class="c-name">${esc(it.name)}</h3>
@@ -643,14 +654,14 @@ function cardHtml(it, idx) {
     <div class="c-map">${muscleMapSvg(lvl, {aria:'Работающие мышцы: ' + ex.pri.map(m => MUSCLE_NAMES[m]).join(', ')})}</div>
     <ul class="mus">${mus}</ul>
   </div>
-  ${jointsLine(ex)}
+  ${jointsLine(ex, idx)}
   ${logBlock(it)}
   <div class="c-hist" hidden></div>
   <div class="c-warm">${warmupHtml(it, workWeightOf(it, null))}</div>
   <div class="c-prog">${progressionHint(it)}</div>
   <div class="c-act">
-    <button type="button" class="btn-ghost" data-workout="${ex.id}" aria-haspopup="dialog" aria-controls="workout-view">Начать тренировку →</button>
-    <span class="c-act-r">${S.mode === 'custom' ? '' : moveButtons(it)}<button type="button" class="btn-ghost" data-swap="${it.slot}" aria-expanded="false" aria-controls="sw-pick-${it.slot}">${ICON.swap}<span>Заменить</span></button></span>
+    <button type="button" class="btn-ghost" data-workout="${ex.id}" aria-haspopup="dialog" aria-controls="workout-view">Начать тренировку<span class="vh">: ${esc(it.name)}</span> <span aria-hidden="true">→</span></button>
+    <span class="c-act-r">${S.mode === 'custom' ? '' : moveButtons(it)}<button type="button" class="btn-ghost" data-swap="${it.slot}" aria-expanded="false" aria-controls="sw-pick-${it.slot}">${ICON.swap}<span>Заменить</span><span class="vh">: ${esc(it.name)}</span></button></span>
     <div class="cp-pick sw-pick" id="sw-pick-${it.slot}" role="group" aria-labelledby="sw-pick-${it.slot}-h" hidden></div>
     ${swapDoneHtml(it)}
   </div>
@@ -746,7 +757,19 @@ function focusHtml() {
 }
 function norm(load) { const mx = Math.max(1, ...Object.values(load)); const o = {}; for (const [m, v] of Object.entries(load)) o[m] = v / mx; return o; }
 
-function renderPlan() {
+/* диктор: #plan не живая область (весь план зачитывался при каждом нажатии, отчёт тестера п. 10) — после пересборки
+   коротко: «План обновлён: 6 упражнений, ≈33 мин» (#plan-status, role="status"); при первом показе — молча */
+let planSaid = null;
+function announcePlan() {
+  const box = $('#plan-status'); if (!box || S.view !== 'plan') return;
+  const n = plan && plan.items ? plan.items.length : 0, empty = $('#plan .empty h2');
+  const text = n ? `План обновлён: ${n} ${plural(n, 'упражнение', 'упражнения', 'упражнений')}, ≈${plan.minutes} мин` : empty ? empty.textContent : '';
+  if (planSaid === null) { planSaid = text; return; }
+  planSaid = text; box.textContent = ''; /* то же сообщение подряд тоже объявляется: сначала очистить, затем вписать */
+  clearTimeout(announcePlan.t); announcePlan.t = setTimeout(() => { box.textContent = text; }, 80);
+}
+function renderPlan() { renderPlanView(); announcePlan(); }
+function renderPlanView() {
   stopFigures();
   if (S.view === 'journal') { prog = null; plan = null; return renderJournal(); }
   if (S.view === 'atlas') { prog = null; plan = null; return renderAtlas(); }
