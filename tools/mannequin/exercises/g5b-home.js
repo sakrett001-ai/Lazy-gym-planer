@@ -434,17 +434,27 @@ const TCURL = once(() => {
 });
 
 /* ---------- Сисси-присед с опорой рукой о дверной косяк ----------
-   Muscle & Strength «Sissy Squat»: стопы на ширине плеч, «Put one arm across your chest and use the other to hold on to your
-   support», «Begin by bending at the knees and lowering your body backward while raising your heels off the ground», «Form a straight
-   line with your body (from your neck to your knees) by leaning back», глубина — насколько позволяет равновесие. Опора — дверной проём
-   слева (homeDoor, стена по оси Z при x > 0, лицевая сторона к телу; камеры атласа не смотрят со стороны +X — стена не заслоняет
-   тело): левая кисть держит край проёма — угол коробки у наличника, пальцы заходят в проём; правая рука поперёк груди, ладонь
-   у левой ключицы. Тело от колен до плеч — одна линия
+   Muscle & Strength «Sissy Squat»: стопы на ширине плеч, «Begin by bending at the knees and lowering your body backward while
+   raising your heels off the ground», «Form a straight line with your body (from your neck to your knees) by leaning back», глубина —
+   насколько позволяет равновесие. Fitness Volt («Sissy Squat Guide»): «Hold the frame with your nearest hand for support»; BarBend
+   (J. Dickson, «Sissy Squat»): за дверной косяк держаться «very light», свободные руки поднимать вперёд «at the same cadence as your
+   knees bend to help maintain your balance»; Garage Gym Reviews (S. McLean, «Sissy Squat»): руки вперёд при отклонении назад —
+   противовес. В 4.102.0 свободная рука лежала поперёк груди (M&S: «Put one arm across your chest») — с ладонью у левой ключицы
+   это читалось как хватание за сердце; теперь она вытянута вперёд противовесом (sissyArms).
+   Опора — дверной проём слева (homeDoor, стена по оси Z при x > 0, лицевая сторона к телу; камеры атласа не смотрят со стороны +X —
+   стена не заслоняет тело). Полотно открыто от человека (open, петли у дальнего края проёма): в закрытом проёме пальцам некуда
+   зайти — за коробкой 2,5 см до притвора и полотно. Левая кисть держит ребро проёма: ладонь на углу наличника, пальцы огибают
+   коробку и лежат в проёме на её внутренней грани (sissyArms). Тело от колен до плеч — одна линия
    (сгибание бедра ≈ 0), пятки подняты: голень наклонена вперёд на φ, линия бедро–корпус — назад на ψ = колено − φ; φ подбирается
    так, чтобы центр масс был над подушечками стоп (рука на косяке страхует, вес не держит). t=0 — на подушечках стоп, колени
    чуть согнуты; t=1 — колени согнуты на SISSY.knee[1]° (умеренная глубина: опора одной рукой, без отягощения). */
-const SISSY = { knee: [10, 95], heel: [16, 38], ballX: 10, ballZ: 8, wallX: 48, edgeZ: 19.75, handY: 108, elbow: -.2, off: [1.05, .3] };
-const SISSY_DOOR = { type: 'homeDoor', id: 'door', at: [SISSY.wallX, 0, SISSY.edgeZ + 40.25], yaw: -90 };
+const SISSY = { knee: [10, 95], heel: [16, 38], ballX: 10, ballZ: 8, wallX: 60, doorZ: 60, handY: 133, gr: 1.2, inset: .2, elbow: [2, .5], tilt: .5,
+  armUp: [-55, 8], armAbd: -6, armElbow: 12, armPron: 70 };
+/* дверь: межкомнатная 80×200 (homeDoor: зазор 0,3, коробка 2,5, наличник 1,5 толщиной); полотно открыто на 90° от человека,
+   петли у дальнего от кисти края (side −1) — полотно уходит в соседнюю комнату и не стоит за кистью */
+const SISSY_DOOR = { type: 'homeDoor', id: 'door', at: [SISSY.wallX, 0, SISSY.doorZ], yaw: -90, side: -1, open: 90 };
+/* в координатах сцены: лицо наличника — на 1,5 см перед стеной; внутренняя грань коробки ближнего к телу края проёма */
+const SISSY_DOOR_GEO = { casing: 1.5, jambFace: SISSY.doorZ - (80 / 2 + .3) };
 function sissyBody(C, k, heel, phi) {
   const { V, M } = C, q = C.base(), opt = { forward: [0, 0, 1], heel };
   const sup = s => [SG[s] * SISSY.ballX, 0, SISSY.ballZ], A = V.mix(M.footFrame(sup('L'), 0, opt).o, M.footFrame(sup('R'), 0, opt).o, .5);
@@ -454,33 +464,50 @@ function sissyBody(C, k, heel, phi) {
   for (const s of S) C.foot(q, s, sup(s), 0, V.unit(V.add([0, 0, 1], [SG[s], 0, 0], .1)), opt);
   return q;
 }
-function sissyArms(C, q, allowShort = false) {
-  const { V } = C, latR = C.lat(q, 'R'), latL = C.lat(q, 'L'), T = C.axes(q, 'thorax');
+/* k — доля опускания (0 вверху, 1 внизу) */
+function sissyArms(C, q, k, allowShort = false) {
+  const { V } = C, latL = C.lat(q, 'L');
   q.L.girdle = [0, 2];
-  /* кулак на углу коробки; ось кулака — поперёк линии плечо–кисть в вертикальной плоскости (запястье без отведения), локоть
-     вниз и чуть внутрь — предплечье не ложится на наличник */
-  const H = [SISSY.wallX - SISSY.off[0], SISSY.handY, SISSY.edgeZ + SISSY.off[1]], pole = V.unit(V.add(V.add([0, -1, 0], latL, SISSY.elbow), [0, 0, -1], .3));
-  let thumb = [0, 1, 0];
-  for (let i = 0; i < 3; i++) { C.grip(q, 'L', H, thumb, pole, { allowShort: true }); thumb = V.unit(V.perp([0, 1, 0], V.unit(V.sub(H, C.fk(q).P.elL)))); }
+  /* Хват за ребро проёма, ближней (левой) рукой. Кулак вписан в угол между лицом наличника и внутренней гранью коробки: центр
+     хвата — на радиус хвата от обеих плоскостей, как у хвата за край скамьи и столешницы (edgeGrip). Ладонь ложится на ребро
+     со стороны комнаты, пальцы огибают его и уходят в проём на внутреннюю грань коробки — ей они и тянут, когда корпус отклоняется
+     назад. Стена слева от кисти, поэтому так обхватить ребро левой рукой можно только большим пальцем вниз (у левой кисти ладонь
+     к стене и пальцы вперёд — большой палец вниз; большим пальцем вверх ладонь смотрит от стены, и кулак у ребра держал воздух,
+     как в 4.102.0): предплечье пронировано, плечо повёрнуто внутрь, локоть в сторону и вверх — так держат косяк в растяжке
+     широчайшей. Чтобы пронация и поворот плеча оставались в пределах, кисть — на высоте груди (рука почти горизонтальна и вверху,
+     и внизу), стоять — в 40 см от стены, а ось кулака наклонена от ребра на долю tilt к поперечной предплечью (запястье без
+     лишнего отведения; наклон — до 25°, допуск оси хвата). Радиус хвата 1,2 (наименьший в таблице пальцев Anny): кольцо пальцев
+     помещается в коробку (2,5 см) и не уходит в стену за ней; центр хвата сдвинут на inset внутрь от вписанного положения —
+     кончики пальцев ложатся на внутреннюю грань коробки (не дальше 1,4 см; tools/anny-look/holds.js — до 1,5). */
+  const gr = SISSY.gr, H = [SISSY.wallX - SISSY_DOOR_GEO.casing + gr + SISSY.inset, SISSY.handY, SISSY_DOOR_GEO.jambFace - gr], down = [0, -1, 0];
+  const pole = V.unit(V.add(V.add([0, 1, 0], latL, SISSY.elbow[0]), [0, 0, -1], SISSY.elbow[1]));
+  let thumb = down;
+  for (let i = 0; i < 3; i++) { C.grip(q, 'L', H, thumb, pole, { allowShort: true }); thumb = V.unit(V.mix(down, V.unit(V.perp(down, V.unit(V.sub(H, C.fk(q).P.elL)))), SISSY.tilt)); }
   C.grip(q, 'L', H, thumb, pole, { allowShort });
-  /* правая рука поперёк груди: ладонь у левой ключицы, локоть вниз и вперёд */
-  q.R.girdle = [0, 6];
-  C.palm(q, 'R', V.add(V.add(C.chestPoint(q, 44, 0), latL, 5), T.z, 1), V.unit(V.add(latL, T.y, .5)), T.z, V.unit(V.add(V.add(T.z, T.y, -1), latR, .3)));
+  /* свободная (правая) рука — противовес: вытянута вперёд и поднимается вместе со сгибанием коленей (BarBend: «raise your
+     arms out in front of you at the same cadence as your knees bend»; Garage Gym Reviews: «holding your arms out in front as
+     you lean back … act as a counterbalance»). Направление руки в мире: подъём над горизонталью от SISSY.armUp[0] вверху до
+     SISSY.armUp[1] внизу, чуть к середине тела; локоть слегка согнут, кисть расслаблена, ладонь вниз и внутрь. Сгибание
+     плеча — от грудной клетки: корпус отклонён назад, и рука «вперёд в мире» согнута в плече меньше 90°. */
+  const T = C.axes(q, 'thorax'), lean = Math.atan2(-T.y[2], T.y[1]) / D, up = C.lerp(SISSY.armUp[0], SISSY.armUp[1], k);
+  q.R.shoulder = [90 + up - lean, SISSY.armAbd, 0]; q.R.elbow = SISSY.armElbow; q.R.pron = SISSY.armPron; q.R.wrist = [0, 0];
+  q.hands = { ...(q.hands || {}), R: 'relaxed' }; C.rhythm(q, 'R');
 }
 /* наклон голени φ: центр масс — над подушечками стоп (в 2 см позади точки под подушечкой) */
 function sissyPose(C, k, heel) {
-  const phi = C.solve1D(ph => { const q = sissyBody(C, k, heel, ph); sissyArms(C, q, true); return C.com(q)[2] - (SISSY.ballZ - 2); }, 0, Math.min(80, k + 10));
-  const q = sissyBody(C, k, heel, phi); sissyArms(C, q);
+  const u = (k - SISSY.knee[0]) / (SISSY.knee[1] - SISSY.knee[0]);
+  const phi = C.solve1D(ph => { const q = sissyBody(C, k, heel, ph); sissyArms(C, q, u, true); return C.com(q)[2] - (SISSY.ballZ - 2); }, 0, Math.min(80, k + 10));
+  const q = sissyBody(C, k, heel, phi); sissyArms(C, q, u);
   return q;
 }
 
 module.exports = {
   /* Сисси-присед с опорой рукой о дверной косяк: раскладка и источник — SISSY выше. */
   sissysquat: {
-    keys: [0, .25, .5, .75, 1],
+    keys: Array.from({ length: 13 }, (_, i) => i / 12),
     equipment: [SISSY_DOOR],
     contacts: [{ body: 'footL', prop: 'floor' }, { body: 'footR', prop: 'floor' }, { body: 'gripL', prop: 'door:jambR' }],
-    gripRadius: { L: 1.5 },
+    gripRadius: { L: SISSY.gr },
     pose(t, C) { const e = C.ease(t); return sissyPose(C, C.lerp(SISSY.knee[0], SISSY.knee[1], e), C.lerp(SISSY.heel[0], SISSY.heel[1], e)); }
   },
 
