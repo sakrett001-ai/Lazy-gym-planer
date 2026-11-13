@@ -49,10 +49,13 @@ function cleanCustomItem(it) {
   return o;
 }
 function cleanPlan(c, id) {
-  const ids = new Set(), out = {id, name:cleanText(c.name, CUSTOM_NAME) || 'Мой план',
+  /* имя по умолчанию (ключ auto, 11a-names.js) — на языке страницы; без имени — «Мой план» */
+  const nm = cleanText(c.name, CUSTOM_NAME), auto = autoKey(c.auto, nm, 'plan') || (nm ? null : 'my');
+  const ids = new Set(), out = {id, name:auto ? autoName(auto) : nm, ...(auto ? {auto} : {}),
     items:(Array.isArray(c.items) ? c.items : []).map(cleanCustomItem).filter(it => it && !ids.has(it.id) && ids.add(it.id)).slice(0, CUSTOM_MAX)};
   for (const [k, dict] of [['goal', GOALS], ['format', FORMATS], ['level', LEVELS]]) if (typeof c[k] === 'string' && dict[c[k]]) out[k] = c[k];
   for (const k of ['group', 'for', 'from']) { const v = cleanText(c[k], CUSTOM_TEXT); if (v) out[k] = v; }
+  const gauto = out.group && autoKey(c.gauto, out.group, 'group'); if (gauto) { out.group = autoName(gauto); out.gauto = gauto; }
   const note = cleanText(c.note, CUSTOM_NOTE, true); if (note) out.note = note;
   return out;
 }
@@ -61,7 +64,7 @@ function ensureCustoms(s) {
   s.fav = Array.isArray(s.fav) ? [...new Set(s.fav.filter(id => typeof id === 'string' && EXI[id]))] : [];
   const seen = new Set();
   s.customs = (Array.isArray(s.customs) ? s.customs : []).filter(c => c && typeof c.id === 'string' && /^[\w-]{1,24}$/.test(c.id) && !seen.has(c.id) && seen.add(c.id)).map(c => cleanPlan(c, c.id));
-  if (!s.customs.length) s.customs.push({id:'c1', name:'Мой план', items:[]});
+  if (!s.customs.length) s.customs.push({id:'c1', name:autoName('my'), auto:'my', items:[]});
   if (!s.customs.some(c => c.id === s.custom)) s.custom = s.customs[0].id;
   /* последний выбранный в «+ В свой план» план: удалён или испорчен — забывается, первым в списке станет открытый */
   if (!s.customs.some(c => c.id === s.cpLast)) s.cpLast = null;
@@ -131,7 +134,7 @@ function customAdd(id) {
 function newCustomPlan() {
   const c = customOf(), taken = new Set(S.customs.map(p => p.name));
   let n = S.customs.length + 1; while (taken.has('План ' + n)) n++;
-  return {id:newPlanId(), name:'План ' + n, items:[], ...(S.mode === 'custom' && c.group ? {group:c.group} : {}), ...Object.fromEntries(PLAN_KEYS.map(k => [k, S[k]]))};
+  return {id:newPlanId(), name:'План ' + n, auto:'plan:' + n, items:[], ...(S.mode === 'custom' && c.group ? {group:c.group, ...(c.gauto ? {gauto:c.gauto} : {})} : {}), ...Object.fromEntries(PLAN_KEYS.map(k => [k, S[k]]))};
 }
 /* «+ В свой план» в атласе и в разборе: в выбранный план (planId) или в новый (planId пустой). Открытый план, режим
    и вид не меняются (S.custom, S.mode, S.view). Добавленное запоминает план первым в списке (S.cpLast). */
@@ -344,9 +347,10 @@ function freezePlan(p) {
 function savePlansFrom() {
   const set = Object.fromEntries(PLAN_KEYS.map(k => [k, S[k]])), added = [];
   if (S.mode === 'program' && prog) {
-    const group = cleanText(`${SPLITS[prog.split].name} · неделя ${S.week}`, CUSTOM_TEXT);
-    for (const d of prog.days) if (d.plan.items) added.push({id:newPlanId(), name:uniquePlanName(`${WD[d.wd]} · ${d.name}`, S.customs.map(c => c.name).concat(added.map(c => c.name))), group, ...set, items:freezePlan(d.plan)});
-  } else if (plan && plan.items) added.push({id:newPlanId(), name:uniquePlanName(titleFor()), ...set, items:freezePlan(plan)});
+    /* имена и программа — с ключами (11a-names.js): в другом языке они пишутся на нём */
+    const gauto = `split:${prog.split}:${S.week}`, group = cleanText(autoName(gauto) || `${SPLITS[prog.split].name} · неделя ${S.week}`, CUSTOM_TEXT);
+    for (const d of prog.days) if (d.plan.items) added.push({id:newPlanId(), ...namedPlan(`${WD[d.wd]} · ${d.name}`, `day:${d.wd}:${d.tid}${d.li ? ':' + d.li : ''}`, S.customs.map(c => c.name).concat(added.map(c => c.name))), group, gauto, ...set, items:freezePlan(d.plan)});
+  } else if (plan && plan.items) added.push({id:newPlanId(), ...namedPlan(titleFor(), S.mode === 'custom' ? customOf().auto : S.groups.length ? 'groups:' + S.groups.join(',') : null), ...set, items:freezePlan(plan)});
   S.customs.push(...added); saveSettings();
   return added;
 }
@@ -399,7 +403,8 @@ document.addEventListener('click', e => {
     return;
   }
   if (t.dataset.cpCopy !== undefined) {
-    const c = customOf(), copy = JSON.parse(JSON.stringify(c)); copy.id = newPlanId(); copy.name = uniquePlanName(c.name + ' — копия');
+    const c = customOf(), copy = JSON.parse(JSON.stringify(c)); copy.id = newPlanId(); delete copy.auto;
+    Object.assign(copy, namedPlan(c.name + ' — копия', c.auto ? c.auto + '+copy' : null));
     S.customs.splice(S.customs.indexOf(c) + 1, 0, copy); openCustom(copy.id); regen();
     const inp = $('#cp-name'); if (inp) { inp.focus(); inp.select(); }
     return;
@@ -424,9 +429,10 @@ document.addEventListener('change', e => {
   if (['cp-group', 'cp-for', 'cp-pnote'].includes(t.id)) {
     const c = customOf(), k = {'cp-group':'group', 'cp-for':'for', 'cp-pnote':'note'}[t.id], v = k === 'note' ? cleanText(t.value, CUSTOM_NOTE, true) : cleanText(t.value, CUSTOM_TEXT);
     if (v) c[k] = v; else delete c[k];
+    if (k === 'group' && v !== (c.gauto && autoName(c.gauto))) delete c.gauto; /* программу переименовали — имя её, а не по умолчанию */
     saveSettings(); if (k === 'group') renderSetup(); if (S.mode === 'custom' && S.view === 'plan') renderPlan(); return;
   }
-  if (t.id === 'cp-name') { const v = t.value.trim().slice(0, CUSTOM_NAME); if (v) customOf().name = v; saveSettings(); renderSetup(); if (S.mode === 'custom' && S.view === 'plan') renderPlan(); return; }
+  if (t.id === 'cp-name') { const v = t.value.trim().slice(0, CUSTOM_NAME), c = customOf(); if (v && v !== c.name) { c.name = v; delete c.auto; } saveSettings(); renderSetup(); if (S.mode === 'custom' && S.view === 'plan') renderPlan(); return; }
   if (t.dataset.cpReps !== undefined) {
     const s = +t.dataset.cpReps;
     if (!customSetReps(s, t.value)) { t.value = plan.items.find(x => x.slot === s)?.rx.reps || ''; return; }

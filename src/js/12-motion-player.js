@@ -615,7 +615,7 @@ function planText() {
 /* ---------- события ---------- */
 /* место тренировок: название и источник программы */
 document.addEventListener('change', e => {
-  if (e.target.id === 'place-name') { const v = e.target.value.trim().slice(0, 24); if (v) placeOf().name = v; saveSettings(); renderSetup(); return; }
+  if (e.target.id === 'place-name') { const v = e.target.value.trim().slice(0, 24), p = placeOf(); if (v && v !== p.name) { p.name = v; delete p.auto; } saveSettings(); renderSetup(); return; }
   if (e.target.id === 'place-adapt') { S.adapt = e.target.value || null; ensurePlaces(S); return regen(); }
 });
 const swapKey = () => S.mode === 'program' ? 'd' + S.day : 's';
@@ -645,7 +645,7 @@ document.addEventListener('click', e => {
   if (t.dataset.place) { S.place = t.dataset.place; ensurePlaces(S); placeDel = false; return regen(); }
   if (t.dataset.placeAdd !== undefined) {
     const id = 'p' + Date.now().toString(36);
-    S.places.push({id, name:'Место ' + (S.places.length + 1), equip:[]});
+    S.places.push({id, name:'Место ' + (S.places.length + 1), auto:'place:' + (S.places.length + 1), equip:[]});
     S.place = id; ensurePlaces(S); eqOpen = true; placeDel = false; regen();
     const inp = $('#place-name'); if (inp) { inp.focus(); inp.select(); }
     return;

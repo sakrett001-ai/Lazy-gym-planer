@@ -477,7 +477,8 @@ function buildProgram() {
     const isFull = DAY_T[d.tid].name === 'Всё тело';
     const fullIdx = isFull ? tmpl.slice(0, d.i + 1).filter(t => DAY_T[t].name === 'Всё тело').length : 0;
     const fullTotal = tmpl.filter(t => DAY_T[t].name === 'Всё тело').length;
-    d.name = DAY_T[d.tid].name + (isFull ? (fullTotal > 1 ? ' ' + letters[fullIdx - 1] : '') : (same > 1 ? ' ' + letters[k - 1] : ''));
+    d.li = isFull ? (fullTotal > 1 ? fullIdx : 0) : (same > 1 ? k : 0); /* номер буквы дня — для ключа имени сохранённого плана (11a-names.js) */
+    d.name = DAY_T[d.tid].name + (d.li ? ' ' + letters[d.li - 1] : '');
   }
   const gvol = {}, load = {};
   let minutes = 0, sets = 0;
@@ -572,11 +573,17 @@ function renderSetup() {
 
 function titleFor() {
   if (S.mode === 'custom') return customOf().name;
-  const gs = new Set(S.groups);
+  return groupsTitle(S.groups);
+}
+/* название тренировки по группам мышц: заготовка («Верх тела») или список («Грудь, спина и плечи»); оно же — имя плана,
+   сохранённого из тренировки (ключ groups:…, 11a-names.js) */
+const GROUPS_AND = ' и ';
+function groupsTitle(groups) {
+  const gs = new Set(groups);
   const p = GROUP_PRESETS.find(p => p.g.length === gs.size && p.g.every(g => gs.has(g)));
   if (p) return p.id === 'full' ? 'Всё тело' : p.id === 'legs' ? 'Ноги и ягодицы' : p.id === 'push' ? 'Грудь, плечи, трицепс' : p.id === 'pull' ? 'Спина, бицепс, хват' : 'Верх тела';
-  const names = S.groups.map(g => GN[g].toLowerCase());
-  const s = names.length > 1 ? names.slice(0, -1).join(', ') + ' и ' + names[names.length - 1] : names[0];
+  const names = groups.map(g => GN[g].toLowerCase());
+  const s = names.length > 1 ? names.slice(0, -1).join(', ') + GROUPS_AND + names[names.length - 1] : names[0] || '';
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
