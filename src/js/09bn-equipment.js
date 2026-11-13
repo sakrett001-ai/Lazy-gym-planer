@@ -498,7 +498,7 @@ function rig(entry){
   if(!Number.isFinite(t)||t<0||t>1)throw Error('Pose must be in [0,1]');
   const k=track(t),q=M.unpack(k.v,k.hands);if(entry.gripRadius)q.gripRadius=entry.gripRadius;if(k.depth)q.handDepth=k.depth;if(k.horn)q.horn=k.horn;
   /* R.t — фаза повтора: по ней движется то, что не следует за телом (лента дорожки, BIND.treadBelt) */
-  const R=M.catalogPose(q);R.t=t;R.props=build(entry.equipment||[],R);R.contacts=(entry.contacts||[]).map(c=>({...c}));R.exerciseBasis='mannequin';
+  const R=M.catalogPose(q);R.t=t;if(entry.loop)R.loop=true;R.props=build(entry.equipment||[],R);R.contacts=(entry.contacts||[]).map(c=>({...c}));R.exerciseBasis='mannequin';
   return R;
  };
 }

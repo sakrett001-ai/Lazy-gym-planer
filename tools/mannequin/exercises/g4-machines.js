@@ -950,7 +950,8 @@ module.exports = {
   /* Подтягивания в гравитроне: колени на платформе-противовесе, хват сверху чуть шире плеч.
      t=0 — вис на почти прямых руках, t=1 — подбородок над рукоятями; платформа поднимается вместе с коленями. */
   assistpull: {
-    keys: [0, .2, .4, .6, .8, 1],
+    /* ключи вдвое чаще: углы рук между ключами уводили кулаки по ручке на 0,55–1,44 см (tools/anny-look/jitter.js) */
+    keys: [0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1],
     get equipment() { return GV_EQ(this); },
     contacts: [{ body: 'kneeL', prop: 'gvPad:pad' }, { body: 'kneeR', prop: 'gvPad:pad' }, { body: 'gripL', prop: 'gv:pullL' }, { body: 'gripR', prop: 'gv:pullR' }],
     pose(t, C) {
@@ -1044,7 +1045,8 @@ module.exports = {
   /* Подъём ног в висе: лицом от рамы, ноги почти прямые поднимаются до горизонтали с подкручиванием таза.
      t=0 — вис, t=1 — ноги на уровне таза. Корпус отклоняется назад так, чтобы центр масс оставался под перекладиной. */
   legraise: {
-    keys: [0, .25, .5, .75, 1],
+    /* 9 ключей: при 5 углы рук между ключами уводили кулаки по ручке до 1,3–2,1 см (tools/anny-look/jitter.js) */
+    keys: [0, .125, .25, .375, .5, .625, .75, .875, 1],
     equipment: [RACK],
     contacts: [{ body: 'gripL', prop: 'rack:pullBar' }, { body: 'gripR', prop: 'rack:pullBar' }],
     pose(t, C) {
@@ -1059,7 +1061,8 @@ module.exports = {
 
   /* Подъём коленей в висе: колени к груди, таз подкручен. t=0 — вис, t=1 — колени у груди. */
   hangknee: {
-    keys: [0, .25, .5, .75, 1],
+    /* 9 ключей: при 5 углы рук между ключами уводили кулаки по ручке до 1,3–2,1 см (tools/anny-look/jitter.js) */
+    keys: [0, .125, .25, .375, .5, .625, .75, .875, 1],
     equipment: [RACK],
     contacts: [{ body: 'gripL', prop: 'rack:pullBar' }, { body: 'gripR', prop: 'rack:pullBar' }],
     pose(t, C) {
@@ -1109,17 +1112,22 @@ module.exports = {
   legpresslow: lpFeetSpec(-10, 18, 96),
 
   /* Гиперэкстензия 45°: упор чуть ниже паховой складки, валики за голенями, руки скрещены на груди.
-     t=0 — тело прямой линией (без переразгибания), t=1 — нижняя точка наклона. */
+     t=0 — тело прямой линией (без переразгибания), t=1 — нижняя точка наклона. Наклон — в тазобедренных суставах, спина
+     прямая, голова на продолжении корпуса (техника каталога: «спина прямая», в ошибках — «округление спины внизу»; нейтральный
+     позвоночник и движение в тазобедренных — McGill S. Low Back Disorders, 3rd ed., Human Kinetics 2016, гл. «упражнения»:
+     разгибание на римском стуле). До 4.102 внизу поясница была согнута на 13°, грудной отдел — на 8°, шея — на 12° (голова
+     свисала; тренер-тестер); теперь 4°, 2° и 0°, а таз наклоняется на 78° вместо 70° (бедро 78° при пределе задней поверхности
+     бедра 83° при колене 6°): наклон корпуса внизу почти тот же (84° против 91°). */
   hyper: {
     keys: [0, .25, .5, .75, 1],
     equipment: [HY().machine],
     contacts: [{ body: 'soleL', prop: 'hy:plate' }, { body: 'soleR', prop: 'hy:plate' }, { body: 'thL', prop: 'hy:pad' }, { body: 'thR', prop: 'hy:pad' },
       { body: 'skL', prop: 'hy:rollL' }, { body: 'skR', prop: 'hy:rollR' }],
     pose(t, C) {
-      const { V, M } = C, L = HY(), e = C.ease(t), q = C.M.clone(L.q), ph = C.lerp(0, 70, e) * C.D2R;
+      const { V, M } = C, L = HY(), e = C.ease(t), q = C.M.clone(L.q), ph = C.lerp(0, 78, e) * C.D2R;
       const up = V.add(V.scale(L.d, Math.cos(ph)), L.n, Math.sin(ph)), fwd = V.add(V.scale(L.n, Math.cos(ph)), L.d, -Math.sin(ph));
       C.root(q, L.H, up, fwd);
-      q.lumbar = [C.lerp(-1, 13, e), 0, 0]; q.thoracic = [C.lerp(0, 8, e), 0, 0]; q.neck = [C.lerp(-8, 12, e), 0, 0];
+      q.lumbar = [C.lerp(-1, 4, e), 0, 0]; q.thoracic = [C.lerp(0, 2, e), 0, 0]; q.neck = [C.lerp(-8, 0, e), 0, 0];
       L.feet.forEach((ft, i) => { const s = S[i]; M.solveLeg(q, s, ft, V.unit(V.add(L.n, C.latP(q, s), .1))); });
       /* руки скрещены на груди: кисти у противоположных плеч, правое предплечье поверх левого */
       for (const s of S) q[s].girdle = [0, 10];

@@ -4,7 +4,7 @@
 const MUSCLE_REGIONS={
  chest:[['pec_clavicular','Ключичная часть грудной','anatomical'],['pec_sternal','Средняя область грудной','teaching'],['pec_costal','Нижняя область грудной','teaching'],['pec_minor','Малая грудная · глубже','deep']],
  triceps:[['tri_long','Длинная головка трицепса','anatomical'],['tri_lateral','Латеральная головка трицепса','anatomical'],['tri_medial','Медиальная головка трицепса · глубже','deep']],
- biceps:[['bi_long','Длинная головка бицепса','anatomical'],['bi_short','Короткая головка бицепса','anatomical']],
+ biceps:[['bi_long','Длинная головка бицепса','anatomical'],['bi_short','Короткая головка бицепса','anatomical'],['brachialis','Плечевая мышца · глубже','deep']],
  delt_f:[['delt_f','Передняя часть дельтовидной','anatomical']],delt_s:[['delt_s','Средняя часть дельтовидной','anatomical']],delt_r:[['delt_r','Задняя часть дельтовидной','anatomical']],
  quads:[['quad_rectus','Прямая мышца бедра','anatomical'],['quad_lateral','Латеральная широкая мышца','anatomical'],['quad_medial','Медиальная широкая мышца','anatomical'],['quad_deep','Промежуточная широкая · глубже','deep']],
  hams:[['ham_lateral','Двуглавая мышца бедра, длинная головка','anatomical'],['ham_medial','Медиальная область заднего бедра','teaching'],['ham_short','Короткая головка двуглавой бедра · глубже','deep']],
@@ -71,6 +71,12 @@ const REGION_FACTORS={
  /* предплечье: сгибание запястий — сгибатели, разгибатели растягиваются, плечелучевая запястье не пересекает (OpenStax A&P 2e,
     11.5); «молот» — плечелучевая сгибает локоть (ЭМГ — Boland и др., 2008), мышцы кисти держат рукоять */
  forearm_flex:id=>id==='hammer'?.6:1,
+ /* группа «Бицепс» на манекене — сгибатели локтя плеча: двуглавая и под ней плечевая (часть BRA данных мышц, tools/muscles/pack.js).
+    Плечевая сгибает локоть при любом положении предплечья (ЭМГ — Basmajian и Latif, 1957) — её доля 1 во всех упражнениях;
+    в нейтральном хвате («молот») двуглавая работает слабее, чем в хвате снизу, а плечелучевая — сильнее (ЭМГ — Kleiber и др.,
+    2015): у головок двуглавой в «молоте» — 0,8 */
+ bi_long:id=>id==='hammer'?.8:1,
+ bi_short:id=>id==='hammer'?.8:1,
  forearm_ext:id=>id==='wristcurl'?.3:id==='hammer'?.6:1,
  brachiorad:id=>id==='wristcurl'?.3:1,
  /* манжета: наружу плечо поворачивают подостная и малая круглая, надостная помогает (ЭМГ — Reinold и др., 2004),
@@ -88,11 +94,13 @@ const REGION_SOURCES={
  shrug:['Трапециевидная в шрагах: ЭМГ — Pizzari и др., 2014','https://doi.org/10.1016/j.clinbiomech.2013.11.011'],
  pull:['Нижняя часть трапециевидной в подтягиваниях: ЭМГ — Youdas и др., 2010','https://doi.org/10.1519/JSC.0b013e3181f1598c'],
  brd:['Плечелучевая в сгибании локтя: ЭМГ — Boland и др., 2008','https://doi.org/10.1016/j.jhsa.2008.07.019'],
+ bra:['Плечевая мышца сгибает локоть при любом положении предплечья: ЭМГ — Basmajian и Latif, 1957','https://pubmed.ncbi.nlm.nih.gov/13475410/'],
+ grip:['Двуглавая и плечелучевая при хвате снизу, нейтральном и сверху: ЭМГ — Kleiber и др., 2015','https://doi.org/10.3389/fphys.2015.00215'],
  cuff:['Мышцы манжеты и дельтовидная в упражнениях на наружную ротацию: ЭМГ — Reinold и др., 2004','https://doi.org/10.2519/jospt.2004.34.7.385']
 };
 const regionSources=(id,muscles)=>[
  ...(SQUAT_LIKE.has(id)&&muscles.quads?[REGION_SOURCES.rectus]:[]),...(muscles.hams&&id!=='legcurl'&&id!=='nordic'?[REGION_SOURCES.hamShort]:[]),
- ...(id==='shrug'?[REGION_SOURCES.shrug]:[]),...(PULL_DOWN.has(id)?[REGION_SOURCES.pull]:[]),...(id==='hammer'?[REGION_SOURCES.brd]:[]),
+ ...(id==='shrug'?[REGION_SOURCES.shrug]:[]),...(PULL_DOWN.has(id)?[REGION_SOURCES.pull]:[]),...(id==='hammer'?[REGION_SOURCES.brd,REGION_SOURCES.bra,REGION_SOURCES.grip]:[]),
  ...(EXT_ROT.has(id)||id==='ytw'?[REGION_SOURCES.cuff]:[])];
 /* Группы, которых нет в составе упражнения, но которые по ЭМГ участвуют: нижняя часть трапециевидной опускает лопатку в тягах
    сверху и подтягиваниях (Youdas и др., 2010) — в профиле как вспомогательная, в составе упражнения (pri/sec) не меняется */

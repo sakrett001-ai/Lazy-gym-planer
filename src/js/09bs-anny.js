@@ -374,7 +374,7 @@ const AnnySkin = (() => {
      больше SUP.GAP_MAX и меньше зазора остальной стопы (на SUP.HEEL_MARGIN — в полную силу); ложится только пяточная область — вершины рамки
      стопы позади SUP.HEEL_Z (стойка, вдоль стопы; плавно на ±1 см). Стоя на всей подошве (зазор пятки и подушечки
      одинаков) опоры нет — свод не сплющивается. */
-  const SUP = { MAX: 4, GAP_MAX: 3, PRESS: .5, RAMP: 3, GAP_VERTS: 250, FOOT_REST: 60, LEN: 24, HEEL_Z: -2.5, HEEL_MARGIN: 1, HEEL: 1000 };
+  const SUP = { MAX: 4, GAP_MAX: 3, PRESS: .5, RAMP: 3, GAP_VERTS: 250, FOOT_REST: 60, LEN: 24, HEEL_Z: -2.5, HEEL_MARGIN: 1, HEEL: 1000, EDGE: .04 };
   const SUP_TRUNK = ['thorax', 'lumbar', 'pelvis', 'clL', 'clR', 'spL', 'spR'];
   /* рамки части тела контакта: [кожа, которая ложится на опору; по какой мерится зазор] */
   function supportBody(body) {
@@ -492,8 +492,15 @@ const AnnySkin = (() => {
       /* стопа: опора пятки — только если пятка ближе к опоре, чем остальная стопа (лежит на пятке, а не стоит на подошве):
          сила нарастает с разницей зазоров от SUP.HEEL_MARGIN / 2 до SUP.HEEL_MARGIN · 1,5 (без скачка в ходьбе) */
       const heel = foot ? smooth((best.other - best.gap - SUP.HEEL_MARGIN / 2) / SUP.HEEL_MARGIN) : 1;
-      if (!(heel > 0)) continue;
-      const u = best.u; u[17] = best.gap + SUP.PRESS; u[18] = SUP.RAMP; u[19] = strength(best.gap) * heel;
+      /* контакт с окном (when): опора включается и выключается не скачком — сила нарастает за SUP.EDGE доли повтора от начала окна
+         и спадает к его концу. Края 0 и 1 — без спада, если там нет перехода: повтор разворачивается (не цикл) или у того же
+         тела на той же опоре окно продолжается через край цикла (R.loop — замкнутый цикл, EQ.rig). Без этого кожа части тела
+         прыгала на опору в первом кадре окна на зазор + 0,5 см: голень на балку скамьи в копенгагенской планке — 1,3 см за кадр,
+         пятка на пол в ходьбе с гантелями — 0,8 (tools/anny-look/jitter.js) */
+      const wrap = e => !R.loop || contacts.some(c => c !== k && c.body === k.body && c.prop === k.prop && c.when && (e ? c.when[0] < 1e-6 : c.when[1] > 1 - 1e-6));
+      const edge = k.when && R.t != null ? smooth(k.when[0] > 1e-6 || !wrap(0) ? (R.t - k.when[0]) / SUP.EDGE : 1) * smooth(k.when[1] < 1 - 1e-6 || !wrap(1) ? (k.when[1] - R.t) / SUP.EDGE : 1) : 1;
+      if (!(heel > 0) || !(edge > 0)) continue;
+      const u = best.u; u[17] = best.gap + SUP.PRESS; u[18] = SUP.RAMP; u[19] = strength(best.gap) * heel * edge;
       const bits = [0, 0, 0]; for (const f of B[0]) { const i = fi[f]; if (i == null) continue; const c = Math.floor(i / 19); bits[c] += 2 ** (i - c * 19); }
       u[20] = bits[0]; u[21] = bits[1]; u[22] = bits[2]; u[23] = foot ? SUP.HEEL + SUP.HEEL_Z : 0;
       out.u.set(u, out.n * SUP.LEN); out.list.push({ body: k.body, prop: k.prop, gap: best.gap, ...(foot ? { heel: true, other: best.other } : {}) }); out.n++;

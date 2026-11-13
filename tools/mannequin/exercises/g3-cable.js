@@ -810,7 +810,9 @@ module.exports = {
 
   /* Сидя, бёдра под валиками, широкий хват сверху, корпус отклонён на ~12°. t=0 — руки выпрямлены вверх; t=1 — гриф у верха груди, локти вниз. */
   latpull: {
-    keys: [0, .25, .5, .75, 1],
+    /* ключи чаще (вверху — через 1/16): углы рук между ключами меняли расстояние между кулаками, а прямая рукоять блока идёт
+       через оба кулака — при 5 ключах она «тянулась» на 2,1 см (tools/anny-look/jitter.js) */
+    keys: [0, .0625, .125, .1875, .25, .375, .5, .5625, .625, .6875, .75, .8125, .875, 1],
     get equipment() { return tuned(this, () => { const E = LP_EQ(), A = EQ.anchors([E]).lat; return [E, cable(E, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 19, bend: 8, wrap: [0, 0, -1] }), { type: 'g3line', id: 'boomCable', pts: [rp(A.boomCableA), rp(A.boomCableB)] }]; }); },
     contacts: [{ body: 'buttocks', prop: 'lat:seat' }, { body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     pose(t, C) {
@@ -1307,7 +1309,8 @@ module.exports = {
 
   /* t=0 — прямые руки на уровне головы; t=1 — рукоять у бёдер, лопатки опущены. */
   straightpull: {
-    keys: [0, .2, .4, .6, .8, 1],
+    /* ключи вдвое чаще: углы рук между ключами уводили кулаки по ручке на 0,55–1,44 см (tools/anny-look/jitter.js) */
+    keys: [0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1],
     get equipment() { return tuned(this, () => [SP_TOWER, cable(SP_TOWER, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 12 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     pose(t, C) {
@@ -1325,7 +1328,9 @@ module.exports = {
   },
   /* t=0 — локти согнуты под 90°, рукоять на уровне низа груди; t=1 — руки выпрямлены, рукоять у бёдер. */
   pushdown: {
-    keys: [0, .25, .5, .75, 1],
+    /* ключи чаще (у почти прямых рук — через 1/16): прямая рукоять блока идёт через оба кулака, и при 5 ключах она «тянулась»
+       на 2 см между ключами (tools/anny-look/jitter.js) */
+    keys: [0, .125, .25, .375, .5, .625, .6875, .75, .8125, .875, 1],
     get equipment() { return tuned(this, () => [PD_TOWER, cable(PD_TOWER, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 11 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     pose(t, C) {

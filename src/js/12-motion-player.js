@@ -499,6 +499,8 @@ function closeMotion(fromBack) {
   detailReturn=null;
   /* вид фигуры мог смениться в разборе — карточки плана берут его же */
   if(figs.some(F=>F.card))applyCardsView();
+  /* добавили в открытый свой план из атласа или разбора — его страница перерисовывается теперь (11d-custom.js) */
+  cpFlush();
 }
 function setupMotionViewer() {
   window.addEventListener('resize',()=>{pickActiveCards();for(const F of figs)if(F.av)F.av.size=null;if(cardAnatomy.view!=='mannequin')queueCardStills();},{passive:true});
@@ -528,7 +530,7 @@ function setupMotionViewer() {
   for(const prefix of ['mv','wv'])$('#'+prefix+'-stress-toggle').addEventListener('change',e=>changeStressPreference(e.target.checked));
   for(const prefix of ['mv','wv'])$('#'+prefix+'-region').addEventListener('change',e=>selectMuscleRegion(prefix,e.target.value));
   $('#motion-view').addEventListener('cancel',e=>{e.preventDefault();closeMotion();});
-  $('#motion-view').addEventListener('close',()=>{disposeMotion(detailMotion);detailMotion=null;closeGallery();document.documentElement.classList.remove('motion-open');OverlayBack.closed('motion');});
+  $('#motion-view').addEventListener('close',()=>{disposeMotion(detailMotion);detailMotion=null;closeGallery();document.documentElement.classList.remove('motion-open');OverlayBack.closed('motion');cpFlush();});
   /* объёмная графика грузится после первого экрана (build.js): если разбор или тренировка открыты раньше, показывается
      плоская схема, а с приходом объёма та же фаза перерисовывается в нём */
   window.addEventListener('gym-volume',()=>{

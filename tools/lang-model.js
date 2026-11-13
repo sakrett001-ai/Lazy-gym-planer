@@ -1,19 +1,23 @@
 'use strict';
 /* Модель приложения на языке сборки для проверок: модули src/js (без 99-boot.js — первой отрисовки) в песочнице,
    для английского — переведённые словарём i18n/en.json так же, как в build.js, и с тем же началом app.js
-   (PODHOD_LANG, PODHOD_LOCALE). Хранилище можно передать — так проверяется работа в одном языке и открытие в другом. */
+   (PODHOD_LANG, PODHOD_LOCALE, PODHOD_SEARCH). Хранилище можно передать — так проверяется работа в одном языке и открытие в другом. */
 const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
 const {translateJs} = require('../i18n/translate');
+const {searchData} = require('../i18n/search-data');
 const root = path.resolve(__dirname, '..');
 const LOCALES = {ru:{dec:',', plural:'ru', dates:'ru', units:'kg'}, en:{dec:'.', plural:'one', dates:'intl', units:'region'}};
-let cache = {};
+let cache = {}, searchCache = {};
+const readJs = () => { const dir = path.join(root, 'src/js'); return fs.readdirSync(dir).filter(f => /^\d.*\.js$/.test(f) && Number.parseInt(f) < 99).sort().map(f => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n'); };
+const enDict = () => JSON.parse(fs.readFileSync(path.join(root, 'i18n', 'en.json'), 'utf8'));
 function source(lang) {
   if (cache[lang]) return cache[lang];
-  const dir = path.join(root, 'src/js');
-  let js = fs.readdirSync(dir).filter(f => /^\d.*\.js$/.test(f) && Number.parseInt(f) < 99).sort().map(f => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n');
+  let js = readJs();
   if (lang !== 'ru') js = translateJs(js, JSON.parse(fs.readFileSync(path.join(root, 'i18n', lang + '.json'), 'utf8')), new Set(), {quotes:'“”'});
   return (cache[lang] = new vm.Script(js, {filename:`app-${lang}.js`}));
 }
+/* данные поиска (PODHOD_SEARCH) — как в build.js: названия на другом языке, синонимы, раскладка */
+const search = lang => searchCache[lang] || (searchCache[lang] = searchData(lang, readJs(), enDict()));
 function loadApp({lang = 'ru', storage = new Map(), nav = lang === 'en' ? ['en-US', 'en'] : ['ru-RU', 'ru']} = {}) {
   const listeners = {};
   const document = {addEventListener:(type, fn) => { (listeners[type] = listeners[type] || []).push(fn); }, querySelector() { return null; }, querySelectorAll() { return []; },
@@ -22,7 +26,7 @@ function loadApp({lang = 'ru', storage = new Map(), nav = lang === 'en' ? ['en-U
     localStorage:{getItem:k => storage.get(k) ?? null, setItem:(k, v) => storage.set(k, String(v)), removeItem:k => storage.delete(k)},
     setTimeout:() => 0, clearTimeout() {}, setInterval:() => 0, clearInterval() {}, Intl,
     requestAnimationFrame:() => 0, cancelAnimationFrame() {}, matchMedia:() => ({matches:false}),
-    PODHOD_LANG:lang, PODHOD_LOCALE:LOCALES[lang], PODHOD_VERSION:'0.0.0-test'};
+    PODHOD_LANG:lang, PODHOD_LOCALE:LOCALES[lang], PODHOD_VERSION:'0.0.0-test', PODHOD_SEARCH:JSON.parse(JSON.stringify(search(lang)))};
   context.window = context;
   vm.createContext(context);
   source(lang).runInContext(context, {timeout:20000});

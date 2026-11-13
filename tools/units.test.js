@@ -26,7 +26,15 @@ test('pounds round-trip: what was typed is shown back, stored in kilograms', () 
   const en = loadApp({lang:'en', nav:['en-US']});
   for (const lb of [135, 137.5, 45, 2.5, 1.25, 315, 52.5]) assert.equal(en.get(`fmtKg(parseKg('${lb}'))`), String(lb), lb + ' lb');
   assert(Math.abs(en.get(`parseKg('135')`) - 61.235) < 1e-3);
-  assert.equal(en.get('fmtKg(60)'), '132.28', 'a kilogram entry is shown in pounds');
+  /* вписанное в килограммах (кратно 50 г) — в фунтах с одной цифрой после точки, целые — без точки (4.101.0: «132.28 lb») */
+  assert.equal(en.get('fmtKg(60)'), '132.3', 'a kilogram entry is shown in pounds, one decimal');
+  assert.deepEqual(en.json('[62.5, 20, 100, 13.75, 0, 45.35].map(fmtKg)'), ['137.8', '44.1', '220.5', '30.3', '0', '100']);
+  assert.equal(en.get('fmtW(60)'), '132.3 lb');
+  /* вписанное в фунтах — тем же числом, и в журнале, и в своём плане (там хранится до граммов) */
+  for (const lb of ['1.25', '137.5', '52.25', '2.5']) assert.equal(en.get(`fmtKg(parseKg('${lb}'))`), lb, lb + ' lb in the log');
+  for (const lb of ['1.25', '137.5', '135', '45']) assert.equal(en.get(`planKgText(parseKgInput('${lb}'))`), lb, lb + ' lb in a plan');
+  /* в килограммах — как раньше, до сотых */
+  assert.deepEqual(loadApp({lang:'ru'}).json('[60, 62.5, 61.235].map(fmtKg)'), ['60', '62,5', '61,24']);
   assert.equal(en.get(`fmtTon(3 * 10 * parseKg('135'))`), '4,050');
   /* вес в своём плане: «135 / 140 / 145» */
   assert.equal(en.get(`planKgText(parseKgInput('135 / 140 / 145'))`), '135 / 140 / 145');
