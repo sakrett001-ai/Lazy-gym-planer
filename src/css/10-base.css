@@ -271,6 +271,8 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .wu-note { font-size:.75rem; color:var(--muted); }
 .wu-work { border-top:1px dashed var(--line); margin-top:2px; padding-top:6px; }
 .wu-work .wu-r { color:var(--accent); font-family:var(--f-body); font-weight:600; }
+/* «рабочий» / «working» — на две колонки (своя и пустая колонка процента): слово не переносится по слогам */
+.wu-work .wu-r { grid-column:3 / span 2; white-space:nowrap; } .wu-work .wu-note { display:none; }
 .wu-pl { min-width:0; display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
 .pl-row { display:inline-flex; gap:3px; flex-wrap:wrap; }
 .pl { display:inline-grid; place-items:center; min-width:26px; height:22px; padding:0 4px; border-radius:5px; font:600 .75rem var(--f-mono); color:var(--surface); background:var(--plate); }
