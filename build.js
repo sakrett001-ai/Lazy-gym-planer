@@ -24,7 +24,7 @@ const LANGS = {
     locale:{dec:',', plural:'ru', dates:'ru', units:'kg'}},
   en:{dir:'en', html:'en', title:'Lazy Gym Planner', desc:'Lazy Gym Planner — workout planner: picks exercises for your muscles and equipment, shows technique, logs your weights.',
     manifestName:'Lazy Gym Planner — workout planner', manifestDesc:'Workouts built around your muscles and equipment, technique, weight log.',
-    other:{lang:'ru', href:'../', label:'RU', offline:'lazy-gym-planner-offline-ru.html', title:'Русская версия'}, fallback:true,
+    other:{lang:'ru', href:'../', label:'RU', offline:'lazy-gym-planner-offline-ru.html', title:'Русская версия'}, fallback:true, quotes:'“”',
     locale:{dec:'.', plural:'one', dates:'intl', units:'region'}}
 };
 /* выбор языка при заходе (src/lang.js): папки языков, язык корня, запасной */
@@ -104,7 +104,8 @@ for (const [lang, L] of Object.entries(LANGS)) {
     const dictPath = path.join(__dirname, 'i18n', lang + '.json');
     const dict = fs.existsSync(dictPath) ? JSON.parse(read(dictPath)) : {};
     const missing = new Set();
-    css = translateCss(css, dict, missing); js = translateJs(js, dict, missing); body = translateHtml(body, dict, missing); pwa = translateJs(pwa, dict, missing);
+    const opts = {quotes:L.quotes}; /* кавычки языка вместо «ёлочек» (i18n/translate.js) */
+    css = translateCss(css, dict, missing, opts); js = translateJs(js, dict, missing, opts); body = translateHtml(body, dict, missing, opts); pwa = translateJs(pwa, dict, missing, opts);
     if (missing.size) report.push(`${lang}: не переведено ${missing.size} строк (node i18n/extract.js ${lang})`);
   }
   /* язык, версия и локаль — до кода приложения: первая отрисовка (99-boot.js) уже с точкой, английским множественным числом и датами */

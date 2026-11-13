@@ -143,7 +143,8 @@ function renderAtlas() {
   const first = A.pri[0] || A.sec[0];
   if (!atlasEx || ![...A.pri, ...A.sec].some(r => r.ex.id === atlasEx)) { atlasEx = first ? first.ex.id : null; atlasCam = null; }
   const place = placeOf();
-  const here = p => { const PE = effEquip(p.equip); return EX.filter(ex => (ex.pri.includes(m) || ex.sec.includes(m)) && available(ex, PE)).length; };
+  /* у места — сколько упражнений с основной нагрузкой на мышцу (как число у мышцы выше) и сколько всего, со вспомогательной */
+  const here = p => { const PE = effEquip(p.equip), all = EX.filter(ex => (ex.pri.includes(m) || ex.sec.includes(m)) && available(ex, PE)); return {main:all.filter(ex => ex.pri.includes(m)).length, all:all.length}; };
   const name = MUSCLE_NAMES[m], lower = name.toLowerCase();
   let html = `<header class="at-head">
     <p class="eyebrow">Атлас мышц</p>
@@ -160,7 +161,7 @@ function renderAtlas() {
     <section class="at-detail" id="at-detail" aria-labelledby="at-name">
       <h2 class="at-name" id="at-name">${esc(name)}</h2>
       <p class="at-desc">${esc(MUSCLE_INFO[m])}</p>
-      <div class="at-where"><span class="at-wl">Упражнений на эту мышцу</span><div class="places at-places" role="group" aria-label="Где тренируетесь">${S.places.map(p => { const n = here(p); return `<button type="button" class="place${p.id === S.place ? ' on' : ''}" data-place="${p.id}" aria-pressed="${p.id === S.place}"><b>${esc(p.name)}</b><small>${n}</small></button>`; }).join('')}</div></div>
+      <div class="at-where"><span class="at-wl">Упражнений на эту мышцу</span><div class="places at-places" role="group" aria-label="Где тренируетесь">${S.places.map(p => { const n = here(p); return `<button type="button" class="place${p.id === S.place ? ' on' : ''}" data-place="${p.id}" aria-pressed="${p.id === S.place}"><b>${esc(p.name)}</b><small>${n.main} ${plural(n.main, 'основное', 'основных', 'основных')} · ${n.all} всего</small></button>`; }).join('')}</div></div>
       <div class="at-acts">
         ${ATLAS_SUPPORT.has(m) ? '<p class="f-note">Эта мышца работает в помощь основным и отдельной тренировки не требует: она включается в упражнениях ниже.</p>' : `<button type="button" class="btn" data-atlas-focus="${m}">Тренировка с акцентом на эту мышцу →</button>
         ${S.focus === m ? '<span class="at-focus-on">Акцент уже выбран</span>' : ''}`}

@@ -8,6 +8,10 @@ const CUSTOM_REPS = /^(\d{1,3})(?:\s*[–-]\s*(\d{1,3}))?$/;
 const CUSTOM_TEMPO = /^[0-9X]{1,2}-[0-9X]{1,2}-[0-9X]{1,2}-[0-9X]{1,2}$/;
 const PLAN_KEYS = ['goal', 'format', 'level'];
 let cpTab = null, cpOpen = new Set(), cpDel = false;
+/* блок «Программа, для кого, заметка» раскрыли — остаётся раскрытым, когда панель перерисовывается (Enter в «Названии»
+   и другие правки), до перезагрузки страницы */
+let cpAboutOpen = false;
+document.addEventListener('toggle', e => { if (e.target && e.target.classList && e.target.classList.contains('cp-about')) cpAboutOpen = e.target.open; }, true);
 
 /* текст от человека или из чужого файла: без управляющих символов, с ограничением длины (переводы строк в заметках остаются) */
 function cleanText(v, max, lines = false) {
@@ -106,14 +110,14 @@ function toggleFav(id) {
 function favLabel(on) { return on ? 'Убрать из избранного' : 'В избранное'; }
 function favButton(id, text = false) {
   const on = isFav(id);
-  return `<button type="button" class="fav${on ? ' on' : ''}${text ? ' fav-t' : ''}" data-fav="${id}" aria-pressed="${on}" aria-label="${favLabel(on)}: ${esc(EXI[id].name)}" title="${favLabel(on)}"><span class="fav-i" aria-hidden="true">${on ? '★' : '☆'}</span>${text ? `<span class="fav-l">${on ? 'В избранном' : 'В избранное'}</span>` : ''}</button>`;
+  return `<button type="button" class="fav${on ? ' on' : ''}${text ? ' fav-t' : ''}" data-fav="${id}" aria-pressed="${on}" aria-label="${favLabel(on)}: ${esc(exNameHere(EXI[id]))}" title="${favLabel(on)}"><span class="fav-i" aria-hidden="true">${on ? '★' : '☆'}</span>${text ? `<span class="fav-l">${on ? 'В избранном' : 'В избранное'}</span>` : ''}</button>`;
 }
 /* звёздочки обновляются на месте: анимации и открытые панели не перестраиваются */
 function refreshFav(id) {
   const on = isFav(id);
   for (const b of document.querySelectorAll(`[data-fav="${id}"]`)) {
     b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); b.setAttribute('title', favLabel(on));
-    b.setAttribute('aria-label', `${favLabel(on)}: ${EXI[id].name}`);
+    b.setAttribute('aria-label', `${favLabel(on)}: ${exNameHere(EXI[id])}`);
     const i = b.querySelector('.fav-i'); if (i) i.textContent = on ? '★' : '☆';
     const l = b.querySelector('.fav-l'); if (l) l.textContent = on ? 'В избранном' : 'В избранное';
   }
@@ -234,7 +238,7 @@ function customSetupHtml() {
   return `${lists}<div class="cp-acts"><button type="button" class="place place-add" data-cp-new="1">+ План</button><button type="button" class="btn-ghost" data-cp-copy="1">Копия плана</button><button type="button" class="btn-ghost" data-cp-import="1">${ICON.load}<span>Загрузить план</span></button></div>`
     + `<div class="place-tools"><label class="place-name">Название<input id="cp-name" type="text" maxlength="${CUSTOM_NAME}" value="${esc(c.name)}" autocomplete="off"></label>`
     + (S.customs.length > 1 ? `<button type="button" class="place-del${cpDel ? ' armed' : ''}" data-cp-del="1">${cpDel ? 'Точно удалить?' : 'Удалить план'}</button>` : '') + `</div>`
-    + `<details class="cp-about"${c.group || c.for || c.note ? ' open' : ''}><summary>Программа, для кого, заметка</summary><div class="cp-about-f">
+    + `<details class="cp-about"${c.group || c.for || c.note || cpAboutOpen ? ' open' : ''}><summary>Программа, для кого, заметка</summary><div class="cp-about-f">
         <label class="place-name">Программа<input id="cp-group" type="text" maxlength="${CUSTOM_TEXT}" list="cp-groups" value="${esc(c.group || '')}" placeholder="Например: Сила, неделя 1" autocomplete="off"><datalist id="cp-groups">${known.map(g => `<option value="${esc(g)}"></option>`).join('')}</datalist></label>
         <label class="place-name">Для кого<input id="cp-for" type="text" maxlength="${CUSTOM_TEXT}" value="${esc(c.for || '')}" placeholder="Имя ученика" autocomplete="off"></label>
         <label class="place-name cp-pnote">Заметка к плану<textarea id="cp-pnote" rows="2" maxlength="${CUSTOM_NOTE}" placeholder="Цель, самочувствие, что важно в этой тренировке">${esc(c.note || '')}</textarea></label>
@@ -260,7 +264,7 @@ function customListHtml() {
     const list = EX.filter(ex => ex.g === g && available(ex, E) && ex.lvl <= lvlMax).sort((a, b) => (fitsBody(a) ? 0 : 1) - (fitsBody(b) ? 0 : 1) || (a.type === 'c' ? 0 : 1) - (b.type === 'c' ? 0 : 1) || (EX_W[b.id] ?? 1) - (EX_W[a.id] ?? 1));
     /* по шесть на группу, остальное — по кнопке: на телефоне список не превращается в ленту */
     const rows = list.map((ex, i) => customRowHtml(ex, E).replace('<li class="cp-row', i >= 6 ? `<li hidden data-cp-g="${g}" class="cp-row` : '<li class="cp-row'));
-    return list.length ? `<li class="cp-gh">${esc(GN[g])} <small>${list.length}</small></li>` + rows.join('') + (list.length > 6 ? `<li class="cp-morel"><button type="button" class="link" data-cp-more="${g}">Ещё ${list.length - 6}</button></li>` : '') : '';
+    return list.length ? `<li class="cp-gh">${esc(GN[g])} <small>${list.length}</small></li>` + rows.join('') + (list.length > 6 ? `<li class="cp-morel"><button type="button" class="link" data-cp-more="${g}">${'Ещё {n}'.replace('{n}', list.length - 6)}</button></li>` : '') : '';
   }).join('') || `<li class="cp-none">Для этих мышц здесь нет упражнений — добавьте инвентарь места.</li>`;
 }
 function customAddHtml() {

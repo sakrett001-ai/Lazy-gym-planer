@@ -42,7 +42,7 @@ function variantRowHtml(it, E = plan && plan.E || effEquip(S.equip)) {
   const what = VARIANT_OF[it.ex.id].family.what;
   return `<div class="c-var" role="group" aria-label="${what}"><span>${what}:</span>${list.map(x => {
     const on = x.ex === it.ex;
-    return `<button type="button" class="${on ? 'on' : ''}" data-variant="${x.ex.id}" data-slot="${it.slot}" aria-pressed="${on}"${on ? '' : ` title="${esc(x.ex.name)}"`}>${esc(x.label)}</button>`;
+    return `<button type="button" class="${on ? 'on' : ''}" data-variant="${x.ex.id}" data-slot="${it.slot}" aria-pressed="${on}"${on ? '' : ` title="${esc(exNameHere(x.ex))}"`}>${esc(x.label)}</button>`;
   }).join('')}</div>`;
 }
 /* в истории упражнения — что записано другими хватами той же семьи */

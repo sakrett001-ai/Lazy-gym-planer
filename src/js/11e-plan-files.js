@@ -14,7 +14,7 @@ function withPlanSettings(c, fn) {
 function exportItem(c, item) {
   const ex = EXI[item.id];
   return withPlanSettings(c, () => {
-    const rx = customRx(prescribe(ex, null, effEquip(EQUIP.map(e => e.id))), item, ex), o = {id:ex.id, name:ex.name};
+    const rx = customRx(prescribe(ex, null, effEquip(EQUIP.map(e => e.id))), item, ex), o = {id:ex.id, name:exNameHere(ex)};
     if (!rx.static) {
       if (S.format !== 'circuit') { o.sets = rx.sets; o.rest = rx.rest; }
       if (!ex.kind) o.reps = item.reps || (S.format === 'circuit' ? GOALS[S.goal].circ.reps : String(rx.reps));

@@ -190,6 +190,9 @@ function exName(ex, E) {
   if (ex.nameV) for (const id of chosenEquip(ex, E)) if (ex.nameV[id]) return ex.nameV[id];
   return ex.name;
 }
+/* название вне плана — как на плитке атласа: с инвентарём этого места, а если здесь упражнения нет — с полным инвентарём
+   («Румынская тяга со штангой» и в списке, и в переключателе разбора, и в подписях кнопок, и в файле плана) */
+function exNameHere(ex) { const E = effEquip(S.equip); return exName(ex, available(ex, E) ? E : effEquip(EQUIP.map(e => e.id))); }
 function propHas(ex, E) {
   const ch = new Set(chosenEquip(ex, E));
   return id => ch.has(id) || ((ex.opt || []).includes(id) && E.has(id));

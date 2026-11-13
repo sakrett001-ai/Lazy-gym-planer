@@ -11,7 +11,7 @@ function source(lang) {
   if (cache[lang]) return cache[lang];
   const dir = path.join(root, 'src/js');
   let js = fs.readdirSync(dir).filter(f => /^\d.*\.js$/.test(f) && Number.parseInt(f) < 99).sort().map(f => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n');
-  if (lang !== 'ru') js = translateJs(js, JSON.parse(fs.readFileSync(path.join(root, 'i18n', lang + '.json'), 'utf8')), new Set());
+  if (lang !== 'ru') js = translateJs(js, JSON.parse(fs.readFileSync(path.join(root, 'i18n', lang + '.json'), 'utf8')), new Set(), {quotes:'“”'});
   return (cache[lang] = new vm.Script(js, {filename:`app-${lang}.js`}));
 }
 function loadApp({lang = 'ru', storage = new Map(), nav = lang === 'en' ? ['en-US', 'en'] : ['ru-RU', 'ru']} = {}) {
