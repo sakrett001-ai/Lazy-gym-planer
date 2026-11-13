@@ -129,6 +129,7 @@ function openGallery() {
   detailReturn = document.activeElement;
   const d = $('#motion-view'); if (!d.open) d.showModal();
   document.documentElement.classList.add('motion-open');
+  OverlayBack.open('motion', () => closeMotion(true)); /* системная «Назад» закрывает атлас (12d-back.js) */
   showGallery();
   scheduleMotionLoop();
 }
@@ -142,7 +143,8 @@ function setupGallery() {
     const k = e.target.closest('[data-gallery-kind]');
     if (k) { gallery.kind = k.dataset.galleryKind; renderGallery(); $('#mv-gallery').querySelector(`[data-gallery-kind="${gallery.kind}"]`)?.focus(); return; }
     const t = e.target.closest('[data-gallery-open]');
-    if (t) { showDetail(); selectMotion(previewItem(t.dataset.galleryOpen)); $('#mv-back').focus(); }
+    /* карточка упражнения из витрины — своя запись истории: «Назад» возвращает к витрине, как «← Все упражнения» */
+    if (t) { showDetail(); selectMotion(previewItem(t.dataset.galleryOpen)); OverlayBack.open('motion-detail', () => showGallery(detailMotion?.it.ex.id)); $('#mv-back').focus(); }
   });
   $('#mv-gallery').addEventListener('change', e => { if (e.target.id === 'mv-ghere') { gallery.here = e.target.checked; renderGallery(); $('#mv-ghere').focus(); } });
   $('#mv-gallery').addEventListener('input', e => {
@@ -150,6 +152,6 @@ function setupGallery() {
     gallery.q = e.target.value; const at = e.target.selectionStart;
     renderGallery(); const q = $('#mv-gq'); q.focus(); q.setSelectionRange(at, at);
   });
-  $('#mv-back').addEventListener('click', () => showGallery(detailMotion?.it.ex.id));
+  $('#mv-back').addEventListener('click', () => { OverlayBack.closed('motion-detail'); showGallery(detailMotion?.it.ex.id); });
   setupGalleryAnatomy();
 }
