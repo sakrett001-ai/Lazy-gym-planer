@@ -1395,7 +1395,7 @@ for (const lang of ['ru', 'en']) {
   const tiles = () => g.evaluate(() => [...document.querySelectorAll('#mv-gallery .mv-tile')].map(b => b.dataset.galleryOpen));
   for (const q of ['бенч', 'bench press']) { await g.fill('#mv-gq', q); const t = await tiles(); check(t[0] === 'bbbench' && await g.evaluate(() => document.activeElement.id === 'mv-gq'), `${lang}: «${q}» — первым «${lang === 'ru' ? 'Жим штанги лёжа' : 'Barbell bench press'}» (${t.slice(0, 3)})`); }
   await g.fill('#mv-gq', 'zzzz');
-  const empty = await g.evaluate(() => document.querySelector('#mv-gallery .mv-gempty')?.textContent || '');
+  const empty = await g.evaluate(() => document.querySelector('#mv-gallery .mv-gcount').textContent + ' ' + (document.querySelector('#mv-gallery .mv-gempty')?.textContent || ''));
   check(empty.startsWith(T.none) && !/«Всё»|“All”/.test(empty), `${lang}: пустая выдача — «${T.none}» без совета выбрать «Всё» (${empty})`);
   await g.fill('#mv-gq', T.squat);
   await g.evaluate(() => { $('#motion-view').scrollTop = 260; }); await g.waitForTimeout(50);

@@ -383,7 +383,13 @@ function savePlansFrom() {
 /* добавили из атласа или разбора: если в открытый свой план, а под окном — его страница, она перерисуется при закрытии
    окна (cpFlush) — окно не закрывается и не прыгает */
 function cpAfterAdd(r) { if (r && r.added && S.mode === 'custom' && S.view === 'plan' && r.plan.id === S.custom) cpStale = true; }
-function cpFlush() { if (!cpStale) return; cpStale = false; if (S.mode === 'custom' && S.view === 'plan') customRerender(); }
+function cpFlush() {
+  if (!cpStale) return; cpStale = false;
+  if (S.mode !== 'custom' || S.view !== 'plan') return;
+  /* фокус после перерисовки — на той же кнопке («Увеличить» карточки, название в «Добавить упражнение»), если она была в плане */
+  const a = typeof document !== 'undefined' ? document.activeElement : null, d = a && a.dataset;
+  customRerender(a && a.id ? '#' + a.id : d && d.cpOpen ? `[data-cp-open="${d.cpOpen}"]` : d && d.fig !== undefined ? `[data-fig="${d.fig}"]` : null);
+}
 
 /* ---------- события ---------- */
 /* раскрыть (open = true) или свернуть список планов под кнопкой «+ В свой план»; раскрытый — фокус на первом пункте */

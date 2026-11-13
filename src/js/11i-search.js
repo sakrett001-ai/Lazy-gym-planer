@@ -204,6 +204,12 @@ function searchExercises(query) {
   searchMemo = {q, r};
   return r;
 }
+/* пояснение над найденным (витрина атласа, «Добавить упражнение»): запрос в другой раскладке или с опечатками */
+function searchNoteText(R) {
+  if (R.mode === 'layout') return `Показано для «${R.as}» — запрос в другой раскладке клавиатуры.`;
+  if (R.mode === 'typo') return R.as ? `Точных совпадений нет — показаны похожие на «${R.as}» (другая раскладка).` : 'Точных совпадений нет — показаны похожие по написанию.';
+  return '';
+}
 /* Совпадение одного текста со всем запросом (по словам, и внутри слова, без опечаток): searchMatcher(q)(название) — true или false */
 function searchMatcher(query) {
   const qs = searchQuery(query);

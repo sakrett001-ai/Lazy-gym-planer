@@ -54,18 +54,14 @@ function galleryTile(ex, E, all) {
   return `<div class="mv-tw"><button type="button" class="mv-tile${here ? '' : ' off'}" data-gallery-open="${ex.id}"><span class="mv-thumb" data-thumb="${ex.id}" aria-hidden="true"></span>`
     + `<span class="mv-tname">${fav ? '<span class="mv-tfav" aria-label="В избранном">★</span> ' : ''}${esc(name)}</span><span class="mv-tsub">${esc(sub)}</span></button>${galleryAddBtn(ex.id, name)}</div>`;
 }
-/* пояснение над найденным: запрос в другой раскладке или с опечатками */
-function searchNoteText(R) {
-  if (R.mode === 'layout') return `Показано для «${R.as}» — запрос в другой раскладке клавиатуры.`;
-  if (R.mode === 'typo') return R.as ? `Точных совпадений нет — показаны похожие на «${R.as}» (другая раскладка).` : 'Точных совпадений нет — показаны похожие по написанию.';
-  return '';
-}
-/* ничего не нашлось: из-за фильтров — сколько без них и кнопка «Искать во всех»; иначе — ближайшие по написанию названия */
+/* ничего не нашлось (строка над витриной — живая, её слышит диктор): из-за фильтров — «Искать во всех: N»; иначе —
+   ближайшие по написанию названия или совет. Совет выбрать «Всё», когда «Всё» уже выбрано, не нужен (замечание 20 тестера) */
+const galleryFiltered = () => gallery.kind !== 'all' || gallery.here;
 function galleryEmptyHtml() {
   const R = searchExercises(gallery.q), wide = R.list.length;
-  if (wide && (gallery.kind !== 'all' || gallery.here)) return `<div class="mv-gempty"><p>С этими фильтрами ничего не нашлось.</p><button type="button" class="btn-ghost" data-gallery-all="1">${'Искать во всех: {n}'.replace('{n}', wide)}</button></div>`;
+  if (wide && galleryFiltered()) return `<div class="mv-gempty"><button type="button" class="btn-ghost" data-gallery-all="1">${'Искать во всех: {n}'.replace('{n}', wide)}</button></div>`;
   const near = R.near.map(ex => `<button type="button" class="btn-ghost" data-gallery-q="${esc(exNameHere(ex))}">${esc(exNameHere(ex))}</button>`).join('');
-  return `<div class="mv-gempty"><p>Ничего не нашлось.</p>${near ? `<p>Похожие по написанию:</p><div class="mv-gnear">${near}</div>` : '<p>Проверьте написание или попробуйте другое слово: «жим», «тяга», «присед».</p>'}</div>`;
+  return `<div class="mv-gempty">${near ? `<p>Похожие по написанию:</p><div class="mv-gnear">${near}</div>` : '<p>Проверьте написание или попробуйте другое слово: «жим», «тяга», «присед».</p>'}</div>`;
 }
 function galleryHtml() {
   const E = effEquip(S.equip), all = effEquip(EQUIP.map(e => e.id)), list = galleryList(), R = searchExercises(gallery.q);
@@ -81,7 +77,7 @@ function galleryHtml() {
   return `<div class="mv-gtools"><div class="mv-gkinds" role="group" aria-label="Чем работать">${chips}</div>`
     /* «…» вокруг названия места — в одном шаблоне со следующей подписью: перевод закрывающей кавычки идёт вместе с ней */
     + `<div class="mv-gfilters"><label class="mv-ghere"><input type="checkbox" id="mv-ghere"${gallery.here ? ' checked' : ''}> Только то, что есть в месте «${esc(placeOf().name)}»</label><label class="mv-gsearch"><span class="vh">Найти упражнение</span><input type="search" id="mv-gq" value="${esc(gallery.q)}" placeholder="Найти: жим, тяга, присед…" autocomplete="off"></label></div></div>`
-    + `<p class="mv-gcount" aria-live="polite">${list.length ? list.length + ' ' + plural(list.length, 'упражнение', 'упражнения', 'упражнений') : 'Ничего не нашлось'}</p><p class="mv-gnote" hidden></p>`
+    + `<p class="mv-gcount${list.length ? '' : ' none'}" aria-live="polite">${list.length ? list.length + ' ' + plural(list.length, 'упражнение', 'упражнения', 'упражнений') : R.list.length && galleryFiltered() ? 'С этими фильтрами ничего не нашлось.' : 'Ничего не нашлось.'}</p><p class="mv-gnote" hidden></p>`
     + (note ? `<p class="mv-gsnote">${esc(note)}</p>` : '')
     + (sections || galleryEmptyHtml());
 }
