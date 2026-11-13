@@ -28,8 +28,8 @@ if (!FULL) await page.evaluate(() => {
 });
 
 const found = new Map();
-/* inputs — проверять и значения текстовых полей (имена по умолчанию в полях «Name»); в остальных шагах там имена, вписанные
-   проверкой, — их не проверяем */
+/* inputs — проверять и значения текстовых полей (имена по умолчанию в полях «Name»); в остальных шагах там имена и запросы
+   поиска, вписанные проверкой, — их не проверяем */
 async function scan(state, extra = '', pg = page, inputs = false) {
   const hits = await pg.evaluate(({ extra, inputs }) => {
     const CYR = /[А-Яа-яЁё]/, out = [];
@@ -40,7 +40,7 @@ async function scan(state, extra = '', pg = page, inputs = false) {
       if (CYR.test(n.nodeValue)) out.push({ text: n.nodeValue.trim().slice(0, 160), where: p.tagName.toLowerCase() + (p.id ? '#' + p.id : '') + (p.className && typeof p.className === 'string' ? '.' + p.className.split(' ')[0] : '') });
     }
     for (const el of document.querySelectorAll('*')) for (const a of ['aria-label', 'title', 'placeholder', 'alt', 'aria-valuetext', 'aria-description', 'label', 'value'])
-      if (el.hasAttribute(a) && CYR.test(el.getAttribute(a)) && !(a === 'value' && el.tagName === 'INPUT' && el.type === 'text' && !inputs)) out.push({ text: `[${a}] ` + el.getAttribute(a).slice(0, 160), where: el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') });
+      if (el.hasAttribute(a) && CYR.test(el.getAttribute(a)) && !(a === 'value' && el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'search') && !inputs)) out.push({ text: `[${a}] ` + el.getAttribute(a).slice(0, 160), where: el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') });
     if (inputs) for (const el of document.querySelectorAll('input, textarea, option')) if (CYR.test(el.value || '')) out.push({ text: '[value] ' + el.value.slice(0, 160), where: el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') });
     if (extra) for (const line of extra.split('\n')) if (CYR.test(line)) out.push({ text: line.slice(0, 160), where: 'text-export' });
     return out;
@@ -124,6 +124,9 @@ await scan('custom plan: removed, undo line');
 await run(`(()=>{document.querySelector('[data-rm-undo]').click();})()`);
 await run(`(()=>{cpTab='groups';renderPlan();document.querySelectorAll('[data-cp-more]').forEach(b=>b.click());})()`);
 await scan('custom add by muscles');
+/* поиск в «Добавить упражнение»: найденное, другая раскладка, опечатка, пусто с похожими */
+for (const q of ['bench', 'ыйгфе', 'squot', 'pressss', 'zzzz']) { await run(`(()=>{cpQ=${JSON.stringify(q)};renderPlan();document.querySelectorAll('[data-cp-more]').forEach(b=>b.click());})()`); await scan('custom add, search ' + q); }
+await run(`(()=>{cpQ='';renderPlan();})()`);
 for (const format of ['superset', 'circuit', 'static']) { await run(`(()=>{S.format='${format}';cpOpen=new Set([0]);regen();})()`); await scan('custom ' + format, await run('planText()')); }
 /* вес по подходам, темп, заметки, «о плане»; подсказка «вес по плану» в журнале карточки */
 await run(`(()=>{S.format='classic';const c=S.customs[0];Object.assign(c,{group:'Block A',for:'Sam',note:'No failure'});
@@ -227,7 +230,8 @@ for (const id of ids) {
   for (const pose of ['start', 'middle', 'end', 'return']) { await run(`document.querySelector('[data-mv-pose="${pose}"]').click()`); await scan(`motion ${id} ${pose}`); }
   await run('closeMotion()');
 }
-/* 6б. витрина атласа: все фильтры «Чем работать», недоступные упражнения в другом месте, пустой поиск */
+/* 6б. витрина атласа: все фильтры «Чем работать», недоступные упражнения в другом месте, поиск (пусто, раскладка, опечатки,
+   фильтр), «+» на плитке с выбором плана и сообщением */
 step('6б. витрина');
 await run('openGallery()');
 for (const k of ['all', 'free', 'mach', 'band', 'body']) { await run(`document.querySelector('[data-gallery-kind="${k}"]').click()`); await scan(`gallery ${k}`); }
@@ -237,6 +241,16 @@ await run(`(()=>{gallery.here=true;renderGallery();})()`);
 await scan('gallery home, only available');
 await run(`(()=>{gallery.here=false;gallery.q='zzz';renderGallery();})()`);
 await scan('gallery empty search');
+/* поиск: другая раскладка, опечатка, пусто с похожими, пусто из-за фильтра; «+» на плитке — выбор плана и сообщение */
+for (const q of ['ыйгфе', 'squot', 'pressss']) { await run(`(()=>{gallery.q=${JSON.stringify(q)};renderGallery();})()`); await scan('gallery search ' + q); }
+await run(`(()=>{S.place='gym';ensurePlaces(S);gallery.kind='band';gallery.q='bench press';renderGallery();})()`);
+await scan('gallery search, nothing with the filter');
+await run(`(()=>{gallery.kind='all';gallery.q='squat';renderGallery();document.querySelector('[data-gadd="squat"]').click();})()`);
+await scan('gallery: + on a tile, choose a plan');
+await run(`(()=>{document.querySelector('#mv-gpick [data-cp-to=""]').click();})()`);
+await scan('gallery: added to a new plan');
+await run(`(()=>{document.querySelector('[data-gadd="squat"]').click();document.querySelector('#mv-gpick [data-cp-to]').click();})()`);
+await scan('gallery: added / already in plan');
 await run(`(()=>{gallery.q='';S.place='gym';ensurePlaces(S);renderGallery();document.querySelector('[data-gallery-open]').click();})()`);
 await scan('gallery → detail');
 await run('closeMotion()');
