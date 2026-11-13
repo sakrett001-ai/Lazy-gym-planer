@@ -1309,7 +1309,8 @@ module.exports = {
 
   /* t=0 — прямые руки на уровне головы; t=1 — рукоять у бёдер, лопатки опущены. */
   straightpull: {
-    keys: [0, .2, .4, .6, .8, 1],
+    /* ключи вдвое чаще: углы рук между ключами уводили кулаки по ручке на 0,55–1,44 см (tools/anny-look/jitter.js) */
+    keys: [0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1],
     get equipment() { return tuned(this, () => [SP_TOWER, cable(SP_TOWER, '', { id: 'cab', attach: 'bar', hands: ['L', 'R'], ext: 12 })]); },
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'cab' }, { body: 'gripR', prop: 'cab' }],
     pose(t, C) {

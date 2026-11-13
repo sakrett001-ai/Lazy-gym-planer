@@ -233,7 +233,8 @@ module.exports = {
 
   /* Подтягивания прямым хватом на турнике силовой рамы. t=0 — вис на прямых руках, t=1 — подбородок над перекладиной. */
   pullup: {
-    keys: [0, .2, .4, .6, .8, 1],
+    /* ключи вдвое чаще: углы рук между ключами уводили кулаки по ручке на 0,55–1,44 см (tools/anny-look/jitter.js) */
+    keys: [0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1],
     equipment: [{ type: 'powerRack', id: 'rack', pullH: 224 }],
     contacts: [{ body: 'gripL', prop: 'rack:pullBar' }, { body: 'gripR', prop: 'rack:pullBar' }],
     pose(t, C) {

@@ -719,7 +719,8 @@ module.exports = {
   /* Жим лёжа узким хватом: хват на ширине плеч, локти вдоль корпуса, гриф к нижней части груди.
      t=0 — руки выпрямлены над плечами, t=1 — гриф касается груди. Стойки у головного конца скамьи. */
   closegrip: {
-    keys: [0, .25, .5, .75, 1],
+    /* ключи вдвое чаще: углы рук между ключами уводили кулаки по ручке на 0,55–1,44 см (tools/anny-look/jitter.js) */
+    keys: [0, .125, .25, .375, .5, .625, .75, .875, 1],
     equipment: [{ type: 'flatBench', id: 'bench' }, { type: 'benchUprights', id: 'rack', z: 47, hook: 107 }, { type: 'barbell', id: 'bar', plates: [20] }],
     contacts: [{ body: 'back', prop: 'bench:pad' }, { body: 'headBack', prop: 'bench:pad' }, ...FEET, ...GRIPS('bar')],
     pose(t, C) {

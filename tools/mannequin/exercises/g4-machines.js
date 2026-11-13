@@ -950,7 +950,8 @@ module.exports = {
   /* Подтягивания в гравитроне: колени на платформе-противовесе, хват сверху чуть шире плеч.
      t=0 — вис на почти прямых руках, t=1 — подбородок над рукоятями; платформа поднимается вместе с коленями. */
   assistpull: {
-    keys: [0, .2, .4, .6, .8, 1],
+    /* ключи вдвое чаще: углы рук между ключами уводили кулаки по ручке на 0,55–1,44 см (tools/anny-look/jitter.js) */
+    keys: [0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1],
     get equipment() { return GV_EQ(this); },
     contacts: [{ body: 'kneeL', prop: 'gvPad:pad' }, { body: 'kneeR', prop: 'gvPad:pad' }, { body: 'gripL', prop: 'gv:pullL' }, { body: 'gripR', prop: 'gv:pullR' }],
     pose(t, C) {
