@@ -24,34 +24,105 @@ function workKind(ex) {
   if (ids.includes('band')) return 'band';
   return 'body';
 }
-const gallery = {kind:'all', here:false, q:'', on:false, scroll:0};
+const gallery = {kind:'all', here:false, q:'', on:false, scroll:0, pick:null, last:null};
 const galleryThumbs = new Map();
 let galleryIO = null, galleryQueue = [], galleryRaf = 0;
 
+/* Поиск (searchExercises, 11i-search.js): по названию на обоих языках, синонимам, группе мышц, с опечатками и в другой
+   раскладке; лучшие совпадения первыми. Фильтры «Чем работать» и «только то, что есть» — поверх найденного */
 function galleryList(kind = gallery.kind) {
-  /* поиск: «ё» и «е» равны, окончания слов не важны (searchMatcher, 11-planner.js) */
-  const E = effEquip(S.equip), match = searchMatcher(gallery.q);
-  /* название с инвентарём («Румынская тяга со штангой» на плитке) тоже находит упражнение */
-  return EX.filter(ex => (kind === 'all' || workKind(ex) === kind) && (!gallery.here || available(ex, E)) && (match(ex.name) || Object.values(ex.nameV || {}).some(match)));
+  const E = effEquip(S.equip);
+  return searchExercises(gallery.q).list.filter(ex => (kind === 'all' || workKind(ex) === kind) && (!gallery.here || available(ex, E)));
 }
+/* «+» на плитке: тот же выбор плана, что «+ В свой план» в разборе (cpPickHtml, 11d-custom.js); «✓» — упражнение уже
+   в плане, который в списке первым (последний выбранный, без него — открытый). Отдельная кнопка рядом с плиткой, а не внутри:
+   нажатие на плитку по-прежнему открывает разбор */
+function galleryAddTarget() { return cpPickOrder()[0]; }
+function galleryAddLabel(id, name) {
+  const p = galleryAddTarget(), has = !!p && p.items.some(it => it.id === id);
+  return {has, label:has ? `Добавить в план: ${name} (уже в плане «${p.name}»)` : `Добавить в план: ${name}`};
+}
+function galleryAddBtn(id, name) {
+  const {has, label} = galleryAddLabel(id, name);
+  return `<button type="button" class="mv-tadd${has ? ' in' : ''}" data-gadd="${id}" aria-expanded="false" aria-controls="mv-gpick" aria-label="${esc(label)}"><span aria-hidden="true">${has ? '✓' : '+'}</span></button>`;
+}
+/* название на плитке: с инвентарём этого места, а если здесь упражнения нет — с полным инвентарём */
+const galleryTileName = (ex, E = effEquip(S.equip), all = effEquip(EQUIP.map(e => e.id))) => exName(ex, available(ex, E) ? E : all);
 function galleryTile(ex, E, all) {
-  const here = available(ex, E), name = exName(ex, here ? E : all), fav = isFav(ex.id);
+  const here = available(ex, E), name = galleryTileName(ex, E, all), fav = isFav(ex.id);
   const sub = here ? equipLine(ex, E) : `Нет в месте «${placeOf().name}», нужно: ${equipLine(ex, all).toLowerCase()}`;
-  return `<button type="button" class="mv-tile${here ? '' : ' off'}" data-gallery-open="${ex.id}"><span class="mv-thumb" data-thumb="${ex.id}" aria-hidden="true"></span>`
-    + `<span class="mv-tname">${fav ? '<span class="mv-tfav" aria-label="В избранном">★</span> ' : ''}${esc(name)}</span><span class="mv-tsub">${esc(sub)}</span></button>`;
+  return `<div class="mv-tw"><button type="button" class="mv-tile${here ? '' : ' off'}" data-gallery-open="${ex.id}"><span class="mv-thumb" data-thumb="${ex.id}" aria-hidden="true"></span>`
+    + `<span class="mv-tname">${fav ? '<span class="mv-tfav" aria-label="В избранном">★</span> ' : ''}${esc(name)}</span><span class="mv-tsub">${esc(sub)}</span></button>${galleryAddBtn(ex.id, name)}</div>`;
+}
+/* ничего не нашлось (строка над витриной — живая, её слышит диктор): из-за фильтров — «Искать во всех: N»; иначе —
+   ближайшие по написанию названия или совет. Совет выбрать «Всё», когда «Всё» уже выбрано, не нужен (замечание 20 тестера) */
+const galleryFiltered = () => gallery.kind !== 'all' || gallery.here;
+function galleryEmptyHtml() {
+  const R = searchExercises(gallery.q), wide = R.list.length;
+  if (wide && galleryFiltered()) return `<div class="mv-gempty"><button type="button" class="btn-ghost" data-gallery-all="1">${'Искать во всех: {n}'.replace('{n}', wide)}</button></div>`;
+  const near = R.near.map(ex => `<button type="button" class="btn-ghost" data-gallery-q="${esc(exNameHere(ex))}">${esc(exNameHere(ex))}</button>`).join('');
+  return `<div class="mv-gempty">${near ? `<p>Похожие по написанию:</p><div class="mv-gnear">${near}</div>` : '<p>Проверьте написание или попробуйте другое слово: «жим», «тяга», «присед».</p>'}</div>`;
 }
 function galleryHtml() {
-  const E = effEquip(S.equip), all = effEquip(EQUIP.map(e => e.id)), list = galleryList();
+  const E = effEquip(S.equip), all = effEquip(EQUIP.map(e => e.id)), list = galleryList(), R = searchExercises(gallery.q);
   const chips = WORK_KINDS.map(k => `<button type="button" class="${gallery.kind === k.id ? 'on' : ''}" data-gallery-kind="${k.id}" aria-pressed="${gallery.kind === k.id}">${esc(k.name)} <small>${galleryList(k.id).length}</small></button>`).join('');
-  const sections = GROUPS.map(g => {
+  /* с запросом группы идут по лучшему совпадению в них (при равенстве — по порядку), без запроса — по порядку */
+  const rank = new Map(list.map((ex, i) => [ex.id, i])), first = g => Math.min(...list.filter(ex => ex.g === g.id).map(ex => rank.get(ex.id)));
+  const groups = R.mode === 'all' ? GROUPS : GROUPS.slice().sort((a, b) => first(a) - first(b));
+  const sections = groups.map(g => {
     const xs = list.filter(ex => ex.g === g.id); if (!xs.length) return '';
     return `<section class="mv-gsec" aria-labelledby="mv-g-${g.id}"><h3 id="mv-g-${g.id}">${esc(g.name)} <small>${xs.length}</small></h3><div class="mv-ggrid">${xs.map(ex => galleryTile(ex, E, all)).join('')}</div></section>`;
   }).join('');
+  const note = list.length ? searchNoteText(R) : '';
   return `<div class="mv-gtools"><div class="mv-gkinds" role="group" aria-label="Чем работать">${chips}</div>`
     /* «…» вокруг названия места — в одном шаблоне со следующей подписью: перевод закрывающей кавычки идёт вместе с ней */
     + `<div class="mv-gfilters"><label class="mv-ghere"><input type="checkbox" id="mv-ghere"${gallery.here ? ' checked' : ''}> Только то, что есть в месте «${esc(placeOf().name)}»</label><label class="mv-gsearch"><span class="vh">Найти упражнение</span><input type="search" id="mv-gq" value="${esc(gallery.q)}" placeholder="Найти: жим, тяга, присед…" autocomplete="off"></label></div></div>`
-    + `<p class="mv-gcount" aria-live="polite">${list.length} ${plural(list.length, 'упражнение', 'упражнения', 'упражнений')}</p><p class="mv-gnote" hidden></p>`
-    + (sections || `<p class="mv-gempty">Ничего не найдено. Выберите «Всё» или измените поиск.</p>`);
+    + `<p class="mv-gcount${list.length ? '' : ' none'}" aria-live="polite">${list.length ? list.length + ' ' + plural(list.length, 'упражнение', 'упражнения', 'упражнений') : R.list.length && galleryFiltered() ? 'С этими фильтрами ничего не нашлось.' : 'Ничего не нашлось.'}</p><p class="mv-gnote" hidden></p>`
+    + (note ? `<p class="mv-gsnote">${esc(note)}</p>` : '')
+    + (sections || galleryEmptyHtml());
+}
+/* «+» на плитках — заново по плану, который в списке первым (после добавления им становится выбранный) */
+function galleryAddRefresh() {
+  const E = effEquip(S.equip), all = effEquip(EQUIP.map(e => e.id));
+  for (const b of document.querySelectorAll('#mv-gallery [data-gadd]')) {
+    const ex = EXI[b.dataset.gadd], {has, label} = galleryAddLabel(ex.id, galleryTileName(ex, E, all));
+    b.classList.toggle('in', has); b.setAttribute('aria-label', label); b.firstElementChild.textContent = has ? '✓' : '+';
+  }
+}
+/* список планов над нижним краем окна (#mv-gpick): открыт для одного упражнения; повторное нажатие, Esc, «Отмена» и
+   нажатие мимо закрывают его, фокус — на «+» */
+function galleryPickBtn() { return gallery.pick && $('#mv-gallery')?.querySelector(`[data-gadd="${gallery.pick}"]`); }
+function galleryPickClose(focus) {
+  const box = $('#mv-gpick'), btn = galleryPickBtn();
+  if (btn) { btn.setAttribute('aria-expanded', 'false'); if (focus) btn.focus({preventScroll:true}); }
+  gallery.pick = null;
+  if (box) { box.hidden = true; box.replaceChildren(); }
+  $('#motion-view')?.classList.remove('mv-has-pick');
+}
+function galleryPickOpen(btn) {
+  const id = btn.dataset.gadd, box = $('#mv-gpick');
+  if (gallery.pick === id) return galleryPickClose(true);
+  galleryPickClose(false); galleryMsgHide();
+  gallery.pick = id; btn.setAttribute('aria-expanded', 'true');
+  box.innerHTML = `<p class="mv-gpick-t">${esc(exNameHere(EXI[id]))}</p>${cpPickHtml(id, 'mv-gpick')}<button type="button" class="btn-ghost mv-gpick-x" data-gpick-x="1">Отмена</button>`;
+  box.hidden = false; $('#motion-view').classList.add('mv-has-pick');
+  box.querySelector('.cp-pick-i').focus({preventScroll:true});
+}
+/* после выбора: сообщение «Добавлено в «Низ А»» с «Открыть план» у нижнего края — витрина не перерисовывается и не
+   прокручивается, атлас остаётся открытым; диктору — тем же текстом (#mv-glive) */
+function galleryAddMsg(r) {
+  const n = r.plan.name;
+  return r.created ? `Создан план «${n}», упражнение добавлено.` : r.added ? `Добавлено в «${n}»` : r.has ? `Уже в плане «${n}»` : `План «${n}» полон: в нём уже ${CUSTOM_MAX} упражнений.`;
+}
+function galleryMsgShow(r) {
+  const box = $('#mv-gmsg'), text = galleryAddMsg(r);
+  box.querySelector('#mv-gmsg-t').textContent = text; box.querySelector('[data-cp-go]').dataset.cpGo = r.plan.id;
+  box.hidden = false; $('#motion-view').classList.add('mv-has-msg');
+  const live = $('#mv-glive'); live.textContent = ''; requestAnimationFrame(() => { live.textContent = text; });
+}
+function galleryMsgHide() {
+  const box = $('#mv-gmsg'); if (box) box.hidden = true;
+  $('#motion-view')?.classList.remove('mv-has-msg');
 }
 function thumbKey(id) { return id + '|' + S.place + '|' + S.equip.join(','); }
 /* конечная точка движения узнаётся лучше всего: штанга у груди, присед в нижней точке; у циклических — середина шага */
@@ -88,6 +159,7 @@ function galleryNeedSvg(el) {
   galleryQueue.push(el); if (!galleryRaf) galleryRaf = requestAnimationFrame(pumpThumbs);
 }
 function renderGallery() {
+  galleryPickClose(false);
   const box = $('#mv-gallery'); box.innerHTML = galleryHtml();
   if (galleryIO) galleryIO.disconnect();
   galleryQueue = [];
@@ -121,6 +193,7 @@ function showGallery(focusId) {
 }
 function showDetail() {
   const was = gallery.on; gallery.on = false;
+  galleryPickClose(false); galleryMsgHide();
   $('#motion-view').classList.remove('mv-mode-gallery');
   $('#mv-gallery').hidden = true; $('#mv-detail').hidden = false;
   if (galleryIO) galleryIO.disconnect(); cancelAnimationFrame(galleryRaf); galleryRaf = 0; galleryQueue = [];
@@ -136,11 +209,19 @@ function openGallery() {
 }
 function closeGallery() {
   const was = gallery.on; gallery.on = false;
+  galleryPickClose(false); galleryMsgHide();
   if (galleryIO) galleryIO.disconnect(); cancelAnimationFrame(galleryRaf); galleryRaf = 0; galleryQueue = [];
   if (was) galleryAnatStop();
 }
 function setupGallery() {
   $('#mv-gallery').addEventListener('click', e => {
+    const add = e.target.closest('[data-gadd]');
+    if (add) { galleryPickOpen(add); return; }
+    if (gallery.pick) galleryPickClose(false);
+    const all = e.target.closest('[data-gallery-all]');
+    if (all) { gallery.kind = 'all'; gallery.here = false; renderGallery(); $('#mv-gq')?.focus(); return; }
+    const near = e.target.closest('[data-gallery-q]');
+    if (near) { gallery.q = near.dataset.galleryQ; renderGallery(); const q = $('#mv-gq'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); return; }
     const k = e.target.closest('[data-gallery-kind]');
     if (k) { gallery.kind = k.dataset.galleryKind; renderGallery(); $('#mv-gallery').querySelector(`[data-gallery-kind="${gallery.kind}"]`)?.focus(); return; }
     const t = e.target.closest('[data-gallery-open]');
@@ -154,5 +235,20 @@ function setupGallery() {
     renderGallery(); const q = $('#mv-gq'); q.focus(); q.setSelectionRange(at, at);
   });
   $('#mv-back').addEventListener('click', () => { OverlayBack.closed('motion-detail'); showGallery(detailMotion?.it.ex.id); });
+  /* выбор плана для «+» на плитке */
+  $('#mv-gpick').addEventListener('click', e => {
+    const t = e.target.closest('button'); if (!t) return;
+    if (t.dataset.gpickX) return galleryPickClose(true);
+    if (t.dataset.cpTo === undefined || !gallery.pick) return;
+    const r = customAddTo(gallery.pick, t.dataset.cpTo || null);
+    gallery.last = gallery.pick; galleryPickClose(true);
+    if (r) { cpAfterAdd(r); galleryAddRefresh(); galleryMsgShow(r); }
+  });
+  $('#mv-gmsg').addEventListener('click', e => { if (e.target.closest('.mv-gmsg-x')) { galleryMsgHide(); $('#mv-gallery').querySelector(`[data-gadd="${gallery.last}"]`)?.focus({preventScroll:true}); } });
+  /* Esc закрывает список планов, а не атлас */
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || !gallery.pick) return;
+    e.preventDefault(); e.stopPropagation(); galleryPickClose(true);
+  });
   setupGalleryAnatomy();
 }

@@ -1,7 +1,8 @@
 'use strict';
 /* «+ В свой план» в атласе и в разборе: список своих планов под кнопкой и «+ Новый план». Упражнение попадает в выбранный
    план, открытый план, режим и вид не меняются; «уже в плане» и «полон» не добавляют; последний выбранный план — первым.
-   Поиск по названиям: «ё» и «е» равны, окончания слов не важны. Поведение в браузере (раскрытие, фокус, Esc) — tools/ui-check.mjs. */
+   Поиск по названиям: «ё» и «е» равны, окончания слов не важны (весь поиск — tools/search.test.js). Поведение в браузере
+   (раскрытие, фокус, Esc) — tools/ui-check.mjs. */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadModel } = require('./biomechanics-audit');
@@ -104,18 +105,33 @@ test('the last chosen plan comes first; without it — the open plan; a removed 
   a.S.cpLast = { evil: 1 }; a.ensureCustoms(a.S); assert.equal(a.S.cpLast, null, 'damaged value is dropped');
 });
 
-test('the button: a list outside the custom plan page, the old direct add on it', () => {
+test('the button: always a list of plans — on the custom plan page too (nothing is added silently)', () => {
   const a = app();
   const at = a.cpKeepHtml('dbcurl', 'at');
   assert.match(at, /data-cp-add="dbcurl" aria-expanded="false" aria-controls="cp-pick-at">\+ В свой план<\/button><div class="cp-pick" id="cp-pick-at" role="group" aria-labelledby="cp-pick-at-h" hidden><\/div>/);
   assert.match(at, /<p class="cp-msg" role="status" hidden>/);
+  /* замечание 12 тестера: из разбора поверх своего плана упражнение уходило молча в открытый план */
   Object.assign(a.S, { view: 'plan', mode: 'custom' });
-  assert.doesNotMatch(a.cpKeepHtml('dbcurl', 'mv'), /aria-expanded/, 'on the custom plan page there is no list');
+  assert.match(a.cpKeepHtml('dbcurl', 'mv'), /data-cp-add="dbcurl" aria-expanded="false" aria-controls="cp-pick-mv"/, 'on the custom plan page — the same list');
+  assert.equal(a.cpPickOrder()[0].id, 'up', 'the open plan comes first there');
+  /* «+ В план» в «Добавить упражнение» своего плана — сразу в открытый план */
   assert.equal(a.customAdd('dbcurl'), true);
   assert.deepEqual(items(a, 'up'), ['bbbench', 'dbcurl'], 'the open plan gets it, as before');
 });
+test('adding into the open custom plan from the atlas repaints its page when the window closes, not at once', () => {
+  const a = app();
+  Object.assign(a.S, { view: 'plan', mode: 'custom', custom: 'up' });
+  a.m.get('cpStale = false; var repaints = 0; customRerender = () => { repaints++; };');
+  a.m.get(`cpAfterAdd(customAddTo('dbcurl', 'low'))`);
+  assert.equal(a.m.get('cpStale'), false, 'another plan — nothing to repaint');
+  a.m.get(`cpAfterAdd(customAddTo('dbcurl', 'up'))`);
+  assert.equal(a.m.get('cpStale'), true);
+  assert.equal(a.m.get('repaints'), 0, 'the atlas stays open: no repaint yet');
+  a.m.get('cpFlush(); cpFlush();');
+  assert.equal(a.m.get('repaints'), 1, 'one repaint when the window closes');
+});
 
-test('search: «ё» equals «е», case and word endings do not matter', () => {
+test('search: «ё» equals «е», case and word endings do not matter (searchMatcher — one name; the whole search — tools/search.test.js)', () => {
   const a = app();
   assert.equal(a.searchFold('ёлка'), a.searchFold('елка'));
   assert.equal(a.searchFold('ЁЛКА'), 'елка');

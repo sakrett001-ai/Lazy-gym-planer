@@ -37,6 +37,12 @@ test('filters: kind, only-here, search; sections follow muscle groups', () => {
   assert.equal([...html.matchAll(/data-gallery-open=/g)].length, a.EX.length);
   a.S.place = 'home'; a.ensurePlaces(a.S);
   assert.match(a.galleryHtml(), /class="mv-tile off" data-gallery-open="bbbench"[\s\S]*?Нет в месте «Дом», нужно: штанга/, 'an exercise not available here says what it needs');
+  /* пусто: при «Всё» — без совета выбрать «Всё» (замечание 20 тестера); из-за фильтра — сколько без него и кнопка */
   reset({ q: 'zzz' });
-  assert.match(a.galleryHtml(), /Ничего не найдено/);
+  assert.match(a.galleryHtml(), /<p class="mv-gcount none" aria-live="polite">Ничего не нашлось\.<\/p>/);
+  assert.doesNotMatch(a.galleryHtml(), /Выберите «Всё»/);
+  reset({ q: 'жим', kind: 'body' });
+  const none = a.galleryHtml();
+  assert(!a.galleryList().length, 'no bodyweight presses');
+  assert.match(none, /<p class="mv-gcount none" aria-live="polite">С этими фильтрами ничего не нашлось\.<\/p>[\s\S]*<div class="mv-gempty"><button type="button" class="btn-ghost" data-gallery-all="1">Искать во всех: \d+<\/button>/, 'nothing among bodyweight exercises — offer all');
 });

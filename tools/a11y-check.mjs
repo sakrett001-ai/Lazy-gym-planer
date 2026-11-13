@@ -12,7 +12,9 @@
    4. «Пиковая нагрузка» в карточке раскрывается кнопкой (aria-expanded) — тот же текст, что в разборе движения.
    Плашка пульса (14b-heart.js) — с подменой Web Bluetooth, чтобы её раскладка и имя кнопки тоже проверялись.
    5. «0 из 21 подхода»; «легче · тяжелее» — цели не меньше 24×24 px (WCAG 2.5.8); на экране отдыха при масштабе 150 %
-      таймер виден, когда фокус на «Перейти к подходу». */
+      таймер виден, когда фокус на «Перейти к подходу».
+   6. Атлас движений: «+» на плитке — имя «Добавить в план: …», цель 44×44; выбор плана и сообщение «Добавлено в …» —
+      имена, раскладка, контраст (обычный и крупный шрифт, тёмная тема). */
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -279,6 +281,29 @@ for (const theme of ['light', 'dark']) {
   check(!names.length, `разбор: имя кнопки содержит её видимую надпись: ${names.join('; ')}`);
   await ctx.close();
 }
+/* атлас движений, поиск и «+» на плитке (13c-gallery.js): у «+» имя «Добавить в план: <упражнение>» и цель не меньше 44×44;
+   выбор плана и сообщение «Добавлено в …» — имена кнопок с надписью, раскладка без наложений и обрезки при обычном и крупном
+   шрифте, контраст в светлой и тёмной теме */
+for (const cfg of [{ width: 390 }, { width: 390, font: 200 }, { width: 390, theme: 'dark' }]) {
+  const tag = `витрина атласа (${cfg.font ? 'шрифт ' + cfg.font + ' %' : cfg.theme === 'dark' ? 'тёмная тема' : '390 px'})`;
+  const { ctx, page } = await open(cfg);
+  if (cfg.theme) await page.evaluate(t => { document.documentElement.dataset.theme = t; }, cfg.theme);
+  await page.evaluate(() => { S.customs = [{ id: 'up', name: 'Верх А', items: [{ id: 'bbbench' }] }, { id: 'low', name: 'Низ А', items: [] }]; S.custom = 'up'; S.cpLast = null; ensureCustoms(S); openGallery(); });
+  await page.fill('#mv-gq', 'присед'); await page.waitForTimeout(80);
+  const plus = await page.evaluate(() => [...document.querySelectorAll('#mv-gallery [data-gadd]')].map(b => { const r = b.getBoundingClientRect(), n = b.parentElement.querySelector('.mv-tname').textContent.trim(); return { id: b.dataset.gadd, w: Math.round(r.width), h: Math.round(r.height), ok: b.getAttribute('aria-label') === 'Добавить в план: ' + n }; }));
+  check(plus.length > 3 && plus.every(x => x.ok && x.w >= 44 && x.h >= 44), `${tag}: «+» — имя «Добавить в план: …» и цель 44×44 (${JSON.stringify(plus.filter(x => !x.ok || x.w < 44 || x.h < 44).slice(0, 3))})`);
+  const steps = [['поиск', async () => {}], ['выбор плана', () => page.click('#mv-gallery [data-gadd="squat"]')], ['сообщение', () => page.click('#mv-gpick [data-cp-to="low"]')]];
+  for (const [name, go] of steps) {
+    await go(); await page.waitForTimeout(80);
+    const names = await page.evaluate(NAMES), bad = await page.evaluate(LAYOUT), { low } = await page.evaluate(CONTRAST);
+    check(!names.length, `${tag}, ${name}: имя кнопки содержит её видимую надпись: ${names.join('; ')}`);
+    check(!bad.length, `${tag}, ${name}: ${bad.join('; ')}`);
+    check(!low.length, `${tag}, ${name}: контраст текста: ${low.join('; ')}`);
+  }
+  check(await page.evaluate(() => document.querySelector('[data-gadd="squat"]').getAttribute('aria-label') === 'Добавить в план: Приседания со штангой (уже в плане «Низ А»)' && $('#mv-glive').getAttribute('role') === 'status' && $('#mv-glive').textContent === 'Добавлено в «Низ А»'),
+    `${tag}: «✓» называет план, сообщение — в живой области для диктора`);
+  await ctx.close();
+}
 {
   /* отдых при масштабе 150 %: фокус на «Перейти к подходу», таймер на экране и над кнопкой */
   const { ctx, page } = await open({ width: 260 });
@@ -291,4 +316,4 @@ for (const theme of ['light', 'dark']) {
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка доступности: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Доступность: шрифт 150 и 200 % и масштаб 150 и 200 % без прокрутки вбок, наложений и обрезки (план, атлас, журнал, разбор, тренировка, отдых), подписи не мельче 12 px, контраст токенов и текста в светлой и тёмной теме, план без живой области и с коротким объявлением, имена кнопок с видимой надписью и упражнением, «Пиковая нагрузка» раскрывается кнопкой, «из 21 подхода», цели «легче · тяжелее», таймер отдыха при фокусе внизу.');
+console.log('Доступность: шрифт 150 и 200 % и масштаб 150 и 200 % без прокрутки вбок, наложений и обрезки (план, атлас, журнал, разбор, тренировка, отдых), подписи не мельче 12 px, контраст токенов и текста в светлой и тёмной теме, план без живой области и с коротким объявлением, имена кнопок с видимой надписью и упражнением, «Пиковая нагрузка» раскрывается кнопкой, «из 21 подхода», цели «легче · тяжелее», таймер отдыха при фокусе внизу, «+» на плитках атласа и выбор плана.');

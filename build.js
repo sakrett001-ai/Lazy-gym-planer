@@ -6,6 +6,7 @@
    dist/artifact.html                 — тело русской страницы для публикации артефактом */
 const fs = require('fs'), path = require('path');
 const {translateJs, translateHtml, translateCss} = require('./i18n/translate');
+const {searchData} = require('./i18n/search-data');
 const SRC = path.join(__dirname, 'src'), DIST = path.join(__dirname, 'dist');
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
 const VERSION = pkg.version;
@@ -57,7 +58,7 @@ const annyBin = fs.readFileSync(path.join(SRC, 'data', 'anny.bin')), annyB64 = a
 const ICON_FILES = ['icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'favicon-32.png'];
 const iconUrl = Object.fromEntries(ICON_FILES.filter(f => fs.existsSync(path.join(SRC, f)))
   .map(f => [f, f + '?v=' + require('node:crypto').createHash('sha256').update(fs.readFileSync(path.join(SRC, f))).digest('hex').slice(0, 16)]));
-const ASSET_VERSION = VERSION + '-' + require('node:crypto').createHash('sha256').update([volumeSrc,cssSrc,jsSrc,bodySrc,pwaSrc,JSON.stringify(manifestSrc),read(path.join(SRC,'sw.js')),langSrc,read(path.join(__dirname,'i18n/en.json')),skeletonB64,musclesB64,annyB64].join('\n')).digest('hex').slice(0,12);
+const ASSET_VERSION = VERSION + '-' + require('node:crypto').createHash('sha256').update([volumeSrc,cssSrc,jsSrc,bodySrc,pwaSrc,JSON.stringify(manifestSrc),read(path.join(SRC,'sw.js')),langSrc,read(path.join(__dirname,'i18n/en.json')),read(path.join(SRC,'data','search.json')),skeletonB64,musclesB64,annyB64].join('\n')).digest('hex').slice(0,12);
 /* Версия отрисовки каждого вида фигуры — для ключа готовых кадров витрины (thumbCacheKey, src/js/12-figure-pace.js): хэш того,
    от чего зависит картинка кадра при той же позе, — объёмная сцена (volume.js: свет, материалы, камеры, кисти, инвентарь),
    манекен и его области (09bm, 09b, 09d) и данные вида: кожа Anny, кости, мышцы. Поза и детали инвентаря входят в ключ сами
@@ -108,8 +109,10 @@ for (const [lang, L] of Object.entries(LANGS)) {
     css = translateCss(css, dict, missing, opts); js = translateJs(js, dict, missing, opts); body = translateHtml(body, dict, missing, opts); pwa = translateJs(pwa, dict, missing, opts);
     if (missing.size) report.push(`${lang}: не переведено ${missing.size} строк (node i18n/extract.js ${lang})`);
   }
-  /* язык, версия и локаль — до кода приложения: первая отрисовка (99-boot.js) уже с точкой, английским множественным числом и датами */
-  js = `window.PODHOD_VERSION='${VERSION}';window.PODHOD_BUILD='${ASSET_VERSION}';window.PODHOD_RENDER=${JSON.stringify(RENDER)};window.PODHOD_LANG='${lang}';window.PODHOD_LOCALE=${JSON.stringify(L.locale)};\n` + js;
+  /* язык, версия и локаль — до кода приложения: первая отрисовка (99-boot.js) уже с точкой, английским множественным числом и датами.
+     Данные поиска (i18n/search-data.js) — после перевода: названия на другом языке и русские синонимы остаются как есть */
+  const search = searchData(lang, jsSrc, JSON.parse(read(path.join(__dirname, 'i18n', 'en.json'))));
+  js = `window.PODHOD_VERSION='${VERSION}';window.PODHOD_BUILD='${ASSET_VERSION}';window.PODHOD_RENDER=${JSON.stringify(RENDER)};window.PODHOD_SEARCH=${JSON.stringify(search)};window.PODHOD_LANG='${lang}';window.PODHOD_LOCALE=${JSON.stringify(L.locale)};\n` + js;
   body = body.replace(/__VERSION__/g, VERSION).replace(/__LANG_CODE__/g, L.other.lang).replace(/__LANG_HREF__/g, L.other.href).replace(/__LANG_LABEL__/g, L.other.label).replace(/__LANG_TITLE__/g, L.other.title);
   const manifest = {...manifestSrc, name:L.manifestName, description:L.manifestDesc, lang, scope:up || './', icons:manifestSrc.icons.map(i => ({...i, src:up + iconUrl[i.src]}))};
 

@@ -162,15 +162,7 @@ function localeTag() {
 }
 /* множественное число: русское — три формы (1 подход, 2 подхода, 5 подходов); 'one' — форма a для 1, иначе c */
 function plural(n, a, b, c) { if (localeOf().plural === 'one') return n === 1 ? a : c; const m10 = n % 10, m100 = n % 100; if (m10 === 1 && m100 !== 11) return a; if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return b; return c; }
-/* Поиск по названиям упражнений. «ё» и «е» равны (ё раскладывается на е и две точки — U+0308, точки убираются; й остаётся
-   собой), регистр и дефисы не важны. У каждого слова запроса отбрасывается окончание — «отжимание» находит «Отжимания»,
-   «тяги» — «Тяга», «presses» — «press»; название подходит, если в нём есть все слова запроса без окончаний. */
-const searchFold = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/\u0308/g, '').normalize('NFC').replace(/[-\u2010-\u2015]/g, '');
-const SEARCH_END = /(?:ями|ами|ого|его|ому|ему|ыми|ими|ой|ей|ий|ый|ая|яя|ое|ее|ие|ые|ую|юю|ом|ем|ам|ям|ах|ях|ов|ев|ия|ья|ье|ью|ию|[аяоеиыуюйь]|es|s)$/;
-function searchMatcher(query) {
-  const words = searchFold(query).split(/[^\p{L}\p{N}]+/u).filter(Boolean).map(w => { const st = w.replace(SEARCH_END, ''); return st.length >= 3 ? st : w; });
-  return words.length ? name => { const n = searchFold(name); return words.every(w => n.includes(w)); } : () => true;
-}
+/* поиск по названиям упражнений — 11i-search.js */
 const fmtNum = v => Number.isInteger(v) ? String(v) : v.toFixed(1).replace('.', DEC); /* DEC — 13-log.js: в английской сборке точка */
 
 /* можно ли взвесить отягощение: свободные веса, тренажёры, блок, машина Смита (а не лента, турник, скамья или вес тела) */
