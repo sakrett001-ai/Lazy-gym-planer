@@ -8,6 +8,10 @@ const CUSTOM_REPS = /^(\d{1,3})(?:\s*[–-]\s*(\d{1,3}))?$/;
 const CUSTOM_TEMPO = /^[0-9X]{1,2}-[0-9X]{1,2}-[0-9X]{1,2}-[0-9X]{1,2}$/;
 const PLAN_KEYS = ['goal', 'format', 'level'];
 let cpTab = null, cpOpen = new Set(), cpDel = false;
+/* поиск в «Добавить упражнение» (searchExercises, 11i-search.js): запрос держится до перезагрузки страницы */
+let cpQ = '';
+/* в открытый свой план добавили из атласа или разбора поверх него — страница плана перерисуется, когда окно закроется */
+let cpStale = false;
 /* блок «Программа, для кого, заметка» раскрыли — остаётся раскрытым, когда панель перерисовывается (Enter в «Названии»
    и другие правки), до перезагрузки страницы */
 let cpAboutOpen = false;
@@ -252,7 +256,20 @@ function customRowHtml(ex, E) {
     : `<button type="button" class="cp-addb" data-cp-add="${ex.id}" aria-label="Добавить в план: ${esc(name)}">+ В план</button>`;
   return `<li class="cp-row${here ? '' : ' away'}">${favButton(ex.id)}<button type="button" class="cp-open" data-cp-open="${ex.id}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Разобрать движение: ${esc(name)}"><b>${esc(name)}</b><small>${esc(here ? equipLine(ex, E) : 'здесь нет инвентаря — в плане будет замена')} · ${esc(ex.pri.slice(0, 2).map(m => MUSCLE_NAMES[m].toLowerCase()).join(', '))}${ex.lvl >= 3 ? ' · сложное' : ''}${unfitHtml(ex, true)}</small></button>${add}</li>`;
 }
+/* найденное поиском «Добавить упражнение»: весь каталог (и то, чего здесь нет, — в плане будет замена), по 8, остальное —
+   по кнопке; ничего — ближайшие по написанию */
+function customFoundHtml() {
+  const E = effEquip(S.equip), R = searchExercises(cpQ), note = searchNoteText(R);
+  if (!R.list.length) {
+    const near = R.near.map(ex => `<button type="button" class="link" data-cp-q="${esc(exNameHere(ex))}">${esc(exNameHere(ex))}</button>`).join(' · ');
+    return `<li class="cp-none">Ничего не нашлось.${near ? ` Похожие по написанию: ${near}` : ' Проверьте написание или попробуйте другое слово.'}</li>`;
+  }
+  const rows = R.list.map((ex, i) => customRowHtml(ex, E).replace('<li class="cp-row', i >= 8 ? '<li hidden data-cp-g="q" class="cp-row' : '<li class="cp-row'));
+  return `<li class="cp-gh">${'Найдено: {n}'.replace('{n}', R.list.length)}${note ? ` <small>${esc(note)}</small>` : ''}</li>` + rows.join('')
+    + (R.list.length > 8 ? `<li class="cp-morel"><button type="button" class="link" data-cp-more="q">${'Ещё {n}'.replace('{n}', R.list.length - 8)}</button></li>` : '');
+}
 function customListHtml() {
+  if (cpQ.trim()) return customFoundHtml();
   const E = effEquip(S.equip), tab = cpTab || (S.fav.length ? 'fav' : 'groups');
   if (tab === 'fav') {
     if (!S.fav.length) return `<li class="cp-none">Избранного пока нет. Отметьте упражнения звёздочкой ☆ — здесь, в атласе мышц или в разборе движения.</li>`;
@@ -273,16 +290,18 @@ function customAddHtml() {
   const t = (id, label, n) => `<button type="button" role="tab" data-cp-tab="${id}" aria-selected="${tab === id}" class="${tab === id ? 'on' : ''}">${label} <small>${n || ''}</small></button>`;
   return `<section class="cp-add" id="cp-add" aria-labelledby="cp-add-h">
     <h2 id="cp-add-h">Добавить упражнение</h2>
+    <label class="cp-find"><span class="vh">Найти упражнение во всём каталоге</span><input type="search" id="cp-q" value="${esc(cpQ)}" placeholder="Найти: жим, тяга, присед…" autocomplete="off"></label>
     <div class="cp-tabs" role="tablist" aria-label="Откуда добавить">${t('fav', '★ Избранное', S.fav.length)}${t('groups', 'По выбранным мышцам', nG)}</div>
     <ol class="cp-list" id="cp-list">${customListHtml()}</ol>
     <p class="f-note">Звёздочка ☆ добавляет упражнение в избранное. Больше вариантов с описанием мышц — в атласе. <button type="button" class="link" data-view="atlas">Открыть атлас мышц →</button></p>
   </section>`;
 }
-/* Под превью атласа (at = 'at') и в разборе движения (at = 'mv'): избранное и «+ В свой план». Вне страницы своего плана
-   кнопка раскрывает прямо под собой список своих планов (cpPickHtml) — его наполняет нажатие, так он всегда свежий. */
+/* Под превью атласа (at = 'at') и в разборе движения (at = 'mv'): избранное и «+ В свой план». Кнопка раскрывает прямо
+   под собой список своих планов (cpPickHtml) — его наполняет нажатие, так он всегда свежий. И на странице своего плана:
+   разбор поверх неё не добавляет молча в открытый план (замечание 12 тестера) — открытый план в списке первым, если
+   последним не выбирали другой. Сразу в открытый план добавляет только «+ В план» в «Добавить упражнение». */
 function cpKeepHtml(id, at) {
-  const pick = !(S.view === 'plan' && S.mode === 'custom');
-  return `${favButton(id, true)}<button type="button" class="btn-ghost" data-cp-add="${id}"${pick ? ` aria-expanded="false" aria-controls="cp-pick-${at}"` : ''}>+ В свой план</button>`
+  return `${favButton(id, true)}<button type="button" class="btn-ghost" data-cp-add="${id}" aria-expanded="false" aria-controls="cp-pick-${at}">+ В свой план</button>`
     + `<div class="cp-pick" id="cp-pick-${at}" role="group" aria-labelledby="cp-pick-${at}-h" hidden></div>`
     + `<p class="cp-msg" role="status" hidden><span></span> <button type="button" class="link" data-cp-go="1">Открыть план →</button></p>`;
 }
@@ -361,6 +380,11 @@ function savePlansFrom() {
   return added;
 }
 
+/* добавили из атласа или разбора: если в открытый свой план, а под окном — его страница, она перерисуется при закрытии
+   окна (cpFlush) — окно не закрывается и не прыгает */
+function cpAfterAdd(r) { if (r && r.added && S.mode === 'custom' && S.view === 'plan' && r.plan.id === S.custom) cpStale = true; }
+function cpFlush() { if (!cpStale) return; cpStale = false; if (S.mode === 'custom' && S.view === 'plan') customRerender(); }
+
 /* ---------- события ---------- */
 /* раскрыть (open = true) или свернуть список планов под кнопкой «+ В свой план»; раскрытый — фокус на первом пункте */
 function cpPickToggle(btn, open = btn.getAttribute('aria-expanded') !== 'true') {
@@ -381,13 +405,14 @@ document.addEventListener('click', e => {
   if (!t) return;
   if (t.dataset.fav) { toggleFav(t.dataset.fav); return; }
   if (t.dataset.cpAdd) {
-    /* на странице своего плана — сразу в открытый план, как раньше; в атласе и разборе — список планов */
-    if (S.view === 'plan' && S.mode === 'custom') { customAdd(t.dataset.cpAdd); return customRerender(`[data-cp-tab="${cpTab || (S.fav.length ? 'fav' : 'groups')}"]`); }
+    /* «+ В план» в «Добавить упражнение» своего плана — сразу в открытый план; «+ В свой план» в атласе и разборе — список планов */
+    if (t.classList.contains('cp-addb')) { customAdd(t.dataset.cpAdd); return customRerender(cpQ.trim() ? '#cp-q' : `[data-cp-tab="${cpTab || (S.fav.length ? 'fav' : 'groups')}"]`); }
     return cpPickToggle(t);
   }
+  if (t.dataset.cpQ !== undefined) { cpQ = t.dataset.cpQ; const q = $('#cp-q'); if (q) { q.value = cpQ; q.focus(); } $('#cp-list').innerHTML = customListHtml(); return; }
   if (t.dataset.cpTo !== undefined && t.closest('.cp-pick')) {
     const box = t.closest('.cp-pick'), btn = box.parentElement.querySelector('[data-cp-add]'), r = customAddTo(btn.dataset.cpAdd, t.dataset.cpTo || null);
-    cpPickToggle(btn, false); btn.focus();
+    cpAfterAdd(r); cpPickToggle(btn, false); btn.focus();
     const m = box.parentElement.querySelector('.cp-msg');
     if (r && m) { m.hidden = false; m.querySelector('span').textContent = customAddMsg(r); m.querySelector('[data-cp-go]').dataset.cpGo = r.plan.id; }
     return;
@@ -400,7 +425,7 @@ document.addEventListener('click', e => {
   if (t.dataset.cpGo !== undefined) { if (document.querySelector('#motion-view')?.open) closeMotion(); openCustom(S.customs.some(c => c.id === t.dataset.cpGo) ? t.dataset.cpGo : null); regen(); window.scrollTo({top:0}); return; }
   if (t.dataset.cpOpen) { openMotionItem(previewItem(t.dataset.cpOpen)); return; }
   if (t.dataset.cpMore) { for (const li of document.querySelectorAll(`[data-cp-g="${t.dataset.cpMore}"]`)) li.hidden = false; t.closest('li').remove(); return; }
-  if (t.dataset.cpTab) { cpTab = t.dataset.cpTab; for (const b of document.querySelectorAll('[data-cp-tab]')) { const on = b === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); } $('#cp-list').innerHTML = customListHtml(); return; }
+  if (t.dataset.cpTab) { cpTab = t.dataset.cpTab; cpQ = ''; const q = $('#cp-q'); if (q) q.value = ''; for (const b of document.querySelectorAll('[data-cp-tab]')) { const on = b === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); } $('#cp-list').innerHTML = customListHtml(); return; }
   if (t.dataset.cpPlan) { openCustom(t.dataset.cpPlan); return regen(); }
   if (t.dataset.cpNew !== undefined) {
     const c = newCustomPlan();
@@ -456,6 +481,11 @@ document.addEventListener('change', e => {
     customSet(s, 'tempo', v || null); return customRerender(`[data-cp-tempo="${s}"]`);
   }
   if (t.dataset.cpNote !== undefined) { const s = +t.dataset.cpNote; customSet(s, 'note', cleanText(t.value, ITEM_NOTE, true) || null); return customRerender(`[data-cp-note="${s}"]`); }
+});
+/* поиск в «Добавить упражнение»: список перерисовывается на месте, поле и фокус остаются */
+document.addEventListener('input', e => {
+  if (e.target.id !== 'cp-q') return;
+  cpQ = e.target.value; const list = $('#cp-list'); if (list) list.innerHTML = customListHtml();
 });
 /* Escape в списке планов (или на его кнопке) сворачивает список и возвращает фокус на кнопку; разбор движения при этом
    не закрывается — preventDefault отменяет у окна запрос на закрытие */
