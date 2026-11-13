@@ -133,6 +133,27 @@ test('arm roll frame (uar): the outward shoulder twist is removed with the arm u
   assert(near > 20 && far === 0 && other === 0, `near ${near}, far ${far}, other ${other}`);
 });
 
+/* «Виляние» плеча: при руке, которая идёт вверх, кожа плеча не должна ходить туда-обратно сама по себе. Снятая закрутка
+   (рамка uar) выше LO1 при той же закрутке только убывает с подъёмом (в 4.98.0 большая закрутка снималась целиком при 162°, не
+   целиком при 166–169° и снова целиком при 171°: жим гири вверху — кожа плеча на 1,5 см туда и обратно, турецкий подъём — 2,7);
+   вес формы с нижним продолжением непрерывен на колене (armsFwd: скачок 0,6–0,7 при подъёме 155° в жимах). Целиком по
+   каталогу — node tools/anny-look/wobble.js. */
+test('no shoulder wobble from the skin rules: the removed twist never grows with elevation above LO1; shape weights are continuous at the knee of the lower extension; the kettlebell press and the getup keep the shoulder skin smooth', () => {
+  for (let e = -90; e <= 90; e += 5) {
+    let prev = Infinity;
+    for (let el = A.ROLL.LO1; el <= 180; el += .25) { const r = Math.abs(A.rollOff(e, el)); assert(r <= prev + 1e-9, `twist ${e}°: ${prev.toFixed(2)} → ${r.toFixed(2)} at ${el}°`); prev = r; }
+  }
+  /* вес форм с нижним продолжением по кадрам повтора (241 кадр): в 4.98.0 за кадр — 0,23–0,58 у жимов, «прыжков», подъёма ног
+     и коленей в висе, «обратного снежного ангела» (скачок на колене 155°), теперь — до 0,15 */
+  const ks = d.correctives.map((c, i) => c.low ? i : -1).filter(i => i >= 0);
+  for (const id of ['ohp', 'dbpress', 'arnold', 'jumpingjack', 'hangknee', 'legraise', 'reversesnow']) {
+    const rig = EQ.rig(POSES[id]); let prev = null;
+    for (let i = 0; i <= 240; i++) { const w = A.correctiveWeights(rig(i / 240), d); if (prev) for (const k of ks) assert(Math.abs(w[k] - prev[k]) <= .16, `${id} t=${(i / 240).toFixed(3)}: ${d.correctives[k].name} ${prev[k].toFixed(3)} → ${w[k].toFixed(3)}`); prev = w; }
+  }
+  const W = require('./anny-look/wobble.js'), rows = W.run({ ids: ['kbpress', 'kbtgu'], n: 81, d, POSES });
+  for (const r of rows.filter(r => r.side === 'L')) assert(r.skin < Math.max(.25, r.bone * 1.5), `${r.id}: shoulder skin jitter ${r.skin.toFixed(2)} cm at t=${r.at.toFixed(3)} (bones ${r.bone.toFixed(2)})`);
+});
+
 test('arm roll in skinning: arms behind the head and the hang lose most of the armpit band; without the roll (shares 0) the band is back', () => {
   const T = require('./anny-look/tails.js'), noRoll = { ...d, roll: null };
   for (const [id, t] of [['crunch', .25], ['hang', 0], ['bicycle', .25]]) {

@@ -103,9 +103,15 @@ PLAIN = {'armsFwd'}
 # Руки вверх через сгибание: в висе при подъёме коленей и ног (подъём 147–150°, отведение 20°) полоса та же, что у формы,
 # а её окно по отведению кончается на 12°: ниже колена 155° окно шире (до 30° → 12°; выше 155° при отведении 7–9° — жим
 # гантелей, жим Арнольда, «прыжки с разведением», пуловер — форма поднимала изломы на 5–12 рёбер), с 125° (с 110° у
-# разгибания из-за головы с гирей — «гало», подъём 123° — на 1 ребро больше)
-LOW = {'armsOverhead': (120, 159, (('twist', -35, -20), ('twist', 68, 55))),
-       'armsFwd': (125, 155, (('abduction', 30, 12), ('twist', -40, -15), ('twist', 65, 40)))}
+# разгибания из-за головы с гирей — «гало», подъём 123° — на 1 ребро больше). Выше колена продолжение сходит на нет за спад°
+# (четвёртое число, плавно): у armsFwd окно продолжения по отведению шире окна формы, и без спада вес на колене рвался — жимы
+# стоя и сидя, жим Арнольда, «прыжки», подъём ног в висе проходили подъём 155° со скачком веса 0,6–0,7 (кожа надплечья — на
+# 0,4–0,8 см за кадр, tools/anny-look/wobble.js). Спад 6°: наибольшее дрожание кожи у плеча в этих упражнениях — 0,31 см
+# (8° — 0,21, 10° — 0,25, но с 8° форма включается и в позе armsUp — подъём 161°, плоскость лопатки: вес 0,06 вместо 0);
+# складки крайних поз — те же, изломов у подмышки (рука выше 140°) — меньше. У armsOverhead вес формы выше колена не меньше
+# продолжения — спад не нужен.
+LOW = {'armsOverhead': (120, 159, (('twist', -35, -20), ('twist', 68, 55)), 0),
+       'armsFwd': (125, 155, (('abduction', 30, 12), ('twist', -40, -15), ('twist', 65, 40)), 6)}
 ALSO = {'armsFwd': (('abduction', 12, 5), ('twist', -40, -15), ('twist', 65, 40)), 'armsUpTw': (('twist', 35, 65),)}
 
 
@@ -178,9 +184,12 @@ def tent(c, v, angles=None):
         w *= float(np.clip((angles[c['angle2']] - c['b0']) / (c['b1'] - c['b0']), 0, 1))
     for k, c0, c1 in (c.get('also') or []) if angles is not None else ():
         w *= float(np.clip((angles[k] - c0) / (c1 - c0), 0, 1))
-    if c.get('low') and angles is not None and v < c['low'][1]:   # нижнее продолжение (LOW): своё окно вместо also
-        l0, l1, win = c['low']; lw = float(np.clip((l1 - c['a0']) / (c['a1'] - c['a0']), 0, 1)) * float(np.clip((v - l0) / (l1 - l0), 0, 1))
-        for k, c0, c1 in win: lw *= float(np.clip((angles[k] - c0) / (c1 - c0), 0, 1))
+    if c.get('low') and angles is not None and v < c['low'][1] + (c['low'][3] if len(c['low']) > 3 else 0):   # нижнее продолжение (LOW): своё окно вместо also
+        l0, l1, win = c['low'][:3]; fade = c['low'][3] if len(c['low']) > 3 else 0
+        if v < l1: k = float(np.clip((v - l0) / (l1 - l0), 0, 1))
+        else: u = float(np.clip((v - l1) / fade, 0, 1)); k = 1 - u * u * (3 - 2 * u)   # спад выше колена — как sstep в AnnySkin
+        lw = float(np.clip((l1 - c['a0']) / (c['a1'] - c['a0']), 0, 1)) * k
+        for kk, c0, c1 in win: lw *= float(np.clip((angles[kk] - c0) / (c1 - c0), 0, 1))
         w = max(w, lw)
     return w
 
@@ -234,7 +243,7 @@ def build(Vcat, F, wi5, ww5, frames, plain=None):
             if a2 is not None: c['a2'] = a2
             if name in SECOND: c['angle2'], c['b0'], c['b1'] = SECOND[name]
             if name in ALSO: c['also'] = [list(x) for x in ALSO[name]]
-            if name in LOW: c['low'] = [LOW[name][0], LOW[name][1], [list(x) for x in LOW[name][2]]]
+            if name in LOW: c['low'] = [LOW[name][0], LOW[name][1], [list(x) for x in LOW[name][2]]] + ([LOW[name][3]] if LOW[name][3] else [])
             out.append(c)
             print(f'  форма {name}{s}: угол {angle} {a0}→{a1:.0f}' + (f'→{a2}' if a2 else '') + (f', {c["angle2"]} {c["b0"]}→{c["b1"]}' if name in SECOND else '') + f', вершин {int(keep.sum())}, наибольшее смещение {np.linalg.norm(D, axis=1).max():.1f} см')
     return out

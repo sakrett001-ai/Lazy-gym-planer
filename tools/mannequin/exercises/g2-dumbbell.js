@@ -415,6 +415,17 @@ const HALO_KEYS = [
   [180, -200, 0, -8, 22, 0.5, 0.5, [-0.015,0.442,0.897], [0.015,0.442,0.897]]
 ];
 const HALO = { step: 5, keys: 73 };
+/* направления локтей ключей — сглаженные по кругу (ядро [1, 2, 1] / 4, HALO_SMOOTH проходов; φ 0 и 180 — на месте: там руки
+   зеркальны): у пути динамического программирования локоть правой руки спереди шёл зигзагом (x полюса 0,05 → 0,51 → 0,25 у
+   φ 10…20°, 0,18 → 0,38 → 0,31 → 0,46 у 30…45°) — локоть на 15 см к середине и на 7 обратно за 4 % цикла (дрожание кости
+   3,3 см за кадр, tools/anny-look/wobble.js). Один проход: 3,3 → 1,7 см (остаток — сгибание локтя у φ 150°, 66° → 82° → 75°),
+   валидатор — 0 ошибок, предупреждений 10 вместо 12; два и четыре прохода — то же */
+const HALO_SMOOTH = 1;
+const HALO_POLES = (() => {
+  let P = HALO_KEYS.map(k => [k[7], k[8]]);
+  for (let it = 0; it < HALO_SMOOTH; it++) P = P.map((p, i) => i === 0 || i === P.length - 1 ? p : [0, 1].map(j => { const a = P[i - 1][j], b = p[j], c = P[i + 1][j], v = [0, 1, 2].map(k => (a[k] + 2 * b[k] + c[k]) / 4), l = Math.hypot(...v); return v.map(x => x / l); }));
+  return P;
+})();
 /* темп: доля цикла в ключе φ = 0, 5…180° (левая половина — зеркально: t(360 − φ) = 1 − t(φ)); шаг времени — по
    перемещению локтей и запястий между ключами (не меньше 4 см на долю отрезка): где кисти перехватывают рога и гиря
    переворачивается (спереди, φ 5…20°), круг идёт медленнее — до 8,9 см на кадр проверки вместо 13 при равном темпе */
@@ -433,7 +444,8 @@ function haloPhi(t) {
 function haloAt(C, phi) {
   const f = ((phi % 360) + 360) % 360, mirror = f > 180, a = mirror ? 360 - f : f, i = Math.min(HALO_KEYS.length - 2, Math.floor(a / HALO.step)), u = (a - HALO_KEYS[i][0]) / HALO.step;
   const A = HALO_KEYS[i], B = HALO_KEYS[i + 1], mx = v => [-v[0], v[1], v[2]];
-  const o = { tilt: C.lerp(A[1], B[1], u), yaw: C.lerp(A[2], B[2], u), dy: C.lerp(A[3], B[3], u), r: C.lerp(A[4], B[4], u), uL: C.lerp(A[5], B[5], u), uR: C.lerp(A[6], B[6], u), L: arc(C, A[7], B[7], u), R: arc(C, A[8], B[8], u) };
+  const PA = HALO_POLES[i], PB = HALO_POLES[i + 1];
+  const o = { tilt: C.lerp(A[1], B[1], u), yaw: C.lerp(A[2], B[2], u), dy: C.lerp(A[3], B[3], u), r: C.lerp(A[4], B[4], u), uL: C.lerp(A[5], B[5], u), uR: C.lerp(A[6], B[6], u), L: arc(C, PA[0], PB[0], u), R: arc(C, PA[1], PB[1], u) };
   return mirror ? { tilt: o.tilt, yaw: -o.yaw, dy: o.dy, r: o.r, uL: o.uR, uR: o.uL, L: mx(o.R), R: mx(o.L) } : o;
 }
 /* ---------- Гиря ---------- */
@@ -490,6 +502,11 @@ const KBDL = once(() => {
   const H0 = [0, KB.bottom + KB.handle, 4], lean0 = 58, hz0 = -24;
   return { H0, H1: [0, 75, 16], lean0, hz0, st: 32, toe: 12 };
 });
+/* концентрированное сгибание: центр свободной ладони — в CONC_PALM см от тазобедренного по бедру (74 % его длины), наклон
+   ладони от верха бедра к середине — из CONC_TILT° (пальцы — веером через 10°; пронация, запястье и ротация плеча — дальше
+   от пределов). Ближе к тазу (24 см) — пронация и отведение запястья за пределами (ладонь плашмя на верх бедра при почти
+   вертикальном предплечье); наклон больше 30° — ладонь уже не смотрит вниз на бедро (tools/hand-holds.test.js) */
+const CONC_PALM = 30, CONC_TILT = [0, 10, 20, 30];
 /* свободная ладонь на бедре над коленом (опора в наклоне): центр ладони — на передней поверхности бедра в 70 % его длины */
 function handOnThigh(C, q, s, at = .7) {
   const { V } = C, f = C.fk(q), hip = f.P['hip' + s], kn = f.P['kn' + s], ax = V.unit(V.sub(kn, hip)), A = V.add(hip, ax, C.M.B.th * at);
@@ -571,11 +588,23 @@ module.exports = {
         const d = V.unit(V.add(V.scale(u, Math.cos(phi)), w, Math.sin(phi))), grip = V.add(E, d, 35.6);
         C.hold(q, 'L', grip, V.unit(V.add(V.sub(E, V.mix(gh, grip, .5)), [1, 0, 0], .3)), { pron: C.lerp(-45, -86, e * e), allowShort: !pass });
       }
-      /* правая рука: ладонь на правом бедре над коленом — на верхней поверхности бедра (кожа сверху в этом месте, поджатие
-         0,2 см). Прежде ладонь ставилась на 7,6 см над осью колена и висела над округлым коленом на 1,4 см, касаясь краем */
-      const g2 = C.fk(q), knR = g2.P.knR, hipR = g2.P.hipR, tR = V.unit(V.sub(knR, hipR)), at = V.add(hipR, tR, 36);
-      const top = Math.max(...C.region(q, 'thR').filter(p => Math.hypot(p[0] - at[0], p[2] - at[2]) < 2.5).map(p => p[1]));
-      palmBest(C, q, 'R', [at[0], top - .2, at[2]], [0, 1, 0], fan(C, [0, 1, 0], tR, 20), [[-1, .3, -.3], [-1, 0, 0], [-1, .5, .3], [-.5, .3, -1]].map(v => V.unit(v)));
+      /* правая рука: ладонь на правом бедре над коленом (опора свободной рукой). До 4.98.0 центр ладони стоял в 36 см от
+         тазобедренного (88 % бедра, у колена): ладонь лежала на округлом верху колена только основанием, пальцы уходили
+         за колено в воздух (снимок владельца, 4.98.0). Теперь центр ладони — на поверхности бедра в CONC_PALM см от
+         тазобедренного, сверху или сверху-изнутри (наклон к середине подбирается: где пронация, запястье и ротация плеча
+         дальше от пределов), поджатие 0,2 см; пальцы — по бедру к колену */
+      const g2 = C.fk(q), knR = g2.P.knR, hipR = g2.P.hipR, tR = V.unit(V.sub(knR, hipR)), A = V.add(hipR, tR, CONC_PALM), med = V.scale(C.latP(q, 'R'), -1);
+      const pts = C.region(q, 'thR').filter(p => Math.abs(V.dot(V.sub(p, A), tR)) <= 2.2);
+      let best = null;
+      for (const tilt of CONC_TILT) {
+        const up = V.unit(V.perp(V.add([0, Math.cos(tilt * C.D2R), 0], med, Math.sin(tilt * C.D2R)), tR));
+        let top = null, tv = -Infinity; for (const p of pts) { const v = V.dot(V.unit(V.perp(V.sub(p, A), tR)), up); if (v > tv) { tv = v; top = p; } }
+        const n = V.unit(V.perp(V.sub(top, A), tR)), qq = C.M.clone(q);
+        const pen = palmBest(C, qq, 'R', V.add(top, n, -.2), n, fan(C, n, tR, 10), [[-1, .3, -.3], [-1, 0, 0], [-1, .5, .3], [-.5, .3, -1], [-.6, .6, -.6]].map(v => V.unit(v)));
+        if (!best || pen < best.pen - 1e-6) best = { pen, q: qq };
+      }
+      for (const k of ['shoulder', 'elbow', 'pron', 'wrist', 'clav', 'scap', 'girdle']) q.R[k] = best.q.R[k];
+      q.hands = { ...(q.hands || {}), R: best.q.hands.R }; q.girdleMode = best.q.girdleMode;
       return q;
     }
   },
