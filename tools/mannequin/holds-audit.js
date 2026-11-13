@@ -14,7 +14,8 @@
      и угол до него (пальцы кожи Anny на диске проверяет tools/anny-look/holds.js);
    * снаряд двумя руками (mount 'hands') — обе кисти на нём: центр хвата или ладони у оси ручки;
    * гиря в одной руке: шар висит под рукоятью, идёт по линии руки (мах) или лежит на тыле предплечья («рэк», над головой,
-     жим лёжа) — не в руке и не в теле, не на ладонной стороне предплечья и не над рукоятью без опоры;
+     жим лёжа) — не в руке и не в теле, не на ладонной стороне предплечья и не над рукоятью без опоры; по каждому кадру плеера
+     (bellPlayer, ниже) — без скачков, без прохода сквозь руку между кадрами и не против маятника;
    * трос, лента, канат у кисти: угол каната или полотенца к оси кулака, глубина оси троса в кисти (ладонь и пальцы) и в
      предплечье — валидатор вокруг центра хвата (9 см) трос не проверяет.
    Варианты инвентаря: has не задан — весь необязательный инвентарь «есть», «без» — has: () => false; при нескольких
@@ -23,7 +24,7 @@ const fs = require('node:fs'), path = require('node:path');
 const M = require('../../src/js/09bm-mannequin.js');
 const EQ = require('../../src/js/09bn-equipment.js');
 const { collider } = require('../biomech/validator2.js');
-const { V } = M, FLOOR = M.FLOOR;
+const { V, D2R } = M, FLOOR = M.FLOOR;
 
 /* пороги «подозрительно» (не ошибки валидатора — повод посмотреть глазами) */
 const LIM = {
@@ -41,7 +42,13 @@ const LIM = {
   cableHand: .5,     // см: ось троса в кисти глубже (ладонь, пальцы — кроме отверстия кулака)
   cableArm: .5,      // см: ось троса в предплечье глубже
   bellBody: 1.0,     // см: шар гири в кисти, руке, корпусе или голове глубже (мягкие ткани поджимаются на 0,3 — E.KB.press)
-  horn: 2.0          // см: центр хвата дальше от оси рога гири (хват за рога) — как gripAxis
+  horn: 2.0,         // см: центр хвата дальше от оси рога гири (хват за рога) — как gripAxis
+  /* гиря в одной руке по ходу плеера (bellPlayer): */
+  bellJump: 25,      // °: шар повернулся вокруг рукояти за кадр 1/60 с больше — маятник длиной 18,7 см под 3 g разгоняется
+                     //    самое большее до 2·√(3g/L) = 25 рад/с (24° за кадр); больше — скачок
+  bellOff: 60,       // °: шар дальше от направления эффективной тяжести g − a (поперёк рукояти) …
+  bellG: .5,         // … при её величине от 0,5 g (слабее — почти невесомость: направление не определено) …
+  bellSwing: 30      // …° дольше, чем маятник длиной L, отпущенный под этой тяжестью, сдвинулся бы на столько: (∫√(|g − a|·|sin δ| / 2L) dt)²
 };
 const GRIPPY = new Set(['grip', 'hook', 'deep']), CUPPY = new Set(['cup', 'cupring']);
 
@@ -99,6 +106,75 @@ function palmOn(H, surf) {
   return { gap, touch, tilt, any };
 }
 
+/* ---------- гиря в одной руке по ходу плеера ----------
+   Кадры — как в приложении (12-motion-player.js, motionFrame): 1/60 с, подъём 0 → 1 с косинусным разгоном, удержание, возврат
+   той же позой назад 1 → 0, пауза; длительности фаз — motionDurations упражнения (темп по умолчанию; у рывка, взятия и махов —
+   anim.timing); замкнутый цикл — по кругу. 41 кадр валидатора по фазе этого не видят: возврат — те же позы, а шар между
+   ними может перескочить за кадр (так было на сбросе в рывке и взятии в 4.102.0). Угол шара вокруг рукояти — в рамке кисти
+   (GymEquipment.bellBasis: 0 — по линии руки, +90° — над тылом кисти, ±180° — в предплечье). По каждому кадру:
+   * скачок — поворот шара вокруг рукояти за кадр (LIM.bellJump);
+   * путь сквозь руку — между соседними кадрами шар идёт по короткой дуге вокруг рукояти: глубина этой дуги в кисти,
+     предплечье и плече (LIM.bellBody; в кадре стоит, а между кадрами прошёл сквозь руку — тоже проход);
+   * против маятника — эффективная тяжесть F = g − a поперёк рукояти (a — ускорение рукояти по кадрам плеера, вторая разность,
+     сглаженная гауссом 40 мс: стыки ключей позы дают выбросы до 20 g за кадр) тянет шар туда, где его нет: дальше LIM.bellOff
+     при |F| ≥ LIM.bellG, и короткий путь к F не упирается в руку (если упирается — рука держит шар: опора). Такое
+     допустимо недолго — пока маятник длиной L, отпущенный под F, не сдвинулся бы на LIM.bellSwing: момент — F·sin(отклонения),
+     при постоянных F и отклонении δ за время t он проходит ½·(F·sin δ/L)·t² = (t·√(F·sin δ/2L))², в общем случае —
+     (∫√(|F|·|sin δ|/2L) dt)² (тяга почти «против» шара — неустойчивое равновесие: момент мал). Так ловится шар, лежащий на
+     опущенной руке (тянет прочь от неё), и шар, висящий «в гору». Мах этим правилом не меряется: при прямом локте и шаре у
+     линии руки (GymEquipment.bellInLine: локоть до BELL.el°, шар до BELL.line° от линии) рука и гиря — одна цепь, шар держится
+     на линии руки (hang 'arm', мах в начале рывка и взятия), а плеер в замахе и в верхней точке маха останавливает кисть
+     косинусным разгоном — маятник на этой остановке пролетел бы или провис, хотя в махе кисть не останавливается (условность
+     плеера, не положения шара). */
+let APP = null;
+function playerDurations(id) {
+  if (!APP) {
+    const { loadModel } = require('../biomechanics-audit'), m = loadModel({ fullApp: true });
+    m.get('renderSetup=()=>{}; logRefresh=()=>{}; LOG.mode="local";'); APP = m.get('({EXI,motionDurations})');
+  }
+  const ex = APP.EXI[id]; if (!ex || ex.anim.hold) return null;
+  return { d: APP.motionDurations({ ex, rx: {} }), loop: !!ex.anim.loop };
+}
+const easeQ = q => .5 - .5 * Math.cos(Math.PI * q), wrapA = a => Math.atan2(Math.sin(a), Math.cos(a));
+function bellPlayer(id, ev, rig, { fps = 60, sigma = .04, has = () => true, trace = false } = {}) {
+  const P = playerDurations(id); if (!P) return [];
+  const bells = (ev.equipment || []).filter(q => q.type === 'kettlebell' && (q.hands || ['L']).length === 1 && EQ.visible(q, has)); if (!bells.length) return [];
+  const { d } = P, total = d.reduce((a, b) => a + b, 0) || 4000, n = Math.round(total / 1000 * fps), dt = total / 1000 / n;
+  const frames = Array.from({ length: n }, (_, i) => {
+    const c = i / n * total; let t;
+    if (P.loop) t = i / n; else { let x = c, k = 0; while (k < 3 && x >= d[k]) { x -= d[k]; k++; } const q = d[k] ? Math.min(1, x / d[k]) : 0; t = k === 0 ? easeQ(q) : k === 1 ? 1 : k === 2 ? 1 - easeQ(q) : 0; }
+    return { t, pct: c / total * 100, R: rig(t) };
+  });
+  const out = [];
+  for (const b of bells) {
+    const s = (b.hands || ['L'])[0], bid = b.id || 'kb';
+    const F = frames.map(f => { const p = f.R.props.find(q => q.kind === 'kettlebell' && q.id === bid); if (!p) return null; const ax = V.unit(p.axis), B = EQ.bellBasis(f.R.frames['hand' + s], s, ax), dv = V.sub(p.c, p.grip); return { ...f, p, ax, B, L: V.len(dv), th: Math.atan2(V.dot(dv, B.e2), V.dot(dv, B.e1)) }; });
+    if (F.some(x => !x)) continue;
+    const at = i => ((i % n) + n) % n, acc = F.map((_, i) => V.scale(V.add(V.sub(F[at(i + 1)].p.grip, V.scale(F[i].p.grip, 2)), F[at(i - 1)].p.grip), 1 / (dt * dt)));
+    const W = Math.ceil(3 * sigma / dt), G = EQ.BELL.G;
+    const eff = F.map((f, i) => { let a = [0, 0, 0], w0 = 0; for (let j = -W; j <= W; j++) { const w = Math.exp(-.5 * (j * dt / sigma) ** 2); a = V.add(a, acc[at(i + j)], w); w0 += w; } return V.perp(V.sub([0, G, 0], V.scale(a, 1 / w0)), f.ax); });
+    const gap = (f, a) => EQ.bellClear(f.R, s, f.p.grip, V.add(V.scale(f.B.e1, Math.cos(a)), f.B.e2, Math.sin(a)), f.L, f.p.radius) - EQ.KB.press;
+    const r = { side: s, bell: bid, hang: b.hang || 'gravity', jump: 0, sweep: -Infinity, swing: 0, frames: n };
+    if (trace) r.trace = [];
+    let run = 0, runFrom = null;
+    for (let i = 0; i < n; i++) {
+      const f = F[i], g = F[at(i + 1)], dj = wrapA(g.th - f.th) / D2R;
+      if (Math.abs(dj) > Math.abs(r.jump)) Object.assign(r, { jump: dj, jumpT: g.t, jumpPct: g.pct });
+      for (let k = 1; k < 8 && Math.abs(dj) > .5; k++) { const v = -gap(g, f.th + dj * D2R * k / 8); if (v > r.sweep) Object.assign(r, { sweep: v, sweepT: g.t, sweepPct: g.pct }); }
+      /* против маятника */
+      const E = eff[i], En = V.len(E), u = Math.atan2(V.dot(E, f.B.e2), V.dot(E, f.B.e1)), off = wrapA(u - f.th);
+      const swing = EQ.bellInLine(f.R, s, f.th);
+      let bad = !swing && En >= LIM.bellG * G && Math.abs(off) > LIM.bellOff * D2R;
+      if (bad) for (let k = 1; k <= 12; k++) if (gap(f, f.th + off * k / 12) < 0) { bad = false; break; }
+      if (bad) { if (!run) runFrom = f; run += dt * Math.sqrt(En * Math.abs(Math.sin(off)) / (2 * f.L)); const sw = run * run / D2R; if (sw > r.swing) Object.assign(r, { swing: sw, swingT: runFrom.t, swingPct: runFrom.pct, swingOff: Math.abs(off) / D2R, swingG: En / G }); }
+      else run = 0;
+      if (trace) r.trace.push({ pct: f.pct, t: f.t, th: f.th / D2R, free: u / D2R, g: En / G, off: off / D2R, bad, swing, gap: gap(f, f.th), run: run * run / D2R });
+    }
+    out.push(r);
+  }
+  return out;
+}
+
 /* ---------- одно упражнение, один вариант ---------- */
 function variantsOf(e) {
   const keys = [...new Set((e.equipment || []).flatMap(q => [q.optional, q.optionalNot]).filter(Boolean))];
@@ -107,7 +183,7 @@ function variantsOf(e) {
   if (keys.length > 1) for (const k of keys) out.push({ label: 'только ' + k, has: x => x === k });
   return out;
 }
-function auditEntry(id, e, { samples = 41 } = {}) {
+function auditEntry(id, e, { samples = 41, player = true } = {}) {
   const rows = [];
   for (const vr of variantsOf(e)) {
     const ev = EQ.variantEntry(e, vr.has), rig = EQ.rig(ev), has = vr.has || (() => true), acc = {};
@@ -233,6 +309,11 @@ function auditEntry(id, e, { samples = 41 } = {}) {
         }
       }
     }
+    /* гиря в одной руке по ходу плеера — в ту же строку «гиря» */
+    if (player) for (const b of bellPlayer(id, ev, rig, { has })) {
+      const r = row('kb' + b.bell, { side: b.side, kind: 'гиря', bell: b.bell, pos: new Set(), deep: -Infinity, palm: 0, up: 0 });
+      r.player = b;
+    }
     for (const r of Object.values(acc)) { if (r.pos) r.pos = [...r.pos].join(', '); r.flags = flagsOf(r); if (r.modes) r.modes = [...r.modes].join(','); if (r.contacts) r.contacts = [...r.contacts].join(' '); rows.push(r); }
   }
   return rows;
@@ -257,7 +338,13 @@ function flagsOf(r) {
   if (r.kind === 'гиря') {
     if (r.deep > LIM.bellBody) f.push(`шар гири в ${r.deepIn} на ${r.deep.toFixed(1)} см (t=${r.deepT})`);
     if (r.palm) f.push(`шар лежит на ладонной стороне предплечья (${r.palm} кадр., t=${r.palmT})`);
-    if (r.up) f.push(`шар выше рукояти без опоры на предплечье (${r.up} кадр., t=${r.upT})`);
+    /* у маятника шар над рукоятью без опоры законен, пока гиря невесома (вершина рывка, переворот через кисть): его
+       меряет правило «против маятника» по ходу плеера */
+    if (r.up && r.player?.hang !== 'turn') f.push(`шар выше рукояти без опоры на предплечье (${r.up} кадр., t=${r.upT})`);
+    const b = r.player;
+    if (b && Math.abs(b.jump) > LIM.bellJump) f.push(`скачок шара ${Math.abs(b.jump).toFixed(0)}° за кадр плеера (${b.jumpPct.toFixed(1)} % повтора, t=${b.jumpT.toFixed(3)})`);
+    if (b && b.sweep > LIM.bellBody) f.push(`шар между кадрами плеера проходит сквозь руку на ${b.sweep.toFixed(1)} см (${b.sweepPct.toFixed(1)} % повтора, t=${b.sweepT.toFixed(3)})`);
+    if (b && b.swing > LIM.bellSwing) f.push(`шар против маятника: в ${b.swingOff.toFixed(0)}° от g − a (${b.swingG.toFixed(1)} g), рука не держит (с ${b.swingPct.toFixed(1)} % повтора, t=${b.swingT.toFixed(3)}; маятник сдвинулся бы на ${b.swing.toFixed(0)}°)`);
   }
   if (r.kind === 'гантель в ладонях' && r.axis > LIM.cupAxis) f.push(`ладонь в ${r.axis.toFixed(1)} см от рукояти`);
   if (r.kind === 'трос') {
@@ -280,7 +367,7 @@ function describe(r) {
     return [r.modes, r.contacts || '—', r.handle ? `${r.handle}${r.declared ? '' : ' (не заявлен)'} ${f1(r.axis)} см @${r.axisT}` : '', r.angle != null ? `${f0(r.angle)}°` : '',
       p ? `${p.on}: ладонь ${f1(p.gap)} см (${f1(p.gapMin)}…${f1(p.gapMax)}), кисть ${f1(p.any)}, ${f0(p.touch * 100)} %, ${f0(p.tilt)}° @${p.t}` : '', r.cup ? `«чаша»: диск от своего места ${f1(r.cup.off)} см, ${f0(r.cup.ang)}°` : ''].join(' | ');
   }
-  if (r.kind === 'гиря') return `${r.bell}: ${r.pos} | ближе всего ${r.deepIn}: ${f1(-r.deep)} см @${r.deepT}`;
+  if (r.kind === 'гиря') return `${r.bell}: ${r.pos} | ближе всего ${r.deepIn}: ${f1(-r.deep)} см @${r.deepT}` + (r.player ? ` | плеер ${r.player.frames} кадр.: скачок до ${f0(Math.abs(r.player.jump))}°, путь в руке ${f1(r.player.sweep)} см, против маятника — маятник сдвинулся бы на ${f0(r.player.swing)}°` : '');
   if (r.kind === 'гиря за рога') return `${r.bell}: ${r.pos} | ближе всего ${r.deepIn}: ${f1(-r.deep)} см @${r.deepT} | кулак от рога до ${f1(r.horn)} см`;
   if (r.kind === 'трос') return [r.cable, r.angle != null ? `угол ${f0(r.angle)}° @${r.angleT}` : '', `ось в кисти ${f1(r.hand)} @${r.handT}`, `ось в предплечье ${f1(r.arm)} @${r.armT}`].join(' | ');
   return `${r.handle}: ладонь у оси ${f1(r.axis)} см @${r.axisT}`;
@@ -295,4 +382,4 @@ if (require.main === module) {
   console.log(`\nУпражнений ${ex.size}; строк ${rows.length} (кисти с хватом или опорой ${holds}, тросов у кистей ${rows.filter(r => r.kind === 'трос').length}); подозрительных ${bad.length} в ${new Set(bad.map(r => r.id)).size} упражнениях`);
   if (arg('--json')) fs.writeFileSync(arg('--json'), JSON.stringify(rows, null, 1));
 }
-module.exports = { run, auditEntry, handGeo, LIM };
+module.exports = { run, auditEntry, handGeo, bellPlayer, LIM };

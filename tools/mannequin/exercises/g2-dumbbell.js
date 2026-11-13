@@ -450,8 +450,13 @@ function haloAt(C, phi) {
 }
 /* ---------- Гиря ---------- */
 /* Наклон с отведением таза (как в махах): u = 0 — замах (наклон ~60°), u = 1 — тело прямое; стопы шире плеч */
-function kbHinge(C, u) {
-  const { M } = C, q = C.base(), k = Math.min(1, u * 1.2), lean = C.lerp(60, -2, Math.min(1, u * 1.15));
+/* min(1, x) с гладким коленом (±k): разгибание таза и наклон в рывке и взятии доходят до конца без излома скорости */
+const sat1 = (x, k = .15) => x < 1 - k ? x : x > 1 + k ? 1 : x - (x - 1 + k) ** 2 / (4 * k);
+function kbHinge(C, u, smooth = false) {
+  /* smooth — колени без излома (sat1): у рывка и взятия ключи густые, и излом скорости тела там, где таз и наклон доходят
+     до конца, виден (аудит виляний: голова 0,5–1,5 см за кадр); у махов — прежние min */
+  const cap = smooth ? sat1 : x => Math.min(1, x);
+  const { M } = C, q = C.base(), k = cap(u * 1.2), lean = C.lerp(60, -2, cap(u * 1.15));
   pelvisLean(C, q, [0, C.lerp(78.9, 87.8, k), C.lerp(-25, 0, k)], lean * .9);
   q.lumbar = [lean * .03, 0, 0]; q.thoracic = [lean * .05, 0, 0]; q.neck = [C.lerp(-16, 0, u), 0, 0];
   for (const s of S) plant(C, q, s, [M.SIGN[s] * 24.5, 0, -2], { toeOut: 20 });
@@ -518,6 +523,49 @@ function handOnThigh(C, q, s, at = .7) {
   palmBest(C, q, s, V.add(best, n, .2), n, fan(C, n, ax, 15), poles);
   return q;
 }
+
+/* естественный кубический сплайн через точки P в моменты ts (вторая производная на концах — нуль): непрерывны и скорость,
+   и ускорение (у spline с неравными отрезками скорость в узле рвётся — в рывке так дёргался локоть в узле 0,68) */
+function natural(V, ts, P, x) {
+  const n = ts.length, h = ts.slice(1).map((t, i) => t - ts[i]), Mk = P[0].map(() => new Array(n).fill(0));
+  for (let k = 0; k < P[0].length; k++) {
+    const a = new Array(n).fill(0), b = new Array(n).fill(1), c = new Array(n).fill(0), d = new Array(n).fill(0);
+    for (let i = 1; i < n - 1; i++) { a[i] = h[i - 1]; b[i] = 2 * (h[i - 1] + h[i]); c[i] = h[i]; d[i] = 6 * ((P[i + 1][k] - P[i][k]) / h[i] - (P[i][k] - P[i - 1][k]) / h[i - 1]); }
+    for (let i = 1; i < n; i++) { const w = a[i] / b[i - 1]; b[i] -= w * c[i - 1]; d[i] -= w * d[i - 1]; }
+    Mk[k][n - 1] = d[n - 1] / b[n - 1]; for (let i = n - 2; i >= 0; i--) Mk[k][i] = (d[i] - c[i] * Mk[k][i + 1]) / b[i];
+  }
+  let i = 0; while (i < n - 2 && x > ts[i + 1]) i++;
+  const hh = h[i], A = (ts[i + 1] - x) / hh, B = (x - ts[i]) / hh;
+  return P[i].map((_, k) => A * P[i][k] + B * P[i + 1][k] + ((A ** 3 - A) * Mk[k][i] + (B ** 3 - B) * Mk[k][i + 1]) * hh * hh / 6);
+}
+/* Переворот гири вокруг кисти (BIND.kettlebell, hang 'turn'): угол шара вокруг рукояти, ° (GymEquipment.bellBasis: 0 — по
+   линии руки к пальцам, 90 — над тылом кисти; угол за касанием с предплечьем — «лежит на тыле предплечья», шар ставится до
+   касания). Гладкая монотонная кривая по точкам [t, угол] (кубика Фрича — Карлсона, без выбросов). В махе шар на линии руки
+   (рука и гиря — одна цепь), затем обходит кисть снаружи — через тыл кисти и костяшки — и ложится на тыл предплечья: в рывке
+   над головой («the bell lands on your forearm» — Clemente, Breaking Muscle), во взятии — в «рэке». Плеер играет сброс той
+   же позой назад: шар скатывается с тыла предплечья через костяшки и уходит на линию руки в замах («let the kettlebell flip
+   over the top of your hand», Kettlebell Kings). Где шар проходит над кистью, подобрано по эффективной тяжести g − a
+   (сила тяжести и ускорение рукояти по кадрам плеера): аудит хватов (tools/mannequin/holds-audit.js, «против маятника»)
+   по каждому кадру подъёма и сброса — в рывке после высокой тяги (t 0,65–0,9) она тянет шар к тылу кисти (на 30–105° от
+   линии руки, 1–2,6 g), наверху и в «рэке» прижимает его к тылу предплечья. */
+function bellCurve(pts) {
+  const ts = pts.map(p => p[0]), ys = pts.map(p => p[1]), m = require('../../../src/js/09bm-mannequin.js').monotone(ts, ys);
+  return t => {
+    if (t <= ts[0]) return ys[0]; if (t >= ts.at(-1)) return ys.at(-1);
+    let i = 0; while (t > ts[i + 1]) i++;
+    const h = ts[i + 1] - ts[i], u = (t - ts[i]) / h, u2 = u * u, u3 = u2 * u;
+    return (2 * u3 - 3 * u2 + 1) * ys[i] + (u3 - 2 * u2 + u) * h * m[i] + (-2 * u3 + 3 * u2) * ys[i + 1] + (u3 - u2) * h * m[i + 1];
+  };
+}
+const kbsBell = bellCurve([[0, 0], [.5, 0], [.62, 35], [.72, 65], [.82, 78], [.9, 95], [.96, 150], [1, 150]]);
+const kbcBell = bellCurve([[0, 0], [.45, 0], [.57, 25], [.7, 60], [.8, 100], [.88, 150], [1, 150]]);
+/* ключи: рывок — через 1/32 по t, взятие — через 1/16 (прежде 10 ключей через 0,12 и 8 через 0,15): между редкими
+   ключами путь кисти уходил от позы и ломался на стыках (аудит виляний: в рывке рывок кисти 6,1 см за кадр плеера у
+   t = 0,6, ускорение рукояти там скакало на 4,5 g), а переворот шара между ними шёл бы рывками */
+const KBS_KEYS = Array.from({ length: 33 }, (_, i) => i / 32);
+/* локоть рывка по e = ease(t): подъём «вверх-назад» (высокая тяга) и уход «под кисть» (замок) — сроки гладких шагов */
+const KBS_POLE = [.4, .8, .74, 1], KBS_UP = 0, KBS_BACK = .5;
+const KBC_KEYS = Array.from({ length: 17 }, (_, i) => i / 16);
 
 module.exports = {
 
@@ -938,13 +986,13 @@ module.exports = {
      Локоть у рёбер, гиря не ударяет по предплечью — кисть проходит вокруг неё; в стойке запястье прямое, локоть прижат —
      техника — по общим положениям школ StrongFirst и RKC (пересказ: страницы школ по этому упражнению при подготовке не открывались). */
   kbclean: {
-    keys: [0, .15, .3, .45, .6, .75, .9, 1],
+    keys: KBC_KEYS,
     dynamic: true,
-    equipment: [{ type: 'kettlebell', id: 'kb', hands: ['L'], hang: 'swing', rest: true }],
+    equipment: [{ type: 'kettlebell', id: 'kb', hands: ['L'], hang: 'turn' }],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'kb' }],
     gripRadius: { L: 1.7, R: 1.7 },
     pose(t, C) {
-      const { V } = C, e = C.ease(t), u = Math.pow(e, .75), q = kbHinge(C, Math.min(1, u * 1.25));
+      const { V } = C, e = C.ease(t), u = Math.pow(e, .75), q = kbHinge(C, sat1(u * 1.25), true);
       q.L.girdle = [C.lerp(-4, 0, e), C.lerp(8, 2, e)]; q.R.girdle = [0, 4];
       /* рука — углами: от замаха (обратная кинематика при t = 0) к «рэку». Плечо уходит к корпусу в первой половине (мах
          до пояса), локоть сгибается во второй, предплечье разворачивается из хвата сверху в нейтральный между ними —
@@ -955,7 +1003,7 @@ module.exports = {
       /* к «рэку» кисть уходит в рукоять глубже (глубокий хват, M.B.deep): рукоять переходит в ладони на t 0,75–0,9 (handDepth),
          пальцы — с ключа 0,9 */
       armAngles(q, 'L', sh, C.lerp(A0.elbow, KB_RACK.elbow, we), C.lerp(A0.pron, KB_RACK.pron, wp), mix3(A0.wrist, [0, 0], wp), t >= .89 ? 'deep' : 'grip');
-      q.handDepth = { L: C.smooth((t - .75) / .15), R: 0 };
+      q.handDepth = { L: C.smooth((t - .75) / .15), R: 0 }; q.bell = { L: kbcBell(t) };
       armAngles(q, 'R', [C.lerp(-28, 6, e), C.lerp(14, 16, e), 0], C.lerp(14, 12, e), 20, [0, 0], 'relaxed');
       return q;
     }
@@ -1056,26 +1104,29 @@ module.exports = {
      к телу), кисть проходит вокруг гири и «пробивает» вверх; t=1 — рука прямая над плечом, ладонь вперёд, шар на тыле
      предплечья, запястье прямое. dynamic: баллистика. */
   kbsnatch: {
-    keys: [0, .12, .24, .36, .48, .6, .72, .84, .92, 1],
+    keys: KBS_KEYS,
     dynamic: true,
-    equipment: [{ type: 'kettlebell', id: 'kb', hands: ['L'], hang: 'swing', rest: true }],
+    equipment: [{ type: 'kettlebell', id: 'kb', hands: ['L'], hang: 'turn' }],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }, { body: 'gripL', prop: 'kb' }],
     gripRadius: { L: 1.7, R: 1.7 },
     pose(t, C) {
-      const { V } = C, e = C.ease(t), u = Math.pow(e, .75), q = kbHinge(C, Math.min(1, u * 1.3));
+      const { V } = C, e = C.ease(t), u = Math.pow(e, .75), q = kbHinge(C, sat1(u * 1.3), true);
       q.R.girdle = [0, 4]; C.rhythm(q, 'L', [0, 0]);
       const T = C.axes(q, 'thorax'), f = C.fk(q), lat = C.lat(q, 'L'), fwd = V.unit(V.perp(T.z, [0, 1, 0])), gh = f.P.ghL;
       const dir = a => [0, -Math.cos(a * C.D2R), Math.sin(a * C.D2R)];
       const P0 = V.add(V.add(gh, dir(-25), 59.8), lat, -14), Pa = V.add(V.add(gh, dir(38), 60), lat, -6);
       const Pb = V.add(V.add(V.add(gh, lat, 7), fwd, 27), [0, 1, 0], 4), P1 = V.add(V.add(V.add(gh, [0, 1, 0], 63), lat, 2), fwd, 1);
-      const g = spline(V, [P0, Pa, Pb, P1], [0, .42, .68, 1], e);
-      const k = Math.max(0, Math.min(1, (e - .4) / .35)), w = k * k * (3 - 2 * k), k2 = Math.max(0, Math.min(1, (e - .7) / .3));
-      /* локоть: в махе — наружу-вниз, в высокой тяге — вверх-назад и в сторону, наверху — как в жиме */
-      const pole = V.unit(V.mix(V.mix(V.add(lat, T.y, -.8), V.add(V.add(lat, [0, 1, 0], .5), fwd, -.8), w), V.add(V.add([0, -1, 0], lat, .6), fwd, .8), k2 * k2));
+      /* сплайн на махе выгибается за длину руки: расстояние кисти от плечевого сустава — с мягким пределом (tanh, без излома) */
+      const g0 = natural(V, [0, .42, .68, 1], [P0, Pa, Pb, P1], e), off = V.sub(g0, gh), rr = V.len(off), r0 = 59, rm = 61;
+      const g = rr <= r0 ? g0 : V.add(gh, off, (r0 + (rm - r0) * Math.tanh((rr - r0) / (rm - r0))) / rr);
+      /* локоть: в махе — наружу-вниз, в высокой тяге — вверх-назад и в сторону, наверху — как в жиме (гладкие шаги по e:
+         KBS_POLE — [начало и конец подъёма локтя, начало и конец ухода под кисть]) */
+      const s5 = x => { x = Math.max(0, Math.min(1, x)); return x * x * x * (x * (6 * x - 15) + 10); }, w = s5((e - KBS_POLE[0]) / (KBS_POLE[1] - KBS_POLE[0])), k2 = s5((e - KBS_POLE[2]) / (KBS_POLE[3] - KBS_POLE[2]));
+      const pole = V.unit(V.mix(V.mix(V.add(lat, T.y, -.8), V.add(V.add(lat, [0, 1, 0], KBS_UP), fwd, -KBS_BACK), w), V.add(V.add([0, -1, 0], lat, .6), fwd, .8), k2));
       /* наверху кисть «пробивает» рукоять и уходит в неё глубже (глубокий хват, M.B.deep): рукоять переходит в ладони на
          t 0,8–0,96 (handDepth), пальцы — с ключа 0,92 */
       holdDir(C, q, 'L', g, pole, V.scale(lat, -1), { signed: true, mode: t >= .91 ? 'deep' : 'grip' });
-      q.handDepth = { L: C.smooth((t - .8) / .16), R: 0 };
+      q.handDepth = { L: C.smooth((t - .8) / .16), R: 0 }; q.bell = { L: kbsBell(t) };
       armAngles(q, 'R', [C.lerp(-28, 6, e), C.lerp(14, 16, e), 0], C.lerp(14, 12, e), 20, [0, 0], 'relaxed');
       return q;
     }

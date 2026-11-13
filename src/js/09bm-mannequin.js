@@ -679,7 +679,7 @@ function makeTrack(keys,{loop=false}={}){
  const slopes=[];for(let j=0;j<n;j++)slopes.push(keys.length>1?monotone(ts,vals.map(v=>v[j])):[0]);
  if(loop&&keys.length>2){const m=keys.length-1;for(let j=0;j<n;j++){const d0=(vals[1][j]-vals[0][j])/(ts[1]-ts[0]),d1=(vals[m][j]-vals[m-1][j])/(ts[m]-ts[m-1]),s=d0*d1<=0?0:(d0+d1)/2;slopes[j][0]=slopes[j][m]=s;}}
  return t=>{
-  if(keys.length===1)return{v:vals[0].slice(),hands:keys[0].hands,...(keys[0].depth?{depth:keys[0].depth}:{}),...(keys[0].horn?{horn:keys[0].horn}:{})};
+  if(keys.length===1)return{v:vals[0].slice(),hands:keys[0].hands,...(keys[0].depth?{depth:keys[0].depth}:{}),...(keys[0].horn?{horn:keys[0].horn}:{}),...(keys[0].bell?{bell:keys[0].bell}:{})};
   t=clamp(t,ts[0],ts.at(-1));let i=0;while(i<ts.length-2&&t>ts[i+1])i++;
   const h=ts[i+1]-ts[i],u=(t-ts[i])/h,u2=u*u,u3=u2*u,h00=2*u3-3*u2+1,h10=u3-2*u2+u,h01=-2*u3+3*u2,h11=u3-u2,out=new Array(n);
   for(let j=0;j<n;j++)out[j]=h00*vals[i][j]+h10*h*slopes[j][i]+h01*vals[i+1][j]+h11*h*slopes[j][i+1];
@@ -688,7 +688,9 @@ function makeTrack(keys,{loop=false}={}){
   const da=keys[i].depth,db=keys[i+1].depth,depth=da||db?Object.fromEntries(SIDES.map(s=>[s,lerp(da?.[s]??0,db?.[s]??0,u)])):null;
   /* horn — точка хвата на роге гири (q.horn): между ключами — тоже линейно */
   const ha=keys[i].horn,hb=keys[i+1].horn,horn=ha||hb?Object.fromEntries(SIDES.map(s=>[s,lerp(ha?.[s]??0,hb?.[s]??0,u)])):null;
-  return{v:out,hands:(u<.5?keys[i]:keys[i+1]).hands,...(depth?{depth}:{}),...(horn?{horn}:{})};
+  /* bell — угол шара гири вокруг рукояти, ° (q.bell, GymEquipment.bellBasis; hang 'turn'): между ключами — линейно */
+  const ba=keys[i].bell,bb=keys[i+1].bell,bell=ba||bb?Object.fromEntries(SIDES.filter(s=>ba?.[s]!=null||bb?.[s]!=null).map(s=>[s,lerp(ba?.[s]??bb[s],bb?.[s]??ba[s],u)])):null;
+  return{v:out,hands:(u<.5?keys[i]:keys[i+1]).hands,...(depth?{depth}:{}),...(horn?{horn}:{}),...(bell?{bell}:{})};
  };
 }
 
@@ -744,6 +746,8 @@ function catalogPose(q){
  if(q.handDepth)R.handDepth={...q.handDepth};
  /* q.horn {L, R} — точка хвата на изогнутом роге гири (0 — прямая часть рога, 1 — у перекладины; GymEquipment.kbHorn) */
  if(q.horn)R.horn={...q.horn};
+ /* q.bell {L?, R?} — угол шара гири вокруг рукояти, ° (GymEquipment.bellBasis: 0 — по линии руки, 90 — над тылом кисти) */
+ if(q.bell)R.bell={...q.bell};
  R.girdle={L:toCat(P.ghL),R:toCat(P.ghR)};
  R.gripRadius={L:q.gripRadius?.L??1.4,R:q.gripRadius?.R??1.4};
  return R;
