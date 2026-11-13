@@ -56,7 +56,7 @@ function timeline(entry, id, n) {
 }
 const d2 = (a, b, c) => Math.hypot(b[0] - (a[0] + c[0]) / 2, b[1] - (a[1] + c[1]) / 2, b[2] - (a[2] + c[2]) / 2);
 /* ближайший ключ позы к моменту t */
-function nearKey(entry, t) { let best = null; for (const k of entry.keys || []) { const kt = k.t ?? k[0] ?? k; if (typeof kt !== 'number') continue; if (!best || Math.abs(kt - t) < Math.abs(best - t)) best = kt; } return best; }
+function nearKey(entry, t) { let best = null; for (const k of entry.keys || []) { const kt = k.t; if (typeof kt !== 'number') continue; if (!best || Math.abs(kt - t) < Math.abs(best - t)) best = kt; } return best; }
 /* ручка в кулаке: деталь снаряда из контакта кисти (балка, цилиндр, гриф — не трос, канат, лента, полотенце), ближайшая к центру
    хвата в первом кадре, где кисть держит; положение центра хвата вдоль её оси — по кадрам */
 const SOFT = /cable|rope|band|towel/;
@@ -119,8 +119,7 @@ function measure(id, entry, { d, zones, n, skin = true, has, hn }) {
         o[v * 3 + 2] = Q[v * 3 + 2] - (S[f + 8] * x + S[f + 9] * y + S[f + 10] * z + S[f + 11]);
       }
       const cw = A.correctiveWeights(R, d), sup = A.supports(R, d, props(R), cw);
-      const floorV = new Uint8Array(0);
-      return { o, Q, cw, roll: { L: W.rollOffOf(R, 'L'), R: W.rollOffOf(R, 'R') }, sup: sup.list.map(s => s.body + '>' + s.prop + ':' + s.gap.toFixed(2)), supN: sup.n, supS: Array.from({ length: sup.n }, (_, k) => sup.u[k * A.SUP.LEN + 19]), hands: { ...R.hands }, floorV };
+      return { o, Q, cw, roll: { L: W.rollOffOf(R, 'L'), R: W.rollOffOf(R, 'R') }, sup: sup.list.map(s => s.body + '>' + s.prop + ':' + s.gap.toFixed(2)), supN: sup.n, supS: Array.from({ length: sup.n }, (_, k) => sup.u[k * A.SUP.LEN + 19]), hands: { ...R.hands } };
     };
     /* по три кадра подряд */
     let a = frameOf(-1), b = frameOf(0), best = { j: 0, v: -1, i: 0 }, zoneMax = {};
