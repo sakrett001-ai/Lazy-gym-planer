@@ -12,16 +12,24 @@ const VERSION = pkg.version;
 const read = p => fs.readFileSync(p, 'utf8');
 const list = (dir, ext) => fs.readdirSync(dir).filter(f => f.endsWith(ext)).sort().map(f => path.join(dir, f));
 
+/* Языки сборки. dir — папка языка ('' — корень сайта); fallback — язык для браузера, в списке языков которого нет
+   ни одного из доступных (src/lang.js); locale — правила чисел и дат (PODHOD_LOCALE в начале app.js):
+   dec — десятичный разделитель, plural — правило множественного числа ('ru' — три формы, 'one' — 1 и остальное),
+   dates — 'intl': даты через Intl по языку браузера (en-US — «Nov 9», en-GB — «9 Nov»), иначе русские сокращения месяцев;
+   units — единицы веса по умолчанию: 'kg' или 'region' (фунты для США, Либерии и Мьянмы по navigator.language). */
 const LANGS = {
   ru:{dir:'', html:'ru', title:'Lazy Gym Planner', desc:'Lazy Gym Planner — планировщик тренировок: подбор под мышцы и оборудование, техника, журнал весов.',
     manifestName:'Lazy Gym Planner — планировщик тренировок', manifestDesc:'Подбор тренировки под мышцы и оборудование, техника, журнал весов.',
-    other:{href:'en/', label:'EN', offline:'lazy-gym-planner-offline-en.html', title:'English version'}, patch:''},
+    other:{lang:'en', href:'en/', label:'EN', offline:'lazy-gym-planner-offline-en.html', title:'English version'},
+    locale:{dec:',', plural:'ru', dates:'ru', units:'kg'}},
   en:{dir:'en', html:'en', title:'Lazy Gym Planner', desc:'Lazy Gym Planner — workout planner: picks exercises for your muscles and equipment, shows technique, logs your weights.',
     manifestName:'Lazy Gym Planner — workout planner', manifestDesc:'Workouts built around your muscles and equipment, technique, weight log.',
-    other:{href:'../', label:'RU', offline:'lazy-gym-planner-offline-ru.html', title:'Русская версия'},
-    /* английское множественное число: 1 → форма a, иначе c */
-    patch:`\nplural = (n, a, b, c) => n === 1 ? a : c;\nDEC = '.';\n`}
+    other:{lang:'ru', href:'../', label:'RU', offline:'lazy-gym-planner-offline-ru.html', title:'Русская версия'}, fallback:true,
+    locale:{dec:'.', plural:'one', dates:'intl', units:'region'}}
 };
+/* выбор языка при заходе (src/lang.js): папки языков, язык корня, запасной */
+const LANG_CFG = {langs:Object.fromEntries(Object.entries(LANGS).map(([k, L]) => [k, L.dir ? L.dir + '/' : ''])),
+  root:Object.keys(LANGS).find(k => !LANGS[k].dir), fallback:Object.keys(LANGS).find(k => LANGS[k].fallback) || null};
 
 fs.rmSync(DIST, {recursive:true, force:true});
 fs.mkdirSync(path.join(DIST, 'fonts'), {recursive:true});
@@ -29,7 +37,12 @@ require('node:child_process').execFileSync(process.execPath,[path.join(__dirname
 const volumeSrc=read(path.join(DIST,'volume.js'));
 
 const cssSrc = list(path.join(SRC, 'css'), '.css').map(read).join('\n');
+/* язык и локаль (PODHOD_LANG, PODHOD_LOCALE) дописываются в начало app.js: модули читают их при загрузке, и первая
+   отрисовка (99-boot.js) уже идёт по правилам языка */
 const jsSrc = list(path.join(SRC, 'js'), '.js').map(read).join('\n');
+/* в <head> — без пояснений (они в исходнике): комментарии с начала строки убираются, код проверяется разбором */
+const langSrc = read(path.join(SRC, 'lang.js')).replace(/^[ \t]*\/\*[\s\S]*?\*\/[ \t]*\n/gm, '');
+new Function(langSrc);
 const bodySrc = read(path.join(SRC, 'body.html'));
 const pwaSrc = read(path.join(SRC, 'pwa.js')).replace(/__VERSION__/g, VERSION);
 const manifestSrc = JSON.parse(read(path.join(SRC, 'manifest.webmanifest')));
@@ -44,7 +57,7 @@ const annyBin = fs.readFileSync(path.join(SRC, 'data', 'anny.bin')), annyB64 = a
 const ICON_FILES = ['icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'favicon-32.png'];
 const iconUrl = Object.fromEntries(ICON_FILES.filter(f => fs.existsSync(path.join(SRC, f)))
   .map(f => [f, f + '?v=' + require('node:crypto').createHash('sha256').update(fs.readFileSync(path.join(SRC, f))).digest('hex').slice(0, 16)]));
-const ASSET_VERSION = VERSION + '-' + require('node:crypto').createHash('sha256').update([volumeSrc,cssSrc,jsSrc,bodySrc,pwaSrc,JSON.stringify(manifestSrc),read(path.join(SRC,'sw.js')),read(path.join(__dirname,'i18n/en.json')),skeletonB64,musclesB64,annyB64].join('\n')).digest('hex').slice(0,12);
+const ASSET_VERSION = VERSION + '-' + require('node:crypto').createHash('sha256').update([volumeSrc,cssSrc,jsSrc,bodySrc,pwaSrc,JSON.stringify(manifestSrc),read(path.join(SRC,'sw.js')),langSrc,read(path.join(__dirname,'i18n/en.json')),skeletonB64,musclesB64,annyB64].join('\n')).digest('hex').slice(0,12);
 /* Версия отрисовки каждого вида фигуры — для ключа готовых кадров витрины (thumbCacheKey, src/js/12-figure-pace.js): хэш того,
    от чего зависит картинка кадра при той же позе, — объёмная сцена (volume.js: свет, материалы, камеры, кисти, инвентарь),
    манекен и его области (09bm, 09b, 09d) и данные вида: кожа Anny, кости, мышцы. Поза и детали инвентаря входят в ключ сами
@@ -94,8 +107,9 @@ for (const [lang, L] of Object.entries(LANGS)) {
     css = translateCss(css, dict, missing); js = translateJs(js, dict, missing); body = translateHtml(body, dict, missing); pwa = translateJs(pwa, dict, missing);
     if (missing.size) report.push(`${lang}: не переведено ${missing.size} строк (node i18n/extract.js ${lang})`);
   }
-  js += L.patch + `\nwindow.PODHOD_VERSION='${VERSION}';window.PODHOD_BUILD='${ASSET_VERSION}';window.PODHOD_RENDER=${JSON.stringify(RENDER)};window.PODHOD_LANG='${lang}';\n`;
-  body = body.replace(/__VERSION__/g, VERSION).replace(/__LANG_HREF__/g, L.other.href).replace(/__LANG_LABEL__/g, L.other.label).replace(/__LANG_TITLE__/g, L.other.title);
+  /* язык, версия и локаль — до кода приложения: первая отрисовка (99-boot.js) уже с точкой, английским множественным числом и датами */
+  js = `window.PODHOD_VERSION='${VERSION}';window.PODHOD_BUILD='${ASSET_VERSION}';window.PODHOD_RENDER=${JSON.stringify(RENDER)};window.PODHOD_LANG='${lang}';window.PODHOD_LOCALE=${JSON.stringify(L.locale)};\n` + js;
+  body = body.replace(/__VERSION__/g, VERSION).replace(/__LANG_CODE__/g, L.other.lang).replace(/__LANG_HREF__/g, L.other.href).replace(/__LANG_LABEL__/g, L.other.label).replace(/__LANG_TITLE__/g, L.other.title);
   const manifest = {...manifestSrc, name:L.manifestName, description:L.manifestDesc, lang, scope:up || './', icons:manifestSrc.icons.map(i => ({...i, src:up + iconUrl[i.src]}))};
 
   /* 1. PWA */
@@ -116,7 +130,9 @@ ${headMeta(L)}
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Lazy Gym">
-<link rel="alternate" hreflang="${lang === 'ru' ? 'en' : 'ru'}" href="${L.other.href}">
+<link rel="alternate" hreflang="${L.other.lang}" href="${L.other.href}">
+<script>window.PODHOD_LANGS=${JSON.stringify({...LANG_CFG, page:lang})};
+${langSrc}</script>
 <style>${reset}</style>
 <link rel="stylesheet" href="app.css?v=${ASSET_VERSION}">
 </head>

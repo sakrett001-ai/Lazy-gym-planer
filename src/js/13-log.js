@@ -15,12 +15,17 @@ const MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'и�
 
 function dayKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 const todayKey = () => dayKey(new Date());
+/* день записи: «сегодня», «9 ноя», «9 ноя 2025»; в сборке с датами через Intl (английская) — по языку браузера:
+   en-US «Nov 9», en-GB «9 Nov» */
 function fmtDay(k, withYear) {
   if (k === todayKey()) return 'сегодня';
-  const [y, m, d] = k.split('-').map(Number);
-  return `${d} ${MONTHS[m - 1]}${withYear && y !== new Date().getFullYear() ? ' ' + y : ''}`;
+  const [y, m, d] = k.split('-').map(Number), year = withYear && y !== new Date().getFullYear();
+  if (localeOf().dates === 'intl' && typeof Intl !== 'undefined') {
+    try { return new Intl.DateTimeFormat(localeTag(), {day:'numeric', month:'short', ...(year ? {year:'numeric'} : {})}).format(new Date(y, m - 1, d, 12)); } catch (e) {}
+  }
+  return `${d} ${MONTHS[m - 1]}${year ? ' ' + y : ''}`;
 }
-let DEC = ','; /* десятичный разделитель; в английской сборке заменяется на точку */
+let DEC = localeOf().dec || ','; /* десятичный разделитель языка сборки (в английской — точка) */
 const fmtKg = v => (Math.round(v * 100) / 100).toString().replace('.', DEC);
 const parseNum = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
 

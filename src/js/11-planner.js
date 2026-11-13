@@ -150,7 +150,17 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;', '<':'&lt;', '>
 const fmtRest = s => s >= 60 ? (s % 60 ? `${Math.floor(s / 60)} мин ${s % 60} с` : `${s / 60} мин`) : `${s} с`;
 /* середина повторов: «8–12» → 10; по подходам «10/8/6/5» — среднее */
 const midOf = r => { const s = String(r); if (s.includes('/')) { const l = s.split('/').map(Number).filter(v => v > 0); if (l.length) return l.reduce((a, b) => a + b, 0) / l.length; } const m = s.match(/(\d+)\D+(\d+)/); if (m) return (+m[1] + +m[2]) / 2; const n = parseFloat(r); return isNaN(n) ? 10 : n; };
-function plural(n, a, b, c) { const m10 = n % 10, m100 = n % 100; if (m10 === 1 && m100 !== 11) return a; if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return b; return c; }
+/* Правила языка сборки (build.js → PODHOD_LOCALE в начале app.js): десятичный разделитель, множественное число, даты,
+   единицы веса по умолчанию. Читаются при загрузке модулей, поэтому уже первая отрисовка — по правилам языка. Вне сборки
+   (проверки, исходники) — русские правила */
+function localeOf() { return (typeof window !== 'undefined' && window.PODHOD_LOCALE) || {}; }
+/* язык для Intl: первый язык браузера с языком страницы (en-US, en-GB), иначе язык страницы */
+function localeTag() {
+  const lang = (typeof window !== 'undefined' && window.PODHOD_LANG) || 'ru', nav = typeof navigator === 'undefined' ? [] : navigator.languages && navigator.languages.length ? [...navigator.languages] : [navigator.language];
+  return nav.find(t => typeof t === 'string' && t.toLowerCase().split(/[-_]/)[0] === lang) || lang;
+}
+/* множественное число: русское — три формы (1 подход, 2 подхода, 5 подходов); 'one' — форма a для 1, иначе c */
+function plural(n, a, b, c) { if (localeOf().plural === 'one') return n === 1 ? a : c; const m10 = n % 10, m100 = n % 100; if (m10 === 1 && m100 !== 11) return a; if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return b; return c; }
 /* Поиск по названиям упражнений. «ё» и «е» равны (ё раскладывается на е и две точки — U+0308, точки убираются; й остаётся
    собой), регистр и дефисы не важны. У каждого слова запроса отбрасывается окончание — «отжимание» находит «Отжимания»,
    «тяги» — «Тяга», «presses» — «press»; название подходит, если в нём есть все слова запроса без окончаний. */
