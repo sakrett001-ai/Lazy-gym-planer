@@ -138,6 +138,34 @@ function cupProblems(o) {
 }
 /* кисти «чашей» в кадре */
 function framesCups(R, P, d) { const out = []; for (const s of M.SIDES) if (CUP_MODES.has(R.hands?.[s])) { const o = cupOf(R, P, d, s); if (o) out.push(o); } return out; }
+/* Хват за ребро детали без оси (край скамьи, сиденья стула, столешницы, дверной коробки: кулак вписан в угол ребра — edgeGrip и
+   sissyArms в tools/mannequin/exercises/g5b-home.js). Заявленная деталь хвата — коробка: оси у неё нет, и проверки ручки выше
+   (обхват, глубина, кончики у оси) её пропускают (handleAt — только ручки с осью). Валидатор и holds-audit меряют только центр хвата,
+   а не кожу, поэтому кулак у косяка в сисси-приседе 4.102.0 держал воздух незамеченным: центр хвата в 1,1–1,2 см снаружи коробки,
+   кончики пальцев кожи Anny — в 3,4–4,0 см от неё, большого — в 5,1–5,2, у коробки — 3–6 % кожи пальцев. Здесь — кончики, как у ручки: середина дальней
+   трети концевой фаланги указательного–мизинца не дальше TIP_FINGER = 1,5 см от поверхности заявленной детали, большого — не дальше
+   TIP_THUMB = 3,2 (он может лежать поверх пальцев, как в силовом хвате). Замер по каталогу 4.102.0: край скамьи, сиденья и
+   столешницы — кончики пальцев от −2,3 до +0,5 см (минус — в обивке или дереве: мякоть и смешение весов у суставов; под этим
+   рёбрами кожа пальцев не проверяется — кисть у заявленной детали хвата освобождена от проверки опор, как у валидатора),
+   большой палец — до 2,8. Отрицательный тест — та же поза с деталью, сдвинутой на 3 см от кулака (tools/anny.test.js). */
+function edgeOf(R, P, d, s, entry, has) {
+  const declared = (entry.contacts || R.contacts || []).filter(k => k.body === 'grip' + s).map(k => k.prop);
+  if (!declared.length) return null;
+  const parts = (R.props || []).filter(p => EQ.visible(p, has)).flatMap(collider).filter(c => !c.unknown && !c.cable && declared.some(p => c.id === p || c.id.startsWith(p + ':')));
+  if (!parts.length || parts.some(c => c.axis)) return null;
+  const sdf = p => Math.min(...parts.map(c => c.sdf(p))), tips = [0, 1, 2, 3, 4].map(() => [0, 0, 0, 0]);
+  for (const hv of handVerts(d)[s]) if (hv.tip) { const c = tips[hv.digit]; c[0] += P[hv.v * 3]; c[1] += P[hv.v * 3 + 1]; c[2] += P[hv.v * 3 + 2]; c[3]++; }
+  const tg = tips.map(c => c[3] ? sdf([c[0] / c[3], c[1] / c[3], c[2] / c[3]]) : 0);
+  return { side: s, kind: 'edge', handle: declared.join('+'), center: sdf(R['grip' + s]), tipFinger: Math.max(...tg.slice(1)), tipThumb: tg[0] };
+}
+function edgeProblems(o) {
+  const out = [];
+  if (o.tipFinger > LIM.TIP_FINGER) out.push(`кончик пальца в ${o.tipFinger.toFixed(2)} см от ${o.handle} — кулак у ребра держит воздух (допуск ${LIM.TIP_FINGER})`);
+  if (o.tipThumb > LIM.TIP_THUMB) out.push(`кончик большого пальца в ${o.tipThumb.toFixed(2)} см от ${o.handle} (допуск ${LIM.TIP_THUMB})`);
+  return out;
+}
+/* кисти в хвате за ребро в кадре (режим хвата, заявленная деталь без оси) */
+function framesEdges(R, P, d, entry, has) { const out = []; for (const s of M.SIDES) if (HOLD.has(R.hands?.[s] || 'relaxed')) { const o = edgeOf(R, P, d, s, entry, has); if (o) out.push(o); } return out; }
 function problems(o) {
   const out = [];
   if (o.cover < LIM.COVER_MIN) out.push(`обхват ${(o.cover * 100).toFixed(0)} % (нужно ≥ ${LIM.COVER_MIN * 100})`);
@@ -159,7 +187,8 @@ function run({ ids = null, ts = [0, .25, .5, .75, 1], d, POSES, log = () => {} }
     if (!POSES[id] || id.startsWith('_')) continue;
     for (const [hn, has] of [['всё', () => true], ['ничего', () => false]]) {
       const e = EQ.variantEntry(POSES[id], has), rig = EQ.rig(e);
-      for (const t of ts) { const R = rig(t); if (!M.SIDES.some(s => HOLD.has(R.hands?.[s]))) continue; const P = A.skin(R, { d, floor: false, props: (R.props || []).filter(p => EQ.visible(p, has)) }); for (const o of framesHolds(R, P, d, e, has)) rows.push({ id, t, has: hn, ...o, bad: problems(o) }); }
+      for (const t of ts) { const R = rig(t); if (!M.SIDES.some(s => HOLD.has(R.hands?.[s]))) continue; const P = A.skin(R, { d, floor: false, props: (R.props || []).filter(p => EQ.visible(p, has)) }); for (const o of framesHolds(R, P, d, e, has)) rows.push({ id, t, has: hn, ...o, bad: problems(o) });
+        for (const o of framesEdges(R, P, d, e, has)) rows.push({ id, t, has: hn, ...o, bad: edgeProblems(o) }); }
     }
     log(id);
   }
@@ -168,18 +197,19 @@ function run({ ids = null, ts = [0, .25, .5, .75, 1], d, POSES, log = () => {} }
 const failures = rows => rows.filter(r => r.bad.length).map(r => `${r.id}${r.has === 'ничего' ? ' (без необязательного инвентаря)' : ''} t=${r.t} ${r.side}: хват ${r.handle} — ${r.bad.join('; ')}`);
 function summary(rows) {
   const q = (a, p) => { const s = a.slice().sort((x, y) => x - y); return s.length ? s[Math.min(s.length - 1, Math.floor(s.length * p))] : NaN; };
-  const col = k => rows.map(r => r[k]);
+  rows = rows.filter(r => r.kind !== 'edge'); const col = k => rows.map(r => r[k]);
   return { n: rows.length, cover: { min: Math.min(...col('cover')), p5: q(col('cover'), .05), median: q(col('cover'), .5) }, fingerDepth: { max: Math.max(...col('fingerDepth')), p95: q(col('fingerDepth'), .95), margin: Math.min(...rows.map(r => r.fingerLimit - r.fingerDepth)) },
     palmDepth: { max: Math.max(...col('palmDepth')), margin: Math.min(...rows.map(r => r.palmLimit - r.palmDepth)) }, tipFinger: { max: Math.max(...col('tipFinger')), p95: q(col('tipFinger'), .95) }, tipThumb: { max: Math.max(...col('tipThumb')), p95: q(col('tipThumb'), .95) } };
 }
-module.exports = { LIM, CUP_MODES, cupOf, cupProblems, framesCups, handVerts, handleAt, holdOf, framesHolds, problems, run, failures, summary };
+module.exports = { LIM, CUP_MODES, cupOf, cupProblems, framesCups, edgeOf, edgeProblems, framesEdges, handVerts, handleAt, holdOf, framesHolds, problems, run, failures, summary };
 if (require.main === module) {
   const CMP = require('./compare.js');
   const ids = process.argv[2] && process.argv[2] !== 'all' && !process.argv[2].startsWith('--') ? process.argv[2].split(',') : null;
   const ts = process.argv[3] && !process.argv[3].startsWith('--') ? process.argv[3].split(',').map(Number) : [0, .25, .5, .75, 1];
   const rows = run({ ids, ts, d: CMP.loadAnny(), POSES: CMP.loadPoses(), log: () => process.stderr.write('.') });
   const f2 = x => x.toFixed(2);
-  for (const r of process.argv.includes('--all') ? rows : rows.filter(r => r.bad.length)) console.log(`${r.id.padEnd(14)} t=${String(r.t).padEnd(4)} ${r.side} ${r.has.padEnd(6)} ${r.handle.padEnd(18)} r=${f2(r.r)} обхват ${(r.cover * 100).toFixed(0).padStart(3)} % пальцы ${f2(r.fingerDepth)}/${f2(r.fingerLimit)} ладонь ${f2(r.palmDepth)}/${f2(r.palmLimit)} кончик ${f2(r.tipFinger)} большой ${f2(r.tipThumb)}${r.bad.length ? '  ⚠ ' + r.bad.join('; ') : ''}`);
+  for (const r of (process.argv.includes('--all') ? rows : rows.filter(r => r.bad.length)).filter(r => r.kind === 'edge')) console.log(`${r.id.padEnd(14)} t=${String(r.t).padEnd(4)} ${r.side} ${r.has.padEnd(6)} ребро ${r.handle.padEnd(12)} центр хвата ${f2(r.center)} кончик ${f2(r.tipFinger)} большой ${f2(r.tipThumb)}${r.bad.length ? '  ⚠ ' + r.bad.join('; ') : ''}`);
+  for (const r of (process.argv.includes('--all') ? rows : rows.filter(r => r.bad.length)).filter(r => r.kind !== 'edge')) console.log(`${r.id.padEnd(14)} t=${String(r.t).padEnd(4)} ${r.side} ${r.has.padEnd(6)} ${r.handle.padEnd(18)} r=${f2(r.r)} обхват ${(r.cover * 100).toFixed(0).padStart(3)} % пальцы ${f2(r.fingerDepth)}/${f2(r.fingerLimit)} ладонь ${f2(r.palmDepth)}/${f2(r.palmLimit)} кончик ${f2(r.tipFinger)} большой ${f2(r.tipThumb)}${r.bad.length ? '  ⚠ ' + r.bad.join('; ') : ''}`);
   console.log('\n' + JSON.stringify(summary(rows)));
   const bad = failures(rows); if (bad.length) { console.error(`Хват кожи Anny: ${bad.length} нарушений`); process.exit(1); }
   console.log(`Хват кожи Anny: ${rows.length} кистей в хвате — обхват, глубина и кончики в допусках.`);

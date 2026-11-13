@@ -6,7 +6,9 @@
    Валидатор (tools/biomech/validator2.js) проверяет только заявленные контакты: хват gripL/R — центр хвата у оси ручки,
    контакт областью кисти (handL/R, palmL/R) — касание любой точкой кисти, хоть краем кулака. Здесь — то, что видит глаз:
    * кулак (grip/hook): расстояние центра хвата до оси ближайшей ручки (гриф, рукоять, дужка, канат, полотенце) и угол
-     между осью кулака и ручкой; заявлен хват или нет. «Кулак держит воздух» — ручки нет ближе 3 см от центра хвата;
+     между осью кулака и ручкой; заявлен хват или нет. «Кулак держит воздух» — ручки нет ближе 3 см от центра хвата; у ребра
+     детали без оси (край скамьи, сиденья, столешницы, дверной коробки) — центр хвата снаружи детали дальше 0,5 см (кулак вписан
+     в угол ребра — центр внутри), угол — к ближайшему ребру;
    * ладонь (flat): зазор центра ладони до ближайшей поверхности (инвентарь, пол, тело), доля ладони и пальцев в касании
      (до 1 см) и наклон ладони к поверхности; при заявленном контакте ладони — до заявленной детали;
    * контакт областью кисти на свободном снаряде (гантель, гиря, диск, мяч) — каждый в список «посмотреть глазами»; кроме
@@ -22,12 +24,13 @@
 const fs = require('node:fs'), path = require('node:path');
 const M = require('../../src/js/09bm-mannequin.js');
 const EQ = require('../../src/js/09bn-equipment.js');
-const { collider } = require('../biomech/validator2.js');
+const { collider, obbEdge } = require('../biomech/validator2.js');
 const { V } = M, FLOOR = M.FLOOR;
 
 /* пороги «подозрительно» (не ошибки валидатора — повод посмотреть глазами) */
 const LIM = {
   gripAxis: 2.0,     // см: центр хвата дальше от оси заявленной ручки
+  edgeOut: .5,       // см: кулак у ребра детали без оси (коробка) — центр хвата снаружи детали дальше: держит воздух (валидатор, EDGE_OUT)
   air: 3.0,          // см: кулак 'grip' без ручки ближе этого — «держит воздух»
   gripAngle: 30,     // °: ось кулака поперёк ручки
   palmGap: 1.0,      // см: центр ладони над заявленной опорой
@@ -52,7 +55,8 @@ function polyDist(p, pts) { let best = { d: Infinity }; for (let i = 1; i < pts.
 function axisOf(c, p) {
   if (c.axis) { const r = segDist(p, c.axis[0], c.axis[1]); return { d: r.d, dir: r.dir, r: c.r || 0, ends: r.k <= 0 || r.k >= 1 }; }
   if (c.cable) { const r = polyDist(p, c.pts); return { d: r.d, dir: r.dir, r: c.r || 0, cable: true }; }
-  return { d: c.sdf(p), r: 0, surface: true };
+  /* коробка (хват за ребро): расстояние — до поверхности (плюс — снаружи), направление — ближайшего ребра */
+  return { d: c.sdf(p), r: 0, surface: true, dir: c.obb ? obbEdge(c.obb, p).dir : undefined };
 }
 const angleTo = (a, b) => { const x = V.angle(a, b); return Math.min(x, 180 - x); };
 /* кисть в координатах каталога (как M.handShape и сетка в приложении): ладонь смотрит в −g·x, пальцы — в −y */
@@ -241,7 +245,7 @@ function flagsOf(r) {
   const f = [];
   if (r.kind === 'кисть') {
     if (r.axis != null && r.declared && !r.surface && r.axis > LIM.gripAxis) f.push(`хват в ${r.axis.toFixed(1)} см от оси ${r.handle}`);
-    if (r.axis != null && r.declared && r.surface && r.axis > LIM.gripAxis) f.push(`хват в ${r.axis.toFixed(1)} см от ${r.handle}`);
+    if (r.axis != null && r.declared && r.surface && r.axis > LIM.edgeOut) f.push(`кулак у ребра ${r.handle} держит воздух: центр хвата в ${r.axis.toFixed(1)} см снаружи`);
     if (r.air) f.push(`кулак без ручки (${r.air} кадр.)`);
     if (r.angle != null && r.declared && r.angle > LIM.gripAngle) f.push(`ручка под ${r.angle.toFixed(0)}° к кулаку`);
     const d = r.palm?.decl;

@@ -41,7 +41,8 @@
       убывают»: числа на позу записаны в tools/anny-look/fixtures/folds.json (node tools/anny-look/check.js --record-folds
       после улучшения), больше записанного — ошибка.
    4. Хват (holds.js): кисть в режиме 'grip' у ручки — обхват ручки кожей ладони и пальцев, глубина пальцев и ладони в ручке,
-      кончики пальцев и большого пальца не торчат из кулака; кисть «чашей» ('cup', 'cupring') — кончики пальцев на верхнем
+      кончики пальцев и большого пальца не торчат из кулака; кулак у ребра детали без оси (край скамьи, сиденья, столешницы,
+      дверной коробки) — кончики пальцев у детали, а не в воздухе; кисть «чашей» ('cup', 'cupring') — кончики пальцев на верхнем
       диске гантели, большой палец на краю диска или у рукояти, пальцы не в диске. Допуски и их обоснование — в шапке holds.js. */
 const fs = require('node:fs'), path = require('node:path');
 const root = path.resolve(__dirname, '../..');
@@ -175,6 +176,7 @@ function run({ ids = null, ts = [0, .25, .5, .75, 1], d = CMP.loadAnny(), log = 
         for (const p of penetration(R, P, d, kind, e, has)) if (p.depth > p.limit) res.penetration.push({ ex: id, t, has: hn, ...p });
         for (const o of HOLDS.framesHolds(R, P, d, e, has)) res.holds.push({ id, t, has: hn, ...o, bad: HOLDS.problems(o) });
         for (const o of HOLDS.framesCups(R, P, d)) res.cups.push({ id, t, has: hn, ...o, bad: HOLDS.cupProblems(o) });
+        for (const o of HOLDS.framesEdges(R, P, d, e, has)) res.holds.push({ id, t, has: hn, ...o, bad: HOLDS.edgeProblems(o) });
         if (hn === 'всё') {
           const body = M.bodyData(R), Pv = new Float32Array(verts.length * 3); verts.forEach((v, k) => { Pv[k * 3] = P[v * 3]; Pv[k * 3 + 1] = P[v * 3 + 1]; Pv[k * 3 + 2] = P[v * 3 + 2]; });
           const dist = CMP.distances(d, Pv, R, zones, verts, body);
@@ -221,7 +223,8 @@ if (require.main === module) {
     console.log(`\nкожа Anny: ${((Date.now() - t0) / 1000).toFixed(0)} с`);
     console.log('отход от процедурной кожи (99 % / наибольший, см):'); for (const [z, s] of Object.entries(res.distance)) console.log(`  ${z.padEnd(12)} ${s.p99.toFixed(2).padStart(5)} / ${s.max.toFixed(2).padStart(5)} (допуск ${s.limitP99} / ${s.limitMax})  ${s.where}`);
     const H = HOLDS.summary(res.holds), f2 = x => x.toFixed(2);
-    console.log(`хват (${H.n} кистей): обхват не меньше ${(H.cover.min * 100).toFixed(0)} % (допуск ${HOLDS.LIM.COVER_MIN * 100}), пальцы в ручке до ${f2(H.fingerDepth.max)} (запас до допуска ${f2(H.fingerDepth.margin)}), ладонь — до ${f2(H.palmDepth.max)} (запас ${f2(H.palmDepth.margin)}), кончики пальцев — до ${f2(H.tipFinger.max)} (допуск ${HOLDS.LIM.TIP_FINGER}), большого — до ${f2(H.tipThumb.max)} (допуск ${HOLDS.LIM.TIP_THUMB})`);
+    if (H.n) console.log(`хват (${H.n} кистей): обхват не меньше ${(H.cover.min * 100).toFixed(0)} % (допуск ${HOLDS.LIM.COVER_MIN * 100}), пальцы в ручке до ${f2(H.fingerDepth.max)} (запас до допуска ${f2(H.fingerDepth.margin)}), ладонь — до ${f2(H.palmDepth.max)} (запас ${f2(H.palmDepth.margin)}), кончики пальцев — до ${f2(H.tipFinger.max)} (допуск ${HOLDS.LIM.TIP_FINGER}), большого — до ${f2(H.tipThumb.max)} (допуск ${HOLDS.LIM.TIP_THUMB})`);
+    { const E = res.holds.filter(h => h.kind === 'edge'); if (E.length) console.log(`хват за ребро (${E.length} кистей): кончики пальцев — до ${f2(Math.max(...E.map(h => h.tipFinger)))} см от детали (допуск ${HOLDS.LIM.TIP_FINGER}), большого — до ${f2(Math.max(...E.map(h => h.tipThumb)))} (допуск ${HOLDS.LIM.TIP_THUMB})`); }
     if (res.cups.length) { const mx = k => Math.max(...res.cups.map(c => c[k])); console.log(`«чаша» (${res.cups.length} кистей): кончики пальцев — до ${f2(mx('tipFinger'))} см от диска (допуск ${HOLDS.LIM.CUP_TIP}), большого — до ${f2(mx('tipThumb'))} от диска или рукояти (допуск ${HOLDS.LIM.TIP_THUMB}), пальцы в диске — до ${f2(mx('fingerDepth'))} (допуск ${HOLDS.LIM.CUP_DEPTH})`); }
     console.log('крайние позы (вывернутые треугольники, складки):', res.folds.map(f => `${f.id} ${f.t}: ${f.inverted}/${f.folds}`).join(', '));
   }

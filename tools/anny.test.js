@@ -366,6 +366,22 @@ test('grip: Anny fingers close around the handle — the ring is closed, no fing
   for (const hv of HO.handVerts(d).L) if (!hv.palm) { const p = [P[hv.v * 3], P[hv.v * 3 + 1], P[hv.v * 3 + 2]], t = M.V.sub(p, h.c0), rad = M.V.perp(t, h.e), n = M.V.unit(rad); for (let i = 0; i < 3; i++) P[hv.v * 3 + i] -= 1.5 * n[i]; }
   assert(HO.problems(HO.holdOf(R, P, d, 'L', e, () => true)).some(x => /пальцы в ручке/.test(x)), 'fingers pushed 1.5 cm into the bar must fail');
 });
+test('edge grip (bench, chair seat, table top, door jamb): fingertips of the fist lie on the gripped part; the same fist 3 cm off the part fails', () => {
+  const HO = require('./anny-look/holds.js'), L = HO.LIM, { V } = M;
+  for (const [id, n] of [['tablerow', 2], ['chairdip', 2], ['benchdip', 2], ['sissysquat', 1]]) for (const t of [0, .5, 1]) {
+    const { R, e } = pose(id, t), rows = HO.framesEdges(R, A.skin(R, { d, floor: false }), d, e, () => true);
+    assert(rows.length === n, `${id} t=${t}: ${n} hand(s) on an edge`);
+    for (const o of rows) assert.deepEqual(HO.edgeProblems(o), [], `${id} t=${t} ${o.side}`);
+  }
+  /* отрицательный: деталь хвата сдвинута на 3 см от кулака (кулак у ребра держит воздух, как у косяка в 4.102.0): столешница — вверх
+     и к телу на 3 см, дверь — на 3 см от тела */
+  const shift = (p, o) => { const q = { ...p }; for (const k of ['c', 'a', 'b']) if (Array.isArray(p[k])) q[k] = V.add(p[k], o); return q; };
+  for (const [id, part, o] of [['tablerow', 'table:', [0, -3, 3]], ['sissysquat', 'door:', [3, 0, 0]]]) {
+    const { R, e } = pose(id, .5), R2 = { ...R, props: R.props.map(p => p.id.startsWith(part) ? shift(p, o) : p) };
+    const rows = HO.framesEdges(R2, A.skin(R, { d, floor: false }), d, e, () => true);
+    assert(rows.length && rows.every(r => r.tipFinger > L.TIP_FINGER && HO.edgeProblems(r).some(x => /держит воздух/.test(x))), `${id}: fist off the edge must fail — ${JSON.stringify(rows.map(r => r.tipFinger))}`);
+  }
+});
 test('cupped dumbbell (cup — goblet, cupring — pullover and overhead extension): fingertips on the top head, thumb at the rim or the handle, fingers not in the head; flat palms fail', () => {
   const HO = require('./anny-look/holds.js'), L = HO.LIM, none = () => false;
   for (const s of M.SIDES) for (const m of HO.CUP_MODES) assert(header.hands[s][m]?.f?.length === 4 && header.hands[s][m].th, `cup row ${s} ${m}`);

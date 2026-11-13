@@ -35,6 +35,10 @@ const LIM = {
 const TOL = 10;
 /* лопатка в рёбрах: наибольший заход передней поверхности тела лопатки под оболочку рёбер, см (правило scapula, 4б) */
 const SCAP_RIB_DEPTH = 1;
+/* хват за ребро детали без оси: центр хвата снаружи детали не дальше EDGE_OUT, см (правило contact, 5). Вписанный в угол кулак
+   держит центр внутри детали на радиус хвата (край скамьи, сиденья, столешницы в каталоге 4.102.0: −1,5…−2,2 см); 0,5 см — запас
+   на скругление рёбер обивки и шаг ключей позы */
+const EDGE_OUT = .5;
 function romChecks(R, entry = {}) {
   const a = angles(R), out = [], contacts = entry.contacts || R.contacts || [];
   /* ладонь, опёртая на пол или опору, разгибается пассивно под весом тела (до ~90°, отжимания) */
@@ -104,6 +108,13 @@ function handleAxis(c, p) {
   if (c.cable) { let best = { d: Infinity, dir: null }; for (let i = 1; i < c.pts.length; i++) { const r = seg(c.pts[i - 1], c.pts[i]); if (r.d < best.d) best = r; } return best; }
   return { d: c.sdf(p) + (c.r || 0), dir: null };
 }
+/* ребро коробки, ближайшее к точке p (хват за ребро): расстояние до прямой ребра и его направление */
+function obbEdge(o, p) {
+  const q = o.ax.map(a => V.dot(V.sub(p, o.c), a));
+  let best = null;
+  for (let i = 0; i < 3; i++) { const j = (i + 1) % 3, k = (i + 2) % 3, d = Math.hypot(q[j] - Math.sign(q[j] || 1) * o.half[j], q[k] - Math.sign(q[k] || 1) * o.half[k]); if (!best || d < best.d) best = { d, dir: o.ax[i] }; }
+  return best;
+}
 /* объём кисти: ладонь (коробка) и фаланги (капсулы) — та же форма, что у сетки и точек тела (Mannequin.handShape) */
 function handSDF(R, s) {
   const f = R.frames['hand' + s], sh = M.handShape(R.hands?.[s] || 'relaxed', s, R.gripRadius?.[s] ?? 1.4), L = p => V.add(V.add(V.add(f.o, f.x, p[0]), f.y, p[1]), f.z, p[2]);
@@ -118,8 +129,8 @@ function collider(s) {
   c.soft = ['pad', 'mat'].includes(c.tone);
   if (s.kind === 'beam') {
     if (s.r) { c.sdf = p => sdCapsule(p, s.a, s.b, s.r); c.pts = linspace(s.a, s.b, 2); c.r = s.r; c.ptR = s.r; c.axis = [s.a, s.b]; }
-    else { const ax = beamAxes(s), cc = V.mix(s.a, s.b, .5), half = [s.w / 2, V.dist(s.a, s.b) / 2, s.h / 2]; c.sdf = p => sdOBB(p, cc, ax, half); c.pts = obbPoints(cc, ax, half, 3); c.r = Math.min(s.w, s.h) / 2; }
-  } else if (s.kind === 'obox') { const ax = [s.x, s.y, s.z].map(V.unit), half = s.size.map(v => v / 2); c.sdf = p => sdOBB(p, s.c, ax, half); c.pts = obbPoints(s.c, ax, half, 4); c.r = Math.min(...half); }
+    else { const ax = beamAxes(s), cc = V.mix(s.a, s.b, .5), half = [s.w / 2, V.dist(s.a, s.b) / 2, s.h / 2]; c.sdf = p => sdOBB(p, cc, ax, half); c.pts = obbPoints(cc, ax, half, 3); c.r = Math.min(s.w, s.h) / 2; c.obb = { c: cc, ax, half }; }
+  } else if (s.kind === 'obox') { const ax = [s.x, s.y, s.z].map(V.unit), half = s.size.map(v => v / 2); c.sdf = p => sdOBB(p, s.c, ax, half); c.pts = obbPoints(s.c, ax, half, 4); c.r = Math.min(...half); c.obb = { c: s.c, ax, half }; }
   else if (s.kind === 'cyl') { const ax = V.unit(s.axis); c.sdf = p => sdCyl(p, s.c, ax, s.r, s.len / 2); c.pts = cylPoints(s.c, ax, s.r, s.len / 2); c.r = Math.min(s.r, s.len / 2); }
   else if (s.kind === 'sphere') { c.sdf = p => V.dist(p, s.c) - s.r; c.pts = [s.c]; c.r = s.r; }
   /* плоский контур pts (в осях u, v) толщиной len вдоль w: кулачок рычажного тренажёра */
@@ -355,6 +366,19 @@ function checkFrame(R, entry = {}) {
       /* ось кулака — вдоль ручки, которую он держит (ближайшей к центру хвата): у грифа и рукояти — их ось, у каната и
          полотенца — направление троса в кулаке (прежде канат не проверялся и мог идти поперёк кулака, сквозь ладонь) */
       if (near.dir) { const ang = V.angle(R['handleAx' + s] || R.frames['hand' + s].z, near.dir), off = Math.min(ang, 180 - ang); if (off > (k.axisTol ?? 25)) push('contact', off > 45 ? 'error' : 'warn', `${k.body}: ладонь повёрнута к ручке под ${off.toFixed(0)}°`, off, '°'); }
+      /* хват за ребро детали без оси (край скамьи, сиденья, столешницы, дверной коробки): кулак обхватывает ребро — ручка кулака
+         (окружность радиуса хвата вокруг его оси) вписана в угол ребра, центр хвата — внутри детали (edgeGrip в g5b-home.js: на
+         радиус хвата от обеих граней). Проверка выше для коробки пропускает центр до 1,2 см снаружи её поверхности — кулак рядом
+         с ребром держит воздух (сисси-присед 4.102.0: центр в 1,1–1,2 см снаружи дверной коробки, кончики пальцев кожи Anny в 3,4–5,2 см
+         от неё). Центр снаружи детали дальше EDGE_OUT — предупреждение, дальше 2·EDGE_OUT — ошибка; ось кулака — вдоль ближайшего
+         ребра, как у ручки (axisTol). */
+      if (!list.some(c => c.axis || c.cable) && list.some(c => c.obb)) {
+        const out = Math.min(...list.map(c => c.sdf(g)));
+        if (out > EDGE_OUT) push('contact', out > 2 * EDGE_OUT ? 'error' : 'warn', `${k.body}: кулак у ребра ${k.prop} держит воздух — центр хвата в ${out.toFixed(1)} см снаружи детали`, out);
+        const e = list.filter(c => c.obb).map(c => obbEdge(c.obb, g)).sort((a, b) => a.d - b.d)[0];
+        const ang = V.angle(R['handleAx' + s] || R.frames['hand' + s].z, e.dir), off = Math.min(ang, 180 - ang);
+        if (off > (k.axisTol ?? 25)) push('contact', off > 45 ? 'error' : 'warn', `${k.body}: кулак поперёк ребра ${k.prop} — ${off.toFixed(0)}°`, off, '°');
+      }
       continue;
     }
     if (k.prop === 'floor') {
@@ -552,4 +576,4 @@ function checkClip(frameAt, entry = {}, { samples = 41 } = {}) {
   if (entry.loop) { const a = frameAt(0), b = frameAt(1); for (const k of keys) { const d = V.dist(a[k], b[k]); if (d > 1) { issues.set('loop|' + k, { rule: 'loop', severity: 'error', detail: `цикл не замкнут: ${k} в конце на ${d.toFixed(1)} см от начала`, t: 1, frames: 1 }); break; } } }
   return [...issues.values()];
 }
-module.exports = { checkFrame, checkClip, angles, romChecks, bodyPoints, regionPoints, collider, bandEdges, LIM, SCAP_RIB_DEPTH };
+module.exports = { checkFrame, checkClip, angles, romChecks, bodyPoints, regionPoints, collider, obbEdge, bandEdges, LIM, SCAP_RIB_DEPTH, EDGE_OUT };
