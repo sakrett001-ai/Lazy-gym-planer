@@ -18,8 +18,9 @@ export const PART_REGION={pecm1:'pec_clavicular',pecm2:'pec_sternal',pecm3:'pec_
  trapsup:'trap_upper',trapmid:'trap_mid'};
 /* этап А аудита анатомии 4.53.0 (цвет по фазам): части, которые в упражнении работают иначе, чем их группа, — свои области
    (09d-catalog-muscles.js, MUSCLE_REGIONS, REGION_FACTORS): нижняя трапециевидная и поднимающая лопатку, короткая головка
-   двуглавой бедра, сгибатели и разгибатели предплечья и плечелучевая, наружная и внутренняя косые, части манжеты */
-Object.assign(PART_REGION,{trapinf:'trap_lower',levscap:'lev_scap',bfsh:'ham_short',eo:'obl_ext',io:'obl_int',pecmin:'pec_minor',
+   двуглавой бедра, сгибатели и разгибатели предплечья и плечелучевая, наружная и внутренняя косые, части манжеты; с 4.102 —
+   плечевая мышца (область группы «Бицепс»: в «молоте» её доля выше, чем у головок двуглавой) */
+Object.assign(PART_REGION,{bra:'brachialis',trapinf:'trap_lower',levscap:'lev_scap',bfsh:'ham_short',eo:'obl_ext',io:'obl_int',pecmin:'pec_minor',
  supsp:'cuff_sup',infsp:'cuff_ext',tmin:'cuff_ext',subsc:'cuff_int',brd:'brachiorad',
  fcr:'forearm_flex',fcu:'forearm_flex',pl:'forearm_flex',fds:'forearm_flex',fdp:'forearm_flex',fpl:'forearm_flex',pt:'forearm_flex',pq:'forearm_flex',
  ecrl:'forearm_ext',ecrb:'forearm_ext',ecu:'forearm_ext',edc:'forearm_ext',edm:'forearm_ext',eip:'forearm_ext',epl:'forearm_ext',epb:'forearm_ext',apl:'forearm_ext',sup:'forearm_ext'});
@@ -36,7 +37,7 @@ export function muscleTint(mu,level,look,color){
  const sel=look?.selected&&look.selected!=='all'?look.selected:null;
  if(sel&&!groups.some(g=>key(g)===sel||g===sel))return MUSCLE_REST;
  if(look?.phases&&look.values){
-  /* значения стороны мышцы; у части без своей области (плечевая, трапециевидная снизу, малая грудная) — наибольшее из
+  /* значения стороны мышцы; у части без своей области — наибольшее из
      областей её группы на этой стороне: в упражнении на одну сторону и они на нерабочей стороне в покое */
   const side=look.sideValues?.[mu.side]||look.values,byParent=regionsOf(look.regions);let v=0,any=false;
   for(const g of groups){

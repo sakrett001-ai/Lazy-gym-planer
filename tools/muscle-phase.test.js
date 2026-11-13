@@ -123,6 +123,7 @@ const EXPECT = [
   ...['latpull', 'latpullv', 'latpulluh', 'assistpull', 'pullup', 'chinup'].map(id => [id, 'LR', { on: ['trapinf', 'lat'], off: ['trapsup'] }]),
   /* сгибание запястий: сгибатели, а не разгибатели; плечелучевая запястье не пересекает (OpenStax A&P 2e, 11.5) */
   ['wristcurl', 'LR', { on: FLEX, off: [...EXT, 'brd'] }],
+  /* «молот»: плечелучевая, плечевая и двуглавая (Boland и др., 2008; Basmajian и Latif, 1957; Kleiber и др., 2015) */
   ['hammer', 'LR', { on: ['brd', 'biclong', 'bra'], off: [] }],
   /* наружная ротация: подостная и малая круглая, не подлопаточная (Reinold и др., 2004); работает правая рука */
   ...['cableextrot', 'bandextrot'].map(id => [id, 'R', { on: ['infsp', 'tmin'], off: ['subsc'] }]),
@@ -153,6 +154,10 @@ test('muscles light up where EMG and anatomy say they work, and stay quiet where
   /* прямая бедра в приседе — слабее широких (Escamilla и др., 1998), в разгибании ног сидя — наравне */
   for (const id of ['squat', 'legpress', 'lunge']) assert(M[id].parts['recfem|L'].con < M[id].parts['vaslat|L'].con - .15, id + ': rectus femoris dimmer than the vasti');
   assert.equal(M.legext.parts['recfem|L'].con, M.legext.parts['vaslat|L'].con, 'leg extension: rectus femoris as bright as the vasti');
+  /* «молот»: плечевая мышца сгибает локоть при любом хвате (Basmajian и Latif, 1957), двуглавая в нейтральном хвате слабее,
+     чем в хвате снизу (Kleiber и др., 2015) — плечевая ярче головок двуглавой; в сгибании с хватом снизу — наравне */
+  for (const s of ['L', 'R']) assert(M.hammer.parts['bra|' + s].con > M.hammer.parts['biclong|' + s].con + .1, 'hammer curl: brachialis brighter than the biceps ' + s);
+  assert.equal(M.dbcurl.parts['bra|L'].con, M.dbcurl.parts['biclong|L'].con, 'supinated curl: brachialis as bright as the biceps');
 });
 
 test('one-sided exercises: the other side keeps the rest colour of the profile', async () => {

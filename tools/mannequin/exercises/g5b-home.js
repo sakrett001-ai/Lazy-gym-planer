@@ -691,7 +691,9 @@ module.exports = {
   /* Приседания с собственным весом (eccFirst): t=0 — стоя, t=1 — бёдра параллельны полу.
      Стопы на ширине плеч, носки наружу 15°, колени по носкам, пятки на полу, руки вперёд для баланса. */
   airsquat: {
-    keys: [0, .2, .4, .6, .8, 1],
+    /* ключи через 0,1 на взмахе рук (до t ≈ 0,7): при шаге 0,2 руки между ключами 0,4 и 0,6 проходили половину взмаха, а в ключе
+       0,6 останавливались — рывок кистей 1,2 см за кадр (tools/anny-look/jitter.js) */
+    keys: [0, .1, .2, .3, .4, .5, .6, .7, .8, 1],
     equipment: [],
     contacts: [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }],
     pose(t, C) {
@@ -701,7 +703,10 @@ module.exports = {
       const feet = S.map(s => ({ s, ...footAt(V, s, [SG[s] * 14, 0], 12) }));
       const resolve = q => {
         for (const F of feet) C.foot(q, F.s, F.sup, 0, V.unit(V.add(F.fw, [SG[F.s], 0, 0], .08)), { forward: F.fw });
-        const a = C.ease(Math.min(1, e * 1.45)), lean = 32 * k + 9 * k + 7 * k;
+        /* взмах рук — почти на всё опускание (до 87 %), со скоростью и ускорением, сходящими на нет к концу (кривая
+           6x⁵ − 15x⁴ + 10x³): прежний взмах (косинус до 69 % опускания) на подъёме за 1 с вёл кисти со скоростью до 4,8 м/с
+           и обрывал ускорение в конце — рывок кистей 1,2 см за кадр (tools/anny-look/jitter.js) */
+        const x = Math.min(1, e * 1.15), a = x * x * x * (x * (6 * x - 15) + 10), lean = 32 * k + 9 * k + 7 * k;
         for (const s of S) { q[s].shoulder = [C.lerp(6, 88 + lean, a), C.lerp(8, 10, a), C.lerp(0, -6, a)]; q[s].elbow = C.lerp(10, 4, a); q[s].pron = C.lerp(0, 75, a); C.rhythm(q, s); }
       };
       C.balanceOver(q, [0, 0, C.lerp(4, 0, k)], { resolve });

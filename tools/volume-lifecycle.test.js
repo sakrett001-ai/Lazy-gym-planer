@@ -179,7 +179,7 @@ test('anatomy colours follow the phase profile: heads take their region, a one-s
   /* тяга гантели одной рукой работает левой стороной: у правой широчайшей — значение покоя профиля */
   const row=catalogVolumeData(ex('dbrow'),.5,0),RL=look(row);
   assert.equal(tint('LAT1_l',RL),muscleColor(row.values.lats));assert.equal(tint('LAT1_r',RL),muscleColor(.28));assert.notEqual(row.values.lats,.28);
-  /* плечевая мышца (группа бицепса без своей области) — тоже по сторонам */
+  /* плечевая мышца (своя область группы бицепса, доля 1 вне «молота») — тоже по сторонам */
   assert.equal(tint('BRA_l',RL),muscleColor(row.values.biceps));assert.equal(tint('BRA_r',RL),muscleColor(.28));
   /* в упражнении на обе стороны та же часть берёт значение группы */
   assert.equal(tint('BRA_r',look(catalogVolumeData(ex('dbcurl'),.5,0))),muscleColor(catalogVolumeData(ex('dbcurl'),.5,0).values.biceps));
