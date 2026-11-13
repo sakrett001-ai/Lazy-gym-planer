@@ -1109,17 +1109,22 @@ module.exports = {
   legpresslow: lpFeetSpec(-10, 18, 96),
 
   /* Гиперэкстензия 45°: упор чуть ниже паховой складки, валики за голенями, руки скрещены на груди.
-     t=0 — тело прямой линией (без переразгибания), t=1 — нижняя точка наклона. */
+     t=0 — тело прямой линией (без переразгибания), t=1 — нижняя точка наклона. Наклон — в тазобедренных суставах, спина
+     прямая, голова на продолжении корпуса (техника каталога: «спина прямая», в ошибках — «округление спины внизу»; нейтральный
+     позвоночник и движение в тазобедренных — McGill S. Low Back Disorders, 3rd ed., Human Kinetics 2016, гл. «упражнения»:
+     разгибание на римском стуле). До 4.102 внизу поясница была согнута на 13°, грудной отдел — на 8°, шея — на 12° (голова
+     свисала; тренер-тестер); теперь 4°, 2° и 0°, а таз наклоняется на 78° вместо 70° (бедро 78° при пределе задней поверхности
+     бедра 83° при колене 6°): наклон корпуса внизу почти тот же (84° против 91°). */
   hyper: {
     keys: [0, .25, .5, .75, 1],
     equipment: [HY().machine],
     contacts: [{ body: 'soleL', prop: 'hy:plate' }, { body: 'soleR', prop: 'hy:plate' }, { body: 'thL', prop: 'hy:pad' }, { body: 'thR', prop: 'hy:pad' },
       { body: 'skL', prop: 'hy:rollL' }, { body: 'skR', prop: 'hy:rollR' }],
     pose(t, C) {
-      const { V, M } = C, L = HY(), e = C.ease(t), q = C.M.clone(L.q), ph = C.lerp(0, 70, e) * C.D2R;
+      const { V, M } = C, L = HY(), e = C.ease(t), q = C.M.clone(L.q), ph = C.lerp(0, 78, e) * C.D2R;
       const up = V.add(V.scale(L.d, Math.cos(ph)), L.n, Math.sin(ph)), fwd = V.add(V.scale(L.n, Math.cos(ph)), L.d, -Math.sin(ph));
       C.root(q, L.H, up, fwd);
-      q.lumbar = [C.lerp(-1, 13, e), 0, 0]; q.thoracic = [C.lerp(0, 8, e), 0, 0]; q.neck = [C.lerp(-8, 12, e), 0, 0];
+      q.lumbar = [C.lerp(-1, 4, e), 0, 0]; q.thoracic = [C.lerp(0, 2, e), 0, 0]; q.neck = [C.lerp(-8, 0, e), 0, 0];
       L.feet.forEach((ft, i) => { const s = S[i]; M.solveLeg(q, s, ft, V.unit(V.add(L.n, C.latP(q, s), .1))); });
       /* руки скрещены на груди: кисти у противоположных плеч, правое предплечье поверх левого */
       for (const s of S) q[s].girdle = [0, 10];
