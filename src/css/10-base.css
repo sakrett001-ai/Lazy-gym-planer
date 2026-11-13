@@ -271,10 +271,14 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .wu-note { font-size:.75rem; color:var(--muted); }
 .wu-work { border-top:1px dashed var(--line); margin-top:2px; padding-top:6px; }
 .wu-work .wu-r { color:var(--accent); font-family:var(--f-body); font-weight:600; }
+/* «рабочий» / «working» — на две колонки (своя и пустая колонка процента): слово не переносится по слогам */
+.wu-work .wu-r { grid-column:3 / span 2; white-space:nowrap; } .wu-work .wu-note { display:none; }
 .wu-pl { min-width:0; display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
 .pl-row { display:inline-flex; gap:3px; flex-wrap:wrap; }
 .pl { display:inline-grid; place-items:center; min-width:26px; height:22px; padding:0 4px; border-radius:5px; font:600 .75rem var(--f-mono); color:var(--surface); background:var(--plate); }
 .pl-25 { background:#B33A3A; } .pl-20 { background:#2B5BB5; } .pl-15 { background:#C9A227; color:var(--ink); } .pl-10 { background:#2E8B57; } .pl-5 { background:#F0F0F0; color:#222; border:1px solid #bbb; } .pl-2_5 { background:#555; } .pl-1_25 { background:#8A8A8A; } .pl-0_5 { background:#AAA; color:#222; }
+/* блины в фунтах (17-warmup.js): цвета бамперов — 55 красный, 45 синий, 35 жёлтый, 25 зелёный, 10 белый; мелкие — серые */
+.pl-lb55 { background:#B33A3A; } .pl-lb45 { background:#2B5BB5; } .pl-lb35 { background:#C9A227; color:var(--ink); } .pl-lb25 { background:#2E8B57; } .pl-lb10 { background:#F0F0F0; color:#222; border:1px solid #bbb; } .pl-lb5 { background:#555; } .pl-lb2_5 { background:#8A8A8A; } .pl-lb1_25 { background:#A8A8A8; color:#222; }
 .pl-empty { font-size:.78125rem; color:var(--muted); }
 .pl-diff { font-size:.75rem; color:var(--warn-ink); }
 .wu-note-f { margin:8px 0 2px; font-size:.78125rem; color:var(--muted); }
@@ -322,6 +326,7 @@ h1, h2, h3, h4 { text-wrap:balance; margin:0; }
 .ls-cloud { background:var(--good); } .ls-local { background:var(--warn-ink); }
 .j-tools { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
 .j-tools label.btn { cursor:pointer; }
+.j-units { margin-top:10px; align-items:center; } /* единицы веса (13-log.js: unitsHtml) */
 .j-heat { margin:0; display:grid; gap:8px; align-content:start; min-width:0; }
 .heat { width:100%; max-width:300px; height:auto; display:block; }
 .hm { fill:var(--surface-2); stroke:var(--line); stroke-width:.6; }

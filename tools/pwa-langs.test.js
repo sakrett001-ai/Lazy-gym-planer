@@ -101,7 +101,7 @@ test('offline: the cached language opens, a missing one gets an honest bilingual
   const en = await net.fetch(SCOPE + 'en/');
   assert.equal(en.status, 503);
   const text = await en.text();
-  assert.match(text, /Английская версия ещё не скачана/); assert.match(text, /English version is not downloaded/); assert.match(text, /href="\.\.\/"/);
+  assert.match(text, /Английская версия ещё не скачана/); assert.match(text, /English version is not downloaded/); assert.match(text, /href="\.\.\/\?lang=ru"/, 'the link to the downloaded language is an explicit choice: the root does not send back to the missing one');
   const data = await net.fetch(SCOPE + 'en/app.js?v=1', 'no-cors');
   assert.equal(data.type, 'error', 'a missing script is a network error, not a page');
 });

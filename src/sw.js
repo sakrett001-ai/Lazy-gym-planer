@@ -59,9 +59,10 @@ async function useLang(lang) {
   for (const f of LANG_FILES[lang]) if (!await c.match(f)) missing.push(f);
   if (missing.length) await c.addAll(missing);
 }
-/* без сети и без скачанной версии этого языка: подсказка на обоих языках со ссылкой на скачанную версию */
+/* без сети и без скачанной версии этого языка: подсказка на обоих языках со ссылкой на скачанную версию. В ссылке —
+   ?lang=: это явный выбор языка (src/lang.js), корень сайта не вернёт на нескачанный язык по прежнему выбору */
 function notDownloaded(lang) {
-  const ru = lang === 'en' ? ['Английская версия', 'русскую версию', '../'] : ['Русская версия', 'английскую версию', './en/'];
+  const ru = lang === 'en' ? ['Английская версия', 'русскую версию', '../?lang=ru'] : ['Русская версия', 'английскую версию', './en/?lang=en'];
   const en = lang === 'en' ? ['The English version', 'the Russian version'] : ['The Russian version', 'the English version'];
   const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>Lazy Gym Planner</title>
 <style>body{margin:0;padding:24px 16px;font:16px/1.5 system-ui,-apple-system,sans-serif;background:Canvas;color:CanvasText}main{max-width:34em;margin:0 auto}a{font-weight:600}</style></head>

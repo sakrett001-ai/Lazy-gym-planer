@@ -1469,6 +1469,94 @@ const fakeBluetooth = () => {
   await n.close();
 }
 
+/* язык и фунты (src/lang.js, 13-log.js: единицы) на телефоне 390×844, PWA по http: новый посетитель с en-US на корне сайта
+   попадает в /en/ (путь, запрос и якорь сохранены), вес — в фунтах (поле, подсказка, журнал), калькулятор блинов — гриф 45 lb
+   и блины в фунтах, тренировка — в фунтах; переключатель RU запоминается (корень больше не уводит на английский), явная
+   ссылка на /en/ меняет выбор обратно; русский браузер остаётся на корне; планы и места, созданные в русской версии, в
+   английской — без кириллицы; в офлайн-файле (его же встраивает Floot) адрес не меняется */
+{
+  const dist = path.dirname(file), types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.bin': 'application/octet-stream', '.woff2': 'font/woff2', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
+  const srv = http.createServer((req, res) => {
+    let u = decodeURIComponent(new URL(req.url, 'http://x').pathname); if (u.endsWith('/')) u += 'index.html';
+    const f = path.join(dist, u); if (!f.startsWith(dist) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end(); return; }
+    res.writeHead(200, { 'Content-Type': types[path.extname(f)] || 'application/octet-stream', 'Cache-Control': 'no-store' }); fs.createReadStream(f).pipe(res);
+  });
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${srv.address().port}/`, CYR = /[А-Яа-яЁё]/;
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'en-US', serviceWorkers: 'block' });
+  const p = await ctx.newPage(); p.on('pageerror', e => errors.push(String(e)));
+  const ready = async () => { await p.waitForFunction(() => typeof S === 'object' && document.querySelector('#plan .card, #plan .empty'), null, { timeout: 30000 }); await fakeFigures(p); };
+  await p.goto(base + '?from=home#plan'); await p.waitForURL(/\/en\//, { timeout: 15000 }).catch(() => {}); await ready();
+  const at = new URL(p.url());
+  check(at.pathname === '/en/' && at.search === '?from=home' && at.hash === '#plan' && await p.evaluate(() => document.documentElement.lang === 'en' && window.PODHOD_LANG === 'en'), `en-US на корне → /en/ с запросом и якорем (${p.url()})`);
+  check(await p.evaluate(() => localStorage.getItem('podhod.lang') === 'en' && wu() === 'lb' && S.units == null), 'выбор en запомнен, фунты — по региону en-US, не по сохранённой настройке');
+  /* вес в фунтах в карточке: подпись столбца, ввод 135 → в журнале 61,23 кг, в поле снова 135 */
+  await p.evaluate(() => { Object.assign(S, { view: 'plan', mode: 'single', format: 'classic', goal: 'mass', level: 'mid', groups: ['chest', 'back', 'shoulders'], count: 5, seed: 3, fold: null }); LOG.data = {}; regen(); });
+  const id = await p.evaluate(() => (plan.items.find(it => (it.eqIds || []).includes('bb')) || plan.items.find(it => loadType(it.ex) === 'kg')).ex.id);
+  const card = `.card[data-ex="${id}"]`;
+  await p.click(`${card} [data-cfold="log"]`);
+  const head = await p.evaluate(s => document.querySelector(s + ' .lt-h span[title]')?.textContent || '', card);
+  await p.fill(`${card} .lt-r[data-k="0"] [data-f="kg"]`, '135'); await p.fill(`${card} .lt-r[data-k="0"] [data-f="reps"]`, '8');
+  await p.click(`${card} [data-tick][data-k="0"]`); await p.waitForTimeout(150);
+  const logged = await p.evaluate(i => ({ kg: todaySession(i, false)?.s[0]?.[0], shown: document.querySelector(`.card[data-ex="${i}"] .lt-r[data-k="0"] [data-f="kg"]`).value }), id);
+  check(/lb/.test(head) && Math.abs(logged.kg - 61.235) < 0.01 && logged.shown === '135', `карточка в фунтах: «${head}», 135 lb хранится как ${logged.kg} кг и показывается ${logged.shown}`);
+  /* калькулятор блинов: гриф 45 lb, блины в фунтах; настройка — в фунтах */
+  const warm = await p.evaluate(i => { const it = plan.items.find(x => x.ex.id === i); return warmupHtml({ ...it, eqIds: ['bb', 'bench'] }, parseKg('225')); }, id);
+  check(/Warm-up for 225 lb/.test(warm) && /Bar 45 lb, plates: 45 · 35 · 25 · 10 · 5 · 2\.5/.test(warm) && /pl-lb45/.test(warm), 'разминка и блины в фунтах: гриф 45 lb, 45 + 45 на сторону для 225 lb');
+  await p.evaluate(() => openGear()); await p.waitForTimeout(80);
+  check(await p.evaluate(() => /lb/.test(document.querySelector('#gear-view label').textContent) && document.querySelector('#gear-bar').value === '45'), 'настройка «Bar and plates»: вес грифа в фунтах, 45');
+  await p.evaluate(() => document.querySelector('#gear-view').close());
+  /* тренировка: подпись поля и прошлый раз — в фунтах */
+  await p.click('#start-workout'); await p.waitForTimeout(250);
+  const wv = await p.evaluate(() => ({ cap: $('#wv-weight-caption').textContent, hidden: $('#wv-weight-label').hidden }));
+  check(wv.hidden || /lb/.test(wv.cap), `экран тренировки: «${wv.cap}»`);
+  await p.evaluate(() => closeWorkout());
+  /* журнал: переключатель единиц, 135 lb; кг — и запись та же, 61,23 */
+  await p.evaluate(() => { S.view = 'journal'; renderSetup(); renderPlan(); });
+  const j = await p.evaluate(() => ({ on: document.querySelector('[data-units="lb"]')?.getAttribute('aria-pressed'), text: document.querySelector('.j-list')?.textContent || '' }));
+  await p.click('[data-units="kg"]');
+  const jk = await p.evaluate(() => ({ units: S.units, text: document.querySelector('.j-list')?.textContent || '' }));
+  check(j.on === 'true' && /135\s*lb/.test(j.text) && jk.units === 'kg' && /61\.23\s*kg/.test(jk.text), `журнал: единицы lb → kg (${j.text.slice(0, 60)} → ${jk.text.slice(0, 60)})`);
+  await p.click('[data-units="lb"]');
+  /* переключатель RU: выбор запоминается до перехода, корень больше не уводит на английский */
+  await p.evaluate(() => { S.view = 'plan'; regen(); });
+  await Promise.all([p.waitForURL(u => new URL(u).pathname === '/', { timeout: 15000 }), p.click('a.lang')]); await ready();
+  check(await p.evaluate(() => localStorage.getItem('podhod.lang') === 'ru' && document.documentElement.lang === 'ru'), 'RU-переключатель: открыта русская версия, выбор ru запомнен');
+  await p.goto(base); await p.waitForTimeout(400); await ready();
+  check(new URL(p.url()).pathname === '/' && await p.evaluate(() => window.PODHOD_LANG === 'ru'), 'после выбора RU корень с en-US открывает русскую версию, без возврата на английский');
+  /* в русской версии создаются план и место по умолчанию, неделя сохраняется в свои планы */
+  await p.evaluate(() => { Object.assign(S, { mode: 'program', days: 3, split: 'full', week: 2 }); regen(); document.querySelector('#save-plan')?.click(); });
+  /* кнопки «+ Место» и «+ План» — нажатием в документе: на телефоне параметры могут быть свёрнуты */
+  await p.evaluate(() => document.querySelector('[data-place-add]').click()); await p.waitForTimeout(100);
+  await p.evaluate(() => { openCustom(S.customs[0].id); regen(); document.querySelector('[data-cp-new]').click(); }); await p.waitForTimeout(100);
+  const ruNames = await p.evaluate(() => ({ plans: S.customs.map(c => c.name), places: S.places.map(x => x.name) }));
+  check(ruNames.plans.includes('Мой план') && ruNames.plans.some(n => /^План \d/.test(n)) && ruNames.plans.some(n => /^Пн · /.test(n)) && ruNames.places.includes('Зал') && ruNames.places.some(n => /^Место \d/.test(n)), `в русской версии — имена по умолчанию: ${ruNames.plans.join(', ')}; ${ruNames.places.join(', ')}`);
+  /* явная ссылка на /en/ — снова английский; имена по умолчанию — по-английски */
+  await p.goto(base + 'en/'); await ready();
+  await p.evaluate(() => { S.view = 'plan'; openCustom(S.customs[0].id); S.place = 'gym'; ensurePlaces(S); regen(); document.querySelectorAll('.cp-about').forEach(d => d.open = true); });
+  const enText = await p.evaluate(() => [...document.querySelectorAll('#e-places, #f-custom-body, #e-place-tools, #plan .p-head')].map(n => n.textContent).join(' | ') + ' | ' + [...document.querySelectorAll('#f-custom-body input, #e-place-tools input, #place-adapt option')].map(i => i.value || i.textContent).join(' | '));
+  check(!CYR.test(enText) && /My plan/.test(enText) && /Plan \d/.test(enText) && /Mon · Full body/.test(enText) && /Gym/.test(enText) && /Place \d/.test(enText), `данные из русской версии в английской без кириллицы: ${enText.replace(/\s+/g, ' ').slice(0, 300)}`);
+  check(await p.evaluate(() => localStorage.getItem('podhod.lang') === 'en'), 'ссылка на /en/ вернула выбор en');
+  await p.goto(base); await p.waitForURL(/\/en\//, { timeout: 15000 }).catch(() => {});
+  check(new URL(p.url()).pathname === '/en/', 'и корень снова открывает английскую версию');
+  await ctx.close();
+  /* русский браузер: корень остаётся русским; русский вторым языком — тоже */
+  for (const locale of ['ru-RU', 'de-DE']) {
+    const c2 = await browser.newContext({ viewport: { width: 390, height: 844 }, locale, serviceWorkers: 'block' }), q = await c2.newPage();
+    q.on('pageerror', e => errors.push(String(e)));
+    await q.goto(base); await q.waitForTimeout(600);
+    const path0 = new URL(q.url()).pathname;
+    check(locale === 'ru-RU' ? path0 === '/' : path0 === '/en/', `браузер ${locale}: ${path0}`);
+    await c2.close();
+  }
+  srv.close();
+  /* офлайн-файл (и сборка Floot, которая его встраивает): без выбора языка при заходе — адрес не меняется */
+  const off = await browser.newPage({ locale: 'en-US' }); off.on('pageerror', e => errors.push(String(e)));
+  await off.goto('file://' + path.join(dist, 'lazy-gym-planner-offline-ru.html')); await off.waitForTimeout(500);
+  check(off.url().endsWith('lazy-gym-planner-offline-ru.html') && !fs.readFileSync(path.join(dist, 'lazy-gym-planner-offline-ru.html'), 'utf8').includes('PODHOD_LANGS') && !fs.readFileSync(path.join(dist, 'lazy-gym-planner-offline-en.html'), 'utf8').includes('PODHOD_LANGS'), 'офлайн-файлы без переадресации языка (Floot)');
+  await off.close();
+}
+
 /* компьютер: параметры в боковой колонке не сворачиваются */
 const desk = await open(1280);
 await desk.evaluate(() => { S.fold.setup = true; regen(); });
@@ -1478,4 +1566,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание блоков, хваты, «Заменить» со списком и «Вернуть», «Убрать» с «Вернуть», «+ В свой план» с выбором плана, поиск витрины (ё = е), бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа (в «Анатомии» и «Манекене» — кадры из общего рендерера, кеш между сеансами, без WebGL — SVG), виды фигуры «Анатомия», «Скелет» и «Манекен» (кожа Anny в карточках и витрине, без её данных — SVG), анатомия в карточках плана и на экране тренировки (откат на манекен, без WebGL — SVG), свободная камера сцены (поворот на воспроизведении, колесо, кнопки ракурсов, двойной щелчок, клавиатура, касания на телефоне), первый экран и разбор на телефоне, карточка, число подходов («−» с подтверждением в строке, «+»), вес на следующие подходы, вопрос о неправдоподобном весе, «Сегодня: N из M», пирамида повторов, журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования, панель замера скорости ?perf работают на телефоне и компьютере.');
+console.log('Интерфейс: сворачивание блоков, хваты, «Заменить» со списком и «Вернуть», «Убрать» с «Вернуть», «+ В свой план» с выбором плана, поиск витрины (ё = е), бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа (в «Анатомии» и «Манекене» — кадры из общего рендерера, кеш между сеансами, без WebGL — SVG), виды фигуры «Анатомия», «Скелет» и «Манекен» (кожа Anny в карточках и витрине, без её данных — SVG), анатомия в карточках плана и на экране тренировки (откат на манекен, без WebGL — SVG), свободная камера сцены (поворот на воспроизведении, колесо, кнопки ракурсов, двойной щелчок, клавиатура, касания на телефоне), первый экран и разбор на телефоне, карточка, число подходов («−» с подтверждением в строке, «+»), вес на следующие подходы, вопрос о неправдоподобном весе, «Сегодня: N из M», пирамида повторов, журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования, панель замера скорости ?perf, выбор языка при заходе и его запоминание, фунты в карточке, тренировке, разминке и журнале, имена по умолчанию из русской версии в английской работают на телефоне и компьютере.');

@@ -502,7 +502,7 @@ function closeMotion(fromBack) {
 }
 function setupMotionViewer() {
   window.addEventListener('resize',()=>{pickActiveCards();for(const F of figs)if(F.av)F.av.size=null;if(cardAnatomy.view!=='mannequin')queueCardStills();},{passive:true});
-  $('#mv-exercise').innerHTML=GROUPS.map(g=>`<optgroup label="${esc(g.name)}">${EX.filter(ex=>ex.g===g.id).map(ex=>`<option value="${ex.id}">${esc(ex.name)}</option>`).join('')}</optgroup>`).join('');
+  $('#mv-exercise').innerHTML=GROUPS.map(g=>`<optgroup label="${esc(g.name)}">${EX.filter(ex=>ex.g===g.id).map(ex=>`<option value="${ex.id}">${esc(exNameHere(ex))}</option>`).join('')}</optgroup>`).join('');
 
   document.addEventListener('click',e=>{
     const t=e.target.closest('button');if(!t)return;
@@ -590,8 +590,8 @@ function blocksText(p) {
     for (const it of b.items) {
       const r = it.rx;
       const side = r.uni ? ' на сторону' : '';
-      if (r.static) { const kgS = r.kgPlan && loadType(it.ex) !== 'none' ? `, ${planKgText(r.kgPlan)} кг` : ''; lines.push(`${it.label}. ${it.name} — ${r.series} × 3 × ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}, темп ${r.tempo} без расслабления, отдых ${fmtRest(r.rest)}${r.series > 1 ? `, между сериями ${fmtRest(r.seriesRest)}` : ''}${kgS}`); if (r.coachNote) lines.push(`   Заметка: ${r.coachNote.replace(/\n+/g, ' ')}`); continue; }
-      const kg = r.kgPlan && loadType(it.ex) !== 'none' ? `, ${planKgText(r.kgPlan)} кг` : '';
+      if (r.static) { const kgS = r.kgPlan && loadType(it.ex) !== 'none' ? `, ${planKgText(r.kgPlan)} ${wUnit()}` : ''; lines.push(`${it.label}. ${it.name} — ${r.series} × 3 × ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}, темп ${r.tempo} без расслабления, отдых ${fmtRest(r.rest)}${r.series > 1 ? `, между сериями ${fmtRest(r.seriesRest)}` : ''}${kgS}`); if (r.coachNote) lines.push(`   Заметка: ${r.coachNote.replace(/\n+/g, ' ')}`); continue; }
+      const kg = r.kgPlan && loadType(it.ex) !== 'none' ? `, ${planKgText(r.kgPlan)} ${wUnit()}` : '';
       lines.push(r.circ ? `${it.label}. ${it.name} — ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}${kg}` : `${it.label}. ${it.name} — ${r.sets} × ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}${kg}${b.kind === 'list' ? `, отдых ${fmtRest(r.rest)}` : ''}`);
       if (r.coachNote) lines.push(`   Заметка: ${r.coachNote.replace(/\n+/g, ' ')}`);
     }
@@ -615,7 +615,7 @@ function planText() {
 /* ---------- события ---------- */
 /* место тренировок: название и источник программы */
 document.addEventListener('change', e => {
-  if (e.target.id === 'place-name') { const v = e.target.value.trim().slice(0, 24); if (v) placeOf().name = v; saveSettings(); renderSetup(); return; }
+  if (e.target.id === 'place-name') { const v = e.target.value.trim().slice(0, 24), p = placeOf(); if (v && v !== p.name) { p.name = v; delete p.auto; } saveSettings(); renderSetup(); return; }
   if (e.target.id === 'place-adapt') { S.adapt = e.target.value || null; ensurePlaces(S); return regen(); }
 });
 const swapKey = () => S.mode === 'program' ? 'd' + S.day : 's';
@@ -645,7 +645,7 @@ document.addEventListener('click', e => {
   if (t.dataset.place) { S.place = t.dataset.place; ensurePlaces(S); placeDel = false; return regen(); }
   if (t.dataset.placeAdd !== undefined) {
     const id = 'p' + Date.now().toString(36);
-    S.places.push({id, name:'Место ' + (S.places.length + 1), equip:[]});
+    S.places.push({id, name:'Место ' + (S.places.length + 1), auto:'place:' + (S.places.length + 1), equip:[]});
     S.place = id; ensurePlaces(S); eqOpen = true; placeDel = false; regen();
     const inp = $('#place-name'); if (inp) { inp.focus(); inp.select(); }
     return;
