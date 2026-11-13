@@ -9,6 +9,11 @@ const memo = f => { const m = new Map(); return t => { const k = +t.toFixed(4); 
 
 /* ---------- Общие помощники ---------- */
 const FEET = [{ body: 'soleL', prop: 'floor' }, { body: 'soleR', prop: 'floor' }];
+/* Подъём штанги на бицепс: центр хвата — 22 см от середины грифа (хват снизу на ширине плеч); локоть — от чуть внутрь (−0,2)
+   внизу к чуть наружу (0,1) вверху; ось кулака повёрнута к грифу на 0 → 17° (вперёд 0,3 вверху): на прямом грифе
+   постоянной ширины предплечье иначе супинируется за предел (−103° при −90°: кисть внизу по углу носа локтя шире, вверху —
+   уже, а гриф не меняет длину); так у других грифов: присед — 24°, «доброе утро» (README кожи, «Известные ограничения») */
+const BBC = { half: 22, pole: [-.2, .1], tilt: .3 };
 const GRIPS = id => [{ body: 'gripL', prop: id }, { body: 'gripR', prop: id }];
 /* Масса штанги: гриф 20 кг + блины; короткий гриф 10 кг */
 const PLATE_KG = { 20: 20, 15: 15, 10: 10, 5: 5, 2.5: 2.5, 1.25: 1.25, c10: 10, c5: 5, c2: 2 };
@@ -74,6 +79,17 @@ function armByAngles(C, q, s, uaDir, fold, angle, thumb, ext = 0, turn = 0) {
   const Rh = M.M3.frameYZ(V.scale(distal, -1), thumb);
   M.solveArmWrist(q, s, W, V.perp(u, V.unit(V.sub(W, gh))), Rh); q.hands = { ...(q.hands || {}), [s]: 'grip' };
   return C.fk(q).P['grip' + s];
+}
+/* Кисти на жёстком грифе на постоянной ширине: руки ставятся углами (armByAngles), а сведение плеча к середине (доля lat в
+   направлении плеча) подбирается так, чтобы центр хвата стоял на half от середины тела — гриф между кистями не меняет длину.
+   С постоянным сведением кулаки ехали по грифу: «французский жим» — на 4 см, сгибание на скамье Скотта — на 2,4
+   (tools/anny-look/jitter.js). put(q, s, k) ставит руку стороны s с долей k; возвращает центр хвата. */
+function barWidth(C, q, half, put, lo = -.4, hi = .4) {
+  for (const s of S) {
+    const f = C.fk(q), m = (f.P.ghL[0] + f.P.ghR[0]) / 2, x = k => { const p = put(q, s, k); return Math.abs(p[0] - m) - half; };
+    put(q, s, C.solve1D(x, lo, hi));
+  }
+  return q;
 }
 /* Таз по наклону корпуса: theta — наклон вперёд от вертикали (град), корпус в плоскости YZ */
 function pelvisPitch(C, q, theta, p = q.root.p) {
@@ -748,13 +764,14 @@ module.exports = {
     contacts: [{ body: 'back', prop: 'bench:pad' }, { body: 'headBack', prop: 'bench:pad' }, ...FEET, ...GRIPS('bar')],
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = lieOnBench(C, { girdle: [-2, -6] });
-      /* плечо отклонено к голове на 14…20°, локти чуть внутрь (хват уже плеч) */
+      /* плечо отклонено к голове на 14…20° */
       const tilt = C.lerp(14, 20, e) * C.D2R;
-      for (const s of S) {
-        const lat = C.lat(q, s), ua = V.add(V.add([0, Math.cos(tilt), Math.sin(tilt)], lat, -.06), [0, 0, 0]);
-        armByAngles(C, q, s, ua, [0, 0, 1], C.lerp(8, 108, e), V.scale(lat, -1), C.lerp(4, 18, e), 16);
-      }
-      return q;
+      /* кисти на грифе — 18,5 см от середины, хват на ширине плеч, как в технике каталога (прежняя поза: 14,7…18,7, кулаки ехали
+         по грифу): сведение плеча подбирается (barWidth) */
+      return barWidth(C, q, 18.5, (q, s, k) => {
+        const lat = C.lat(q, s), ua = V.add([0, Math.cos(tilt), Math.sin(tilt)], lat, k);
+        return armByAngles(C, q, s, ua, [0, 0, 1], C.lerp(8, 108, e), V.scale(lat, -1), C.lerp(4, 18, e), 16);
+      }, -.4, .4);
     }
   },
 
@@ -842,8 +859,9 @@ module.exports = {
     gripRadius: { L: 1.5, R: 1.5 },
     pose(t, C) {
       const { V } = C, e = C.ease(t), L = PREACHER(), q = C.M.clone(L.q);
-      for (const s of S) armByAngles(C, q, s, L.ua(s), L.n, C.lerp(18, 116, e), C.lat(q, s), C.lerp(-6, 14, e));
-      return q;
+      /* кисти на грифе (и на гантелях — та же поза) — 17,5 см от середины (прежняя поза: 16,3…18,7): сведение плеча по упору
+         подбирается (barWidth), плечо остаётся в плоскости упора */
+      return barWidth(C, q, 17.5, (q, s, k) => armByAngles(C, q, s, V.unit(V.add(L.down, [-C.M.SIGN[s], 0, 0], k)), L.n, C.lerp(18, 116, e), C.lat(q, s), C.lerp(-6, 14, e)), -.2, .3);
     }
   },
 
@@ -863,22 +881,29 @@ module.exports = {
     }
   },
 
-  /* Подъём штанги на бицепс: короткий гриф, хват снизу на ширине плеч, локти у боков.
+  /* Подъём штанги на бицепс: короткий гриф, хват снизу на ширине плеч, локти у боков (кисти на грифе — BBC).
      t=0 — руки почти прямые, гриф перед бёдрами; t=1 — гриф у верха груди. */
   bbcurl: {
-    keys: [0, .25, .5, .75, 1],
+    /* 9 ключей: углы рук между ключами интерполируются, и при 5 ключах кулаки уходили по грифу на 0,65 см */
+    keys: [0, .125, .25, .375, .5, .625, .75, .875, 1],
     equipment: [{ type: 'barbell', id: 'bar', size: 'curl', plates: ['c10'] }],
     contacts: [...FEET, ...GRIPS('bar')],
     pose(t, C) {
       const { V } = C, e = C.ease(t), q = C.base(), st = { ax: 11, az: 0, out: 8 };
       q.lumbar = [0, 0, 0]; q.thoracic = [C.lerp(0, -3, e), 0, 0]; q.neck = [2, 0, 0];
-      for (const s of S) {
-        q[s].girdle = [C.lerp(-2, 2, e), C.lerp(4, -2, e)];
-        q[s].shoulder = [C.lerp(1, 14, e), C.lerp(9, 7, e), C.lerp(-4, 0, e)];
-        q[s].elbow = C.lerp(9, 138, e); q[s].pron = -84; q[s].wrist = [C.lerp(4, 18, e), 0];
-      }
-      q.hands = { L: 'grip', R: 'grip' };
-      C.balanceOver(q, [0, 0, 6], { loads: q => { const f = C.fk(q); return [[V.mix(f.P.gripL, f.P.gripR, .5), barKg(['c10'], true)]]; }, resolve: q => { q.root.p[1] = hipHeightFor(C, q, 4, st); placeFeet(C, q, st); } });
+      /* путь грифа — середина кистей рук, согнутых углами (локти у боков); кисти — на грифе на постоянной ширине BBC_HALF:
+         гриф жёсткий, хват по нему не ездит (до 4.102 руки шли углами, и кулаки сходились по грифу с 56 до 36 см —
+         tools/anny-look/jitter.js) */
+      const arms = q => {
+        for (const s of S) {
+          q[s].girdle = [C.lerp(-2, 2, e), C.lerp(4, -2, e)];
+          q[s].shoulder = [C.lerp(1, 14, e), C.lerp(9, 7, e), C.lerp(-4, 0, e)];
+          q[s].elbow = C.lerp(9, 138, e); q[s].pron = -84; q[s].wrist = [C.lerp(4, 18, e), 0];
+        }
+        const f = C.fk(q), mid = V.mix(f.P.gripL, f.P.gripR, .5);
+        for (const s of S) { const lat = [C.M.SIGN[s], 0, 0]; C.grip(q, s, V.add(mid, lat, BBC.half), V.unit(V.add(lat, [0, 0, 1], -BBC.tilt * e)), V.unit(V.add(V.add([0, -1, 0], [0, 0, -1], .5), lat, C.lerp(BBC.pole[0], BBC.pole[1], e))), { wristExt: -C.lerp(4, 18, e) }); }
+      };
+      C.balanceOver(q, [0, 0, 6], { loads: q => { const f = C.fk(q); return [[V.mix(f.P.gripL, f.P.gripR, .5), barKg(['c10'], true)]]; }, resolve: q => { q.root.p[1] = hipHeightFor(C, q, 4, st); placeFeet(C, q, st); arms(q); } });
       return q;
     }
   }
