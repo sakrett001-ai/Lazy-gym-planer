@@ -124,7 +124,8 @@ const WEEKS = [
 const DEFAULTS = {goal:'mass', format:'classic', level:'mid', count:6, groups:['chest', 'back', 'shoulders'], equip:EQUIP.map(e => e.id), seed:7,
   mode:'single', days:3, split:'full', week:1, day:0, view:'plan', atlasM:'chest', focus:null, fav:[], customs:[], custom:null, gen:null, author:'', fold:null, protect:[],
   cpLast:null /* свой план, куда последним добавляли из атласа или разбора (11d-custom.js) */,
-  lr:{} /* «Л/П отдельно» по упражнениям: {exId:true} (13a-sets.js) */};
+  lr:{} /* «Л/П отдельно» по упражнениям: {exId:true} (13a-sets.js) */,
+  units:null /* единицы веса: 'kg' | 'lb'; null — по языку и региону браузера (13-log.js: wu) */};
 const STORE = 'podhod.settings.v1';
 function loadSettings() {
   try { const s = JSON.parse(localStorage.getItem(STORE) || 'null'); if (s && s.groups && s.equip) return Object.assign({}, DEFAULTS, s); } catch (e) {}
@@ -612,7 +613,7 @@ function volRow(g, val, max, extra = '', cls = '') {
 function rxKgHtml(it) {
   const r = it.rx; if (!r.kgPlan || typeof loadType !== 'function') return '';
   const lt = loadType(it.ex); if (lt === 'none') return '';
-  return `<span class="rx-kg">${lt === 'assist' ? 'противовес ' : lt === 'extra' ? '+' : ''}${planKgText(r.kgPlan)} кг</span>`;
+  return `<span class="rx-kg">${lt === 'assist' ? 'противовес ' : lt === 'extra' ? '+' : ''}${planKgText(r.kgPlan)} ${wUnit()}</span>`;
 }
 function rxHtml(it) {
   const r = it.rx;
@@ -877,7 +878,7 @@ function renderProgram() {
     <h2>Цикл из 4 недель</h2>
     <div class="wk" role="group" aria-label="Неделя цикла">${WEEKS.map((w, i) => `<button type="button" class="${i + 1 === S.week ? 'on' : ''}" data-week="${i + 1}" aria-pressed="${i + 1 === S.week}"><b>${i + 1}</b><small>${w.name}</small></button>`).join('')}</div>
     <p class="wk-note"><b>${wk.name}.</b> ${esc(wk.note)}</p>
-    <details class="rule"><summary>Как добавлять вес</summary><p>Работайте в диапазоне повторов из карточки. Когда во всех подходах сделали верхнюю границу, в следующий раз добавьте вес — 1–2,5 кг для верха тела, 2,5–5 кг для ног — и начните с нижней границы. Если записывать подходы в карточках, планировщик сам подскажет, когда прибавлять. После разгрузки повторите цикл с новыми весами.</p></details>
+    <details class="rule"><summary>Как добавлять вес</summary><p>Работайте в диапазоне повторов из карточки. Когда во всех подходах сделали верхнюю границу, в следующий раз добавьте вес — ${unitRange([1, 2.5], [2.5, 5])} для верха тела, ${unitRange([2.5, 5], [5, 10])} для ног — и начните с нижней границы. Если записывать подходы в карточках, планировщик сам подскажет, когда прибавлять. После разгрузки повторите цикл с новыми весами.</p></details>
   </section>
   <nav class="days" role="tablist" aria-label="Дни недели">${prog.days.map((d, i) => `<button type="button" role="tab" class="${i === S.day ? 'on' : ''}" data-day="${i}" aria-selected="${i === S.day}"><b>${WD[d.wd]}</b><span>${esc(d.name)}</span><small>${d.plan.items ? `≈${d.plan.minutes} мин` : 'нет упражнений'}</small></button>`).join('')}</nav>
   <div class="day-head"><h2>${WD_FULL[day.wd]} — ${esc(day.name)}</h2>

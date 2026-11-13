@@ -2,14 +2,21 @@
 /* BODY.rows = [{d:'2026-10-06', kg:82.4, waist:88, …}] — одна запись на день, любые поля.
    Хранится в localStorage (podhod.body.v1) и, при входе в аккаунт, в документе «_body» той же коллекции, что журнал. */
 const BODY_KEY = 'podhod.body.v1';
+/* вес хранится в килограммах, обхваты — в сантиметрах; показываются и вводятся в выбранных единицах (13-log.js: wu()):
+   в фунтах — вес в фунтах, обхваты в дюймах. Хранится до сотых — 180 фунтов остаются 180 */
 const BODY_FIELDS = [
-  {k:'kg', name:'Вес', unit:'кг', main:true},
-  {k:'waist', name:'Талия', unit:'см'}, {k:'chest', name:'Грудь', unit:'см'}, {k:'hips', name:'Таз', unit:'см'},
-  {k:'arm', name:'Бицепс', unit:'см'}, {k:'thigh', name:'Бедро', unit:'см'}, {k:'calf', name:'Голень', unit:'см'}, {k:'neck', name:'Шея', unit:'см'}
+  {k:'kg', name:'Вес', w:true, main:true},
+  {k:'waist', name:'Талия'}, {k:'chest', name:'Грудь'}, {k:'hips', name:'Таз'},
+  {k:'arm', name:'Бицепс'}, {k:'thigh', name:'Бедро'}, {k:'calf', name:'Голень'}, {k:'neck', name:'Шея'}
 ];
+const bodyUnit = f => f.w ? wUnit() : lUnit();
+const bodyToU = (f, v) => f.w ? toU(v) : isLb() ? v / IN_CM : v;
+const bodyFromU = (f, v) => f.w ? fromU(v) : isLb() ? v * IN_CM : v;
+/* значение замера в выбранных единицах, до десятых */
+const fmtBody = (f, v) => fmtU1(bodyToU(f, v));
 const BODY = {rows:[], pending:false, writing:false, again:false};
 function validBodyRows(rows) { return Array.isArray(rows) && rows.every(r => r && typeof r.d === 'string' && /^\d{4}-\d\d-\d\d$/.test(r.d)); }
-function cleanBodyRow(r) { const o = {d:r.d}; for (const f of BODY_FIELDS) { const v = parseNum(r[f.k]); if (v != null && v > 0 && v < 1000) o[f.k] = Math.round(v * 10) / 10; } return o; }
+function cleanBodyRow(r) { const o = {d:r.d}; for (const f of BODY_FIELDS) { const v = parseNum(r[f.k]); if (v != null && v > 0 && v < 1000) o[f.k] = Math.round(v * 100) / 100; } return o; }
 function bodyHasValues(r) { return BODY_FIELDS.some(f => r[f.k] != null); }
 function bodyLoad() { try { const s = JSON.parse(localStorage.getItem(BODY_KEY) || 'null'); if (s && validBodyRows(s.rows)) BODY.rows = s.rows.map(cleanBodyRow).filter(bodyHasValues); } catch (e) {} }
 function bodySaveLocal() { try { localStorage.setItem(BODY_KEY, JSON.stringify({rows:BODY.rows})); } catch (e) {} }
@@ -60,33 +67,35 @@ function bodyDelta(k, days) {
   const last = bodyLatest(k); if (!last) return null;
   const cutoff = dayKey(new Date(new Date(last.d + 'T12:00:00') - days * 86400000));
   const prev = [...BODY.rows].reverse().find(r => r[k] != null && r.d <= cutoff && r.d !== last.d);
-  return prev ? {v:Math.round((last[k] - prev[k]) * 10) / 10, from:prev.d} : null;
+  return prev ? {v:Math.round((last[k] - prev[k]) * 100) / 100, from:prev.d} : null;
 }
-const fmtDelta = v => (v > 0 ? '+' : v < 0 ? '−' : '±') + fmtKg(Math.abs(v));
+/* изменение в выбранных единицах; меньше 0,05 — не показывается */
+const fmtDelta = (v, f = BODY_FIELDS[0]) => (v > 0 ? '+' : v < 0 ? '−' : '±') + fmtBody(f, Math.abs(v));
+const deltaShown = (dl, f = BODY_FIELDS[0]) => dl && Math.abs(bodyToU(f, dl.v)) >= .05;
 /* окраска изменения веса зависит от цели: на массе рост — хорошо, на рельефе — наоборот; на силе нейтрально */
 function deltaClass(v) { const g = S.goal === 'mass' ? 1 : S.goal === 'cut' ? -1 : 0; return !g || !v ? '' : v * g > 0 ? 'good' : 'bad'; }
 function bodyHtml() {
   const last = bodyLatest('kg'), d4 = bodyDelta('kg', 28);
   const pts = BODY.rows.filter(r => r.kg != null).slice(-40).map(r => ({d:r.d, v:r.kg}));
-  const chips = BODY_FIELDS.filter(f => !f.main).map(f => { const l = bodyLatest(f.k); if (!l) return ''; const dl = bodyDelta(f.k, 28); return `<li><span>${f.name}</span><b>${fmtKg(l[f.k])}<small>${f.unit}</small></b>${dl && dl.v ? `<em>${fmtDelta(dl.v)}</em>` : ''}</li>`; }).join('');
+  const chips = BODY_FIELDS.filter(f => !f.main).map(f => { const l = bodyLatest(f.k); if (!l) return ''; const dl = bodyDelta(f.k, 28); return `<li><span>${f.name}</span><b>${fmtBody(f, l[f.k])}<small>${bodyUnit(f)}</small></b>${deltaShown(dl, f) ? `<em>${fmtDelta(dl.v, f)}</em>` : ''}</li>`; }).join('');
   const form = `<form class="b-form" id="b-form" autocomplete="off">
     <label class="b-date">Дата<input type="date" id="b-date" value="${todayKey()}" max="${todayKey()}" required></label>
-    ${BODY_FIELDS.map(f => { const l = bodyLatest(f.k); return `<label${f.main ? ' class="b-main"' : ''}>${f.name}, ${f.unit}<input class="lt-in" type="text" inputmode="decimal" data-bf="${f.k}" placeholder="${l ? fmtKg(l[f.k]) : '—'}" aria-label="${f.name}, ${f.unit}"></label>`; }).join('')}
+    ${BODY_FIELDS.map(f => { const l = bodyLatest(f.k), u = bodyUnit(f); return `<label${f.main ? ' class="b-main"' : ''}>${f.name}, ${u}<input class="lt-in" type="text" inputmode="decimal" data-bf="${f.k}" placeholder="${l ? fmtBody(f, l[f.k]) : '—'}" aria-label="${f.name}, ${u}"></label>`; }).join('')}
     <button type="submit" class="btn">Записать</button>
-    <p class="b-hint">Заполняйте то, что измерили: вес — утром натощак, обхваты — сантиметровой лентой без натяжения, в одних и тех же точках. Остальное можно оставить пустым.</p>
+    <p class="b-hint">Заполняйте то, что измерили: вес — утром натощак, обхваты — мерной лентой без натяжения, в одних и тех же точках. Остальное можно оставить пустым.</p>
   </form>`;
   const rows = [...BODY.rows].reverse();
-  const rowHtml = r => `<li><span class="h-d">${fmtDay(r.d, true)}</span><span class="h-s">${BODY_FIELDS.filter(f => r[f.k] != null).map(f => `${f.main ? '' : f.name.toLowerCase() + ' '}${fmtKg(r[f.k])}${f.main ? ' кг' : ''}`).join(' · ')}</span><button type="button" class="h-del" data-bdel="${r.d}" aria-label="Удалить замер за ${fmtDay(r.d, true)}">Удалить</button></li>`;
+  const rowHtml = r => `<li><span class="h-d">${fmtDay(r.d, true)}</span><span class="h-s">${BODY_FIELDS.filter(f => r[f.k] != null).map(f => `${f.main ? '' : f.name.toLowerCase() + ' '}${fmtBody(f, r[f.k])}${f.main ? ' ' + wUnit() : ''}`).join(' · ')}</span><button type="button" class="h-del" data-bdel="${r.d}" aria-label="Удалить замер за ${fmtDay(r.d, true)}">Удалить</button></li>`;
   const list = rows.length ? `<ul class="h-list b-list">${rows.slice(0, 6).map(rowHtml).join('')}</ul>${rows.length > 6 ? `<details class="j-all"><summary>Все замеры (${rows.length})</summary><ul class="h-list b-list">${rows.slice(6).map(rowHtml).join('')}</ul></details>` : ''}` : '';
   return `<section class="b-sec" aria-labelledby="b-title">
     <div class="b-head">
       <div>
         <p class="eyebrow">Тело</p>
         <h2 id="b-title">Вес и замеры</h2>
-        ${last ? `<p class="b-now"><b>${fmtKg(last.kg)}<small>кг</small></b>${d4 && d4.v ? `<em class="${deltaClass(d4.v)}">${fmtDelta(d4.v)} за 4 нед.</em>` : `<em>${fmtDay(last.d, true)}</em>`}</p>` : `<p class="b-empty">Записей о весе пока нет. Взвешивайтесь раз в неделю в одно и то же время — по графику будет видно, куда идёт масса, а не дневные колебания воды.</p>`}
+        ${last ? `<p class="b-now"><b>${fmtBody(BODY_FIELDS[0], last.kg)}<small>${wUnit()}</small></b>${deltaShown(d4) ? `<em class="${deltaClass(d4.v)}">${fmtDelta(d4.v)} за 4 нед.</em>` : `<em>${fmtDay(last.d, true)}</em>`}</p>` : `<p class="b-empty">Записей о весе пока нет. Взвешивайтесь раз в неделю в одно и то же время — по графику будет видно, куда идёт масса, а не дневные колебания воды.</p>`}
         ${chips ? `<ul class="b-chips">${chips}</ul>` : ''}
       </div>
-      ${pts.length > 1 ? `<div class="h-chart b-chart"><p class="h-cap">Вес, кг · ${pts.length} ${plural(pts.length, 'запись', 'записи', 'записей')}</p>${sparkSvg(pts, 'кг', 0.1)}</div>` : ''}
+      ${pts.length > 1 ? `<div class="h-chart b-chart"><p class="h-cap">Вес, ${wUnit()} · ${pts.length} ${plural(pts.length, 'запись', 'записи', 'записей')}</p>${sparkSvg(pts, wUnit(), v => fmtBody(BODY_FIELDS[0], v))}</div>` : ''}
     </div>
     ${form}
     ${list}
@@ -97,7 +106,8 @@ function bodySubmit(form) {
   if (!/^\d{4}-\d\d-\d\d$/.test(d) || d > todayKey()) { $('#b-date').focus(); return; }
   const row = {d};
   let any = false;
-  form.querySelectorAll('[data-bf]').forEach(inp => { const v = parseNum(inp.value); if (v != null && v > 0) { row[inp.dataset.bf] = v; any = true; } });
+  /* вписано в выбранных единицах — в килограммы и сантиметры */
+  form.querySelectorAll('[data-bf]').forEach(inp => { const v = parseNum(inp.value), f = BODY_FIELDS.find(x => x.k === inp.dataset.bf); if (v != null && v > 0 && f) { row[f.k] = bodyFromU(f, v); any = true; } });
   if (!any) { const f = form.querySelector('[data-bf="kg"]'); f.classList.add('need'); f.focus(); setTimeout(() => f.classList.remove('need'), 1200); return; }
   BODY.rows = mergeBodyRows(BODY.rows, [cleanBodyRow(row)]);
   bodyTouch(false);
@@ -110,8 +120,9 @@ function bodyDelete(btn) {
   bodyTouch(false); renderJournal();
 }
 function bodyCsv() {
-  const head = ['Дата'].concat(BODY_FIELDS.map(f => `${f.name}, ${f.unit}`));
-  const rows = BODY.rows.map(r => [r.d].concat(BODY_FIELDS.map(f => r[f.k] != null ? fmtKg(r[f.k]) : '')));
+  /* в выбранных единицах, единица — в заголовке столбца */
+  const head = ['Дата'].concat(BODY_FIELDS.map(f => `${f.name}, ${bodyUnit(f)}`));
+  const rows = BODY.rows.map(r => [r.d].concat(BODY_FIELDS.map(f => r[f.k] != null ? fmtBody(f, r[f.k]) : '')));
   return '﻿' + [head].concat(rows).map(r => r.join(';')).join('\r\n');
 }
 document.addEventListener('submit', e => { if (e.target.id === 'b-form') { e.preventDefault(); bodySubmit(e.target); } });
@@ -129,7 +140,7 @@ bodyLoad();
    для упражнения. */
 function backupObject() {
   return {app:'podhod', v:2, exported:new Date().toISOString(), version:window.PODHOD_VERSION || '',
-    settings:{...S}, gear:{bar:GEAR.bar, plates:GEAR.plates}, autoreg:{dismissed:AR.dismissed, light:AR.light}, ics:{...ICS}, motion:{...motionPrefs},
+    settings:{...S}, gear:gearObject(), autoreg:{dismissed:AR.dismissed, light:AR.light}, ics:{...ICS}, motion:{...motionPrefs},
     log:LOG.data, body:BODY.rows, heart:heartBackup()};
 }
 function restoreBackup(obj) {
@@ -160,9 +171,10 @@ function restoreBackup(obj) {
       if (Array.isArray(ok.equip)) ok.equip = ok.equip.filter(id => EQUIP.some(x => x.id === id));
       if (!GOALS[ok.goal]) delete ok.goal; if (!FORMATS[ok.format]) delete ok.format; if (!LEVELS[ok.level]) delete ok.level;
       if ('lr' in ok) ok.lr = cleanLr(ok.lr);
-      Object.assign(S, ok); saveSettings(); out.settings = true;
+      if ('units' in ok && ok.units !== 'kg' && ok.units !== 'lb') ok.units = null;
+      Object.assign(S, ok); ensurePlaces(S); ensureCustoms(S); saveSettings(); out.settings = true; /* имена по умолчанию — на языке страницы */
     }
-    if (obj.gear && typeof obj.gear === 'object') { if (isFinite(obj.gear.bar) && obj.gear.bar > 0) GEAR.bar = +obj.gear.bar; if (Array.isArray(obj.gear.plates)) { const pl = obj.gear.plates.map(Number).filter(v => v > 0); if (pl.length) GEAR.plates = [...new Set(pl)].sort((a, b) => b - a); } gearSave(); }
+    if (obj.gear && typeof obj.gear === 'object') { gearPick(GEAR_UNITS.kg, obj.gear); gearPick(GEAR_UNITS.lb, obj.gear.lb); gearSave(); }
     if (obj.autoreg && typeof obj.autoreg === 'object') { if (obj.autoreg.dismissed && typeof obj.autoreg.dismissed === 'object') AR.dismissed = obj.autoreg.dismissed; AR.light = !!obj.autoreg.light; arSave(); }
     if (obj.ics && typeof obj.ics === 'object') { Object.assign(ICS, obj.ics); try { localStorage.setItem(ICS_KEY, JSON.stringify(ICS)); } catch (e) {} }
     if (obj.motion && typeof obj.motion === 'object') { Object.assign(motionPrefs, obj.motion); saveMotionPrefs(); }

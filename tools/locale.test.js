@@ -9,7 +9,7 @@ const fs = require('node:fs'), path = require('node:path');
 const {loadApp} = require('./lang-model');
 
 test('English: decimal point, English plurals and the load bars are right before the first render', () => {
-  const en = loadApp({lang:'en'});
+  const en = loadApp({lang:'en'}); en.get(`S.units='kg'`);
   assert.deepEqual(en.json('[DEC, fmtNum(1.5), fmtKg(52.5), plural(1,"set","sets","sets"), plural(21,"set","sets","sets"), plural(2,"set","sets","sets")]'), ['.', '1.5', '52.5', 'set', 'sets', 'sets']);
   const bars = en.get('loadBars({traps:1.5, lats:3})');
   assert.match(bars, /1\.5</); assert.doesNotMatch(bars, /1,5/);

@@ -14,16 +14,18 @@ function cleanText(v, max, lines = false) {
   if (typeof v !== 'string') return '';
   return v.replace(lines ? /[\u0000-\u0009\u000B-\u001F\u007F]/g : /[\u0000-\u001F\u007F]/g, lines ? '' : ' ').replace(/[ \t]+/g, ' ').trim().slice(0, max);
 }
-/* вес: одно число на все подходы или по подходам; 0–500 кг, шаг 0,25 */
+/* вес: одно число на все подходы или по подходам; 0–500 кг, до тысячных килограмма (вписанное в фунтах — тем же числом
+   фунтов; прежние версии округляли до 0,25 кг) */
 function cleanKg(v) {
   const list = (Array.isArray(v) ? v : [v]).map(x => typeof x === 'string' ? parseFloat(x.replace(',', '.')) : x)
-    .filter(x => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 500).map(x => Math.round(x * 4) / 4).slice(0, 10);
+    .filter(x => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 500).map(x => Math.round(x * 1000) / 1000).slice(0, 10);
   return list.length ? list : null;
 }
 /* ввод веса: «60», «62,5», «60 / 62,5 / 65», «60, 62,5, 65» — запятая с пробелом, пробел, «/» и «;» разделяют подходы,
    запятая внутри числа — десятичная */
 function parseKgInput(text) {
-  return cleanKg(String(text || '').split(/\s*[;\/]\s*|,\s+|\s+/).map(x => x.trim()).filter(Boolean));
+  /* вписано в выбранных единицах (13-log.js: fromU), хранится в килограммах */
+  return cleanKg(String(text || '').split(/\s*[;\/]\s*|,\s+|\s+/).map(x => x.trim()).filter(Boolean).map(x => { const n = parseFloat(x.replace(',', '.')); return Number.isFinite(n) ? fromU(n) : x; }));
 }
 /* повторы: «8», «8–12» или по подходам — «10/8/6/5» (через «/», «;», запятую или пробел; 2–10 значений; одинаковые
    сводятся к одному числу). Хранятся и выгружаются в файл плана строкой «10/8/6/5»; прежние версии такую строку
@@ -304,9 +306,9 @@ function customToolsHtml(it) {
         ${it.ex.kind ? '' : `<label class="cp-f"><span>Темп</span><input type="text" maxlength="11" data-cp-tempo="${slot}" value="${esc(o.tempo || '')}" placeholder="${esc(r.tempo || '3-0-1-0')}" aria-label="Темп: опускание, пауза, подъём, пауза — например 3-0-1-0" autocomplete="off"></label>`}
         ${o.sets || o.reps || o.rest !== undefined || o.tempo ? `<button type="button" class="btn-ghost cp-reset" data-cp-reset="${slot}">Как по цели</button>` : ''}
       </div>`;
-  const lt = loadType(it.ex), kgLabel = lt === 'assist' ? 'Противовес, кг' : lt === 'extra' ? 'Доп. вес, кг' : 'Вес, кг';
+  const lt = loadType(it.ex), u = wUnit(), kgLabel = lt === 'assist' ? `Противовес, ${u}` : lt === 'extra' ? `Доп. вес, ${u}` : `Вес, ${u}`;
   const extra = `<div class="cp-fields">
-      ${lt === 'none' ? '' : `<label class="cp-f cp-kg"><span>${kgLabel}</span><input type="text" maxlength="60" data-cp-kg="${slot}" value="${o.kg ? esc(o.kg.map(fmtKg).join(' / ')) : ''}" placeholder="60 или 60 / 62,5 / 65" aria-label="${kgLabel}: одно число на все подходы или по подходам через «/»" autocomplete="off"></label>`}
+      ${lt === 'none' ? '' : `<label class="cp-f cp-kg"><span>${kgLabel}</span><input type="text" maxlength="60" data-cp-kg="${slot}" value="${o.kg ? esc(o.kg.map(fmtKg).join(' / ')) : ''}" placeholder="${isLb() ? '135 или 135 / 140 / 145' : '60 или 60 / 62,5 / 65'}" aria-label="${kgLabel}: одно число на все подходы или по подходам через «/»" autocomplete="off"></label>`}
       <label class="cp-f cp-note"><span>Заметка к упражнению</span><textarea rows="2" maxlength="${ITEM_NOTE}" data-cp-note="${slot}" placeholder="Например: пауза 1 с на груди">${esc(o.note || '')}</textarea></label>
     </div>`;
   return `<div class="cp-tools">
