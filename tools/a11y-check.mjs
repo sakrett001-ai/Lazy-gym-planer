@@ -8,7 +8,7 @@
       текст плана, атласа и разбора в светлой и тёмной теме.
    3. Диктор: у #plan нет живой области, пересборка объявляется коротко в #plan-status, подписи фаз анимации — вне живых
       областей; имя кнопки содержит её видимую надпись (WCAG 2.5.3), одинаковые кнопки карточек различаются упражнением;
-      конец отдыха объявляется «Пора к подходу».
+      конец отдыха объявляется «Можно продолжать».
    4. «Пиковая нагрузка» в карточке раскрывается кнопкой (aria-expanded) — тот же текст, что в разборе движения.
    Плашка пульса (14b-heart.js) — с подменой Web Bluetooth, чтобы её раскладка и имя кнопки тоже проверялись.
    5. «0 из 21 подхода»; «легче · тяжелее» — цели не меньше 24×24 px (WCAG 2.5.8); на экране отдыха при масштабе 150 %
@@ -257,7 +257,7 @@ for (const theme of ['light', 'dark']) {
   const lk = await page.evaluate(() => { const out = []; for (const [g, n] of [['chest', 6], ['back', 6], ['quads', 6], ['abs', 5]]) { S.groups = [g]; S.count = n; regen(); for (const b of document.querySelectorAll('.prog .lk')) { const r = b.getBoundingClientRect(); out.push([b.textContent, Math.round(r.width), Math.round(r.height)]); } if (out.length) break; } return out; });
   check(lk.length && lk.every(([, w, h]) => w >= 24 && h >= 24), `«легче · тяжелее»: цели не меньше 24×24 px (${JSON.stringify(lk.slice(0, 4))})`);
 
-  /* тренировка: «0 из 21 подхода», имена кнопок, «Пора к подходу» в конце отдыха */
+  /* тренировка: «0 из 21 подхода», имена кнопок, «Можно продолжать» в конце отдыха (спокойный конец, без красного экрана) */
   await page.evaluate(() => { S.groups = ['chest', 'back', 'shoulders']; S.count = 6; regen(); document.querySelector('#start-workout').click(); });
   await page.waitForTimeout(100);
   const prog = await page.evaluate(() => { const q = workout.queue, out = {}; for (const n of [21, 23, 1, 2]) { workout.queue = Array.from({ length: n }, (_, i) => q[i % q.length]); workoutTick(); out[n] = $('#wv-progress-label').textContent; } workout.queue = q; workoutTick(); return out; });
@@ -266,9 +266,9 @@ for (const theme of ['light', 'dark']) {
   check(!wnames.length, `тренировка: имя кнопки содержит её видимую надпись: ${wnames.join('; ')}`);
   await SCREENS.rest(page);
   await page.evaluate(() => { workout.restUntil = Date.now() - 1000; workoutTick(); });
-  const rest = await page.evaluate(() => ({ say: $('#wv-rest-say').textContent, role: $('#wv-rest-say').getAttribute('role'), over: $('#wv-rest-over').textContent, overRole: $('#wv-rest-over').getAttribute('role') }));
+  const rest = await page.evaluate(() => ({ say: $('#wv-rest-say').textContent, role: $('#wv-rest-say').getAttribute('role'), done: !$('#wv-rest-done').hidden, heading: $('#wv-rest-heading').textContent, overRole: $('#wv-rest-over').getAttribute('role') }));
   check(await page.evaluate(() => !$('#wv-hr-btn').hidden), 'на экране тренировки видна плашка «♥ Пульс» (проверена и её раскладка)');
-  check(rest.say === 'Пора к подходу' && rest.role === 'status' && rest.over === 'сверх отдыха' && !rest.overRole, `конец отдыха объявляется «Пора к подходу» (${JSON.stringify(rest)})`);
+  check(rest.say === 'Можно продолжать' && rest.role === 'status' && rest.done && rest.heading === 'Можно продолжать' && !rest.overRole, `конец отдыха объявляется «Можно продолжать» (${JSON.stringify(rest)})`);
   await ctx.close();
 }
 {

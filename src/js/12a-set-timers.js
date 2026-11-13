@@ -21,8 +21,8 @@ function restView(end, now) {
 }
 
 /* моменты сигналов отдыха (мс): за 10 с до конца — мягкий (если включён и отдых длиннее 15 с), конец, затем в режиме
-   «настойчиво» — повторы раз в 20 с, не больше трёх. from — начало отдыха. */
-function restSignals(end, {mode = 'persist', warn = false, from = null} = {}) {
+   «настойчиво» — повторы раз в 20 с, не больше трёх. from — начало отдыха. По умолчанию — один сигнал на нуле. */
+function restSignals(end, {mode = 'once', warn = false, from = null} = {}) {
   const out = [];
   if (warn && (from == null || end - from > (REST_SIGNAL.warn + 5) * 1000)) out.push({at:end - REST_SIGNAL.warn * 1000, kind:'warn'});
   out.push({at:end, kind:'end'});
@@ -41,6 +41,14 @@ function restLastAt(signals) { return signals.reduce((m, s) => Math.max(m, s.at)
 /* ±15 с: во время отдыха сдвигает конец (не раньше «сейчас»); после нуля «+15» даёт ещё 15 с от текущего момента,
    «−15» ничего не меняет — отдых уже кончился */
 function restAdjust(end, now, d) { return end > now ? Math.max(now, end + d * 1000) : d > 0 ? now + d * 1000 : end; }
+/* пауза отдыха: paused — момент нажатия ⏸ (0 — идёт). На паузе время стоит: экран показывает отдых на момент паузы,
+   сигналов нет; «▶» сдвигает конец отдыха на длину паузы. После нуля пауза не ставится — отдых уже кончился.
+   Фактический отдых в журнале (restActual) — от записи подхода до следующего, вместе с паузой: столько человек и отдыхал. */
+function restClock(paused, now) { return paused > 0 ? Math.min(paused, now) : now; }
+function restPauseToggle(end, paused, now) {
+  if (paused > 0) return {end:end + Math.max(0, now - paused), paused:0};
+  return end > now ? {end, paused:now} : {end, paused:0};
+}
 /* фактический отдых, с: от записи подхода до перехода к следующему; меньше секунды или дольше 30 мин — не записывается */
 function restActual(from, to) {
   if (!Number.isFinite(from) || !Number.isFinite(to) || from <= 0 || to < from) return null;
