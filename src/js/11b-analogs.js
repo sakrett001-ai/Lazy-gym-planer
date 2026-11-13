@@ -84,7 +84,7 @@ const PLACE_DEFAULTS = [
 const PLACE_ADDED = [[1, 'homeband']];
 function ensurePlaces(s) {
   if (!Array.isArray(s.places) || !s.places.length) {
-    s.places = PLACE_DEFAULTS.map(p => ({...p, equip:p.equip.slice()}));
+    s.places = PLACE_DEFAULTS.map(p => ({...p, auto:p.id, equip:p.equip.slice()}));
     /* перенос старой настройки: инвентарь, который уже был выбран, становится инвентарём подходящего места */
     const same = (a, b) => a.length === b.length && a.every(x => b.includes(x));
     const match = s.places.find(p => same(p.equip, s.equip || []));
@@ -93,9 +93,11 @@ function ensurePlaces(s) {
   }
   for (const [v, id] of PLACE_ADDED) if ((s.placesV || 0) < v) {
     const d = PLACE_DEFAULTS.find(p => p.id === id);
-    if (!s.places.some(p => p.id === id)) s.places.push({...d, equip:d.equip.slice()});
+    if (!s.places.some(p => p.id === id)) s.places.push({...d, auto:d.id, equip:d.equip.slice()});
     s.placesV = v;
   }
+  /* имена по умолчанию — на языке страницы (11a-names.js) */
+  for (const p of s.places) { const a = autoKey(p.auto, p.name, 'place', p.id); if (a) { p.auto = a; p.name = autoName(a); } else delete p.auto; }
   if (!s.places.some(p => p.id === s.place)) s.place = s.places[0].id;
   if (s.adapt && (!s.places.some(p => p.id === s.adapt) || s.adapt === s.place)) s.adapt = null;
   s.equip = placeOf(s).equip.slice();

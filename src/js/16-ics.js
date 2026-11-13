@@ -2,6 +2,11 @@
 const ICS_KEY = 'podhod.ics.v1';
 const ICS = {time:'19:00', weeks:4, alarm:60};
 try { Object.assign(ICS, JSON.parse(localStorage.getItem(ICS_KEY) || '{}')); } catch (e) {}
+/* напоминание: «Тренировка через 1 час: Всё тело А» (порядок слов — из перевода целой строки с {t} и {name}) */
+function icsAlarmText(min, name) {
+  const h = min / 60, t = min >= 60 && Number.isInteger(h) ? `${h} ${plural(h, 'час', 'часа', 'часов')}` : `${min} мин`;
+  return 'Тренировка через {t}: {name}'.replace('{t}', t).replace('{name}', name);
+}
 function nextMonday() { const d = new Date(); d.setHours(12, 0, 0, 0); const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() + (dow === 0 ? 0 : 7 - dow)); return d; }
 const pad2 = n => String(n).padStart(2, '0');
 const icsDate = d => `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}T${pad2(d.getHours())}${pad2(d.getMinutes())}00`;
@@ -23,7 +28,7 @@ function icsText(start, time, weeksN) {
       const body = [`${GOALS[S.goal].name}, ${FORMATS[S.format].name.toLowerCase()}, ≈${d.plan.minutes} мин`, pr.week.note, ''].concat(blocksText(d.plan)).join('\n');
       lines.push('BEGIN:VEVENT', `UID:podhod-${icsDate(dt)}-${d.tid}@podhod`, `DTSTAMP:${stamp}`, `DTSTART:${icsDate(dt)}`, `DTEND:${icsDate(end)}`,
         icsFold(`SUMMARY:${icsEsc(title)}`), icsFold(`DESCRIPTION:${icsEsc(body)}`), 'CATEGORIES:Тренировка');
-      if (ICS.alarm > 0) lines.push('BEGIN:VALARM', 'ACTION:DISPLAY', icsFold(`DESCRIPTION:${icsEsc('Через ' + (ICS.alarm >= 60 ? ICS.alarm / 60 + ' ч' : ICS.alarm + ' мин') + ' тренировка: ' + d.name)}`), `TRIGGER:-PT${ICS.alarm}M`, 'END:VALARM');
+      if (ICS.alarm > 0) lines.push('BEGIN:VALARM', 'ACTION:DISPLAY', icsFold(`DESCRIPTION:${icsEsc(icsAlarmText(ICS.alarm, d.name))}`), `TRIGGER:-PT${ICS.alarm}M`, 'END:VALARM');
       lines.push('END:VEVENT');
     }
   }

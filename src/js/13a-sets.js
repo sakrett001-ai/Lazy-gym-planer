@@ -62,14 +62,15 @@ const impPerRep = (ex, impl) => armsAlternate(ex) ? 1 : impCount(ex, impl);
 function weightLabel(it) {
   const lt = loadType(it.ex);
   if (lt === 'none') return null;
-  if (lt === 'assist') return {full:'Противовес, кг', short:'Противовес', n:1, impl:null};
+  const u = wUnit(); /* «кг» или «фнт» (13-log.js) */
+  if (lt === 'assist') return {full:`Противовес, ${u}`, short:'Противовес', n:1, impl:null};
   const impl = itemImpl(it), n = impCount(it.ex, impl);
-  if (impl === 'db') return {full:n > 1 ? 'Вес одной гантели, кг' : 'Вес гантели, кг', short:'Гантель, кг', n, impl};
-  if (impl === 'kb') return {full:n > 1 ? 'Вес одной гири, кг' : 'Вес гири, кг', short:'Гиря, кг', n, impl};
-  return lt === 'extra' ? {full:'Доп. вес, кг', short:'Доп. кг', n:1, impl} : {full:'Вес, кг', short:'Вес, кг', n:1, impl};
+  if (impl === 'db') return {full:n > 1 ? `Вес одной гантели, ${u}` : `Вес гантели, ${u}`, short:`Гантель, ${u}`, n, impl};
+  if (impl === 'kb') return {full:n > 1 ? `Вес одной гири, ${u}` : `Вес гири, ${u}`, short:`Гиря, ${u}`, n, impl};
+  return lt === 'extra' ? {full:`Доп. вес, ${u}`, short:`Доп. ${u}`, n:1, impl} : {full:`Вес, ${u}`, short:`Вес, ${u}`, n:1, impl};
 }
 /* «×2 = 40 кг» — вес двух снарядов в руках */
-function pairTotalText(n, kg) { return n > 1 && kg > 0 ? `×${n} = ${fmtKg(kg * n)} кг` : ''; }
+function pairTotalText(n, kg) { return n > 1 && kg > 0 ? `×${n} = ${fmtW(kg * n)}` : ''; }
 
 /* ---------- стороны подхода ---------- */
 /* одна сторона: [кг | null, повторы]; кг — не меньше нуля, повторы (секунды, метры) — больше нуля */
@@ -142,8 +143,8 @@ function dayTonnage(d, data = LOG.data) {
   for (const [id, ss] of Object.entries(data || {})) { const ex = EXI[id]; if (ex && Array.isArray(ss)) for (const s of ss) if (s && s.d === d) t += sessionTonnage(ex, s); }
   return t;
 }
-/* 4320 → «4 320»; в английской сборке — «4,320» */
-function fmtTon(v) { return String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, DEC === ',' ? ' ' : ','); }
+/* общий вес (кг) — в выбранных единицах: 4320 → «4 320»; в английской сборке — «4,320» */
+function fmtTon(v) { return String(Math.round(toU(v))).replace(/\B(?=(\d{3})+(?!\d))/g, DEC === ',' ? ' ' : ','); }
 
 /* ---------- текст подхода ---------- */
 const pairText = p => (p[0] ? fmtKg(p[0]) + '×' : '') + p[1];

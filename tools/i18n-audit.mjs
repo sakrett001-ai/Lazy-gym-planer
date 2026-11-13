@@ -3,7 +3,8 @@
    По умолчанию рисунки движений заменены заглушками (текст от них не зависит) — проверка идёт около минуты;
    --full рисует настоящие фигуры и 3D (около 20 минут).
    Экраны: план (форматы × цели × уровни, разовая и недельная, места и замены), атлас мышц (все мышцы × места),
-   журнал с записями, разбор каждого упражнения в четырёх положениях, режим тренировки, тексты копирования. */
+   журнал с записями, разбор каждого упражнения в четырёх положениях, режим тренировки, тексты копирования; планы и места,
+   созданные в русской версии (имена по умолчанию). */
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -14,7 +15,8 @@ const fileArg = process.argv.indexOf('--file'), file = fileArg > 0 ? path.resolv
 if (!fs.existsSync(file)) { console.error('Нет dist/lazy-gym-planner-offline-en.html — сначала npm run build'); process.exit(2); }
 
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
-const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
+/* свой контекст: в шаге 9 в нём открываются ещё страницы (русский и английский офлайн-файлы делят localStorage) */
+const page = await (await browser.newContext({ viewport: { width: 1280, height: 1000 } })).newPage();
 const errors = [];
 page.on('pageerror', e => errors.push(String(e)));
 await page.goto('file://' + file);
@@ -26,8 +28,10 @@ if (!FULL) await page.evaluate(() => {
 });
 
 const found = new Map();
-async function scan(state, extra = '') {
-  const hits = await page.evaluate(({ extra }) => {
+/* inputs — проверять и значения текстовых полей (имена по умолчанию в полях «Name»); в остальных шагах там имена, вписанные
+   проверкой, — их не проверяем */
+async function scan(state, extra = '', pg = page, inputs = false) {
+  const hits = await pg.evaluate(({ extra, inputs }) => {
     const CYR = /[А-Яа-яЁё]/, out = [];
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
@@ -36,10 +40,11 @@ async function scan(state, extra = '') {
       if (CYR.test(n.nodeValue)) out.push({ text: n.nodeValue.trim().slice(0, 160), where: p.tagName.toLowerCase() + (p.id ? '#' + p.id : '') + (p.className && typeof p.className === 'string' ? '.' + p.className.split(' ')[0] : '') });
     }
     for (const el of document.querySelectorAll('*')) for (const a of ['aria-label', 'title', 'placeholder', 'alt', 'aria-valuetext', 'aria-description', 'label', 'value'])
-      if (el.hasAttribute(a) && CYR.test(el.getAttribute(a)) && !(a === 'value' && el.tagName === 'INPUT' && el.type === 'text')) out.push({ text: `[${a}] ` + el.getAttribute(a).slice(0, 160), where: el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') });
+      if (el.hasAttribute(a) && CYR.test(el.getAttribute(a)) && !(a === 'value' && el.tagName === 'INPUT' && el.type === 'text' && !inputs)) out.push({ text: `[${a}] ` + el.getAttribute(a).slice(0, 160), where: el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') });
+    if (inputs) for (const el of document.querySelectorAll('input, textarea, option')) if (CYR.test(el.value || '')) out.push({ text: '[value] ' + el.value.slice(0, 160), where: el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') });
     if (extra) for (const line of extra.split('\n')) if (CYR.test(line)) out.push({ text: line.slice(0, 160), where: 'text-export' });
     return out;
-  }, { extra });
+  }, { extra, inputs });
   for (const h of hits) { if (/^\[title\] Русская версия$/.test(h.text)) continue; /* название языка на нём самом */ const k = h.text; if (!found.has(k)) found.set(k, { ...h, state }); }
 }
 const run = js => page.evaluate(js);
@@ -401,6 +406,42 @@ await page.click('#perf-panel [data-perf="copy"]'); await page.waitForTimeout(10
 await page.click('#start-workout'); await page.waitForTimeout(150);
 await run(`(()=>{perfRun();})()`); await page.waitForTimeout(100); await scan('perf: close the workout first');
 await run(`(()=>{closeWorkout();perfStop();})()`);
+
+/* 9. данные, созданные в русской версии (офлайн-файлы делят localStorage): «Мой план», «План 2», «Зал», «Место 5», неделя
+   в свои планы («Пн · Всё тело А», программа «Всё тело · неделя 2»), копия плана, тренировка по мышцам — в английской
+   версии имена по умолчанию пишутся по-английски (11a-names.js); проверяются и значения полей «Name» */
+step('9. данные из русской версии');
+{
+  const ru = await page.context().newPage(); ru.on('pageerror', e => errors.push(String(e)));
+  await ru.goto('file://' + file.replace(/-en\.html$/, '-ru.html')); await ru.waitForTimeout(600);
+  await ru.evaluate(() => {
+    const fake = () => { const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); return { svg, camera: 'side', at() {}, setTrace() {}, setVectors() {}, setJoints() {}, setStress() {}, setMuscles() {}, setRegion() {}, dispose() {} }; };
+    window.buildFigure = fake; window.createMotionFigure = fake;
+    localStorage.removeItem('podhod.settings.v1'); S.customs = []; S.places = []; ensurePlaces(S); ensureCustoms(S);
+    Object.assign(S, { view: 'plan', mode: 'program', days: 3, split: 'full', week: 2 }); regen(); document.querySelector('#save-plan').click();
+    Object.assign(S, { mode: 'single', groups: ['chest', 'back', 'biceps'] }); regen(); document.querySelector('#save-plan').click();
+    document.querySelector('[data-place-add]').click();
+    openCustom(S.customs[0].id); regen(); document.querySelector('[data-cp-new]').click(); document.querySelector('[data-cp-copy]').click();
+    S.place = 'home'; S.adapt = 'gym'; ensurePlaces(S); saveSettings();
+  });
+  const made = await ru.evaluate(() => S.customs.map(c => c.name).concat(S.places.map(p => p.name)).join(', '));
+  if (!/Мой план/.test(made) || !/Место \d/.test(made)) errors.push('русская версия не создала имена по умолчанию: ' + made);
+  await ru.close();
+  const en = await page.context().newPage(); en.on('pageerror', e => errors.push(String(e)));
+  await en.goto('file://' + file); await en.waitForTimeout(600);
+  await en.evaluate(() => { const fake = () => { const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); return { svg, camera: 'side', at() {}, setTrace() {}, setVectors() {}, setJoints() {}, setStress() {}, setMuscles() {}, setRegion() {}, dispose() {} }; }; window.buildFigure = fake; window.createMotionFigure = fake; });
+  for (const c of await en.evaluate(() => S.customs.map(c => c.id))) {
+    await en.evaluate(id => { openCustom(id); regen(); document.querySelectorAll('.cp-about').forEach(d => d.open = true); }, c);
+    await scan('plans made in Russian: ' + c, await en.evaluate(() => plan && plan.items && plan.items.length ? planText() : ''), en, true);
+  }
+  await en.evaluate(() => { document.querySelector('#plan-export')?.click(); }); await en.waitForTimeout(100);
+  await scan('plans made in Russian: export dialog', '', en, true);
+  await en.evaluate(() => { document.querySelector('#plan-out')?.close(); S.mode = 'single'; S.view = 'atlas'; renderSetup(); renderPlan(); document.querySelector('#at-keep [data-cp-add]')?.click(); });
+  await scan('plans made in Russian: atlas and plan picker', '', en, true);
+  await en.evaluate(() => { S.view = 'plan'; regen(); openGallery(); });
+  await scan('places made in Russian: gallery', '', en, true);
+  await en.close();
+}
 
 await browser.close();
 const list = [...found.values()];

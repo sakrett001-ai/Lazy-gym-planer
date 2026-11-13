@@ -8,22 +8,28 @@ const CUSTOM_REPS = /^(\d{1,3})(?:\s*[–-]\s*(\d{1,3}))?$/;
 const CUSTOM_TEMPO = /^[0-9X]{1,2}-[0-9X]{1,2}-[0-9X]{1,2}-[0-9X]{1,2}$/;
 const PLAN_KEYS = ['goal', 'format', 'level'];
 let cpTab = null, cpOpen = new Set(), cpDel = false;
+/* блок «Программа, для кого, заметка» раскрыли — остаётся раскрытым, когда панель перерисовывается (Enter в «Названии»
+   и другие правки), до перезагрузки страницы */
+let cpAboutOpen = false;
+document.addEventListener('toggle', e => { if (e.target && e.target.classList && e.target.classList.contains('cp-about')) cpAboutOpen = e.target.open; }, true);
 
 /* текст от человека или из чужого файла: без управляющих символов, с ограничением длины (переводы строк в заметках остаются) */
 function cleanText(v, max, lines = false) {
   if (typeof v !== 'string') return '';
   return v.replace(lines ? /[\u0000-\u0009\u000B-\u001F\u007F]/g : /[\u0000-\u001F\u007F]/g, lines ? '' : ' ').replace(/[ \t]+/g, ' ').trim().slice(0, max);
 }
-/* вес: одно число на все подходы или по подходам; 0–500 кг, шаг 0,25 */
+/* вес: одно число на все подходы или по подходам; 0–500 кг, до тысячных килограмма (вписанное в фунтах — тем же числом
+   фунтов; прежние версии округляли до 0,25 кг) */
 function cleanKg(v) {
   const list = (Array.isArray(v) ? v : [v]).map(x => typeof x === 'string' ? parseFloat(x.replace(',', '.')) : x)
-    .filter(x => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 500).map(x => Math.round(x * 4) / 4).slice(0, 10);
+    .filter(x => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 500).map(x => Math.round(x * 1000) / 1000).slice(0, 10);
   return list.length ? list : null;
 }
 /* ввод веса: «60», «62,5», «60 / 62,5 / 65», «60, 62,5, 65» — запятая с пробелом, пробел, «/» и «;» разделяют подходы,
    запятая внутри числа — десятичная */
 function parseKgInput(text) {
-  return cleanKg(String(text || '').split(/\s*[;\/]\s*|,\s+|\s+/).map(x => x.trim()).filter(Boolean));
+  /* вписано в выбранных единицах (13-log.js: fromU), хранится в килограммах */
+  return cleanKg(String(text || '').split(/\s*[;\/]\s*|,\s+|\s+/).map(x => x.trim()).filter(Boolean).map(x => { const n = parseFloat(x.replace(',', '.')); return Number.isFinite(n) ? fromU(n) : x; }));
 }
 /* повторы: «8», «8–12» или по подходам — «10/8/6/5» (через «/», «;», запятую или пробел; 2–10 значений; одинаковые
    сводятся к одному числу). Хранятся и выгружаются в файл плана строкой «10/8/6/5»; прежние версии такую строку
@@ -49,10 +55,13 @@ function cleanCustomItem(it) {
   return o;
 }
 function cleanPlan(c, id) {
-  const ids = new Set(), out = {id, name:cleanText(c.name, CUSTOM_NAME) || 'Мой план',
+  /* имя по умолчанию (ключ auto, 11a-names.js) — на языке страницы; без имени — «Мой план» */
+  const nm = cleanText(c.name, CUSTOM_NAME), auto = autoKey(c.auto, nm, 'plan') || (nm ? null : 'my');
+  const ids = new Set(), out = {id, name:auto ? autoName(auto) : nm, ...(auto ? {auto} : {}),
     items:(Array.isArray(c.items) ? c.items : []).map(cleanCustomItem).filter(it => it && !ids.has(it.id) && ids.add(it.id)).slice(0, CUSTOM_MAX)};
   for (const [k, dict] of [['goal', GOALS], ['format', FORMATS], ['level', LEVELS]]) if (typeof c[k] === 'string' && dict[c[k]]) out[k] = c[k];
   for (const k of ['group', 'for', 'from']) { const v = cleanText(c[k], CUSTOM_TEXT); if (v) out[k] = v; }
+  const gauto = out.group && autoKey(c.gauto, out.group, 'group'); if (gauto) { out.group = autoName(gauto); out.gauto = gauto; }
   const note = cleanText(c.note, CUSTOM_NOTE, true); if (note) out.note = note;
   return out;
 }
@@ -61,7 +70,7 @@ function ensureCustoms(s) {
   s.fav = Array.isArray(s.fav) ? [...new Set(s.fav.filter(id => typeof id === 'string' && EXI[id]))] : [];
   const seen = new Set();
   s.customs = (Array.isArray(s.customs) ? s.customs : []).filter(c => c && typeof c.id === 'string' && /^[\w-]{1,24}$/.test(c.id) && !seen.has(c.id) && seen.add(c.id)).map(c => cleanPlan(c, c.id));
-  if (!s.customs.length) s.customs.push({id:'c1', name:'Мой план', items:[]});
+  if (!s.customs.length) s.customs.push({id:'c1', name:autoName('my'), auto:'my', items:[]});
   if (!s.customs.some(c => c.id === s.custom)) s.custom = s.customs[0].id;
   /* последний выбранный в «+ В свой план» план: удалён или испорчен — забывается, первым в списке станет открытый */
   if (!s.customs.some(c => c.id === s.cpLast)) s.cpLast = null;
@@ -101,14 +110,14 @@ function toggleFav(id) {
 function favLabel(on) { return on ? 'Убрать из избранного' : 'В избранное'; }
 function favButton(id, text = false) {
   const on = isFav(id);
-  return `<button type="button" class="fav${on ? ' on' : ''}${text ? ' fav-t' : ''}" data-fav="${id}" aria-pressed="${on}" aria-label="${favLabel(on)}: ${esc(EXI[id].name)}" title="${favLabel(on)}"><span class="fav-i" aria-hidden="true">${on ? '★' : '☆'}</span>${text ? `<span class="fav-l">${on ? 'В избранном' : 'В избранное'}</span>` : ''}</button>`;
+  return `<button type="button" class="fav${on ? ' on' : ''}${text ? ' fav-t' : ''}" data-fav="${id}" aria-pressed="${on}" aria-label="${favLabel(on)}: ${esc(exNameHere(EXI[id]))}" title="${favLabel(on)}"><span class="fav-i" aria-hidden="true">${on ? '★' : '☆'}</span>${text ? `<span class="fav-l">${on ? 'В избранном' : 'В избранное'}</span>` : ''}</button>`;
 }
 /* звёздочки обновляются на месте: анимации и открытые панели не перестраиваются */
 function refreshFav(id) {
   const on = isFav(id);
   for (const b of document.querySelectorAll(`[data-fav="${id}"]`)) {
     b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); b.setAttribute('title', favLabel(on));
-    b.setAttribute('aria-label', `${favLabel(on)}: ${EXI[id].name}`);
+    b.setAttribute('aria-label', `${favLabel(on)}: ${exNameHere(EXI[id])}`);
     const i = b.querySelector('.fav-i'); if (i) i.textContent = on ? '★' : '☆';
     const l = b.querySelector('.fav-l'); if (l) l.textContent = on ? 'В избранном' : 'В избранное';
   }
@@ -131,7 +140,7 @@ function customAdd(id) {
 function newCustomPlan() {
   const c = customOf(), taken = new Set(S.customs.map(p => p.name));
   let n = S.customs.length + 1; while (taken.has('План ' + n)) n++;
-  return {id:newPlanId(), name:'План ' + n, items:[], ...(S.mode === 'custom' && c.group ? {group:c.group} : {}), ...Object.fromEntries(PLAN_KEYS.map(k => [k, S[k]]))};
+  return {id:newPlanId(), name:'План ' + n, auto:'plan:' + n, items:[], ...(S.mode === 'custom' && c.group ? {group:c.group, ...(c.gauto ? {gauto:c.gauto} : {})} : {}), ...Object.fromEntries(PLAN_KEYS.map(k => [k, S[k]]))};
 }
 /* «+ В свой план» в атласе и в разборе: в выбранный план (planId) или в новый (planId пустой). Открытый план, режим
    и вид не меняются (S.custom, S.mode, S.view). Добавленное запоминает план первым в списке (S.cpLast). */
@@ -229,7 +238,7 @@ function customSetupHtml() {
   return `${lists}<div class="cp-acts"><button type="button" class="place place-add" data-cp-new="1">+ План</button><button type="button" class="btn-ghost" data-cp-copy="1">Копия плана</button><button type="button" class="btn-ghost" data-cp-import="1">${ICON.load}<span>Загрузить план</span></button></div>`
     + `<div class="place-tools"><label class="place-name">Название<input id="cp-name" type="text" maxlength="${CUSTOM_NAME}" value="${esc(c.name)}" autocomplete="off"></label>`
     + (S.customs.length > 1 ? `<button type="button" class="place-del${cpDel ? ' armed' : ''}" data-cp-del="1">${cpDel ? 'Точно удалить?' : 'Удалить план'}</button>` : '') + `</div>`
-    + `<details class="cp-about"${c.group || c.for || c.note ? ' open' : ''}><summary>Программа, для кого, заметка</summary><div class="cp-about-f">
+    + `<details class="cp-about"${c.group || c.for || c.note || cpAboutOpen ? ' open' : ''}><summary>Программа, для кого, заметка</summary><div class="cp-about-f">
         <label class="place-name">Программа<input id="cp-group" type="text" maxlength="${CUSTOM_TEXT}" list="cp-groups" value="${esc(c.group || '')}" placeholder="Например: Сила, неделя 1" autocomplete="off"><datalist id="cp-groups">${known.map(g => `<option value="${esc(g)}"></option>`).join('')}</datalist></label>
         <label class="place-name">Для кого<input id="cp-for" type="text" maxlength="${CUSTOM_TEXT}" value="${esc(c.for || '')}" placeholder="Имя ученика" autocomplete="off"></label>
         <label class="place-name cp-pnote">Заметка к плану<textarea id="cp-pnote" rows="2" maxlength="${CUSTOM_NOTE}" placeholder="Цель, самочувствие, что важно в этой тренировке">${esc(c.note || '')}</textarea></label>
@@ -255,7 +264,7 @@ function customListHtml() {
     const list = EX.filter(ex => ex.g === g && available(ex, E) && ex.lvl <= lvlMax).sort((a, b) => (fitsBody(a) ? 0 : 1) - (fitsBody(b) ? 0 : 1) || (a.type === 'c' ? 0 : 1) - (b.type === 'c' ? 0 : 1) || (EX_W[b.id] ?? 1) - (EX_W[a.id] ?? 1));
     /* по шесть на группу, остальное — по кнопке: на телефоне список не превращается в ленту */
     const rows = list.map((ex, i) => customRowHtml(ex, E).replace('<li class="cp-row', i >= 6 ? `<li hidden data-cp-g="${g}" class="cp-row` : '<li class="cp-row'));
-    return list.length ? `<li class="cp-gh">${esc(GN[g])} <small>${list.length}</small></li>` + rows.join('') + (list.length > 6 ? `<li class="cp-morel"><button type="button" class="link" data-cp-more="${g}">Ещё ${list.length - 6}</button></li>` : '') : '';
+    return list.length ? `<li class="cp-gh">${esc(GN[g])} <small>${list.length}</small></li>` + rows.join('') + (list.length > 6 ? `<li class="cp-morel"><button type="button" class="link" data-cp-more="${g}">${'Ещё {n}'.replace('{n}', list.length - 6)}</button></li>` : '') : '';
   }).join('') || `<li class="cp-none">Для этих мышц здесь нет упражнений — добавьте инвентарь места.</li>`;
 }
 function customAddHtml() {
@@ -301,9 +310,9 @@ function customToolsHtml(it) {
         ${it.ex.kind ? '' : `<label class="cp-f"><span>Темп</span><input type="text" maxlength="11" data-cp-tempo="${slot}" value="${esc(o.tempo || '')}" placeholder="${esc(r.tempo || '3-0-1-0')}" aria-label="Темп: опускание, пауза, подъём, пауза — например 3-0-1-0" autocomplete="off"></label>`}
         ${o.sets || o.reps || o.rest !== undefined || o.tempo ? `<button type="button" class="btn-ghost cp-reset" data-cp-reset="${slot}">Как по цели</button>` : ''}
       </div>`;
-  const lt = loadType(it.ex), kgLabel = lt === 'assist' ? 'Противовес, кг' : lt === 'extra' ? 'Доп. вес, кг' : 'Вес, кг';
+  const lt = loadType(it.ex), u = wUnit(), kgLabel = lt === 'assist' ? `Противовес, ${u}` : lt === 'extra' ? `Доп. вес, ${u}` : `Вес, ${u}`;
   const extra = `<div class="cp-fields">
-      ${lt === 'none' ? '' : `<label class="cp-f cp-kg"><span>${kgLabel}</span><input type="text" maxlength="60" data-cp-kg="${slot}" value="${o.kg ? esc(o.kg.map(fmtKg).join(' / ')) : ''}" placeholder="60 или 60 / 62,5 / 65" aria-label="${kgLabel}: одно число на все подходы или по подходам через «/»" autocomplete="off"></label>`}
+      ${lt === 'none' ? '' : `<label class="cp-f cp-kg"><span>${kgLabel}</span><input type="text" maxlength="60" data-cp-kg="${slot}" value="${o.kg ? esc(o.kg.map(fmtKg).join(' / ')) : ''}" placeholder="${isLb() ? '135 или 135 / 140 / 145' : '60 или 60 / 62,5 / 65'}" aria-label="${kgLabel}: одно число на все подходы или по подходам через «/»" autocomplete="off"></label>`}
       <label class="cp-f cp-note"><span>Заметка к упражнению</span><textarea rows="2" maxlength="${ITEM_NOTE}" data-cp-note="${slot}" placeholder="Например: пауза 1 с на груди">${esc(o.note || '')}</textarea></label>
     </div>`;
   return `<div class="cp-tools">
@@ -344,9 +353,10 @@ function freezePlan(p) {
 function savePlansFrom() {
   const set = Object.fromEntries(PLAN_KEYS.map(k => [k, S[k]])), added = [];
   if (S.mode === 'program' && prog) {
-    const group = cleanText(`${SPLITS[prog.split].name} · неделя ${S.week}`, CUSTOM_TEXT);
-    for (const d of prog.days) if (d.plan.items) added.push({id:newPlanId(), name:uniquePlanName(`${WD[d.wd]} · ${d.name}`, S.customs.map(c => c.name).concat(added.map(c => c.name))), group, ...set, items:freezePlan(d.plan)});
-  } else if (plan && plan.items) added.push({id:newPlanId(), name:uniquePlanName(titleFor()), ...set, items:freezePlan(plan)});
+    /* имена и программа — с ключами (11a-names.js): в другом языке они пишутся на нём */
+    const gauto = `split:${prog.split}:${S.week}`, group = cleanText(autoName(gauto) || `${SPLITS[prog.split].name} · неделя ${S.week}`, CUSTOM_TEXT);
+    for (const d of prog.days) if (d.plan.items) added.push({id:newPlanId(), ...namedPlan(`${WD[d.wd]} · ${d.name}`, `day:${d.wd}:${d.tid}${d.li ? ':' + d.li : ''}`, S.customs.map(c => c.name).concat(added.map(c => c.name))), group, gauto, ...set, items:freezePlan(d.plan)});
+  } else if (plan && plan.items) added.push({id:newPlanId(), ...namedPlan(titleFor(), S.mode === 'custom' ? customOf().auto : S.groups.length ? 'groups:' + S.groups.join(',') : null), ...set, items:freezePlan(plan)});
   S.customs.push(...added); saveSettings();
   return added;
 }
@@ -399,7 +409,8 @@ document.addEventListener('click', e => {
     return;
   }
   if (t.dataset.cpCopy !== undefined) {
-    const c = customOf(), copy = JSON.parse(JSON.stringify(c)); copy.id = newPlanId(); copy.name = uniquePlanName(c.name + ' — копия');
+    const c = customOf(), copy = JSON.parse(JSON.stringify(c)); copy.id = newPlanId(); delete copy.auto;
+    Object.assign(copy, namedPlan(c.name + ' — копия', c.auto ? c.auto + '+copy' : null));
     S.customs.splice(S.customs.indexOf(c) + 1, 0, copy); openCustom(copy.id); regen();
     const inp = $('#cp-name'); if (inp) { inp.focus(); inp.select(); }
     return;
@@ -424,9 +435,10 @@ document.addEventListener('change', e => {
   if (['cp-group', 'cp-for', 'cp-pnote'].includes(t.id)) {
     const c = customOf(), k = {'cp-group':'group', 'cp-for':'for', 'cp-pnote':'note'}[t.id], v = k === 'note' ? cleanText(t.value, CUSTOM_NOTE, true) : cleanText(t.value, CUSTOM_TEXT);
     if (v) c[k] = v; else delete c[k];
+    if (k === 'group' && v !== (c.gauto && autoName(c.gauto))) delete c.gauto; /* программу переименовали — имя её, а не по умолчанию */
     saveSettings(); if (k === 'group') renderSetup(); if (S.mode === 'custom' && S.view === 'plan') renderPlan(); return;
   }
-  if (t.id === 'cp-name') { const v = t.value.trim().slice(0, CUSTOM_NAME); if (v) customOf().name = v; saveSettings(); renderSetup(); if (S.mode === 'custom' && S.view === 'plan') renderPlan(); return; }
+  if (t.id === 'cp-name') { const v = t.value.trim().slice(0, CUSTOM_NAME), c = customOf(); if (v && v !== c.name) { c.name = v; delete c.auto; } saveSettings(); renderSetup(); if (S.mode === 'custom' && S.view === 'plan') renderPlan(); return; }
   if (t.dataset.cpReps !== undefined) {
     const s = +t.dataset.cpReps;
     if (!customSetReps(s, t.value)) { t.value = plan.items.find(x => x.slot === s)?.rx.reps || ''; return; }

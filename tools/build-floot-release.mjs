@@ -14,6 +14,8 @@ for (const lang of ['ru', 'en']) {
   const html = await fs.readFile(path.join(dist, `lazy-gym-planner-offline-${lang}.html`));
   if (!html.toString().includes(`window.PODHOD_VERSION='${pkg.version}'`)) throw new Error('Версия HTML не совпадает с package.json');
   if (/serviceWorker\s*\.\s*register/.test(html.toString())) throw new Error('Сборка Floot не должна регистрировать сервис-воркер');
+  /* выбор языка при заходе (src/lang.js) — только на страницах PWA: в окне Floot документ не уходит на другой адрес */
+  if (html.toString().includes('PODHOD_LANGS')) throw new Error('Сборка Floot не должна переадресовывать на другой язык');
   const relativePath = `floot/releases/${sourceCommit}/planner-${lang}.html`;
   await fs.mkdir(path.dirname(path.join(dist, relativePath)), {recursive:true});
   await fs.writeFile(path.join(dist, relativePath), html);

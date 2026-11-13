@@ -14,7 +14,7 @@ function withPlanSettings(c, fn) {
 function exportItem(c, item) {
   const ex = EXI[item.id];
   return withPlanSettings(c, () => {
-    const rx = customRx(prescribe(ex, null, effEquip(EQUIP.map(e => e.id))), item, ex), o = {id:ex.id, name:ex.name};
+    const rx = customRx(prescribe(ex, null, effEquip(EQUIP.map(e => e.id))), item, ex), o = {id:ex.id, name:exNameHere(ex)};
     if (!rx.static) {
       if (S.format !== 'circuit') { o.sets = rx.sets; o.rest = rx.rest; }
       if (!ex.kind) o.reps = item.reps || (S.format === 'circuit' ? GOALS[S.goal].circ.reps : String(rx.reps));
@@ -27,7 +27,10 @@ function exportItem(c, item) {
 }
 function exportPlan(c) {
   const o = {name:c.name};
+  /* ключ имени по умолчанию (11a-names.js): получатель увидит имя на своём языке; прежние версии ключ пропускают */
+  if (c.auto) o.auto = c.auto;
   for (const k of ['group', 'for', 'note']) if (c[k]) o[k] = c[k];
+  if (c.group && c.gauto) o.gauto = c.gauto;
   for (const k of PLAN_KEYS) o[k] = c[k] || S.gen[k] || S[k];
   o.items = c.items.map(it => exportItem(c, it));
   return o;
@@ -71,7 +74,7 @@ function readPlanFile(text) {
 /* добавление: всегда новыми планами, занятые имена получают «(2)» */
 function addPlans(plans) {
   const taken = S.customs.map(c => c.name), added = [];
-  for (const p of plans) { const c = {...p, id:newPlanId(), name:uniquePlanName(p.name, taken)}; taken.push(c.name); S.customs.push(c); added.push(c); }
+  for (const p of plans) { const c = {...p, id:newPlanId()}; delete c.auto; Object.assign(c, namedPlan(p.name, p.auto, taken)); taken.push(c.name); S.customs.push(c); added.push(c); }
   saveSettings(); return added;
 }
 

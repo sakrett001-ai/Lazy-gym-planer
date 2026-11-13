@@ -11,7 +11,7 @@ const EQUIP = [
   {id:'captain', name:'Стойка для пресса', cat:'bars', hint:'упор на предплечья и спинка, ноги свисают'},
   {id:'cable', name:'Блочный тренажёр', cat:'mach'}, {id:'smith', name:'Машина Смита', cat:'mach'}, {id:'legpress', name:'Жим ногами', cat:'mach'},
   {id:'legext', name:'Разгибание ног', cat:'mach'}, {id:'legcurl', name:'Сгибание ног', cat:'mach'}, {id:'pecdeck', name:'Бабочка', cat:'mach'},
-  {id:'hyper', name:'Гиперэкстензия', cat:'mach'}
+  {id:'hyper', name:'Скамья для гиперэкстензии', cat:'mach'}
 ];
 const EQUIP_CATS = [{id:'free', name:'Свободные веса и инвентарь'}, {id:'bench', name:'Скамьи'}, {id:'bars', name:'Турник и стойки'}, {id:'mach', name:'Тренажёры'}];
 /* что даёт оборудование «в придачу»: регулируемая скамья раскладывается в горизонтальную, на скамье с обратным наклоном можно качать пресс */
