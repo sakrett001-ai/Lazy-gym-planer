@@ -1,3 +1,4 @@
+window.PODHOD_VERSION='4.101.0';window.PODHOD_BUILD='4.101.0-597621248b3a';window.PODHOD_RENDER={"skin":"7c5712659f","skeleton":"f4e7c4b726","anatomy":"48636840a9"};window.PODHOD_LANG='en';window.PODHOD_LOCALE={"dec":".","plural":"one","dates":"intl","units":"region"};
 /* ===================== SVG-ФИГУРА: общие помощники ===================== */
 const D2R = Math.PI / 180;
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -136,10 +137,10 @@ const EQUIP = [
   {id:'abbench', name:'Ab bench', cat:'bench', hint:'inclined board with foot anchor'},
   {id:'preacher', name:'Preacher bench', cat:'bench', hint:'arm pad for biceps curls'},
   {id:'pullup', name:'Pull-up bar', cat:'bars'}, {id:'dipbars', name:'Dip bars', cat:'bars'},
-  {id:'captain', name:'Captain\'s chair', cat:'bars', hint:'forearm pads and backrest, legs hang free'},
+  {id:'captain', name:'Captain’s chair', cat:'bars', hint:'forearm pads and backrest, legs hang free'},
   {id:'cable', name:'Cable machine', cat:'mach'}, {id:'smith', name:'Smith machine', cat:'mach'}, {id:'legpress', name:'Leg press', cat:'mach'},
   {id:'legext', name:'Leg extension', cat:'mach'}, {id:'legcurl', name:'Leg curl', cat:'mach'}, {id:'pecdeck', name:'Pec deck', cat:'mach'},
-  {id:'hyper', name:'Back extension', cat:'mach'}
+  {id:'hyper', name:'Back extension bench', cat:'mach'}
 ];
 const EQUIP_CATS = [{id:'free', name:'Free weights & gear'}, {id:'bench', name:'Benches'}, {id:'bars', name:'Bar & stations'}, {id:'mach', name:'Machines'}];
 /* что даёт оборудование «в придачу»: регулируемая скамья раскладывается в горизонтальную, на скамье с обратным наклоном можно качать пресс */
@@ -172,14 +173,14 @@ const MUSCLE_GROUP = {chest:'chest', delt_f:'shoulders', delt_s:'shoulders', del
 /* ---------- упражнения ---------- */
 const EX = [
 /* ===== ГРУДЬ ===== */
-{id:'pushup', name:'Push-ups', eq:[], g:'chest', pri:['chest'], sec:['triceps', 'delt_f', 'abs', 'obliques', 'serratus'], type:'c', lvl:1,
- tech:['Hands slightly wider than shoulders, fingers pointing forward. Body in a straight line from heels to head — glutes and abs tight.',
+{id:'pushup', name:'Push-up', eq:[], g:'chest', pri:['chest'], sec:['triceps', 'delt_f', 'abs', 'obliques', 'serratus'], type:'c', lvl:1,
+ tech:['Hands slightly wider than shoulder width, fingers pointing forward. Body in a straight line from heels to head — glutes and abs tight.',
    'Lower yourself, elbows at 30–45° to your torso, until your chest is 2–3 cm from the floor.',
-   'Push the floor away and press up to full arm extension; don\'t let your shoulders sag.'],
+   'Push the floor away and press up to full arm extension; don’t let your shoulders sag.'],
  err:['Sagging lower back or hips piked up', 'Elbows flared out to 90°', 'Partial range of motion'],
  breath:'Inhale on the way down, exhale on the way up.',
  anim:{}},
-{id:'diamond', name:'Close-grip push-ups', eq:[], g:'triceps', pri:['triceps', 'chest'], sec:['delt_f', 'abs', 'serratus'], type:'c', lvl:1,
+{id:'diamond', name:'Close-grip push-up', eq:[], g:'triceps', pri:['triceps', 'chest'], sec:['delt_f', 'abs', 'serratus'], type:'c', lvl:1,
  tech:['Hands under your chest at shoulder width, fingers pointing forward.',
    'Body straight, abs and glutes tight.',
    'Lower yourself, driving your elbows back along your sides, until your chest nears your hands.',
@@ -187,7 +188,7 @@ const EX = [
  err:['Elbows flaring out', 'Sagging hips', 'Head reaching the floor before the chest'],
  breath:'Inhale down, exhale up.',
  anim:{}},
-{id:'dip', name:'Dips', eq:[['dipbars']], g:'chest', pri:['chest', 'triceps'], sec:['delt_f', 'serratus'], type:'c', lvl:2,
+{id:'dip', name:'Dip', eq:[['dipbars']], g:'chest', pri:['chest', 'triceps'], sec:['delt_f', 'serratus'], type:'c', lvl:2,
  tech:['Support yourself on the bars with straight arms, shoulders down, shoulder blades squeezed.',
    'Lean your torso forward 20–30°, legs slightly bent and crossed.',
    'Lower until your elbows reach about 90°, elbows tracking back.',
@@ -197,7 +198,7 @@ const EX = [
  anim:{}},
 {id:'bbbench', name:'Barbell bench press', eq:[['bb'], ['bench']], g:'chest', pri:['chest'], sec:['triceps', 'delt_f'], type:'c', lvl:2,
  tech:['Lie down with your eyes under the bar. Squeeze your shoulder blades into the bench, feet planted firmly.',
-   'Grip slightly wider than shoulders. Unrack the bar and bring it over your shoulders on straight arms.',
+   'Grip slightly wider than shoulder width. Unrack the bar and bring it over your shoulders on straight arms.',
    'Lower the bar to your lower chest, elbows at 45–70° to your torso.',
    'Once it touches your chest, press the bar up and slightly back toward your head.'],
  err:['Hips lifting off the bench', 'Bouncing the bar off the chest', 'Elbows flared to 90°'],
@@ -222,7 +223,7 @@ const EX = [
  anim:{}},
 {id:'smithincline', name:'Smith machine incline press', eq:[['smith'], ['incline']], g:'chest', pri:['chest', 'delt_f'], sec:['triceps'], type:'c', lvl:1,
  tech:['Set the bench at 30° so the bar comes down to your upper chest.',
-   'Grip slightly wider than shoulders, shoulder blades squeezed, feet on the floor.',
+   'Grip slightly wider than shoulder width, shoulder blades squeezed, feet on the floor.',
    'Rotate your wrists to unhook the bar and lower it to your chest.',
    'Press up without snapping your elbows straight; after the set, rotate the bar back onto the hooks.'],
  err:['Bench not aligned with the bar path', 'Shoulder blades lifting off', 'Grip too wide'],
@@ -253,14 +254,14 @@ const EX = [
  anim:{}},
 
 /* ===== СПИНА ===== */
-{id:'pullup', name:'Pull-ups', eq:[['pullup']], g:'back', pri:['lats'], sec:['biceps', 'midback', 'forearms', 'chest', 'delt_r', 'cuff'], type:'c', lvl:2,
- tech:['Overhand grip slightly wider than shoulders, hang on straight arms, shoulder blades down.',
+{id:'pullup', name:'Pull-up', eq:[['pullup']], g:'back', pri:['lats'], sec:['biceps', 'midback', 'forearms', 'chest', 'delt_r', 'cuff'], type:'c', lvl:2,
+ tech:['Overhand grip slightly wider than shoulder width, hang on straight arms, shoulder blades down.',
    'Start by pulling your shoulder blades down, then drive your elbows down toward your ribs.',
    'Pull up until your chin clears the bar.',
    'Lower under control to full arm extension.'],
  err:['Swinging and kicking the legs', 'Not going all the way down', 'Reaching with the chin instead of lifting the chest'],
  breath:'Exhale on the way up, inhale on the way down.',
- note:'If you can\'t hit the target reps, use a resistance band or slow negatives.',
+ note:'If you can’t hit the target reps, use a resistance band or slow negatives.',
  anim:{}},
 {id:'bbrow', name:'Bent-over row', eq:[['bb']], g:'back', pri:['lats', 'midback'], sec:['biceps', 'delt_r', 'lowback'], type:'c', lvl:2,
  tech:['Overhand grip at shoulder width. Knees slightly bent, torso at 30–45° to the floor, back straight.',
@@ -339,7 +340,7 @@ const EX = [
  err:['Hyperextending at the top', 'Jerky reps', 'Rounding the back at the bottom'],
  breath:'Inhale as you bend, exhale as you rise.',
  anim:{}},
-{id:'shrug', name:'Dumbbell shrugs', eq:[['db']], g:'back', pri:['traps'], sec:['forearms'], type:'i', lvl:1, imp:2, sides:'both',
+{id:'shrug', name:'Dumbbell shrug', eq:[['db']], g:'back', pri:['traps'], sec:['forearms'], type:'i', lvl:1, imp:2, sides:'both',
  tech:['Stand tall, dumbbells hanging at your sides.',
    'Raise your shoulders straight up toward your ears.',
    'Hold for 1–2 seconds and lower slowly.'],
@@ -365,36 +366,36 @@ const EX = [
  breath:'Exhale as you press, inhale as you lower.',
  anim:{}},
 {id:'ohp', name:'Overhead press', eq:[['bb']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'abs', 'traps', 'serratus'], type:'c', lvl:2,
- tech:['Grip slightly wider than shoulders, bar resting on your front delts by the collarbones, elbows slightly in front of the bar.',
+ tech:['Grip slightly wider than shoulder width, bar resting on your front delts by the collarbones, elbows slightly in front of the bar.',
    'Feet hip-width apart, glutes and abs tight.',
    'Press the bar straight up, moving your head back, then bring it back under the bar.',
    'Lock out the bar over mid-foot and lower it back to your collarbones.'],
  err:['Arching the lower back', 'Using leg drive — that makes it a push press', 'Pressing forward instead of overhead'],
  breath:'Inhale before the press, exhale once the bar passes your forehead.',
  anim:{}},
-{id:'latraise', name:'Dumbbell lateral raises', eq:[['db']], g:'shoulders', pri:['delt_s'], sec:['traps', 'delt_f'], type:'i', lvl:1, imp:2, sides:'both',
+{id:'latraise', name:'Dumbbell lateral raise', eq:[['db']], g:'shoulders', pri:['delt_s'], sec:['traps', 'delt_f'], type:'i', lvl:1, imp:2, sides:'both',
  tech:['Standing, dumbbells at your thighs, elbows slightly bent, torso leaning slightly forward.',
    'Raise your arms out to the sides to shoulder height, leading with your elbows.',
-   'Keep your hands no higher than your elbows; don\'t shrug your shoulders toward your ears.',
+   'Keep your hands no higher than your elbows; don’t shrug your shoulders toward your ears.',
    'Lower slowly.'],
  err:['Swinging the torso', 'Shrugging the shoulders to the ears', 'Dumbbells too heavy'],
  breath:'Exhale on the way up, inhale on the way down.',
  anim:{}},
-{id:'bandlatraise', name:'Resistance band lateral raises', eq:[['band']], g:'shoulders', pri:['delt_s'], sec:['traps', 'delt_f'], type:'i', lvl:1,
+{id:'bandlatraise', name:'Band lateral raise', eq:[['band']], g:'shoulders', pri:['delt_s'], sec:['traps', 'delt_f'], type:'i', lvl:1,
  tech:['Stand on the middle of the band, ends in your hands at your thighs.',
    'Raise your arms out to the sides to shoulder height, elbows slightly bent.',
    'Pause, then lower slowly without letting the band snap your arms down.'],
  err:['Shrugging the shoulders to the ears', 'Swinging the torso', 'Band too stiff'],
  breath:'Exhale on the way up, inhale on the way down.',
  anim:{}},
-{id:'frontraise', name:'Dumbbell front raises', eq:[['db']], g:'shoulders', pri:['delt_f'], sec:['delt_s', 'chest'], type:'i', lvl:1, imp:2, sides:'both',
+{id:'frontraise', name:'Dumbbell front raise', eq:[['db']], g:'shoulders', pri:['delt_f'], sec:['delt_s', 'chest'], type:'i', lvl:1, imp:2, sides:'both',
  tech:['Stand with dumbbells in front of your thighs, overhand grip.',
    'Raise your straight arms forward to shoulder height, elbows slightly bent.',
    'Pause for a second and lower under control.'],
  err:['Jerking with the torso', 'Raising above shoulder height while arching the back'],
  breath:'Exhale on the way up, inhale on the way down.',
  anim:{}},
-{id:'facepull', name:'Cable face pulls', eq:[['cable']], g:'shoulders', pri:['delt_r', 'midback'], sec:['traps', 'cuff'], type:'i', lvl:1,
+{id:'facepull', name:'Cable face pull', eq:[['cable']], g:'shoulders', pri:['delt_r', 'midback'], sec:['traps', 'cuff'], type:'i', lvl:1,
  tech:['Set the pulley at forehead height, grab the rope with an overhand grip and step back.',
    'Pull the rope toward your face, spreading its ends apart and driving your elbows high and wide.',
    'At the end point, hands are by your ears and shoulder blades squeezed together.',
@@ -402,7 +403,7 @@ const EX = [
  err:['Elbows below the hands', 'Leaning the torso back', 'Shrugging the shoulders'],
  breath:'Exhale as you pull, inhale on the return.',
  anim:{}},
-{id:'pikepush', name:'Pike push-ups', eq:[], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'traps'], type:'c', lvl:2,
+{id:'pikepush', name:'Pike push-up', eq:[], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'traps'], type:'c', lvl:2,
  tech:['From a push-up position, lift your hips up: your body forms an upside-down V, hands shoulder-width apart.',
    'Lower your head between your hands toward the floor, bending your elbows back.',
    'Nearly touch the floor with the top of your head, then press yourself back up.'],
@@ -425,14 +426,14 @@ const EX = [
  err:['Cheating with the torso', 'Elbows drifting forward', 'Not fully extending at the bottom'],
  breath:'Exhale on the way up, inhale on the way down.',
  anim:{}},
-{id:'hammer', name:'Hammer curls', eq:[['db']], g:'biceps', pri:['biceps', 'forearms'], sec:[], type:'i', lvl:1, imp:2, sides:'both',
+{id:'hammer', name:'Hammer curl', eq:[['db']], g:'biceps', pri:['biceps', 'forearms'], sec:[], type:'i', lvl:1, imp:2, sides:'both',
  tech:['Hold dumbbells with palms facing each other.',
    'Curl while keeping a neutral grip; elbows close to your body.',
    'Lower slowly until your arms are straight.'],
  err:['Cheating with the torso', 'Moving the elbows forward'],
  breath:'Exhale on the way up, inhale on the way down.',
  anim:{}},
-{id:'cablecurl', name:'Low-pulley cable curl', eq:[['cable']], g:'biceps', pri:['biceps'], sec:['forearms'], type:'i', lvl:1,
+{id:'cablecurl', name:'Cable curl', eq:[['cable']], g:'biceps', pri:['biceps'], sec:['forearms'], type:'i', lvl:1,
  tech:['Face the machine, holding a straight bar with an underhand grip.',
    'Elbows at your sides, curl up to chest level.',
    'Pause and extend smoothly.'],
@@ -455,7 +456,7 @@ const EX = [
  err:['Elbows drifting forward', 'Swinging the torso'],
  breath:'Exhale as you curl, inhale as you lower.',
  anim:{}},
-{id:'chinup', name:'Chin-ups', eq:[['pullup']], g:'biceps', pri:['biceps', 'lats'], sec:['forearms', 'midback', 'chest', 'delt_r', 'cuff'], type:'c', lvl:2,
+{id:'chinup', name:'Chin-up', eq:[['pullup']], g:'biceps', pri:['biceps', 'lats'], sec:['forearms', 'midback', 'chest', 'delt_r', 'cuff'], type:'c', lvl:2,
  tech:['Underhand grip at shoulder width, hang with straight arms.',
    'Drive your elbows down to your sides, pulling your chest toward the bar.',
    'Get your chin over the bar, then lower slowly until your arms are straight.'],
@@ -495,7 +496,7 @@ const EX = [
  err:['Elbows drifting forward', 'Leaning the torso instead of working the arms'],
  breath:'Exhale as you extend, inhale as you return.',
  anim:{}},
-{id:'benchdip', name:'Bench dips', eq:[['bench']], g:'triceps', pri:['triceps'], sec:['chest', 'delt_f'], type:'c', lvl:1,
+{id:'benchdip', name:'Bench dip', eq:[['bench']], g:'triceps', pri:['triceps'], sec:['chest', 'delt_f'], type:'c', lvl:1,
  tech:['Sit on the edge of a bench, hands next to your hips, fingers forward. Slide your hips forward off the bench.',
    'Bent legs make it easier, straight legs make it harder.',
    'Lower yourself, bending your elbows back to 90°.',
@@ -520,12 +521,12 @@ const EX = [
  err:['Lifting the forearms off the thighs', 'Too much weight and jerky reps'],
  breath:'Breathe steadily, exhale on the way up.',
  anim:{}},
-{id:'farmer', name:'Farmer\'s carry', nameV:{kb:'Kettlebell farmer\'s carry'}, eq:[['db', 'kb']], g:'forearms', pri:['forearms', 'traps'], sec:['abs', 'glutes', 'obliques', 'lowback', 'lats'], type:'c', lvl:1, imp:2, sides:'both', kind:'dist',
+{id:'farmer', name:'Farmer’s carry', nameV:{kb:'Kettlebell farmer’s carry'}, eq:[['db', 'kb']], g:'forearms', pri:['forearms', 'traps'], sec:['abs', 'glutes', 'obliques', 'lowback', 'lats'], type:'c', lvl:1, imp:2, sides:'both', kind:'dist',
  tech:['Pick up heavy dumbbells or kettlebells and stand tall, shoulders down and back.',
    'Walk with short, quick steps, keeping your torso upright.',
-   'Don\'t let the weight sway your torso. Set the weights down by squatting, not bending over.'],
+   'Don’t let the weight sway your torso. Set the weights down by squatting, not bending over.'],
  err:['Slouching', 'Leaning to one side', 'Long, swaying steps'],
- breath:'Breathe steadily, don\'t hold your breath.',
+ breath:'Breathe steadily, don’t hold your breath.',
  note:'The mannequin walks in place, as on a treadmill. In the gym, walk forward in a straight line for the set distance or time.',
  /* объёмная поза — tools/mannequin/exercises/g2-dumbbell.js (WALK); цикл из двух шагов */
  anim:{period:1400}},
@@ -538,7 +539,7 @@ const EX = [
  anim:{}},
 
 /* ===== ПРЕСС ===== */
-{id:'crunch', name:'Crunches', eq:[], g:'abs', pri:['abs'], sec:['obliques'], type:'i', lvl:1,
+{id:'crunch', name:'Crunch', eq:[], g:'abs', pri:['abs'], sec:['obliques'], type:'i', lvl:1,
  tech:['Lie on your back, knees bent, feet on the floor, arms crossed over your chest.',
    'Curl up, lifting your shoulder blades off the floor and bringing your ribs toward your pelvis.',
    'Keep your lower back pressed to the floor. Pause and lower slowly.'],
@@ -550,7 +551,7 @@ const EX = [
    'Squeeze your glutes and abs, draw your ribs toward your pelvis.',
    'Hold the position, breathing steadily.'],
  err:['Sagging lower back', 'Hips raised too high', 'Holding your breath'],
- breath:'Calm belly breathing, don\'t hold your breath.',
+ breath:'Calm belly breathing, don’t hold your breath.',
  anim:{}},
 {id:'sideplank', name:'Side plank', eq:[], g:'abs', pri:['obliques'], sec:['abs', 'glutes', 'lowback'], type:'i', lvl:1, kind:'time', uni:true,
  tech:['Lie on your side, propped on your forearm, elbow under your shoulder, legs together.',
@@ -559,21 +560,21 @@ const EX = [
  err:['Sagging hips', 'Shoulder creeping toward the ear', 'Torso rotating forward'],
  breath:'Breathe steadily.',
  anim:{}},
-{id:'legraise', name:'Hanging leg raises', eq:[['pullup']], g:'abs', pri:['abs', 'hipflex'], sec:['obliques', 'forearms', 'quads', 'lats'], type:'i', lvl:3,
+{id:'legraise', name:'Hanging leg raise', eq:[['pullup']], g:'abs', pri:['abs', 'hipflex'], sec:['obliques', 'forearms', 'quads', 'lats'], type:'i', lvl:3,
  tech:['Hang from the bar, shoulder blades down, torso still.',
    'Raise straight or bent legs to horizontal or higher, tilting your pelvis up.',
    'Lower slowly without swinging.'],
  err:['Swinging like a pendulum', 'Lifting with only the hip flexors, without tilting the pelvis'],
  breath:'Exhale as you raise your legs, inhale as you lower.',
  anim:{}},
-{id:'lyinglegraise', name:'Lying leg raises', eq:[], g:'abs', pri:['abs', 'hipflex'], sec:['obliques', 'quads'], type:'i', lvl:1,
+{id:'lyinglegraise', name:'Lying leg raise', eq:[], g:'abs', pri:['abs', 'hipflex'], sec:['obliques', 'quads'], type:'i', lvl:1,
  tech:['Lie on your back, arms at your sides, lower back pressed to the floor.',
    'Raise your straight legs to vertical; at the top, lift your hips slightly off the floor.',
    'Lower your legs slowly without touching the floor with your heels.'],
  err:['Arching the lower back while lowering', 'Jerky reps'],
  breath:'Exhale on the way up, inhale on the way down.',
  anim:{}},
-{id:'cablecrunch', name:'Kneeling cable crunches', eq:[['cable']], g:'abs', pri:['abs'], sec:['obliques'], type:'i', lvl:1,
+{id:'cablecrunch', name:'Kneeling cable crunch', eq:[['cable']], g:'abs', pri:['abs'], sec:['obliques'], type:'i', lvl:1,
  tech:['Kneel facing the high pulley, hands holding the rope ends by your temples.',
    'Keep your hips still. Crunch down, bringing your elbows toward your thighs.',
    'Return up while keeping tension in your abs.'],
@@ -639,16 +640,16 @@ const EX = [
  anim:{}},
 {id:'kbfrontsquat', name:'Kettlebell front squat', eq:[['kb']], g:'quads', pri:['quads', 'glutes'], sec:['abs', 'obliques', 'lowback', 'hams', 'adductors'], type:'c', lvl:2, uni:true, imp:1, sides:'one',
  tech:['The kettlebell is racked on one arm: fist under the chin, wrist straight, elbow by the ribs. The free arm reaches out to the side for balance.',
-   'Feet slightly wider than shoulders, toes turned out a little. Squat by lowering the hips between the knees; keep the torso upright.',
+   'Feet slightly wider than shoulder width, toes turned out a little. Squat by lowering the hips between the knees; keep the torso upright.',
    'Go down until the thighs are below parallel if the back stays straight. The kettlebell must not pull the torso sideways.',
    'Stand up, pushing through the whole foot. Move the kettlebell to the other hand after the set.'],
- err:['Leaning the torso towards the kettlebell', 'Elbow resting on the knee', 'Knees caving in', 'Heels lifting off'],
+ err:['Leaning the torso toward the kettlebell', 'Elbow resting on the knee', 'Knees caving in', 'Heels lifting off'],
  breath:'Inhale down, exhale up.',
  anim:{}},
 {id:'kbrow', name:'One-arm bent-over kettlebell row', eq:[['kb']], g:'back', pri:['lats', 'midback'], sec:['biceps', 'delt_r', 'lowback', 'forearms'], type:'c', lvl:1, uni:true, imp:1, sides:'one',
  tech:['Step forward with the leg opposite the working arm. Hinge at the hips with a straight back, the free palm resting on the thigh.',
    'The kettlebell hangs under the shoulder on a straight arm.',
-   'Pull the kettlebell to the waist, driving the elbow back along the torso; the shoulder blade moves towards the spine.',
+   'Pull the kettlebell to the waist, driving the elbow back along the torso; the shoulder blade moves toward the spine.',
    'Lower the kettlebell until the arm is fully straight. Switch sides after the set.'],
  err:['Twisting the torso', 'Curling it to the chest with the biceps', 'Rounding the back', 'Jerking with the torso'],
  breath:'Exhale as you pull, inhale as you lower.',
@@ -682,8 +683,8 @@ const EX = [
  anim:{}},
 {id:'kbwindmill', name:'Kettlebell windmill', eq:[['kb']], g:'abs', pri:['obliques'], sec:['glutes', 'hams', 'delt_s', 'cuff', 'lowback'], type:'c', lvl:3, uni:true, imp:1, sides:'one',
  tech:['The kettlebell is overhead on a straight arm. Feet wider than shoulders, toes turned 45° away from the kettlebell.',
-   'Keep your eyes on the kettlebell. Push the hips back and towards the kettlebell side and hinge with a straight back towards the opposite leg.',
-   'The free hand slides down the leg to the shin. The kettlebell arm stays vertical, the chest turns towards the kettlebell.',
+   'Keep your eyes on the kettlebell. Push the hips back and toward the kettlebell side and hinge with a straight back toward the opposite leg.',
+   'The free hand slides down the leg to the shin. The kettlebell arm stays vertical, the chest turns toward the kettlebell.',
    'Return by extending the hips. Switch sides after the set.'],
  err:['Rounding the back instead of hinging at the hips', 'The kettlebell arm drifting off vertical', 'Bending the knee under the kettlebell', 'Looking at the floor'],
  breath:'Inhale as you bend, exhale as you rise.',
@@ -720,7 +721,7 @@ const EX = [
  err:['Stance too short', 'Knee caving in', 'Pushing off the back leg'],
  breath:'Inhale down, exhale up.',
  anim:{}},
-{id:'stepup', name:'Step-ups', eq:[['bench']], opt:['db'], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:1, uni:true, imp:2, sides:'one',
+{id:'stepup', name:'Step-up', eq:[['bench']], opt:['db'], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:1, uni:true, imp:2, sides:'one',
  tech:['Place one foot on a bench or a stable box no higher than knee height.',
    'Shift your weight onto that leg and step up until it is fully straight.',
    'Step down under control with the same leg.'],
@@ -738,7 +739,7 @@ const EX = [
 
 /* ===== КВАДРИЦЕПС ===== */
 {id:'squat', name:'Barbell squat', eq:[['bb']], g:'quads', pri:['quads', 'glutes'], sec:['lowback', 'hams', 'abs', 'adductors'], type:'c', lvl:2,
- tech:['Bar on your traps, feet slightly wider than shoulders, toes turned out a little.',
+ tech:['Bar on your traps, feet slightly wider than shoulder width, toes turned out a little.',
    'Inhale and brace your abs. Descend by bending your knees and pushing your hips back at the same time.',
    'Knees track over your toes, back neutral.',
    'Lower until your thighs are parallel to the floor or below, then stand up, pushing through your whole foot.'],
@@ -747,8 +748,8 @@ const EX = [
  note:'Train in a power rack with the safety bars set.',
  anim:{}},
 {id:'goblet', name:'Goblet squat', nameV:{kb:'Kettlebell goblet squat'}, eq:[['db', 'kb']], g:'quads', pri:['quads', 'glutes'], sec:['abs', 'lowback', 'hams', 'adductors'], type:'c', lvl:1, imp:1, sides:'both',
- tech:['Hold a dumbbell vertically at your chest with both palms under the top head (or a kettlebell by the horns), elbows pointing down.',
-   'Feet slightly wider than shoulders. Squat down, dropping your hips between your knees; keep your torso upright.',
+ tech:['Hold a dumbbell vertically at your chest, cupping its top end with both palms (or hold a kettlebell by the horns), elbows pointing down.',
+   'Feet slightly wider than shoulder width. Squat down, dropping your hips between your knees; keep your torso upright.',
    'Go as low as you can with a straight back, then stand up.'],
  err:['Leaning the torso forward', 'Knees caving in', 'Heels lifting off'],
  breath:'Inhale down, exhale up.',
@@ -837,7 +838,7 @@ EX.push(
 /* ===== ГРУДЬ ===== */
 {id:'inclinebb', name:'Incline barbell bench press', eq:[['bb'], ['incline']], g:'chest', pri:['chest', 'delt_f'], sec:['triceps'], type:'c', lvl:2,
  tech:['Set the backrest to 30–45° and lie so the bar is above your eyes. Shoulder blades squeezed, feet on the floor.',
-   'Grip slightly wider than shoulders. Unrack the bar and bring it over your upper chest.',
+   'Grip slightly wider than shoulder width. Unrack the bar and bring it over your upper chest.',
    'Lower the bar to your upper chest just below the collarbones, elbows at 45–60° to your torso.',
    'Press the bar up in a vertical path.'],
  err:['Hips and shoulder blades lifting off the bench', 'Backrest too steep — mostly the shoulders work', 'Bouncing the bar off the chest'],
@@ -846,12 +847,12 @@ EX.push(
  anim:{}},
 {id:'declinebb', name:'Decline barbell bench press', eq:[['bb'], ['decline']], g:'chest', pri:['chest'], sec:['triceps', 'delt_f'], type:'c', lvl:2,
  tech:['Lock your legs under the rollers and lie so the bar is above your eyes. Bench decline 15–30°.',
-   'Squeeze your shoulder blades, grip slightly wider than shoulders. Unrack the bar with a spotter.',
+   'Squeeze your shoulder blades, grip slightly wider than shoulder width. Unrack the bar with a spotter.',
    'Lower the bar to your lower chest, elbows at 45–60° to your torso.',
    'Press the bar up and slightly toward your head.'],
  err:['Grip too wide', 'Bouncing the bar off the chest', 'Training without a spotter: unracking and racking the bar head-down is awkward'],
  breath:'Inhale as you lower, exhale as you press.',
- note:'Don\'t stay head-down between sets. If you have high blood pressure, replace this exercise with a flat bench press.',
+ note:'Don’t stay head-down between sets. If you have high blood pressure, replace this exercise with a flat bench press.',
  anim:{}},
 {id:'closegrip', name:'Close-grip bench press', eq:[['bb'], ['bench']], g:'triceps', pri:['triceps', 'chest'], sec:['delt_f'], type:'c', lvl:2,
  tech:['Lie on the bench, grip at shoulder width or slightly narrower, thumbs wrapped around the bar.',
@@ -868,8 +869,8 @@ EX.push(
  err:['Bending the elbows — it turns into a lying triceps extension', 'Going too deep with shoulder pain', 'Arching the lower back'],
  breath:'Inhale as you lower, exhale as you return.',
  anim:{}},
-{id:'declinepush', name:'Decline push-ups (feet on bench)', eq:[['bench']], g:'chest', pri:['chest', 'delt_f'], sec:['triceps', 'abs', 'serratus'], type:'c', lvl:2,
- tech:['Place your toes on the bench, hands on the floor slightly wider than shoulders. Body in a straight line.',
+{id:'declinepush', name:'Decline push-up (feet on bench)', eq:[['bench']], g:'chest', pri:['chest', 'delt_f'], sec:['triceps', 'abs', 'serratus'], type:'c', lvl:2,
+ tech:['Place your toes on the bench, hands on the floor slightly wider than shoulder width. Body in a straight line.',
    'Lower until your chest almost touches the floor; elbows at 30–45° to your torso.',
    'Push yourself up without sagging in the lower back.'],
  err:['Sagging lower back', 'Head reaching the floor before the chest', 'Partial range of motion'],
@@ -877,8 +878,8 @@ EX.push(
  anim:{}},
 
 /* ===== СПИНА ===== */
-{id:'invrow', name:'Inverted rows', eq:[['smith', 'pullup']], g:'back', pri:['midback', 'lats'], sec:['biceps', 'delt_r', 'lowback'], type:'c', lvl:1,
- tech:['Set a bar or low rail at waist height. Grab it overhand slightly wider than shoulders and lie under it, heels on the floor.',
+{id:'invrow', name:'Inverted row', eq:[['smith', 'pullup']], g:'back', pri:['midback', 'lats'], sec:['biceps', 'delt_r', 'lowback'], type:'c', lvl:1,
+ tech:['Set a bar or low rail at waist height. Grab it overhand slightly wider than shoulder width and lie under it, heels on the floor.',
    'Body in a straight line, glutes and abs tight.',
    'Pull your chest to the bar, squeezing your shoulder blades and driving your elbows back.',
    'Lower to straight arms.'],
@@ -910,7 +911,7 @@ EX.push(
  err:['Arching the lower back', 'Rotating the wrists abruptly without control', 'Heavy dumbbells at the expense of range of motion'],
  breath:'Exhale as you press, inhale as you lower.',
  anim:{noVectors:true}},
-{id:'cablelat', name:'Low-pulley lateral raise', eq:[['cable']], g:'shoulders', pri:['delt_s'], sec:['traps', 'delt_f'], type:'i', lvl:1, uni:true,
+{id:'cablelat', name:'Cable lateral raise', eq:[['cable']], g:'shoulders', pri:['delt_s'], sec:['traps', 'delt_f'], type:'i', lvl:1, uni:true,
  tech:['Stand sideways to the cable, handle in the hand farther from the machine, hold the frame with your other hand.',
    'Raise your arm out to the side to shoulder height, elbow slightly bent.',
    'Slowly lower your arm, keeping tension on the cable. Then switch sides.'],
@@ -961,7 +962,7 @@ EX.push(
  breath:'Exhale as you curl, inhale as you lower.',
  anim:{}},
 {id:'inclinecurl', name:'Incline dumbbell curl', eq:[['db'], ['incline']], g:'biceps', pri:['biceps'], sec:['forearms'], type:'i', lvl:1, imp:2, sides:'both',
- tech:['Set the backrest to 45–60°, sit down and press your back into it. Dumbbells hang at arm\'s length, palms forward.',
+ tech:['Set the backrest to 45–60°, sit down and press your back into it. Dumbbells hang at arm’s length, palms forward.',
    'Curl the weights without bringing your elbows forward.',
    'Lower slowly to full extension, feeling the stretch in your biceps.'],
  err:['Elbows drifting forward', 'Back and shoulders lifting off the backrest', 'Not fully extending at the bottom'],
@@ -985,7 +986,7 @@ EX.push(
  anim:{}},
 
 /* ===== ПРЕСС ===== */
-{id:'declinecrunch', name:'Ab bench crunches', eq:[['abbench', 'decline']], g:'abs', pri:['abs'], sec:['obliques', 'hipflex'], type:'i', lvl:1,
+{id:'declinecrunch', name:'Ab bench crunch', eq:[['abbench', 'decline']], g:'abs', pri:['abs'], sec:['obliques', 'hipflex'], type:'i', lvl:1,
  tech:['Lock your feet under the rollers, lie on the incline bench, arms crossed over your chest.',
    'Crunch up, lifting your shoulder blades and bringing your ribs toward your pelvis, to about 45° from the bench.',
    'Lower slowly without resting your shoulder blades on the bench to keep the tension.'],
@@ -993,8 +994,8 @@ EX.push(
  breath:'Exhale as you crunch, inhale as you lower.',
  note:'The steeper the incline, the harder it gets. To progress, hold a plate at your chest.',
  anim:{}},
-{id:'captainraise', name:'Captain\'s chair knee raise', eq:[['captain']], g:'abs', pri:['abs', 'obliques', 'hipflex'], sec:[], type:'i', lvl:1,
- tech:['Get into the captain\'s chair: back against the pad, forearms on the supports, legs hanging.',
+{id:'captainraise', name:'Captain’s chair knee raise', eq:[['captain']], g:'abs', pri:['abs', 'obliques', 'hipflex'], sec:[], type:'i', lvl:1,
+ tech:['Get into the captain’s chair: back against the pad, forearms on the supports, legs hanging.',
    'Raise your knees to your chest, tilting your pelvis slightly forward.',
    'Lower your legs slowly without swinging.'],
  err:['Swinging and dropping the legs', 'Lower back lifting off the pad', 'Shoulders shrugging up to the ears'],
@@ -1022,12 +1023,12 @@ EX.push(
  tech:['Stand tall, dumbbell in one hand, other hand behind your head.',
    'Bend sideways toward the dumbbell without tipping forward or back.',
    'Return upright by contracting the obliques on the opposite side. Then switch sides.'],
- err:['Leaning forward', 'Jerky reps', 'Dumbbells in both hands: the load balances out and the obliques don\'t work'],
+ err:['Leaning forward', 'Jerky reps', 'Dumbbells in both hands: the load balances out and the obliques don’t work'],
  breath:'Inhale as you bend, exhale as you return.',
  anim:{}},
 
 /* ===== ЯГОДИЦЫ ===== */
-{id:'glutekick', name:'Cable kickback (low pulley)', eq:[['cable']], g:'glutes', pri:['glutes'], sec:['hams'], type:'i', lvl:1, uni:true,
+{id:'glutekick', name:'Cable glute kickback', eq:[['cable']], g:'glutes', pri:['glutes'], sec:['hams'], type:'i', lvl:1, uni:true,
  tech:['Attach the cuff to your ankle, face the machine and hold the frame.',
    'Lean your torso slightly forward, keep the standing knee soft.',
    'Kick your leg back until your hip is fully extended, squeezing the glute.',
@@ -1059,7 +1060,7 @@ EX.push(
    'Slowly return your arms up without letting the band jerk them.'],
  err:['Leaning back instead of working the back', 'Shoulders shrugging up to the ears', 'Letting the arms snap back up', 'Band slack at the top'],
  breath:'Exhale as you pull down, inhale on the return.',
- note:'A home twin of the lat pulldown. The farther from the door, the tighter the band; resistance grows toward the end of the pull.',
+ note:'A home alternative to the lat pulldown. The farther from the door, the tighter the band; resistance grows toward the end of the pull.',
  anim:{}},
 {id:'bandlegext', name:'Seated band leg extension', eq:[['band']], g:'quads', pri:['quads'], sec:[], type:'i', lvl:1, uni:true,
  tech:['Anchor the middle of the band at the bottom of the door and clip both ends to an ankle strap. Sit on a chair with your back to the door, far enough for the band to be taut with the knee bent.',
@@ -1068,7 +1069,7 @@ EX.push(
    'Slowly bend the knee back to a right angle without letting the band jerk the leg. Then switch sides.'],
  err:['Thigh lifting off the seat', 'Jerking and dropping the leg', 'Leaning the torso forward'],
  breath:'Exhale as you straighten, inhale as you bend.',
- note:'A home twin of the leg extension machine. The band loads most near a straight knee, the machine closer to a bent one; in the lifting phase the quadriceps work about the same.',
+ note:'A home alternative to the leg extension machine. The band loads most near a straight knee, the machine closer to a bent one; in the lifting phase the quadriceps work about the same.',
  anim:{}},
 {id:'bandadduct', name:'Band hip adduction', eq:[['band']], g:'quads', pri:['adductors'], sec:['obliques'], type:'i', lvl:1, uni:true,
  tech:['Anchor the middle of the band at the bottom of the door and clip both ends to an ankle strap on the leg nearer the door.',
@@ -1113,7 +1114,7 @@ EX.push(
    'Slowly lower your arms until your upper arms touch the floor, without letting the band jerk them.'],
  err:['Elbows flared to 90° from the torso', 'Band slipping off the back', 'Jerking up and dropping down', 'Wrists bending back'],
  breath:'Exhale as you press, inhale as you lower.',
- note:'A home twin of the bench press. The floor limits the depth, as in a floor press; the band pulls harder toward the top.',
+ note:'A home alternative to the bench press. The floor limits the depth, as in a floor press; the band pulls harder toward the top.',
  anim:{}},
 {id:'bandfly', name:'Band chest fly at the door', eq:[['band']], g:'chest', pri:['chest'], sec:['delt_f'], type:'i', lvl:1,
  tech:['Anchor the middle of the band in the door at chest height. Stand with your back to the door and step forward, one foot ahead of the other.',
@@ -1122,7 +1123,7 @@ EX.push(
    'Slowly open your arms until you feel a light chest stretch.'],
  err:['Bending and straightening the elbows — the fly turns into a press', 'Torso rocking forward', 'Arms going behind the shoulder line, the band jerking them back'],
  breath:'Exhale as you bring them together, inhale as you open.',
- note:'A twin of the cable crossover. When the hands meet, the band runs under the armpits along your sides — that is expected.',
+ note:'An alternative to the cable crossover. When the hands meet, the band runs under the armpits along your sides — that is expected.',
  anim:{}},
 {id:'sissysquat', name:'Door-frame assisted sissy squat', eq:[], g:'quads', pri:['quads'], sec:['hipflex', 'abs', 'calves'], type:'i', lvl:2,
  tech:['Stand side-on to a doorway, feet hip-width apart. Hold the edge of the doorway with the nearer hand and rest the other hand on your chest.',
@@ -1131,39 +1132,39 @@ EX.push(
    'Lower to a comfortable depth and straighten your knees to come back up. The hand on the frame steadies you, it does not pull.'],
  err:['Bending at the hips — the pelvis moving back as in a regular squat', 'Heels dropping to the floor', 'Pulling with the arm instead of working the legs', 'Going deeper than the knee allows'],
  breath:'Inhale on the way down, exhale on the way up.',
- note:'An equipment-free twin of the leg extension machine. Holding on lets you choose the depth: start with shallow reps and go lower gradually; if your knee hurts, stop higher.',
+ note:'An equipment-free alternative to the leg extension machine. Holding on lets you choose the depth: start with shallow reps and go lower gradually; if your knee hurts, stop higher.',
  anim:{}},
 
 /* ===== КАРДИО ===== */
-{id:'jumpingjack', name:'Jumping jacks', eq:[], g:'cardio', pri:['calves', 'delt_s'], sec:['quads', 'glutes'], type:'c', lvl:1, kind:'time',
+{id:'jumpingjack', name:'Jumping jack', eq:[], g:'cardio', pri:['calves', 'delt_s'], sec:['quads', 'glutes'], type:'c', lvl:1, kind:'time',
  tech:['Stand tall, arms at your sides.',
    'Jump your feet wider than shoulders and raise your arms out to the sides overhead.',
    'Jump back to the start position. Land softly on the balls of your feet.'],
  err:['Landing on straight legs and heels', 'Holding your breath'],
  breath:'Breathe rhythmically with the pace of the jumps.',
  anim:{period:1600, noVectors:true}},
-{id:'burpee', name:'Burpees', eq:[], g:'cardio', pri:['quads', 'chest', 'delt_f'], sec:['glutes', 'triceps', 'abs'], type:'c', lvl:2,
+{id:'burpee', name:'Burpee', eq:[], g:'cardio', pri:['quads', 'chest', 'delt_f'], sec:['glutes', 'triceps', 'abs'], type:'c', lvl:2,
  tech:['From standing, squat down and place your palms on the floor.',
    'Jump your feet back into a high plank; add a push-up if you like.',
    'Jump your feet back to your hands and jump up, reaching your arms overhead.'],
  err:['Sagging lower back in the plank', 'Landing on straight legs', 'Long pauses between phases'],
  breath:'Exhale as you jump up and as you push off the floor.',
  anim:{period:4600, noVectors:true}},
-{id:'mountain', name:'Mountain climbers', eq:[], g:'cardio', pri:['abs', 'quads'], sec:['delt_f', 'chest', 'hipflex'], type:'c', lvl:1, kind:'time',
+{id:'mountain', name:'Mountain climber', eq:[], g:'cardio', pri:['abs', 'quads'], sec:['delt_f', 'chest', 'hipflex'], type:'c', lvl:1, kind:'time',
  tech:['Get into a high plank on straight arms, palms under shoulders.',
    'Quickly drive your knees to your chest one at a time, keeping hips level with shoulders.',
-   'Breathe rhythmically, don\'t hike your hips up.'],
+   'Breathe rhythmically, don’t hike your hips up.'],
  err:['Hips rise up', 'Shoulders drift back from the hands', 'Short range of the steps'],
  breath:'Rhythmic breathing, no breath-holding.',
  anim:{period:1400}},
-{id:'jumpsquat', name:'Jump squats', eq:[], g:'cardio', pri:['quads', 'glutes', 'calves'], sec:['hams'], type:'c', lvl:2,
+{id:'jumpsquat', name:'Jump squat', eq:[], g:'cardio', pri:['quads', 'glutes', 'calves'], sec:['hams'], type:'c', lvl:2,
  tech:['Feet shoulder-width apart. Squat to parallel or slightly above, swinging your arms back.',
    'Jump up explosively, using an arm swing.',
    'Land softly on the balls of your feet, roll onto the whole foot and drop straight into the next squat.'],
  err:['Landing on straight legs', 'Knees cave in on landing', 'Squatting without controlling depth'],
  breath:'Exhale as you jump, inhale as you squat.',
  anim:{period:2200, noVectors:true}},
-{id:'thruster', name:'Dumbbell thrusters', eq:[['db']], g:'cardio', pri:['quads', 'glutes', 'delt_f'], sec:['triceps', 'abs', 'delt_s'], type:'c', lvl:2, imp:2, sides:'both',
+{id:'thruster', name:'Dumbbell thruster', eq:[['db']], g:'cardio', pri:['quads', 'glutes', 'delt_f'], sec:['triceps', 'abs', 'delt_s'], type:'c', lvl:2, imp:2, sides:'both',
  tech:['Dumbbells at your shoulders, elbows pointing forward. Feet shoulder-width apart.',
    'Squat to parallel, keeping your torso upright.',
    'Drive up powerfully and press the dumbbells overhead in one fluid motion.',
@@ -1182,16 +1183,16 @@ const eccFirst = new Set('pushup diamond dip bbbench dbbench dbincline smithincl
 const isometric = new Set(['plank','sideplank','hang']);
 const MOTION_CUES = {
   bbrow:['Elbows drive the weight toward your waist. Keep your torso still.','Lower the bar under control, gradually straightening your arms.'],
-  dbrow:['Drive your elbow back. Don\'t rotate your hips or chest.','Return the dumbbell under your shoulder. Keep your support on the bench.'],
+  dbrow:['Drive your elbow back. Don’t rotate your hips or chest.','Return the dumbbell under your shoulder. Keep your support on the bench.'],
   cablerow:['Pull the handle to your stomach, drive your elbows back.','Straighten your arms with control, keep your torso position.'],
   bandrow:['Bend your elbows and pull the band to your waist.','Return your arms forward without jerking or swinging your torso.'],
-  kbswing:['The hip extension drives the kettlebell. Arms stay long.','Meet the kettlebell by pushing your hips back; don\'t squat after it.'],
+  kbswing:['The hip extension drives the kettlebell. Arms stay long.','Meet the kettlebell by pushing your hips back; don’t squat after it.'],
   deadlift:['Push the floor away with your legs. Arms straight, bar travels along your legs.','Push your hips back first, then bend your knees.'],
   rdl:['Hips back, knees soft. Arms hold the weight without bending.','Extend your hips, keeping your back controlled and arms straight.'],
-  crunch:['Bring your ribs toward your pelvis, gradually lifting your shoulder blades.','Uncurl your chest back down, don\'t drop to the floor.'],
-  declinecrunch:['Curl your chest toward your pelvis; don\'t sit all the way up.','Return smoothly to the bench, keeping your torso controlled.'],
+  crunch:['Bring your ribs toward your pelvis, gradually lifting your shoulder blades.','Uncurl your chest back down, don’t drop to the floor.'],
+  declinecrunch:['Curl your chest toward your pelvis; don’t sit all the way up.','Return smoothly to the bench, keeping your torso controlled.'],
   latraise:['Lead with your elbows out to the sides up to shoulder height.','Lower your arms in an arc, without swinging.'],
-  bandlatraise:['Raise your elbows out to the sides; don\'t shrug toward your ears.','Release the band tension smoothly.'],
+  bandlatraise:['Raise your elbows out to the sides; don’t shrug toward your ears.','Release the band tension smoothly.'],
   dbpress:['Press the dumbbells overhead without help from your lower back.','Lower the dumbbells under control to the start position.'],
   pullup:['Pull your body to the fixed bar, driving your elbows down.','Lower with control; keep your grip.'],
   chinup:['Pull your body up to the bar without swinging.','Straighten your arms smoothly, keeping your grip.'],
@@ -1207,32 +1208,32 @@ for (const ex of EX) {
 /* ===================== СОБСТВЕННЫЙ ВЕС 3.7 ===================== */
 EX.push(
 /* --- отжимания: лестница сложности --- */
-{id:'wallpush', name:'Wall push-ups', eq:[], g:'chest', pri:['chest'], sec:['triceps', 'delt_f', 'serratus'], type:'c', lvl:1,
- tech:['Stand a step from the wall, palms on the wall at shoulder height, slightly wider than shoulders.', 'Bend your elbows, bringing your chest to the wall; body straight, heels down.', 'Push back to straight arms.'],
+{id:'wallpush', name:'Wall push-up', eq:[], g:'chest', pri:['chest'], sec:['triceps', 'delt_f', 'serratus'], type:'c', lvl:1,
+ tech:['Stand a step from the wall, palms on the wall at shoulder height, slightly wider than shoulder width.', 'Bend your elbows, bringing your chest to the wall; body straight, heels down.', 'Push back to straight arms.'],
  err:['Arching the lower back', 'Elbows flared to 90°', 'Too close to the wall: no load'],
  breath:'Inhale toward the wall, exhale away from it.',
  anim:{}},
-{id:'inclinepush', name:'Incline push-ups', eq:[['bench']], g:'chest', pri:['chest'], sec:['triceps', 'delt_f', 'serratus'], type:'c', lvl:1,
- tech:['Palms on a bench or stable surface slightly wider than shoulders, body straight from heels to crown.', 'Lower your chest to the bench edge, elbows at 45° to your body.', 'Press yourself up to straight arms.'],
+{id:'inclinepush', name:'Incline push-up', eq:[['bench']], g:'chest', pri:['chest'], sec:['triceps', 'delt_f', 'serratus'], type:'c', lvl:1,
+ tech:['Palms on a bench or stable surface slightly wider than shoulder width, body straight from heels to crown.', 'Lower your chest to the bench edge, elbows at 45° to your body.', 'Press yourself up to straight arms.'],
  err:['Sagging hips', 'Head drops before the chest', 'Partial range of motion'],
  breath:'Inhale down, exhale up.',
  anim:{}},
-{id:'kneepush', name:'Knee push-ups', eq:[], g:'chest', pri:['chest'], sec:['triceps', 'delt_f', 'serratus'], type:'c', lvl:1,
- tech:['Weight on palms and knees, shins can be crossed. Straight line from knees to crown, hips don\'t sit back.', 'Lower your chest to the floor, elbows at 45° to your body.', 'Press up to straight arms.'],
+{id:'kneepush', name:'Knee push-up', eq:[], g:'chest', pri:['chest'], sec:['triceps', 'delt_f', 'serratus'], type:'c', lvl:1,
+ tech:['Weight on palms and knees, shins can be crossed. Straight line from knees to crown, hips don’t sit back.', 'Lower your chest to the floor, elbows at 45° to your body.', 'Press up to straight arms.'],
  err:['Hips pushed back: only the arms work', 'Arching the lower back', 'Elbows flared out'],
  breath:'Inhale down, exhale up.',
  anim:{}},
-{id:'widepush', name:'Wide push-ups', eq:[], g:'chest', pri:['chest'], sec:['delt_f', 'triceps', 'abs', 'serratus'], type:'c', lvl:2,
+{id:'widepush', name:'Wide push-up', eq:[], g:'chest', pri:['chest'], sec:['delt_f', 'triceps', 'abs', 'serratus'], type:'c', lvl:2,
  tech:['Palms one and a half times shoulder width, fingers turned slightly out. Body straight.', 'Lower until your chest is 3–5 cm from the floor; elbows go out, but not above shoulder level.', 'Press yourself up, squeezing your chest.'],
  err:['Elbows above shoulders: stress on the shoulder joints', 'Sagging hips'],
  breath:'Inhale down, exhale up.',
  anim:{}},
-{id:'archer', name:'Archer push-ups', eq:[], g:'chest', pri:['chest', 'triceps'], sec:['delt_f', 'abs', 'obliques', 'serratus'], type:'c', lvl:3, uni:true,
+{id:'archer', name:'Archer push-up', eq:[], g:'chest', pri:['chest', 'triceps'], sec:['delt_f', 'abs', 'obliques', 'serratus'], type:'c', lvl:3, uni:true,
  tech:['Palms wide. Lower toward one hand while the other arm straightens out to the side and slides along the floor.', 'Chest to the working hand, elbow close to your body.', 'Press back to center and repeat on the other side.'],
  err:['Torso rotation', 'Supporting arm not vertical', 'Hips sag'],
  breath:'Inhale down, exhale up.',
  anim:{}},
-{id:'declinepike', name:'Feet-elevated pike push-ups', eq:[['bench']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'traps'], type:'c', lvl:3,
+{id:'declinepike', name:'Feet-elevated pike push-up', eq:[['bench']], g:'shoulders', pri:['delt_f', 'delt_s'], sec:['triceps', 'traps'], type:'c', lvl:3,
  tech:['Feet on a bench, hips high, torso nearly vertical, palms shoulder-width apart.', 'Lower the top of your head to the floor, bending your elbows; elbows go forward and down, not out.', 'Press yourself up to straight arms.'],
  err:['Hips drop: it turns into a decline push-up', 'Hitting the floor with your head', 'Elbows flared out'],
  breath:'Inhale down, exhale up.',
@@ -1244,7 +1245,7 @@ EX.push(
  err:['Throwing your head back', 'Jerking', 'Holding your breath'],
  breath:'Exhale as you lift, inhale as you lower.',
  anim:{}},
-{id:'ytw', name:'Prone Y-T-W raises', eq:[], g:'back', pri:['midback', 'delt_r', 'cuff'], sec:['traps', 'lowback', 'delt_s'], type:'i', lvl:1,
+{id:'ytw', name:'Prone Y-T-W raise', eq:[], g:'back', pri:['midback', 'delt_r', 'cuff'], sec:['traps', 'lowback', 'delt_s'], type:'i', lvl:1,
  tech:['Lie on your stomach, forehead on a towel. Raise straight arms forward and out in a Y, thumbs up.', 'Lower, then raise your arms straight out to the sides (T), then bend your elbows to 90° and raise (W).', 'Three positions make one rep. Squeeze your shoulder blades in each.'],
  err:['Lifting the torso instead of the arms', 'Shoulders shrugging up to the ears', 'Jerky reps'],
  breath:'Exhale as you raise your arms, inhale as you lower.',
@@ -1261,10 +1262,10 @@ EX.push(
  breath:'Exhale as you pull, inhale as you lower.',
  note:'The table must hold your weight; the edge must have no sharp corners.',
  anim:{}},
-{id:'reversesnow', name:'Reverse snow angels', eq:[], g:'shoulders', pri:['delt_r', 'midback'], sec:['traps'], type:'i', lvl:1,
+{id:'reversesnow', name:'Reverse snow angel', eq:[], g:'shoulders', pri:['delt_r', 'midback'], sec:['traps'], type:'i', lvl:1,
  tech:['Lie on your stomach, arms at your sides palms down, chest slightly lifted.', 'Slowly sweep your straight arms in an arc out to the sides and overhead without touching the floor.', 'Return along the same arc. Keep your shoulder blades down throughout.'],
  err:['Shoulders to ears', 'Arms touch the floor', 'Jerking the torso up'],
- breath:'Breathe steadily, don\'t hold your breath.',
+ breath:'Breathe steadily, don’t hold your breath.',
  anim:{period:3400}},
 
 /* --- ноги --- */
@@ -1273,12 +1274,12 @@ EX.push(
  err:['Knees past toes', 'Hips above knees', 'Hands pushing on thighs'],
  breath:'Calm breathing.',
  anim:{}},
-{id:'revlunge', name:'Reverse lunges', eq:[], opt:['db'], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:1, uni:true, imp:2, sides:'alt',
+{id:'revlunge', name:'Reverse lunge', eq:[], opt:['db'], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:1, uni:true, imp:2, sides:'alt',
  tech:['From standing, step back and lower until your back knee almost touches the floor.', 'Front knee over the foot, torso upright.', 'Push off the front leg and return to standing. Alternate legs.'],
  err:['Short step', 'Leaning the torso forward', 'Knee caving in'],
  breath:'Inhale as you step back, exhale as you return.',
  anim:{period:3200, noVectors:true}},
-{id:'sidelunge', name:'Lateral lunges', eq:[], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:1, uni:true,
+{id:'sidelunge', name:'Lateral lunge', eq:[], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'adductors'], type:'c', lvl:1, uni:true,
  tech:['Feet wide, toes forward.', 'Bend one leg, pushing your hips back and to the side; the other leg stays straight, whole foot on the floor.', 'Push off and return to center, then go to the other side.'],
  err:['Knee caving in', 'Straight-leg foot lifting off', 'Rounding the back'],
  breath:'Inhale as you lower, exhale as you return.',
@@ -1297,7 +1298,7 @@ EX.push(
    'Lower your hips about halfway, until your bottom foot touches the floor, and lift again. Then switch sides.'],
  err:['Hips sagging at the top', 'Torso rolling forward or back', 'Shoulder shrugging toward the ear, elbow not under the shoulder'],
  breath:'Exhale on the way up, inhale on the way down.',
- note:'Support at the ankle is a long lever: the load on the adductors and on the knee is high. Start with 3–5 reps per side in the first week and add a little at a time. If your knee bothers you or you can\'t do it yet, support the knee instead.',
+ note:'Support at the ankle is a long lever: the load on the adductors and on the knee is high. Start with 3–5 reps per side in the first week and add a little at a time. If your knee bothers you or you can’t do it yet, support the knee instead.',
  anim:{}},
 {id:'copenhagenknee', name:'Short-lever Copenhagen plank', eq:[['bench']], g:'quads', pri:['adductors'], sec:['obliques'], type:'i', lvl:2, uni:true,
  tech:['Lie on your side on your forearm, elbow under your shoulder. Bend your top leg and rest the inside of the knee and shin on a bench; bend your bottom leg the same way, knee on the floor under the bench.',
@@ -1307,7 +1308,7 @@ EX.push(
  breath:'Exhale on the way up, inhale on the way down.',
  note:'The easier version: the support is closer to the hips — a shorter lever, and the knee takes no sideways load. Adductor programs start with knee support and then progress to ankle support.',
  anim:{}},
-{id:'pistolbox', name:'Single-leg box squats', eq:[['bench']], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'abs', 'adductors'], type:'c', lvl:2, uni:true,
+{id:'pistolbox', name:'Single-leg box squat', eq:[['bench']], g:'quads', pri:['quads', 'glutes'], sec:['hams', 'abs', 'adductors'], type:'c', lvl:2, uni:true,
  tech:['Stand on one leg with your back to a bench, the other leg extended forward, arms in front.', 'Lower slowly until you touch the bench, standing knee tracking over the toes.', 'Stand up without pushing off the bench. The lower the bench, the harder it gets.'],
  err:['Dropping onto the bench', 'Knee caving in', 'Heel lifting off'],
  breath:'Inhale down, exhale up.',
@@ -1322,8 +1323,8 @@ EX.push(
  err:['Hip tilt', 'Arching the lower back', 'Pushing through the toes'],
  breath:'Exhale on the way up, inhale on the way down.',
  anim:{}},
-{id:'nordic', name:'Nordic curls', eq:[], g:'hams', pri:['hams'], sec:['glutes', 'calves'], type:'c', lvl:3,
- tech:['Kneel with your feet anchored under a support or by a partner. Body straight from knees to head.', 'Slowly lower your torso forward, resisting with your hamstrings as long as possible.', 'At the bottom, catch your weight on your hands, push off and return. Don\'t bend at the hips.'],
+{id:'nordic', name:'Nordic curl', eq:[], g:'hams', pri:['hams'], sec:['glutes', 'calves'], type:'c', lvl:3,
+ tech:['Kneel with your feet anchored under a support or by a partner. Body straight from knees to head.', 'Slowly lower your torso forward, resisting with your hamstrings as long as possible.', 'At the bottom, catch your weight on your hands, push off and return. Don’t bend at the hips.'],
  err:['Bending at the hips', 'Uncontrolled drop', 'Pushing back with the hands too quickly'],
  breath:'Inhale as you lower, exhale as you return.',
  note:'Feet must be securely anchored.',
@@ -1348,26 +1349,26 @@ EX.push(
 {id:'hollow', name:'Hollow hold', eq:[], g:'abs', pri:['abs'], sec:['obliques', 'hipflex'], type:'i', lvl:2, kind:'time',
  tech:['Lie on your back, press your lower back into the floor, arms by your sides or overhead.', 'Lift your shoulder blades and straight legs 15–20 cm off the floor; body forms a shallow arc.', 'Hold the position. The lower the legs and the farther the arms, the harder it gets.'],
  err:['Arching the lower back', 'Tucking the chin too hard', 'Holding your breath'],
- breath:'Breathe steadily, don\'t hold your breath.',
+ breath:'Breathe steadily, don’t hold your breath.',
  anim:{}},
-{id:'bicycle', name:'Bicycle crunches', eq:[], g:'abs', pri:['obliques', 'abs'], sec:[], type:'i', lvl:1,
+{id:'bicycle', name:'Bicycle crunch', eq:[], g:'abs', pri:['obliques', 'abs'], sec:[], type:'i', lvl:1,
  tech:['Lie on your back, hands behind your head, shoulder blades off the floor, legs raised.', 'Bring your right elbow toward your left knee while extending your right leg; then switch.', 'Moderate tempo, lower back pressed down.'],
  err:['Pulling on the head with the hands', 'Too fast — the hip flexors take over', 'Lower back lifting'],
  breath:'Exhale as you crunch.',
  anim:{period:1800}},
-{id:'plankup', name:'Plank up-downs', eq:[], g:'abs', pri:['abs', 'triceps'], sec:['delt_f', 'chest'], type:'c', lvl:2,
+{id:'plankup', name:'Plank up-down', eq:[], g:'abs', pri:['abs', 'triceps'], sec:['delt_f', 'chest'], type:'c', lvl:2,
  tech:['From a forearm plank, place one palm down, then the other, straightening your arms.', 'Lower back onto your forearms in the same order.', 'Keep the hips from swaying; switch the leading arm every rep.'],
  err:['Hips swaying', 'Sagging lower back', 'Always leading with the same arm'],
  breath:'Breathe steadily.',
  anim:{}},
 
 /* --- руки без снаряда --- */
-{id:'chairdip', name:'Chair dips', eq:[], g:'triceps', pri:['triceps'], sec:['chest', 'delt_f'], type:'c', lvl:1,
+{id:'chairdip', name:'Chair dip', eq:[], g:'triceps', pri:['triceps'], sec:['chest', 'delt_f'], type:'c', lvl:1,
  tech:['Sit on the edge of a sturdy chair, hands next to your hips, and slide your hips forward. Knees bent.', 'Lower yourself, bending your elbows back to 90°.', 'Press yourself up.'],
  err:['Elbows flared out', 'Going too deep — shoulder pain', 'Hips too far from the support'],
  breath:'Inhale down, exhale up.',
  anim:{}},
-{id:'towelcurl', name:'Towel curls', eq:[], g:'biceps', pri:['biceps'], sec:['forearms'], type:'i', lvl:1,
+{id:'towelcurl', name:'Towel curl', eq:[], g:'biceps', pri:['biceps'], sec:['forearms'], type:'i', lvl:1,
  tech:['Step on the middle of a towel, holding the ends with an underhand grip. Pull it taut.', 'Curl while resisting with your foot: pull harder than you let it give.', 'Lower over 3–4 seconds while still pulling.'],
  err:['Too little tension — no load', 'Elbows drifting forward', 'Swinging'],
  breath:'Exhale as you curl, inhale as you lower.',
@@ -1380,10 +1381,10 @@ EQUIP.push(
   {id:'hack', name:'Hack squat', cat:'mach', hint:'squat with your back braced against an angled sled'},
   {id:'chestpress', name:'Chest press', cat:'mach', hint:'lever or cable, with back support'},
   {id:'shoulderpress', name:'Shoulder press', cat:'mach'},
-  {id:'leverrow', name:'Lever row', cat:'mach', hint:'chest-supported row to the waist'},
-  {id:'tbar', name:'T-bar', cat:'mach', hint:'bent-over row with an anchored bar'},
-  {id:'gravitron', name:'Assisted pull-up / dip', cat:'mach', hint:'pull-ups and dips with a counterweight'},
-  {id:'abductor', name:'Hip abductor / adductor', cat:'mach'},
+  {id:'leverrow', name:'Chest-supported row machine', cat:'mach', hint:'chest-supported row to the waist'},
+  {id:'tbar', name:'T-bar row', cat:'mach', hint:'bent-over row with an anchored bar'},
+  {id:'gravitron', name:'Assisted pull-up/dip machine', cat:'mach', hint:'pull-ups and dips with a counterweight'},
+  {id:'abductor', name:'Hip abduction/adduction machine', cat:'mach'},
   {id:'calfseat', name:'Seated calf raise', cat:'mach'}, {id:'calfstand', name:'Standing calf raise', cat:'mach'},
   {id:'treadmill', name:'Treadmill', cat:'cardio'}, {id:'bike', name:'Stationary bike', cat:'cardio'},
   {id:'rower', name:'Rowing machine', cat:'cardio'}, {id:'elliptical', name:'Elliptical', cat:'cardio'}, {id:'stairs', name:'Stair climber', cat:'cardio'}
@@ -1396,7 +1397,7 @@ EX.push(
 {id:'chestpressm', name:'Machine chest press', eq:[['chestpress']], g:'chest', pri:['chest'], sec:['triceps', 'delt_f'], type:'c', lvl:1,
  tech:['Adjust the seat so the handles are at mid-chest height, back and head against the pad.',
    'Press the handles forward until your arms are almost straight, keeping your shoulder blades on the pad.',
-   'Return slowly until your elbows go just past your torso; don\'t rest the weight on the stack.'],
+   'Return slowly until your elbows go just past your torso; don’t rest the weight on the stack.'],
  err:['Shoulders rolling forward at the end of the press', 'Lower back coming off the pad', 'Dropping the weight onto the stack'],
  breath:'Exhale as you press, inhale on the way back.',
  anim:{}},
@@ -1419,7 +1420,7 @@ EX.push(
 {id:'leverrowm', name:'Chest-supported lever row', eq:[['leverrow']], g:'back', pri:['lats', 'midback'], sec:['biceps', 'delt_r'], type:'c', lvl:1,
  tech:['Sit with your chest on the pad, feet on the platform, and grab the handles with a neutral grip.',
    'Pull the handles toward you, driving your elbows back along your sides and squeezing your shoulder blades; keep your chest on the pad.',
-   'Return smoothly, letting your shoulder blades spread, but don\'t round your back.'],
+   'Return smoothly, letting your shoulder blades spread, but don’t round your back.'],
  err:['Chest lifting off the pad', 'Shrugging up', 'Jerking at the start'],
  breath:'Exhale as you pull, inhale on the return.',
  anim:{}},
@@ -1430,8 +1431,8 @@ EX.push(
  err:['Rounding the lower back', 'Jerking your torso upright', 'Pulling to the chest with elbows flared'],
  breath:'Exhale as you pull, inhale as you lower.',
  anim:{}},
-{id:'assistpull', name:'Assisted pull-ups', eq:[['gravitron']], assist:true, g:'back', pri:['lats'], sec:['biceps', 'midback', 'chest', 'delt_r', 'forearms', 'cuff'], type:'c', lvl:1,
- tech:['Set the counterweight: the more you add, the easier it gets. Kneel on the platform, grip slightly wider than shoulders.',
+{id:'assistpull', name:'Assisted pull-up', eq:[['gravitron']], assist:true, g:'back', pri:['lats'], sec:['biceps', 'midback', 'chest', 'delt_r', 'forearms', 'cuff'], type:'c', lvl:1,
+ tech:['Set the counterweight: the more you add, the easier it gets. Kneel on the platform, grip slightly wider than shoulder width.',
    'Pull up, driving your elbows down until your chin clears the handles.',
    'Lower slowly to straight arms without letting the platform drop.'],
  err:['Swinging', 'Not fully straightening your arms at the bottom', 'Too much counterweight — no real effort'],
@@ -1462,7 +1463,7 @@ EX.push(
  anim:{}},
 
 /* ===== ТРИЦЕПС ===== */
-{id:'assistdip', name:'Assisted dips', eq:[['gravitron']], assist:true, g:'triceps', pri:['triceps', 'chest'], sec:['delt_f', 'serratus'], type:'c', lvl:1,
+{id:'assistdip', name:'Assisted dip', eq:[['gravitron']], assist:true, g:'triceps', pri:['triceps', 'chest'], sec:['delt_f', 'serratus'], type:'c', lvl:1,
  tech:['Set the counterweight, kneel on the platform, grab the lower handles, torso upright.',
    'Lower yourself, bending your elbows back to 90°.',
    'Press yourself up without flaring your elbows.'],
@@ -1494,7 +1495,7 @@ EX.push(
  err:['Squatting instead of hinging', 'Pulling with the arms', 'Hyperextending the lower back at the top'],
  breath:'Inhale as you hinge, exhale as you stand up.',
  anim:{}},
-{id:'cablekickback', name:'Cable glute kickback', eq:[['cable']], g:'glutes', pri:['glutes'], sec:['hams'], type:'i', lvl:1,
+{id:'cablekickback', name:'Straight-leg cable glute kickback', eq:[['cable']], g:'glutes', pri:['glutes'], sec:['hams'], type:'i', lvl:1,
  tech:['Cuff on your ankle, face the machine, lean slightly, hands on the frame.',
    'Drive your straight leg back with your glute, without arching your lower back.',
    'Return under control without setting your foot down between reps.'],
@@ -1521,7 +1522,7 @@ EX.push(
    doi:10.1136/bjsports-2012-091746); у блока сопротивление ровнее по амплитуде. Косые и прямая мышца живота в этих
    упражнениях работают слабо — косые здесь стабилизатор корпуса на одной ноге. */
 {id:'cableadduct', name:'Standing cable hip adduction', eq:[['cable']], g:'quads', pri:['adductors'], sec:['obliques'], type:'i', lvl:1, uni:true,
- tech:['Strap the cuff to the ankle nearest the pulley. Stand side-on to the machine, about an arm\'s length away, and hold it with your near hand.',
+ tech:['Strap the cuff to the ankle nearest the pulley. Stand side-on to the machine, about an arm’s length away, and hold it with your near hand.',
    'From out to the side, bring your nearly straight leg to your standing leg and a little past it, in front of your standing foot.',
    'Return the leg slowly without letting the cable yank it. Keep your torso upright and the foot off the floor. Then switch sides.'],
  err:['Leaning and jerking instead of working the hip', 'Bending the knee and rotating the pelvis', 'Resting the foot on the floor between reps'],
@@ -1538,14 +1539,14 @@ EX.push(
  anim:{}},
 
 /* ===== ИКРЫ ===== */
-{id:'seatedcalf', name:'Seated calf raises', eq:[['calfseat']], g:'calves', pri:['calves'], sec:[], type:'i', lvl:1,
+{id:'seatedcalf', name:'Seated calf raise', eq:[['calfseat']], g:'calves', pri:['calves'], sec:[], type:'i', lvl:1,
  tech:['Sit with the balls of your feet on the edge of the platform, pads snug on your lower thighs.',
    'Release the stop and lower your heels as far as possible, stretching your calves.',
    'Rise onto your toes as high as you can and hold for a second.'],
  err:['Bouncing at the bottom', 'Partial range of motion', 'Pads on the knees'],
  breath:'Exhale on the way up, inhale on the way down.',
  anim:{}},
-{id:'standcalf', name:'Standing machine calf raises', eq:[['calfstand']], g:'calves', pri:['calves'], sec:[], type:'i', lvl:1,
+{id:'standcalf', name:'Standing machine calf raise', eq:[['calfstand']], g:'calves', pri:['calves'], sec:[], type:'i', lvl:1,
  tech:['Shoulders under the pads, balls of your feet on the edge of the platform, legs straight, torso upright.',
    'Lower your heels below the platform, stretching your calves.',
    'Rise onto your toes as high as possible and hold.'],
@@ -1556,17 +1557,17 @@ EX.push(
 /* ===== КАРДИО-ТРЕНАЖЁРЫ ===== */
 {id:'treadmill', name:'Treadmill', eq:[['treadmill']], g:'cardio', pri:['quads', 'calves'], sec:['glutes', 'hams'], type:'c', lvl:1, kind:'time',
  tech:['Start with 2–3 minutes of walking, then settle into a working pace: breathing deep, but you can still speak in short phrases.',
-   'Torso upright, eyes forward, arms swinging along your body; don\'t hold the handrails.',
+   'Torso upright, eyes forward, arms swinging along your body; don’t hold the handrails.',
    'For intervals, alternate 1 minute fast with 1–2 minutes easy. Finish with a walk.'],
  err:['Holding the handrails', 'Overstriding with a heel strike', 'Stopping abruptly without a cool-down'],
  breath:'Steady breathing in rhythm with your steps.',
  anim:{period:1200}},
 {id:'bike', name:'Stationary bike', eq:[['bike']], g:'cardio', pri:['quads', 'glutes'], sec:['hams', 'calves'], type:'c', lvl:1, kind:'time',
  tech:['Saddle height: leg almost straight at the bottom of the pedal stroke. Hands on the handlebars without leaning your full weight.',
-   'Keep a cadence of 80–100 rpm; set resistance so you breathe deeply but aren\'t out of breath.',
+   'Keep a cadence of 80–100 rpm; set resistance so you breathe deeply but aren’t out of breath.',
    'For intervals: 30–60 seconds at high resistance, then 1–2 minutes easy.'],
  err:['Saddle too low — knees above hips', 'Rocking the torso', 'Pressure on the wrists'],
- breath:'Breathe steadily, don\'t hold your breath.',
+ breath:'Breathe steadily, don’t hold your breath.',
  anim:{period:1400, noVectors:true}},
 {id:'rower', name:'Rowing machine', eq:[['rower']], g:'cardio', pri:['lats', 'quads'], sec:['glutes', 'midback', 'biceps', 'hams', 'lowback'], type:'c', lvl:2, kind:'time',
  tech:['Catch: knees bent, shins vertical, arms straight, torso leaning forward from the hips.',
@@ -1577,7 +1578,7 @@ EX.push(
  anim:{period:2200}},
 {id:'elliptical', name:'Elliptical', eq:[['elliptical']], g:'cardio', pri:['quads', 'glutes'], sec:['hams', 'calves', 'delt_f'], type:'c', lvl:1, kind:'time',
  tech:['Feet flat on the pedals, torso upright, hands on the moving handles.',
-   'Move smoothly, pushing the pedals through your heels and helping with your arms; don\'t shift your weight onto the handles.',
+   'Move smoothly, pushing the pedals through your heels and helping with your arms; don’t shift your weight onto the handles.',
    'Vary the load with resistance, not speed: 60–70 strides per minute.'],
  err:['Hanging on the handles', 'Rising onto the toes', 'Pace too fast with short steps'],
  breath:'Breathe steadily.',
@@ -1617,7 +1618,7 @@ const MACHINE_CUES = {
   treadmill:['Torso upright, arms swinging along your body.', 'Step under your body, land on your midfoot.'],
   bike:['Cadence 80–100, push the pedal through your heel.', 'Torso still, no weight on your hands.'],
   rower:['Legs — torso — arms: push, lean back, pull to the ribs.', 'Arms — torso — legs: recover twice as slowly as the stroke.'],
-  elliptical:['Push the pedals through your heels, helping with your arms.', 'Don\'t shift your weight onto the handles.'],
+  elliptical:['Push the pedals through your heels, helping with your arms.', 'Don’t shift your weight onto the handles.'],
   stairs:['Whole foot on the step, push through your heel.', 'Touch the handrails only for balance.']
 };
 // The player stores every pair as [working/lifting phase, return/lowering phase].
@@ -1663,13 +1664,13 @@ const CUES_ALL = {
   ohp:['Press the bar straight up, then move your head under it.','Lower the bar to your collarbones, elbows in front of the bar.'],
   arnold:['Rotate your palms to face forward as you press.','Lower the dumbbells, rotating your palms to face you.'],
   latraise:['Raise your elbows out to the sides to shoulder height.','Lower your arms in an arc, without swinging.'],
-  bandlatraise:['Raise your arms out to the sides, shoulders away from your ears.','Lower slowly; don\'t let the band snap your arms down.'],
+  bandlatraise:['Raise your arms out to the sides, shoulders away from your ears.','Lower slowly; don’t let the band snap your arms down.'],
   cablelat:['Raise your arm out to the side to shoulder height.','Return your arm, keeping the cable taut.'],
   frontraise:['Raise your straight arms forward to shoulder height.','Lower with control to your thighs.'],
   facepull:['Pull the rope to your face, elbows high and wide.','Return your arms forward until straight.'],
   bandfacepull:['Pull the band to your face, spreading the ends apart.','Smoothly return your arms forward.'],
   cableextrot:['Rotate the forearm outward, elbow pressed against the towel.','Bring the hand back to your belly slowly, keeping the cable taut.'],
-  bandextrot:['Rotate the forearm outward, elbow at your side.','Return slowly; don\'t let the band snap your arm back.'],
+  bandextrot:['Rotate the forearm outward, elbow at your side.','Return slowly; don’t let the band snap your arm back.'],
   reversefly:['Open your arms back, squeezing your shoulder blades.','Return the handles forward, chest against the pad.'],
   pikepush:['Press yourself up, hips staying high.','Lower the top of your head between your hands.'],
   /* бицепс */
@@ -1692,7 +1693,7 @@ const CUES_ALL = {
   kickback:['Extend your arm back until straight.','Return to 90°, upper arm fixed.'],
   /* предплечья */
   wristcurl:['Curl your wrists, lifting the bar.','Lower by extending your wrists, letting the bar roll to your fingers.'],
-  farmer:['Walk with short steps, torso upright.','Shoulders back and down; don\'t let the weights swing.'],
+  farmer:['Walk with short steps, torso upright.','Shoulders back and down; don’t let the weights swing.'],
   hang:['Active hang: shoulders pulled slightly away from your ears, steady breathing.'],
   /* пресс */
   crunch:['Bring your ribs toward your pelvis, lifting your shoulder blades.','Lower without dropping, lower back pressed down.'],
@@ -1732,7 +1733,7 @@ const CUES_ALL = {
   kbtgu:['Kettlebell arm vertical, eyes on the bell: elbow, hand, bridge, knee under, lunge, stand.','Get down in reverse order: lunge, knee, hand, elbow, onto your back.'],
   kbhalo:['The kettlebell travels close to your head, torso still.','Behind the head: elbows up, bell by the upper back.'],
   kbwindmill:['Extend the hips and stand tall, eyes on the kettlebell.','Hips back, hinge with a straight back; the kettlebell arm vertical.'],
-  glutekick:['Kick your leg back, squeezing the glute; don\'t arch your lower back.','Return your leg slowly.'],
+  glutekick:['Kick your leg back, squeezing the glute; don’t arch your lower back.','Return your leg slowly.'],
   bulgarian:['Drive up through your front leg.','Lower straight down, knee tracking over your toes.'],
   stepup:['Step up, fully straightening the working leg.','Step down with the same leg under control.'],
   lunge:['Stand up, torso upright.','Lower until your back knee almost touches the floor.'],
@@ -1742,7 +1743,7 @@ const CUES_ALL = {
   airsquat:['Rise to full extension.','Lower until your thighs are parallel to the floor.'],
   smithsquat:['Rise without lifting your heels.','Lower to parallel, feet in front of the bar.'],
   legpress:['Press the platform away without locking your knees.','Lower the platform until your knees reach 90°, hips pressed down.'],
-  legpresshigh:['Press through your whole foot; don\'t lock your knees.','Lower only as far as your hips stay on the seat.'],
+  legpresshigh:['Press through your whole foot; don’t lock your knees.','Lower only as far as your hips stay on the seat.'],
   legpresslow:['Press the platform, heels down.','Lower to 90–100° at the knees without lifting your heels or hips.'],
   legext:['Extend your legs until nearly straight and hold.','Lower slowly, without dropping.'],
   legcurl:['Pull your heels toward your glutes, hips pressed down.','Straighten your legs smoothly.'],
@@ -1796,8 +1797,8 @@ DEMO.sidebend.err[2] = 'Excessive range of motion and loss of torso control';
 const SOURCES_BY_EX = {
   kbswing:[['Kettlebell swing — NSCA','https://www.nsca.com/education/articles/kinetic-select/two-arm-kettlebell-swing/']],
   kbdeadlift:[['Muscles in the deadlift: EMG — Escamilla et al., 2002','https://pubmed.ncbi.nlm.nih.gov/11932579/'],['Sumo-style kettlebell deadlift — StrongFirst (A. Bolton, P. Tsatsouline)','https://www.strongfirst.com/kettlebell-deadlift-%E2%9E%94-barbell-deadlift/'],['Kettlebell deadlift: the kettlebell between the feet — NASM','https://www.nasm.org/resource-center/exercise-library/kettlebell-deadlift']],
-  kbswing1:[['Kettlebell swing — NSCA','https://www.nsca.com/education/articles/kinetic-select/two-arm-kettlebell-swing/'],['Trunk muscles in one- and two-armed swings: EMG — Andersen et al., 2019','https://doi.org/10.1055/a-0869-7228'],['Kettlebell swings and back health from S. McGill\'s data — StrongFirst (S. Iardella)','https://www.strongfirst.com/optimizing-back-health-with-the-kettlebell-swing/']],
-  kbclean:[['Kettlebell swing — NSCA','https://www.nsca.com/education/articles/kinetic-select/two-arm-kettlebell-swing/'],['Kettlebell clean and press: technique — StrongFirst','https://www.strongfirst.com/test-your-kettlebell-military-press/'],['Kettlebell swings and back health from S. McGill\'s data — StrongFirst (S. Iardella)','https://www.strongfirst.com/optimizing-back-health-with-the-kettlebell-swing/']],
+  kbswing1:[['Kettlebell swing — NSCA','https://www.nsca.com/education/articles/kinetic-select/two-arm-kettlebell-swing/'],['Trunk muscles in one- and two-armed swings: EMG — Andersen et al., 2019','https://doi.org/10.1055/a-0869-7228'],['Kettlebell swings and back health from S. McGill’s data — StrongFirst (S. Iardella)','https://www.strongfirst.com/optimizing-back-health-with-the-kettlebell-swing/']],
+  kbclean:[['Kettlebell swing — NSCA','https://www.nsca.com/education/articles/kinetic-select/two-arm-kettlebell-swing/'],['Kettlebell clean and press: technique — StrongFirst','https://www.strongfirst.com/test-your-kettlebell-military-press/'],['Kettlebell swings and back health from S. McGill’s data — StrongFirst (S. Iardella)','https://www.strongfirst.com/optimizing-back-health-with-the-kettlebell-swing/']],
   kbpress:[['Standing kettlebell press: technique — StrongFirst','https://www.strongfirst.com/test-your-kettlebell-military-press/'],['Overhead presses standing and seated, barbell and dumbbells: EMG — Saeterbakken & Fimland, 2013','https://pubmed.ncbi.nlm.nih.gov/23096062/']],
   kbfrontsquat:[['Front and back squats: biomechanics and EMG — Gullett et al., 2009','https://pubmed.ncbi.nlm.nih.gov/19002072/']],
   kbrow:[['Bent-over and seated rows: trunk muscles and lumbar load — Fenwick et al., 2009','https://pubmed.ncbi.nlm.nih.gov/19197209/']],
@@ -1847,21 +1848,21 @@ const MOTION_FOCUS={
  legpresslow:{setup:'Lower back pressed into the pad, feet in the lower part of the platform, heels fully on it.',control:'Heels stay down, hips on the seat; knees track over your toes.'},
  bandlatpull:{setup:'Kneeling facing the door, band anchored above it, arms up, palms facing away.',control:'Elbows down to your sides; torso almost still, shoulders away from your ears.'},
  bandlegext:{setup:'Sitting with your back to the door, strap on the ankle, back on the backrest, hands holding the seat edges.',control:'Only the lower leg moves: thigh on the seat, torso still.'},
- bandadduct:{setup:'Side-on to the door, strap on the near ankle, band taut; standing leg straight.',control:'Only the leg moves: the pelvis and torso don\'t rotate, the foot stays off the floor.'},
+ bandadduct:{setup:'Side-on to the door, strap on the near ankle, band taut; standing leg straight.',control:'Only the leg moves: the pelvis and torso don’t rotate, the foot stays off the floor.'},
  bandabduct:{setup:'Mini loop on the shins above the ankles, weight on the standing leg, hands on hips.',control:'The leg goes out to the side without the torso leaning, toes forward.'},
  bandbridge:{setup:'Lying on your back, mini loop above the knees, feet slightly wider than your hips.',control:'Knees over the feet for the whole set; hips rise without arching the lower back.'},
  bandfloorpress:{setup:'Lying on your back, band below the shoulder blades, knees bent; at the bottom the upper arms rest on the floor at 45° to the torso.',control:'Forearms vertical, wrists straight; the band does not slip off the back.'},
  bandfly:{setup:'Back to the door, band at chest height behind you, one step forward; arms out to the sides, elbows softly bent.',control:'The elbow angle stays the same; the torso is still, palms face each other at the end.'},
  sissysquat:{setup:'Side-on to a doorway, hand on the edge of the doorway, on the balls of the feet; body straight from knees to shoulders.',control:'The pelvis does not move back — only the knees bend; heels raised, the hand only steadies you.'},
- cableadduct:{setup:'Cuff on the ankle nearest the pulley, near hand on the machine, standing leg straight.',control:'Only the leg moves: the pelvis and torso don\'t rotate, the foot stays off the floor.'},
- copenhagen:{setup:'Elbow under the shoulder, the inside of the top ankle on the bench.',control:'The hips rise into a straight line without the torso rolling; the shoulder doesn\'t creep toward the ear.'},
- copenhagenknee:{setup:'Elbow under the shoulder, the inside of the top knee and shin on the bench, bottom leg bent.',control:'The hips rise into a straight line from shoulders to knee; the torso doesn\'t roll.'},
- cableextrot:{setup:'Side-on to the pulley, handle in the far hand, elbow bent to 90° and pressed against the towel at your side.',control:'Only the shoulder rotates: the elbow stays put, the torso doesn\'t turn.'},
- bandextrot:{setup:'Side-on to the band anchor, band in the far hand, elbow bent to 90° and pressed against the towel at your side.',control:'Only the shoulder rotates: the elbow stays put, the torso doesn\'t turn.'},
+ cableadduct:{setup:'Cuff on the ankle nearest the pulley, near hand on the machine, standing leg straight.',control:'Only the leg moves: the pelvis and torso don’t rotate, the foot stays off the floor.'},
+ copenhagen:{setup:'Elbow under the shoulder, the inside of the top ankle on the bench.',control:'The hips rise into a straight line without the torso rolling; the shoulder doesn’t creep toward the ear.'},
+ copenhagenknee:{setup:'Elbow under the shoulder, the inside of the top knee and shin on the bench, bottom leg bent.',control:'The hips rise into a straight line from shoulders to knee; the torso doesn’t roll.'},
+ cableextrot:{setup:'Side-on to the pulley, handle in the far hand, elbow bent to 90° and pressed against the towel at your side.',control:'Only the shoulder rotates: the elbow stays put, the torso doesn’t turn.'},
+ bandextrot:{setup:'Side-on to the band anchor, band in the far hand, elbow bent to 90° and pressed against the towel at your side.',control:'Only the shoulder rotates: the elbow stays put, the torso doesn’t turn.'},
  cablerowwide:{setup:'Feet on the platform, knees slightly bent, overhand grip wider than your shoulders.',control:'Elbows out and back, bar to your lower chest; lean back no more than 10–15°.'},
  latpullv:{setup:'Thighs under the pads, palms facing each other on the V-handle.',control:'Elbows down along your sides, the handle passes in front of your face to your chest; no torso swing.'},
  latpulluh:{setup:'Thighs under the pads, underhand grip about shoulder-width apart.',control:'Elbows down along your sides, the handle passes in front of your face to your chest; no torso swing.'},
- bbrow:{setup:'Lean your torso forward and hold that position.',control:'Your arms drive the pull; don\'t heave the bar with your torso.'},
+ bbrow:{setup:'Lean your torso forward and hold that position.',control:'Your arms drive the pull; don’t heave the bar with your torso.'},
  deadlift:{setup:'Weight close to your legs, arms straight.',control:'Extend hips and knees together, keeping the weight close to your body.'},
  rdl:{setup:'Weight held in straight arms, knees slightly bent.',control:'Push your hips back; back control limits the depth.'},
  kbswing:{setup:'Feet stable, hands holding the kettlebell.',control:'Hip extension drives the swing; elbows stay straight.'},
@@ -1869,8 +1870,8 @@ const MOTION_FOCUS={
  kbswing1:{setup:'Feet stable, the kettlebell in one hand in an overhand grip.',control:'Hip extension drives the swing; the shoulders stay square.'},
  kbclean:{setup:'Backswing between the legs, as in the one-arm swing.',control:'Elbow by the ribs, the hand goes around the kettlebell; in the rack the wrist is straight.'},
  kbpress:{setup:'Kettlebell in the rack: wrist straight, elbow by the ribs, the bell on the back of the forearm.',control:'The forearm stays vertical throughout the press; torso and hips stay still.'},
- kbfrontsquat:{setup:'The kettlebell is racked on one arm, the free arm out to the side for balance.',control:'Hips and knees bend together; the torso does not lean towards the kettlebell.'},
- kbrow:{setup:'Hip hinge in a split stance, the free palm on the thigh, the kettlebell under the shoulder.',control:'The elbow moves towards the hip; the torso does not rotate.'},
+ kbfrontsquat:{setup:'The kettlebell is racked on one arm, the free arm out to the side for balance.',control:'Hips and knees bend together; the torso does not lean toward the kettlebell.'},
+ kbrow:{setup:'Hip hinge in a split stance, the free palm on the thigh, the kettlebell under the shoulder.',control:'The elbow moves toward the hip; the torso does not rotate.'},
  kbfloorpress:{setup:'Lying on your back, the upper arm on the floor at 45° to the torso, the forearm vertical.',control:'Wrist straight; the elbow touches the floor softly, without a bump.'},
  kbsnatch:{setup:'Backswing between the legs, as in the one-arm swing.',control:'The kettlebell travels close to the body; at the top the arm and wrist are straight.'},
  kbsllift:{setup:'Standing on one leg, the kettlebell in the opposite hand.',control:'Hip hinge, back straight, the hips do not open to the side.'},
@@ -1895,7 +1896,7 @@ DEMO.latpull.tech=['Sit down, place your feet on the floor and lock your thighs 
 DEMO.latpull.anim.cues=['Drive your elbows down; the handle travels past your face to your chest.','Straighten your arms under control, holding your torso position.'];
 DEMO.bulgarian.tech=['Place your front foot on the floor and the top of your rear foot on a stable bench. Feet hip-width apart, not in a single line.','Bend your front leg and lower your rear knee toward the floor. Choose depth based on position control and available mobility.','Keep your whole front foot planted; front knee travels toward the toes. A slight forward lean of the torso is fine.','Rise mainly through the front leg. Repeat on the other side.'];
 DEMO.bulgarian.anim.cues=['Rise using your front leg without pushing off the bench.','Lower your hips and rear knee; both feet stay planted.'];
-DEMO.hipthrust.tech=['Rest your lower shoulder blades on a stable bench. Place the padded bar in your hip crease and hold it with your hands.','Plant your feet firmly: at the top your shins are roughly vertical, knees tracking over the toes.','Raise your hips to a shoulders–hips–knees line. Upper back stays in contact with the bench; don\'t add lower-back arch.','Lower your hips smoothly, controlling the barbell and keeping your feet planted.'];
+DEMO.hipthrust.tech=['Rest your lower shoulder blades on a stable bench. Place the padded bar in your hip crease and hold it with your hands.','Plant your feet firmly: at the top your shins are roughly vertical, knees tracking over the toes.','Raise your hips to a shoulders–hips–knees line. Upper back stays in contact with the bench; don’t add lower-back arch.','Lower your hips smoothly, controlling the barbell and keeping your feet planted.'];
 MOTION_FOCUS.latpull={setup:'Thighs under the pads, feet on the floor, slight lean back.',control:'Elbows down, handle past your face to your chest; no torso swinging.'};
 MOTION_FOCUS.bulgarian={setup:'Front foot on the floor, top of the rear foot on the bench.',control:'Rear knee travels toward the floor; front foot stays planted.'};
 MOTION_FOCUS.hipthrust={setup:'Lower shoulder blades on the edge of the bench; bar in the hip crease.',control:'Drive the hips up by extending them; keep your back and feet in contact.'};
@@ -1914,21 +1915,21 @@ const CAMERA_HINTS={
   angle:'Feet on two separate lines. Front knee points toward the toes, hips hold position.'
  },
  hipthrust:{
-  side:'Support at the lower shoulder blades. Plates are shown as outlines so they don\'t hide the hips and bar position.',
+  side:'Support at the lower shoulder blades. Plates are shown as outlines so they don’t hide the hips and bar position.',
   angle:'Both feet, knee position and grip are visible. The padded bar rests in the hip crease.'
  },
  chinup:{
   side:'Elbows move down in front of the torso. Hands keep the grip, body rises without swinging.',
-  front:'Grip about shoulder-width, palms facing you. Arms work symmetrically; the elbows\' forward travel is visible from the side.'
+  front:'Grip about shoulder-width, palms facing you. Arms work symmetrically; the elbows’ forward travel is visible from the side.'
  },
  bbbench:{
   side:'The bar lowers to the lower chest and travels up and slightly toward the head. Hips stay on the bench.',
-  front:'Grip slightly wider than shoulders, forearms nearly vertical at the bottom, elbows don\'t flare to 90°.',
+  front:'Grip slightly wider than shoulder width, forearms nearly vertical at the bottom, elbows don’t flare to 90°.',
   above:'See the chest, shoulders and arm symmetry. Use the side view to check the bar path relative to your chest.'
  },
  squat:{
   side:'Hips move back as the knees bend; the bar travels vertically over midfoot.',
-  front:'Knees track toward the toes without caving in. Feet slightly wider than shoulders, heels down.',
+  front:'Knees track toward the toes without caving in. Feet slightly wider than shoulder width, heels down.',
   back:'See the glutes and hamstrings. Keep the pelvis centered and maintain support through both feet.'
  },
  deadlift:{
@@ -1937,22 +1938,22 @@ const CAMERA_HINTS={
  },
  ohp:{
   side:'The bar goes straight up from the collarbones; the head moves back, then returns under the bar.',
-  front:'Grip slightly wider than shoulders, elbows under the bar; torso doesn\'t lean to the side.'
+  front:'Grip slightly wider than shoulder width, elbows under the bar; torso doesn’t lean to the side.'
  },
  rdl:{
   side:'Hips move back, knees slightly bent with almost no change in angle. The weight slides along the legs.',
   front:'The weight stays centered, shoulders level, feet hip-width apart.'
  },
  lunge:{
-  side:'Vertical descent: front knee over the foot, rear knee toward the floor, torso doesn\'t lean.',
-  front:'Feet on two parallel lines, front knee tracks over the toes and doesn\'t cave in.'
+  side:'Vertical descent: front knee over the foot, rear knee toward the floor, torso doesn’t lean.',
+  front:'Feet on two parallel lines, front knee tracks over the toes and doesn’t cave in.'
  },
  dbpress:{
   front:'Dumbbells move in an arc and meet overhead; elbows under the dumbbells, shoulders level.',
-  side:'Back pressed to the backrest. Elbows don\'t drift behind the torso, no excessive lower-back arch.'
+  side:'Back pressed to the backrest. Elbows don’t drift behind the torso, no excessive lower-back arch.'
  },
  bbrow:{
-  side:'Torso at 45–50°, angle doesn\'t change. The bar goes to the lower belly, elbows back along the torso.',
+  side:'Torso at 45–50°, angle doesn’t change. The bar goes to the lower belly, elbows back along the torso.',
   front:'Shoulder-width grip, elbows move symmetrically, shoulders level.'
  },
  dbbench:{
@@ -1968,8 +1969,8 @@ const V3={
  dot:(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),unit:a=>{const n=Math.hypot(...a)||1;return a.map(v=>v/n);},
  cross:(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]
 };
-const CAMERA3={front:{label:'Front',yaw:0,elevation:0},side:{label:'Side',yaw:90,elevation:0},angle:{label:'Angled',yaw:55,elevation:-15},
- back:{label:'Rear view',yaw:180,elevation:0},above:{label:'Angled overhead view',yaw:35,elevation:-55},rear:{label:'Angled rear view',yaw:235,elevation:-15}};
+const CAMERA3={front:{label:'Front',yaw:0,elevation:0},side:{label:'Side',yaw:90,elevation:0},angle:{label:'Angle',yaw:55,elevation:-15},
+ back:{label:'Back',yaw:180,elevation:0},above:{label:'Top',yaw:35,elevation:-55},rear:{label:'Back angle',yaw:235,elevation:-15}};
 function camera3(key){
  const C=CAMERA3[key]||CAMERA3.side,sy=Math.sin(C.yaw*D2R),cy=Math.cos(C.yaw*D2R),se=Math.sin(C.elevation*D2R),ce=Math.cos(C.elevation*D2R);
  return p=>{const depth=-p[0]*sy+p[2]*cy;return [p[0]*cy+p[2]*sy,p[1]*ce-depth*se,depth*ce+p[1]*se];};
@@ -2323,7 +2324,7 @@ const MUSCLE_PROFILES={
  bandextrot:{pair:'back',curveBasis:'illustrative',
   sources:[['Rotator cuff and deltoid in external rotation exercises: EMG — Reinold et al., 2004','https://doi.org/10.2519/jospt.2004.34.7.385']],
   notes:{concentric:'Infraspinatus and teres minor rotate the shoulder outward; the band pulls harder toward the end.',
-   eccentric:'The external rotators control the hand on the way back to your belly; the band doesn\'t snap the arm.',
+   eccentric:'The external rotators control the hand on the way back to your belly; the band doesn’t snap the arm.',
    end:'Shoulder rotated out — the band is at its tightest.',
    start:'Hand at your belly: the band is barely taut.'},
   muscles:{
@@ -10910,7 +10911,7 @@ const STRESS_RULES = [
   {id:'wrist', parts:['wrists'], zone:'Wrists', what:'The wrist is bent back under body weight.', tip:'Spread the load over the whole palm; if it hurts, use push-up handles.'},
   {id:'achilles', parts:['Achilles tendons'], zone:'Achilles tendons', what:'Heel below the step under load — peak tension on the tendon.', tip:'Lower smoothly, no bouncing.'},
   {id:'landing', parts:['knees', 'Achilles tendons'], zone:'Knees and Achilles tendons', what:'Landing — an impact several times your body weight.', tip:'Land softly on the balls of your feet, knees in line with your feet.'},
-  {id:'hams', parts:['hamstrings'], zone:'Hamstrings', what:'The hamstrings are stretched under load.', tip:'Lower until you feel the stretch, no jerking out of the bottom.'}
+  {id:'hams', parts:['hamstring tendons'], zone:'Hamstring tendons', what:'The hamstrings are stretched under load.', tip:'Lower until you feel the stretch, no jerking out of the bottom.'}
 ];
 const STRESS_RULE = Object.fromEntries(STRESS_RULES.map(r => [r.id, r]));
 /* свои тексты, где общие не подходят: в турецком подъёме плечо и кисть нагружает опорная рука, а не жим или отжимание */
@@ -11159,14 +11160,14 @@ const GOALS = {
   strength:{name:'Strength', hint:'3–6 reps', reps:{c:'3–5', i:'6–8'}, sets:{c:5, i:3}, rest:{c:180, i:90}, tempo:'2-0-X-0',
     load:{c:'≈ 80–90% of 1RM', i:'heavy'}, rir:[1, 2], rep:3, time:'20–30 s', dist:'20 m',
     circ:{rounds:4, reps:'6–8', work:20, rest:30, roundRest:180}, ss:{rest:150}},
-  mass:{name:'Muscle', hint:'6–12 reps', reps:{c:'6–10', i:'10–12'}, sets:{c:4, i:3}, rest:{c:120, i:75}, tempo:'3-0-1-0',
+  mass:{name:'Hypertrophy', hint:'6–12 reps', reps:{c:'6–10', i:'10–12'}, sets:{c:4, i:3}, rest:{c:120, i:75}, tempo:'3-0-1-0',
     load:{c:'≈ 70–80% of 1RM', i:''}, rir:[1, 2], rep:4, time:'30–45 s', dist:'30 m',
     circ:{rounds:3, reps:'10–12', work:30, rest:20, roundRest:120}, ss:{rest:90}},
-  cut:{name:'Definition', hint:'12–20 reps', reps:{c:'12–15', i:'15–20'}, sets:{c:3, i:3}, rest:{c:60, i:40}, tempo:'2-0-1-0',
+  cut:{name:'Muscular endurance', hint:'12–20 reps', reps:{c:'12–15', i:'15–20'}, sets:{c:3, i:3}, rest:{c:60, i:40}, tempo:'2-0-1-0',
     load:{c:'≈ 55–65% of 1RM', i:'until a strong burn'}, rir:null, rep:3, time:'45–60 s', dist:'40 m',
     circ:{rounds:4, reps:'15–20', work:40, rest:15, roundRest:90}, ss:{rest:60}},
   /* бережно: суставы болят или идёт восстановление (11g-gentle.js) — Garber et al., MSSE 2011, 43(7):1334–1359 */
-  gentle:{name:'Gentle', hint:'12–15 reps', reps:{c:'12–15', i:'12–15'}, sets:{c:2, i:2}, rest:{c:90, i:60}, tempo:'3-0-2-0',
+  gentle:{name:'Easy', hint:'12–15 reps', reps:{c:'12–15', i:'12–15'}, sets:{c:2, i:2}, rest:{c:90, i:60}, tempo:'3-0-2-0',
     load:{c:'≈ 40–60% of 1RM', i:'light weight'}, rir:[3, 4], rep:5, time:'20–30 s', dist:'20 m',
     circ:{rounds:2, reps:'12–15', work:30, rest:30, roundRest:120}, ss:{rest:90}}
 };
@@ -11239,7 +11240,7 @@ function eqName(id) {
   return EQN[id];
 }
 /* ---------- недельная программа ---------- */
-const MODES = {single:{name:'Workout', hint:'for one day'}, program:{name:'Program', hint:'for a week'}, custom:{name:'Custom plan', hint:'from favorites'}};
+const MODES = {single:{name:'Workout', hint:'for one day'}, program:{name:'Program', hint:'for a week'}, custom:{name:'Custom plan', hint:'your own list'}};
 const DAY_T = {
   fa:{name:'Full body', g:['quads', 'chest', 'back', 'shoulders', 'biceps', 'abs']},
   fb:{name:'Full body', g:['hams', 'glutes', 'back', 'chest', 'triceps', 'abs']},
@@ -11266,7 +11267,7 @@ const WD_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturd
    (reserveOf: цель и уровень открытого плана) */
 const WEEKS = [
   {name:'Intro', rir:3, add:0, pct:{strength:'≈ 75–80%', mass:'≈ 65–70%', cut:'≈ 55–60%', gentle:'≈ 40–50%'},
-    get note() { return `Choose working weights that leave ${reserveText(reserveOf(this))} in every set. Log weight and reps: next weeks' progress is built on them.`; }},
+    get note() { return `Choose working weights that leave ${reserveText(reserveOf(this))} in every set. Log weight and reps: the progress over the next weeks builds on them.`; }},
   {name:'Loading', rir:2, add:1, pct:{strength:'≈ 80–85%', mass:'≈ 70–75%', cut:'≈ 60–65%', gentle:'≈ 45–55%'},
     get note() { return `Compound exercises get an extra set. Increase weight using double progression, ${reserveText(reserveOf(this))}.`; }},
   {name:'Peak', rir:1, add:1, pct:{strength:'≈ 85–90%', mass:'≈ 75–80%', cut:'≈ 65–70%', gentle:'≈ 50–60%'},
@@ -11278,7 +11279,8 @@ const WEEKS = [
 const DEFAULTS = {goal:'mass', format:'classic', level:'mid', count:6, groups:['chest', 'back', 'shoulders'], equip:EQUIP.map(e => e.id), seed:7,
   mode:'single', days:3, split:'full', week:1, day:0, view:'plan', atlasM:'chest', focus:null, fav:[], customs:[], custom:null, gen:null, author:'', fold:null, protect:[],
   cpLast:null /* свой план, куда последним добавляли из атласа или разбора (11d-custom.js) */,
-  lr:{} /* «Л/П отдельно» по упражнениям: {exId:true} (13a-sets.js) */};
+  lr:{} /* «Л/П отдельно» по упражнениям: {exId:true} (13a-sets.js) */,
+  units:null /* единицы веса: 'kg' | 'lb'; null — по языку и региону браузера (13-log.js: wu) */};
 const STORE = 'podhod.settings.v1';
 function loadSettings() {
   try { const s = JSON.parse(localStorage.getItem(STORE) || 'null'); if (s && s.groups && s.equip) return Object.assign({}, DEFAULTS, s); } catch (e) {}
@@ -11304,7 +11306,17 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;', '<':'&lt;', '>
 const fmtRest = s => s >= 60 ? (s % 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s / 60} min`) : `${s} s`;
 /* середина повторов: «8–12» → 10; по подходам «10/8/6/5» — среднее */
 const midOf = r => { const s = String(r); if (s.includes('/')) { const l = s.split('/').map(Number).filter(v => v > 0); if (l.length) return l.reduce((a, b) => a + b, 0) / l.length; } const m = s.match(/(\d+)\D+(\d+)/); if (m) return (+m[1] + +m[2]) / 2; const n = parseFloat(r); return isNaN(n) ? 10 : n; };
-function plural(n, a, b, c) { const m10 = n % 10, m100 = n % 100; if (m10 === 1 && m100 !== 11) return a; if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return b; return c; }
+/* Правила языка сборки (build.js → PODHOD_LOCALE в начале app.js): десятичный разделитель, множественное число, даты,
+   единицы веса по умолчанию. Читаются при загрузке модулей, поэтому уже первая отрисовка — по правилам языка. Вне сборки
+   (проверки, исходники) — русские правила */
+function localeOf() { return (typeof window !== 'undefined' && window.PODHOD_LOCALE) || {}; }
+/* язык для Intl: первый язык браузера с языком страницы (en-US, en-GB), иначе язык страницы */
+function localeTag() {
+  const lang = (typeof window !== 'undefined' && window.PODHOD_LANG) || 'ru', nav = typeof navigator === 'undefined' ? [] : navigator.languages && navigator.languages.length ? [...navigator.languages] : [navigator.language];
+  return nav.find(t => typeof t === 'string' && t.toLowerCase().split(/[-_]/)[0] === lang) || lang;
+}
+/* множественное число: русское — три формы (1 подход, 2 подхода, 5 подходов); 'one' — форма a для 1, иначе c */
+function plural(n, a, b, c) { if (localeOf().plural === 'one') return n === 1 ? a : c; const m10 = n % 10, m100 = n % 100; if (m10 === 1 && m100 !== 11) return a; if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return b; return c; }
 /* Поиск по названиям упражнений. «ё» и «е» равны (ё раскладывается на е и две точки — U+0308, точки убираются; й остаётся
    собой), регистр и дефисы не важны. У каждого слова запроса отбрасывается окончание — «отжимание» находит «Отжимания»,
    «тяги» — «Тяга», «presses» — «press»; название подходит, если в нём есть все слова запроса без окончаний. */
@@ -11333,6 +11345,9 @@ function exName(ex, E) {
   if (ex.nameV) for (const id of chosenEquip(ex, E)) if (ex.nameV[id]) return ex.nameV[id];
   return ex.name;
 }
+/* название вне плана — как на плитке атласа: с инвентарём этого места, а если здесь упражнения нет — с полным инвентарём
+   («Румынская тяга со штангой» и в списке, и в переключателе разбора, и в подписях кнопок, и в файле плана) */
+function exNameHere(ex) { const E = effEquip(S.equip); return exName(ex, available(ex, E) ? E : effEquip(EQUIP.map(e => e.id))); }
 function propHas(ex, E) {
   const ch = new Set(chosenEquip(ex, E));
   return id => ch.has(id) || ((ex.opt || []).includes(id) && E.has(id));
@@ -11621,7 +11636,8 @@ function buildProgram() {
     const isFull = DAY_T[d.tid].name === 'Full body';
     const fullIdx = isFull ? tmpl.slice(0, d.i + 1).filter(t => DAY_T[t].name === 'Full body').length : 0;
     const fullTotal = tmpl.filter(t => DAY_T[t].name === 'Full body').length;
-    d.name = DAY_T[d.tid].name + (isFull ? (fullTotal > 1 ? ' ' + letters[fullIdx - 1] : '') : (same > 1 ? ' ' + letters[k - 1] : ''));
+    d.li = isFull ? (fullTotal > 1 ? fullIdx : 0) : (same > 1 ? k : 0); /* номер буквы дня — для ключа имени сохранённого плана (11a-names.js) */
+    d.name = DAY_T[d.tid].name + (d.li ? ' ' + letters[d.li - 1] : '');
   }
   const gvol = {}, load = {};
   let minutes = 0, sets = 0;
@@ -11695,7 +11711,7 @@ function renderSetup() {
     + (others.length ? `<label class="place-adapt">Program<select id="place-adapt"><option value="">Built for this place</option>${others.map(p => `<option value="${p.id}"${S.adapt === p.id ? ' selected' : ''}>As in “${esc(p.name)}”, with substitutes</option>`).join('')}</select></label>
       <p class="f-note">${S.adapt ? `Exercises are chosen for “${esc(placeOf(S, S.adapt).name)}”; anything missing here is replaced with the closest alternative — same movement, same muscles.` : 'The program is built from what this place has.'}</p>` : '');
   const es = new Set(S.equip);
-  $('#e-presets').innerHTML = '<span class="pres-l">Fill in:</span>' + EQUIP_PRESETS.map(p => {
+  $('#e-presets').innerHTML = '<span class="pres-l">Presets:</span>' + EQUIP_PRESETS.map(p => {
     const on = p.eq.length === es.size && p.eq.every(e => es.has(e));
     return `<button type="button" class="pre${on ? ' on' : ''}" data-ep="${p.id}">${p.name}</button>`;
   }).join('');
@@ -11716,11 +11732,17 @@ function renderSetup() {
 
 function titleFor() {
   if (S.mode === 'custom') return customOf().name;
-  const gs = new Set(S.groups);
+  return groupsTitle(S.groups);
+}
+/* название тренировки по группам мышц: заготовка («Верх тела») или список («Грудь, спина и плечи»); оно же — имя плана,
+   сохранённого из тренировки (ключ groups:…, 11a-names.js) */
+const GROUPS_AND = ' and ';
+function groupsTitle(groups) {
+  const gs = new Set(groups);
   const p = GROUP_PRESETS.find(p => p.g.length === gs.size && p.g.every(g => gs.has(g)));
   if (p) return p.id === 'full' ? 'Full body' : p.id === 'legs' ? 'Legs & glutes' : p.id === 'push' ? 'Chest, shoulders, triceps' : p.id === 'pull' ? 'Back, biceps, grip' : 'Upper body';
-  const names = S.groups.map(g => GN[g].toLowerCase());
-  const s = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
+  const names = groups.map(g => GN[g].toLowerCase());
+  const s = names.length > 1 ? names.slice(0, -1).join(', ') + GROUPS_AND + names[names.length - 1] : names[0] || '';
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
@@ -11749,7 +11771,7 @@ function volRow(g, val, max, extra = '', cls = '') {
 function rxKgHtml(it) {
   const r = it.rx; if (!r.kgPlan || typeof loadType !== 'function') return '';
   const lt = loadType(it.ex); if (lt === 'none') return '';
-  return `<span class="rx-kg">${lt === 'assist' ? 'counterweight ' : lt === 'extra' ? '+' : ''}${planKgText(r.kgPlan)} kg</span>`;
+  return `<span class="rx-kg">${lt === 'assist' ? 'counterweight ' : lt === 'extra' ? '+' : ''}${planKgText(r.kgPlan)} ${wUnit()}</span>`;
 }
 function rxHtml(it) {
   const r = it.rx;
@@ -11897,7 +11919,7 @@ function headButtons(copyLabel) {
   const w = workoutPlanState();
   return `${workoutAskHtml(w)}<div class="p-btns">
         <button type="button" class="btn" id="start-workout" aria-haspopup="dialog" aria-controls="workout-view">${workoutStartHtml(w)}</button>
-        ${S.mode === 'custom' ? '' : `<button type="button" class="btn btn-2" id="reroll">${ICON.dice}<span>Another option</span></button>`}
+        ${S.mode === 'custom' ? '' : `<button type="button" class="btn btn-2" id="reroll">${ICON.dice}<span>Shuffle</span></button>`}
         <button type="button" class="btn btn-2" id="copy">${ICON.copy}<span>${copyLabel}</span></button>
         ${S.mode === 'program' ? `<button type="button" class="btn btn-2" id="ics-open">${ICON.cal}<span>Add to calendar</span></button>` : ''}
         ${S.mode === 'custom' ? `<button type="button" class="btn btn-2" id="plan-export">${ICON.share}<span>Export</span></button>`
@@ -11965,9 +11987,9 @@ function renderPlanView() {
     <figure class="p-load${lf ? ' folded' : ''}">
       <div class="p-map">${muscleMapSvg(norm(plan.load), {labels:true, aria:'Workout load map'})}</div>
       <figcaption>
-        ${loadFoldHead('Load by muscle, sets', loadTop(loadRows))}
+        ${loadFoldHead('Sets per muscle', loadTop(loadRows))}
         <ul class="lbars">${loadBars(plan.load)}</ul>
-        <p class="lb-note">Assisting work counts as half a set.</p>
+        <p class="lb-note">Secondary muscles count as half a set.</p>
       </figcaption>
     </figure>
   </header>`;
@@ -12006,7 +12028,7 @@ function renderProgram() {
       <figcaption>
         ${loadFoldHead('Sets per group per week', loadTop(volRows))}
         <ul class="vbars">${volBars(prog.gvol, allGroups)}</ul>
-        <p class="lb-note">The band is a guide for muscle growth: 10–20 sets per week. A set counts in full for the target group and as half for the other working muscles. ${S.goal === 'strength' ? 'Volume is lower in a strength cycle — that\'s normal.' : S.goal === 'gentle' ? 'In gentle mode the volume is lower on purpose: joints and technique come first.' : ''}</p>
+        <p class="lb-note">The band is a guide for muscle growth: 10–20 sets per week. A set counts in full for the target group and as half for the other working muscles. ${S.goal === 'strength' ? 'Volume is lower in a strength cycle — that’s normal.' : S.goal === 'gentle' ? 'In gentle mode the volume is lower on purpose: joints and technique come first.' : ''}</p>
       </figcaption>
     </figure>
   </header>
@@ -12014,7 +12036,7 @@ function renderProgram() {
     <h2>4-week cycle</h2>
     <div class="wk" role="group" aria-label="Cycle week">${WEEKS.map((w, i) => `<button type="button" class="${i + 1 === S.week ? 'on' : ''}" data-week="${i + 1}" aria-pressed="${i + 1 === S.week}"><b>${i + 1}</b><small>${w.name}</small></button>`).join('')}</div>
     <p class="wk-note"><b>${wk.name}.</b> ${esc(wk.note)}</p>
-    <details class="rule"><summary>How to add weight</summary><p>Work within the rep range on the card. Once you hit the top of the range in every set, add weight next time — 1–2.5 kg for the upper body, 2.5–5 kg for legs — and start again from the bottom of the range. If you log your sets on the cards, the planner will tell you when to increase. After the deload, repeat the cycle with the new weights.</p></details>
+    <details class="rule"><summary>How to add weight</summary><p>Work within the rep range on the card. Once you hit the top of the range in every set, add weight next time — ${unitRange([1, 2.5], [2.5, 5])} for the upper body, ${unitRange([2.5, 5], [5, 10])} for legs — and start again from the bottom of the range. If you log your sets on the cards, the planner will tell you when to increase. After the deload, repeat the cycle with the new weights.</p></details>
   </section>
   <nav class="days" role="tablist" aria-label="Days of the week">${prog.days.map((d, i) => `<button type="button" role="tab" class="${i === S.day ? 'on' : ''}" data-day="${i}" aria-selected="${i === S.day}"><b>${WD[d.wd]}</b><span>${esc(d.name)}</span><small>${d.plan.items ? `≈${d.plan.minutes} min` : 'no exercises'}</small></button>`).join('')}</nav>
   <div class="day-head"><h2>${WD_FULL[day.wd]} — ${esc(day.name)}</h2>
@@ -12024,6 +12046,127 @@ function renderProgram() {
   html += LEGEND;
   $('#plan').innerHTML = html;
   if (plan.items) mountFigures();
+}
+
+/* ===================== ИМЕНА ПО УМОЛЧАНИЮ =====================
+   Планы, программы и места, которые назвало приложение, а не человек («Мой план», «План 2», «Зал», «Место 5»,
+   «Пн · Верх», «Всё тело · неделя 2»), хранят ключ имени: у плана и места — auto, у программы плана — gauto. Имя
+   по ключу пишется на языке страницы при каждой загрузке (ensureCustoms, ensurePlaces): созданные в русской версии
+   не остаются русскими в английской, и наоборот. Переименовал человек — ключ снимается, имя остаётся его.
+   Ключ — основа и поправки по порядку:
+     my — «Мой план»; plan:N — «План N»; day:Д:Т[:Б] — день программы (Д — день недели 0–6, Т — шаблон дня DAY_T,
+     Б — номер буквы: «Ср · Всё тело Б»); groups:g1,g2 — тренировка по группам мышц («Грудь, спина и плечи»);
+     split:С:Н — программа недели («Всё тело · неделя 2»); place:N — «Место N»; gym, home, street, homeband — места-заготовки;
+     +copy — «… — копия»; #k — номер занятого имени «… (k)».
+   Данные прежних версий (только имя): имя, совпадающее с именем по умолчанию на русском или английском, получает ключ
+   (autoGuess). Файл плана несёт ключ рядом с именем (docs/plan-format.md); прежние версии ключ пропускают и видят имя. */
+const AUTO_LETTERS = {full:'ABCD', other:'AB'};
+/* Имена прежних версий на обоих языках сборки. Русские — в регулярных выражениях: строки с кириллицей при сборке
+   английской версии переводятся, регулярные выражения — нет. Порядок — как у ключей рядом */
+const AUTO_LEGACY = {
+  ids:{places:['gym', 'home', 'street', 'homeband'], days:['fa', 'up', 'lo', 'push', 'pull', 'legs'], splits:['full', 'ul', 'ppl'],
+    presets:['full', 'legs', 'push', 'pull', 'upper'], groups:['chest', 'back', 'shoulders', 'biceps', 'triceps', 'forearms', 'abs', 'glutes', 'quads', 'hams', 'calves', 'cardio']},
+  ru:{my:/Мой план/, plan:/План/, place:/Место/, copy:/копия/, week:/неделя/, and:/и/, letters:/АБВГ/,
+    places:/Зал|Дом|Улица|Дома с эспандером/, wd:/Пн|Вт|Ср|Чт|Пт|Сб|Вс/, days:/Всё тело|Верх|Низ|Жим|Тяга|Ноги/,
+    splits:/Всё тело|Верх \/ низ|Жим \/ тяга \/ ноги/, presets:/Всё тело|Ноги и ягодицы|Грудь, плечи, трицепс|Спина, бицепс, хват|Верх тела/,
+    groups:/грудь|спина|плечи|бицепс|трицепс|предплечья|пресс|ягодицы|квадрицепс|бицепс бедра|икры|кардио/},
+  en:{my:'My plan', plan:'Plan', place:'Place', copy:'copy', week:'week', and:'and', letters:'ABCD',
+    places:'Gym|Home|Outdoors|Home with bands', wd:'Mon|Tue|Wed|Thu|Fri|Sat|Sun', days:'Full body|Upper|Lower|Push|Pull|Legs',
+    splits:'Full body|Upper / lower|Push / pull / legs', presets:'Full body|Legs & glutes|Chest, shoulders, triceps|Back, biceps, grip|Upper body',
+    groups:'chest|back|shoulders|biceps|triceps|forearms|abs|glutes|quads|hamstrings|calves|cardio'}
+};
+const autoList = v => (v instanceof RegExp ? v.source.replace(/\\\//g, '/') : String(v)).split('|');
+/* имя основы ключа на языке страницы или null */
+function autoBase(b) {
+  let m;
+  if (b === 'my') return 'My plan';
+  if ((m = /^plan:([1-9]\d{0,2})$/.exec(b))) return 'Plan ' + m[1];
+  if ((m = /^place:([1-9]\d{0,2})$/.exec(b))) return 'Place ' + m[1];
+  const pd = typeof PLACE_DEFAULTS !== 'undefined' && PLACE_DEFAULTS.find(p => p.id === b); if (pd) return pd.name;
+  if ((m = /^day:([0-6]):(\w+)(?::([1-4]))?$/.exec(b)) && DAY_T[m[2]]) {
+    const letters = DAY_T[m[2]].name === 'Full body' ? AUTO_LETTERS.full : AUTO_LETTERS.other, li = m[3] ? +m[3] : 0;
+    return li > letters.length ? null : `${WD[+m[1]]} · ${DAY_T[m[2]].name}${li ? ' ' + letters[li - 1] : ''}`;
+  }
+  if ((m = /^split:(\w+):([1-9])$/.exec(b)) && SPLITS[m[1]]) return `${SPLITS[m[1]].name} · week ${m[2]}`;
+  if ((m = /^groups:([\w,]{1,200})$/.exec(b))) { const g = m[1].split(','); if (g.every(x => GN[x]) && new Set(g).size === g.length) return groupsTitle(g); }
+  return null;
+}
+/* вид ключа: имя плана, программы или места */
+function autoKind(key) {
+  const b = String(key).split(/[+#]/)[0];
+  return /^(?:my|plan:\d+|day:.+|groups:.+)$/.test(b) ? 'plan' : /^split:/.test(b) ? 'group' : /^place:\d+$/.test(b) || AUTO_LEGACY.ids.places.includes(b) ? 'place' : null;
+}
+/* имя по ключу на языке страницы или null (ключ неверный) */
+function autoName(key) {
+  if (typeof key !== 'string' || key.length > 240) return null;
+  const m = /^([^+#]+)((?:\+copy|#[1-9]\d{0,2})*)$/.exec(key); if (!m) return null;
+  let s = autoBase(m[1]); if (!s) return null;
+  for (const [, copy, k] of m[2].matchAll(/(\+copy)|#(\d+)/g)) s = copy ? `${s} — copy` : `${s} (${k})`;
+  return s.slice(0, CUSTOM_NAME_MAX);
+}
+const CUSTOM_NAME_MAX = 40;
+/* имена по умолчанию → основа ключа: на языке страницы, по-русски и по-английски (для данных прежних версий) */
+let autoNames = null;
+function autoNameMap() {
+  if (autoNames) return autoNames;
+  const add = (map, name, key) => { if (name && !map.has(name)) map.set(name, key); };
+  const plan = new Map(), place = new Map(), group = new Map();
+  const ids = AUTO_LEGACY.ids;
+  /* на языке страницы — по ключам */
+  add(plan, autoBase('my'), 'my');
+  for (const id of ids.places) add(place, autoBase(id), id);
+  for (const tid of Object.keys(DAY_T)) for (let wd = 0; wd < 7; wd++) for (let li = 0; li <= 4; li++) { const k = `day:${wd}:${tid}${li ? ':' + li : ''}`; add(plan, autoBase(k), k); }
+  for (const sp of Object.keys(SPLITS)) for (let w = 1; w <= 9; w++) add(group, autoBase(`split:${sp}:${w}`), `split:${sp}:${w}`);
+  for (const p of GROUP_PRESETS) add(plan, groupsTitle(p.g), 'groups:' + p.g.join(','));
+  /* по-русски и по-английски — по спискам прежних версий */
+  for (const L of [AUTO_LEGACY.ru, AUTO_LEGACY.en]) {
+    add(plan, autoList(L.my)[0], 'my');
+    autoList(L.places).forEach((n, i) => add(place, n, ids.places[i]));
+    const wd = autoList(L.wd), days = autoList(L.days), letters = autoList(L.letters)[0];
+    days.forEach((dn, j) => { for (let w = 0; w < 7; w++) for (let li = 0; li <= (j ? 2 : 4); li++) add(plan, `${wd[w]} · ${dn}${li ? ' ' + letters[li - 1] : ''}`, `day:${w}:${ids.days[j]}${li ? ':' + li : ''}`); });
+    autoList(L.splits).forEach((sn, j) => { for (let w = 1; w <= 9; w++) add(group, `${sn} · ${autoList(L.week)[0]} ${w}`, `split:${ids.splits[j]}:${w}`); });
+    autoList(L.presets).forEach((pn, j) => { const p = GROUP_PRESETS.find(x => x.id === ids.presets[j]); if (p) add(plan, pn, 'groups:' + p.g.join(',')); });
+  }
+  return (autoNames = {plan, place, group});
+}
+/* «Грудь, спина и плечи» → groups:chest,back,shoulders (на языке страницы, по-русски и по-английски) */
+function autoGroupsGuess(s) {
+  const low = s.toLowerCase(), ids = AUTO_LEGACY.ids.groups;
+  const langs = [[ids.map(g => String(GN[g]).toLowerCase()), GROUPS_AND.trim()], [autoList(AUTO_LEGACY.ru.groups), autoList(AUTO_LEGACY.ru.and)[0]], [autoList(AUTO_LEGACY.en.groups), AUTO_LEGACY.en.and]];
+  for (const [names, and] of langs) {
+    const parts = low.split(new RegExp(`, | ${and} `)), out = parts.map(p => ids[names.indexOf(p)]);
+    const text = parts.length > 1 ? parts.slice(0, -1).join(', ') + ` ${and} ` + parts[parts.length - 1] : parts[0];
+    if (out.every(Boolean) && new Set(out).size === out.length && text === low) return 'groups:' + out.join(',');
+  }
+  return null;
+}
+/* ключ имени прежней версии: kind — 'plan' | 'place' | 'group'; id — код места (заготовки узнаются только на своём месте) */
+function autoGuess(name, kind, id) {
+  if (typeof name !== 'string' || !name.trim()) return null;
+  let s = name.trim(), mods = '', m;
+  if (kind === 'plan') for (;;) {
+    if ((m = /^(.*\S) \(([1-9]\d{0,2})\)$/.exec(s))) { s = m[1]; mods = '#' + m[2] + mods; continue; }
+    if ((m = /^(.*\S) — (?:копия|copy)$/.exec(s))) { s = m[1]; mods = '+copy' + mods; continue; }
+    break;
+  }
+  const map = autoNameMap()[kind]; let base = map && map.get(s) || null;
+  if (kind === 'place' && base && base !== id) base = null;
+  if (!base && kind === 'plan' && (m = /^(?:План|Plan) ([1-9]\d{0,2})$/.exec(s))) base = 'plan:' + m[1];
+  if (!base && kind === 'place' && (m = /^(?:Место|Place) ([1-9]\d{0,2})$/.exec(s))) base = 'place:' + m[1];
+  if (!base && kind === 'plan') base = autoGroupsGuess(s);
+  return base && autoName(base + mods) ? base + mods : null;
+}
+/* ключ из данных (свой, если верный и того же вида) или угаданный по имени */
+function autoKey(given, name, kind, id) {
+  if (typeof given === 'string' && autoKind(given) === kind && autoName(given)) return given;
+  return autoGuess(name, kind, id);
+}
+/* имя и ключ нового плана: занятое имя получает номер «(2)», ключ — «#2» */
+function namedPlan(name, auto, taken) {
+  const base = auto && autoName(auto) || name, n = uniquePlanName(base, taken);
+  if (!auto || !autoName(auto)) return {name:n};
+  const m = n !== base && / \((\d+)\)$/.exec(n);
+  return {name:n, auto:m ? `${auto}#${m[1]}` : auto};
 }
 
 /* ===================== АНАЛОГИ УПРАЖНЕНИЙ =====================
@@ -12039,7 +12182,7 @@ const PATTERN_NAMES = {squat:'squat', hinge:'hip hinge', hpush:'horizontal press
 
 /* вид сопротивления: от него зависит, как ощущается замена */
 const LOAD_KIND_NOTE = {
-  band:'band: resistance rises towards the end of the range',
+  band:'band: resistance rises toward the end of the range',
   body:'bodyweight: progress with tempo and range',
   free:'free weight: more work for stabilizers',
   machine:'machine guides the path: less stabilization',
@@ -12112,7 +12255,7 @@ const PLACE_DEFAULTS = [
 const PLACE_ADDED = [[1, 'homeband']];
 function ensurePlaces(s) {
   if (!Array.isArray(s.places) || !s.places.length) {
-    s.places = PLACE_DEFAULTS.map(p => ({...p, equip:p.equip.slice()}));
+    s.places = PLACE_DEFAULTS.map(p => ({...p, auto:p.id, equip:p.equip.slice()}));
     /* перенос старой настройки: инвентарь, который уже был выбран, становится инвентарём подходящего места */
     const same = (a, b) => a.length === b.length && a.every(x => b.includes(x));
     const match = s.places.find(p => same(p.equip, s.equip || []));
@@ -12121,9 +12264,11 @@ function ensurePlaces(s) {
   }
   for (const [v, id] of PLACE_ADDED) if ((s.placesV || 0) < v) {
     const d = PLACE_DEFAULTS.find(p => p.id === id);
-    if (!s.places.some(p => p.id === id)) s.places.push({...d, equip:d.equip.slice()});
+    if (!s.places.some(p => p.id === id)) s.places.push({...d, auto:d.id, equip:d.equip.slice()});
     s.placesV = v;
   }
+  /* имена по умолчанию — на языке страницы (11a-names.js) */
+  for (const p of s.places) { const a = autoKey(p.auto, p.name, 'place', p.id); if (a) { p.auto = a; p.name = autoName(a); } else delete p.auto; }
   if (!s.places.some(p => p.id === s.place)) s.place = s.places[0].id;
   if (s.adapt && (!s.places.some(p => p.id === s.adapt) || s.adapt === s.place)) s.adapt = null;
   s.equip = placeOf(s).equip.slice();
@@ -12189,22 +12334,28 @@ const CUSTOM_REPS = /^(\d{1,3})(?:\s*[–-]\s*(\d{1,3}))?$/;
 const CUSTOM_TEMPO = /^[0-9X]{1,2}-[0-9X]{1,2}-[0-9X]{1,2}-[0-9X]{1,2}$/;
 const PLAN_KEYS = ['goal', 'format', 'level'];
 let cpTab = null, cpOpen = new Set(), cpDel = false;
+/* блок «Программа, для кого, заметка» раскрыли — остаётся раскрытым, когда панель перерисовывается (Enter в «Названии»
+   и другие правки), до перезагрузки страницы */
+let cpAboutOpen = false;
+document.addEventListener('toggle', e => { if (e.target && e.target.classList && e.target.classList.contains('cp-about')) cpAboutOpen = e.target.open; }, true);
 
 /* текст от человека или из чужого файла: без управляющих символов, с ограничением длины (переводы строк в заметках остаются) */
 function cleanText(v, max, lines = false) {
   if (typeof v !== 'string') return '';
   return v.replace(lines ? /[\u0000-\u0009\u000B-\u001F\u007F]/g : /[\u0000-\u001F\u007F]/g, lines ? '' : ' ').replace(/[ \t]+/g, ' ').trim().slice(0, max);
 }
-/* вес: одно число на все подходы или по подходам; 0–500 кг, шаг 0,25 */
+/* вес: одно число на все подходы или по подходам; 0–500 кг, до тысячных килограмма (вписанное в фунтах — тем же числом
+   фунтов; прежние версии округляли до 0,25 кг) */
 function cleanKg(v) {
   const list = (Array.isArray(v) ? v : [v]).map(x => typeof x === 'string' ? parseFloat(x.replace(',', '.')) : x)
-    .filter(x => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 500).map(x => Math.round(x * 4) / 4).slice(0, 10);
+    .filter(x => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 500).map(x => Math.round(x * 1000) / 1000).slice(0, 10);
   return list.length ? list : null;
 }
 /* ввод веса: «60», «62,5», «60 / 62,5 / 65», «60, 62,5, 65» — запятая с пробелом, пробел, «/» и «;» разделяют подходы,
    запятая внутри числа — десятичная */
 function parseKgInput(text) {
-  return cleanKg(String(text || '').split(/\s*[;\/]\s*|,\s+|\s+/).map(x => x.trim()).filter(Boolean));
+  /* вписано в выбранных единицах (13-log.js: fromU), хранится в килограммах */
+  return cleanKg(String(text || '').split(/\s*[;\/]\s*|,\s+|\s+/).map(x => x.trim()).filter(Boolean).map(x => { const n = parseFloat(x.replace(',', '.')); return Number.isFinite(n) ? fromU(n) : x; }));
 }
 /* повторы: «8», «8–12» или по подходам — «10/8/6/5» (через «/», «;», запятую или пробел; 2–10 значений; одинаковые
    сводятся к одному числу). Хранятся и выгружаются в файл плана строкой «10/8/6/5»; прежние версии такую строку
@@ -12230,10 +12381,13 @@ function cleanCustomItem(it) {
   return o;
 }
 function cleanPlan(c, id) {
-  const ids = new Set(), out = {id, name:cleanText(c.name, CUSTOM_NAME) || 'My plan',
+  /* имя по умолчанию (ключ auto, 11a-names.js) — на языке страницы; без имени — «Мой план» */
+  const nm = cleanText(c.name, CUSTOM_NAME), auto = autoKey(c.auto, nm, 'plan') || (nm ? null : 'my');
+  const ids = new Set(), out = {id, name:auto ? autoName(auto) : nm, ...(auto ? {auto} : {}),
     items:(Array.isArray(c.items) ? c.items : []).map(cleanCustomItem).filter(it => it && !ids.has(it.id) && ids.add(it.id)).slice(0, CUSTOM_MAX)};
   for (const [k, dict] of [['goal', GOALS], ['format', FORMATS], ['level', LEVELS]]) if (typeof c[k] === 'string' && dict[c[k]]) out[k] = c[k];
   for (const k of ['group', 'for', 'from']) { const v = cleanText(c[k], CUSTOM_TEXT); if (v) out[k] = v; }
+  const gauto = out.group && autoKey(c.gauto, out.group, 'group'); if (gauto) { out.group = autoName(gauto); out.gauto = gauto; }
   const note = cleanText(c.note, CUSTOM_NOTE, true); if (note) out.note = note;
   return out;
 }
@@ -12242,7 +12396,7 @@ function ensureCustoms(s) {
   s.fav = Array.isArray(s.fav) ? [...new Set(s.fav.filter(id => typeof id === 'string' && EXI[id]))] : [];
   const seen = new Set();
   s.customs = (Array.isArray(s.customs) ? s.customs : []).filter(c => c && typeof c.id === 'string' && /^[\w-]{1,24}$/.test(c.id) && !seen.has(c.id) && seen.add(c.id)).map(c => cleanPlan(c, c.id));
-  if (!s.customs.length) s.customs.push({id:'c1', name:'My plan', items:[]});
+  if (!s.customs.length) s.customs.push({id:'c1', name:autoName('my'), auto:'my', items:[]});
   if (!s.customs.some(c => c.id === s.custom)) s.custom = s.customs[0].id;
   /* последний выбранный в «+ В свой план» план: удалён или испорчен — забывается, первым в списке станет открытый */
   if (!s.customs.some(c => c.id === s.cpLast)) s.cpLast = null;
@@ -12282,14 +12436,14 @@ function toggleFav(id) {
 function favLabel(on) { return on ? 'Remove from favorites' : 'Add to favorites'; }
 function favButton(id, text = false) {
   const on = isFav(id);
-  return `<button type="button" class="fav${on ? ' on' : ''}${text ? ' fav-t' : ''}" data-fav="${id}" aria-pressed="${on}" aria-label="${favLabel(on)}: ${esc(EXI[id].name)}" title="${favLabel(on)}"><span class="fav-i" aria-hidden="true">${on ? '★' : '☆'}</span>${text ? `<span class="fav-l">${on ? 'In favorites' : 'Add to favorites'}</span>` : ''}</button>`;
+  return `<button type="button" class="fav${on ? ' on' : ''}${text ? ' fav-t' : ''}" data-fav="${id}" aria-pressed="${on}" aria-label="${favLabel(on)}: ${esc(exNameHere(EXI[id]))}" title="${favLabel(on)}"><span class="fav-i" aria-hidden="true">${on ? '★' : '☆'}</span>${text ? `<span class="fav-l">${on ? 'In favorites' : 'Add to favorites'}</span>` : ''}</button>`;
 }
 /* звёздочки обновляются на месте: анимации и открытые панели не перестраиваются */
 function refreshFav(id) {
   const on = isFav(id);
   for (const b of document.querySelectorAll(`[data-fav="${id}"]`)) {
     b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); b.setAttribute('title', favLabel(on));
-    b.setAttribute('aria-label', `${favLabel(on)}: ${EXI[id].name}`);
+    b.setAttribute('aria-label', `${favLabel(on)}: ${exNameHere(EXI[id])}`);
     const i = b.querySelector('.fav-i'); if (i) i.textContent = on ? '★' : '☆';
     const l = b.querySelector('.fav-l'); if (l) l.textContent = on ? 'In favorites' : 'Add to favorites';
   }
@@ -12312,7 +12466,7 @@ function customAdd(id) {
 function newCustomPlan() {
   const c = customOf(), taken = new Set(S.customs.map(p => p.name));
   let n = S.customs.length + 1; while (taken.has('Plan ' + n)) n++;
-  return {id:newPlanId(), name:'Plan ' + n, items:[], ...(S.mode === 'custom' && c.group ? {group:c.group} : {}), ...Object.fromEntries(PLAN_KEYS.map(k => [k, S[k]]))};
+  return {id:newPlanId(), name:'Plan ' + n, auto:'plan:' + n, items:[], ...(S.mode === 'custom' && c.group ? {group:c.group, ...(c.gauto ? {gauto:c.gauto} : {})} : {}), ...Object.fromEntries(PLAN_KEYS.map(k => [k, S[k]]))};
 }
 /* «+ В свой план» в атласе и в разборе: в выбранный план (planId) или в новый (planId пустой). Открытый план, режим
    и вид не меняются (S.custom, S.mode, S.view). Добавленное запоминает план первым в списке (S.cpLast). */
@@ -12410,7 +12564,7 @@ function customSetupHtml() {
   return `${lists}<div class="cp-acts"><button type="button" class="place place-add" data-cp-new="1">+ Plan</button><button type="button" class="btn-ghost" data-cp-copy="1">Duplicate plan</button><button type="button" class="btn-ghost" data-cp-import="1">${ICON.load}<span>Import plan</span></button></div>`
     + `<div class="place-tools"><label class="place-name">Name<input id="cp-name" type="text" maxlength="${CUSTOM_NAME}" value="${esc(c.name)}" autocomplete="off"></label>`
     + (S.customs.length > 1 ? `<button type="button" class="place-del${cpDel ? ' armed' : ''}" data-cp-del="1">${cpDel ? 'Are you sure?' : 'Delete plan'}</button>` : '') + `</div>`
-    + `<details class="cp-about"${c.group || c.for || c.note ? ' open' : ''}><summary>Program, athlete, note</summary><div class="cp-about-f">
+    + `<details class="cp-about"${c.group || c.for || c.note || cpAboutOpen ? ' open' : ''}><summary>Program, athlete, note</summary><div class="cp-about-f">
         <label class="place-name">Program<input id="cp-group" type="text" maxlength="${CUSTOM_TEXT}" list="cp-groups" value="${esc(c.group || '')}" placeholder="For example: Strength, week 1" autocomplete="off"><datalist id="cp-groups">${known.map(g => `<option value="${esc(g)}"></option>`).join('')}</datalist></label>
         <label class="place-name">For<input id="cp-for" type="text" maxlength="${CUSTOM_TEXT}" value="${esc(c.for || '')}" placeholder="Athlete’s name" autocomplete="off"></label>
         <label class="place-name cp-pnote">Plan note<textarea id="cp-pnote" rows="2" maxlength="${CUSTOM_NOTE}" placeholder="Goal, how you feel, what matters in this workout">${esc(c.note || '')}</textarea></label>
@@ -12436,7 +12590,7 @@ function customListHtml() {
     const list = EX.filter(ex => ex.g === g && available(ex, E) && ex.lvl <= lvlMax).sort((a, b) => (fitsBody(a) ? 0 : 1) - (fitsBody(b) ? 0 : 1) || (a.type === 'c' ? 0 : 1) - (b.type === 'c' ? 0 : 1) || (EX_W[b.id] ?? 1) - (EX_W[a.id] ?? 1));
     /* по шесть на группу, остальное — по кнопке: на телефоне список не превращается в ленту */
     const rows = list.map((ex, i) => customRowHtml(ex, E).replace('<li class="cp-row', i >= 6 ? `<li hidden data-cp-g="${g}" class="cp-row` : '<li class="cp-row'));
-    return list.length ? `<li class="cp-gh">${esc(GN[g])} <small>${list.length}</small></li>` + rows.join('') + (list.length > 6 ? `<li class="cp-morel"><button type="button" class="link" data-cp-more="${g}">More: ${list.length - 6}</button></li>` : '') : '';
+    return list.length ? `<li class="cp-gh">${esc(GN[g])} <small>${list.length}</small></li>` + rows.join('') + (list.length > 6 ? `<li class="cp-morel"><button type="button" class="link" data-cp-more="${g}">${'{n} more'.replace('{n}', list.length - 6)}</button></li>` : '') : '';
   }).join('') || `<li class="cp-none">No exercises for these muscles here — add equipment to this place.</li>`;
 }
 function customAddHtml() {
@@ -12482,9 +12636,9 @@ function customToolsHtml(it) {
         ${it.ex.kind ? '' : `<label class="cp-f"><span>Tempo</span><input type="text" maxlength="11" data-cp-tempo="${slot}" value="${esc(o.tempo || '')}" placeholder="${esc(r.tempo || '3-0-1-0')}" aria-label="Tempo: lowering, pause, lifting, pause — for example 3-0-1-0" autocomplete="off"></label>`}
         ${o.sets || o.reps || o.rest !== undefined || o.tempo ? `<button type="button" class="btn-ghost cp-reset" data-cp-reset="${slot}">Use goal default</button>` : ''}
       </div>`;
-  const lt = loadType(it.ex), kgLabel = lt === 'assist' ? 'Counterweight, kg' : lt === 'extra' ? 'Extra weight, kg' : 'Weight, kg';
+  const lt = loadType(it.ex), u = wUnit(), kgLabel = lt === 'assist' ? `Counterweight, ${u}` : lt === 'extra' ? `Extra weight, ${u}` : `Weight, ${u}`;
   const extra = `<div class="cp-fields">
-      ${lt === 'none' ? '' : `<label class="cp-f cp-kg"><span>${kgLabel}</span><input type="text" maxlength="60" data-cp-kg="${slot}" value="${o.kg ? esc(o.kg.map(fmtKg).join(' / ')) : ''}" placeholder="60 or 60 / 62.5 / 65" aria-label="${kgLabel}: one number for all sets, or per set separated by “/”" autocomplete="off"></label>`}
+      ${lt === 'none' ? '' : `<label class="cp-f cp-kg"><span>${kgLabel}</span><input type="text" maxlength="60" data-cp-kg="${slot}" value="${o.kg ? esc(o.kg.map(fmtKg).join(' / ')) : ''}" placeholder="${isLb() ? '135 or 135 / 140 / 145' : '60 or 60 / 62.5 / 65'}" aria-label="${kgLabel}: one number for all sets, or per set separated by “/”" autocomplete="off"></label>`}
       <label class="cp-f cp-note"><span>Exercise note</span><textarea rows="2" maxlength="${ITEM_NOTE}" data-cp-note="${slot}" placeholder="For example: 1 s pause on the chest">${esc(o.note || '')}</textarea></label>
     </div>`;
   return `<div class="cp-tools">
@@ -12500,7 +12654,7 @@ function customEmptyHtml() {
 /* под названием своего плана: программа, для кого, от кого и заметка */
 function customHeadHtml() {
   /* название программы само может содержать «·», поэтому части разделены отступом, а значения выделены */
-  const c = customOf(), sub = [c.group ? `<span>program: <b>${esc(c.group)}</b></span>` : '', c.for ? `<span>for: <b>${esc(c.for)}</b></span>` : '', c.from ? `<span>from: <b>${esc(c.from)}</b></span>` : ''].filter(Boolean);
+  const c = customOf(), sub = [c.group ? `<span>Program: <b>${esc(c.group)}</b></span>` : '', c.for ? `<span>For: <b>${esc(c.for)}</b></span>` : '', c.from ? `<span>From: <b>${esc(c.from)}</b></span>` : ''].filter(Boolean);
   return (sub.length ? `<p class="cp-sub">${sub.join('')}</p>` : '') + (c.note ? `<p class="c-note cp-pn">${esc(c.note)}</p>` : '');
 }
 
@@ -12525,9 +12679,10 @@ function freezePlan(p) {
 function savePlansFrom() {
   const set = Object.fromEntries(PLAN_KEYS.map(k => [k, S[k]])), added = [];
   if (S.mode === 'program' && prog) {
-    const group = cleanText(`${SPLITS[prog.split].name} · week ${S.week}`, CUSTOM_TEXT);
-    for (const d of prog.days) if (d.plan.items) added.push({id:newPlanId(), name:uniquePlanName(`${WD[d.wd]} · ${d.name}`, S.customs.map(c => c.name).concat(added.map(c => c.name))), group, ...set, items:freezePlan(d.plan)});
-  } else if (plan && plan.items) added.push({id:newPlanId(), name:uniquePlanName(titleFor()), ...set, items:freezePlan(plan)});
+    /* имена и программа — с ключами (11a-names.js): в другом языке они пишутся на нём */
+    const gauto = `split:${prog.split}:${S.week}`, group = cleanText(autoName(gauto) || `${SPLITS[prog.split].name} · week ${S.week}`, CUSTOM_TEXT);
+    for (const d of prog.days) if (d.plan.items) added.push({id:newPlanId(), ...namedPlan(`${WD[d.wd]} · ${d.name}`, `day:${d.wd}:${d.tid}${d.li ? ':' + d.li : ''}`, S.customs.map(c => c.name).concat(added.map(c => c.name))), group, gauto, ...set, items:freezePlan(d.plan)});
+  } else if (plan && plan.items) added.push({id:newPlanId(), ...namedPlan(titleFor(), S.mode === 'custom' ? customOf().auto : S.groups.length ? 'groups:' + S.groups.join(',') : null), ...set, items:freezePlan(plan)});
   S.customs.push(...added); saveSettings();
   return added;
 }
@@ -12580,7 +12735,8 @@ document.addEventListener('click', e => {
     return;
   }
   if (t.dataset.cpCopy !== undefined) {
-    const c = customOf(), copy = JSON.parse(JSON.stringify(c)); copy.id = newPlanId(); copy.name = uniquePlanName(c.name + ' — copy');
+    const c = customOf(), copy = JSON.parse(JSON.stringify(c)); copy.id = newPlanId(); delete copy.auto;
+    Object.assign(copy, namedPlan(c.name + ' — copy', c.auto ? c.auto + '+copy' : null));
     S.customs.splice(S.customs.indexOf(c) + 1, 0, copy); openCustom(copy.id); regen();
     const inp = $('#cp-name'); if (inp) { inp.focus(); inp.select(); }
     return;
@@ -12605,9 +12761,10 @@ document.addEventListener('change', e => {
   if (['cp-group', 'cp-for', 'cp-pnote'].includes(t.id)) {
     const c = customOf(), k = {'cp-group':'group', 'cp-for':'for', 'cp-pnote':'note'}[t.id], v = k === 'note' ? cleanText(t.value, CUSTOM_NOTE, true) : cleanText(t.value, CUSTOM_TEXT);
     if (v) c[k] = v; else delete c[k];
+    if (k === 'group' && v !== (c.gauto && autoName(c.gauto))) delete c.gauto; /* программу переименовали — имя её, а не по умолчанию */
     saveSettings(); if (k === 'group') renderSetup(); if (S.mode === 'custom' && S.view === 'plan') renderPlan(); return;
   }
-  if (t.id === 'cp-name') { const v = t.value.trim().slice(0, CUSTOM_NAME); if (v) customOf().name = v; saveSettings(); renderSetup(); if (S.mode === 'custom' && S.view === 'plan') renderPlan(); return; }
+  if (t.id === 'cp-name') { const v = t.value.trim().slice(0, CUSTOM_NAME), c = customOf(); if (v && v !== c.name) { c.name = v; delete c.auto; } saveSettings(); renderSetup(); if (S.mode === 'custom' && S.view === 'plan') renderPlan(); return; }
   if (t.dataset.cpReps !== undefined) {
     const s = +t.dataset.cpReps;
     if (!customSetReps(s, t.value)) { t.value = plan.items.find(x => x.slot === s)?.rx.reps || ''; return; }
@@ -12651,7 +12808,7 @@ function withPlanSettings(c, fn) {
 function exportItem(c, item) {
   const ex = EXI[item.id];
   return withPlanSettings(c, () => {
-    const rx = customRx(prescribe(ex, null, effEquip(EQUIP.map(e => e.id))), item, ex), o = {id:ex.id, name:ex.name};
+    const rx = customRx(prescribe(ex, null, effEquip(EQUIP.map(e => e.id))), item, ex), o = {id:ex.id, name:exNameHere(ex)};
     if (!rx.static) {
       if (S.format !== 'circuit') { o.sets = rx.sets; o.rest = rx.rest; }
       if (!ex.kind) o.reps = item.reps || (S.format === 'circuit' ? GOALS[S.goal].circ.reps : String(rx.reps));
@@ -12664,7 +12821,10 @@ function exportItem(c, item) {
 }
 function exportPlan(c) {
   const o = {name:c.name};
+  /* ключ имени по умолчанию (11a-names.js): получатель увидит имя на своём языке; прежние версии ключ пропускают */
+  if (c.auto) o.auto = c.auto;
   for (const k of ['group', 'for', 'note']) if (c[k]) o[k] = c[k];
+  if (c.group && c.gauto) o.gauto = c.gauto;
   for (const k of PLAN_KEYS) o[k] = c[k] || S.gen[k] || S[k];
   o.items = c.items.map(it => exportItem(c, it));
   return o;
@@ -12708,7 +12868,7 @@ function readPlanFile(text) {
 /* добавление: всегда новыми планами, занятые имена получают «(2)» */
 function addPlans(plans) {
   const taken = S.customs.map(c => c.name), added = [];
-  for (const p of plans) { const c = {...p, id:newPlanId(), name:uniquePlanName(p.name, taken)}; taken.push(c.name); S.customs.push(c); added.push(c); }
+  for (const p of plans) { const c = {...p, id:newPlanId()}; delete c.auto; Object.assign(c, namedPlan(p.name, p.auto, taken)); taken.push(c.name); S.customs.push(c); added.push(c); }
   saveSettings(); return added;
 }
 
@@ -12786,7 +12946,7 @@ function planInHtml() {
   else if (r) {
     /* общая программа и адресат — один раз сверху; у плана — только то, что отличает его от соседей */
     const groups = [...new Set(r.plans.map(p => p.group || ''))], common = groups.length === 1 && groups[0];
-    const meta = [common ? `<span>program: <b>${esc(common)}</b></span>` : '', r.from ? `<span>from: <b>${esc(r.from)}</b></span>` : '', r.plans[0].for ? `<span>for: <b>${esc(r.plans[0].for)}</b></span>` : ''].join('');
+    const meta = [common ? `<span>Program: <b>${esc(common)}</b></span>` : '', r.from ? `<span>From: <b>${esc(r.from)}</b></span>` : '', r.plans[0].for ? `<span>For: <b>${esc(r.plans[0].for)}</b></span>` : ''].join('');
     const setup = p => [GOALS[p.goal]?.name, FORMATS[p.format]?.name, LEVELS[p.level]?.name].filter(Boolean).join(', ').toLowerCase();
     body = `${meta ? `<p class="cp-sub pi-meta">${meta}</p>` : ''}${r.note ? `<p class="c-note">${esc(r.note)}</p>` : ''}
       ${r.newer ? '<p class="warn">The file was made in a newer version of the app: anything this version doesn’t know will be skipped. Update the app.</p>' : ''}
@@ -12798,7 +12958,7 @@ function planInHtml() {
     <h2>Import plan</h2>
     <p class="gear-hint">Choose a .json file exported from Lazy Gym Planner — your own or from a coach. The plans are added to yours; nothing is overwritten.</p>
     <label class="btn btn-2 pi-file" for="pi-file">Choose file</label><input type="file" id="pi-file" accept=".json,application/json,text/plain" hidden>
-    <details class="pi-paste"${r && r.pasted && r.error ? ' open' : ''}><summary>or paste the file text</summary><textarea id="pi-text" rows="4" placeholder='{"format": "lazy-gym-planner/plans", …}'></textarea><button type="button" class="btn btn-2" id="pi-read">Read</button></details>
+    <details class="pi-paste"${r && r.pasted && r.error ? ' open' : ''}><summary>or paste the file text</summary><textarea id="pi-text" rows="4" placeholder='{"format": "lazy-gym-planner/plans", …}'></textarea><button type="button" class="btn btn-2" id="pi-read">Load</button></details>
     ${body}
     <p class="p-hint" id="pi-msg" role="status"></p>
     <div class="gear-btns"><button type="button" class="btn btn-2" id="pi-close">Close</button>${r && r.plans ? `<button type="button" class="btn" id="pi-add">Add to my plans</button>` : ''}</div>
@@ -12988,7 +13148,7 @@ const PROTECT = [
   {id:'lumbar', name:'Lower back', acc:'lower back', part:'lower back'},
   {id:'knees', name:'Knees', acc:'knees', part:'knees'},
   {id:'achilles', name:'Achilles tendons', acc:'Achilles tendons', part:'Achilles tendons'},
-  {id:'hams', name:'Hamstrings', acc:'hamstrings', part:'hamstrings'}
+  {id:'hams', name:'Hamstring tendons', acc:'hamstring tendons', part:'hamstring tendons'}
 ].map(p => ({...p, rules:STRESS_RULES.filter(r => r.parts.includes(p.part)).map(r => r.id)}));
 const PROTECT_BY = Object.fromEntries(PROTECT.map(p => [p.id, p]));
 /* ударные и рывковые движения: пиковая нагрузка на суставы в несколько раз больше веса тела */
@@ -13156,7 +13316,7 @@ function variantRowHtml(it, E = plan && plan.E || effEquip(S.equip)) {
   const what = VARIANT_OF[it.ex.id].family.what;
   return `<div class="c-var" role="group" aria-label="${what}"><span>${what}:</span>${list.map(x => {
     const on = x.ex === it.ex;
-    return `<button type="button" class="${on ? 'on' : ''}" data-variant="${x.ex.id}" data-slot="${it.slot}" aria-pressed="${on}"${on ? '' : ` title="${esc(x.ex.name)}"`}>${esc(x.label)}</button>`;
+    return `<button type="button" class="${on ? 'on' : ''}" data-variant="${x.ex.id}" data-slot="${it.slot}" aria-pressed="${on}"${on ? '' : ` title="${esc(exNameHere(x.ex))}"`}>${esc(x.label)}</button>`;
   }).join('')}</div>`;
 }
 /* в истории упражнения — что записано другими хватами той же семьи */
@@ -13243,7 +13403,7 @@ function anatomyPace(P=ANATOMY_PACE){
    able — есть объёмная графика (WebGL) и манекен каталога; state — данные костей и мышц: 'ready' | 'loading' | 'error';
    slow — сработал откат по скорости. Ответ: {view, note, wait} — wait: показан манекен, пока грузятся данные. */
 const FIGURE_NOTES={loading:'Loading bones and muscles — the mannequin is shown for now.',error:'Could not load the bones and muscles, so the mannequin is shown. Check the connection.',
-  slowPhone:'The phone can’t keep up — showing the mannequin',slowComputer:'The computer can’t keep up — showing the mannequin'};
+  slowPhone:'Your device is struggling — showing the simple mannequin',slowComputer:'Your device is struggling — showing the simple mannequin'};
 function figureViewFor(pref,{able=true,state='ready',slow=false,coarse=true}={}){
   const want=['anatomy','skeleton','mannequin'].includes(pref)?pref:'anatomy';
   if(want==='mannequin'||!able)return{view:'mannequin',note:'',wait:false};
@@ -13429,7 +13589,7 @@ function motionFrame(F, clock=F.clock) {
   /* статодинамика: только рабочая часть амплитуды, без выпрямления и без провала */
   const part=F.it.rx&&F.it.rx.partial;if(part&&!F.it.ex.anim.loop&&!F.it.ex.anim.hold)t=part[0]+(part[1]-part[0])*t;
   const a = F.it.ex.anim;
-  let labels = a.eccFirst ? ['Lowering','Bottom position','Lifting','Top position'] : ['Working phase','End position','Return','Starting position'];
+  let labels = a.eccFirst ? ['Lowering','Bottom position','Lifting','Top position'] : ['Working phase','End','Return','Starting position'];
   if (F.it.ex.id === 'kbswing' || F.it.ex.id === 'kbswing1') labels=['Forward swing','Top position','Backswing','Starting position'];
   /* скандинавские сгибания: t 0→1 — толчок руками и возврат вверх, главная работа бёдер — медленное опускание 1→0
      (уступающая; профиль мышц — 09b-muscle-profiles.js) */
@@ -13764,7 +13924,7 @@ function mountFigures() {
     const F={btn,it,f:null,av:null,card:true,vis:false,far:true,seen:0,active:false,paused:reduceMotion,clock:0,durations:motionDurations(it)};
     figs.push(F);
     const tile=btn.closest('.motion-tile');
-    if(motionProfile(it.ex.anim)){const note=document.createElement('p');note.className='muscle-tile-note';note.textContent='Color is an educational illustration';note.hidden=!motionPrefs.muscles;tile.appendChild(note);}
+    if(motionProfile(it.ex.anim)){const note=document.createElement('p');note.className='muscle-tile-note';note.textContent='Colors are illustrative';note.hidden=!motionPrefs.muscles;tile.appendChild(note);}
     {const note=document.createElement('p');note.className='figure-tile-note';note.hidden=true;tile.appendChild(note);}
     const pause=tile.querySelector('[data-motion-pause]');
     if(pause){pause.textContent=F.paused?'Start':'Pause';pause.setAttribute('aria-label',`${F.paused?'Start':'Pause'}: ${it.name}`);}
@@ -13809,7 +13969,7 @@ function selectMotion(it, clock=0) {
   $('#mv-tools').innerHTML=cpKeepHtml(it.ex.id,'mv');
   $('#mv-view').textContent=CAMERA3[motionCamera(it.ex)].label;
   $('#mv-speed').value=String(motionPrefs.speed);$('#mv-joints').checked=!!motionPrefs.joints;$('#mv-trace').checked=!!motionPrefs.trace;$('#mv-vectors').checked=!!motionPrefs.vectors;
-  $('#mv-tempo').textContent=it.ex.anim.hold?'Hold the position and breathe steadily.':it.ex.anim.timing||it.ex.g==='cardio'||it.ex.kind?'The rhythm is shown schematically. Slowing it down helps you study the movement.':it.rx.static?`Static-dynamic: tempo ${it.rx.tempo} with no pauses; the working part of the range is shown — no lockout at the top and no relaxing at the bottom.`:`Prescribed tempo: ${it.rx.tempo}. Playback speed doesn't change the prescription.`;
+  $('#mv-tempo').textContent=it.ex.anim.hold?'Hold the position and breathe steadily.':it.ex.anim.timing||it.ex.g==='cardio'||it.ex.kind?'The rhythm is shown schematically. Slowing it down helps you study the movement.':it.rx.static?`Static-dynamic: tempo ${it.rx.tempo} with no pauses; the working part of the range is shown — no lockout at the top and no relaxing at the bottom.`:`Prescribed tempo: ${it.rx.tempo}. Playback speed doesn’t change the prescription.`;
   const level={};it.ex.pri.forEach(m=>level[m]=1);it.ex.sec.forEach(m=>{if(!level[m])level[m]=.38;});
   $('#mv-muscles').innerHTML=muscleMapSvg(level,{labels:true,aria:'Primary and secondary muscles'});
   $('#mv-primary').textContent=it.ex.pri.map(m=>MUSCLE_NAMES[m]).join(', ');
@@ -13834,9 +13994,9 @@ const FIGURE_VIEWS=['anatomy','skeleton','mannequin'];
 const figureView=()=>FIGURE_VIEWS.includes(motionPrefs.view)?motionPrefs.view:'anatomy';
 function anatomyLevel(ex){const level={};ex.pri.forEach(m=>level[m]=1);ex.sec.forEach(m=>{if(!level[m])level[m]=.38;});return level;}
 function figureNote(view,F){
-  if(view==='skeleton')return 'Bones follow the open MyoSim models; sources are under “About the demonstrations”. Muscles are hidden in this view.';
+  if(view==='skeleton')return 'Bones follow the open MyoSim models; sources are under “About the demos”. Muscles are hidden in this view.';
   if(view!=='anatomy')return '';
-  return 'Bones and muscles follow open models, muscle thickness follows MRI; sources are under “About the demonstrations”. '+(motionPrefs.muscles&&F&&motionProfile(F.it.ex.anim)
+  return 'Bones and muscles follow open models, muscle thickness follows MRI; sources are under “About the demos”. '+(motionPrefs.muscles&&F&&motionProfile(F.it.ex.anim)
     ?'A muscle’s color shows how much it works in this phase: the more orange, the stronger.':'Colored muscles work in the exercise: primary ones brighter, assisting ones paler.');
 }
 function applyFigureView(F=detailMotion){
@@ -13896,7 +14056,7 @@ function closeMotion(fromBack) {
 }
 function setupMotionViewer() {
   window.addEventListener('resize',()=>{pickActiveCards();for(const F of figs)if(F.av)F.av.size=null;if(cardAnatomy.view!=='mannequin')queueCardStills();},{passive:true});
-  $('#mv-exercise').innerHTML=GROUPS.map(g=>`<optgroup label="${esc(g.name)}">${EX.filter(ex=>ex.g===g.id).map(ex=>`<option value="${ex.id}">${esc(ex.name)}</option>`).join('')}</optgroup>`).join('');
+  $('#mv-exercise').innerHTML=GROUPS.map(g=>`<optgroup label="${esc(g.name)}">${EX.filter(ex=>ex.g===g.id).map(ex=>`<option value="${ex.id}">${esc(exNameHere(ex))}</option>`).join('')}</optgroup>`).join('');
 
   document.addEventListener('click',e=>{
     const t=e.target.closest('button');if(!t)return;
@@ -13984,8 +14144,8 @@ function blocksText(p) {
     for (const it of b.items) {
       const r = it.rx;
       const side = r.uni ? ' per side' : '';
-      if (r.static) { const kgS = r.kgPlan && loadType(it.ex) !== 'none' ? `, ${planKgText(r.kgPlan)} kg` : ''; lines.push(`${it.label}. ${it.name} — ${r.series} × 3 × ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}, tempo ${r.tempo} without relaxing, rest ${fmtRest(r.rest)}${r.series > 1 ? `, between series ${fmtRest(r.seriesRest)}` : ''}${kgS}`); if (r.coachNote) lines.push(`   Note: ${r.coachNote.replace(/\n+/g, ' ')}`); continue; }
-      const kg = r.kgPlan && loadType(it.ex) !== 'none' ? `, ${planKgText(r.kgPlan)} kg` : '';
+      if (r.static) { const kgS = r.kgPlan && loadType(it.ex) !== 'none' ? `, ${planKgText(r.kgPlan)} ${wUnit()}` : ''; lines.push(`${it.label}. ${it.name} — ${r.series} × 3 × ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}, tempo ${r.tempo} without relaxing, rest ${fmtRest(r.rest)}${r.series > 1 ? `, between series ${fmtRest(r.seriesRest)}` : ''}${kgS}`); if (r.coachNote) lines.push(`   Note: ${r.coachNote.replace(/\n+/g, ' ')}`); continue; }
+      const kg = r.kgPlan && loadType(it.ex) !== 'none' ? `, ${planKgText(r.kgPlan)} ${wUnit()}` : '';
       lines.push(r.circ ? `${it.label}. ${it.name} — ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}${kg}` : `${it.label}. ${it.name} — ${r.sets} × ${r.reps}${r.unit ? ' ' + r.unit : ''}${side}${kg}${b.kind === 'list' ? `, rest ${fmtRest(r.rest)}` : ''}`);
       if (r.coachNote) lines.push(`   Note: ${r.coachNote.replace(/\n+/g, ' ')}`);
     }
@@ -14009,7 +14169,7 @@ function planText() {
 /* ---------- события ---------- */
 /* место тренировок: название и источник программы */
 document.addEventListener('change', e => {
-  if (e.target.id === 'place-name') { const v = e.target.value.trim().slice(0, 24); if (v) placeOf().name = v; saveSettings(); renderSetup(); return; }
+  if (e.target.id === 'place-name') { const v = e.target.value.trim().slice(0, 24), p = placeOf(); if (v && v !== p.name) { p.name = v; delete p.auto; } saveSettings(); renderSetup(); return; }
   if (e.target.id === 'place-adapt') { S.adapt = e.target.value || null; ensurePlaces(S); return regen(); }
 });
 const swapKey = () => S.mode === 'program' ? 'd' + S.day : 's';
@@ -14039,7 +14199,7 @@ document.addEventListener('click', e => {
   if (t.dataset.place) { S.place = t.dataset.place; ensurePlaces(S); placeDel = false; return regen(); }
   if (t.dataset.placeAdd !== undefined) {
     const id = 'p' + Date.now().toString(36);
-    S.places.push({id, name:'Place ' + (S.places.length + 1), equip:[]});
+    S.places.push({id, name:'Place ' + (S.places.length + 1), auto:'place:' + (S.places.length + 1), equip:[]});
     S.place = id; ensurePlaces(S); eqOpen = true; placeDel = false; regen();
     const inp = $('#place-name'); if (inp) { inp.focus(); inp.select(); }
     return;
@@ -14051,8 +14211,8 @@ document.addEventListener('click', e => {
   if (t.id === 'reroll') { S.seed = (S.seed * 48271 + 11) % 2147483647; regen(); $('#plan').scrollIntoView({behavior:reduceMotion ? 'auto' : 'smooth', block:'start'}); return; }
   if (t.id === 'copy') {
     const txt = planText(), msg = $('#copy-msg');
-    const fallback = () => { msg.innerHTML = 'Couldn\'t copy automatically. Select the text:<textarea readonly rows="6"></textarea>'; const ta = msg.querySelector('textarea'); ta.value = txt; ta.focus(); ta.select(); };
-    try { navigator.clipboard.writeText(txt).then(() => { msg.textContent = 'Copied — you can paste it into notes or a messenger.'; }, fallback); } catch (err) { fallback(); }
+    const fallback = () => { msg.innerHTML = 'Couldn’t copy automatically. Select the text:<textarea readonly rows="6"></textarea>'; const ta = msg.querySelector('textarea'); ta.value = txt; ta.focus(); ta.select(); };
+    try { navigator.clipboard.writeText(txt).then(() => { msg.textContent = 'Copied — you can paste it into notes or a messaging app.'; }, fallback); } catch (err) { fallback(); }
     return;
   }
   /* «Заменить» — список замен под кнопкой и «Вернуть»: 12c-swap.js */
@@ -14618,14 +14778,51 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 function dayKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 const todayKey = () => dayKey(new Date());
+/* день записи: «сегодня», «9 ноя», «9 ноя 2025»; в сборке с датами через Intl (английская) — по языку браузера:
+   en-US «Nov 9», en-GB «9 Nov» */
 function fmtDay(k, withYear) {
   if (k === todayKey()) return 'today';
-  const [y, m, d] = k.split('-').map(Number);
-  return `${d} ${MONTHS[m - 1]}${withYear && y !== new Date().getFullYear() ? ' ' + y : ''}`;
+  const [y, m, d] = k.split('-').map(Number), year = withYear && y !== new Date().getFullYear();
+  if (localeOf().dates === 'intl' && typeof Intl !== 'undefined') {
+    try { return new Intl.DateTimeFormat(localeTag(), {day:'numeric', month:'short', ...(year ? {year:'numeric'} : {})}).format(new Date(y, m - 1, d, 12)); } catch (e) {}
+  }
+  return `${d} ${MONTHS[m - 1]}${year ? ' ' + y : ''}`;
 }
-let DEC = ','; /* десятичный разделитель; в английской сборке заменяется на точку */
-const fmtKg = v => (Math.round(v * 100) / 100).toString().replace('.', DEC);
+let DEC = localeOf().dec || ','; /* десятичный разделитель языка сборки (в английской — точка) */
 const parseNum = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
+/* ---------- единицы веса ----------
+   Хранится всё в килограммах (журнал, планы, вес тела, кг-инвентарь) и в сантиметрах (обхваты), показывается и вводится —
+   в выбранных единицах. S.units — 'kg' | 'lb' (переключатель «Единицы» в журнале); не выбирали — по языку сборки:
+   PODHOD_LOCALE.units 'kg' или 'region' — фунты, если регион в navigator.language — США, Либерия или Мьянма. В фунтах обхваты —
+   в дюймах. Шаги прибавки, гантели, стек, гриф и блины в фунтах — свои, а не пересчёт килограммовых (stepFor, 17-warmup.js):
+   вес, вписанный в фунтах, хранится в килограммах с запасом точности и показывается тем же числом фунтов. */
+const LB_KG = 0.45359237, IN_CM = 2.54, LB_REGIONS = new Set(['US', 'LR', 'MM']);
+function unitsDefault() {
+  if (localeOf().units !== 'region') return 'kg';
+  const tag = typeof navigator === 'undefined' ? '' : navigator.language || (navigator.languages || [])[0] || '';
+  const m = /^[a-z]{2,3}(?:[-_][a-z]{4})?[-_]([a-z]{2}|\d{3})(?:$|[-_])/i.exec(String(tag));
+  return m && LB_REGIONS.has(m[1].toUpperCase()) ? 'lb' : 'kg';
+}
+function wu() { const u = typeof S === 'undefined' ? null : S.units; return u === 'kg' || u === 'lb' ? u : unitsDefault(); }
+const isLb = () => wu() === 'lb';
+/* килограммы ↔ выбранные единицы; введённое в фунтах — в килограммы с точностью 0,00001 кг */
+const toU = kg => isLb() ? kg / LB_KG : kg;
+const fromU = v => isLb() ? Math.round(v * LB_KG * 1e5) / 1e5 : v;
+/* подписи: «кг» / «фнт» (в английской сборке — kg / lb), обхваты — «см» / «дюйм» (cm / in) */
+const wUnit = () => isLb() ? 'lb' : 'kg';
+const lUnit = () => isLb() ? 'in' : 'cm';
+/* число в единицах показа: до сотых, без лишних нулей; fmtU1 — до десятых */
+const fmtU = v => (Math.round(v * 100) / 100).toString().replace('.', DEC);
+const fmtU1 = v => (Math.round(v * 10) / 10).toString().replace('.', DEC);
+/* вес из хранилища (кг) — числом в выбранных единицах; fmtKgR — округлённый до шага в них (расчётный максимум: 0,5 кг или 1 фнт) */
+const fmtKg = v => fmtU(toU(v));
+const fmtKgR = (v, st = isLb() ? 1 : .5) => fmtU(Math.round(toU(v) / st) * st);
+/* вес с подписью: «62,5 кг», «135 lb» */
+const fmtW = v => fmtKg(v) + ' ' + wUnit();
+/* вписанный вес (в выбранных единицах) — в килограммах */
+const parseKg = v => { const n = parseNum(v); return n == null ? null : fromU(n); };
+/* «1–2,5 кг» или «2,5–5 фнт»: пара чисел для килограммов и для фунтов */
+const unitRange = (kg, lb) => { const [a, b] = isLb() ? lb : kg; return `${fmtU(a)}–${fmtU(b)} ${wUnit()}`; };
 
 function validSessions(ss) {
   return Array.isArray(ss) && ss.every(x => x && typeof x.d === 'string' && /^\d{4}-\d\d-\d\d$/.test(x.d) && Array.isArray(x.s));
@@ -14713,7 +14910,7 @@ async function logFlush(id, retried) {
     const code = e && e.code;
     if (code === 'unavailable' && !retried) { LOG.writing[id] = false; setTimeout(() => logFlush(id, true), 600 + Math.random() * 900); return; }
     if (code === 'quota_exceeded') LOG.err = 'Log storage is full. Delete old entries or make a backup.';
-    else { LOG.mode = 'local'; LOG.err = 'Couldn\'t save to your account — entries are saved in this browser.'; }
+    else { LOG.mode = 'local'; LOG.err = 'Couldn’t save to your account — entries are saved in this browser.'; }
     logRefresh(null);
   } finally {
     LOG.writing[id] = false;
@@ -14751,16 +14948,28 @@ function loadType(ex) {
   return 'extra';
 }
 function repLabel(ex) { return ex.kind === 'time' ? 'Seconds' : ex.kind === 'dist' ? 'Meters' : 'Reps'; }
+/* шаг прибавки, кг. В фунтах — свои шаги (блины 2,5 и 5 фнт, гантели через 5 фнт): штанга и тренажёры +5 фнт на верх тела,
+   +10 на ноги, жим ногами +20, гантели и гири +5; в килограммах они хранятся точно — показываются целыми фунтами */
 function stepFor(it) {
-  const ids = it.eqIds || [], lower = LOWER_G.has(it.ex.g);
-  if (ids.includes('legpress') || ids.includes('hack')) return 10;
-  if (ids.includes('bb') || ids.includes('smith')) return lower ? 5 : 2.5;
-  if (ids.some(i => MACHINE.has(i))) return lower ? 5 : 2.5;
-  if (ids.includes('db')) return 2;
-  if (ids.includes('kb')) return 4;
-  return 2.5;
+  const ids = it.eqIds || [], lower = LOWER_G.has(it.ex.g), lb = isLb();
+  const st = ids.includes('legpress') || ids.includes('hack') ? (lb ? 20 : 10)
+    : ids.includes('bb') || ids.includes('smith') || ids.some(i => MACHINE.has(i)) ? (lb ? (lower ? 10 : 5) : (lower ? 5 : 2.5))
+    : ids.includes('db') ? (lb ? 5 : 2) : ids.includes('kb') ? (lb ? 5 : 4) : (lb ? 5 : 2.5);
+  return lb ? st * LB_KG : st;
 }
 const roundTo = (v, st) => Math.max(0, Math.round(v / st) * st);
+/* сетка весов в фунтах (кг): гантели и гири — через 5 фнт, штанга, тренажёры и стек — через 2,5 фнт */
+function gridFor(it) { const ids = it.eqIds || []; return (ids.includes('db') || ids.includes('kb') ? 5 : 2.5) * LB_KG; }
+/* следующий вес вверх и вниз на шаг st; в фунтах — с округлением до сетки g: вес, записанный в килограммах, в фунтах
+   не круглый (60 кг = 132,28 фнт → 137,5, а не 137,28). В килограммах — как раньше, ± шаг от записанного */
+function stepUp(w, st, g) {
+  if (!isLb() || !g) return w + st;
+  let v = Math.round((w + st) / g) * g; if (v <= w + 1e-6) v += g; return v;
+}
+function stepDown(w, st, g) {
+  if (!isLb() || !g) return Math.max(0, w - st);
+  let v = Math.round((w - st) / g) * g; if (v >= w - 1e-6) v -= g; return Math.max(0, v);
+}
 /* повторы плана по подходам (пирамида своего плана, 11d-custom.js: cleanReps): «10/8/6/5» → [10, 8, 6, 5];
    диапазон или одно число — null */
 function repsPlanOf(r) { const s = String(r ?? ''); if (!s.includes('/')) return null; const l = s.split('/').map(Number); return l.length > 1 && l.every(v => v > 0) ? l : null; }
@@ -14793,7 +15002,7 @@ function suggestBase(it) {
     const prev = past[past.length - 1] || null, ps = prev ? prev.s.filter(Boolean) : [];
     res.tone = 'plan'; res.kgs = it.rx.kgPlan; res.kg = it.rx.kgPlan[0]; res.prev = prev;
     const what = lt === 'assist' ? 'Planned counterweight' : lt === 'extra' ? 'Planned extra weight' : 'Planned weight';
-    res.text = `${what}: ${planKgText(it.rx.kgPlan)} kg.` + (rp ? ` Planned reps: ${rp.join(' / ')}.` : '') + (ps.length ? ` Last time: ${ps.map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(', ')}.` : '');
+    res.text = `${what}: ${planKgText(it.rx.kgPlan)} ${wUnit()}.` + (rp ? ` Planned reps: ${rp.join(' / ')}.` : '') + (ps.length ? ` Last time: ${ps.map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(', ')}.` : '');
     return res;
   }
   /* прошлых тренировок нет, а сегодня подходы уже записаны — не «Первая запись», а сколько сделано и что дальше */
@@ -14803,10 +15012,10 @@ function suggestBase(it) {
     const last = all[all.length - 1], kgs = last ? last.s.filter(Boolean).map(x => x[0]).filter(v => v > 0) : [];
     if (lt === 'kg' && kgs.length) {
       const w = Math.max(...kgs); res.kg = roundTo(w * .6, step);
-      res.text = `Static-dynamic: about ${fmtKg(res.kg)} kg — roughly 60% of your last working weight (${fmtKg(w)} kg). A strong burn by the end of the set, but not failure.`;
-    } else res.text = lt === 'kg' ? 'First static-dynamic entry. Take about half of your usual working weight: a strong burn by the end of the set, but not failure.'
-      : lt === 'assist' ? 'First static-dynamic entry. Choose a counterweight that gives a strong burn by the end of the set, but not failure.'
-      : 'First static-dynamic entry. Note how many slow reps you managed in each set.';
+      res.text = `Static-dynamic: about ${fmtKg(res.kg)} ${wUnit()} — roughly 60% of your last working weight (${fmtKg(w)} ${wUnit()}). A strong burn by the end of the set, but not failure.`;
+    } else res.text = lt === 'kg' ? 'No static-dynamic history yet. Take about half of your usual working weight: a strong burn by the end of the set, but not failure.'
+      : lt === 'assist' ? 'No static-dynamic history yet. Choose a counterweight that gives a strong burn by the end of the set, but not failure.'
+      : 'No static-dynamic history yet. Note how many slow reps you managed in each set.';
     return res;
   }
   if (!past.length) {
@@ -14814,10 +15023,10 @@ function suggestBase(it) {
     const rir = it.rx.rir !== undefined ? it.rx.rir : reserveOf(week);
     const how = rir ? '' : week && week.deload ? 'without going to failure.' : ex.type === 'i' && S.goal === 'cut' ? 'until you feel a strong burn.' : 'close to failure.';
     const range = rp ? rp.join(' / ') : lo === hi ? String(lo) : lo + '–' + hi;
-    res.text = lt === 'assist' ? (rir ? `First entry. Choose a counterweight that lets you do ${range} reps with a reserve of ${reserveReps(rir)}.` : `First entry. Choose a counterweight that lets you do ${range} reps ${how}`) : lt === 'kg'
-      ? (ex.kind === 'dist' ? 'First entry. Take heavy implements you can carry the full distance without stopping.'
-        : rir ? `First entry. Pick a weight that lets you do ${range}${unit} with a reserve of ${reserveReps(rir)}.` : `First entry. Pick a weight that lets you do ${range}${unit} ${how}`)
-      : `First entry. Note how many ${ex.kind === 'time' ? 'seconds' : ex.kind === 'dist' ? 'meters' : 'reps'} you did in each set.`;
+    res.text = lt === 'assist' ? (rir ? `No history yet. Choose a counterweight that lets you do ${range} reps with a reserve of ${reserveReps(rir)}.` : `No history yet. Choose a counterweight that lets you do ${range} reps ${how}`) : lt === 'kg'
+      ? (ex.kind === 'dist' ? 'No history yet. Take heavy implements you can carry the full distance without stopping.'
+        : rir ? `No history yet. Pick a weight that lets you do ${range}${unit} with a reserve of ${reserveReps(rir)}.` : `No history yet. Pick a weight that lets you do ${range}${unit} ${how}`)
+      : `No history yet. Note how many ${ex.kind === 'time' ? 'seconds' : ex.kind === 'dist' ? 'meters' : 'reps'} you did in each set.`;
     return res;
   }
   const prev = past[past.length - 1];
@@ -14826,19 +15035,19 @@ function suggestBase(it) {
   const kgs = sets.map(x => x[0]).filter(v => v > 0);
   const work = kgs.length ? Math.max(...kgs) : null;
   const prevList = sets.map(x => (x[0] ? fmtKg(x[0]) + '×' : '') + x[1]).join(', ');
-  if (ex.kind === 'dist') { res.tone = 'same'; res.kg = work; res.text = work ? `Last time — ${fmtKg(work)} kg. Try to cover more distance or go heavier.` : `Last time: ${prevList} m.`; return res; }
+  if (ex.kind === 'dist') { res.tone = 'same'; res.kg = work; res.text = work ? `Last time — ${fmtKg(work)} ${wUnit()}. Try to cover more distance or go heavier.` : `Last time: ${prevList} m.`; return res; }
   /* пирамида или сброс (веса подходов в прошлый раз разные): совет — по верхнему подходу, подсказки — по каждому подходу */
   const pyr = !ex.kind && (lt === 'kg' || lt === 'extra') && pyramidAdvice(it, res, sets, past, tgt, step, week, rp);
   if (pyr) return pyr;
   if (!week && AR.light && work && (lt === 'kg' || lt === 'assist')) {
     res.tone = 'deload'; res.kg = lt === 'assist' ? Math.max((Math.floor(work / step) + 1) * step, roundTo(work * 1.1, step)) : roundTo(work * .9, step); res.reps = sets.map((x, i) => tgt(i)[0]);
-    res.text = lt === 'assist' ? `Light mode: counterweight ${fmtKg(res.kg)} kg instead of ${fmtKg(work)}, not to failure.` : `Light mode: ${fmtKg(res.kg)} kg instead of ${fmtKg(work)}, not to failure.`;
+    res.text = lt === 'assist' ? `Light mode: counterweight ${fmtKg(res.kg)} ${wUnit()} instead of ${fmtKg(work)}, not to failure.` : `Light mode: ${fmtKg(res.kg)} ${wUnit()} instead of ${fmtKg(work)}, not to failure.`;
     return res;
   }
   if (week && week.deload && work) {
     res.tone = 'deload'; res.kg = lt === 'assist' ? Math.max((Math.floor(work / step) + 1) * step, roundTo(work * 1.15, step)) : roundTo(work * .85, step);
     res.reps = sets.map((x, i) => tgt(i)[0]);
-    res.text = lt === 'assist' ? `Deload: counterweight ${fmtKg(res.kg)} kg instead of ${fmtKg(work)}, not to failure.` : `Deload: ${fmtKg(res.kg)} kg instead of ${fmtKg(work)}, not to failure.`;
+    res.text = lt === 'assist' ? `Deload: counterweight ${fmtKg(res.kg)} ${wUnit()} instead of ${fmtKg(work)}, not to failure.` : `Deload: ${fmtKg(res.kg)} ${wUnit()} instead of ${fmtKg(work)}, not to failure.`;
     return res;
   }
   const required=prev.target || (it.rx.circ ? it.rounds : it.rx.sets) || 1;
@@ -14846,11 +15055,11 @@ function suggestBase(it) {
   const anyLow = sets.some((x, i) => (!work || x[0] === work) && x[1] < tgt(i)[0]);
   if (allTop) {
     if (lt === 'kg' && work) {
-      res.tone = 'up'; res.kg = work + step; res.reps = sets.map((x, i) => tgt(i)[0]);
-      res.text = rp ? `Increase to ${fmtKg(res.kg)} kg (+${fmtKg(step)}). Last time all sets matched the plan: ${prevList}.` : `Increase to ${fmtKg(res.kg)} kg (+${fmtKg(step)}). Last time all sets were at the top of the range: ${prevList}.`;
+      res.tone = 'up'; res.kg = stepUp(work, step, gridFor(it)); res.reps = sets.map((x, i) => tgt(i)[0]);
+      res.text = rp ? `Increase to ${fmtKg(res.kg)} ${wUnit()} (+${fmtKg(res.kg - work)}). Last time all sets matched the plan: ${prevList}.` : `Increase to ${fmtKg(res.kg)} ${wUnit()} (+${fmtKg(res.kg - work)}). Last time all sets were at the top of the range: ${prevList}.`;
     } else if (lt === 'assist' && work) {
-      res.tone = 'up'; res.kg = Math.max(0, work - step); res.reps = sets.map((x, i) => tgt(i)[0]);
-      res.text = rp ? `Reduce the counterweight to ${fmtKg(res.kg)} kg (−${fmtKg(step)}). Last time all sets matched the plan: ${prevList}.` : `Reduce the counterweight to ${fmtKg(res.kg)} kg (−${fmtKg(step)}). Last time all sets were at the top of the range: ${prevList}.`;
+      res.tone = 'up'; res.kg = stepDown(work, step, gridFor(it)); res.reps = sets.map((x, i) => tgt(i)[0]);
+      res.text = rp ? `Reduce the counterweight to ${fmtKg(res.kg)} ${wUnit()} (−${fmtKg(work - res.kg)}). Last time all sets matched the plan: ${prevList}.` : `Reduce the counterweight to ${fmtKg(res.kg)} ${wUnit()} (−${fmtKg(work - res.kg)}). Last time all sets were at the top of the range: ${prevList}.`;
     } else if (ex.kind === 'time') {
       res.tone = 'up'; res.kg = work; res.reps = sets.map(() => hi + 10);
       res.text = `All sets at the top of the range. Hold 10 s longer${lt === 'extra' ? ' or add weight' : ''}.`;
@@ -14866,19 +15075,19 @@ function suggestBase(it) {
     const lowAgain = work && bWork === work && before.some((x, i) => x[0] === work && x[1] < tgt(i)[0]);
     if (lt === 'kg' && work && lowAgain) {
       res.tone = 'down'; res.kg = roundTo(work * 0.9, step); res.reps = sets.map((x, i) => tgt(i)[0]);
-      res.text = rp ? `Two workouts in a row short of the plan — drop to ${fmtKg(res.kg)} kg and build the reps back up.` : `Two workouts in a row below ${lo}${unit} — drop to ${fmtKg(res.kg)} kg and build the reps back up.`;
+      res.text = rp ? `Two workouts in a row short of the plan — drop to ${fmtKg(res.kg)} ${wUnit()} and build the reps back up.` : `Two workouts in a row below ${lo}${unit} — drop to ${fmtKg(res.kg)} ${wUnit()} and build the reps back up.`;
     } else if (lt === 'assist' && work != null && lowAgain) {
-      res.tone = 'down'; res.kg = work + step; res.reps = sets.map((x, i) => tgt(i)[0]);
-      res.text = rp ? `Two workouts in a row short of the plan — increase the counterweight to ${fmtKg(res.kg)} kg and build the reps back up.` : `Two workouts in a row below ${lo} — increase the counterweight to ${fmtKg(res.kg)} kg and build the reps back up.`;
+      res.tone = 'down'; res.kg = stepUp(work, step, gridFor(it)); res.reps = sets.map((x, i) => tgt(i)[0]);
+      res.text = rp ? `Two workouts in a row short of the plan — increase the counterweight to ${fmtKg(res.kg)} ${wUnit()} and build the reps back up.` : `Two workouts in a row below ${lo} — increase the counterweight to ${fmtKg(res.kg)} ${wUnit()} and build the reps back up.`;
     } else {
       res.tone = 'same'; res.kg = work; res.reps = sets.map((x, i) => Math.max(tgt(i)[0], x[1]));
-      const keep = work ? `Keep ${fmtKg(work)} kg` : 'Same variation';
+      const keep = work ? `Keep ${fmtKg(work)} ${wUnit()}` : 'Same variation';
       res.text = rp ? `${keep} and build up to the plan: ${rp.join(' / ')}. Last time: ${prevList}.` : `${keep} and build up to ${lo}${unit} in every set. Last time: ${prevList}.`;
     }
     return res;
   }
   res.tone = 'same'; res.kg = work; res.reps = sets.map((x, i) => Math.min(tgt(i)[1], x[1] + 1));
-  res.text = `${work ? `${lt === 'assist' ? 'Same counterweight' : 'Same weight'} — ${fmtKg(work)} kg` : 'Same variation'}, aim for 1${unit || ' rep'} more: last time ${prevList}.`;
+  res.text = `${work ? `${lt === 'assist' ? 'Same counterweight' : 'Same weight'} — ${fmtKg(work)} ${wUnit()}` : 'Same variation'}, aim for 1${unit || ' rep'} more: last time ${prevList}.`;
   return res;
 }
 /* Пирамида или сброс в прошлый раз: веса подходов разные (все записаны с весом). Совет — по верхнему подходу (самый
@@ -14890,19 +15099,19 @@ function pyramidAdvice(it, res, sets, past, tgt, step, week, rp) {
   if (pk.length < 2 || pk.some(v => !(v > 0)) || pk.every(v => v === pk[0])) return null;
   const W = Math.max(...pk), top = pk.map((v, i) => i).filter(i => pk[i] === W), one = top.length === 1;
   res.kgs = pk.slice(); res.reps = sets.map((x, i) => rp ? tgt(i)[0] : x[1]);
-  const topText = one ? `Top set: ${fmtKg(W)} kg × ${sets[top[0]][1]}` : `Sets with ${fmtKg(W)} kg: ${top.map(i => sets[i][1]).join(', ')}`;
+  const topText = one ? `Top set: ${fmtKg(W)} ${wUnit()} × ${sets[top[0]][1]}` : `Sets with ${fmtKg(W)} ${wUnit()}: ${top.map(i => sets[i][1]).join(', ')}`;
   const rest = 'Other sets — as last time.';
   const ease = !week && AR.light ? .9 : week && week.deload ? .85 : 0;
   if (ease) {
     res.tone = 'deload'; res.kgs = pk.map(v => roundTo(v * ease, step)); res.reps = sets.map((x, i) => tgt(i)[0]); res.kg = res.kgs[0];
-    res.text = `${ease === .9 ? 'Light mode' : 'Deload'}: weights ${Math.round((1 - ease) * 100)}% lighter than last time — ${res.kgs.map(fmtKg).join(' / ')} kg, not to failure.`;
+    res.text = `${ease === .9 ? 'Light mode' : 'Deload'}: weights ${Math.round((1 - ease) * 100)}% lighter than last time — ${res.kgs.map(fmtKg).join(' / ')} ${wUnit()}, not to failure.`;
     return res;
   }
   if (top.every(i => sets[i][1] >= tgt(i)[1])) {
-    const nw = W + step;
+    const nw = stepUp(W, step, gridFor(it));
     for (const i of top) { res.kgs[i] = nw; res.reps[i] = tgt(i)[0]; }
     res.tone = 'up'; res.kg = res.kgs[0];
-    res.text = `${topText} — ${one ? 'at the top of the range. Next time use' : 'all at the top of the range. Next time use'} ${fmtKg(nw)} kg (+${fmtKg(step)}). ${rest}`;
+    res.text = `${topText} — ${one ? 'at the top of the range. Next time use' : 'all at the top of the range. Next time use'} ${fmtKg(nw)} ${wUnit()} (+${fmtKg(nw - W)}). ${rest}`;
     return res;
   }
   /* верхний подход второй раз подряд ниже нижней границы при том же весе — снизить его */
@@ -14913,8 +15122,8 @@ function pyramidAdvice(it, res, sets, past, tgt, step, week, rp) {
     const nw = roundTo(W * .9, step);
     for (const i of top) { res.kgs[i] = nw; res.reps[i] = tgt(i)[0]; }
     res.tone = 'down'; res.kg = res.kgs[0];
-    res.text = one ? `Two workouts in a row the top set fell short on reps — next time use ${fmtKg(nw)} kg and build the reps back up. ${rest}`
-      : `Two workouts in a row the sets with ${fmtKg(W)} kg fell short on reps — next time use ${fmtKg(nw)} kg and build the reps back up. ${rest}`;
+    res.text = one ? `Two workouts in a row the top set fell short on reps — next time use ${fmtKg(nw)} ${wUnit()} and build the reps back up. ${rest}`
+      : `Two workouts in a row the sets with ${fmtKg(W)} ${wUnit()} fell short on reps — next time use ${fmtKg(nw)} ${wUnit()} and build the reps back up. ${rest}`;
     return res;
   }
   const goal = top.map(i => { const [a, b] = tgt(i), r = sets[i][1]; return r < a ? a : Math.min(b, r + 1); });
@@ -14931,9 +15140,9 @@ function todayNote(it, lt) {
   if (!done.length) return '';
   const total = Math.max(it.rx.circ ? (it.rounds || it.rx.sets) : it.rx.sets, done.length), n = done.length;
   const head = `Today: ${n} of ${total}.`;
-  if (n >= total) return `${head} Exercise done — next time you'll see a progression tip here.`;
+  if (n >= total) return `${head} Exercise done — next time you’ll see a progression tip here.`;
   const kgs = done.map(x => x[0]);
-  if (lt !== 'none' && kgs[0] > 0 && kgs.every(v => v === kgs[0])) return `${head} Next set: ${lt === 'assist' ? 'same counterweight' : 'same weight'} (${fmtKg(kgs[0])} kg).`;
+  if (lt !== 'none' && kgs[0] > 0 && kgs.every(v => v === kgs[0])) return `${head} Next set: ${lt === 'assist' ? 'same counterweight' : 'same weight'} (${fmtKg(kgs[0])} ${wUnit()}).`;
   return head;
 }
 
@@ -15070,7 +15279,7 @@ function carryKgBox(box) {
   const it = plan && plan.items && plan.items.find(x => x.ex.id === box.dataset.log);
   const filled = (row, inp) => {
     const done = row.classList.contains('done'); if (!done && inp.value.trim() === '') return null;
-    const v = parseNum(inp.value), odd = !done && v > 0 && it && kgDoubt(it, [v], +row.dataset.k);
+    const v = parseKg(inp.value), odd = !done && v > 0 && it && kgDoubt(it, [v], +row.dataset.k);
     return {kg:v != null && v >= 0 && !odd ? v : null};
   };
   const hint = (inp, src, k) => { const ph = carryPh(src && kgCarries(own, src.k, k) ? src.kg : null, inp.dataset.ph ?? inp.placeholder); if (inp.placeholder !== ph) inp.placeholder = ph; };
@@ -15115,8 +15324,8 @@ function logBlock(it) { return `<div class="c-log" data-log="${it.ex.id}">${logR
    доп. вес к собственному (пояс, жилет) — 200 кг (рекордные отягощения в подтягиваниях и на брусьях — 100–150 кг);
    противовес гравитрона — 150 кг (стек — около 100 кг, противовес больше веса тела не нужен). */
 const KG_LIMIT = {db:100, kb:100, bb:500, press:1000, machine:300, extra:200, assist:150};
-const KG_LIMIT_NOTE = {db:'That\'s unusually heavy for one dumbbell.', kb:'That\'s unusually heavy for one kettlebell.', bb:'That\'s unusually heavy for a barbell.',
-  press:'That\'s unusually heavy for a machine.', machine:'That\'s unusually heavy for a machine.', extra:'That\'s unusually heavy for extra weight.', assist:'That\'s an unusually large counterweight.'};
+const KG_LIMIT_NOTE = {db:'That’s unusually heavy for one dumbbell.', kb:'That’s unusually heavy for one kettlebell.', bb:'That’s unusually heavy for a barbell.',
+  press:'That’s unusually heavy for a machine.', machine:'That’s unusually heavy for a machine.', extra:'That’s unusually heavy for extra weight.', assist:'That’s an unusually large counterweight.'};
 function kgLimitOf(it) {
   const lt = loadType(it.ex), ids = it.eqIds || [];
   if (lt === 'assist') return 'assist';
@@ -15135,8 +15344,8 @@ function kgDoubt(it, kgs, k) {
   const weights = (s, skip = -1) => s ? s.s.flatMap((x, i) => { if (!x || i === skip) return []; const sd = setSides(x, ex); return sd ? [sd.l[0], sd.r[0]] : [x[0]]; }).filter(v => v > 0) : [];
   const last = pastSessions(ex.id).reverse().find(s => weights(s).length), today = weights(todaySession(ex.id, false), k);
   const ref = last ? Math.max(...weights(last)) : today.length ? Math.max(...today) : null;
-  const ask = why => ({kg, text:`${why} Log ${fmtKg(kg)} kg?`});
-  if (ref != null) return kg >= 2 * ref && kg - ref >= 5 ? ask(last ? `That's far more than last time (${fmtKg(ref)} kg).` : `That's far more than your other sets today (${fmtKg(ref)} kg).`) : null;
+  const ask = why => ({kg, text:`${why} Log ${fmtKg(kg)} ${wUnit()}?`});
+  if (ref != null) return kg >= 2 * ref && kg - ref >= 5 ? ask(last ? `That’s far more than last time (${fmtKg(ref)} ${wUnit()}).` : `That’s far more than your other sets today (${fmtKg(ref)} ${wUnit()}).`) : null;
   const kind = kgLimitOf(it);
   return kg > KG_LIMIT[kind] ? ask(KG_LIMIT_NOTE[kind]) : null;
 }
@@ -15183,7 +15392,7 @@ function kgFix(id, box) {
 /* ---------- история упражнения ---------- */
 function metricOf(ex) {
   /* расчётный максимум по медленным подходам без расслабления занижен — статодинамика в него не входит */
-  if (loadType(ex) === 'kg' && ex.kind !== 'dist') return {name:'Estimated 1RM', unit:'kg', f:s => { if (s.fmt === 'static') return null; const v = s.s.filter(x => x && x[0] > 0).map(x => e1rm(x[0], x[1])); return v.length ? Math.max(...v) : null; }};
+  if (loadType(ex) === 'kg' && ex.kind !== 'dist') return {name:'Estimated 1RM', unit:wUnit(), w:true, f:s => { if (s.fmt === 'static') return null; const v = s.s.filter(x => x && x[0] > 0).map(x => e1rm(x[0], x[1])); return v.length ? Math.max(...v) : null; }};
   if (ex.kind === 'time') return {name:'Best set', unit:'s', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
   if (ex.kind === 'dist') return {name:'Best distance', unit:'m', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
   return {name:'Best set', unit:'reps', f:s => { const v = s.s.filter(Boolean).map(x => x[1]); return v.length ? Math.max(...v) : null; }};
@@ -15203,7 +15412,7 @@ function histMetric(ex, ss) {
   const tops = ss.map(topSet).filter(Boolean);
   if (tops.length < 2 || !tops.every(t => t.w === tops[0].w)) return m;
   const w = tops[0].w;
-  return {name:`Reps with ${fmtKg(w)} kg`, unit:'reps', bare:true, f:s => { const t = topSet(s); return t && t.w === w ? t.r : null; }};
+  return {name:`Reps with ${fmtKg(w)} ${wUnit()}`, unit:'reps', bare:true, f:s => { const t = topSet(s); return t && t.w === w ? t.r : null; }};
 }
 /* Сводка упражнения в строке журнала. С весом: крупно — рабочий вес и лучшие повторы с ним в последней записи, мельче
    и с подписью — расчётный максимум; изменение с первой записи — по весу, а при том же весе — по повторам («+3 повт.»,
@@ -15213,15 +15422,18 @@ function journalVal(ex, ss) {
   if (!tops.length) {
     const vals = ss.map(s => m.f(s)).filter(v => v != null), firstV = vals[0], lastV = vals[vals.length - 1];
     const ch = vals.length > 1 && firstV ? Math.round((lastV / firstV - 1) * 100) : null;
-    return `<span class="j-val">${lastV != null ? fmtKg(Math.round(lastV * 2) / 2) : '—'}<small>${m.unit}</small>${ch != null ? `<em class="${ch > 0 ? 'pos' : ch < 0 ? 'neg' : ''}">${ch > 0 ? '+' : ''}${ch}%</em>` : ''}</span>`;
+    return `<span class="j-val">${lastV != null ? metricFmt(m)(lastV) : '—'}<small>${m.unit}</small>${ch != null ? `<em class="${ch > 0 ? 'pos' : ch < 0 ? 'neg' : ''}">${ch > 0 ? '+' : ''}${ch}%</em>` : ''}</span>`;
   }
   const a = tops[0], b = tops[tops.length - 1], e = [...ss].reverse().map(m.f).find(v => v != null);
-  const chip = (d, u) => `<em class="${d > 0 ? 'pos' : 'neg'}">${d > 0 ? '+' : '−'}${u === 'kg' ? fmtKg(Math.abs(d)) : Math.abs(d)} ${u}</em>`;
-  const ch = tops.length < 2 ? '' : b.w !== a.w ? chip(b.w - a.w, 'kg') : b.r !== a.r ? chip(b.r - a.r, 'reps') : '';
-  return `<span class="j-val j-wr"><span class="j-big"><span class="vh">${'Working weight'} </span>${fmtKg(b.w)}<small>kg</small> × ${b.r}<span class="vh"> ${'reps'}</span></span>`
-    + `${e != null ? `<small class="j-e1">${'est. 1RM'} ${fmtKg(Math.round(e * 2) / 2)} kg</small>` : ''}${ch}</span>`;
+  const chip = (d, u, w) => `<em class="${d > 0 ? 'pos' : 'neg'}">${d > 0 ? '+' : '−'}${w ? fmtKg(Math.abs(d)) : Math.abs(d)} ${u}</em>`;
+  const ch = tops.length < 2 ? '' : b.w !== a.w ? chip(b.w - a.w, wUnit(), true) : b.r !== a.r ? chip(b.r - a.r, 'reps') : '';
+  return `<span class="j-val j-wr"><span class="j-big"><span class="vh">${'Working weight'} </span>${fmtKg(b.w)}<small>${wUnit()}</small> × ${b.r}<span class="vh"> ${'reps'}</span></span>`
+    + `${e != null ? `<small class="j-e1">${'est. 1RM'} ${fmtKgR(e)} ${wUnit()}</small>` : ''}${ch}</span>`;
 }
-function sparkSvg(pts, unit, step = 0.5) {
+/* число метрики: вес (кг из журнала) — в выбранных единицах до 0,5 кг или 1 фнт, остальное (повторы, секунды, метры) — до 0,5 */
+const metricFmt = m => m.w ? v => fmtKgR(v) : v => fmtU(Math.round(v * 2) / 2);
+/* fmt — подпись значения точки (метрика: metricFmt; вес тела — 18-measures.js) */
+function sparkSvg(pts, unit, fmt = v => fmtU(Math.round(v * 2) / 2)) {
   if (!pts.length) return '';
   const W = 300, H = 74, L = 6, R = 40, T = 12, B = 14;
   const vs = pts.map(p => p.v);
@@ -15233,7 +15445,7 @@ function sparkSvg(pts, unit, step = 0.5) {
   const line = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join('');
   const area = pts.length > 1 ? `${line}L${x(pts.length - 1).toFixed(1)},${H - B}L${x(0).toFixed(1)},${H - B}Z` : '';
   const last = pts[pts.length - 1], first = pts[0];
-  const fv = v => fmtKg(Math.round(v / step) * step);
+  const fv = fmt;
   const data = esc(JSON.stringify(pts.map((p, i) => [x(i), y(p.v), `${fmtDay(p.d, true)} · ${fv(p.v)} ${unit}`])));
   return `<svg class="spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="Trend: from ${fv(first.v)} to ${fv(last.v)} ${unit}" data-pts="${data}">
     <line class="sp-base" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/>
@@ -15248,7 +15460,7 @@ function sparkSvg(pts, unit, step = 0.5) {
 /* подходы записи и её общий вес второй строкой (если есть внешний вес) */
 function histSets(ex, s) {
   const t = sessionTonnage(ex, s);
-  return `${setsText(s.s, ex)}${t > 0 ? `<small class="h-ton">${'total weight ' + fmtTon(t) + ' kg'}</small>` : ''}`;
+  return `${setsText(s.s, ex)}${t > 0 ? `<small class="h-ton">${'total weight ' + fmtTon(t) + ' ' + wUnit()}</small>` : ''}`;
 }
 function histHtml(ex) {
   const ss = (LOG.data[ex.id] || []).filter(x => x.s.some(Boolean));
@@ -15259,7 +15471,7 @@ function histHtml(ex) {
   const rows = ss.slice(-6).reverse().map(s => `<li><span class="h-d">${fmtDay(s.d, true)}${s.wk ? `<small>wk ${s.wk}</small>` : ''}${s.fmt === 'static' ? '<small>static-dynamic</small>' : ''}</span>
     <span class="h-s">${histSets(ex, s)}</span>
     <button type="button" class="h-del" data-del="${ex.id}" data-d="${s.d}" aria-label="Delete entry for ${fmtDay(s.d, true)}">Delete</button></li>`).join('');
-  return `<div class="h-chart"><p class="h-cap">${m.name}${m.bare ? '' : ', ' + m.unit}${best != null ? ` · best ${fmtKg(Math.round(best * 2) / 2)}` : ''}</p>${sparkSvg(pts, m.unit)}</div>
+  return `<div class="h-chart"><p class="h-cap">${m.name}${m.bare ? '' : ', ' + m.unit}${best != null ? ` · best ${metricFmt(m)(best)}` : ''}</p>${sparkSvg(pts, m.unit, metricFmt(m))}</div>
     <ul class="h-list">${rows}</ul>${ss.length > 6 ? `<p class="h-more">Total entries: ${ss.length}. Full history is in the “Log” section.</p>` : ''}${variantHistNote(ex)}`;
 }
 function histCount(id) { return (LOG.data[id] || []).filter(x => x.s.some(Boolean)).length; }
@@ -15296,7 +15508,7 @@ function statusHtml() {
   const t = m === 'cloud' ? 'Entries are saved to your account and available on any device where you open this page.'
     : m === 'connecting' ? 'Connecting entry storage…'
     : 'Entries are stored in this browser. Make a backup to move your log to another device or to keep it if browser data is cleared.';
-  return `<span class="ls-dot ls-${m}" aria-hidden="true"></span><span>${LOG.err ? esc(LOG.err) + ' Make a backup so you don\'t lose your entries.' : t}</span>`;
+  return `<span class="ls-dot ls-${m}" aria-hidden="true"></span><span>${LOG.err ? esc(LOG.err) + ' Make a backup so you don’t lose your entries.' : t}</span>`;
 }
 function journalDays() { const s = new Set(); for (const ss of Object.values(LOG.data)) for (const x of ss) if (x.s.some(Boolean)) s.add(x.d); return s.size; }
 
@@ -15318,7 +15530,7 @@ function trainingDays(data = LOG.data) {
 function daysHtml(by = trainingDays(), limit = 5) {
   const days = Object.values(by).sort((a, b) => a.d < b.d ? 1 : -1).slice(0, limit);
   if (!days.length) return '';
-  return `<div class="j-days"><p class="lb-h">${'Recent workouts · total weight'}</p><ul>${days.map(x => `<li><span class="j-dd">${fmtDay(x.d, true)}</span><span class="j-dn">${x.ex} ${plural(x.ex, 'exercise', 'exercises', 'exercises')} · ${x.sets} ${plural(x.sets, 'set', 'sets', 'sets')}${heartDayHtml(x.d)}</span><b class="j-dt">${x.t > 0 ? fmtTon(x.t) + `<small>${'kg'}</small>` : '—'}</b></li>`).join('')}</ul></div>`;
+  return `<div class="j-days"><p class="lb-h">${'Recent workouts · total weight'}</p><ul>${days.map(x => `<li><span class="j-dd">${fmtDay(x.d, true)}</span><span class="j-dn">${x.ex} ${plural(x.ex, 'exercise', 'exercises', 'exercises')} · ${x.sets} ${plural(x.sets, 'set', 'sets', 'sets')}${heartDayHtml(x.d)}</span><b class="j-dt">${x.t > 0 ? fmtTon(x.t) + `<small>${wUnit()}</small>` : '—'}</b></li>`).join('')}</ul></div>`;
 }
 function heatmap(today = new Date(), by = trainingDays()) {
   const byDay = {};
@@ -15335,7 +15547,7 @@ function heatmap(today = new Date(), by = trainingDays()) {
     const k = dayKey(dt), n = byDay[k] || 0;
     const lv = n === 0 ? 0 : n < 10 ? 1 : n < 20 ? 2 : 3;
     const t = n && by[k] ? by[k].t : 0;
-    cells += `<rect class="hm hm${lv}" x="${LX + w * (cell + gap)}" y="${TY + d * (cell + gap)}" width="${cell}" height="${cell}" rx="3" data-tip="${fmtDay(k, true)}: ${n ? n + ' ' + plural(n, 'set', 'sets', 'sets') + (t > 0 ? ` · ${fmtTon(t)} kg` : '') : 'no workout'}"/>`;
+    cells += `<rect class="hm hm${lv}" x="${LX + w * (cell + gap)}" y="${TY + d * (cell + gap)}" width="${cell}" height="${cell}" rx="3" data-tip="${fmtDay(k, true)}: ${n ? n + ' ' + plural(n, 'set', 'sets', 'sets') + (t > 0 ? ` · ${fmtTon(t)} ${wUnit()}` : '') : 'no workout'}"/>`;
     if (d === 0 && dt.getMonth() !== lastM) { lastM = dt.getMonth(); marks.push([w, lastM]); }
   }
   /* подпись месяца — над его первой неделей; хвост прошлого месяца в первой колонке подписывается, только если до
@@ -15359,7 +15571,7 @@ function renderJournal() {
   const tools = `<div class="j-tools">
       ${LOG.canExport ? `<button type="button" class="btn btn-2" id="exp-json">Full backup (JSON)</button><button type="button" class="btn btn-2" id="exp-csv">Log for Excel</button><button type="button" class="btn btn-2" id="exp-body">Measurements for Excel</button>` : ''}
       <label class="btn btn-2" for="imp-file">Restore from backup</label><input type="file" id="imp-file" accept=".json,application/json" hidden>
-    </div><p class="p-hint" id="j-msg" role="status"></p>
+    </div>${unitsHtml()}<p class="p-hint" id="j-msg" role="status"></p>
     <p class="p-hint">A full backup holds your settings, gear, log and measurements in one file: it moves everything to another phone or brings it back after the browser data is cleared.</p>`;
   let html = `<header class="p-head j-head">
     <div class="p-sum">
@@ -15393,9 +15605,19 @@ function renderJournal() {
     }).join('')}</ul>
     <p class="legend">On the right: your working weight and the best reps with it in the last workout; below it, the estimated 1RM and the change since the first entry — in weight, or in reps when the weight is the same. For dumbbells and kettlebells the weight is that of one implement.</p>
     <p class="legend">Estimated 1RM is the weight you could lift once, per the Epley formula: weight × (1 + reps / 30). It rises both when you add weight and when you do more reps with the same weight, but reps above 12 are not counted. If every entry uses the same weight, the chart shows your reps with it.</p>
-    <p class="legend">Total weight is the sum of “weight × reps” over all implements and sides: a dumbbell press with 2 × 20 kg for 10 reps is 400 kg, a one-arm dumbbell row with 30 kg for 10 reps per side is 600 kg. Only external load counts: dumbbells, kettlebells, barbell, machine, extra weight; body weight, assisted-machine counterweight, timed holds and distance are not included. L/R — a set with the left and right side logged separately: progress and records follow the weaker side.</p>`;
+    <p class="legend">Total weight is the sum of “weight × reps” over all implements and sides: ${tonnageExample()}. Only external load counts: dumbbells, kettlebells, barbell, machine, extra weight; body weight, assisted-machine counterweight, timed holds and distance are not included. L/R — a set with the left and right side logged separately: progress and records follow the weaker side.</p>`;
   }
   $('#plan').innerHTML = html;
+}
+/* единицы веса — рядом с копией и выгрузкой: общая настройка приложения (S.units) */
+function unitsHtml() {
+  const u = wu(), b = (v, label) => `<button type="button" class="pre${u === v ? ' on' : ''}" data-units="${v}" aria-pressed="${u === v}">${label}</button>`;
+  return `<div class="pres j-units" role="group" aria-labelledby="j-units-l"><span class="pres-l" id="j-units-l">Weight units</span>${b('kg', 'kg')}${b('lb', 'lb')}</div>`;
+}
+/* пример общего веса в пояснении журнала — в выбранных единицах: гантели 2 × 20 кг (2 × 45 фнт), тяга 30 кг (65 фнт) */
+function tonnageExample() {
+  const [a, b] = isLb() ? [45, 65] : [20, 30], u = wUnit();
+  return `a dumbbell press with 2 × ${a} ${u} for 10 reps is ${fmtTon(fromU(a * 20))} ${u}, a one-arm dumbbell row with ${b} ${u} for 10 reps per side is ${fmtTon(fromU(b * 20))} ${u}`;
 }
 function viewTabs() {
   const n = journalDays(), v = ['atlas', 'journal'].includes(S.view) ? S.view : 'plan';
@@ -15422,7 +15644,8 @@ async function saveFile(name, text, mime) {
    («12×10», у удержаний — секунды), основные вес и повторы тогда — слабая сторона; общий вес — последний столбец,
    у подходов без внешнего веса пусто. */
 function csvText() {
-  const rows = [['Date', 'Exercise', 'Muscle group', 'Set', 'Weight, kg', 'Reps / seconds / meters', 'Cycle week', 'Rest after the set, s', 'Left', 'Right', 'Total weight per set, kg']];
+  /* вес и общий вес — в выбранных единицах, единица — в заголовке столбца */
+  const rows = [['Date', 'Exercise', 'Muscle group', 'Set', `Weight, ${wUnit()}`, 'Reps / seconds / meters', 'Cycle week', 'Rest after the set, s', 'Left', 'Right', `Total weight per set, ${wUnit()}`]];
   const all = [], side = p => (p[0] != null ? fmtKg(p[0]) + '×' : '') + p[1];
   for (const [id, ss] of Object.entries(LOG.data)) {
     const ex = EXI[id]; if (!ex) continue;
@@ -15443,7 +15666,7 @@ async function exportLog(kind) {
   const r = kind === 'csv' ? await saveFile(`lazy-gym-log-${d}.csv`, csvText(), 'text/csv')
     : await saveFile(`lazy-gym-kopiya-${d}.json`, JSON.stringify(backupObject()), 'application/json');
   if (msg) msg.textContent = r === 'ok' ? (kind === 'csv' ? 'Spreadsheet saved. Open it in Excel: columns are separated by semicolons.' : 'Full backup saved. You can restore everything from it right here, on any device.')
-    : r === 'declined' ? 'Save canceled.' : 'Couldn\'t save the file.';
+    : r === 'declined' ? 'Save canceled.' : 'Couldn’t save the file.';
 }
 function importLog(file) {
   const msg = $('#j-msg');
@@ -15502,7 +15725,7 @@ function rowFields(row, side) {
 /* значения поля (пустое — подсказка); bad — поле, которое надо заполнить */
 function readFields({kgIn, rIn}, lt) {
   const reps = parseNum(rIn.value !== '' ? rIn.value : rIn.placeholder);
-  let kg = kgIn ? parseNum(kgIn.value !== '' ? kgIn.value : kgIn.placeholder) : null;
+  let kg = kgIn ? parseKg(kgIn.value !== '' ? kgIn.value : kgIn.placeholder) : null;
   if (reps == null || reps <= 0) return {bad:rIn};
   if (lt === 'kg' && kg == null && kgIn) return {bad:kgIn};
   if (kg != null && kg < 0) kg = null;
@@ -15555,7 +15778,7 @@ function editSet(inp, sure) {
   const row = inp.closest('.lt-r'); if (!row || !row.classList.contains('done')) return;
   const box = inp.closest('.c-log'), id = box.dataset.log, k = +row.dataset.k, ex = EXI[id];
   const s = todaySession(id, false); if (!s || !s.s[k]) return;
-  const v = parseNum(inp.value), x = s.s[k], side = inp.dataset.side;
+  const v = inp.dataset.f === 'kg' ? parseKg(inp.value) : parseNum(inp.value), x = s.s[k], side = inp.dataset.side;
   /* неправдоподобный вес — запись прежняя, вопрос в строке */
   if (inp.dataset.f === 'kg' && v > 0 && !sure) {
     const it = (plan && plan.items && plan.items.find(y => y.ex.id === id)) || {ex, rx:{}}, q = kgDoubt(it, [v], k);
@@ -15668,7 +15891,7 @@ function toggleLr(btn) {
 /* «×2 = 40 кг» под таблицей обновляется при вводе веса */
 function updatePairTotal(inp) {
   const box = inp.closest('.c-log'), x2 = box && box.querySelector('.lt-x2 b'); if (!x2) return;
-  const n = +box.querySelector('.lt-x2').dataset.n, v = parseNum(inp.value !== '' ? inp.value : inp.placeholder);
+  const n = +box.querySelector('.lt-x2').dataset.n, v = parseKg(inp.value !== '' ? inp.value : inp.placeholder);
   x2.textContent = pairTotalText(n, v);
 }
 function refreshHist(id) {
@@ -15714,6 +15937,7 @@ document.addEventListener('click', e => {
   }
   if (t.dataset.del) { deleteSession(t); return; }
   if (t.dataset.view) { S.view = t.dataset.view; saveSettings(); renderSetup(); renderPlan(); window.scrollTo({top:0}); return; }
+  if (t.dataset.units) { S.units = t.dataset.units === 'lb' ? 'lb' : 'kg'; saveSettings(); renderJournal(); const b = document.querySelector(`[data-units="${S.units}"]`); if (b) b.focus(); return; }
   if (t.id === 'exp-csv') { exportLog('csv'); return; }
   if (t.id === 'exp-json') { exportLog('json'); return; }
 });
@@ -15800,14 +16024,15 @@ const impPerRep = (ex, impl) => armsAlternate(ex) ? 1 : impCount(ex, impl);
 function weightLabel(it) {
   const lt = loadType(it.ex);
   if (lt === 'none') return null;
-  if (lt === 'assist') return {full:'Counterweight, kg', short:'Counterweight', n:1, impl:null};
+  const u = wUnit(); /* «кг» или «фнт» (13-log.js) */
+  if (lt === 'assist') return {full:`Counterweight, ${u}`, short:'Counterweight', n:1, impl:null};
   const impl = itemImpl(it), n = impCount(it.ex, impl);
-  if (impl === 'db') return {full:n > 1 ? 'Weight of one dumbbell, kg' : 'Dumbbell weight, kg', short:'DB, kg', n, impl};
-  if (impl === 'kb') return {full:n > 1 ? 'Weight of one kettlebell, kg' : 'Kettlebell weight, kg', short:'KB, kg', n, impl};
-  return lt === 'extra' ? {full:'Extra weight, kg', short:'Extra kg', n:1, impl} : {full:'Weight, kg', short:'Weight, kg', n:1, impl};
+  if (impl === 'db') return {full:n > 1 ? `Weight of one dumbbell, ${u}` : `Dumbbell weight, ${u}`, short:`DB, ${u}`, n, impl};
+  if (impl === 'kb') return {full:n > 1 ? `Weight of one kettlebell, ${u}` : `Kettlebell weight, ${u}`, short:`KB, ${u}`, n, impl};
+  return lt === 'extra' ? {full:`Extra weight, ${u}`, short:`Extra ${u}`, n:1, impl} : {full:`Weight, ${u}`, short:`Weight, ${u}`, n:1, impl};
 }
 /* «×2 = 40 кг» — вес двух снарядов в руках */
-function pairTotalText(n, kg) { return n > 1 && kg > 0 ? `×${n} = ${fmtKg(kg * n)} kg` : ''; }
+function pairTotalText(n, kg) { return n > 1 && kg > 0 ? `×${n} = ${fmtW(kg * n)}` : ''; }
 
 /* ---------- стороны подхода ---------- */
 /* одна сторона: [кг | null, повторы]; кг — не меньше нуля, повторы (секунды, метры) — больше нуля */
@@ -15880,8 +16105,8 @@ function dayTonnage(d, data = LOG.data) {
   for (const [id, ss] of Object.entries(data || {})) { const ex = EXI[id]; if (ex && Array.isArray(ss)) for (const s of ss) if (s && s.d === d) t += sessionTonnage(ex, s); }
   return t;
 }
-/* 4320 → «4 320»; в английской сборке — «4,320» */
-function fmtTon(v) { return String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, DEC === ',' ? ' ' : ','); }
+/* общий вес (кг) — в выбранных единицах: 4320 → «4 320»; в английской сборке — «4,320» */
+function fmtTon(v) { return String(Math.round(toU(v))).replace(/\B(?=(\d{3})+(?!\d))/g, DEC === ',' ? ' ' : ','); }
 
 /* ---------- текст подхода ---------- */
 const pairText = p => (p[0] ? fmtKg(p[0]) + '×' : '') + p[1];
@@ -15946,7 +16171,7 @@ const MUSCLE_INFO = {
   hams:'Bend the knee and extend the hip. Work in hip hinges and leg curls.',
   calves:'Raise you onto your toes. The gastrocnemius works harder with a straight knee, the soleus with a bent one.',
   adductors:'Bring the legs together. Adductor magnus also extends the hip: in a deep squat and a lunge it works together with the glutes. Targeted work: hip adduction and the Copenhagen plank.',
-  hipflex:'Lift the thigh towards the trunk — iliopsoas, rectus femoris, sartorius. The main movers in leg and knee raises.',
+  hipflex:'Lift the thigh toward the trunk — iliopsoas, rectus femoris, sartorius. The main movers in leg and knee raises.',
   serratus:'Holds the shoulder blade against the ribs, moves it forward and rotates it upward. Works in push-ups and overhead presses.',
   cuff:'Four deep muscles around the shoulder joint: they keep the head of the humerus in its socket and rotate the arm. Targeted work: shoulder external rotation; they also assist in reverse flyes, Y-T-W raises and overhead pulls.'
 };
@@ -15958,7 +16183,7 @@ const ATLAS_SUPPORT = new Set(['serratus']);
 const ATLAS_BACK = new Set(['delt_r', 'triceps', 'traps', 'midback', 'lats', 'lowback', 'glutes', 'hams', 'calves', 'cuff']);
 let atlasEx = null, atlasCam = null;
 /* ракурсы превью: «спереди» и «сзади» — три четверти, так видно и мышцу, и движение */
-const ATLAS_CAMS = {angle:'Front', rear:'Back', side:'Side', above:'Above'};
+const ATLAS_CAMS = {angle:'Front', rear:'Back', side:'Side', above:'Top'};
 
 /* пик учебной кривой участия мышцы в упражнении (0…1) */
 function atlasPeak(ex, m) {
@@ -16051,7 +16276,7 @@ function atlasRow(r, m, sel) {
 function atlasKeepHtml(id) { return cpKeepHtml(id, 'at'); }
 function atlasList(rows, m, sel, limit) {
   return `<ol class="at-list">${rows.map((r, i) => atlasRow(r, m, r.ex.id === sel).replace('<li class="at-row', i >= limit ? '<li hidden class="at-more at-row' : '<li class="at-row')).join('')}</ol>`
-    + (rows.length > limit ? `<button type="button" class="at-show" data-atlas-show="1">Show all: ${rows.length}</button>` : '');
+    + (rows.length > limit ? `<button type="button" class="at-show" data-atlas-show="1">Show all ${rows.length}</button>` : '');
 }
 
 function renderAtlas() {
@@ -16060,7 +16285,8 @@ function renderAtlas() {
   const first = A.pri[0] || A.sec[0];
   if (!atlasEx || ![...A.pri, ...A.sec].some(r => r.ex.id === atlasEx)) { atlasEx = first ? first.ex.id : null; atlasCam = null; }
   const place = placeOf();
-  const here = p => { const PE = effEquip(p.equip); return EX.filter(ex => (ex.pri.includes(m) || ex.sec.includes(m)) && available(ex, PE)).length; };
+  /* у места — сколько упражнений с основной нагрузкой на мышцу (как число у мышцы выше) и сколько всего, со вспомогательной */
+  const here = p => { const PE = effEquip(p.equip), all = EX.filter(ex => (ex.pri.includes(m) || ex.sec.includes(m)) && available(ex, PE)); return {main:all.filter(ex => ex.pri.includes(m)).length, all:all.length}; };
   const name = MUSCLE_NAMES[m], lower = name.toLowerCase();
   let html = `<header class="at-head">
     <p class="eyebrow">Muscle atlas</p>
@@ -16072,12 +16298,12 @@ function renderAtlas() {
     <section class="at-pick" aria-label="Muscles">
       <div class="at-map">${atlasMapSvg(m, counts)}</div>
       ${ATLAS_GROUPS.map(([g, ids]) => `<h2 class="at-gh">${g}</h2><div class="at-chips">${ids.map(id => `<button type="button" class="at-chip${id === m ? ' on' : ''}${counts[id] ? '' : ' none'}" data-atlas-m="${id}" aria-pressed="${id === m}"><span>${esc(MUSCLE_NAMES[id])}</span><small>${counts[id] || '—'}</small></button>`).join('')}</div>`).join('')}
-      <p class="f-note">The number is how many exercises target the muscle as the main mover at “${esc(place.name)}».</p>
+      <p class="f-note">The number is how many exercises target the muscle as the main mover at “${esc(place.name)}”.</p>
     </section>
     <section class="at-detail" id="at-detail" aria-labelledby="at-name">
       <h2 class="at-name" id="at-name">${esc(name)}</h2>
       <p class="at-desc">${esc(MUSCLE_INFO[m])}</p>
-      <div class="at-where"><span class="at-wl">Exercises for this muscle</span><div class="places at-places" role="group" aria-label="Where you train">${S.places.map(p => { const n = here(p); return `<button type="button" class="place${p.id === S.place ? ' on' : ''}" data-place="${p.id}" aria-pressed="${p.id === S.place}"><b>${esc(p.name)}</b><small>${n}</small></button>`; }).join('')}</div></div>
+      <div class="at-where"><span class="at-wl">Exercises for this muscle</span><div class="places at-places" role="group" aria-label="Where you train">${S.places.map(p => { const n = here(p); return `<button type="button" class="place${p.id === S.place ? ' on' : ''}" data-place="${p.id}" aria-pressed="${p.id === S.place}"><b>${esc(p.name)}</b><small>${n.main} ${plural(n.main, 'main', 'main', 'main')} · ${n.all} total</small></button>`; }).join('')}</div></div>
       <div class="at-acts">
         ${ATLAS_SUPPORT.has(m) ? '<p class="f-note">This muscle assists the main movers and needs no separate workout: it works in the exercises below.</p>' : `<button type="button" class="btn" data-atlas-focus="${m}">Workout focused on this muscle →</button>
         ${S.focus === m ? '<span class="at-focus-on">Already in focus</span>' : ''}`}
@@ -16187,7 +16413,8 @@ let galleryIO = null, galleryQueue = [], galleryRaf = 0;
 function galleryList(kind = gallery.kind) {
   /* поиск: «ё» и «е» равны, окончания слов не важны (searchMatcher, 11-planner.js) */
   const E = effEquip(S.equip), match = searchMatcher(gallery.q);
-  return EX.filter(ex => (kind === 'all' || workKind(ex) === kind) && (!gallery.here || available(ex, E)) && match(ex.name));
+  /* название с инвентарём («Румынская тяга со штангой» на плитке) тоже находит упражнение */
+  return EX.filter(ex => (kind === 'all' || workKind(ex) === kind) && (!gallery.here || available(ex, E)) && (match(ex.name) || Object.values(ex.nameV || {}).some(match)));
 }
 function galleryTile(ex, E, all) {
   const here = available(ex, E), name = exName(ex, here ? E : all), fav = isFav(ex.id);
@@ -16206,7 +16433,7 @@ function galleryHtml() {
     /* «…» вокруг названия места — в одном шаблоне со следующей подписью: перевод закрывающей кавычки идёт вместе с ней */
     + `<div class="mv-gfilters"><label class="mv-ghere"><input type="checkbox" id="mv-ghere"${gallery.here ? ' checked' : ''}> Only what is available at “${esc(placeOf().name)}”</label><label class="mv-gsearch"><span class="vh">Find an exercise</span><input type="search" id="mv-gq" value="${esc(gallery.q)}" placeholder="Find: press, row, squat…" autocomplete="off"></label></div></div>`
     + `<p class="mv-gcount" aria-live="polite">${list.length} ${plural(list.length, 'exercise', 'exercises', 'exercises')}</p><p class="mv-gnote" hidden></p>`
-    + (sections || `<p class="mv-gempty">Nothing found. Choose «All» or change the search.</p>`);
+    + (sections || `<p class="mv-gempty">Nothing found. Choose “All” or change the search.</p>`);
 }
 function thumbKey(id) { return id + '|' + S.place + '|' + S.equip.join(','); }
 /* конечная точка движения узнаётся лучше всего: штанга у груди, присед в нижней точке; у циклических — середина шага */
@@ -16451,11 +16678,11 @@ function agoText(age, d) {
   return age < LOAD.days ? `${age} ${plural(age, 'day', 'days', 'days')} ago` : fmtDay(d, true);
 }
 function restText(r) {
-  if (r.age == null) return r.v > 0 ? 'no main work' : 'no work';
+  if (r.age == null) return r.v > 0 ? 'secondary work only' : 'no work';
   return `rest ${r.age} ${plural(r.age, 'day', 'days', 'days')}`;
 }
 function loadStatusHtml(L) {
-  const det = L.last ? `${agoText(L.last.age, L.last.d)}, ${L.last.sets} ${setsWord(L.last.sets)}` : L.v > 0 ? 'no main work' : 'no work';
+  const det = L.last ? `${agoText(L.last.age, L.last.d)}, ${L.last.sets} ${setsWord(L.last.sets)}` : L.v > 0 ? 'secondary work only' : 'no work';
   return `<span class="ml-st"><i aria-hidden="true"></i><b>${LOAD_ST[L.st]}</b><span>${det}</span></span>`;
 }
 
@@ -16472,21 +16699,21 @@ function muscleLoadHtml(load = muscleLoad()) {
   const max = Math.max(22, ...ids.map(g => load[g].v));
   const body = any ? `<ul class="vbars ml-list">${ids.map(g => volRow(g, load[g].v, max, loadStatusHtml(load[g]), 'st-' + load[g].st)).join('')}</ul>
     <p class="ml-legend"><span class="st-loaded"><i></i>fatigued — under 48 h</span><span class="st-recovering"><i></i>recovering — 48–72 h</span><span class="st-ready"><i></i>ready — 72 h or more</span></p>`
-    : `<p class="ml-empty">No entries in the last 7 days — every muscle has rested. Today's workout will start with the big muscle groups.</p>`;
+    : `<p class="ml-empty">No entries in the last 7 days — every muscle has rested. Today’s workout will start with the big muscle groups.</p>`;
   return `<section class="ml" id="ml" aria-labelledby="ml-title">
     <div class="ml-head">
-      <div><p class="eyebrow">Muscle load</p><h2 id="ml-title">Sets in 7 days and rest</h2>
+      <div><p class="eyebrow">Muscle load</p><h2 id="ml-title">Weekly sets &amp; recovery</h2>
         <p class="ml-sub">Today and the 6 days before, from logged sets. The band is the growth target: 10–20 sets per muscle group per week.</p>
         ${any ? loadSummaryHtml(load) : ''}</div>
-      <div class="ml-act"><button type="button" class="btn" data-logpick="journal">Build today's workout →</button>
+      <div class="ml-act"><button type="button" class="btn" data-logpick="journal">Build today’s workout →</button>
         <p class="p-hint ml-msg" id="ml-msg" role="status"></p></div>
     </div>
     ${body}
     <details class="rule ml-how"><summary>How it is counted</summary>
-      <p>A set counts in full for the exercise's target group and as half a set for the other working groups — the same as the weekly chart in the plan (Pelland et al., 2026). Only logged sets count; “10 per side” is one set.</p>
+      <p>A set counts in full for the exercise’s target group and as half a set for the other working groups — the same as the weekly chart in the plan (Pelland et al., 2026). Only logged sets count; “10 per side” is one set.</p>
       <p>Target: 10–20 sets per muscle group per week — from 10 sets muscles grow noticeably more (Schoenfeld, Ogborn, Krieger, 2017).</p>
       <p>Status comes from the last workout in which the group did 2 or more sets as a main mover: under 48 h ago — fatigued, 48–72 h — recovering, 72 h or more — ready. Without training to failure muscles mostly recover in 24–48 h, after sets to failure — in up to 72 h (Morán-Navarro et al., 2017). Assisting work and cardio do not change the status. The log stores dates only, so hours are counted in days: yesterday — 24 h, 2 days ago — 48 h, 3 days ago — 72 h.</p>
-      <p>Today's workout: groups with the biggest shortfall to 10 sets come first (big muscles before small ones), fatigued groups are skipped, recovering groups get one exercise with one set fewer. Gear, level and number of exercises come from the plan settings.</p>
+      <p>Today’s workout: groups with the biggest shortfall to 10 sets come first (big muscles before small ones), fatigued groups are skipped, recovering groups get one exercise with one set fewer. Gear, level and number of exercises come from the plan settings.</p>
     </details>
   </section>`;
 }
@@ -17037,9 +17264,9 @@ function workoutStartHtml(w=workoutPlanState()){
 /* вопрос в плане: тренировка прошлого дня не закончена — её подходы уже в журнале */
 function workoutAskHtml(w=workoutPlanState()){
   if(w.kind!=='ask')return '';
-  const y=yesterdayKey()===w.day,when=y?'Yesterday\'s workout isn\'t finished':`${'Workout'} ${fmtDay(w.day,true)} ${'isn\'t finished'}`;
-  return `<section class="wip-ask" id="wip-ask" aria-labelledby="wip-ask-h"><h2 id="wip-ask-h">${when}</h2><p>${doneOfText(w.done,w.total)} ${'— they\'re already in the log.'}${w.can?'':` ${'The current plan doesn\'t have these exercises, so it can\'t be continued here.'}`}</p>`
-    +`<div class="wip-ask-b">${w.can?`<button type="button" class="btn" data-wip="go">${y?'Continue yesterday\'s':'Continue it'}</button>`:''}<button type="button" class="btn btn-2" data-wip="end">${'Finish it'}</button></div></section>`;
+  const y=yesterdayKey()===w.day,when=y?'Yesterday’s workout isn’t finished':`${'Workout'} ${fmtDay(w.day,true)} ${'isn’t finished'}`;
+  return `<section class="wip-ask" id="wip-ask" aria-labelledby="wip-ask-h"><h2 id="wip-ask-h">${when}</h2><p>${doneOfText(w.done,w.total)} ${'— they’re already in the log.'}${w.can?'':` ${'The current plan doesn’t have these exercises, so it can’t be continued here.'}`}</p>`
+    +`<div class="wip-ask-b">${w.can?`<button type="button" class="btn" data-wip="go">${y?'Continue yesterday’s':'Continue it'}</button>`:''}<button type="button" class="btn btn-2" data-wip="end">${'Finish it'}</button></div></section>`;
 }
 /* после выхода из тренировки и ответа на вопрос: кнопка и вопрос в плане — без пересборки плана (фокус и прокрутка на месте) */
 function paintStartButtons(){
@@ -17117,7 +17344,7 @@ function workoutShow(index){
   const unit=ex.kind==='time'?'s':ex.kind==='dist'?'m':'reps',psd=prev&&setSides(prev,ex);
   /* прошлых тренировок нет: «Первая запись», пока в тренировке ничего не записано, потом — «—» */
   const todayN=workoutSetsOf(ex.id).filter(Boolean).length;
-  $('#wv-previous').textContent=psd?`${setText(prev,ex)} ${unit}`:prev?`${prev[0]!=null?fmtKg(prev[0])+' kg × ':''}${prev[1]} ${unit}`:todayN?'—':'First entry';
+  $('#wv-previous').textContent=psd?`${setText(prev,ex)} ${unit}`:prev?`${prev[0]!=null?fmtW(prev[0])+' × ':''}${prev[1]} ${unit}`:todayN?'—':'None yet';
   $('#wv-previous-date').textContent=sg.prev?fmtDay(sg.prev.d,true):'';
   $('#wv-set-chips').innerHTML=workout.queue.map((x,i)=>x.it.ex.id===ex.id?`<button type="button" data-wv-index="${i}" class="${workoutValue(x)?'is-done ':''}${i===workout.index?'is-current':''}" aria-label="Set ${x.k+1}${workoutValue(x)?', done':''}" aria-current="${i===workout.index?'step':'false'}">${workoutValue(x)?'✓ ':''}${x.k+1}</button>`:'').join('');
   workoutFill(s,sg,prev);
@@ -17137,8 +17364,8 @@ function workoutFill(s,sg,prev){
   $('#wv-unilateral').hidden=!side;$('#wv-unilateral').textContent=hold?'Both sides in one set: left, a 10 s pause, right. Both sides are logged; progress follows the weaker side’s time.'
     :lr?'Log each side. Progress and tips follow the weaker side.':sidesOf(ex)==='alt'?'Alternate sides. Log the reps for one side.':'Do both sides. Log the reps for one side.';
   $('#wv-lr-bar').hidden=!side;$('#wv-lr').setAttribute('aria-pressed',String(lr));$('#wv-one').hidden=lr;$('#wv-lr-fields').hidden=!lr;
-  $('#wv-weight-label').hidden=lt==='none';$('#wv-weight-caption').textContent=wl?wl.full:'Weight, kg';$('#wv-rep-caption').textContent=side&&!ex.kind?'Reps per side':repLabel(ex);
-  $('#wv-lr-fields').classList.toggle('wv-lr-nokg',lt==='none');$('#wv-lr-kg-cap').textContent=wl?wl.full:'Weight, kg';$('#wv-lr-rep-cap').textContent=repLabel(ex);
+  $('#wv-weight-label').hidden=lt==='none';$('#wv-weight-caption').textContent=wl?wl.full:`Weight, ${wUnit()}`;$('#wv-rep-caption').textContent=side&&!ex.kind?'Reps per side':repLabel(ex);
+  $('#wv-lr-fields').classList.toggle('wv-lr-nokg',lt==='none');$('#wv-lr-kg-cap').textContent=wl?wl.full:`Weight, ${wUnit()}`;$('#wv-lr-rep-cap').textContent=repLabel(ex);
   for(const id of ['wv-reps','wv-reps-l','wv-reps-r'])$('#'+id).setAttribute('inputmode',ex.kind==='dist'?'decimal':'numeric');
   /* подходы упражнения в этой тренировке (продолженной — и вчерашние): по ним вес на следующие подходы */
   const draft=workout.drafts[workoutDraftKey(s)],today=workoutSetsOf(ex.id);
@@ -17165,7 +17392,7 @@ function workoutFill(s,sg,prev){
 /* «×2 = 40 кг» под весом одной гантели, когда их две */
 function workoutPairTotal(){
   const step=workout?.queue[workout.index];if(!step)return;
-  const wl=weightLabel(step.it),v=parseNum($('#wv-kg').value),t=wl&&wl.n>1&&!lrOn(step.it.ex)?pairTotalText(wl.n,v):'';
+  const wl=weightLabel(step.it),v=parseKg($('#wv-kg').value),t=wl&&wl.n>1&&!lrOn(step.it.ex)?pairTotalText(wl.n,v):'';
   if($('#wv-kg-total').textContent!==t)$('#wv-kg-total').textContent=t;
 }
 /* «Л/П отдельно»: включили — введённое общее значение в обе стороны (вес — всегда, повторы — в пустые поля сторон);
@@ -17200,7 +17427,7 @@ function commitWorkout(e,sure){
     if(lt!=='none'&&kgRaw&&kg===null)return{bad:kgEl,msg:'Enter the weight as a number, e.g. 12.5.'};
     if(lt==='kg'&&(kg===null||kg<=0))return{bad:kgEl,msg:'Enter the actual weight used.'};
     if(reps===null||reps<=0||(!ex.kind&&!Number.isInteger(reps)))return{bad:repsEl,msg:ex.kind?'Enter the actual result as a number greater than zero.':'Enter a whole number of reps completed.'};
-    return{kg,reps:Math.round(reps*10)/10};
+    return{kg:kg==null?null:fromU(kg),reps:Math.round(reps*10)/10}; /* вписано в выбранных единицах, хранится в килограммах */
   };
   const got=lr?[read($('#wv-kg-l'),$('#wv-reps-l')),read($('#wv-kg-r'),$('#wv-reps-r'))]:[read($('#wv-kg'),$('#wv-reps'))],bad=got.find(g=>g.bad),pair=workout.holdPair;
   workout.holdPair=null;
@@ -17250,9 +17477,9 @@ function workoutShowRest(){
 /* после подхода: общий вес подхода, если он считается (внешний вес), и слабая сторона, если стороны отличались */
 function restNote(){
   const step=workout.queue[workout.last],x=step&&workoutValue(step);
-  if(!x)return 'Result saved. Move on when you\'re ready.';
+  if(!x)return 'Saved. Move on when you’re ready.';
   const ex=step.it.ex,t=setTonnage(ex,x,sessionImpl(ex,workoutSession(step))),w=weakSideNote(ex,{s:[x]});
-  return (t>0?`Result saved: total weight of the set ${fmtTon(t)} kg.`:'Result saved.')+(w?' '+w:'')+' Move on when you’re ready.';
+  return (t>0?`Saved · set volume ${fmtTon(t)} ${wUnit()}.`:'Saved.')+(w?' '+w:'')+' Move on when you’re ready.';
 }
 /* общий вес упражнения за тренировку (продолженной — за все её дни) */
 function workoutTonnage(ex){return workoutDays().reduce((a,d)=>a+sessionTonnage(ex,(LOG.data[ex.id]||[]).find(x=>x.d===d)),0);}
@@ -17287,9 +17514,9 @@ function workoutFinish(){
   const inQ=new Set(its.map(it=>it.ex.id)),days=workoutDays(),gone=workout.gone.filter(g=>!inQ.has(g.id)&&EXI[g.id]).map(g=>({ex:EXI[g.id],name:g.name||EXI[g.id].name,n:g.ks.filter(k=>wkSet(LOG.data,g.id,k,days)).length})).filter(g=>g.n);
   const rows=its.map(it=>({ex:it.ex,name:it.name,n:doneOf(it.ex.id),skip:skip.has(it.ex.id)})).concat(gone.map(g=>({...g,swapped:true})));
   const n=rows.reduce((a,r)=>a+r.n,0),worked=rows.filter(r=>r.n).length,tons=rows.map(r=>r.n?workoutTonnage(r.ex):0),total=tons.reduce((a,b)=>a+b,0);
-  $('#wv-finish-text').textContent=`Completed ${n} ${plural(n,'set','sets','sets')} in ${worked} ${plural(worked,'exercise','exercises','exercises')}.`+(total>0?` Total weight — ${fmtTon(total)} kg.`:'');
+  $('#wv-finish-text').textContent=`Completed ${n} ${plural(n,'set','sets','sets')} in ${worked} ${plural(worked,'exercise','exercises','exercises')}.`+(total>0?` Total weight — ${fmtTon(total)} ${wUnit()}.`:'');
   Heart.finish();
-  $('#wv-summary').innerHTML=rows.map((r,i)=>`<p><span>${esc(r.name)}${r.swapped?` <small>${'swapped'}</small>`:''}</span><strong>${tons[i]>0?`<small>${fmtTon(tons[i])+' kg'}</small>`:''}${!r.n&&r.skip?`<small>${'skipped'}</small>`:r.n+' ✓'}</strong></p>`).join('');saveWorkout();workoutTick();
+  $('#wv-summary').innerHTML=rows.map((r,i)=>`<p><span>${esc(r.name)}${r.swapped?` <small>${'swapped'}</small>`:''}</span><strong>${tons[i]>0?`<small>${fmtTon(tons[i])+' '+wUnit()}</small>`:''}${!r.n&&r.skip?`<small>${'skipped'}</small>`:r.n+' ✓'}</strong></p>`).join('');saveWorkout();workoutTick();
 }
 function workoutTick(){
   if(!workout)return;
@@ -17328,7 +17555,7 @@ function paintHold(now=Date.now()){
   if(!st){mode=two?'Left, then right':'Hold timer';time=holdText(H.target.sec);btn='Start';}
   else if(st.phase==='lead'){mode='Get ready';time=String(st.count);btn='Cancel';cls='is-lead';}
   else if(st.phase==='switch'){mode='Switch sides';time=String(st.count);btn='Right side now';cls='is-lead';}
-  else if(st.phase==='hold'){mode=(two?sideName(st.side)+' · ':'')+(st.mode==='to'?(two?'to target':'To target'):(two?'over target':'Over target'));time=st.mode==='to'?holdText(st.left):holdText(st.over,true);btn='Stop';cls=st.mode==='over'?'is-over':'is-run';}
+  else if(st.phase==='hold'){mode=(two?sideName(st.side)+' · ':'')+(st.mode==='to'?(two?'to target':'To go'):(two?'over target':'Over target'));time=st.mode==='to'?holdText(st.left):holdText(st.over,true);btn='Stop';cls=st.mode==='over'?'is-over':'is-run';}
   else{mode='Logged';time=holdText(st.value);btn='Start again';}
   let sides='';
   if(two&&st){
@@ -17432,7 +17659,7 @@ function setupWorkout(){
     const t=e.target.closest&&e.target.closest('[data-wip]');if(!t)return;
     if(t.dataset.wip==='go'){startWorkout(null,{cont:true});return;}
     const w=workoutPlanState(),y=w.day&&yesterdayKey()===w.day;workoutEndSaved();paintStartButtons();
-    const msg=$('#save-msg');if(msg&&w.day)msg.textContent=(y?'Yesterday\'s workout is finished.':`${'Workout'} ${fmtDay(w.day,true)} ${'finished.'}`)+' '+'Its sets are in the log.';
+    const msg=$('#save-msg');if(msg&&w.day)msg.textContent=(y?'Yesterday’s workout is finished.':`${'Workout'} ${fmtDay(w.day,true)} ${'finished.'}`)+' '+'Its sets are in the log.';
     $('#start-workout')?.focus();
   });
   /* вернулись на экран: таймеры страницы в фоне редки — обновить отдых и удержание сразу */
@@ -18335,6 +18562,11 @@ document.addEventListener('click', e => {
 const ICS_KEY = 'podhod.ics.v1';
 const ICS = {time:'19:00', weeks:4, alarm:60};
 try { Object.assign(ICS, JSON.parse(localStorage.getItem(ICS_KEY) || '{}')); } catch (e) {}
+/* напоминание: «Тренировка через 1 час: Всё тело А» (порядок слов — из перевода целой строки с {t} и {name}) */
+function icsAlarmText(min, name) {
+  const h = min / 60, t = min >= 60 && Number.isInteger(h) ? `${h} ${plural(h, 'hour', 'hours', 'hours')}` : `${min} min`;
+  return 'Workout in {t}: {name}'.replace('{t}', t).replace('{name}', name);
+}
 function nextMonday() { const d = new Date(); d.setHours(12, 0, 0, 0); const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() + (dow === 0 ? 0 : 7 - dow)); return d; }
 const pad2 = n => String(n).padStart(2, '0');
 const icsDate = d => `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}T${pad2(d.getHours())}${pad2(d.getMinutes())}00`;
@@ -18356,7 +18588,7 @@ function icsText(start, time, weeksN) {
       const body = [`${GOALS[S.goal].name}, ${FORMATS[S.format].name.toLowerCase()}, ≈${d.plan.minutes} min`, pr.week.note, ''].concat(blocksText(d.plan)).join('\n');
       lines.push('BEGIN:VEVENT', `UID:podhod-${icsDate(dt)}-${d.tid}@podhod`, `DTSTAMP:${stamp}`, `DTSTART:${icsDate(dt)}`, `DTEND:${icsDate(end)}`,
         icsFold(`SUMMARY:${icsEsc(title)}`), icsFold(`DESCRIPTION:${icsEsc(body)}`), 'CATEGORIES:Workout');
-      if (ICS.alarm > 0) lines.push('BEGIN:VALARM', 'ACTION:DISPLAY', icsFold(`DESCRIPTION:${icsEsc('In ' + (ICS.alarm >= 60 ? ICS.alarm / 60 + ' h' : ICS.alarm + ' min') + ' workout: ' + d.name)}`), `TRIGGER:-PT${ICS.alarm}M`, 'END:VALARM');
+      if (ICS.alarm > 0) lines.push('BEGIN:VALARM', 'ACTION:DISPLAY', icsFold(`DESCRIPTION:${icsEsc(icsAlarmText(ICS.alarm, d.name))}`), `TRIGGER:-PT${ICS.alarm}M`, 'END:VALARM');
       lines.push('END:VEVENT');
     }
   }
@@ -18393,7 +18625,7 @@ async function saveIcs() {
   try { localStorage.setItem(ICS_KEY, JSON.stringify(ICS)); } catch (e) {}
   const txt = icsText(start, ICS.time, ICS.weeks);
   const r = await saveFile(`lazy-gym-workouts-${dayKey(start)}.ics`, txt, 'text/calendar');
-  $('#ics-msg').textContent = r === 'ok' ? 'File saved. Open it — your calendar will offer to add the events.' : r === 'declined' ? 'Save canceled.' : 'Couldn\'t save the file.';
+  $('#ics-msg').textContent = r === 'ok' ? 'File saved. Open it — your calendar will offer to add the events.' : r === 'declined' ? 'Save canceled.' : 'Couldn’t save the file.';
 }
 document.addEventListener('click', e => {
   const t = e.target.closest('button'); if (!t) return;
@@ -18404,14 +18636,31 @@ document.addEventListener('click', e => {
 
 /* ===================== РАЗМИНКА И БЛИНЫ ===================== */
 const GEAR_KEY = 'podhod.gear.v1';
-const GEAR = {bar:20, plates:[25, 20, 15, 10, 5, 2.5, 1.25], dbStep:2, machineStep:5};
+/* Инвентарь — в своих единицах (13-log.js: wu()): килограммовый зал — гриф 20 кг, блины 25…1,25 кг, гантели через 2 кг,
+   стек через 5 кг; фунтовый — гриф 45 фнт, блины 45/35/25/10/5/2,5 фнт, гантели через 5 фнт, стек через 10 фнт. Это разные
+   блины, а не пересчёт: 20-килограммовый блин — не 45 фунтов. Хранится {bar, plates} в килограммах, как в прежних версиях,
+   и lb:{bar, plates} — в фунтах */
+const GEAR_UNITS = {kg:{bar:20, plates:[25, 20, 15, 10, 5, 2.5, 1.25], dbStep:2, machineStep:5, kbStep:4, step:.5},
+  lb:{bar:45, plates:[45, 35, 25, 10, 5, 2.5], dbStep:5, machineStep:10, kbStep:5, step:1}};
+/* инвентарь выбранных единиц */
+const gearU = (u = wu()) => GEAR_UNITS[u];
 const PLATE_SETS = {
-  std:{name:'Standard', plates:[25, 20, 15, 10, 5, 2.5, 1.25]},
-  home:{name:'Home', plates:[20, 10, 5, 2.5, 1.25]},
-  fine:{name:'With small plates', plates:[25, 20, 15, 10, 5, 2.5, 1.25, 0.5]}
+  kg:{std:{name:'Standard', plates:[25, 20, 15, 10, 5, 2.5, 1.25]},
+    home:{name:'Home', plates:[20, 10, 5, 2.5, 1.25]},
+    fine:{name:'With small plates', plates:[25, 20, 15, 10, 5, 2.5, 1.25, 0.5]}},
+  lb:{std:{name:'Standard', plates:[45, 35, 25, 10, 5, 2.5]},
+    home:{name:'Home', plates:[25, 10, 5, 2.5]},
+    fine:{name:'With small plates', plates:[45, 35, 25, 10, 5, 2.5, 1.25]}}
 };
-function gearLoad() { try { const g = JSON.parse(localStorage.getItem(GEAR_KEY) || 'null'); if (g && typeof g === 'object') { if (isFinite(g.bar)) GEAR.bar = +g.bar; if (Array.isArray(g.plates)) GEAR.plates = g.plates.map(Number).filter(v => v > 0).sort((a, b) => b - a); } } catch (e) {} }
-function gearSave() { try { localStorage.setItem(GEAR_KEY, JSON.stringify({bar:GEAR.bar, plates:GEAR.plates})); } catch (e) {} }
+function gearPick(to, g) {
+  if (!g || typeof g !== 'object') return;
+  if (isFinite(g.bar) && +g.bar > 0) to.bar = +g.bar;
+  if (Array.isArray(g.plates)) { const pl = [...new Set(g.plates.map(Number).filter(v => v > 0))].sort((a, b) => b - a); if (pl.length) to.plates = pl; }
+}
+function gearLoad() { try { const g = JSON.parse(localStorage.getItem(GEAR_KEY) || 'null'); if (g && typeof g === 'object') { gearPick(GEAR_UNITS.kg, g); gearPick(GEAR_UNITS.lb, g.lb); } } catch (e) {} }
+/* для файла и хранилища: килограммы — на прежних местах, фунты — в lb */
+const gearObject = () => ({bar:GEAR_UNITS.kg.bar, plates:GEAR_UNITS.kg.plates, lb:{bar:GEAR_UNITS.lb.bar, plates:GEAR_UNITS.lb.plates}});
+function gearSave() { try { localStorage.setItem(GEAR_KEY, JSON.stringify(gearObject())); } catch (e) {} }
 gearLoad();
 
 /* чем нагружают: штанга (гриф + блины), гантели, тренажёр (стек), гиря */
@@ -18423,57 +18672,63 @@ function implementOf(it) {
   if (ids.some(i => MACHINE.has(i) || i === 'legpress')) return 'machine';
   return null;
 }
-/* раскладка блинов на одну сторону грифа; возвращает {side:[...], total, diff} */
-function plateSplit(target, bar = GEAR.bar, plates = GEAR.plates) {
-  let perSide = (target - bar) / 2, side = [];
-  if (perSide <= 0) return {side, total:bar, diff:target - bar};
-  for (const p of plates) while (perSide >= p - 1e-9) { side.push(p); perSide -= p; }
+/* раскладка блинов на одну сторону грифа: target — вес из журнала (кг), раскладка — в блинах выбранных единиц;
+   возвращает {side:[блины в единицах показа], total, diff} — total и diff в килограммах */
+function plateSplit(target, g = gearU()) {
+  const t = Math.round(toU(target) * 1000) / 1000, bar = g.bar; /* фунты из килограммов — до тысячных: 225 остаётся 225 */
+  let perSide = (t - bar) / 2, side = [];
+  if (perSide <= 1e-6) return {side, total:fromU(bar), diff:fromU(t - bar)};
+  for (const p of g.plates) while (perSide >= p - 1e-6) { side.push(p); perSide -= p; }
   const total = bar + 2 * side.reduce((a, b) => a + b, 0);
-  return {side, total, diff:target - total};
+  return {side, total:fromU(total), diff:fromU(t - total)};
 }
-/* ближайший достижимый вес (вниз) */
+/* ближайший достижимый вес (кг): гриф с блинами — вниз, гантели, стек и гиря — по своему шагу в выбранных единицах */
 function roundToGear(target, impl) {
-  if (impl === 'bb') return plateSplit(target).total;
-  if (impl === 'db') return Math.round(target / GEAR.dbStep) * GEAR.dbStep;
-  if (impl === 'machine') return Math.round(target / GEAR.machineStep) * GEAR.machineStep;
-  if (impl === 'kb') return Math.round(target / 4) * 4;
-  return Math.round(target * 2) / 2;
+  const g = gearU(), t = toU(target), at = st => fromU(Math.round(t / st) * st);
+  if (impl === 'bb') return plateSplit(target, g).total;
+  if (impl === 'db') return at(g.dbStep);
+  if (impl === 'machine') return at(g.machineStep);
+  if (impl === 'kb') return at(g.kbStep);
+  return at(g.step);
 }
 /* пирамида разминки: от грифа/лёгкого к рабочему; число шагов зависит от веса */
 function warmupPlan(work, impl, reps) {
   if (!work || work <= 0) return [];
   const [lo] = parseRange(reps);
   const steps = [];
+  const bar = fromU(gearU().bar);
   if (impl === 'bb') {
-    if (work <= GEAR.bar * 1.6) return [{kg:GEAR.bar, reps:Math.max(8, lo + 4), note:'empty bar'}];
-    steps.push({kg:GEAR.bar, reps:10, note:'empty bar'});
+    if (work <= bar * 1.6) return [{kg:bar, reps:Math.max(8, lo + 4), note:'empty bar'}];
+    steps.push({kg:bar, reps:10, note:'empty bar'});
   }
   const ratios = work >= 140 ? [0.4, 0.6, 0.75, 0.9] : work >= 90 ? [0.5, 0.7, 0.85] : work >= 50 ? [0.55, 0.8] : [0.6];
   const repsFor = r => r < 0.55 ? 8 : r < 0.72 ? 5 : r < 0.87 ? 3 : 1;
   for (const r of ratios) {
     const kg = roundToGear(work * r, impl);
-    if (kg <= (steps.length ? steps[steps.length - 1].kg : 0) || kg >= work) continue;
-    steps.push({kg, reps:repsFor(r), note:`${Math.round(r * 100)}%`});
+    if (kg <= (steps.length ? steps[steps.length - 1].kg + 1e-6 : 0) || kg >= work - 1e-6) continue;
+    /* процент — от веса, который получился с инвентарём (30 из 50 — 60%, а не заданные 55%: замечание 10 тестера) */
+    steps.push({kg, reps:repsFor(r), note:`${Math.round(kg / work * 100)}%`});
   }
   return steps;
 }
 function platesHtml(target) {
-  const s = plateSplit(target);
-  if (!s.side.length && s.diff <= 0) return `<span class="pl-empty">empty bar ${fmtKg(GEAR.bar)}</span>`;
-  const chips = s.side.map(p => `<i class="pl pl-${String(p).replace('.', '_')}" title="${fmtKg(p)} kg">${fmtKg(p)}</i>`).join('');
+  const s = plateSplit(target), g = gearU(), u = wUnit(), cls = isLb() ? 'pl-lb' : 'pl-'; /* цвета блинов: в фунтах — свои (10-base.css) */
+  if (!s.side.length && s.diff <= 0.01) return `<span class="pl-empty">empty bar ${fmtU(g.bar)}</span>`;
+  const chips = s.side.map(p => `<i class="pl ${cls}${String(p).replace('.', '_')}" title="${fmtU(p)} ${u}">${fmtU(p)}</i>`).join('');
   const warn = s.diff > 0.01 ? `<small class="pl-diff">= ${fmtKg(s.total)}, short by ${fmtKg(s.diff)}</small>` : '';
-  return `<span class="pl-row" aria-label="Per side: ${s.side.map(fmtKg).join(', ')} kg">${chips}</span>${warn}`;
+  return `<span class="pl-row" aria-label="Per side: ${s.side.map(fmtU).join(', ')} ${u}">${chips}</span>${warn}`;
 }
 function warmupHtml(it, work) {
   const impl = implementOf(it);
   if (!impl || !work) return '';
   const steps = warmupPlan(work, impl, it.rx.reps);
   if (!steps.length) return '';
-  const rows = steps.map((s, i) => `<li><span class="wu-n">${i + 1}</span><span class="wu-kg">${fmtKg(s.kg)}<small>kg</small></span><span class="wu-r">× ${s.reps}</span><span class="wu-note">${s.note}</span>${impl === 'bb' ? `<span class="wu-pl">${s.note === 'empty bar' ? '' : platesHtml(s.kg)}</span>` : ''}</li>`).join('');
-  const workRow = impl === 'bb' ? `<li class="wu-work"><span class="wu-n">→</span><span class="wu-kg">${fmtKg(work)}<small>kg</small></span><span class="wu-r">working</span><span class="wu-note"></span><span class="wu-pl">${platesHtml(work)}</span></li>` : '';
-  return `<details class="wu"><summary>Warm-up for ${fmtKg(work)} kg<small>${steps.length} ${plural(steps.length, 'set', 'sets', 'sets')}${impl === 'bb' ? ' · plates per side' : ''}</small></summary>
+  const g = gearU(), u = wUnit();
+  const rows = steps.map((s, i) => `<li><span class="wu-n">${i + 1}</span><span class="wu-kg">${fmtKg(s.kg)}<small>${u}</small></span><span class="wu-r">× ${s.reps}</span><span class="wu-note">${s.note}</span>${impl === 'bb' ? `<span class="wu-pl">${s.note === 'empty bar' ? '' : platesHtml(s.kg)}</span>` : ''}</li>`).join('');
+  const workRow = impl === 'bb' ? `<li class="wu-work"><span class="wu-n">→</span><span class="wu-kg">${fmtKg(work)}<small>${u}</small></span><span class="wu-r">working</span><span class="wu-note"></span><span class="wu-pl">${platesHtml(work)}</span></li>` : '';
+  return `<details class="wu"><summary>Warm-up for ${fmtKg(work)} ${u}<small>${steps.length} ${plural(steps.length, 'set', 'sets', 'sets')}${impl === 'bb' ? ' · plates per side' : ''}</small></summary>
     <ol class="wu-list${impl === 'bb' ? ' wu-bb' : ''}">${rows}${workRow}</ol>
-    <p class="wu-note-f">Rest 30–60 s between warm-up sets. ${impl === 'bb' ? `Bar ${fmtKg(GEAR.bar)} kg, plates: ${GEAR.plates.map(fmtKg).join(' · ')} — <button type="button" class="lk" data-gear="1">adjust</button>.` : impl === 'machine' ? 'Weight stack increment assumed to be 5 kg.' : ''}</p>
+    <p class="wu-note-f">Rest 30–60 s between warm-up sets. ${impl === 'bb' ? `Bar ${fmtU(g.bar)} ${u}, plates: ${g.plates.map(fmtU).join(' · ')} — <button type="button" class="lk" data-gear="1">adjust</button>.` : impl === 'machine' ? `Weight stack increment assumed to be ${fmtU(g.machineStep)} ${u}.` : ''}</p>
   </details>`;
 }
 /* рабочий вес для разминки: из первого введённого поля (неправдоподобный и ещё не подтверждённый — «5000», kgDoubt
@@ -18481,7 +18736,7 @@ function warmupHtml(it, work) {
 function workWeightOf(it, card) {
   if (card) {
     const inp = card.querySelector('.lt-r:not(.done) [data-f="kg"], .lt-r [data-f="kg"]'), row = inp && inp.closest('.lt-r');
-    if (inp && inp.value) { const v = parseNum(inp.value); if (v > 0 && !(row && !row.classList.contains('done') && kgDoubt(it, [v], +row.dataset.k))) return v; }
+    if (inp && inp.value) { const v = parseKg(inp.value); if (v > 0 && !(row && !row.classList.contains('done') && kgDoubt(it, [v], +row.dataset.k))) return v; }
   }
   const sg = suggest(it); return sg.kg && sg.kg > 0 ? sg.kg : null;
 }
@@ -18493,15 +18748,15 @@ function refreshWarmup(card) {
   box.innerHTML = warmupHtml(it, workWeightOf(it, card));
   if (open && box.querySelector('details')) box.querySelector('details').open = true;
 }
-/* настройка инвентаря */
+/* настройка инвентаря — в выбранных единицах: в фунтах свои гриф и блины */
 function gearDialogHtml() {
-  const cur = Object.entries(PLATE_SETS).find(([, v]) => v.plates.join() === GEAR.plates.join());
+  const g = gearU(), sets = PLATE_SETS[wu()], u = wUnit(), cur = Object.entries(sets).find(([, v]) => v.plates.join() === g.plates.join());
   return `<form method="dialog" class="gear">
     <h2>Bar and plates</h2>
-    <label>Bar weight, kg<input id="gear-bar" type="text" inputmode="decimal" value="${fmtKg(GEAR.bar)}"></label>
+    <label>Bar weight, ${u}<input id="gear-bar" type="text" inputmode="decimal" value="${fmtU(g.bar)}"></label>
     <p class="gear-l">Plate set</p>
-    <div class="pres">${Object.entries(PLATE_SETS).map(([k, v]) => `<button type="button" class="pre${cur && cur[0] === k ? ' on' : ''}" data-pset="${k}">${v.name}</button>`).join('')}</div>
-    <label>Your plates, kg, comma-separated<input id="gear-plates" type="text" inputmode="decimal" value="${GEAR.plates.map(fmtKg).join(', ')}"></label>
+    <div class="pres">${Object.entries(sets).map(([k, v]) => `<button type="button" class="pre${cur && cur[0] === k ? ' on' : ''}" data-pset="${k}">${v.name}</button>`).join('')}</div>
+    <label>Your plates, ${u} (comma-separated)<input id="gear-plates" type="text" inputmode="decimal" value="${g.plates.map(fmtU).join(', ')}"></label>
     <p class="gear-hint">The calculator loads one side from the heaviest plate to the lightest. Enter the plates your gym has.</p>
     <div class="gear-btns"><button type="button" class="btn btn-2" value="cancel" id="gear-cancel">Cancel</button><button type="submit" class="btn" id="gear-save">Save</button></div>
   </form>`;
@@ -18511,16 +18766,17 @@ function openGear() {
   if (!d) { d = document.createElement('dialog'); d.id = 'gear-view'; d.className = 'gear-view'; document.body.appendChild(d); }
   d.innerHTML = gearDialogHtml(); d.showModal();
   d.querySelector('form').addEventListener('submit', () => {
-    const bar = parseNum($('#gear-bar').value); if (bar > 0) GEAR.bar = bar;
-    const pl = $('#gear-plates').value.split(/[,;\s]+/).map(parseNum).filter(v => v > 0).sort((a, b) => b - a);
-    if (pl.length) GEAR.plates = [...new Set(pl)];
+    const g = gearU(), bar = parseNum($('#gear-bar').value); if (bar > 0) g.bar = bar;
+    /* «25, 20, 2,5»: запятая с пробелом, «;» и пробел разделяют блины, запятая внутри числа — десятичная */
+    const pl = $('#gear-plates').value.split(/\s*;\s*|,\s+|\s+/).map(parseNum).filter(v => v > 0).sort((a, b) => b - a);
+    if (pl.length) g.plates = [...new Set(pl)];
     gearSave(); document.querySelectorAll('.card').forEach(refreshWarmup);
   });
 }
 document.addEventListener('click', e => {
   const t = e.target.closest('button'); if (!t) return;
   if (t.dataset.gear) { openGear(); return; }
-  if (t.dataset.pset) { $('#gear-plates').value = PLATE_SETS[t.dataset.pset].plates.map(fmtKg).join(', '); t.parentElement.querySelectorAll('.pre').forEach(b => b.classList.toggle('on', b === t)); return; }
+  if (t.dataset.pset) { $('#gear-plates').value = PLATE_SETS[wu()][t.dataset.pset].plates.map(fmtU).join(', '); t.parentElement.querySelectorAll('.pre').forEach(b => b.classList.toggle('on', b === t)); return; }
   if (t.id === 'gear-cancel') { $('#gear-view').close(); return; }
 });
 document.addEventListener('input', e => {
@@ -18533,14 +18789,21 @@ document.addEventListener('input', e => {
 /* BODY.rows = [{d:'2026-10-06', kg:82.4, waist:88, …}] — одна запись на день, любые поля.
    Хранится в localStorage (podhod.body.v1) и, при входе в аккаунт, в документе «_body» той же коллекции, что журнал. */
 const BODY_KEY = 'podhod.body.v1';
+/* вес хранится в килограммах, обхваты — в сантиметрах; показываются и вводятся в выбранных единицах (13-log.js: wu()):
+   в фунтах — вес в фунтах, обхваты в дюймах. Хранится до сотых — 180 фунтов остаются 180 */
 const BODY_FIELDS = [
-  {k:'kg', name:'Weight', unit:'kg', main:true},
-  {k:'waist', name:'Waist', unit:'cm'}, {k:'chest', name:'Chest', unit:'cm'}, {k:'hips', name:'Hips', unit:'cm'},
-  {k:'arm', name:'Biceps', unit:'cm'}, {k:'thigh', name:'Thigh', unit:'cm'}, {k:'calf', name:'Calf', unit:'cm'}, {k:'neck', name:'Neck', unit:'cm'}
+  {k:'kg', name:'Weight', w:true, main:true},
+  {k:'waist', name:'Waist'}, {k:'chest', name:'Chest'}, {k:'hips', name:'Hips'},
+  {k:'arm', name:'Biceps'}, {k:'thigh', name:'Thigh'}, {k:'calf', name:'Calf'}, {k:'neck', name:'Neck'}
 ];
+const bodyUnit = f => f.w ? wUnit() : lUnit();
+const bodyToU = (f, v) => f.w ? toU(v) : isLb() ? v / IN_CM : v;
+const bodyFromU = (f, v) => f.w ? fromU(v) : isLb() ? v * IN_CM : v;
+/* значение замера в выбранных единицах, до десятых */
+const fmtBody = (f, v) => fmtU1(bodyToU(f, v));
 const BODY = {rows:[], pending:false, writing:false, again:false};
 function validBodyRows(rows) { return Array.isArray(rows) && rows.every(r => r && typeof r.d === 'string' && /^\d{4}-\d\d-\d\d$/.test(r.d)); }
-function cleanBodyRow(r) { const o = {d:r.d}; for (const f of BODY_FIELDS) { const v = parseNum(r[f.k]); if (v != null && v > 0 && v < 1000) o[f.k] = Math.round(v * 10) / 10; } return o; }
+function cleanBodyRow(r) { const o = {d:r.d}; for (const f of BODY_FIELDS) { const v = parseNum(r[f.k]); if (v != null && v > 0 && v < 1000) o[f.k] = Math.round(v * 100) / 100; } return o; }
 function bodyHasValues(r) { return BODY_FIELDS.some(f => r[f.k] != null); }
 function bodyLoad() { try { const s = JSON.parse(localStorage.getItem(BODY_KEY) || 'null'); if (s && validBodyRows(s.rows)) BODY.rows = s.rows.map(cleanBodyRow).filter(bodyHasValues); } catch (e) {} }
 function bodySaveLocal() { try { localStorage.setItem(BODY_KEY, JSON.stringify({rows:BODY.rows})); } catch (e) {} }
@@ -18591,33 +18854,35 @@ function bodyDelta(k, days) {
   const last = bodyLatest(k); if (!last) return null;
   const cutoff = dayKey(new Date(new Date(last.d + 'T12:00:00') - days * 86400000));
   const prev = [...BODY.rows].reverse().find(r => r[k] != null && r.d <= cutoff && r.d !== last.d);
-  return prev ? {v:Math.round((last[k] - prev[k]) * 10) / 10, from:prev.d} : null;
+  return prev ? {v:Math.round((last[k] - prev[k]) * 100) / 100, from:prev.d} : null;
 }
-const fmtDelta = v => (v > 0 ? '+' : v < 0 ? '−' : '±') + fmtKg(Math.abs(v));
+/* изменение в выбранных единицах; меньше 0,05 — не показывается */
+const fmtDelta = (v, f = BODY_FIELDS[0]) => (v > 0 ? '+' : v < 0 ? '−' : '±') + fmtBody(f, Math.abs(v));
+const deltaShown = (dl, f = BODY_FIELDS[0]) => dl && Math.abs(bodyToU(f, dl.v)) >= .05;
 /* окраска изменения веса зависит от цели: на массе рост — хорошо, на рельефе — наоборот; на силе нейтрально */
 function deltaClass(v) { const g = S.goal === 'mass' ? 1 : S.goal === 'cut' ? -1 : 0; return !g || !v ? '' : v * g > 0 ? 'good' : 'bad'; }
 function bodyHtml() {
   const last = bodyLatest('kg'), d4 = bodyDelta('kg', 28);
   const pts = BODY.rows.filter(r => r.kg != null).slice(-40).map(r => ({d:r.d, v:r.kg}));
-  const chips = BODY_FIELDS.filter(f => !f.main).map(f => { const l = bodyLatest(f.k); if (!l) return ''; const dl = bodyDelta(f.k, 28); return `<li><span>${f.name}</span><b>${fmtKg(l[f.k])}<small>${f.unit}</small></b>${dl && dl.v ? `<em>${fmtDelta(dl.v)}</em>` : ''}</li>`; }).join('');
+  const chips = BODY_FIELDS.filter(f => !f.main).map(f => { const l = bodyLatest(f.k); if (!l) return ''; const dl = bodyDelta(f.k, 28); return `<li><span>${f.name}</span><b>${fmtBody(f, l[f.k])}<small>${bodyUnit(f)}</small></b>${deltaShown(dl, f) ? `<em>${fmtDelta(dl.v, f)}</em>` : ''}</li>`; }).join('');
   const form = `<form class="b-form" id="b-form" autocomplete="off">
     <label class="b-date">Date<input type="date" id="b-date" value="${todayKey()}" max="${todayKey()}" required></label>
-    ${BODY_FIELDS.map(f => { const l = bodyLatest(f.k); return `<label${f.main ? ' class="b-main"' : ''}>${f.name}, ${f.unit}<input class="lt-in" type="text" inputmode="decimal" data-bf="${f.k}" placeholder="${l ? fmtKg(l[f.k]) : '—'}" aria-label="${f.name}, ${f.unit}"></label>`; }).join('')}
+    ${BODY_FIELDS.map(f => { const l = bodyLatest(f.k), u = bodyUnit(f); return `<label${f.main ? ' class="b-main"' : ''}>${f.name}, ${u}<input class="lt-in" type="text" inputmode="decimal" data-bf="${f.k}" placeholder="${l ? fmtBody(f, l[f.k]) : '—'}" aria-label="${f.name}, ${u}"></label>`; }).join('')}
     <button type="submit" class="btn">Save</button>
     <p class="b-hint">Fill in what you measured: weight in the morning before eating, girths with a tape measure without pulling it tight, always at the same spots. Leave the rest empty.</p>
   </form>`;
   const rows = [...BODY.rows].reverse();
-  const rowHtml = r => `<li><span class="h-d">${fmtDay(r.d, true)}</span><span class="h-s">${BODY_FIELDS.filter(f => r[f.k] != null).map(f => `${f.main ? '' : f.name.toLowerCase() + ' '}${fmtKg(r[f.k])}${f.main ? ' kg' : ''}`).join(' · ')}</span><button type="button" class="h-del" data-bdel="${r.d}" aria-label="Delete the measurement for ${fmtDay(r.d, true)}">Delete</button></li>`;
+  const rowHtml = r => `<li><span class="h-d">${fmtDay(r.d, true)}</span><span class="h-s">${BODY_FIELDS.filter(f => r[f.k] != null).map(f => `${f.main ? '' : f.name.toLowerCase() + ' '}${fmtBody(f, r[f.k])}${f.main ? ' ' + wUnit() : ''}`).join(' · ')}</span><button type="button" class="h-del" data-bdel="${r.d}" aria-label="Delete the measurement for ${fmtDay(r.d, true)}">Delete</button></li>`;
   const list = rows.length ? `<ul class="h-list b-list">${rows.slice(0, 6).map(rowHtml).join('')}</ul>${rows.length > 6 ? `<details class="j-all"><summary>All measurements (${rows.length})</summary><ul class="h-list b-list">${rows.slice(6).map(rowHtml).join('')}</ul></details>` : ''}` : '';
   return `<section class="b-sec" aria-labelledby="b-title">
     <div class="b-head">
       <div>
         <p class="eyebrow">Body</p>
         <h2 id="b-title">Weight and measurements</h2>
-        ${last ? `<p class="b-now"><b>${fmtKg(last.kg)}<small>kg</small></b>${d4 && d4.v ? `<em class="${deltaClass(d4.v)}">${fmtDelta(d4.v)} over 4 wk</em>` : `<em>${fmtDay(last.d, true)}</em>`}</p>` : `<p class="b-empty">No weight entries yet. Weigh yourself once a week at the same time — the chart will show where your mass is going, not daily water swings.</p>`}
+        ${last ? `<p class="b-now"><b>${fmtBody(BODY_FIELDS[0], last.kg)}<small>${wUnit()}</small></b>${deltaShown(d4) ? `<em class="${deltaClass(d4.v)}">${fmtDelta(d4.v)} over 4 wk</em>` : `<em>${fmtDay(last.d, true)}</em>`}</p>` : `<p class="b-empty">No weight entries yet. Weigh yourself once a week at the same time — the chart will show where your mass is going, not daily water swings.</p>`}
         ${chips ? `<ul class="b-chips">${chips}</ul>` : ''}
       </div>
-      ${pts.length > 1 ? `<div class="h-chart b-chart"><p class="h-cap">Weight, kg · ${pts.length} ${plural(pts.length, 'entry', 'entries', 'entries')}</p>${sparkSvg(pts, 'kg', 0.1)}</div>` : ''}
+      ${pts.length > 1 ? `<div class="h-chart b-chart"><p class="h-cap">Weight, ${wUnit()} · ${pts.length} ${plural(pts.length, 'entry', 'entries', 'entries')}</p>${sparkSvg(pts, wUnit(), v => fmtBody(BODY_FIELDS[0], v))}</div>` : ''}
     </div>
     ${form}
     ${list}
@@ -18628,7 +18893,8 @@ function bodySubmit(form) {
   if (!/^\d{4}-\d\d-\d\d$/.test(d) || d > todayKey()) { $('#b-date').focus(); return; }
   const row = {d};
   let any = false;
-  form.querySelectorAll('[data-bf]').forEach(inp => { const v = parseNum(inp.value); if (v != null && v > 0) { row[inp.dataset.bf] = v; any = true; } });
+  /* вписано в выбранных единицах — в килограммы и сантиметры */
+  form.querySelectorAll('[data-bf]').forEach(inp => { const v = parseNum(inp.value), f = BODY_FIELDS.find(x => x.k === inp.dataset.bf); if (v != null && v > 0 && f) { row[f.k] = bodyFromU(f, v); any = true; } });
   if (!any) { const f = form.querySelector('[data-bf="kg"]'); f.classList.add('need'); f.focus(); setTimeout(() => f.classList.remove('need'), 1200); return; }
   BODY.rows = mergeBodyRows(BODY.rows, [cleanBodyRow(row)]);
   bodyTouch(false);
@@ -18641,15 +18907,16 @@ function bodyDelete(btn) {
   bodyTouch(false); renderJournal();
 }
 function bodyCsv() {
-  const head = ['Date'].concat(BODY_FIELDS.map(f => `${f.name}, ${f.unit}`));
-  const rows = BODY.rows.map(r => [r.d].concat(BODY_FIELDS.map(f => r[f.k] != null ? fmtKg(r[f.k]) : '')));
+  /* в выбранных единицах, единица — в заголовке столбца */
+  const head = ['Date'].concat(BODY_FIELDS.map(f => `${f.name}, ${bodyUnit(f)}`));
+  const rows = BODY.rows.map(r => [r.d].concat(BODY_FIELDS.map(f => r[f.k] != null ? fmtBody(f, r[f.k]) : '')));
   return '﻿' + [head].concat(rows).map(r => r.join(';')).join('\r\n');
 }
 document.addEventListener('submit', e => { if (e.target.id === 'b-form') { e.preventDefault(); bodySubmit(e.target); } });
 document.addEventListener('click', e => {
   const t = e.target.closest('button'); if (!t) return;
   if (t.dataset.bdel) { bodyDelete(t); return; }
-  if (t.id === 'exp-body') { saveFile(`lazy-gym-body-${todayKey()}.csv`, bodyCsv(), 'text/csv').then(r => { const m = $('#j-msg'); if (m) m.textContent = r === 'ok' ? 'Measurements table saved.' : r === 'declined' ? 'Save canceled.' : 'Couldn\'t save the file.'; }); }
+  if (t.id === 'exp-body') { saveFile(`lazy-gym-body-${todayKey()}.csv`, bodyCsv(), 'text/csv').then(r => { const m = $('#j-msg'); if (m) m.textContent = r === 'ok' ? 'Measurements table saved.' : r === 'declined' ? 'Save canceled.' : 'Couldn’t save the file.'; }); }
 });
 bodyLoad();
 
@@ -18660,7 +18927,7 @@ bodyLoad();
    для упражнения. */
 function backupObject() {
   return {app:'podhod', v:2, exported:new Date().toISOString(), version:window.PODHOD_VERSION || '',
-    settings:{...S}, gear:{bar:GEAR.bar, plates:GEAR.plates}, autoreg:{dismissed:AR.dismissed, light:AR.light}, ics:{...ICS}, motion:{...motionPrefs},
+    settings:{...S}, gear:gearObject(), autoreg:{dismissed:AR.dismissed, light:AR.light}, ics:{...ICS}, motion:{...motionPrefs},
     log:LOG.data, body:BODY.rows, heart:heartBackup()};
 }
 function restoreBackup(obj) {
@@ -18691,9 +18958,10 @@ function restoreBackup(obj) {
       if (Array.isArray(ok.equip)) ok.equip = ok.equip.filter(id => EQUIP.some(x => x.id === id));
       if (!GOALS[ok.goal]) delete ok.goal; if (!FORMATS[ok.format]) delete ok.format; if (!LEVELS[ok.level]) delete ok.level;
       if ('lr' in ok) ok.lr = cleanLr(ok.lr);
-      Object.assign(S, ok); saveSettings(); out.settings = true;
+      if ('units' in ok && ok.units !== 'kg' && ok.units !== 'lb') ok.units = null;
+      Object.assign(S, ok); ensurePlaces(S); ensureCustoms(S); saveSettings(); out.settings = true; /* имена по умолчанию — на языке страницы */
     }
-    if (obj.gear && typeof obj.gear === 'object') { if (isFinite(obj.gear.bar) && obj.gear.bar > 0) GEAR.bar = +obj.gear.bar; if (Array.isArray(obj.gear.plates)) { const pl = obj.gear.plates.map(Number).filter(v => v > 0); if (pl.length) GEAR.plates = [...new Set(pl)].sort((a, b) => b - a); } gearSave(); }
+    if (obj.gear && typeof obj.gear === 'object') { gearPick(GEAR_UNITS.kg, obj.gear); gearPick(GEAR_UNITS.lb, obj.gear.lb); gearSave(); }
     if (obj.autoreg && typeof obj.autoreg === 'object') { if (obj.autoreg.dismissed && typeof obj.autoreg.dismissed === 'object') AR.dismissed = obj.autoreg.dismissed; AR.light = !!obj.autoreg.light; arSave(); }
     if (obj.ics && typeof obj.ics === 'object') { Object.assign(ICS, obj.ics); try { localStorage.setItem(ICS_KEY, JSON.stringify(ICS)); } catch (e) {} }
     if (obj.motion && typeof obj.motion === 'object') { Object.assign(motionPrefs, obj.motion); saveMotionPrefs(); }
@@ -19142,7 +19410,7 @@ async function perfStepRun(P, run, step, T, ctx) {
     if (S.view !== 'plan') { ctx.view = S.view; S.view = 'plan'; renderSetup(); renderPlan(); }
     const F = figs.find(x => x.card);
     if (!F) return Object.assign(out, {skip:PERF_T.noCards});
-    out.id = F.it.ex.id; run.label = out.label + ` «${F.it.name}»`;
+    out.id = F.it.ex.id; run.label = out.label + ` “${F.it.name}”`;
     if (!ctx.card || ctx.card.F !== F) ctx.card = {F, paused:F.paused, pick:F.pick};
     /* вид карточек — на время шага; «Анатомия» — новая попытка с холодной памятью (как первое открытие плана) */
     const anat = step.view !== 'mannequin';
@@ -19155,7 +19423,7 @@ async function perfStepRun(P, run, step, T, ctx) {
     if (anat) await perfUntil(() => F.av?.on || cardAnatomy.view === 'mannequin' && !cardAnatomy.loading, 10000, run);
     out.view = cardAnatomy.view === 'mannequin' ? 'svg' : cardAnatomy.view;
     /* подпись — то, что показано: «Анатомия» («Скелет») или манекен (SVG-карточки); «Анатомия» без объёма — манекен с пометкой */
-    out.label += ` «${F.it.name}» — ${perfViewName(out.view === 'svg' ? 'mannequin' : out.view)}` + (anat && out.view === 'svg' ? ` (${PERF_T.noVolume})` : '');
+    out.label += ` “${F.it.name}” — ${perfViewName(out.view === 'svg' ? 'mannequin' : out.view)}` + (anat && out.view === 'svg' ? ` (${PERF_T.noVolume})` : '');
     run.label = out.label;
     await perfWait(T.warm / 2, run);
     finish(await perfMeasure(P, run, T.plan));
@@ -19304,8 +19572,3 @@ renderSetup();
 renderPlan();
 prefetchStressIds();
 logInit();
-
-plural = (n, a, b, c) => n === 1 ? a : c;
-DEC = '.';
-
-window.PODHOD_VERSION='4.100.0';window.PODHOD_BUILD='4.100.0-a7c1caa9d94b';window.PODHOD_RENDER={"skin":"7c5712659f","skeleton":"f4e7c4b726","anatomy":"48636840a9"};window.PODHOD_LANG='en';
