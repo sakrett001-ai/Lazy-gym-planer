@@ -1,18 +1,19 @@
 /* ===================== ПЛАНИРОВЩИК ===================== */
 /* load — начало строки нагрузки (c — базовые с весом, который можно взвесить, i — изолирующие); запас повторов к ней
-   дописывает reserveOf (rir — запас по цели без цикла; null — без числа: «почти до отказа», «до выраженного жжения») */
+   дописывает reserveOf (rir — запас по цели без цикла; null — без числа: «почти до отказа», «до выраженного жжения»).
+   about — пояснение цели простыми словами: под переключателем в параметрах и на шаге «Цель» первого запуска (11k-first-run.js) */
 const GOALS = {
-  strength:{name:'Сила', hint:'3–6 повт.', reps:{c:'3–5', i:'6–8'}, sets:{c:5, i:3}, rest:{c:180, i:90}, tempo:'2-0-X-0',
+  strength:{name:'Сила', hint:'3–6 повт.', about:'Стать сильнее: тяжёлый вес, 3–6 повторов, долгий отдых.', reps:{c:'3–5', i:'6–8'}, sets:{c:5, i:3}, rest:{c:180, i:90}, tempo:'2-0-X-0',
     load:{c:'≈ 80–90% от 1ПМ', i:'тяжело'}, rir:[1, 2], rep:3, time:'20–30 с', dist:'20 м',
     circ:{rounds:4, reps:'6–8', work:20, rest:30, roundRest:180}, ss:{rest:150}},
-  mass:{name:'Масса', hint:'6–12 повт.', reps:{c:'6–10', i:'10–12'}, sets:{c:4, i:3}, rest:{c:120, i:75}, tempo:'3-0-1-0',
+  mass:{name:'Масса', hint:'6–12 повт.', about:'Нарастить мышцы: средний вес, 6–12 повторов.', reps:{c:'6–10', i:'10–12'}, sets:{c:4, i:3}, rest:{c:120, i:75}, tempo:'3-0-1-0',
     load:{c:'≈ 70–80% от 1ПМ', i:''}, rir:[1, 2], rep:4, time:'30–45 с', dist:'30 м',
     circ:{rounds:3, reps:'10–12', work:30, rest:20, roundRest:120}, ss:{rest:90}},
-  cut:{name:'Рельеф', hint:'12–20 повт.', reps:{c:'12–15', i:'15–20'}, sets:{c:3, i:3}, rest:{c:60, i:40}, tempo:'2-0-1-0',
+  cut:{name:'Рельеф', hint:'12–20 повт.', about:'Подтянуть тело и выносливость: лёгкий вес, 12–20 повторов, короткий отдых.', reps:{c:'12–15', i:'15–20'}, sets:{c:3, i:3}, rest:{c:60, i:40}, tempo:'2-0-1-0',
     load:{c:'≈ 55–65% от 1ПМ', i:'до выраженного жжения'}, rir:null, rep:3, time:'45–60 с', dist:'40 м',
     circ:{rounds:4, reps:'15–20', work:40, rest:15, roundRest:90}, ss:{rest:60}},
   /* бережно: суставы болят или идёт восстановление (11g-gentle.js) — Garber et al., MSSE 2011, 43(7):1334–1359 */
-  gentle:{name:'Бережно', hint:'12–15 повт.', reps:{c:'12–15', i:'12–15'}, sets:{c:2, i:2}, rest:{c:90, i:60}, tempo:'3-0-2-0',
+  gentle:{name:'Бережно', hint:'12–15 повт.', about:'Если болят суставы, после травмы или долгого перерыва: лёгкий вес, медленно, без прыжков и рывков.', reps:{c:'12–15', i:'12–15'}, sets:{c:2, i:2}, rest:{c:90, i:60}, tempo:'3-0-2-0',
     load:{c:'≈ 40–60% от 1ПМ', i:'лёгкий вес'}, rir:[3, 4], rep:5, time:'20–30 с', dist:'20 м',
     circ:{rounds:2, reps:'12–15', work:30, rest:30, roundRest:120}, ss:{rest:90}}
 };
@@ -38,7 +39,10 @@ const reserveReps = r => `${reserveNum(r)} ${plural(r.hi, 'повтор', 'по�
 const reserveText = r => `${reserveReps(r)} в запасе`;
 const FORMATS = {classic:{name:'Классика', hint:'по подходам'}, superset:{name:'Суперсеты', hint:'пары без отдыха'}, circuit:{name:'Круговая', hint:'круги подряд'},
   static:{name:'Статодинамика', hint:'без расслабления'}};
-const LEVELS = {beg:{name:'Новичок'}, mid:{name:'Средний'}, adv:{name:'Опытный'}};
+/* ask и about — вопрос «Ваш опыт» первого запуска (11k-first-run.js): там уровень называется словами человека */
+const LEVELS = {beg:{name:'Новичок', ask:'Новичок', about:'Только начинаю или после долгого перерыва'},
+  mid:{name:'Средний', ask:'Уже тренируюсь', about:'Занимаюсь регулярно, знаю основные упражнения'},
+  adv:{name:'Опытный', ask:'Опытный', about:'Тренируюсь больше года, уверенная техника'}};
 const GROUP_W = {chest:1.3, back:1.5, shoulders:1, biceps:0.8, triceps:0.8, forearms:0.5, abs:0.8, glutes:1, quads:1.3, hams:1, calves:0.6, cardio:0.9};
 const GROUP_ORDER = {quads:0, glutes:0, hams:1, back:2, chest:3, shoulders:4, triceps:5, biceps:5, forearms:6, calves:7, cardio:7.5, abs:8};
 const REGION = {quads:'low', glutes:'low', hams:'low', calves:'low', chest:'push', shoulders:'push', triceps:'push', back:'pull', biceps:'pull', forearms:'pull', abs:'core', cardio:'cardio'};
@@ -125,8 +129,16 @@ const DEFAULTS = {goal:'mass', format:'classic', level:'mid', count:6, groups:['
   mode:'single', days:3, split:'full', week:1, day:0, view:'plan', atlasM:'chest', focus:null, fav:[], customs:[], custom:null, gen:null, author:'', fold:null, protect:[],
   cpLast:null /* свой план, куда последним добавляли из атласа или разбора (11d-custom.js) */,
   lr:{} /* «Л/П отдельно» по упражнениям: {exId:true} (13a-sets.js) */,
-  units:null /* единицы веса: 'kg' | 'lb'; null — по языку и региону браузера (13-log.js: wu) */};
+  units:null /* единицы веса: 'kg' | 'lb'; null — по языку и региону браузера (13-log.js: wu) */,
+  dur:null /* время на тренировку: 'short' | 'mid' | 'long' (11j-duration.js); null — число упражнений из «Упражнений» (count) */};
 const STORE = 'podhod.settings.v1';
+/* Самый первый запуск: в этом браузере ещё нет ни настроек, ни журнала, ни начатой тренировки, ни отметки «план показан»
+   (11f-fold.js). Тогда вместо параметров — короткий мастер из нескольких вопросов (11k-first-run.js). Проверяется до того,
+   как приложение что-либо запишет; хранилище недоступно — мастера нет. Отметка «план показан» в первый запуск
+   пишется, только когда мастер пройден или пропущен: закрытая на середине вкладка откроет мастер снова. */
+const FIRST_RUN = (() => {
+  try { return !['podhod.settings.v1', 'podhod.log.v1', 'podhod.workout.v3', 'podhod.planSeen.v1'].some(k => localStorage.getItem(k) != null); } catch (e) { return false; }
+})();
 function loadSettings() {
   try { const s = JSON.parse(localStorage.getItem(STORE) || 'null'); if (s && s.groups && s.equip) return Object.assign({}, DEFAULTS, s); } catch (e) {}
   return Object.assign({}, DEFAULTS);
@@ -224,7 +236,9 @@ function pickExercises(E, rand, groups, count, avoid, opt) {
   for (const g of groups) quota[g] = count * GW[g] / totalW;
   const picked = [];
   const usedPat = {};
-  const compBonus = {strength:0.7, mass:0.35, cut:0.05, gentle:0.1}[S.goal];
+  /* короткая тренировка (20–30 мин, 11j-duration.js) — базовым упражнениям чуть больше веса: в малое время они нагружают
+     больше мышц (Iversen et al., Sports Med 2021; 51(10):2079–2095) */
+  const compBonus = {strength:0.7, mass:0.35, cut:0.05, gentle:0.1}[S.goal] + (S.dur === 'short' && S.mode !== 'custom' ? 0.3 : 0);
   /* акцент из атласа: если группа мышцы есть в этой тренировке, треть упражнений нагружают её как основную
      (в недельной программе — одно на каждые 5 упражнений дня, объём набирается за неделю);
      сверх этого — небольшой плюс, а где мышца помогает — ещё меньший */
@@ -352,13 +366,18 @@ function byOrder(units, order, slotOf) {
   return units.map((u, i) => [u, rank(u), i]).sort((a, b) => a[1] - b[1] || a[2] - b[2]).map(x => x[0]);
 }
 
-/* ---------- сборка одной тренировки ---------- */
-function buildPlan(ctx = {}) {
+/* ---------- сборка одной тренировки ----------
+   buildPlan (11j-duration.js) — с учётом времени на тренировку: подбирает число упражнений и дозировку и собирает план
+   здесь. ctx.dose — уступка по времени: s — подходов (кругов, серий) больше или меньше, r — доля отдыха;
+   ctx.fitBase — оценка для подбора по времени: без облегчений (разгрузочная неделя, «облегчить тренировку», мышцы
+   восстанавливаются) — они уменьшают уже подобранную тренировку, а не добавляют в неё упражнения */
+function buildPlanAt(ctx = {}) {
   /* свой план: упражнения и порядок задал человек; мышцы — только подсказка для подбора */
   const custom = S.mode === 'custom' && !ctx.groups ? customOf() : null;
   /* тренировка на сегодня по журналу: группы уже в S.groups, отсюда — доли групп, отдых и облегчение (13d-muscle-load.js) */
   const lp = !custom && !ctx.groups && S.mode === 'single' ? logPickCtx() : null;
-  const groups = ctx.groups || S.groups, count = custom ? custom.items.length : ctx.count || (lp ? lp.count : S.count), week = ctx.week || null;
+  const base = !!ctx.fitBase, dose = ctx.dose || null;
+  const groups = ctx.groups || S.groups, count = custom ? custom.items.length : ctx.count || (lp ? lp.count : S.count), week = base ? null : ctx.week || null;
   const sw = custom ? {} : ctx.swaps || {};
   const E = effEquip(S.equip);
   const rand = rng((ctx.seed ?? S.seed) * 9973 + count * 31 + groups.length * 7);
@@ -395,8 +414,8 @@ function buildPlan(ctx = {}) {
   if (!picked.length) return {empty:'none', pool, groups, lost};
   const G = GOALS[S.goal];
   const items = picked.map((ex, k) => {
-    const slot = slots[k], rx = applyLight(prescribe(ex, week, E), ex);
-    if (lp && lp.light.has(ex.g)) easeRx(rx);
+    const slot = slots[k], dosed = applyDose(prescribe(ex, week, E), dose), rx = base ? dosed : applyLight(dosed, ex);
+    if (lp && lp.light.has(ex.g) && !base) easeRx(rx);
     return {ex, slot, rx:custom ? customRx(rx, custom.items[slot], ex) : rx, name:exName(ex, E), eqLine:equipLine(ex, E), eqIds:chosenEquip(ex, E), has:propHas(ex, E), sub:subs.get(ex) || null};
   });
   const bySlot = new Map(items.map(it => [it.ex, it]));
@@ -413,7 +432,7 @@ function buildPlan(ctx = {}) {
       const L = String.fromCharCode(65 + pi);
       const its = pr.map((ex, j) => { const it = bySlot.get(ex); it.label = pr.length > 1 ? L + (j + 1) : L; return it; });
       const sets = Math.max(...its.map(it => it.rx.sets));
-      const rest = pr.length > 1 ? G.ss.rest : its[0].rx.rest;
+      const rest = pr.length > 1 ? doseRest(G.ss.rest, dose) : its[0].rx.rest;
       its.forEach(it => { it.rx.sets = sets; it.rx.restShown = pr.length > 1 ? (it === its[its.length - 1] ? rest : 0) : rest; });
       blocks.push({kind:'pair', letter:L, items:its, sets, rest});
       minutes += sets * (its.reduce((a, it) => a + it.rx.work, 0) + 15 + rest) + 60;
@@ -421,12 +440,14 @@ function buildPlan(ctx = {}) {
     });
   } else {
     const ord = byOrder((custom ? picked : orderCircuit(picked)).map(ex => bySlot.get(ex)), custom ? null : ctx.order, it => [it.slot]);
-    const c = G.circ;
+    const c = dose ? {...G.circ, rest:doseRest(G.circ.rest, dose), roundRest:doseRest(G.circ.roundRest, dose)} : G.circ;
     let rounds = c.rounds + (S.level === 'beg' ? -1 : S.level === 'adv' ? 1 : 0);
+    /* время на тренировку: кругов больше или меньше (не меньше двух и не больше шести) */
+    if (dose && dose.s) rounds = Math.max(Math.min(2, rounds), Math.min(DOSE_MAX_ROUNDS, rounds + dose.s));
     if (week && week.deload) rounds -= 1;
     else if (week && week.add) rounds += 0;
     rounds = Math.max(2, rounds);
-    if (AR.light && S.mode !== 'program') rounds = Math.max(1, Math.round(rounds * .6));
+    if (AR.light && S.mode !== 'program' && !base) rounds = Math.max(1, Math.round(rounds * .6));
     ord.forEach((it, i) => {
       it.label = String(i + 1);
       it.rounds = rounds;
@@ -461,7 +482,8 @@ function buildProgram() {
     seen[tid] = (seen[tid] || 0) + 1;
     /* день «всё тело» включает мышцу акцента, даже если по шаблону её группы в этот день нет */
     const fg = S.focus && MUSCLE_GROUP[S.focus], g = DAY_T[tid].name === 'Всё тело' && fg && !DAY_T[tid].g.includes(fg) ? DAY_T[tid].g.concat(fg) : DAY_T[tid].g;
-    const p = buildPlan({groups:g, count:S.count, seed:S.seed * 131 + i * 977 + 13, avoid:new Set(avoid), week, swaps:swaps['d' + i] || {}, order:swaps.__order?.['d' + i]});
+    /* время на тренировку задано — число упражнений каждого дня подбирается под него (11j-duration.js) */
+    const p = buildPlan({groups:g, count:durationOf() ? undefined : S.count, seed:S.seed * 131 + i * 977 + 13, avoid:new Set(avoid), week, swaps:swaps['d' + i] || {}, order:swaps.__order?.['d' + i]});
     /* следующие дни обходят и подобранное, и поставленное заменой: замена в одном дне не меняет остальные */
     if (p.items) { p.items.forEach(it => avoid.add(it.ex.id)); p.picks.forEach(id => avoid.add(id)); }
     return {tid, i, wd:SCHEDULE[days][i], plan:p};
@@ -527,11 +549,16 @@ function renderSetup() {
     $('#split-note').textContent = SPLITS[sp].note;
   }
   $('#f-goal').innerHTML = seg('goal', GOALS, S.goal);
+  $('#goal-note').textContent = GOALS[S.goal].about;
   $('#f-format').innerHTML = seg('format', FORMATS, S.format);
   $('#f-level').innerHTML = seg('level', LEVELS, S.level);
   renderProtect();
-  $('#count-v').textContent = S.count;
-  $('#count-minus').disabled = S.count <= 3; $('#count-plus').disabled = S.count >= 10;
+  /* время на тренировку (11j-duration.js): в своём плане упражнения и подходы задал человек — поля нет */
+  $('#f-dur').hidden = custom;
+  const dur = S.dur || '';
+  $('#f-dur-seg').innerHTML = Object.entries(DURATIONS).concat([['', {name:'Не задано'}]]).map(([k, v]) =>
+    `<button type="button" class="seg-b${k === dur ? ' on' : ''}" data-dur="${k}" aria-pressed="${k === dur}"><b>${v.name}</b>${v.hint ? `<small>${v.hint}</small>` : ''}</button>`).join('');
+  renderCount();
   const gs = new Set(S.groups);
   $('#g-presets').innerHTML = GROUP_PRESETS.map(p => {
     const on = p.g.length === gs.size && p.g.every(g => gs.has(g));
@@ -565,6 +592,15 @@ function renderSetup() {
   $('#e-toggle').hidden = !open;
   $('#e-toggle-top').textContent = open ? 'Свернуть' : 'Изменить список';
   for (const b of [$('#e-toggle'), $('#e-toggle-top')]) b.setAttribute('aria-expanded', String(open));
+}
+
+/* «Упражнений»: при заданном времени — сколько подобрано (после сборки плана число уточняется), «−» и «+» задают своё
+   число вместо времени */
+function renderCount() {
+  const n = shownCount(), D = durationOf();
+  $('#count-v').textContent = n;
+  $('#count-minus').disabled = n <= 3; $('#count-plus').disabled = n >= 10;
+  $('#count-hint').textContent = D ? `подобрано под ${D.say}; «−» и «+» — своё число` : 'от 3 до 10 в одной тренировке';
 }
 
 function titleFor() {
@@ -749,6 +785,7 @@ function warnHtml(p) {
   const byBody = p.missing.filter(g => EX.some(ex => available(ex, p.E) && groupsOf(ex).has(g))), byEq = p.missing.filter(g => !byBody.includes(g));
   if (byEq.length) warn.push(`Без упражнений осталось: ${byEq.map(g => GN[g].toLowerCase()).join(', ')}. Для них нужно другое оборудование.`);
   if (byBody.length) warn.push(`Без упражнений в бережном режиме осталось: ${byBody.map(g => GN[g].toLowerCase()).join(', ')}. Всё, что для этого есть, даёт нагрузку, которую вы бережёте.`);
+  const dw = durationWarn(p); if (dw) warn.push(dw);
   return warn.length ? `<div class="warn">${warn.map(w => `<p>${esc(w)}</p>`).join('')}</div>` : '';
 }
 function headButtons(copyLabel) {
@@ -783,7 +820,7 @@ function announcePlan() {
   planSaid = text; box.textContent = ''; /* то же сообщение подряд тоже объявляется: сначала очистить, затем вписать */
   clearTimeout(announcePlan.t); announcePlan.t = setTimeout(() => { box.textContent = text; }, 80);
 }
-function renderPlan() { renderPlanView(); announcePlan(); }
+function renderPlan() { renderPlanView(); if ($('#count-v')) renderCount(); announcePlan(); }
 function renderPlanView() {
   stopFigures();
   if (S.view === 'journal') { prog = null; plan = null; return renderJournal(); }
