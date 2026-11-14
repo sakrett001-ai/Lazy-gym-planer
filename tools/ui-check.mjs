@@ -351,8 +351,10 @@ await page.close();
     /* «Время на тренировку» в параметрах: другое время — другое число упражнений; «+» — своё число от показанного */
     await p.evaluate(() => setSetupFold(false));
     await p.click('[data-dur="long"]');
-    const long = await p.evaluate(() => ({ dur: S.dur, min: plan.minutes, n: plan.items.length, shown: +$('#count-v').textContent, hint: $('#count-hint').textContent }));
+    const long = await p.evaluate(() => ({ dur: S.dur, min: plan.minutes, n: plan.items.length, shown: +$('#count-v').textContent, hint: $('#count-hint').textContent,
+      seg: [...document.querySelectorAll('#f-dur-seg button')].map(b => b.textContent).join(' | ') }));
     check(long.dur === 'long' && long.min >= 60 && long.min <= 80 && long.shown === long.n && /подобрано под 60 мин и больше/.test(long.hint), `параметры: «60+» — ≈60–80 мин, «Упражнений» показывает подобранное (${JSON.stringify(long)})`);
+    check(long.seg === '20–30мин | 45мин | 60+мин | Не задано', `параметры: варианты времени — «20–30 / 45 / 60+ мин / Не задано» (${long.seg})`);
     await p.click('#count-minus');
     const own = await p.evaluate(() => ({ dur: S.dur, count: S.count, n: plan.items.length, on: $('#f-dur-seg [aria-pressed="true"]')?.dataset.dur }));
     check(own.dur === null && own.count === long.n - 1 && own.n === long.n - 1 && own.on === '', `«−» при заданном времени: своё число от подобранного, время «не задано» (${JSON.stringify(own)})`);

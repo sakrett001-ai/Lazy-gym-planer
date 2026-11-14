@@ -42,4 +42,6 @@ html.first-run { overflow:hidden; }
   .fr-view { width:100vw; height:100dvh; max-height:100dvh; margin:0; border:0; border-radius:0; }
   .fr-shell { padding:max(10px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); }
 }
+/* «Время на тренировку» в параметрах (11j-duration.js): у «Не задано» нет второй строки — надписи по центру кнопки */
+#f-dur-seg .seg-b { align-content:center; }
 @media print { .fr-view { display:none !important; } }

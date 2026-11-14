@@ -556,8 +556,8 @@ function renderSetup() {
   /* время на тренировку (11j-duration.js): в своём плане упражнения и подходы задал человек — поля нет */
   $('#f-dur').hidden = custom;
   const dur = S.dur || '';
-  $('#f-dur-seg').innerHTML = Object.entries(DURATIONS).concat([['', {name:'Не задано', hint:'по числу упражнений'}]]).map(([k, v]) =>
-    `<button type="button" class="seg-b${k === dur ? ' on' : ''}" data-dur="${k}" aria-pressed="${k === dur}"><b>${v.name}</b><small>${v.hint}</small></button>`).join('');
+  $('#f-dur-seg').innerHTML = Object.entries(DURATIONS).concat([['', {name:'Не задано'}]]).map(([k, v]) =>
+    `<button type="button" class="seg-b${k === dur ? ' on' : ''}" data-dur="${k}" aria-pressed="${k === dur}"><b>${v.name}</b>${v.hint ? `<small>${v.hint}</small>` : ''}</button>`).join('');
   renderCount();
   const gs = new Set(S.groups);
   $('#g-presets').innerHTML = GROUP_PRESETS.map(p => {
