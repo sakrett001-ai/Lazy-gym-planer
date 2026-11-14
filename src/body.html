@@ -15,14 +15,15 @@
       <section class="field" id="f-custom" hidden><h2 class="lbl">Свои планы</h2><div id="f-custom-body"></div></section>
       <section class="field" id="f-prog"><h2 class="lbl">Тренировок в неделю</h2><div class="seg seg-4" id="f-days" role="group" aria-label="Тренировок в неделю"></div>
         <h2 class="lbl lbl-sub">Сплит</h2><div class="seg" id="f-split" role="group" aria-label="Сплит"></div><p class="f-note" id="split-note"></p></section>
-      <section class="field"><h2 class="lbl">Цель</h2><div class="seg seg-2" id="f-goal" role="group" aria-label="Цель"></div></section>
+      <section class="field"><h2 class="lbl">Цель</h2><div class="seg seg-2" id="f-goal" role="group" aria-label="Цель"></div><p class="f-note" id="goal-note"></p></section>
       <section class="field"><h2 class="lbl">Формат</h2><div class="seg seg-2" id="f-format" role="group" aria-label="Формат"></div></section>
       <section class="field"><h2 class="lbl">Уровень</h2><div class="seg" id="f-level" role="group" aria-label="Уровень"></div></section>
+      <section class="field" id="f-dur"><h2 class="lbl" id="dur-l">Время на тренировку</h2><div class="seg seg-4" id="f-dur-seg" role="group" aria-labelledby="dur-l"></div><p class="f-note">Без разминки и заминки — на них ещё 10–15 минут.</p></section>
       <section class="field"><h2 class="lbl" id="count-l">Упражнений</h2>
-        <div class="stepper"><button type="button" id="count-minus" aria-label="Меньше упражнений">−</button><output id="count-v" aria-live="polite">6</output><button type="button" id="count-plus" aria-label="Больше упражнений">+</button><p>от 3 до 10 в одной тренировке</p></div>
+        <div class="stepper"><button type="button" id="count-minus" aria-label="Меньше упражнений">−</button><output id="count-v" aria-live="polite">6</output><button type="button" id="count-plus" aria-label="Больше упражнений">+</button><p id="count-hint">от 3 до 10 в одной тренировке</p></div>
       </section>
-      <section class="field" id="f-muscles"><h2 class="lbl">Мышцы</h2><p class="f-note" id="g-note" hidden>В своём плане мышцы подсказывают, что добавить: по ним собирается список «Добавить упражнение» и проверяется, все ли нагружены.</p><div class="pres" id="g-presets"></div><p class="f-note lp-msg" id="lp-msg" role="status" hidden></p><div class="chips" id="g-chips"></div></section>
       <section class="field" id="f-joints"><h2 class="lbl">Беречь суставы</h2><div class="chips" id="j-chips" role="group" aria-label="Беречь суставы"></div><p class="f-note" id="j-note"></p></section>
+      <section class="field" id="f-muscles"><h2 class="lbl">Мышцы</h2><p class="f-note" id="g-note" hidden>В своём плане мышцы подсказывают, что добавить: по ним собирается список «Добавить упражнение» и проверяется, все ли нагружены.</p><div class="pres" id="g-presets"></div><p class="f-note lp-msg" id="lp-msg" role="status" hidden></p><div class="chips" id="g-chips"></div></section>
       <section class="field"><h2 class="lbl">Где тренируетесь</h2><div class="places" id="e-places" role="group" aria-label="Места тренировок"></div><div class="place-tools" id="e-place-tools"></div><div class="e-head"><h3 class="lbl lbl-sub">Оборудование места <em id="e-count"></em></h3><button type="button" class="e-toggle e-toggle-top" id="e-toggle-top" aria-controls="e-chips"></button></div><div class="pres" id="e-presets"></div><p class="e-sum" id="e-sum"></p><div class="e-cats" id="e-chips"></div><button type="button" class="e-toggle" id="e-toggle" aria-controls="e-chips">Свернуть список</button>
         <p class="f-note">Упражнения с весом тела доступны всегда.</p></section>
       <button type="button" class="setup-fold-end" id="setup-fold-end" data-sfold="1">Свернуть параметры<i class="cg-chev" aria-hidden="true"></i></button>
@@ -38,6 +39,16 @@
     <div class="t-btns"><button type="button" id="t-minus" aria-label="Минус 15 секунд">−15</button><button type="button" id="t-plus" aria-label="Плюс 15 секунд">+15</button><button type="button" id="t-sound" data-rest-sound aria-pressed="true" aria-label="Звук таймеров">🔔</button><button type="button" id="t-skip">Готово</button></div>
   </div>
 </div>
+<dialog id="first-run" class="fr-view" aria-labelledby="fr-title">
+ <div class="fr-shell">
+  <div class="fr-bar"><button type="button" id="fr-back" class="fr-link" hidden><span aria-hidden="true">←</span> Назад</button><p id="fr-count" class="fr-count"></p><button type="button" id="fr-skip" class="fr-link">Пропустить</button></div>
+  <p class="fr-eyebrow">LAZY GYM PLANNER</p>
+  <h2 id="fr-title" tabindex="-1" aria-describedby="fr-count"></h2>
+  <p id="fr-lead" class="fr-lead"></p>
+  <div id="fr-body" class="fr-body"></div>
+  <button type="button" id="fr-next" class="fr-primary" hidden></button>
+ </div>
+</dialog>
 <dialog id="workout-view" class="workout-view" aria-labelledby="wv-title">
  <div class="wv-shell">
   <header class="wv-head"><div><p class="wv-eyebrow">LAZY GYM PLANNER · ТРЕНИРОВКА</p><p id="wv-context"></p></div><button type="button" id="wv-close">К плану ×</button></header>

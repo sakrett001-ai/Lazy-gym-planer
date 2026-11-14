@@ -11,6 +11,15 @@ const fileArg = process.argv.indexOf('--file'), file = fileArg > 0 ? path.resolv
 if (!fs.existsSync(file)) { console.error('Нет собранного файла — сначала npm run build'); process.exit(2); }
 
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+/* Каждая новая страница — первый запуск, и на ней открывается мастер (11k-first-run.js). Проверки плана, тренировки и атласа
+   его не ждут: мастер закрывается без ответов сразу после запуска приложения (как и раньше, в хранилище — только отметка
+   «план показан»). Сам мастер проверяется на страницах с { firstRun: true }. */
+const skipFirstRun = () => addEventListener('DOMContentLoaded', () => { try { if (typeof firstRunClose === 'function') firstRunClose(); } catch (e) {} });
+{
+  const newContext = browser.newContext.bind(browser);
+  browser.newContext = async (o = {}) => { const { firstRun, ...rest } = o; const c = await newContext(rest); if (!firstRun) await c.addInitScript(skipFirstRun); return c; };
+  browser.newPage = async (o = {}) => { const c = await browser.newContext(o), pg = await c.newPage(); pg.on('close', () => c.close().catch(() => {})); return pg; };
+}
 const fails = [], errors = [];
 const check = (ok, what) => { if (!ok) fails.push(what); };
 /* рисунки движений — заглушки: проверяется поведение и раскладка, а не фигура */
@@ -26,7 +35,9 @@ async function open(width, height = 800) {
   await page.goto('file://' + file); await page.waitForTimeout(500);
   await fakeFigures(page);
   await page.evaluate(() => {
-    Object.assign(S, { view: 'plan', mode: 'single', format: 'classic', goal: 'mass', level: 'mid', groups: ['chest', 'back', 'shoulders'], count: 5, seed: 3, fold: null });
+    /* мастер первого запуска (новый контекст — первый запуск) закрывается без ответов: здесь проверяется план; мастер — ниже */
+    firstRunClose();
+    Object.assign(S, { view: 'plan', mode: 'single', format: 'classic', goal: 'mass', level: 'mid', groups: ['chest', 'back', 'shoulders'], count: 5, seed: 3, fold: null, dur: null });
     LOG.data = {}; regen();
   });
   return page;
@@ -210,10 +221,10 @@ await page.close();
   });
   check(head.top.b - head.top.t <= 120 && head.tag === 'none' && head.atlas.t < head.logo.b && head.views.t >= head.atlas.b - 1 && head.lang.t < head.views.b && head.lang.b > head.views.t,
     'телефон: шапка в две строки — логотип и атлас, под ними разделы и язык; подпись скрыта');
-  check(await p.evaluate(() => !S.fold.setup), 'первый запуск: параметры раскрыты');
+  /* первый запуск теперь — мастер (проверка ниже, «первый запуск»); повторный запуск — параметры свёрнуты */
   await p.reload(); await p.waitForTimeout(500); await fakeFigures(p);
-  check(await p.evaluate(() => S.fold.setup === true && document.querySelector('.setup').classList.contains('folded') && document.querySelector('#plan').getBoundingClientRect().top < innerHeight * .6),
-    'после первого плана параметры на телефоне свёрнуты, план — на первом экране');
+  check(await p.evaluate(() => !document.querySelector('#first-run').open && S.fold.setup === true && document.querySelector('.setup').classList.contains('folded') && document.querySelector('#plan').getBoundingClientRect().top < innerHeight * .6),
+    'повторный запуск: мастера нет, параметры на телефоне свёрнуты, план — на первом экране');
   /* разбор: сцена под заголовком, ракурсы под сценой одной строкой, выбор упражнения — после управления движением */
   await p.evaluate(() => openMotionItem(previewItem('latpull'))); await p.waitForTimeout(150);
   const mv = await p.evaluate(() => {
@@ -276,6 +287,118 @@ await page.close();
     check(/^\d+ из \d+$/.test(cnt.text) && cnt.h <= cnt.lh * 1.5, `«Оборудование места» (${w} px): счётчик «${cnt.text}» в одну строку`);
     check(await c.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), `план (${w} px) без прокрутки вбок`);
     await c.close();
+  }
+}
+
+/* первый запуск (11k-first-run.js): вместо «стены параметров» — вопросы по одному на экран. Шаги и счётчик, фокус на заголовке
+   шага, «Назад» кнопкой, Esc и системной «Назад» — на предыдущий шаг (ответы на месте), цель без выбора по умолчанию, ответы →
+   параметры, после — план сверху и параметры свёрнуты, записи шагов убраны из истории; повторный вход — без мастера;
+   «Пропустить» — по умолчанию для новичка; данные прежних версий (настройки или только журнал) — без мастера */
+{
+  const fresh = async (width = 390, height = 844) => {
+    const ctx = await browser.newContext({ viewport: { width, height }, firstRun: true });
+    const p = await ctx.newPage(); p.on('pageerror', e => errors.push(String(e)));
+    await p.goto('file://' + file); await p.waitForTimeout(500); await fakeFigures(p);
+    return { ctx, p };
+  };
+  const st = p => p.evaluate(() => ({ open: $('#first-run').open, step: $('#first-run').dataset.step, count: $('#fr-count').textContent, title: $('#fr-title').textContent,
+    focus: document.activeElement.id, back: !$('#fr-back').hidden, skip: !$('#fr-skip').hidden }));
+  const pressed = (p, sel) => p.evaluate(s => [...document.querySelectorAll(s)].filter(b => b.getAttribute('aria-pressed') === 'true').map(b => Object.values(b.dataset)[0]).sort().join(), sel);
+  {
+    const { ctx, p } = await fresh();
+    let s = await st(p);
+    check(s.open && s.step === 'place' && s.count === 'Шаг 1 из 4' && s.title === 'Где вы будете тренироваться?' && s.focus === 'fr-title' && !s.back && s.skip,
+      `первый запуск: мастер, шаг «Где», фокус на заголовке, «Пропустить» есть, «Назад» нет (${JSON.stringify(s)})`);
+    check(await p.evaluate(() => [...document.querySelectorAll('[data-fr-place]')].map(b => b.dataset.frPlace).join() === S.places.map(x => x.id).join()), 'варианты места — места тренировок');
+    check(await p.evaluate(() => $('#fr-title').getAttribute('aria-describedby') === 'fr-count' && $('#first-run').getAttribute('aria-labelledby') === 'fr-title'), 'окно названо заголовком шага, «Шаг N из M» — его описание');
+    check(await p.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth && $('#first-run').scrollWidth <= $('#first-run').clientWidth), 'мастер без прокрутки вбок');
+    await p.click('[data-fr-place="home"]');
+    s = await st(p);
+    check(s.step === 'equip' && s.count === 'Шаг 2 из 4' && s.focus === 'fr-title' && s.back, `«Дом» → «Что есть под рукой?», фокус на заголовке (${JSON.stringify(s)})`);
+    check(await pressed(p, '[data-fr-eq]') === await p.evaluate(() => placeOf(S, 'home').equip.slice().sort().join()), 'отмечен инвентарь места');
+    await p.click('[data-fr-eq="kb"]'); await p.click('[data-fr-eq="band"]');
+    await p.click('#fr-next');
+    s = await st(p);
+    check(s.step === 'goal' && s.count === 'Шаг 3 из 4' && !(await pressed(p, '[data-fr-goal]')), 'дальше — цель, ничего не выбрано заранее (нет «Массы» по умолчанию)');
+    check(await p.evaluate(() => [...document.querySelectorAll('[data-fr-goal] small')].every(x => x.textContent.length > 20 && !/1ПМ|темп|БАЗОВОЕ/i.test(x.textContent))), 'у каждой цели — пояснение простыми словами');
+    await p.goBack(); await p.waitForTimeout(250);
+    s = await st(p);
+    check(s.open && s.step === 'equip' && s.focus === 'fr-title', `системная «Назад» — на предыдущий шаг, а не из приложения (${JSON.stringify(s)})`);
+    check(await pressed(p, '[data-fr-eq]') === 'abwheel,db,kb', 'отметки инвентаря сохранились');
+    await p.click('#fr-next'); await p.click('[data-fr-goal="cut"]');
+    s = await st(p);
+    check(s.step === 'more' && s.count === 'Шаг 4 из 4' && !s.skip, 'последний шаг — время и опыт, без «Пропустить»');
+    check(await p.evaluate(() => ['fr-q-dur', 'fr-q-lvl', 'fr-q-joint'].every(id => document.querySelector(`[aria-labelledby="${id}"][role="group"]`)) && $('[data-fr-protect="knees"]') === $('[data-fr-protect]')),
+      'время, опыт и «Что беречь» — группы с заголовками; колени — первыми');
+    await p.click('#fr-back'); s = await st(p);
+    check(s.step === 'goal' && await pressed(p, '[data-fr-goal]') === 'cut' && s.focus === 'fr-title', 'кнопка «Назад» — на цель, выбор отмечен');
+    await p.click('[data-fr-goal="cut"]'); await p.keyboard.press('Escape'); s = await st(p);
+    check(s.open && s.step === 'goal', 'Esc — тоже на шаг назад, окно открыто');
+    await p.click('[data-fr-goal="cut"]');
+    await p.click('[data-fr-dur="short"]'); await p.click('[data-fr-level="mid"]'); await p.click('[data-fr-protect="knees"]'); await p.click('[data-fr-protect="lumbar"]'); await p.click('[data-fr-protect="lumbar"]');
+    check(await pressed(p, '[data-fr-dur]') === 'short' && await pressed(p, '[data-fr-level]') === 'mid' && await pressed(p, '[data-fr-protect]') === 'knees', 'время и опыт — один ответ, суставы — отметки');
+    await p.click('#fr-next'); await p.waitForTimeout(400);
+    const after = await p.evaluate(() => ({ open: $('#first-run').open, goal: S.goal, level: S.level, dur: S.dur, place: S.place, equip: S.equip.slice().sort().join(), protect: S.protect.join(),
+      groups: S.groups.length, fold: S.fold.setup, folded: $('.setup').classList.contains('folded'), planTop: $('#plan').getBoundingClientRect().top, vh: innerHeight, min: plan.minutes,
+      focus: document.activeElement.className, durOn: $('#f-dur-seg [aria-pressed="true"]')?.dataset.dur, chip: [...document.querySelectorAll('.sb-chip')].map(c => c.textContent).join(' | ') }));
+    check(!after.open && after.goal === 'cut' && after.level === 'mid' && after.dur === 'short' && after.place === 'home' && after.equip === 'abwheel,db,kb' && after.protect === 'knees' && after.groups === 7,
+      `ответы мастера — в параметрах плана (${JSON.stringify(after)})`);
+    check(after.fold && after.folded && after.planTop < after.vh * .6 && after.min >= 20 && after.min <= 30 && after.durOn === 'short' && /20–30 мин/.test(after.chip),
+      `после мастера параметры свёрнуты, план сверху, ≈20–30 мин (${JSON.stringify(after)})`);
+    check(/p-title/.test(after.focus), 'фокус — на названии плана');
+    await p.waitForTimeout(400);
+    check(await p.evaluate(() => !(history.state && history.state.lgOverlay)), 'записи шагов мастера убраны из истории');
+    /* «Время на тренировку» в параметрах: другое время — другое число упражнений; «+» — своё число от показанного */
+    await p.evaluate(() => setSetupFold(false));
+    await p.click('[data-dur="long"]');
+    const long = await p.evaluate(() => ({ dur: S.dur, min: plan.minutes, n: plan.items.length, shown: +$('#count-v').textContent, hint: $('#count-hint').textContent }));
+    check(long.dur === 'long' && long.min >= 60 && long.min <= 80 && long.shown === long.n && /подобрано под 60 мин и больше/.test(long.hint), `параметры: «60+» — ≈60–80 мин, «Упражнений» показывает подобранное (${JSON.stringify(long)})`);
+    await p.click('#count-minus');
+    const own = await p.evaluate(() => ({ dur: S.dur, count: S.count, n: plan.items.length, on: $('#f-dur-seg [aria-pressed="true"]')?.dataset.dur }));
+    check(own.dur === null && own.count === long.n - 1 && own.n === long.n - 1 && own.on === '', `«−» при заданном времени: своё число от подобранного, время «не задано» (${JSON.stringify(own)})`);
+    await p.reload(); await p.waitForTimeout(500);
+    check(await p.evaluate(() => !$('#first-run').open && S.goal === 'cut' && S.place === 'home' && S.fold.setup === true), 'повторный вход: мастера нет, ответы сохранились');
+    await ctx.close();
+  }
+  {
+    /* «Пропустить» на первом шаге: по умолчанию для новичка; повторный вход — без мастера */
+    const { ctx, p } = await fresh();
+    await p.click('#fr-skip'); await p.waitForTimeout(300);
+    const s = await p.evaluate(() => ({ open: $('#first-run').open, goal: S.goal, level: S.level, dur: S.dur, format: S.format, place: S.place, groups: S.groups.join(), fold: S.fold.setup,
+      seen: localStorage.getItem('podhod.planSeen.v1'), stored: !!localStorage.getItem('podhod.settings.v1'), min: plan.minutes, eyebrow: $('#plan .eyebrow').textContent }));
+    check(!s.open && s.goal === 'gentle' && s.level === 'beg' && s.dur === 'mid' && s.format === 'classic' && s.place === 'gym' && s.groups === 'chest,back,shoulders,quads,hams,glutes,abs' && s.fold && s.seen === '1' && s.stored && s.min >= 40 && s.min <= 50,
+      `«Пропустить»: «Бережно», новичок, ≈45 мин, всё тело (${JSON.stringify(s)})`);
+    await p.reload(); await p.waitForTimeout(500);
+    check(await p.evaluate(() => !$('#first-run').open), '«Пропустить» — при следующем входе мастера нет');
+    await ctx.close();
+  }
+  {
+    /* «Пропустить» на шаге цели: место и инвентарь — как ответили, остальное — по умолчанию */
+    const { ctx, p } = await fresh();
+    await p.click('[data-fr-place="street"]'); await p.click('[data-fr-eq="db"]'); await p.click('#fr-next'); await p.click('#fr-skip'); await p.waitForTimeout(300);
+    check(await p.evaluate(() => S.place === 'street' && S.equip.slice().sort().join() === 'db,dipbars,pullup' && S.goal === 'gentle'), '«Пропустить» после ответов: ответы на месте, остальное — по умолчанию');
+    await ctx.close();
+  }
+  for (const [what, key, val] of [['настройки прежней версии', 'podhod.settings.v1', JSON.stringify({ goal: 'strength', format: 'classic', level: 'adv', count: 7, groups: ['chest', 'back', 'shoulders'], equip: ['db', 'bb', 'bench', 'incline', 'pullup', 'cable'], seed: 3, fold: { setup: false, load: false, cards: 'compact' } })],
+    ['только журнал', 'podhod.log.v1', JSON.stringify({ bbbench: [{ d: '2026-11-01', s: [[60, 8]] }] })]]) {
+    const { ctx, p } = await fresh();
+    await p.evaluate(([k, v]) => { localStorage.clear(); localStorage.setItem(k, v); }, [key, val]);
+    await p.reload(); await p.waitForTimeout(500);
+    const s = await p.evaluate(() => ({ open: $('#first-run').open, goal: S.goal, dur: S.dur, n: plan && plan.items ? plan.items.length : 0 }));
+    check(!s.open && (key !== 'podhod.settings.v1' || (s.goal === 'strength' && s.dur === null && s.n === 7)), `${what}: мастера нет, план как раньше (${JSON.stringify(s)})`);
+    await ctx.close();
+  }
+  {
+    /* компьютер: мастер — окно поверх плана; после него параметры в боковой колонке раскрыты */
+    const { ctx, p } = await fresh(1280, 900);
+    const box = await rect(p, '#first-run');
+    check(box && box.w <= 600 && box.l > 100, `компьютер: мастер — окно по центру (${JSON.stringify(box)})`);
+    await p.click('[data-fr-place="gym"]');
+    check((await st(p)).count === 'Шаг 2 из 3', 'зал: вопроса об инвентаре нет — три шага');
+    await p.click('[data-fr-goal="mass"]'); await p.click('#fr-next'); await p.waitForTimeout(300);
+    check(await p.evaluate(() => !$('#first-run').open && S.fold.setup === false && !$('.setup').classList.contains('folded') && S.goal === 'mass' && S.level === 'beg' && S.dur === 'mid'),
+      'компьютер: после мастера параметры в колонке раскрыты; невыбранное — по умолчанию');
+    await ctx.close();
   }
 }
 
@@ -1626,4 +1749,4 @@ await desk.close();
 await browser.close();
 if (errors.length) console.error('Ошибки страницы:\n' + [...new Set(errors)].slice(0, 10).join('\n'));
 if (fails.length || errors.length) { console.error(`Проверка интерфейса: ${fails.length} замечаний`); for (const f of fails) console.error('  ✗ ' + f); process.exit(1); }
-console.log('Интерфейс: сворачивание блоков, хваты, «Заменить» со списком и «Вернуть», «Убрать» с «Вернуть», «+ В свой план» с выбором плана (и на странице своего плана), поиск витрины (ё = е, второй язык, синонимы, пусто) и «+» на плитке с выбором плана и «✓», поиск в «Добавить упражнение», бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа (в «Анатомии» и «Манекене» — кадры из общего рендерера, кеш между сеансами, без WebGL — SVG), виды фигуры «Анатомия», «Скелет» и «Манекен» (кожа Anny в карточках и витрине, без её данных — SVG), анатомия в карточках плана и на экране тренировки (откат на манекен, без WebGL — SVG), свободная камера сцены (поворот на воспроизведении, колесо, кнопки ракурсов, двойной щелчок, клавиатура, касания на телефоне), первый экран и разбор на телефоне, карточка, число подходов («−» с подтверждением в строке, «+»), вес на следующие подходы, вопрос о неправдоподобном весе, «Сегодня: N из M», пирамида повторов, журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования, панель замера скорости ?perf, выбор языка при заходе и его запоминание, фунты в карточке, тренировке, разминке и журнале, имена по умолчанию из русской версии в английской работают на телефоне и компьютере.');
+console.log('Интерфейс: мастер первого запуска (шаги, «Назад» кнопкой, Esc и системной «Назад», «Пропустить», повторный вход, данные прежних версий), время на тренировку в параметрах, сворачивание блоков, хваты, «Заменить» со списком и «Вернуть», «Убрать» с «Вернуть», «+ В свой план» с выбором плана (и на странице своего плана), поиск витрины (ё = е, второй язык, синонимы, пусто) и «+» на плитке с выбором плана и «✓», поиск в «Добавить упражнение», бережный режим, порядок упражнений, сигнал отдыха, тренировка (экран не гаснет, отдых сверх нуля, таймер удержания), витрина атласа (в «Анатомии» и «Манекене» — кадры из общего рендерера, кеш между сеансами, без WebGL — SVG), виды фигуры «Анатомия», «Скелет» и «Манекен» (кожа Anny в карточках и витрине, без её данных — SVG), анатомия в карточках плана и на экране тренировки (откат на манекен, без WebGL — SVG), свободная камера сцены (поворот на воспроизведении, колесо, кнопки ракурсов, двойной щелчок, клавиатура, касания на телефоне), первый экран и разбор на телефоне, карточка, число подходов («−» с подтверждением в строке, «+»), вес на следующие подходы, вопрос о неправдоподобном весе, «Сегодня: N из M», пирамида повторов, журнал, вес гантелей, Л/П и общий вес, загрузка мышц и тренировка по журналу, счётчик оборудования, панель замера скорости ?perf, выбор языка при заходе и его запоминание, фунты в карточке, тренировке, разминке и журнале, имена по умолчанию из русской версии в английской работают на телефоне и компьютере.');

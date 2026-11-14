@@ -638,8 +638,12 @@ document.addEventListener('click', e => {
     const dh = $('.day-head'); if (dh) dh.scrollIntoView({block:'nearest', behavior:reduceMotion ? 'auto' : 'smooth'});
     return;
   }
-  if (t.id === 'count-minus') { S.count = Math.max(3, S.count - 1); return regen(); }
-  if (t.id === 'count-plus') { S.count = Math.min(10, S.count + 1); return regen(); }
+  /* время на тренировку (11j-duration.js); «−» и «+» при заданном времени — своё число от подобранного, время снимается */
+  if (t.dataset.dur !== undefined) { S.dur = t.dataset.dur || null; ensureDur(S); return regen(); }
+  if (t.id === 'count-minus' || t.id === 'count-plus') {
+    const n = shownCount(); S.dur = null;
+    S.count = Math.max(3, Math.min(10, n + (t.id === 'count-plus' ? 1 : -1))); return regen();
+  }
   if (t.dataset.g) { const g = t.dataset.g; S.groups = S.groups.includes(g) ? S.groups.filter(x => x !== g) : S.groups.concat(g); S.groups.sort((a, b) => GROUPS.findIndex(x => x.id === a) - GROUPS.findIndex(x => x.id === b)); return regen(); }
   if (t.dataset.gp) { S.groups = GROUP_PRESETS.find(p => p.id === t.dataset.gp).g.slice(); return regen(); }
   if (t.dataset.e) { eqOpen = true; const id = t.dataset.e; setPlaceEquip(S.equip.includes(id) ? S.equip.filter(x => x !== id) : S.equip.concat(id)); return regen(); }
