@@ -274,7 +274,7 @@ await page.close();
     const c = await open(w, 800);
     await c.evaluate(() => document.querySelector('.card').scrollIntoView()); await c.waitForTimeout(150);
     const fig = await rect(c, '.card .illus > .fig'), view = await rect(c, '.card .illus-v'), zoom = await rect(c, '.card .illus-zoom');
-    check(fig && Math.abs(fig.w - fig.h) < 1.5 && apart(fig, view) && apart(fig, zoom), `карточка (${w} px): «Изометрия» и «↗» не лежат на рисунке`);
+    check(fig && Math.abs(fig.w - fig.h) < 1.5 && apart(fig, view) && apart(fig, zoom), `карточка (${w} px): «3D-вид» и «↗» не лежат на рисунке`);
     const caps = await c.evaluate(() => {
       const cap = document.querySelector('.card .motion-caption'), lh = parseFloat(getComputedStyle(cap).lineHeight), out = [];
       for (const label of ['Рабочая фаза', 'Конечная точка', 'Возврат', 'Исходное положение', 'Опускание', 'Нижняя точка', 'Подъём', 'Верхняя точка']) {
@@ -1551,6 +1551,54 @@ for (const lang of ['ru', 'en']) {
   check(await g.evaluate(() => !$('#motion-view').open && S.custom === 'low' && S.mode === 'custom' && customOf().items.map(i => i.id).join() === 'squat,smithsquat'), `${lang}: «${T.open}» открывает этот план`);
   check(await g.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), `${lang}: без прокрутки вбок`);
   await g.close();
+}
+
+/* простые слова (замечания тестеров к 4.94.0: Ольга п. 7, Виктор п. 14, Alex п. 15–16), телефон 390×844, русская и
+   английская версии: в видимом тексте карточек (с раскрытой техникой и разминкой), разбора (мышцы по фазам, «О демонстрациях»)
+   и тренировки (подсказка по нагрузке, отдых) нет «1ПМ», «отказа», «БАЗОВОЕ», «ЭМГ», «изометрии», «запаса» оборотом
+   «в запасе / с запасом N» и темпа числами; в английской — «1RM», «failure», «reps in reserve», «EMG», «compound»;
+   под планом 1ПМ назван только после простого объяснения. Строки нагрузки во всех режимах — tools/plain-words.test.js */
+{
+  const JARGON = { ru: /1ПМ|отказ|базов|изолирующ|ЭМГ|региональн|изометри|в запасе|с запасом \d|выраженного жжения|двойной прогресс/i,
+    en: /1RM|failure|\bcompound\b|\bisolation\b|\bEMG\b|regional emphasis|isometr|in reserve|reserve of|educational|double progression|Another option|Load cue|Go to set|no main work/i };
+  const CODE = /\b\d{1,2}-\d{1,2}-[\dX]{1,2}-\d{1,2}\b/;
+  for (const lang of ['ru', 'en']) {
+    const g = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    g.on('pageerror', e => errors.push(String(e)));
+    await g.goto('file://' + path.join(path.dirname(file), `lazy-gym-planner-offline-${lang}.html`)); await g.waitForTimeout(500);
+    await fakeFigures(g);
+    const seen = [], look = async (where, sel) => {
+      const t = await g.evaluate(s => { for (const r of document.querySelectorAll(s)) r.querySelectorAll('details').forEach(d => d.open = true); return [...document.querySelectorAll(s)].map(r => r.innerText).join('\n'); }, sel);
+      const j = t.match(JARGON[lang]), c = t.match(CODE);
+      if (j) seen.push(`${where}: «${j[0]}» — …${t.slice(Math.max(0, j.index - 50), j.index + 50).replace(/\s+/g, ' ')}…`);
+      if (c) seen.push(`${where}: темп числами «${c[0]}»`);
+      return t;
+    };
+    /* Ольга (рельеф, новичок, дома и в зале), масса, сила в пиковую неделю, бережно с суставами */
+    for (const [goal, level, place, mode, week] of [['cut', 'beg', 'gym', 'single', 1], ['cut', 'beg', 'home', 'single', 1], ['mass', 'mid', 'gym', 'single', 1], ['strength', 'adv', 'gym', 'program', 3], ['gentle', 'beg', 'gym', 'program', 4]]) {
+      await g.evaluate(o => { Object.assign(S, { view: 'plan', mode: o.mode, week: o.week, day: 0, format: 'classic', goal: o.goal, level: o.level, place: o.place, adapt: null, groups: ['chest', 'back', 'quads'], count: 5, seed: 3, protect: o.goal === 'gentle' ? ['knees'] : [], customs: [], custom: null });
+        ensurePlaces(S); ensureCustoms(S); LOG.data = { bbbench: [{ d: '2020-01-06', s: [[60, 10], [60, 10]] }], squat: [{ d: '2020-01-06', s: [[80, 10], [80, 10]] }] }; S.fold = { setup: true, load: true, cards: 'full' }; regen(); }, { goal, level, place, mode, week });
+      await look(`${lang} ${goal}/${level}/${place}/${mode}: карточки`, '#plan .card, #plan .gentle-box, #plan .phase, #plan .week-note, #plan .wk-note');
+      const legend = await g.evaluate(() => document.querySelector('#plan .legend')?.innerText || '');
+      check(lang === 'ru' ? legend.startsWith('Максимум на 1 повтор (1ПМ) — вес') : legend.startsWith('One-rep max (1RM) is the weight'), `${lang}: под планом сначала простое объяснение, потом обозначение (${legend.slice(0, 50)})`);
+    }
+    /* разбор: жим лёжа, присед, планка — мышцы по фазам, нагрузка на суставы, источники */
+    for (const id of ['bbbench', 'squat', 'plank', 'kbswing']) {
+      await g.evaluate(id => { motionPrefs.muscles = true; motionPrefs.stress = true; openMotionItem(previewItem(id)); }, id); await g.waitForTimeout(80);
+      await look(`${lang} разбор ${id}`, '#mv-detail');
+      await g.evaluate(() => closeMotion());
+    }
+    /* тренировка: каждое упражнение с раскрытой подсказкой, затем отдых */
+    await g.evaluate(() => { Object.assign(S, { mode: 'single', goal: 'cut', level: 'beg', place: 'gym', protect: [] }); ensurePlaces(S); LOG.data = {}; regen(); document.querySelector('#start-workout').click(); });
+    await g.waitForTimeout(150);
+    const n = await g.evaluate(() => workout.queue.length);
+    for (let i = 0; i < n; i += 2) { await g.evaluate(i => workoutShow(i), i); await look(`${lang} тренировка #${i}`, '#wv-active'); }
+    await g.evaluate(() => workoutShow(0)); await g.fill('#wv-reps', '12'); await g.click('#wv-done'); await g.waitForTimeout(80);
+    await look(`${lang} отдых`, '#wv-rest');
+    await g.evaluate(() => closeWorkout());
+    check(!seen.length, `${lang}: простые слова в карточках, разборе и тренировке (${seen.slice(0, 3).join(' | ')})`);
+    await g.close();
+  }
 }
 
 /* пульсометр (14b-heart.js) на телефоне — navigator.bluetooth подменён до загрузки (addInitScript): плашка «♥ Пульс» до

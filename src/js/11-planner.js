@@ -1,26 +1,27 @@
 /* ===================== ПЛАНИРОВЩИК ===================== */
-/* load — начало строки нагрузки (c — базовые с весом, который можно взвесить, i — изолирующие); запас повторов к ней
-   дописывает reserveOf (rir — запас по цели без цикла; null — без числа: «почти до отказа», «до выраженного жжения»).
+/* load — нагрузка в строке карточки (c — процент от максимума на 1 повтор у базовых с весом, который можно взвесить, —
+   его дописывает pctText; i — начало строки у изолирующих); запас повторов к ней дописывает reserveOf (rir — запас по цели
+   без цикла; null — без числа: «до последнего чистого повтора», «до сильного жжения в мышце»).
    about — пояснение цели простыми словами: под переключателем в параметрах и на шаге «Цель» первого запуска (11k-first-run.js) */
 const GOALS = {
   strength:{name:'Сила', hint:'3–6 повт.', about:'Стать сильнее: тяжёлый вес, 3–6 повторов, долгий отдых.', reps:{c:'3–5', i:'6–8'}, sets:{c:5, i:3}, rest:{c:180, i:90}, tempo:'2-0-X-0',
-    load:{c:'≈ 80–90% от 1ПМ', i:'тяжело'}, rir:[1, 2], rep:3, time:'20–30 с', dist:'20 м',
+    load:{c:'≈ 80–90%', i:'тяжело'}, rir:[1, 2], rep:3, time:'20–30 с', dist:'20 м',
     circ:{rounds:4, reps:'6–8', work:20, rest:30, roundRest:180}, ss:{rest:150}},
   mass:{name:'Масса', hint:'6–12 повт.', about:'Нарастить мышцы: средний вес, 6–12 повторов.', reps:{c:'6–10', i:'10–12'}, sets:{c:4, i:3}, rest:{c:120, i:75}, tempo:'3-0-1-0',
-    load:{c:'≈ 70–80% от 1ПМ', i:''}, rir:[1, 2], rep:4, time:'30–45 с', dist:'30 м',
+    load:{c:'≈ 70–80%', i:''}, rir:[1, 2], rep:4, time:'30–45 с', dist:'30 м',
     circ:{rounds:3, reps:'10–12', work:30, rest:20, roundRest:120}, ss:{rest:90}},
   cut:{name:'Рельеф', hint:'12–20 повт.', about:'Подтянуть тело и выносливость: лёгкий вес, 12–20 повторов, короткий отдых.', reps:{c:'12–15', i:'15–20'}, sets:{c:3, i:3}, rest:{c:60, i:40}, tempo:'2-0-1-0',
-    load:{c:'≈ 55–65% от 1ПМ', i:'до выраженного жжения'}, rir:null, rep:3, time:'45–60 с', dist:'40 м',
+    load:{c:'≈ 55–65%', i:'до сильного жжения в мышце'}, rir:null, rep:3, time:'45–60 с', dist:'40 м',
     circ:{rounds:4, reps:'15–20', work:40, rest:15, roundRest:90}, ss:{rest:60}},
   /* бережно: суставы болят или идёт восстановление (11g-gentle.js) — Garber et al., MSSE 2011, 43(7):1334–1359 */
   gentle:{name:'Бережно', hint:'12–15 повт.', about:'Если болят суставы, после травмы или долгого перерыва: лёгкий вес, медленно, без прыжков и рывков.', reps:{c:'12–15', i:'12–15'}, sets:{c:2, i:2}, rest:{c:90, i:60}, tempo:'3-0-2-0',
-    load:{c:'≈ 40–60% от 1ПМ', i:'лёгкий вес'}, rir:[3, 4], rep:5, time:'20–30 с', dist:'20 м',
+    load:{c:'≈ 40–60%', i:'лёгкий вес'}, rir:[3, 4], rep:5, time:'20–30 с', dist:'20 м',
     circ:{rounds:2, reps:'12–15', work:30, rest:30, roundRest:120}, ss:{rest:90}}
 };
 /* Запас повторов (повторы в запасе) — один источник для строки нагрузки в карточке, подсказки первой записи в журнале,
    описания недели цикла и плашки «Бережно»: число нигде больше не пишется. Без цикла — по цели (GOALS.rir), новичку
    в силе и массе на повтор больше (2–3); в цикле — по неделе (WEEKS.rir), в «Бережно» не меньше 3, новичку +1.
-   null — без числа: рельеф («почти до отказа») и разгрузка («без отказа»). */
+   null — без числа: рельеф («до последнего чистого повтора») и разгрузка («не до предела»). */
 function reserveOf(week, goal = S.goal, level = S.level) {
   if (week) {
     if (week.deload) return null;
@@ -35,8 +36,28 @@ function reserveOf(week, goal = S.goal, level = S.level) {
 const reserveNum = r => r.lo === r.hi ? String(r.lo) : `${r.lo}–${r.hi}`;
 /* «1–2 повтора» */
 const reserveReps = r => `${reserveNum(r)} ${plural(r.hi, 'повтор', 'повтора', 'повторов')}`;
-/* «1–2 повтора в запасе» */
-const reserveText = r => `${reserveReps(r)} в запасе`;
+/* Слова нагрузки — простые, без расшифровки внизу страницы (замечания тестеров к 4.94.0: «1ПМ», «почти до отказа»,
+   «темп 2-0-1-0», «до выраженного жжения» новичку непонятны, «отказ» пугает). Числа те же, меняются только слова:
+   · запас повторов — «силы ещё на 1–2 повтора» («оставляйте силы ещё на 1–2 повтора»);
+   · «почти до отказа» — «до последнего чистого повтора», «без отказа» — «не до предела»;
+   · процент от 1ПМ — «от максимума на 1 повтор» (1ПМ назван в расшифровке LEGEND под планом);
+   · темп — tempoWords: «усилие 1 с, возврат 3 с», запись числами — в подсказке строки и в поле «Темп» своего плана.
+   Фразы с {n} переводятся целиком (i18n/en.json): в английском число стоит в другом месте фразы. */
+/* «силы ещё на 1–2 повтора» */
+const reserveText = r => 'силы ещё на {n}'.replace('{n}', reserveReps(r));
+/* «оставляйте силы ещё на 1–2 повтора» — строка нагрузки и описание пиковой недели */
+const reserveDo = r => 'оставляйте силы ещё на {n}'.replace('{n}', reserveReps(r));
+const NEAR_LIMIT = 'до последнего чистого повтора', NOT_LIMIT = 'не до предела';
+/* «≈ 70–80% от максимума на 1 повтор» */
+const pctText = p => '{p} от максимума на 1 повтор'.replace('{p}', p);
+/* «3-0-1-0» (опускание – пауза – подъём – пауза, секунды; X — быстро) → «усилие 1 с, возврат 3 с». Усилие — подъём
+   веса (или тяга, жим), возврат — опускание: так верно для любого упражнения, и для тяги сверху тоже. Паузы — если не 0 */
+function tempoWords(code) {
+  const p = String(code || '').toUpperCase().split('-');
+  if (p.length !== 4) return String(code || '');
+  const [ecc, low, con, high] = p, sec = (f, v) => f.replace('{t}', v), pause = v => v !== 'X' && +v > 0 ? sec('пауза {t} с', +v) : '';
+  return [con === 'X' ? 'быстрое усилие' : sec('усилие {t} с', +con), pause(high), ecc === 'X' ? 'быстрый возврат' : sec('возврат {t} с', +ecc), pause(low)].filter(Boolean).join(', ');
+}
 const FORMATS = {classic:{name:'Классика', hint:'по подходам'}, superset:{name:'Суперсеты', hint:'пары без отдыха'}, circuit:{name:'Круговая', hint:'круги подряд'},
   static:{name:'Статодинамика', hint:'без расслабления'}};
 /* ask и about — вопрос «Ваш опыт» первого запуска (11k-first-run.js): там уровень называется словами человека */
@@ -116,11 +137,12 @@ const WD_FULL = ['Понедельник', 'Вторник', 'Среда', 'Че
    (reserveOf: цель и уровень открытого плана) */
 const WEEKS = [
   {name:'Вход', rir:3, add:0, pct:{strength:'≈ 75–80%', mass:'≈ 65–70%', cut:'≈ 55–60%', gentle:'≈ 40–50%'},
-    get note() { return `Подберите рабочие веса так, чтобы в каждом подходе оставалось ${reserveText(reserveOf(this))}. Записывайте вес и повторы: от них строится прогресс следующих недель.`; }},
+    get note() { return `Подберите рабочие веса так, чтобы в каждом подходе оставались ${reserveText(reserveOf(this))}. Записывайте вес и повторы: от них строится прогресс следующих недель.`; }},
   {name:'Нагрузка', rir:2, add:1, pct:{strength:'≈ 80–85%', mass:'≈ 70–75%', cut:'≈ 60–65%', gentle:'≈ 45–55%'},
-    get note() { return `В базовых упражнениях добавляется подход. Вес увеличивайте по правилу двойной прогрессии, ${reserveText(reserveOf(this))}.`; }},
+    /* двойная прогрессия — простыми словами: сначала повторы до верхней границы, потом вес */
+    get note() { return `В упражнениях на несколько мышц добавляется подход. Сначала доводите повторы до верхней границы, потом прибавляйте вес; ${reserveDo(reserveOf(this))}.`; }},
   {name:'Пик', rir:1, add:1, pct:{strength:'≈ 85–90%', mass:'≈ 75–80%', cut:'≈ 65–70%', gentle:'≈ 50–60%'},
-    get note() { return `Самая тяжёлая неделя цикла: ${reserveText(reserveOf(this))}, техника без срывов. Если сон и самочувствие плохие, оставайтесь на нагрузке второй недели.`; }},
+    get note() { return `Самая тяжёлая неделя цикла: ${reserveDo(reserveOf(this))}, техника без срывов. Если сон и самочувствие плохие, оставайтесь на нагрузке второй недели.`; }},
   {name:'Разгрузка', rir:4, deload:true, pct:{strength:'≈ 65–70%', mass:'≈ 55–60%', cut:'≈ 50–55%', gentle:'≈ 40%'},
     note:'Подходов примерно на 40% меньше, вес на 10–15% ниже. Это восстановление перед новым циклом, а не пропуск: мышцы растут, когда успевают восстановиться.'}
 ];
@@ -333,18 +355,20 @@ function prescribe(ex, week, E) {
      противовес или вариант упражнения. */
   const pct = t === 'c' && weighable(ex, E);
   const band = ex.eq.length && ex.eq.every(g => g.every(id => id === 'band')), assisted = ex.eq.some(g => g.includes('gravitron'));
-  const how = band ? 'натяжение ленты: ' : assisted ? 'противовес: ' : 'вариант по силам: ';
-  const easy = band ? 'слабее обычного, без отказа' : assisted ? 'больше обычного, без отказа' : 'облегчённый, без отказа';
-  /* запас повторов — из reserveOf (он же в подсказке первой записи и в описании недели); rir — в дозировку */
+  const how = band ? 'натяжение ленты: ' : assisted ? 'противовес: ' : 'вариант полегче или посложнее: ';
+  const easy = band ? 'натяжение ленты: слабее обычного, не до предела' : assisted ? 'противовес: больше обычного, не до предела' : 'вариант полегче, не до предела';
+  /* запас повторов — из reserveOf (он же в подсказке первой записи и в описании недели); rir — в дозировку.
+     Простое правило — первым, процент от максимума на 1 повтор — в скобках, для тех, кто его знает */
   const rir = reserveOf(week);
-  const tail = rir ? reserveText(rir) + (S.goal === 'gentle' ? ', без боли' : '') : 'почти до отказа';
-  let load = t === 'c' ? (pct ? `${G.load.c}, ${tail}` : how + tail) : !G.rir ? G.load.i : G.load.i ? `${G.load.i}, ${tail}` : tail;
+  const tail = rir ? reserveDo(rir) + (S.goal === 'gentle' ? ', без боли' : '') : NEAR_LIMIT;
+  const withPct = (s, p) => `${s} (${pctText(p)})`;
+  let load = t === 'c' ? (pct ? withPct(tail, G.load.c) : how + tail) : !G.rir ? G.load.i : G.load.i ? `${G.load.i}, ${tail}` : tail;
   if (week) {
-    const reserve = rir ? reserveText(rir) : '';
-    if (week.deload) { sets = Math.max(2, Math.round(sets * 0.6)); load = pct ? `${week.pct[S.goal]} от 1ПМ, лёгкий вес без отказа` : t === 'c' ? how + easy : 'лёгкий вес, без отказа'; }
+    const reserve = rir ? reserveDo(rir) : '';
+    if (week.deload) { sets = Math.max(2, Math.round(sets * 0.6)); load = pct ? withPct('лёгкий вес, не до предела', week.pct[S.goal]) : t === 'c' ? easy : 'лёгкий вес, не до предела'; }
     else {
       if (week.add && t === 'c') sets = Math.min(6, sets + week.add);
-      load = pct ? `${week.pct[S.goal]} от 1ПМ, ${reserve}` : t === 'c' ? how + reserve : reserve;
+      load = pct ? withPct(reserve, week.pct[S.goal]) : t === 'c' ? how + reserve : reserve;
     }
   }
   if (ex.kind === 'time') load = ex.g === 'cardio' ? (S.goal === 'gentle' ? 'умеренный темп: можно говорить, не задыхаясь' : 'высокий темп без потери техники') : S.goal === 'strength' ? 'с отягощением или в усложнённом варианте' : 'ровно, без потери формы';
@@ -680,15 +704,17 @@ function cardHtml(it, idx) {
   for (const m of ex.pri) lvl[m] = 1;
   for (const m of ex.sec) if (!lvl[m]) lvl[m] = 0.38;
   const mus = ex.pri.map(m => `<li class="p">${MUSCLE_NAMES[m]}</li>`).join('') + ex.sec.map(m => `<li class="s">${MUSCLE_NAMES[m]}</li>`).join('');
+  /* темп — словами (запись числами — в подсказке, опытным), за ним нагрузка — как и раньше, в одной строке */
   const meta = [];
-  if (r.tempo) meta.push(`<span title="опускание – пауза – подъём – пауза, секунды; X — взрывно">темп <b>${r.tempo}</b></span>`);
+  if (r.tempo) meta.push(`<span title="${esc(r.tempo)}: опускание – пауза – подъём – пауза, секунды; X — быстро">темп: ${tempoWords(r.tempo)}</span>`);
   if (r.load) meta.push(`<span>${r.load}</span>`);
-  const view = 'Изометрия · 5 ракурсов';
+  /* «изометрия» в фитнесе — статика (замечание тестера): подпись — объёмный вид */
+  const view = '3D-вид · 5 ракурсов';
   return `<li class="card${cardFoldClass(ex.id)}" data-ex="${ex.id}" data-slot="${it.slot}">
   <div class="c-top">
     <div class="motion-tile"><button type="button" class="illus" data-fig="${idx}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Увеличить: ${esc(it.name)}, разбор движения — ${view}"><span class="illus-v">${view}</span><span class="illus-zoom" aria-hidden="true">Увеличить ↗</span></button><div class="motion-bar"><span class="motion-caption">Исходное положение</span><button type="button" data-motion-pause="${idx}" aria-label="Пауза: ${esc(it.name)}">Пауза</button></div></div>
     <div class="c-info">
-      <div class="c-head"><span class="c-idx">${it.label}</span><span class="c-type">${ex.type === 'c' ? 'базовое' : 'изолирующее'}</span>${favButton(ex.id)}</div>
+      <div class="c-head"><span class="c-idx">${it.label}</span><span class="c-type">${ex.type === 'c' ? 'много мышц' : 'прицельное'}</span>${favButton(ex.id)}</div>
       <h3 class="c-name">${esc(it.name)}</h3>
       <p class="c-eq">${esc(it.eqLine)}</p>
       ${it.sub ? `<p class="c-sub"><b>Вместо: ${esc(exName(it.sub.from, effEquip(programEquip() || S.equip)))}</b>${it.sub.note ? ` · ${esc(it.sub.note)}` : ''}</p>` : ''}
@@ -747,7 +773,7 @@ function blocksHtml(p) {
   MOVE_UNITS = S.mode === 'custom' ? [] : planUnits(p);
   let html = `<p class="phase"><b>Разминка, 8–10 мин.</b> Лёгкое кардио до тёплого пота, суставная гимнастика, затем 1–2 разминочных подхода с лёгким весом в первом упражнении.</p>`;
   html += cardsViewHtml();
-  if (S.format === 'static') html += `<p class="phase phase-static"><b>Статодинамика.</b> Вес — около половины от 1ПМ. Медленно: 3 с вниз и 3 с вверх, без пауз; не выпрямляйтесь до конца и не расслабляйтесь внизу — мышца всё время напряжена. К концу подхода (30–40 с) — сильное жжение, но не отказ. Три подхода с отдыхом 30 с — одна серия.</p>`;
+  if (S.format === 'static') html += `<p class="phase phase-static"><b>Статодинамика.</b> Вес — около половины от максимума на 1 повтор. Медленно: 3 с вниз и 3 с вверх, без пауз; не выпрямляйтесь до конца и не расслабляйтесь внизу — мышца всё время напряжена. К концу подхода (30–40 с) мышца сильно горит, но повторы ещё получаются. Три подхода с отдыхом 30 с — одна серия.</p>`;
   let idx = 0;
   /* «Убрано: … Вернуть» — на месте убранной карточки своего плана (12c-swap.js) */
   let gone = rmGoneHtml();
@@ -775,7 +801,8 @@ function blocksHtml(p) {
   html += `<p class="phase"><b>Заминка, 5 мин.</b> Спокойная ходьба и растяжка мышц, которые работали: по 20–30 секунд на каждую.</p>`;
   return html;
 }
-const LEGEND = `<p class="legend">1ПМ — вес, который вы можете поднять один раз. Темп — секунды на опускание, паузу внизу, подъём и паузу вверху; X — взрывной подъём.</p>`;
+/* расшифровка для тех, кто знает обозначения: на карточках они уже сказаны словами */
+const LEGEND = `<p class="legend">Максимум на 1 повтор (1ПМ) — вес, который вы можете поднять только один раз. Темп: усилие — подъём веса, возврат — опускание, в секундах. В поле «Темп» своего плана — четыре числа: опускание, пауза внизу, подъём, пауза вверху; X — быстрый подъём.</p>`;
 function warnHtml(p) {
   const warn = [];
   const gentle = S.goal === 'gentle' || S.protect.length > 0;
