@@ -107,6 +107,17 @@ test('hold: a dumbbell on the edges of the fists, beside its handle, is an error
   assert.deepEqual(errors(checkFrame(C, entry), 'hold'), []);
   assert(errors(checkFrame(moveProp(C, p => p.id.startsWith('cup:'), V.scale(up, 4)), entry), 'hold').some(i => /ладонь не на cup:top/.test(i.detail)));
 });
+test('contact: a fist beside an edge, holding air, is an error (door-frame sissy squat in 4.102.0)', () => {
+  /* хват за ребро коробки: кулак вписан в угол ребра (центр хвата внутри детали) — чисто; та же деталь, отодвинутая от кулака на
+     3,1 см (центр хвата в 1,6–2,6 см снаружи; у косяка в 4.102.0 было 1,1), — кулак держит воздух; кулак поперёк ребра — ошибка оси */
+  for (const [id, part, d] of [['tablerow', 'table:', [0, 3.1, 0]], ['chairdip', 'chair:', [0, 3.1, 0]], ['sissysquat', 'door:', [3.1, 0, 0]]]) {
+    const R = frame(id, .5), e = { ...POSES[id], t: .5 }, grips = r => r.issues.filter(i => i.rule === 'contact' && /^grip/.test(i.detail));
+    assert.deepEqual(grips(checkFrame(R, e)), [], id);
+    assert(errors(checkFrame(moveProp(R, p => p.id.startsWith(part), d), e), 'contact').some(i => /кулак у ребра .* держит воздух/.test(i.detail)), id + ': moved off the edge');
+  }
+  const R = frame('tablerow', .5), turn = h => ({ ...h, z: h.y, y: V.scale(h.z, -1) });
+  assert(errors(checkFrame({ ...R, frames: { ...R.frames, handL: turn(R.frames.handL) }, handleAxL: null }, { ...POSES.tablerow, t: .5 }), 'contact').some(i => /gripL: кулак поперёк ребра/.test(i.detail)));
+});
 test('contact: a rope running across the fist is an error', () => {
   /* прежде канат шёл прямо от карабина через центр хвата: при оси кулака поперёк ветви — сквозь ладонь и пальцы */
   const R = frame('facepull', .5), straight = p => { const g = R['grip' + p.id.slice(-1)], d = V.unit(V.sub(g, p.pts[0])); return { ...p, pts: [p.pts[0], V.add(g, d, 4)] }; };
