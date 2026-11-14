@@ -17,6 +17,10 @@ const DURATIONS = {
   long:{name:'60+', hint:'мин', lo:60, hi:80, target:65, say:'60 мин и больше'}
 };
 const DOSE_MIN_SETS = 2, DOSE_MAX_SETS = 6, DOSE_MAX_ROUNDS = 6, DOSE_MAX_SERIES = 4, DOSE_COUNTS = [3, 4, 5, 6, 7, 8, 9, 10];
+/* новичку — не больше 8 упражнений: за одну тренировку не больше новых названий, остальное время добирается подходами
+   (решение владельца 14.11.2026: «Рельеф» на 45 минут давал новичку 10 упражнений по 2 подхода) */
+const DOSE_BEG_MAX = 8;
+const doseCounts = () => S.level === 'beg' ? DOSE_COUNTS.filter(c => c <= DOSE_BEG_MAX) : DOSE_COUNTS;
 /* уступки по порядку: короче — подходы, затем отдых; длиннее — подходы, затем отдых на четверть дольше (дольше
    отдых — не хуже для роста мышц: Schoenfeld et al., J Strength Cond Res 2016; 30(7):1805–1812). Новичку — не больше
    одного подхода сверх обычного (в круговой — двух кругов): объём растёт постепенно, лишнее время — на разминку и заминку */
@@ -62,7 +66,7 @@ function fitDuration(ctx, D) {
   const all = [];
   const run = dose => {
     const got = [];
-    for (const c of DOSE_COUNTS) {
+    for (const c of doseCounts()) {
       const p = buildPlanAt({...ctx, count:c, dose, fitBase:true});
       if (!p.items) return null;
       /* упражнений меньше, чем просили (всё доступное уже в плане), — та же тренировка, что при меньшем числе */
@@ -83,7 +87,7 @@ function fitDuration(ctx, D) {
   const gap = r => r.m < D.lo ? D.lo - r.m : r.m > D.hi ? r.m - D.hi : 0;
   const near = all.sort((a, b) => gap(a) - gap(b) || Math.abs(a.dose.s) - Math.abs(b.dose.s) || b.n - a.n)[0];
   /* почему не уложились: длиннее — меньше подходов уже некуда; короче — не хватило упражнений или новичку больше не прибавляем */
-  const most = DOSE_COUNTS[DOSE_COUNTS.length - 1];
+  const counts = doseCounts(), most = counts[counts.length - 1];
   return {...near, why:near.m > D.hi ? 'long' : S.level === 'beg' && near.n >= most ? 'beg' : 'few'};
 }
 /* сколько упражнений показать в «Упражнений»: при заданном времени — сколько подобрано в открытой тренировке */

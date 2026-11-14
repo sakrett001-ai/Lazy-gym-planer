@@ -32,18 +32,26 @@ test('time not set: the number of exercises comes from «Exercises», exactly as
   assert.equal(a.S.dur, null, 'an unknown value is «not set»');
 });
 
+/* новичку не больше 8 упражнений и одного подхода сверх обычного: на 60+ он может не дотянуть до коридора — тогда
+   под планом сказано почему, а тренировка не короче, чем на 45 минут */
+const begShort = (p, level, dur, tag) => {
+  assert(level === 'beg' && dur === 'long' && p.fit.why === 'beg' && p.items.length === 8, tag);
+  assert.match(a.durationWarn(p), /^Новичку больше подходов не прибавляем: тренировка ≈\d+ мин\./, tag);
+};
+const rising = (mins, level, tag) => assert(mins[0] < mins[1] && (mins[1] < mins[2] || (level === 'beg' && mins[1] <= mins[2])), `${tag}: ${mins.join(' < ')}`);
+
 test('straight sets: short is shorter than 45 min, 45 shorter than 60+, and each estimate lands in its corridor', () => {
   for (const place of ['gym', 'home', 'street', 'homeband']) for (const groups of [FULL, UPPER, LEGS])
     for (const goal of Object.keys(a.GOALS)) for (const level of Object.keys(a.LEVELS)) {
       const mins = DURS.map(dur => {
         reset({ place, groups: groups.slice(), goal, level, dur });
-        const p = a.buildPlan(), tag = `${place} ${groups.join('+')} ${goal} ${level} ${dur}`;
-        assert(inside(p, dur), `${tag}: ≈${p.minutes} min, ${p.items.length} exercises`);
+        const p = a.buildPlan(), tag = `${place} ${groups.join('+')} ${goal} ${level} ${dur}: ≈${p.minutes} min, ${p.items.length} exercises`;
+        if (!inside(p, dur)) { begShort(p, level, dur, tag); return p.minutes; }
         assert(p.fit && p.fit.ok && p.count === p.items.length, tag + ': fitted, no «picked N of M» warning');
         assert.equal(a.durationWarn(p), '', tag);
         return p.minutes;
       });
-      assert(mins[0] < mins[1] && mins[1] < mins[2], `${place} ${goal} ${level}: ${mins.join(' < ')}`);
+      rising(mins, level, `${place} ${goal} ${level}`);
     }
 });
 
@@ -54,13 +62,10 @@ test('supersets, circuits, slow-tempo: inside the corridor; a beginner may stop 
         reset({ place, format, goal, level, dur });
         const p = a.buildPlan(), tag = `${format} ${place} ${goal} ${level} ${dur}: ≈${p.minutes} min`;
         if (inside(p, dur)) assert.equal(a.durationWarn(p), '', tag);
-        else {
-          assert(level === 'beg' && dur === 'long' && p.fit.why === 'beg' && p.items.length === 10, tag);
-          assert.match(a.durationWarn(p), /^Новичку больше подходов не прибавляем: тренировка ≈\d+ мин\./, tag);
-        }
+        else begShort(p, level, dur, tag);
         return p.minutes;
       });
-      assert(mins[0] < mins[1] && mins[1] < mins[2], `${format} ${goal} ${level}: ${mins.join(' < ')}`);
+      rising(mins, level, `${format} ${goal} ${level}`);
     }
 });
 
@@ -134,4 +139,16 @@ test('«−» and «+» while time is set count from the shown number; backups k
     a.restoreBackup({ v: 2, settings: { groups: FULL, equip: ['db'], dur } });
     assert.equal(a.S.dur, want, `backup with ${dur}`);
   }
+});
+
+test('a beginner never gets more than 8 exercises: extra time goes into sets (owner, 14.11.2026)', () => {
+  for (const format of ['classic', 'superset', 'circuit', 'static']) for (const place of ['gym', 'home'])
+    for (const goal of Object.keys(a.GOALS)) for (const dur of DURS) {
+      reset({ place, format, goal, level: 'beg', dur });
+      const p = a.buildPlan();
+      assert(p.items.length <= 8, `${format} ${place} ${goal} ${dur}: ${p.items.length} exercises`);
+    }
+  reset({ goal: 'cut', level: 'beg', dur: 'mid' });
+  const p = a.buildPlan();
+  assert(inside(p, 'mid') && p.items.length <= 8, `beginner, cut, 45 min: ≈${p.minutes} min, ${p.items.length} exercises`);
 });
