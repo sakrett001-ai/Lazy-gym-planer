@@ -142,3 +142,45 @@ test('kettlebell in one hand: the bell hangs, flies along the arm or rests on th
   assert(Math.abs(kb.radius ** 2 - kb.bottom ** 2 - 49) < .2);
   assert(Math.abs(M.FLOOR - kb.c[1] - kb.bottom) < .3, 'the bell of the deadlift stands on the floor at the start');
 });
+
+test('kettlebell turn (snatch, clean): the bell goes round the hand outside, frame by frame of the player, both ways', () => {
+  const { auditEntry, LIM } = require('./mannequin/holds-audit.js');
+  const row = (id, e) => auditEntry(id, e, { samples: N }).find(r => r.kind === 'гиря');
+  for (const id of ['kbsnatch', 'kbclean']) {
+    const e = POSES[id], kb = e.equipment.find(q => q.type === 'kettlebell');
+    assert.equal(kb.hang, 'turn', id + ': the bell turns round the hand (BIND.kettlebell, hang turn)');
+    assert(e.keys.every(k => Number.isFinite(k.bell?.L)), id + ': every key carries the bell angle');
+    /* the bell angle grows monotonically: along the arm in the swing, over the back of the hand, onto the forearm */
+    for (let i = 1; i < e.keys.length; i++) assert(e.keys[i].bell.L >= e.keys[i - 1].bell.L - 1e-9, `${id}: bell angle monotone at t=${e.keys[i].t}`);
+    const r = row(id, e), b = r.player;
+    assert.deepEqual(r.flags, [], id);
+    /* the player: up, hold at the top, the drop played back, the pause — 60 frames a second (anim.timing of the catalog) */
+    assert(b && b.frames > 140, id + ': player frames ' + b?.frames);
+    assert(Math.abs(b.jump) <= LIM.bellJump && b.sweep <= LIM.bellBody && b.swing <= LIM.bellSwing, `${id}: ${JSON.stringify(b)}`);
+  }
+  /* the audit catches what was wrong in 4.102.0 (the bell placed frame by frame, without history: on the drop it snapped
+     through the arm in one frame — snatch 99° at 69 % of the rep, the path through the arm 13.3 cm; clean 148°, the bell
+     lying on top of the hanging forearm at 72 %): the same frame-by-frame model on today's poses — a hanging bell resting
+     on the forearm where it hits it */
+  const swap = (id, o) => ({ ...POSES[id], equipment: POSES[id].equipment.map(q => q.type === 'kettlebell' ? { ...q, ...o } : q) });
+  const old = row('kbsnatch', swap('kbsnatch', { hang: 'gravity', rest: true })).flags;
+  assert(old.some(f => /скачок шара/.test(f)) && old.some(f => /проходит сквозь руку/.test(f)), 'snatch, frame-by-frame bell: ' + JSON.stringify(old));
+  assert(row('kbclean', swap('kbclean', { hang: 'gravity', rest: true })).flags.some(f => /скачок шара/.test(f)), 'clean, frame-by-frame bell');
+  /* …a bell lying on the back of the forearm the whole rep (also on the hanging arm in the swing): against the pendulum */
+  for (const id of ['kbsnatch', 'kbclean']) {
+    const on = { ...POSES[id], keys: POSES[id].keys.map(k => ({ ...k, bell: { L: 150 } })) };
+    assert(row(id, on).flags.some(f => /против маятника/.test(f)), id + ': bell resting on a hanging arm');
+    /* …and a step in the angle between two keys: a jump */
+    const step = { ...POSES[id], keys: POSES[id].keys.map(k => ({ ...k, bell: { L: k.t < .7 ? 0 : 150 } })) };
+    assert(row(id, step).flags.some(f => /скачок шара/.test(f)), id + ': bell snapping round the handle');
+  }
+  /* the swing along the arm is a swing (hang arm: the arm and the bell are one chain), not «against the pendulum» */
+  assert.equal(row('kbswing1', POSES.kbswing1).player.swing, 0);
+});
+
+test('kettlebell turn: the timing the audit plays is the timing of the catalog (anim.timing)', () => {
+  const { loadModel } = require('./biomechanics-audit'), m = loadModel({ fullApp: true });
+  m.get('renderSetup=()=>{}; logRefresh=()=>{}; LOG.mode="local";');
+  const { EXI } = m.get('({EXI})');
+  for (const id of ['kbsnatch', 'kbclean', 'kbswing1']) assert(Array.isArray(EXI[id].anim.timing) && EXI[id].anim.timing.length === 4, id);
+});
