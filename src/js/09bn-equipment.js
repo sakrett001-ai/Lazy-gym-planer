@@ -361,28 +361,56 @@ BIND.cable=(e,R)=>{
    Рукоять лежит в кулаке по его оси (z кисти; двумя руками — по линии хватов), шар — на KB.handle от оси рукояти поперёк неё:
    * hang 'gravity' (по умолчанию) — шар висит под рукоятью;
    * hang 'arm' — шар на продолжении предплечья (мах: гирю тянет по линии руки центробежная сила);
-   * hang 'swing' — взятие на грудь и рывок: пока рука прямая, шар на её продолжении (мах); по мере сгибания локтя
-     (25…70°) гирю подтягивают к телу, и она повисает под рукоятью; так же — когда предплечье смотрит вверх (рывок:
-     над головой гиря не стоит на руке дном вверх, а переворачивается на тыл предплечья — с rest);
+   * hang 'turn' — взятие на грудь и рывок: угол шара вокруг рукояти задаёт поза (q.bell; см. «Переворот гири» ниже): в махе
+     шар на линии руки, затем обходит кисть снаружи и ложится на тыл предплечья там, где рука его держит;
    * rest: true — шар не может пройти сквозь руку: если свободное направление ведёт его в кисть, предплечье или плечо, он
      поворачивается вокруг рукояти к тылу кисти и ложится на тыл запястья и предплечья («рэк», гиря над головой, жим лёжа:
-     так учат школы StrongFirst и RKC — пересказ, не цитата). Поджатие мягких тканей — 0,3 см. */
+     так учат школы StrongFirst и RKC — пересказ, не цитата). Поджатие мягких тканей — 0,3 см.
+   В 4.102.0 у взятия и рывка был hang 'swing': шар на продолжении руки, пока локоть прямой, под рукоятью — когда согнут, и
+   на тыле предплечья — когда свободное направление упирается в руку. Положение считалось по одному кадру, без истории:
+   на сбросе в замах (плеер проигрывает подъём назад) шар за кадр перескакивал с тыла предплечья на ладонную сторону сквозь
+   руку (рывок — 99° за 1/60 с при 69 % повтора, путь шара заходил в руку на 13 см) и лежал сверху на опущенной руке
+   (взятие — 72 % повтора; замер — tools/mannequin/holds-audit.js, строка «гиря»). */
 const KB={r:10.5,handle:18.67,handleR:1.7,half:5,base:7,bottom:7.83,kg:16,press:.3};
+/* Переворот гири вокруг кисти (hang 'turn': рывок, взятие на грудь). Угол шара вокруг рукояти задаёт поза (q.bell, °,
+   по ключам — линейно; базис bellBasis: 0 — по линии руки к пальцам, +90 — над тылом кисти, к ±180 — предплечье): в махе
+   шар на линии руки, в переходе — обходит кисть снаружи, через тыл кисти и костяшки, и ложится на тыл предплечья там, где
+   рука его держит; сквозь кисть, предплечье и плечо он не проходит (bellOut: угол, заходящий в руку, — до касания со
+   своей стороны; так задаётся и «лежит на предплечье»: угол за касанием). Прежде (4.102.0, hang 'swing') положение
+   считалось по одному кадру и на сбросе перескакивало сквозь руку. Согласие пути с маятником — сила тяжести и ускорение
+   рукояти, по каждому кадру плеера в обе стороны — проверяет tools/mannequin/holds-audit.js (строка «гиря»); BELL — общие
+   пороги этой проверки. */
+const BELL={G:981,el:60,line:45};
+/* базис поперёк рукояти ax в рамке кисти стороны s: e1 — к пальцам (продолжение предплечья), e2 — к тылу кисти;
+   угол шара a: 0 — по линии руки, +90° — над тылом кисти, ±180° — в предплечье */
+function bellBasis(F,s,ax){const e2=V.unit(V.perp(V.scale(F.x,M.SIGN[s]),ax));let e1=V.unit(V.cross(e2,ax));if(V.dot(e1,F.y)>0)e1=V.scale(e1,-1);return{e1,e2};}
+/* зазор шара (центр на H от рукояти g по направлению n) до кисти, предплечья и плеча, с поджатием мягких тканей */
+function bellClear(R,s,g,n,H,r){const c=V.add(g,n,H),F=R.frames['hand'+s],wr=R['wr'+s],kn=V.add(wr,F.y,-9),ab=V.sub(kn,wr),k=Math.max(0,Math.min(1,V.dot(V.sub(c,wr),ab)/V.dot(ab,ab)));return Math.min(V.dist(c,V.add(wr,ab,k))-1.6,M.limbSDF(R,'fa',s,c),M.limbSDF(R,'ua',s,c))-r+KB.press;}
+/* вывести шар из руки: поворот вокруг рукояти от предплечья (оно — у ±180°) со своей стороны до касания */
+function bellOut(R,s,g,B,a,H,r){
+ const at=x=>V.add(V.scale(B.e1,Math.cos(x)),B.e2,Math.sin(x));if(bellClear(R,s,g,at(a),H,r)>=0)return a;
+ const w=Math.atan2(Math.sin(a),Math.cos(a)),sg=w>0?-1:1;let lo=a,hi=a;
+ for(let j=1;j<=120;j++){hi=a+sg*j*1.5*D2R;if(bellClear(R,s,g,at(hi),H,r)>=0)break;lo=hi;}
+ for(let j=0;j<12;j++){const m=(lo+hi)/2;if(bellClear(R,s,g,at(m),H,r)>=0)hi=m;else lo=m;}
+ return hi;
+}
+/* мах: локоть прямой (до BELL.el°) и шар у линии руки (до BELL.line°, угол a в радианах) — рука и гиря одна цепь */
+function bellInLine(R,s,a){return V.angle(V.sub(R['el'+s],R['sh'+s]),V.sub(R['wr'+s],R['el'+s]))<=BELL.el&&Math.abs(Math.atan2(Math.sin(a),Math.cos(a)))<=BELL.line*D2R;}
 BIND.kettlebell=(e,R)=>{
  const hands=e.hands||['L'],grips=hands.map(s=>R['grip'+s]),k=(e.r||KB.r)/KB.r,r=KB.r*k,H=e.drop??KB.handle*k;
  let g=V.mix(grips[0],grips[1]??grips[0],.5),axis=hands.length>1?V.unit(V.sub(grips[0],grips[1])):V.unit(R.frames['hand'+hands[0]].z);
  /* одной рукой — рукоять там, где её держит кулак (R.handle, R.handleAx: у глубокого хвата 'deep' — наискось у основания
     ладони, M.B.deep; в переходе — между положениями по доле q.handDepth) */
  if(hands.length===1&&R['handle'+hands[0]]){g=R['handle'+hands[0]];axis=R['handleAx'+hands[0]];}
- let down=[0,1,0];
- if(e.hang==='arm'||e.hang==='swing'){
-  const s=hands[0],arm=V.unit(V.sub(R['wr'+s],R['el'+s]));
-  if(e.hang==='arm')down=arm;
-  else{ /* по сгибанию локтя: прямая рука — мах (0…25°), согнутая (от 70°) — гиря висит */
-   const el=Math.acos(Math.max(-1,Math.min(1,V.dot(V.unit(V.sub(R['el'+s],R['sh'+s])),arm))))/D2R,up=Math.max(0,Math.min(1,-arm[1]/.5)),u=Math.max(up,Math.max(0,Math.min(1,(el-25)/45))),w=u*u*(3-2*u);
-   down=V.unit(V.add(V.scale(arm,1-w),[0,1,0],w));
-  }
+ /* переворот: угол шара — из позы (R.bell, °); без него (подбор позы в спецификации) — как висящая гиря с опорой */
+ const id=e.id||'kb';
+ if(e.hang==='turn'&&hands.length===1&&R.bell&&R.bell[hands[0]]!=null){
+  const s=hands[0],B=bellBasis(R.frames['hand'+s],s,axis),a=bellOut(R,s,g,B,R.bell[s]*D2R,H,r),c=V.add(g,V.add(V.scale(B.e1,Math.cos(a)),B.e2,Math.sin(a)),H);
+  return[{kind:'kettlebell',c,grip:g,axis,handleAxis:axis,radius:r,handleUp:H,bottom:KB.bottom*k,role:'free',tone:'plate',free:true,id,mount:'hands'}];
  }
+ if(e.hang==='turn')e={...e,rest:true};
+ let down=[0,1,0];
+ if(e.hang==='arm')down=V.unit(V.sub(R['wr'+hands[0]],R['el'+hands[0]]));
  /* рукоять почти вдоль свободного направления (кулак «стоймя»): шар заваливается к тылу кисти — со стороны ладони
     его не пускают пальцы и основание ладони */
  if(e.rest&&hands.length===1){const p=V.perp(down,axis),n=V.len(p);if(n<.6){const s=hands[0];down=V.add(p,ortho(V.scale(R.frames['hand'+s].x,M.SIGN[s]),axis),.6-n);}}
@@ -492,16 +520,21 @@ function build(list,R){
 }
 function anchors(list){return staticParts(list).anchors;}
 /* ---------- Риг упражнения: ключи позы → поза каталога + инвентарь ---------- */
-function rig(entry){
+/* поза каталога по фазе t — без инвентаря (риг, аудиты) */
+function poseOf(entry){
  const track=M.makeTrack(entry.keys,{loop:!!entry.loop});
+ return t=>{const k=track(t),q=M.unpack(k.v,k.hands);if(entry.gripRadius)q.gripRadius=entry.gripRadius;if(k.depth)q.handDepth=k.depth;if(k.horn)q.horn=k.horn;if(k.bell)q.bell=k.bell;return M.catalogPose(q);};
+}
+function rig(entry){
+ const poseAt=poseOf(entry);
  return t=>{
   if(!Number.isFinite(t)||t<0||t>1)throw Error('Pose must be in [0,1]');
-  const k=track(t),q=M.unpack(k.v,k.hands);if(entry.gripRadius)q.gripRadius=entry.gripRadius;if(k.depth)q.handDepth=k.depth;if(k.horn)q.horn=k.horn;
   /* R.t — фаза повтора: по ней движется то, что не следует за телом (лента дорожки, BIND.treadBelt) */
-  const R=M.catalogPose(q);R.t=t;if(entry.loop)R.loop=true;R.props=build(entry.equipment||[],R);R.contacts=(entry.contacts||[]).map(c=>({...c}));R.exerciseBasis='mannequin';
+  const R=poseAt(t);R.t=t;if(entry.loop)R.loop=true;
+  R.props=build(entry.equipment||[],R);R.contacts=(entry.contacts||[]).map(c=>({...c}));R.exerciseBasis='mannequin';
   return R;
  };
 }
-return{TYPES,BIND,Builder,build,anchors,rig,PLATES,padFrame,barbellPart,dumbbellPart,bodyPoint,ortho,visible,variantOf,variantEntry,ankleCuff,cuffParts,stirrup,bandHandle,BAND_HANDLE,clearOfForearm,KB};
+return{TYPES,BIND,Builder,build,anchors,rig,poseOf,PLATES,padFrame,barbellPart,dumbbellPart,bodyPoint,ortho,visible,variantOf,variantEntry,ankleCuff,cuffParts,stirrup,bandHandle,BAND_HANDLE,clearOfForearm,KB,BELL,bellBasis,bellClear,bellOut,bellInLine};
 })(typeof Mannequin!=='undefined'?Mannequin:require('./09bm-mannequin.js'));
 if(typeof module!=='undefined'&&module.exports){module.exports=GymEquipment;const fs=require('fs'),path=require('path');for(const f of fs.readdirSync(__dirname).filter(f=>/^09bo.*\.js$/.test(f)).sort()){try{require(path.join(__dirname,f));}catch(e){console.error('Инвентарь '+f+': '+e.message);}}}

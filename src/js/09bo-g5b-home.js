@@ -11,10 +11,13 @@
 
   /* Сцена скругляет рёбра коробок пропорционально размеру (~8 %); у больших панелей (стена, дверное полотно)
      углы выглядели бы овальными. Угловые вставки чуть тоньше панели закрывают скругление — углы прямые. */
-  function squareCorners(b, k, cx, W, H, T, tone, y0 = 0, zc = -T / 2) {
+  function squareCorners(b, k, cx, W, H, T, tone, y0 = 0, zc = -T / 2, xf = null) {
     const cw = Math.min(W / 2, Math.max(4, .1 * W)), ch = Math.min(H / 2, Math.max(4, .1 * H));
-    for (const [n, sx, sy] of [['BL', 1, 0], ['BR', -1, 0], ['TL', 1, 1], ['TR', -1, 1]])
-      b.box(k + 'Corner' + n, [cx + sx * (W / 2 - cw / 2), y0 + (sy ? H - ch / 2 : ch / 2), zc], [cw, ch, T - .3], { tone, mount: k, round: .2 });
+    for (const [n, sx, sy] of [['BL', 1, 0], ['BR', -1, 0], ['TL', 1, 1], ['TR', -1, 1]]) {
+      const c = [cx + sx * (W / 2 - cw / 2), y0 + (sy ? H - ch / 2 : ch / 2), zc], o = { tone, mount: k, round: .2 };
+      /* xf — поворот панели (открытое дверное полотно): центр вставки и её оси вместе с панелью */
+      if (xf) b.box(k + 'Corner' + n, xf.p(c), [cw, ch, T - .3], { ...o, axes: xf.axes }); else b.box(k + 'Corner' + n, c, [cw, ch, T - .3], o);
+    }
   }
   /* Стена: лицевая плоскость z = 0, тело стены z ∈ [−t, 0]; внизу деревянный плинтус */
   TYPES.homeWall = (s, b) => {
@@ -27,10 +30,17 @@
 
   /* Дверь в проёме: стена с проёмом, дверная коробка, наличники, полотно, упорная планка (притвор),
      петли и ручки-рычаги с обеих сторон. Дверь открывается от человека: притвор со стороны человека,
-     поэтому при тяге полотно прижимается к коробке. side: +1 — ручка у края +x (локально). */
+     поэтому при тяге полотно прижимается к коробке. side: +1 — ручка у края +x (локально).
+     open — угол открывания полотна, град (0 — закрыто): полотно с ручками поворачивается на петлях вокруг оси петель
+     (вертикаль у края −side, за полотном) от человека, в соседнюю комнату; коробка, притвор и петли остаются на месте. */
   TYPES.homeDoor = (s, b) => {
     const W = s.w || 220, H = s.h || 240, T = s.t || 12, dw = s.dw || 80, dh = s.dh || 200, hh = s.handleH || 100, sg = s.side || 1;
     const jt = 2.5, gap = .3, ow = dw / 2 + gap + jt, oh = dh + gap + jt;
+    /* поворот полотна на петлях: ось петель — (−sg·(dw/2 + gap/2), y, −8.6); свободный край уходит в −z (от человека) */
+    const op = (s.open || 0) * Math.PI / 180, hingeX = -sg * (dw / 2 + gap / 2), hingeZ = -8.6, co = Math.cos(op), so = Math.sin(op);
+    const swing = p => { const x = p[0] - hingeX, z = p[2] - hingeZ; return [hingeX + x * co + sg * z * so, p[1], hingeZ - sg * x * so + z * co]; };
+    const swingDir = a => [a[0] * co + sg * a[2] * so, a[1], -sg * a[0] * so + a[2] * co];
+    const leafAxes = [swingDir([1, 0, 0]), [0, 1, 0], swingDir([0, 0, 1])];
     /* стена по обе стороны проёма и надпроёмная часть */
     for (const k of [1, -1]) b.box('wall' + (k > 0 ? 'L' : 'R'), [k * (ow + (W / 2 - ow) / 2), H / 2, -T / 2], [W / 2 - ow, H, T], { role: 'support', tone: 'wall', mount: 'floor', round: .3 });
     b.box('header', [0, (oh + H) / 2, -T / 2], [2 * ow, H - oh, T], { tone: 'wall', mount: 'wallL', round: .1 });
@@ -46,18 +56,20 @@
     b.box('casingTop', [0, oh + 3, .75], [2 * ow + 12, 6, 1.5], { tone: 'wood', mount: 'header', round: .3 });
     /* полотно 4 см: z ∈ [−8, −4], зазор у пола 1 см; висит на петлях у края −sg */
     const leafZ = -6;
-    b.box('leaf', [0, (dh + 1) / 2, leafZ], [dw, dh - 1, 4], { tone: 'wood', mount: 'hingeB', round: .3 });
-    squareCorners(b, 'leaf', 0, dw, dh - 1, 4, 'wood', 1, leafZ);
+    /* L, A — точка и направление полотна (с ручками) в его положении: закрытое — как есть, открытое — повёрнуто на петлях */
+    const L = op ? swing : p => p, A = op ? swingDir : a => a, lo = op ? { axes: leafAxes } : {};
+    b.box('leaf', L([0, (dh + 1) / 2, leafZ]), [dw, dh - 1, 4], { tone: 'wood', mount: 'hingeB', round: .3, ...lo });
+    squareCorners(b, 'leaf', 0, dw, dh - 1, 4, 'wood', 1, leafZ, op ? { p: swing, axes: leafAxes } : null);
     for (const k of [1, -1]) squareCorners(b, 'wall' + (k > 0 ? 'L' : 'R'), k * (ow + (W / 2 - ow) / 2), W / 2 - ow, H, T, 'wall');
     for (const [k, y] of [['B', 22], ['T', dh - 22]]) b.cyl('hinge' + k, [-sg * (dw / 2 + gap / 2), y, -8.6], [0, 1, 0], .8, 10, { tone: 'chrome', mount: 'jamb' + (sg > 0 ? 'R' : 'L') });
     /* ручки: розетка, шейка, рычаг к петлям; со стороны человека и с обратной */
     const hx = sg * (dw / 2 - 6);
     for (const [k, face, dir] of [['', -4, 1], ['Back', -8, -1]]) {
-      b.cyl('rose' + k, [hx, hh, face + dir * .6], [0, 0, 1], 2.8, 1.2, { tone: 'chrome', mount: 'leaf' });
-      b.cyl('neck' + k, [hx, hh, face + dir * 3.6], [0, 0, 1], 1.0, 5.2, { tone: 'chrome', mount: 'rose' + k });
-      b.tube('lever' + k, [hx + sg * .6, hh, face + dir * 6.4], [hx - sg * 11.5, hh, face + dir * 7.4], 1.1, { tone: 'chrome', mount: 'neck' + k, role: 'grip' });
+      b.cyl('rose' + k, L([hx, hh, face + dir * .6]), A([0, 0, 1]), 2.8, 1.2, { tone: 'chrome', mount: 'leaf' });
+      b.cyl('neck' + k, L([hx, hh, face + dir * 3.6]), A([0, 0, 1]), 1.0, 5.2, { tone: 'chrome', mount: 'rose' + k });
+      b.tube('lever' + k, L([hx + sg * .6, hh, face + dir * 6.4]), L([hx - sg * 11.5, hh, face + dir * 7.4]), 1.1, { tone: 'chrome', mount: 'neck' + k, role: 'grip' });
     }
-    b.anchor('handle', [hx, hh, -4 + 3.4]);
+    b.anchor('handle', L([hx, hh, -4 + 3.4]));
     b.anchor('face', [0, 0, 0]);
   };
 

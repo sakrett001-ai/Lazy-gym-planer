@@ -229,11 +229,11 @@ function bakedPoses(spec, list, n = 40) {
     try {
       M.rhythmHint(null); let q = spec.pose(t, C);
       for (let k = 0; k < 2; k++) { M.rhythmHint(hint(q)); q = spec.pose(t, C); }
-      return { t, v: M.pack(q).map((x, i) => i >= 3 && i < 7 ? round(x, 1e5) : round(x, 100)), hands: { L: q.hands?.L || 'relaxed', R: q.hands?.R || 'relaxed' }, ...(q.handDepth ? { depth: { L: round(q.handDepth.L ?? 0, 1e3), R: round(q.handDepth.R ?? 0, 1e3) } } : {}), ...(q.horn ? { horn: { L: round(q.horn.L ?? 0, 1e3), R: round(q.horn.R ?? 0, 1e3) } } : {}) };
+      return { t, v: M.pack(q).map((x, i) => i >= 3 && i < 7 ? round(x, 1e5) : round(x, 100)), hands: { L: q.hands?.L || 'relaxed', R: q.hands?.R || 'relaxed' }, ...(q.handDepth ? { depth: { L: round(q.handDepth.L ?? 0, 1e3), R: round(q.handDepth.R ?? 0, 1e3) } } : {}), ...(q.horn ? { horn: { L: round(q.horn.L ?? 0, 1e3), R: round(q.horn.R ?? 0, 1e3) } } : {}), ...(q.bell ? { bell: Object.fromEntries(Object.entries(q.bell).map(([k, x]) => [k, round(x, 10)])) } : {}) };
     } finally { M.rhythmHint(null); }
   });
   const track = M.makeTrack(keys, { loop: !!spec.loop }), poses = [];
-  for (let i = 0; i <= n; i++) { const k = track(i / n); poses.push(M.catalogPose(M.unpack(k.v, k.hands))); }
+  for (let i = 0; i <= n; i++) { const k = track(i / n), q = M.unpack(k.v, k.hands); if (k.depth) q.handDepth = k.depth; if (k.horn) q.horn = k.horn; if (k.bell) q.bell = k.bell; poses.push(M.catalogPose(q)); }
   return poses;
 }
 module.exports = { ctx, fromCat, bakedPoses };
