@@ -668,17 +668,17 @@ function cardHtml(it, idx) {
   for (const m of ex.pri) lvl[m] = 1;
   for (const m of ex.sec) if (!lvl[m]) lvl[m] = 0.38;
   const mus = ex.pri.map(m => `<li class="p">${MUSCLE_NAMES[m]}</li>`).join('') + ex.sec.map(m => `<li class="s">${MUSCLE_NAMES[m]}</li>`).join('');
-  /* нагрузка — первой, темп — словами; запись темпа числами — в подсказке (опытным) */
+  /* темп — словами (запись числами — в подсказке, опытным), за ним нагрузка — как и раньше, в одной строке */
   const meta = [];
-  if (r.load) meta.push(`<span>${r.load}</span>`);
   if (r.tempo) meta.push(`<span title="${esc(r.tempo)}: опускание – пауза – подъём – пауза, секунды; X — быстро">темп: ${tempoWords(r.tempo)}</span>`);
+  if (r.load) meta.push(`<span>${r.load}</span>`);
   /* «изометрия» в фитнесе — статика (замечание тестера): подпись — объёмный вид */
   const view = '3D-вид · 5 ракурсов';
   return `<li class="card${cardFoldClass(ex.id)}" data-ex="${ex.id}" data-slot="${it.slot}">
   <div class="c-top">
     <div class="motion-tile"><button type="button" class="illus" data-fig="${idx}" aria-haspopup="dialog" aria-controls="motion-view" aria-label="Увеличить: ${esc(it.name)}, разбор движения — ${view}"><span class="illus-v">${view}</span><span class="illus-zoom" aria-hidden="true">Увеличить ↗</span></button><div class="motion-bar"><span class="motion-caption">Исходное положение</span><button type="button" data-motion-pause="${idx}" aria-label="Пауза: ${esc(it.name)}">Пауза</button></div></div>
     <div class="c-info">
-      <div class="c-head"><span class="c-idx">${it.label}</span><span class="c-type">${ex.type === 'c' ? 'на несколько мышц' : 'прицельное'}</span>${favButton(ex.id)}</div>
+      <div class="c-head"><span class="c-idx">${it.label}</span><span class="c-type">${ex.type === 'c' ? 'много мышц' : 'прицельное'}</span>${favButton(ex.id)}</div>
       <h3 class="c-name">${esc(it.name)}</h3>
       <p class="c-eq">${esc(it.eqLine)}</p>
       ${it.sub ? `<p class="c-sub"><b>Вместо: ${esc(exName(it.sub.from, effEquip(programEquip() || S.equip)))}</b>${it.sub.note ? ` · ${esc(it.sub.note)}` : ''}</p>` : ''}
